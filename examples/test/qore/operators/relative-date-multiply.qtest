@@ -1,0 +1,129 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class RelativeDateMultiplyTest
+
+#! A relative date multiplied by a number scales each of its components, the same in every mode (qore#6109)
+/** The product flattened the date into hours (a month was 31 days and a year 365 days), so months(1) * 2 gave 1488
+    hours and 2024-01-31 + months(1) * 2 gave 2024-04-02.  Each component is now multiplied, and the fraction that a
+    float factor gives is carried to the smaller units as the ISO 8601 duration parser carries it, so that
+    date("P1.5M") == months(1) * 1.5 with the same components.  The probes (relative-date-multiply/probes.q) run in
+    each execution mode in a child process, with tiered execution at the IR tier and promoted to native code, and as
+    qcc-compiled executables (-O0, -O3); the results are the same everywhere.
+*/
+class RelativeDateMultiplyTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the result of each probe, which is the same in every mode
+        const Results = (
+            "months(1) * 2: <time: 2 months>",
+            "years(1) * 2: <time: 2 years>",
+            "days(1) * 2: <time: 2 days>",
+            "2 * months(1): <time: 2 months>",
+            "2024-01-31 + months(1) * 2: 2024-03-31 00:00:00.000000 +00:00",
+            "P1Y2M3DT4H5M6S * 3: <time: 3 years 6 months 9 days 12 hours 15 minutes 18 seconds>",
+            "months(7) * 2: <time: 1 year 2 months>",
+            "seconds(40) * 3: <time: 2 minutes>",
+            "hours(5) * -2: <time: -10 hours>",
+            "days(1) * 0: <time: 0 seconds>",
+            "months(1) * 1.5: <time: 1 month 15 days>",
+            "years(1) * 1.5: <time: 1 year 182 days 12 hours>",
+            "days(1) * 1.5: <time: 1 day 12 hours>",
+            "P1Y2M * 0.5: <time: 1 month 182 days 12 hours>",
+            "hours(1) * 0.25: <time: 15 minutes>",
+            "microseconds(3) * 0.5: <time: 1 microsecond>",
+            "days(-1) * 1.5: <time: -1 days -12 hours>",
+            "2024-01-31 + months(1) * 2.0: 2024-03-31 00:00:00.000000 +00:00",
+            "months(1) * 1.5n: <time: 1 month 15 days>",
+            "P1.5M: <time: 1 month 15 days> == <time: 1 month 15 days> (equal: True, same components: True)",
+            "P1.5Y: <time: 1 year 182 days 12 hours> == <time: 1 year 182 days 12 hours> (equal: True, same "
+                "components: True)",
+            "P1.5D: <time: 1 day 12 hours> == <time: 1 day 12 hours> (equal: True, same components: True)",
+            "PT1.5H: <time: 1 hour 30 minutes> == <time: 1 hour 30 minutes> (equal: True, same components: True)",
+            "PT1.5M: <time: 1 minute 30 seconds> == <time: 1 minute 30 seconds> (equal: True, same components: True)",
+            "P2.3M: <time: 2 months 9 days> == <time: 2 months 9 days> (equal: True, same components: True)",
+            "PT0.57S: <time: 570 milliseconds> == <time: 570 milliseconds> (equal: True, same components: True)",
+            "PT0.0000015S: <time: 1 microsecond> == <time: 1 microsecond> (equal: True, same components: True)",
+            "P0.0000001Y: <time: 3 seconds 153600 microseconds> == <time: 3 seconds 153600 microseconds> (equal: "
+                "True, same components: True)",
+            "P0.00000000002733384069001Y: <time: 862 microseconds> == <time: 862 microseconds> (equal: True, same "
+                "components: True)",
+            "PT0.9999999996S: <time: 999999 microseconds> == <time: 999999 microseconds> (equal: True, same "
+                "components: True)",
+            "months(3) * 0.1: <time: 9 days>",
+            "differential: ok (180 cases)",
+            "*= int: <time: 2 months>",
+            "*= float: <time: 1 month 15 days>",
+            "*= number: <time: 1 day 12 hours>",
+            "*= date operand: <time: 3 hours>",
+            "*= hash member: <time: 3 months>",
+            "*= list element: <time: 3 months>",
+            "*= overflow: INVALID-DATE",
+            "*= softint lvalue: 7200",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("RelativeDateMultiply", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        for (int i = 0; i < 8; ++i) {
+            foreach string line in (Results) {
+                expected += sprintf("%d: %s\n", i, line);
+            }
+        }
+
+        addTestCase("relative dates are multiplied component by component in every mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-relative-date-multiply-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "relative-date-multiply" + DirSep
+            + "probes.q")
+            + "\nfor (int i = 0; i < 8; ++i) {\n    foreach string line in (probes()) {\n"
+            "        printf(\"%d: %s\\n\", i, line);\n    }\n}\n");
+        f.close();
+
+        string env = sprintf("TZ=UTC QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=5 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("TZ=UTC LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                libqore_dir, libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("TZ=UTC QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 "
+                "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)),
+                "qcc " + opt + ", JIT");
+        }
+    }
+}

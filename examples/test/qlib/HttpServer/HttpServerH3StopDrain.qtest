@@ -1,0 +1,227 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/3 (QUIC) session draining on HttpServer stop over UDP with OpenSSL
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpServer::stop() drains HTTP/3 sessions (qore#5899): each session is sent a GOAWAY notice, the requests in
+    progress are answered, and each session is closed when its requests end; stop() ends when the last session of the
+    listener is closed, without waiting for the drain timeout.  The test synchronizes on the handler and on the
+    server's log messages, never on time.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpServerH3StopDrainTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! a handler that blocks until it is released on the "block" path, and answers at once on any other path
+class DrainHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the path of each blocking request as it enters the handler
+        Queue entered();
+
+        #! blocking requests return when this reaches zero
+        Counter release(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path == "block") {
+            entered.push(hdr.path);
+            release.waitForZero();
+            return makeResponse(200, "released", {"Content-Type": "text/plain"});
+        }
+        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+    }
+
+    #! releases every blocked request; safe to call more than once
+    releaseAll() {
+        if (release.getCount()) {
+            release.dec();
+        }
+    }
+}
+
+#! records the server's drain log messages and pushes them to a Queue
+class DrainLogAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue messages();
+    }
+
+    private {
+        Mutex lck();
+        list<string> all = ();
+    }
+
+    constructor() : LoggerAppenderWithLayout("drain-log", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /drain/) {
+            {
+                AutoLock al(lck);
+                all += params;
+            }
+            messages.push(params);
+        }
+    }
+
+    #! waits for a message matching the given pattern and returns it
+    string waitFor(string pattern) {
+        while (True) {
+            string msg = messages.get(30s);
+            if (msg.regex(pattern)) {
+                return msg;
+            }
+        }
+    }
+
+    #! returns True if a message matching the given pattern was logged
+    bool seen(string pattern) {
+        AutoLock al(lck);
+        return boolean(select all, $1.regex(pattern));
+    }
+}
+
+class HttpServerH3StopDrainTest inherits QUnit::Test {
+    constructor() : Test("HttpServerH3StopDrainTest", "1.0") {
+        addTestCase("stop() answers an HTTP/3 request in progress and ends when the session closes",
+            \testInFlightRequestFinishes());
+        set_return_value(main());
+    }
+
+    testInFlightRequestFinishes() {
+        DrainHandler handler();
+        DrainLogAppender appender();
+        Logger logger("h3-stop-drain-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            # a drain timeout that a correct drain never reaches
+            "drain_timeout": 60s,
+        });
+        on_exit {
+            handler.releaseAll();
+            server.stopImmediate();
+        }
+        server.setHandler("drain", "", NOTHING, handler);
+        server.setDefaultHandler("drain", handler);
+        server.waitForAsyncIo();
+        int port = server.addQuicListener(<HttpListenerOptionInfo>{
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        string url = "https://127.0.0.1:" + port;
+
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "logger": new Logger("h3-stop-drain-client", LoggerLevel::getLevelError()),
+            "request_timeout": 30s,
+            "connect_timeout": 10s,
+        });
+        on_exit mgr.closeAll();
+
+        Queue responses();
+        background sub () {
+            try {
+                responses.push(mgr.request(url, "GET", "/block"));
+            } catch (hash<ExceptionInfo> ex) {
+                responses.push(ex);
+            }
+        }();
+        assertEq("block", handler.entered.get(30s), "the request reaches the handler");
+
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            server.stop();
+        }();
+        appender.waitFor("drain started");
+        assertEq(1, stopped.getCount(), "stop() waits for the request in progress");
+
+        handler.releaseAll();
+        hash<auto> resp = responses.get(30s);
+        assertEq(200, resp.status_code, sprintf("the request in progress is answered: %y", resp));
+        assertEq("released", resp.body);
+
+        assertEq(0, stopped.waitForZero(30s), "stop() ends when the session is closed");
+        assertFalse(appender.seen("did not finish"), "the drain did not time out");
+    }
+}

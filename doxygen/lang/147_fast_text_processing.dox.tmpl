@@ -80,6 +80,9 @@ sc.advance();                          # consume ';'
     @par <string>::iterator() / StringIterator
     Iterate codepoints (not bytes) without materialising a list.  Each element is a @ref char value.
     This is also the iterator used by <tt>iterate</tt> for string sources.
+    The @ref plus_operator "+ operator" adds a char as a one-character string, so chars read by index or by
+    iteration concatenate (<tt>foldl $1 + $2, s.iterator()</tt> gives the string itself), and their codepoints are
+    added with \c int() (see @ref char_plus).
 
     @par <string>::codePointIterator() / StringCharIterator
     Iterate codepoints as integers without materialising a list.  This preserves the pre-char API for

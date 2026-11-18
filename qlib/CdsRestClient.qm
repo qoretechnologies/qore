@@ -50,6 +50,8 @@ module CdsRestClient {
         ConnectionSchemeCache::registerScheme("dynamics", DynamicsRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("bcrests", BusinessCentralRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage CdsRestClient Module

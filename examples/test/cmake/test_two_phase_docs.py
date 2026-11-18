@@ -125,7 +125,7 @@ set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
 set(QORE_QJAR_COMMAND "{sys.executable}" "${{CMAKE_SOURCE_DIR}}/check-env.py")
 set(QORE_USERMODULE_DOXYGEN_TEMPLATE "${{CMAKE_SOURCE_DIR}}/Doxyfile.in")
 set(QORE_MODULES_DIR lib/qore-modules)
-set(QORE_API_VERSION 2.0)
+set(QORE_API_VERSION 2.3)
 add_custom_target(docs)
 add_custom_target(docs-lang)
 add_library(fixture MODULE fixture.c)
@@ -213,7 +213,8 @@ qore_binary_module_two_phase_docs(native "First;Second")
             self.assertIn('"docs-Second"', result.stderr)
             self.assertIn("does not exist", " ".join(result.stderr.split()))
 
-    def test_bundled_modules_use_all_available_indexes(self):
+    def test_bundled_modules_import_only_referenced_indexes(self):
+        # #6350: importing every tag file copies all their symbols into each module's search index
         with tempfile.TemporaryDirectory(prefix="qore bundled docs ") as directory:
             root = Path(directory)
             source, build = root / "source", root / "build"
@@ -225,29 +226,205 @@ set(DOXYGEN_FOUND TRUE)
 set(DOXYGEN_EXECUTABLE "${{CMAKE_COMMAND}}" -E echo)
 set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
 add_custom_target(docs)
-foreach(name lang lib native peer User)
+foreach(name lang lib native peer unrelated User Other)
     add_custom_target(docs-${{name}} COMMAND "${{CMAKE_COMMAND}}" -E touch "${{name}}-built")
 endforeach()
-foreach(name native peer)
+foreach(name native peer unrelated)
     file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/modules/${{name}}")
     file(WRITE "${{CMAKE_BINARY_DIR}}/modules/${{name}}/Doxyfile" "# ${{name}}\\n")
 endforeach()
-qore_bundled_module_two_phase_docs("native;peer;disabled" "User")
+# disabled is an optional module that is not built; native lists it anyway
+set(QORE_DOC_REFERENCE_MODULES_native peer User disabled)
+set(QORE_DOC_REFERENCE_MODULES_peer native Other)
+qore_bundled_module_two_phase_docs("native;peer;unrelated;disabled" "User;Other")
 ''')
             for command in ([CMAKE, "-S", str(source), "-B", str(build)],
                             [CMAKE, "--build", str(build), "--target", "docs", "-j4"]):
                 result = subprocess.run(command, text=True, capture_output=True, timeout=30)
                 self.assertEqual(0, result.returncode, result.stdout + result.stderr)
                 self.assertNotIn("Warning", result.stderr)
-            for name, peer in (("native", "peer"), ("peer", "native")):
+            expected = {
+                "native": (f'"{build}/modules/peer/peer.tag=../../peer/html"', f'"{build}/User.tag=../../User/html"'),
+                "peer": (f'"{build}/modules/native/native.tag=../../native/html"', f'"{build}/Other.tag=../../Other/html"'),
+                "unrelated": (),
+            }
+            for name, tags in expected.items():
                 config = (build / f"modules/{name}/Doxyfile.final").read_text()
-                self.assertIn(f'"{build}/User.tag=../../User/html"', config)
-                self.assertIn(f'"{build}/modules/{peer}/{peer}.tag=../../{peer}/html"', config)
-                self.assertNotIn(f"{name}.tag=", config)
-                self.assertNotIn("disabled.tag", config)
+                self.assertEqual(len(tags), config.count(".tag="), config)
+                for tag in tags:
+                    self.assertIn(tag, config)
+                for other in ("lang", "lib", "unrelated", "disabled"):
+                    self.assertNotIn(f"/{other}.tag=", config)
+                if name != "peer":
+                    # Other is listed under peer only
+                    self.assertNotIn("/Other.tag=", config)
+                self.assertNotIn(f"/{name}.tag=", config)
                 self.assertIn("GENERATE_TAGFILE =\n", config)
-            for name in ("lang", "lib", "native", "peer", "User"):
+            for name in ("lang", "lib", "native", "peer", "unrelated", "User", "Other"):
                 self.assertTrue((build / f"{name}-built").exists())
+
+    def configure_bundled(self, references, binaries="native", users="User"):
+        directory = tempfile.TemporaryDirectory(prefix="qore bundled docs ")
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        source, build = root / "source", root / "build"
+        source.mkdir()
+        (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(BundledDocs NONE)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE "${{CMAKE_COMMAND}}" -E echo)
+set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
+add_custom_target(docs)
+foreach(name lang lib native User)
+    add_custom_target(docs-${{name}})
+endforeach()
+file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/modules/native")
+file(WRITE "${{CMAKE_BINARY_DIR}}/modules/native/Doxyfile" "# native\\n")
+set(QORE_DOC_REFERENCE_MODULES_native {references})
+qore_bundled_module_two_phase_docs("{binaries}" "{users}")
+''')
+        result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)],
+                                text=True, capture_output=True, timeout=30)
+        return build, result
+
+    def test_bundled_module_listing_a_typo_is_an_error(self):
+        _, result = self.configure_bundled("User Typo")
+        self.assertNotEqual(0, result.returncode)
+        message = " ".join(result.stderr.split())
+        self.assertIn('QORE_DOC_REFERENCE_MODULES_native lists "Typo"', message)
+
+    def test_bundled_module_listing_a_user_module_not_passed_is_an_error(self):
+        # User2 is a valid user module elsewhere but is not in this call's user module list
+        _, result = self.configure_bundled("User User2")
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn('lists "User2"', " ".join(result.stderr.split()))
+
+    def test_bundled_module_listing_an_unbuilt_declared_module_is_skipped(self):
+        build, result = self.configure_bundled("User optional", binaries="native;optional")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        config = (build / "modules/native/Doxyfile.final").read_text()
+        self.assertEqual(1, config.count(".tag="), config)
+        self.assertIn(f'"{build}/User.tag=../../User/html"', config)
+        self.assertNotIn("optional", config)
+
+    def configure_reference_check(self, references, warning, rc=0):
+        """Configures a bundled module whose final pass reports an unresolved reference (issue #6367): a stand-in
+        for Doxygen writes the warning to the pass's WARN_LOGFILE, and the tag files of the other modules exist"""
+        directory = tempfile.TemporaryDirectory(prefix="qore bundled doc refs ")
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        source, build = root / "source", root / "build"
+        source.mkdir()
+        (source / "warning.txt").write_text(warning + "\n")
+        (source / "fake-doxygen.py").write_text(f'''import re, sys
+from pathlib import Path
+config = Path(sys.argv[1]).read_text()
+match = re.search(r'^WARN_LOGFILE = "([^"]*)"', config, re.M)
+if match:
+    Path(match.group(1)).write_text(Path({str(source / "warning.txt")!r}).read_text())
+sys.exit({rc})
+''')
+        tag = """<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<tagfile><compound kind="page"><name>{name}_page</name><filename>{name}_page.html</filename></compound></tagfile>
+"""
+        (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(BundledDocRefs NONE)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(Python3_EXECUTABLE "{Path(sys.executable).as_posix()}")
+set(DOXYGEN_EXECUTABLE "${{Python3_EXECUTABLE}}" "${{CMAKE_SOURCE_DIR}}/fake-doxygen.py")
+set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
+add_custom_target(docs)
+foreach(name lang lib native peer User)
+    add_custom_target(docs-${{name}})
+endforeach()
+foreach(name native peer)
+    file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/modules/${{name}}")
+    file(WRITE "${{CMAKE_BINARY_DIR}}/modules/${{name}}/Doxyfile" "# ${{name}}\\n")
+endforeach()
+file(WRITE "${{CMAKE_BINARY_DIR}}/modules/peer/peer.tag" [=[{tag.format(name="peer")}]=])
+file(WRITE "${{CMAKE_BINARY_DIR}}/User.tag" [=[{tag.format(name="User")}]=])
+set(QORE_DOC_REFERENCE_MODULES_native {references})
+qore_bundled_module_two_phase_docs("native;peer" "User")
+''')
+        result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)],
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        config = (build / "modules/native/Doxyfile.final").read_text()
+        self.assertIn(f'WARN_LOGFILE = "{build}/modules/native/doc-final-warnings.log"', config)
+        return build
+
+    def build_final(self, build, module="native"):
+        return subprocess.run([CMAKE, "--build", str(build), "--target", f"docs-{module}-final"],
+                              text=True, capture_output=True, timeout=60)
+
+    def test_bundled_module_reference_to_an_unlisted_module_fails(self):
+        warning = "/src/native.dox:3: warning: unable to resolve reference to 'peer_page' for \\ref command"
+        for references, owner in (("User", "peer"), ("peer", "User")):
+            with self.subTest(references=references):
+                target = f"{owner}_page"
+                build = self.configure_reference_check(references, warning.replace("peer_page", target))
+                result = self.build_final(build)
+                self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+                output = " ".join((result.stdout + result.stderr).split())
+                self.assertIn(f"refers to '{target}' of module {owner}, which is not in "
+                              "QORE_DOC_REFERENCE_MODULES_native", output)
+
+    def test_bundled_module_reference_to_a_listed_module_passes(self):
+        warning = "/src/native.dox:3: warning: unable to resolve reference to 'peer_page' for \\ref command"
+        build = self.configure_reference_check("peer User", warning)
+        result = self.build_final(build)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        # the warning is still shown
+        self.assertIn("unable to resolve reference to 'peer_page'", result.stdout + result.stderr)
+
+    def test_bundled_module_failed_doxygen_shows_its_errors(self):
+        # with WARN_LOGFILE, Doxygen writes its errors only to the log, which the check prints
+        error = "error: tag OUTPUT_DIRECTORY: Output directory cannot be created"
+        build = self.configure_reference_check("User", error, rc=1)
+        result = self.build_final(build)
+        self.assertNotEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertIn(error, result.stdout + result.stderr)
+
+    def test_bundled_module_unknown_reference_passes(self):
+        # a reference that no module defines is a documentation error for Doxygen to report, not a missing import
+        build = self.configure_reference_check(
+            "User", "/src/native.dox:3: warning: unable to resolve reference to 'nowhere' for \\ref command")
+        result = self.build_final(build)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_bundled_module_final_pass_writes_its_warnings_for_the_check(self):
+        # Python is found by the function itself, and the check script is the one of the source tree of the macros
+        build, result = self.configure_bundled("User")
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        config = (build / "modules/native/Doxyfile.final").read_text()
+        self.assertIn(f'WARN_LOGFILE = "{build}/modules/native/doc-final-warnings.log"', config)
+
+    def test_bundled_module_listing_itself_is_an_error(self):
+        with tempfile.TemporaryDirectory(prefix="qore bundled docs ") as directory:
+            root = Path(directory)
+            source, build = root / "source", root / "build"
+            source.mkdir()
+            (source / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.14...3.31)
+project(BundledDocs NONE)
+include("{ROOT.as_posix()}/cmake/QoreMacros.cmake")
+set(DOXYGEN_FOUND TRUE)
+set(DOXYGEN_EXECUTABLE "${{CMAKE_COMMAND}}" -E echo)
+set(QORE_QDX_COMMAND "${{CMAKE_COMMAND}}" -E true)
+add_custom_target(docs)
+foreach(name lang lib native)
+    add_custom_target(docs-${{name}})
+endforeach()
+file(MAKE_DIRECTORY "${{CMAKE_BINARY_DIR}}/modules/native")
+file(WRITE "${{CMAKE_BINARY_DIR}}/modules/native/Doxyfile" "# native\\n")
+set(QORE_DOC_REFERENCE_MODULES_native native)
+qore_bundled_module_two_phase_docs("native" "")
+''')
+            result = subprocess.run([CMAKE, "-S", str(source), "-B", str(build)],
+                                    text=True, capture_output=True, timeout=30)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("lists the module itself", " ".join(result.stderr.split()))
 
 
 if __name__ == "__main__":

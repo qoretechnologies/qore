@@ -62,6 +62,17 @@ enum class HttpClientProtocol {
                 //!< manager decides H1 vs H2 per connection
 };
 
+//! defined if HttpClientConnectionBase::tryReservePendingStream() is available and the idle timeout of a client
+//! connection does not close it with a reserved stream (#6184)
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION 1
+
+//! defined if HttpClientConnectionBase::setIdleCloseHold() is available (#6194)
+/** @since %Qore 3.0
+*/
+#define QORE_HAS_HTTP_CLIENT_IDLE_CLOSE_HOLD 1
+
 //! Abstract base for C++ HTTP client connections
 /** This class wraps a protocol-specific poll operation (H1, H2, or H3) and
     a socket, submits the poll op to the global AsyncIoController, and exposes
@@ -207,6 +218,52 @@ public:
 
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
+
+    //! Called by the I/O thread when the connection's idle timeout expires: false if a stream is reserved or active
+    /** Under @ref reserve_lock: with no hold (setIdleCloseHold()), no reserved stream and no active one (a request
+        submitted since the operation found the connection idle; read with \a active_streams, or
+        getActiveStreamCount() if it is nullptr), the
+        connection is marked as closing for its idle timeout and accepts no further reservation (tryReserveStream()
+        and tryReservePendingStream() fail), and true is returned; otherwise false is returned and the operation
+        starts a new idle period, so that the reserved request is not closed under (#6184)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool tryBeginIdleClose(active_stream_count_t active_streams, const void* op) override;
+
+    //! Reserves a stream for a connection whose active streams are counted by its operation (a Qore-level connection)
+    /** Like tryReserveStream(), with the active streams read with \a active_streams from the operation \a op and the
+        limit given by the caller: fails if the connection is draining, closed or closing for its idle timeout, or if
+        \a max_streams is not 0 and the active streams and the reservations reach it.  The active streams are read
+        under @ref reserve_lock, as in tryBeginIdleClose(), which a release of a reservation takes: a submit counts its
+        active stream before it releases its reservation, so a request that is being submitted is in one of the two
+        counts, and two requests cannot reserve the last stream of a connection.  The draining and closed states are
+        checked after the count, as in tryReserveStream(): a connection stops accepting requests before the response
+        that ends it releases its stream, so a connection whose released stream is counted is seen draining.  The
+        reservation is released with releaseStreamReservation(), as one of tryReserveStream(); the idle timeout of the
+        connection's operation does not close a connection with a reservation (#6184).
+
+        @param active_streams returns the active streams of the operation \a op
+        @param op the connection's operation
+        @param max_streams the most streams of the connection; 0: no limit
+
+        @return true if a stream was reserved
+
+        @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_PENDING_RESERVATION)
+    */
+    DLLEXPORT bool tryReservePendingStream(active_stream_count_t active_streams, const void* op, int max_streams);
+
+    //! Holds the connection against its idle timeout, or releases the hold
+    /** While held, tryBeginIdleClose() returns false: the idle timeout of the connection's operation does not close
+        it, whether or not a stream is reserved; for a connection that a session holds between its requests (a leased
+        connection of the Qore-level connection manager, #6194).  Set the hold before the reservation that it replaces
+        is released, so that the connection is never without both.
+
+        @param hold true to hold the connection, false to release the hold
+
+        @since %Qore 3.0 (@ref QORE_HAS_HTTP_CLIENT_IDLE_CLOSE_HOLD)
+    */
+    DLLEXPORT void setIdleCloseHold(bool hold);
 
     //! Returns true if a response has been received on this connection
     /** A connection that has served a request can be closed by the peer while it is idle in the pool, so a
@@ -542,11 +599,20 @@ public:
     DLLLOCAL void inheritOpener(const HttpClientConnectionBase& from);
 
     //! Sets the pool key for O(1) eviction by the connection manager
-    /** Called by the manager when inserting the connection into the pool.
+    /** Called by the manager when inserting the connection into the pool, with the pool's lock held.
+
+        The key is set with the lock of the close notification (onClosedHook()), which reads it: a connection whose
+        close notification has been sent already, which happens when a connection that is still connecting fails
+        while it is added to the pool, gets no key, and the manager must not pool it, as no notification would
+        remove it; a connection that gets the key sends its notification with it.
+
         @param key the pool key string
+
+        @return true if the key was set, false if the connection's close notification has been sent already
+
         @since %Qore 3.0
     */
-    DLLEXPORT void setPoolKey(const std::string& key);
+    DLLEXPORT bool setPoolKey(const std::string& key);
 
     //! Returns the pool key (empty if not in a pool)
     /** @since %Qore 3.0
@@ -669,6 +735,15 @@ public:
     */
     DLLEXPORT uint32_t markInvalidated();
 
+    //! Returns @c true once @ref markInvalidated has been called: the connection is being closed or destroyed
+    /** New calls on the connection are refused from then on, before @ref isClosed reports the close.
+
+        @since %Qore 3.0
+    */
+    bool isInvalidated() const {
+        return lifetime_state_.load(std::memory_order_acquire) & INVALIDATED_BIT;
+    }
+
     //! Blocks until every in-flight @ref MethodGuard has released.
     /** Must be called AFTER @ref markInvalidated (otherwise new guards
         would keep acquiring while the caller waits).  Returns promptly
@@ -678,8 +753,10 @@ public:
     */
     DLLEXPORT void drainInFlight();
 
-    //! Returns the connection creation timestamp (epoch microseconds).
-    /** Set once in the protected constructor; never updated.  Used by
+    //! Returns the time that the connection was created, in microseconds on the monotonic clock
+    /** The value is q_get_monotonic_us() when the connection was created, not a time of day: it only serves to measure
+        the connection's age, which a step of the system clock does not change.  Set once in the protected
+        constructor; never updated.  Used by
         @ref HttpClientConnectionManagerBase to enforce
         @ref HttpClientConnectionManagerBase::Options::max_age_ms at pool checkout.  Pure stored-state
         read — no syscall, no I/O thread coupling.
@@ -723,6 +800,14 @@ protected:
     //! @ref reserve_lock.
     int pending_stream_count = 0;
 
+    //! True once the connection's idle timeout decided to close it: no reservation is taken.  Protected by
+    //! @ref reserve_lock (#6184)
+    bool idle_closing = false;
+
+    //! True while the connection is held against its idle timeout (setIdleCloseHold()).  Protected by
+    //! @ref reserve_lock (#6194)
+    bool idle_close_hold = false;
+
     //! Pending streaming-send reservations.  Protected by @ref reserve_lock.
     /** At most one is allowed because H2/H3 connection objects keep one
         active streaming-send stream id for incremental body pushes.
@@ -755,9 +840,13 @@ protected:
     */
     HttpClientConnectionManagerBase* manager_ = nullptr;
 
-    //! Pool key for O(1) eviction.  Set by setPoolKey(), read by the
-    //! manager's onConnectionClosed / closeAndEvict.
+    //! Pool key for O(1) eviction.  Set by setPoolKey() with @ref onclose_lock and the manager's pool lock held,
+    //! read by the manager's onConnectionClosed (with @ref onclose_lock held) and closeAndEvict (with the pool lock
+    //! held).
     std::string pool_key_;
+
+    //! True once the close notification (onClosedHook()) has run; protected by @ref onclose_lock
+    bool close_notified_ = false;
 
     //! Lifetime barrier state — see @ref MethodGuard.
     /** Packed: top bit @ref INVALIDATED_BIT + low 31 bits in-flight count.

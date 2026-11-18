@@ -34,6 +34,51 @@
 #include "QC_NormalMethodVariant.h"
 #include "QC_Class.h"
 
+#include <qore/intern/LexicalReflection.h>
+
+template <bool Lexical>
+static QORE_LEXICAL_REFLECTION_INLINE QoreValue CopyMethodVariant_call_impl(LexicalSemanticPolicy policy,
+        QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink, QoreObject* obj) {
+    // the privileges of the calling code, captured before switching to the class's Program
+    QoreReflectionCaller caller;
+    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
+        return QoreValue();
+    }
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, v->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
+    // a confusing exception
+    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
+    const QoreMethod* m = mv->getMethod();
+    if (check_variant_call(v->variant, obj, *m, xsink)) {
+        return QoreValue();
+    }
+
+    const QoreClass* cls = m->getClass();
+    // copying creates an object of the class: the class and the variant must be allowed by the caller and the class's
+    // Program
+    if (check_constructor(caller, cls, v->pgm, xsink)
+        || reflection_check_variant_call(caller, v->variant, cls->getName(), "copy", v->pgm, xsink)) {
+        return QoreValue();
+    }
+    if constexpr (Lexical) return qore_lexical_reflection_copy(policy, *cls, obj, xsink);
+    else return cls->execCopy(obj, xsink);
+}
+
+static QoreValue CopyMethodVariant_call_Vo_lexical(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    return CopyMethodVariant_call_impl<true>(qore_get_native_semantic_policy(), self, v, args, runtime_cfg, xsink,
+        args->retrieveEntry(0).get<QoreObject>());
+}
+
+static QoreValue CopyMethodVariant_call_Vo(QoreObject* self, QoreReflectionVariant* v, const QoreListNode* args, RuntimeConfig& runtime_cfg, ExceptionSink* xsink);
+static const QoreLexicalMethodRegistrationHelper::Entry lexical_entries_CopyMethodVariant[] = {
+    {reinterpret_cast<q_method_t>(CopyMethodVariant_call_Vo), reinterpret_cast<q_method_t>(CopyMethodVariant_call_Vo_lexical)},
+};
+
 //! The class for %Qore class copy method variants
 /**
     This class cannot be instantiated directly and also cannot be directly inherited by user-defined classes.
@@ -68,31 +113,7 @@ auto v = m.call(obj);
     @throw INVALID-FUNCTION-ACCESS the calling code's or the class's Program's sandboxing restrictions do not allow the variant (see @ref reflection_caller_privilege)
 */
 auto CopyMethodVariant::call(object obj) {
-    // the privileges of the calling code, captured before switching to the class's Program
-    QoreReflectionCaller caller;
-    if (reflection_check_program_access(caller, obj->getProgram(), "call methods on objects of", xsink)) {
-        return QoreValue();
-    }
-    // get read access to program object
-    QoreExternalProgramContextHelper tch(xsink, v->pgm);
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    // we have to explictly test object compatibility here, otherwise QoreObject::evalMethod() will throw
-    // a confusing exception
-    const QoreExternalMethodVariant* mv = reinterpret_cast<const QoreExternalMethodVariant*>(v->variant);
-    const QoreMethod* m = mv->getMethod();
-    if (check_variant_call(v->variant, obj, *m, xsink)) {
-        return QoreValue();
-    }
-
-    const QoreClass* cls = m->getClass();
-    // copying creates an object of the class: the class and the variant must be allowed by the caller and the class's
-    // Program
-    if (check_constructor(caller, cls, v->pgm, xsink)
-        || reflection_check_variant_call(caller, v->variant, cls->getName(), "copy", v->pgm, xsink)) {
-        return QoreValue();
-    }
-    return cls->execCopy(obj, xsink);
+    return CopyMethodVariant_call_impl<false>({}, self, v, args, runtime_cfg, xsink, obj);
 }
+
+//! @qppinit: QoreLexicalMethodRegistrationHelper lexical_registration(lexical_entries_CopyMethodVariant);

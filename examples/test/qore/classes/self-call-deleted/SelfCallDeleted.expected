@@ -1,0 +1,135 @@
+round 0
+final class, self, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m(auto a) on an object that has already been deleted
+final class, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m() on an object that has already been deleted
+final class, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m(auto a) on an object that has already been deleted
+final class, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m() on an object that has already been deleted
+final class, local try block:
+  local handler: OBJECT-ALREADY-DELETED
+  local handler: OBJECT-ALREADY-DELETED
+final class, valid object:
+  arg evaluated
+  F::m() called
+  F::m() called
+class, self, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+class, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+class, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+final method, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm() on an object that has already been deleted
+final method, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm(auto a) on an object that has already been deleted
+final method, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm() on an object that has already been deleted
+static method:
+  arg evaluated
+  C::sm() called
+closure, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+on_exit handler:
+  on_exit handler: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class, valid object:
+  arg evaluated
+  C::m() called
+  C::m() called
+  arg evaluated
+  C::fm() called
+round 1
+final class, self, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m(auto a) on an object that has already been deleted
+final class, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m() on an object that has already been deleted
+final class, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m(auto a) on an object that has already been deleted
+final class, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m() on an object that has already been deleted
+final class, local try block:
+  local handler: OBJECT-ALREADY-DELETED
+  local handler: OBJECT-ALREADY-DELETED
+final class, valid object:
+  arg evaluated
+  F::m() called
+  F::m() called
+class, self, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+class, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+class, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+final method, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm() on an object that has already been deleted
+final method, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm(auto a) on an object that has already been deleted
+final method, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm() on an object that has already been deleted
+static method:
+  arg evaluated
+  C::sm() called
+closure, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+on_exit handler:
+  on_exit handler: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class, valid object:
+  arg evaluated
+  C::m() called
+  C::m() called
+  arg evaluated
+  C::fm() called
+round 2
+final class, self, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m(auto a) on an object that has already been deleted
+final class, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m() on an object that has already been deleted
+final class, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m(auto a) on an object that has already been deleted
+final class, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call F::m() on an object that has already been deleted
+final class, local try block:
+  local handler: OBJECT-ALREADY-DELETED
+  local handler: OBJECT-ALREADY-DELETED
+final class, valid object:
+  arg evaluated
+  F::m() called
+  F::m() called
+class, self, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+class, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+class, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+final method, self, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm() on an object that has already been deleted
+final method, unqualified, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm(auto a) on an object that has already been deleted
+final method, unqualified, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::fm() on an object that has already been deleted
+static method:
+  arg evaluated
+  C::sm() called
+closure, function argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+closure, literal argument:
+  OBJECT-ALREADY-DELETED: cannot call C::m(auto a) on an object that has already been deleted
+on_exit handler:
+  on_exit handler: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class, valid object:
+  arg evaluated
+  C::m() called
+  C::m() called
+  arg evaluated
+  C::fm() called

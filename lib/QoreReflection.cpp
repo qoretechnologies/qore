@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/LexicalReflection.h"
 #include "qore/Qore.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/Function.h"
@@ -75,7 +76,7 @@ bool qore_type_is_assignable_from(const QoreTypeInfo* ti1, const QoreTypeInfo* t
 
 QoreValue qore_type_assign_value(const QoreTypeInfo* t, const QoreValue value, ExceptionSink* xsink) {
     ValueHolder rv(value.refSelf(), xsink);
-    QoreTypeInfo::acceptAssignment(t, "<type assignment>", *rv, xsink);
+    QoreTypeInfo::acceptAssignmentNative(t, "<type assignment>", *rv, xsink, nullptr);
     return *xsink ? QoreValue() : rv.release();
 }
 
@@ -108,7 +109,7 @@ bool qore_type_is_assignable_from(const QoreTypeInfo* ti1, const QoreTypeInfo* t
 
 int qore_type_is_assignable_from(const QoreTypeInfo* t, QoreValue value) {
     // an assignment folds the elements of a container that it can convert
-    return QoreTypeInfo::runtimeAcceptsValueOrFold(t, value);
+    return QoreTypeInfo::runtimeAcceptsValue(t, value, qore_get_native_semantic_policy(), true);
 }
 
 bool qore_type_can_convert_to_scalar(const QoreTypeInfo* ti) {
@@ -324,6 +325,26 @@ QoreValue QoreExternalMemberBase::getDefaultValue(ExceptionSink* xsink) const {
     return reinterpret_cast<const QoreMemberInfoBase*>(this)->exp.eval(xsink);
 }
 
+QoreValue QoreExternalMemberBase::getDefaultValue(const QoreClass& cls, ExceptionSink* xsink) const {
+    const QoreMemberInfoBase* mi = reinterpret_cast<const QoreMemberInfoBase*>(this);
+    // the initializer is code of the class's source Program (see QoreDeclaringProgramHelper)
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (mi->initIsCode() && qore_class_private::get(cls)->enterSourceProgramForInit(src_pgm_helper, xsink)) {
+        return QoreValue();
+    }
+    return mi->exp.eval(xsink);
+}
+
+QoreValue QoreExternalMemberBase::getDefaultValue(const TypedHashDecl& hd, ExceptionSink* xsink) const {
+    const QoreMemberInfoBase* mi = reinterpret_cast<const QoreMemberInfoBase*>(this);
+    // the initializer is code of the Program that declared the hashdecl (see QoreDeclaringProgramHelper)
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (mi->initIsCode() && typed_hash_decl_private::get(hd)->enterSourceProgram(src_pgm_helper, xsink)) {
+        return QoreValue();
+    }
+    return mi->exp.eval(xsink);
+}
+
 const QoreExternalProgramLocation* QoreExternalMemberBase::getSourceLocation() const {
     const QoreProgramLocation* loc = reinterpret_cast<const QoreMemberInfoBase*>(this)->loc;
     return reinterpret_cast<const QoreExternalProgramLocation*>(loc ? loc : &loc_builtin);
@@ -339,6 +360,15 @@ const char* QoreExternalMemberVarBase::getAccessString() const {
 
 QoreValue QoreExternalStaticMember::getValue() const {
     return reinterpret_cast<const QoreVarInfo*>(this)->getRuntimeReferencedValue();
+}
+
+int QoreExternalStaticMember::setValue(const QoreValue val, const QoreProgram* writer, ExceptionSink* xsink) const {
+    // decided on the Program of the code that asks for the write: the write itself can run in the Program that
+    // defines the class, whose code may change its state (qore#5664)
+    if (reinterpret_cast<const QoreVarInfo*>(this)->checkTrustedModuleWriter(writer, xsink)) {
+        return -1;
+    }
+    return setValue(val, xsink);
 }
 
 int QoreExternalStaticMember::setValue(const QoreValue val, ExceptionSink* xsink) const {
@@ -407,11 +437,26 @@ const QoreClass* QoreExternalFunction::getClass() const {
     return reinterpret_cast<const QoreFunction*>(this)->getClass();
 }
 
+bool QoreExternalFunction::isModulePublic() const {
+    return reinterpret_cast<const QoreFunction*>(this)->hasPublic();
+}
+
 const QoreExternalVariant* QoreExternalFunction::findVariant(const type_vec_t& type_vec, ExceptionSink* xsink) const {
     const QoreClass* cls = getClass();
     const qore_class_private* qc = cls ? qore_class_private::get(*cls) : nullptr;
     return reinterpret_cast<const QoreExternalVariant*>(
         reinterpret_cast<const QoreFunction*>(this)->runtimeFindVariant(xsink, type_vec, qc)
+    );
+}
+
+const QoreExternalVariant* QoreExternalFunction::findVariant(const type_vec_t& type_vec, const QoreProgram* pgm,
+        const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
+    assert(!getClass());
+    // a caller that the export boundary applies to finds only the variants that an importer of the module sees
+    unsigned filter = caller.appliesModuleExports(pgm) ? QRFV_EXPORTED_ONLY : 0;
+    return reinterpret_cast<const QoreExternalVariant*>(
+        reinterpret_cast<const QoreFunction*>(this)->runtimeFindVariant(xsink, type_vec, nullptr, nullptr, nullptr,
+            nullptr, filter)
     );
 }
 
@@ -435,20 +480,68 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     );
 }
 
+//! returns the functional domains of \a dom that the caller or the target Program does not allow
+static int64 qore_reflection_denied_domains(const QoreReflectionCaller& caller, int64 dom, const QoreProgram* target) {
+    int64 denied = 0;
+    for (int i = 0; i < 64; ++i) {
+        int64 bit = static_cast<int64>(1ULL << i);
+        if ((dom & bit) && !caller.allowsDomain(bit, target)) {
+            denied |= bit;
+        }
+    }
+    return denied;
+}
+
 QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
         QoreProgram* pgm, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
-    const QoreFunction* f = reinterpret_cast<const QoreFunction*>(this);
+    return evalFunction(variant, args, pgm, nullptr, caller, xsink);
+}
+
+template <bool Lexical>
+static QORE_INTERN_ALWAYS_INLINE QoreValue qore_reflection_function_impl(LexicalSemanticPolicy policy, const QoreExternalFunction& external,
+        const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm, const QoreNamespace* ns,
+        const QoreReflectionCaller& caller, ExceptionSink* xsink) {
+    const QoreFunction* f = reinterpret_cast<const QoreFunction*>(&external);
     RuntimeConfig& rc = rc_get_current_ref();
+    // a function that a user module does not export, or that is in a namespace that it does not export, cannot be
+    // called by a caller its export boundary applies to
+    if (caller.checkModuleExport(caller.canSeeDeclaration(pgm, ns, external.isModulePublic() || external.isBuiltin()),
+            "function", external.getName(), xsink)) {
+        return QoreValue();
+    }
+    // nor can a variant that the module does not export (a function can have public and private variants)
+    bool limited = caller.appliesModuleExports(pgm);
+    if (variant && limited && caller.checkModuleExport(caller.canSeeVariant(pgm, variant), "function variant",
+            external.getName(), xsink)) {
+        return QoreValue();
+    }
     // the call is deferred as a cross-Program call is (args evaluated in the caller's context, body under the
     // Program's own options); the override forces the caller's restrictions on the domain check and the body
     QoreReflectionCallCheckHelper call_check(caller, pgm);
+    // the variant is selected for the arguments among the visible variants, as in a call from an importer of the
+    // module: selecting among all variants could select a private one where an importer selects a public one
+    if (!variant && limited) {
+        if constexpr (Lexical) {
+            variant = reinterpret_cast<const QoreExternalVariant*>(f->runtimeFindVariant(xsink, args,
+                QRFV_EXPORTED_ONLY, nullptr, nullptr, nullptr, nullptr, nullptr, policy));
+        } else {
+            variant = reinterpret_cast<const QoreExternalVariant*>(f->runtimeFindVariant(xsink, args,
+                QRFV_EXPORTED_ONLY, nullptr));
+        }
+        if (!variant) {
+            assert(*xsink);
+            return QoreValue();
+        }
+    }
     // Check the fixed variant's domain, or the domains common to all variants before dynamic resolution.
     // Keep domain errors ahead of the Program-access error for a builtin that the caller already cannot use.
     bool caller_refused = false;
-    if (!caller.allowsDomain(variant ? variant->getDomain() : getDomain(), pgm, &caller_refused)) {
-        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'",
-            caller_refused ? "parse options" : "the parse options of the Program it was found in", getName(),
-            variant ? variant->getSignatureText() : "...");
+    int64 dom = variant ? variant->getDomain() : external.getDomain();
+    if (!caller.allowsDomain(dom, pgm, &caller_refused)) {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "%s do not allow access to function '%s(%s)'; "
+            "functional domain: %s", caller_refused ? "parse options" : "the parse options of the Program it was "
+            "found in", external.getName(), variant ? variant->getSignatureText() : "...",
+            qore_describe_source_domains(qore_reflection_denied_domains(caller, dom, pgm)).c_str());
         return QoreValue();
     }
     // Builtins can enter user code or construct Programs as well (for example create_object()), so every call
@@ -456,9 +549,29 @@ QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant,
     if (caller.checkProgramAccess(pgm, "execute code in", xsink)) {
         return QoreValue();
     }
-    return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
-        nullptr, true);
+    // a caller that the boundary applies to can be given a public variant whose arguments only another variant
+    // accepts: the variant is then selected among the public variants as well
+    QORE_DBG_RUNTIME_CHOSEN_VARIANT();
+    if constexpr (Lexical) {
+        return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
+            nullptr, QCEF_DEFER_DOMAIN_PO | (limited ? QRFV_EXPORTED_ONLY : 0), policy);
+    } else {
+        return f->evalFunction(reinterpret_cast<const AbstractQoreFunctionVariant*>(variant), args, pgm, rc, xsink,
+            nullptr, QCEF_DEFER_DOMAIN_PO | (limited ? QRFV_EXPORTED_ONLY : 0));
+    }
 }
+
+QoreValue QoreExternalFunction::evalFunction(const QoreExternalVariant* variant, const QoreListNode* args,
+        QoreProgram* pgm, const QoreNamespace* ns, const QoreReflectionCaller& caller, ExceptionSink* xsink) const {
+    return qore_reflection_function_impl<false>({}, *this, variant, args, pgm, ns, caller, xsink);
+}
+
+QoreValue qore_lexical_reflection_function(LexicalSemanticPolicy policy, const QoreExternalFunction& external,
+        const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm, const QoreNamespace* ns,
+        const QoreReflectionCaller& caller, ExceptionSink* xsink) {
+    return qore_reflection_function_impl<true>(policy, external, variant, args, pgm, ns, caller, xsink);
+}
+
 
 const QoreExternalVariant* QoreExternalFunction::getFirstVariant() const {
     return reinterpret_cast<const QoreExternalVariant*>(reinterpret_cast<const QoreFunction*>(this)->first());
@@ -582,6 +695,16 @@ QoreValue QoreExternalGlobalVar::getReferencedValue() const {
 
 const QoreExternalProgramLocation* QoreExternalGlobalVar::getSourceLocation() const {
     return reinterpret_cast<const QoreExternalProgramLocation*>(reinterpret_cast<const Var*>(this)->getParseLocation());
+}
+
+int QoreExternalGlobalVar::setValue(const QoreValue val, const QoreProgram* writer, const QoreProgram* owner,
+        ExceptionSink* xsink) const {
+    // decided on the Program of the code that asks for the write: the write itself can run in the Program that
+    // holds the variable (qore#5664)
+    if (reinterpret_cast<const Var*>(this)->checkModuleStateWriter(writer, owner, xsink)) {
+        return -1;
+    }
+    return setValue(val, xsink);
 }
 
 int QoreExternalGlobalVar::setValue(const QoreValue val, ExceptionSink* xsink) const {
@@ -781,6 +904,73 @@ int QoreReflectionCaller::checkClassElementAccess(const QoreClass* cls, ClassAcc
             "code that a sandbox governs or whose functional domains are restricted", kind, cls->getName(), name,
             privpub(access));
     }
+    return -1;
+}
+
+bool QoreReflectionCaller::appliesModuleExports(const QoreProgram* target) const {
+    if (!member_access || !target || target == pgm) {
+        return false;
+    }
+    // only a user module has an export boundary; user code cannot set PO_IN_MODULE
+    if (!target->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE))) {
+        return false;
+    }
+    // a Program that the caller created is under its control
+    return !(pgm_id && qore_program_private::programCreatedBy(*target, pgm_id));
+}
+
+bool QoreReflectionCaller::canSeeNamespace(const QoreProgram* target, const QoreNamespace* ns) const {
+    if (!ns || !appliesModuleExports(target)) {
+        return true;
+    }
+    // as when the module is imported (qore_ns_private::copyMergeCommittedNamespace()): a namespace that the module
+    // declares without "public" is not exported, nor is anything in it; a namespace that the module imported was
+    // exported by the module that declares it
+    for (const QoreNamespace* i = ns; i; i = i->getParent()) {
+        const qore_ns_private* p = qore_ns_private::get(*i);
+        if (!p->root && !p->builtin && !p->pub && !p->imported) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreReflectionCaller::canSeeDeclaration(const QoreProgram* target, const QoreNamespace* ns,
+        bool exported) const {
+    if (!appliesModuleExports(target)) {
+        return true;
+    }
+    return exported && canSeeNamespace(target, ns);
+}
+
+bool QoreReflectionCaller::canSeeVariant(const QoreProgram* target, const QoreExternalVariant* v) const {
+    assert(v);
+    if (!appliesModuleExports(target)) {
+        return true;
+    }
+    return !QoreFunction::skipFilteredVariant(QRFV_EXPORTED_ONLY,
+        reinterpret_cast<const AbstractQoreFunctionVariant*>(v));
+}
+
+bool QoreReflectionCaller::canSeeClass(const QoreProgram* target, const QoreClass* cls) const {
+    if (!cls || cls->isSystem()) {
+        return true;
+    }
+    // an imported class shares its declaration with the original: the Program and namespace that declare it, and
+    // its public flag
+    const QoreProgram* spgm = cls->getSourceProgram();
+    return canSeeDeclaration(spgm ? spgm : target, cls->getNamespace(), cls->isModulePublic());
+}
+
+int QoreReflectionCaller::checkModuleExport(bool visible, const char* kind, const char* name,
+        ExceptionSink* xsink) const {
+    assert(xsink);
+    if (visible) {
+        return 0;
+    }
+    xsink->raiseException("REFLECTION-ACCESS-ERROR", "%s '%s' is not exported by the module that declares it and "
+        "cannot be used through reflection by code that a sandbox governs or whose functional domains are "
+        "restricted", kind, name);
     return -1;
 }
 

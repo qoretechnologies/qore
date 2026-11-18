@@ -25,7 +25,6 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
 %requires Util
 %requires QUnit
 %requires Mime
@@ -39,9 +38,7 @@
 %define NoPgsql
 %endtry
 
-%try-module SqlUtil
-%define NoSqlUtil
-%endtry
+%requires SqlUtil
 
 %requires Schema
 # a run on PostgreSQL has its own schema
@@ -79,6 +76,8 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("namedArtifacts", \namedArtifactsTest());
         addTestCase("executableAdapterNative", \executableAdapterNativeTest());
         addTestCase("executableAdapterOnnxTensor", \executableAdapterOnnxTensorTest());
+        addTestCase("executable adapter device binding is refused to a sandbox that refuses uncontrolled APIs",
+            \executableAdapterDeviceBindingSandboxTest());
         addTestCase("executableAdapterOnnxStorageDtypes", \executableAdapterOnnxStorageDtypesTest());
         addTestCase("modelPackageInspection", \modelPackageInspectionTest());
         addTestCase("onnxPackageInspection", \onnxPackageInspectionTest());
@@ -1142,6 +1141,49 @@ class ModelRegistryTest inherits QUnit::Test {
         assertEq(2, batch.prediction.size(), "native matrix adapter should return two predictions");
     }
 
+    executableAdapterDeviceBindingSandboxTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        # device binding uses uncontrolled APIs, which a sandbox refuses unless it allows them (qore#5741): the
+        # adapter refuses it before any binding call, with its own error
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+        string package_dir = dir + DirSep + "onnx_device_adapter";
+        mkdir_ex(package_dir, 0755, True);
+        writeBinaryFile(package_dir + DirSep + "model.onnx",
+            ReadOnlyFile::readBinaryFile(getTestOnnxModelPath()));
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        string vid = registry.registerPackage(package_dir, {
+            "name": "adapter-onnx-device",
+            "description": "adapter ONNX device binding sandbox fixture",
+            "execution_config": <ML::OnnxSessionConfig>{"providers": ()},
+            "device_binding": <ML::OnnxDeviceBindingConfig>{"enabled": True, "default_output_device": "cpu"},
+        });
+        QoreModelRegistry::ModelExecutableAdapter adapter = registry.loadExecutableAdapter("adapter-onnx-device", vid);
+        code run = auto sub () { return adapter.runFeatureMatrixTensors(((1.0,), (2.0,), (3.0,)), NOTHING); };
+        # trusted code binds the device
+        assertTrue(run().size() > 0, "trusted code binds the device");
+        foreach bool allow in ((False, True)) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+            if (allow) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            Program p(PO_NEW_STYLE);
+            p.setSandboxManager(sm);
+            p.parse("auto sub through(code c) { return c(); }", "registry-device-binding-sandbox");
+            if (allow) {
+                assertTrue(p.callFunction("through", run).size() > 0,
+                    "a sandbox that allows uncontrolled APIs binds the device");
+            } else {
+                assertThrows("ML-REGISTRY-ERROR", "uncontrolled APIs", \p.callFunction(), ("through", run),
+                    "the default sandbox is refused device binding");
+            }
+        }
+    }
+
     executableAdapterOnnxTensorTest() {
         if (skipOnnx()) {
             return;
@@ -1803,9 +1845,6 @@ class ModelRegistryTest inherits QUnit::Test {
     databaseBackendIntegrationTest() {
 %ifdef NoPgsql
         testSkip("pgsql module not available");
-%endif
-%ifdef NoSqlUtil
-        testSkip("SqlUtil module not available");
 %endif
         *string dsn = ENV.QORE_DB_CONNSTR_PGSQL;
         if (!dsn) {

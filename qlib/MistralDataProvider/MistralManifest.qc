@@ -25,8 +25,9 @@
 public namespace MistralDataProvider {
 #! Reviewed Mistral operations, presentation and reference data
 /** Action IDs are stable and the original chat-completion, create-embeddings and ocr paths are retained.
-    All non-deprecated, completed-response operations in the pinned official description are exposed.
-    SSE-only operations are excluded; the LLM provider supports streaming chat. Preview operations remain
+    The exposed operations are completed-response operations of the vendored official description; a new
+    operation is exposed by adding it here. SSE-only operations are excluded; the LLM provider supports streaming
+    chat. Preview operations remain
     subject to account permissions. Dropdowns fetch one page and permit explicitly supplied identifiers.
 */
 public class MistralManifest {
@@ -38,28 +39,6 @@ public class MistralManifest {
             conversation, shows the same labels; an overlay labels one location only.
         */
         const hash<string, hash<string, string>> EnumDisplayNames = {
-            # the operator of a filter condition, which filter groups nest without a limit
-            "#/components/schemas/FilterCondition/properties/op": {
-                "lt": "Lt",
-                "lte": "Lte",
-                "gt": "Gt",
-                "gte": "Gte",
-                "startswith": "Startswith",
-                "istartswith": "Istartswith",
-                "endswith": "Endswith",
-                "iendswith": "Iendswith",
-                "contains": "Contains",
-                "icontains": "Icontains",
-                "matches": "Matches",
-                "notcontains": "Notcontains",
-                "inotcontains": "Inotcontains",
-                "eq": "Eq",
-                "neq": "Neq",
-                "isnull": "Isnull",
-                "includes": "Includes",
-                "excludes": "Excludes",
-                "len_eq": "Len Eq",
-            },
             # the type of a tool call, in every message of a conversation
             "#/components/schemas/ToolTypes": {
                 "function": "Function",
@@ -213,22 +192,6 @@ public class MistralManifest {
                 "desc": "Choose an existing workflow registration. Listings return one page; identifiers can also be supplied directly.",
                 "records_path": ("workflow_registrations",),
             },
-            "judges": <RestSchemaReferenceDataInfo>{
-                "name": "judges",
-                "action": "list-judges",
-                "value_field": "id",
-                "display_field": "name",
-                "desc": "Choose an existing judge. Listings return one page; identifiers can also be supplied directly.",
-                "records_path": ("judges", "results"),
-            },
-            "campaigns": <RestSchemaReferenceDataInfo>{
-                "name": "campaigns",
-                "action": "list-campaigns",
-                "value_field": "id",
-                "display_field": "name",
-                "desc": "Choose an existing campaign. Listings return one page; identifiers can also be supplied directly.",
-                "records_path": ("campaigns", "results"),
-            },
             "datasets": <RestSchemaReferenceDataInfo>{
                 "name": "datasets",
                 "action": "list-datasets",
@@ -249,18 +212,36 @@ public class MistralManifest {
                 "options_from": {"conversation_id": "conversation_id"},
                 "desc": "Choose an entry from the selected conversation.",
             },
+            "pipelines": <RestSchemaReferenceDataInfo>{
+                "name": "pipelines", "action": "list-pipelines",
+                "value_field": "id", "display_field": "name", "records_path": ("pipelines", "results"),
+                "desc": "Choose an evaluation pipeline. Listings return one page; identifiers can also be supplied directly.",
+            },
+            "log-fields": <RestSchemaReferenceDataInfo>{
+                "name": "log-fields", "action": "list-log-fields",
+                "value_field": "name", "display_field": "label", "records_path": ("field_definitions",),
+                "desc": "Choose a log field. Other field names can also be supplied directly.",
+            },
+            "trace-fields": <RestSchemaReferenceDataInfo>{
+                "name": "trace-fields", "action": "list-trace-fields",
+                "value_field": "name", "display_field": "label", "records_path": ("field_definitions",),
+                "desc": "Choose a trace field. Other field names can also be supplied directly.",
+            },
+            "span-fields": <RestSchemaReferenceDataInfo>{
+                "name": "span-fields", "action": "list-span-fields",
+                "value_field": "name", "display_field": "label", "records_path": ("field_definitions",),
+                "desc": "Choose a span field. Other field names can also be supplied directly.",
+            },
+            "span-evaluation-fields": <RestSchemaReferenceDataInfo>{
+                "name": "span-evaluation-fields", "action": "list-span-evaluation-fields",
+                "value_field": "name", "display_field": "label", "records_path": ("field_definitions",),
+                "desc": "Choose a span evaluation field. Other field names can also be supplied directly.",
+            },
             "dataset-tasks": <RestSchemaReferenceDataInfo>{
                 "name": "dataset-tasks", "action": "list-dataset-tasks",
                 "value_field": "id", "display_field": "id", "records_path": ("tasks", "results"),
                 "options_from": {"dataset_id": "dataset_id"},
                 "desc": "Choose an import task from the selected dataset.",
-            },
-            "chat-events": <RestSchemaReferenceDataInfo>{
-                "name": "chat-events", "action": "search-chat-events",
-                "value_field": "event_id", "display_field": "event_id",
-                "records_path": ("completion_events", "results"),
-                "options": {"search_params": {"filters": NOTHING}, "page_size": 100},
-                "desc": "Choose a recorded chat completion event from the first page of account history.",
             },
             "workflows": <RestSchemaReferenceDataInfo>{
                 "name": "workflows", "action": "list-workflow-registrations",
@@ -2660,11 +2641,6 @@ public class MistralManifest {
                         "supports_custom_values": True,
                         "default_value": "mistral-ocr-latest",
                     },
-                    "id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Id",
-                        "short_desc": "Id",
-                        "desc": "The `id` value for this operation.",
-                    },
                     "document": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Document",
                         "short_desc": "Document to run OCR on",
@@ -3041,11 +3017,6 @@ public class MistralManifest {
                         "desc": "The `name` value for this operation.",
                         "preselected": True,
                     },
-                    "slug": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Slug",
-                        "short_desc": "Slug",
-                        "desc": "The `slug` value for this operation.",
-                    },
                     "languages": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Languages",
                         "short_desc": "Languages",
@@ -3173,7 +3144,7 @@ public class MistralManifest {
                 "action": "get-voice-sample",
                 "method": "GET",
                 "path": "/v1/audio/voices/{voice_id}/sample",
-                "response_content_type": "application/json",
+                "response_content_type": "audio/wav",
                 "operation_id": "get_voice_sample_audio_v1_audio_voices__voice_id__sample_get",
                 "display_name": "Get Voice Sample",
                 "short_desc": "Get Voice Sample",
@@ -3679,10 +3650,6 @@ public class MistralManifest {
                                 "value": "Workspace",
                                 "display_name": "Workspace",
                             },
-                            <AllowedValueInfo>{
-                                "value": "Org",
-                                "display_name": "Org",
-                            },
                         ),
                     },
                     "library_id": <RestSchemaFieldOverlayInfo>{
@@ -3725,10 +3692,6 @@ public class MistralManifest {
                                 "value": "Workspace",
                                 "display_name": "Workspace",
                             },
-                            <AllowedValueInfo>{
-                                "value": "Org",
-                                "display_name": "Org",
-                            },
                         ),
                     },
                     "library_id": <RestSchemaFieldOverlayInfo>{
@@ -3737,618 +3700,6 @@ public class MistralManifest {
                         "desc": "The `library_id` value for this operation.",
                         "ref_data": "libraries",
                         "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "search-chat-events",
-                "method": "POST",
-                "path": "/v1/observability/chat-completion-events/search",
-                "operation_id": "get_chat_completion_events_v1_observability_chat_completion_events_search_post",
-                "display_name": "Search Chat Events",
-                "short_desc": "Search Chat Events",
-                "desc": "Get Chat Completion Events. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events",),
-                "fields": {
-                    "search_params": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Search Params",
-                        "short_desc": "Search Params",
-                        "desc": "The `search_params` value for this operation.",
-                    },
-                    "extra_fields": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Extra Fields",
-                        "short_desc": "Extra Fields",
-                        "desc": "The `extra_fields` value for this operation.",
-                    },
-                    "page_size": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page Size",
-                        "short_desc": "Page Size",
-                        "desc": "The `page_size` value for this operation.",
-                        "preselected": True,
-                    },
-                    "cursor": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Cursor",
-                        "short_desc": "Cursor",
-                        "desc": "The `cursor` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "search-chat-event-ids",
-                "method": "POST",
-                "path": "/v1/observability/chat-completion-events/search-ids",
-                "operation_id": "get_chat_completion_event_ids_v1_observability_chat_completion_events_search_ids_post",
-                "display_name": "Search Chat Event IDs",
-                "short_desc": "Search Chat Event IDs",
-                "desc": "Alternative to /search that returns only the IDs and that can return many IDs at once. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events",),
-                "fields": {
-                    "search_params": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Search Params",
-                        "short_desc": "Search Params",
-                        "desc": "The `search_params` value for this operation.",
-                    },
-                    "extra_fields": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Extra Fields",
-                        "short_desc": "Extra Fields",
-                        "desc": "The `extra_fields` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-chat-completion-event",
-                "method": "GET",
-                "path": "/v1/observability/chat-completion-events/{event_id}",
-                "operation_id": "get_chat_completion_event_v1_observability_chat_completion_events__event_id__get",
-                "display_name": "Get Chat Completion Event",
-                "short_desc": "Get Chat Completion Event",
-                "desc": "Get Chat Completion Event. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events",),
-                "fields": {
-                    "event_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Event ID",
-                        "short_desc": "Event ID",
-                        "desc": "The `event_id` value for this operation.",
-                        "ref_data": "chat-events",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-similar-chat-completion-events",
-                "method": "GET",
-                "path": "/v1/observability/chat-completion-events/{event_id}/similar-events",
-                "operation_id": "get_similar_chat_completion_events_v1_observability_chat_completion_events__event_id__similar_events_get",
-                "display_name": "Get Similar Chat Completion Events",
-                "short_desc": "Get Similar Chat Completion Events",
-                "desc": "Get Similar Chat Completion Events. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events",),
-                "fields": {
-                    "event_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Event ID",
-                        "short_desc": "Event ID",
-                        "desc": "The `event_id` value for this operation.",
-                        "ref_data": "chat-events",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-chat-completion-fields",
-                "method": "GET",
-                "path": "/v1/observability/chat-completion-fields",
-                "operation_id": "get_chat_completion_fields_v1_observability_chat_completion_fields_get",
-                "display_name": "Get Chat Completion Fields",
-                "short_desc": "Get Chat Completion Fields",
-                "desc": "Get Chat Completion Fields. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events Fields",),
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-chat-completion-field-options",
-                "method": "GET",
-                "path": "/v1/observability/chat-completion-fields/{field_name}/options",
-                "operation_id": "get_chat_completion_field_options_v1_observability_chat_completion_fields__field_name__options_get",
-                "display_name": "Get Chat Completion Field Options",
-                "short_desc": "Get Chat Completion Field Options",
-                "desc": "Get Chat Completion Field Options. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events Fields",),
-                "fields": {
-                    "field_name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Field Name",
-                        "short_desc": "Field Name",
-                        "desc": "The `field_name` value for this operation.",
-                    },
-                    "operator": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Operator",
-                        "short_desc": "The operator to use for filtering options",
-                        "allowed_values": (
-                            <AllowedValueInfo>{
-                                "value": "lt",
-                                "display_name": "Lt",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "lte",
-                                "display_name": "Lte",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "gt",
-                                "display_name": "Gt",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "gte",
-                                "display_name": "Gte",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "startswith",
-                                "display_name": "Startswith",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "istartswith",
-                                "display_name": "Istartswith",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "endswith",
-                                "display_name": "Endswith",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "iendswith",
-                                "display_name": "Iendswith",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "contains",
-                                "display_name": "Contains",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "icontains",
-                                "display_name": "Icontains",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "matches",
-                                "display_name": "Matches",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "notcontains",
-                                "display_name": "Notcontains",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "inotcontains",
-                                "display_name": "Inotcontains",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "eq",
-                                "display_name": "Eq",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "neq",
-                                "display_name": "Neq",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "isnull",
-                                "display_name": "Isnull",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "includes",
-                                "display_name": "Includes",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "excludes",
-                                "display_name": "Excludes",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "len_eq",
-                                "display_name": "Len Eq",
-                            },
-                        ),
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-chat-completion-field-options-counts",
-                "method": "POST",
-                "path": "/v1/observability/chat-completion-fields/{field_name}/options-counts",
-                "operation_id": "get_chat_completion_field_options_counts_v1_observability_chat_completion_fields__field_name__options_counts_post",
-                "display_name": "Get Chat Completion Field Options Counts",
-                "short_desc": "Get Chat Completion Field Options Counts",
-                "desc": "Get Chat Completion Field Options Counts. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events Fields",),
-                "fields": {
-                    "filter_params": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Filter Params",
-                        "short_desc": "Filter Params",
-                        "desc": "The `filter_params` value for this operation.",
-                    },
-                    "field_name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Field Name",
-                        "short_desc": "Field Name",
-                        "desc": "The `field_name` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "judge-chat-event",
-                "method": "POST",
-                "path": "/v1/observability/chat-completion-events/{event_id}/live-judging",
-                "operation_id": "judge_chat_completion_event_v1_observability_chat_completion_events__event_id__live_judging_post",
-                "display_name": "Judge Chat Event",
-                "short_desc": "Judge Chat Event",
-                "desc": "Run Judge on an event based on the given options. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Chat Completion Events",),
-                "fields": {
-                    "judge_definition": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge Definition",
-                        "short_desc": "Judge Definition",
-                        "desc": "The `judge_definition` value for this operation.",
-                    },
-                    "event_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Event ID",
-                        "short_desc": "Event ID",
-                        "desc": "The `event_id` value for this operation.",
-                        "ref_data": "chat-events",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "create-judge",
-                "method": "POST",
-                "path": "/v1/observability/judges",
-                "operation_id": "create_judge_v1_observability_judges_post",
-                "display_name": "Create Judge",
-                "short_desc": "Create Judge",
-                "desc": "Create a new judge. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Judges",),
-                "fields": {
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Name",
-                        "short_desc": "Name",
-                        "desc": "The `name` value for this operation.",
-                        "preselected": True,
-                    },
-                    "description": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Description",
-                        "short_desc": "Description",
-                        "desc": "The `description` value for this operation.",
-                    },
-                    "model_name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Model Name",
-                        "short_desc": "Model Name",
-                        "desc": "The `model_name` value for this operation.",
-                    },
-                    "output": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Output",
-                        "short_desc": "Output",
-                        "desc": "The `output` value for this operation.",
-                    },
-                    "instructions": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Instructions",
-                        "short_desc": "Instructions",
-                        "desc": "The `instructions` value for this operation.",
-                    },
-                    "tools": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Tools",
-                        "short_desc": "Tools",
-                        "desc": "The `tools` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "list-judges",
-                "method": "GET",
-                "path": "/v1/observability/judges",
-                "operation_id": "get_judges_v1_observability_judges_get",
-                "display_name": "List Judges",
-                "short_desc": "List Judges",
-                "desc": "Get judges with optional filtering and search. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Judges",),
-                "fields": {
-                    "type_filter": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Type Filter",
-                        "short_desc": "Filter by judge output types",
-                        "element_allowed_values": (
-                            <AllowedValueInfo>{
-                                "value": "REGRESSION",
-                                "display_name": "Regression",
-                            },
-                            <AllowedValueInfo>{
-                                "value": "CLASSIFICATION",
-                                "display_name": "Classification",
-                            },
-                        ),
-                    },
-                    "model_filter": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Model Filter",
-                        "short_desc": "Filter by model names",
-                    },
-                    "page_size": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page Size",
-                        "short_desc": "Page Size",
-                        "desc": "The `page_size` value for this operation.",
-                        "preselected": True,
-                    },
-                    "page": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page",
-                        "short_desc": "Page",
-                        "desc": "The `page` value for this operation.",
-                        "preselected": True,
-                    },
-                    "q": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Q",
-                        "short_desc": "Q",
-                        "desc": "The `q` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-judge",
-                "method": "GET",
-                "path": "/v1/observability/judges/{judge_id}",
-                "operation_id": "get_judge_by_id_v1_observability_judges__judge_id__get",
-                "display_name": "Get Judge",
-                "short_desc": "Get Judge",
-                "desc": "Get judge by id. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Judges",),
-                "fields": {
-                    "judge_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge ID",
-                        "short_desc": "Judge ID",
-                        "desc": "The `judge_id` value for this operation.",
-                        "ref_data": "judges",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "delete-judge",
-                "method": "DELETE",
-                "path": "/v1/observability/judges/{judge_id}",
-                "operation_id": "delete_judge_v1_observability_judges__judge_id__delete",
-                "display_name": "Delete Judge",
-                "short_desc": "Delete Judge",
-                "desc": "Delete a judge. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
-                "groups": ("Observability Judges",),
-                "fields": {
-                    "judge_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge ID",
-                        "short_desc": "Judge ID",
-                        "desc": "The `judge_id` value for this operation.",
-                        "ref_data": "judges",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "update-judge",
-                "method": "PUT",
-                "path": "/v1/observability/judges/{judge_id}",
-                "operation_id": "update_judge_v1_observability_judges__judge_id__put",
-                "display_name": "Update Judge",
-                "short_desc": "Update Judge",
-                "desc": "Update a judge. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Judges",),
-                "fields": {
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Name",
-                        "short_desc": "Name",
-                        "desc": "The `name` value for this operation.",
-                        "preselected": True,
-                    },
-                    "description": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Description",
-                        "short_desc": "Description",
-                        "desc": "The `description` value for this operation.",
-                    },
-                    "model_name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Model Name",
-                        "short_desc": "Model Name",
-                        "desc": "The `model_name` value for this operation.",
-                    },
-                    "output": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Output",
-                        "short_desc": "Output",
-                        "desc": "The `output` value for this operation.",
-                    },
-                    "instructions": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Instructions",
-                        "short_desc": "Instructions",
-                        "desc": "The `instructions` value for this operation.",
-                    },
-                    "tools": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Tools",
-                        "short_desc": "Tools",
-                        "desc": "The `tools` value for this operation.",
-                    },
-                    "judge_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge ID",
-                        "short_desc": "Judge ID",
-                        "desc": "The `judge_id` value for this operation.",
-                        "ref_data": "judges",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "run-judge",
-                "method": "POST",
-                "path": "/v1/observability/judges/{judge_id}/live-judging",
-                "operation_id": "judge_conversation_v1_observability_judges__judge_id__live_judging_post",
-                "display_name": "Run Judge",
-                "short_desc": "Run Judge",
-                "desc": "Run a saved judge on a conversation. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Judges",),
-                "fields": {
-                    "messages": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Messages",
-                        "short_desc": "Messages",
-                        "desc": "The `messages` value for this operation.",
-                    },
-                    "properties": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Properties",
-                        "short_desc": "Properties",
-                        "desc": "The `properties` value for this operation.",
-                    },
-                    "judge_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge ID",
-                        "short_desc": "Judge ID",
-                        "desc": "The `judge_id` value for this operation.",
-                        "ref_data": "judges",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "create-campaign",
-                "method": "POST",
-                "path": "/v1/observability/campaigns",
-                "operation_id": "create_campaign_v1_observability_campaigns_post",
-                "display_name": "Create Campaign",
-                "short_desc": "Create Campaign",
-                "desc": "Create and start a new campaign. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Campaigns",),
-                "fields": {
-                    "search_params": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Search Params",
-                        "short_desc": "Search Params",
-                        "desc": "The `search_params` value for this operation.",
-                    },
-                    "judge_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge ID",
-                        "short_desc": "Judge ID",
-                        "desc": "The `judge_id` value for this operation.",
-                        "ref_data": "judges",
-                        "supports_custom_values": True,
-                    },
-                    "name": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Name",
-                        "short_desc": "Name",
-                        "desc": "The `name` value for this operation.",
-                        "preselected": True,
-                    },
-                    "description": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Description",
-                        "short_desc": "Description",
-                        "desc": "The `description` value for this operation.",
-                    },
-                    "max_nb_events": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Max Nb Events",
-                        "short_desc": "Max Nb Events",
-                        "desc": "The `max_nb_events` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "list-campaigns",
-                "method": "GET",
-                "path": "/v1/observability/campaigns",
-                "operation_id": "get_campaigns_v1_observability_campaigns_get",
-                "display_name": "List Campaigns",
-                "short_desc": "List Campaigns",
-                "desc": "Get all campaigns. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Campaigns",),
-                "fields": {
-                    "page_size": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page Size",
-                        "short_desc": "Page Size",
-                        "desc": "The `page_size` value for this operation.",
-                        "preselected": True,
-                    },
-                    "page": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page",
-                        "short_desc": "Page",
-                        "desc": "The `page` value for this operation.",
-                        "preselected": True,
-                    },
-                    "q": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Q",
-                        "short_desc": "Q",
-                        "desc": "The `q` value for this operation.",
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-campaign",
-                "method": "GET",
-                "path": "/v1/observability/campaigns/{campaign_id}",
-                "operation_id": "get_campaign_by_id_v1_observability_campaigns__campaign_id__get",
-                "display_name": "Get Campaign",
-                "short_desc": "Get Campaign",
-                "desc": "Get campaign by id. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Campaigns",),
-                "fields": {
-                    "campaign_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Campaign ID",
-                        "short_desc": "Campaign ID",
-                        "desc": "The `campaign_id` value for this operation.",
-                        "ref_data": "campaigns",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "delete-campaign",
-                "method": "DELETE",
-                "path": "/v1/observability/campaigns/{campaign_id}",
-                "operation_id": "delete_campaign_v1_observability_campaigns__campaign_id__delete",
-                "display_name": "Delete Campaign",
-                "short_desc": "Delete Campaign",
-                "desc": "Delete a campaign. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
-                "groups": ("Observability Campaigns",),
-                "fields": {
-                    "campaign_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Campaign ID",
-                        "short_desc": "Campaign ID",
-                        "desc": "The `campaign_id` value for this operation.",
-                        "ref_data": "campaigns",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-campaign-status",
-                "method": "GET",
-                "path": "/v1/observability/campaigns/{campaign_id}/status",
-                "operation_id": "get_campaign_status_by_id_v1_observability_campaigns__campaign_id__status_get",
-                "display_name": "Get Campaign Status",
-                "short_desc": "Get Campaign Status",
-                "desc": "Get campaign status by campaign id. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Campaigns",),
-                "fields": {
-                    "campaign_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Campaign ID",
-                        "short_desc": "Campaign ID",
-                        "desc": "The `campaign_id` value for this operation.",
-                        "ref_data": "campaigns",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "get-campaign-events",
-                "method": "GET",
-                "path": "/v1/observability/campaigns/{campaign_id}/selected-events",
-                "operation_id": "get_campaign_selected_events_v1_observability_campaigns__campaign_id__selected_events_get",
-                "display_name": "Get Campaign Events",
-                "short_desc": "Get Campaign Events",
-                "desc": "Get event ids that were selected by the given campaign. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Campaigns",),
-                "fields": {
-                    "campaign_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Campaign ID",
-                        "short_desc": "Campaign ID",
-                        "desc": "The `campaign_id` value for this operation.",
-                        "ref_data": "campaigns",
-                        "supports_custom_values": True,
-                    },
-                    "page_size": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page Size",
-                        "short_desc": "Page Size",
-                        "desc": "The `page_size` value for this operation.",
-                        "preselected": True,
-                    },
-                    "page": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page",
-                        "short_desc": "Page",
-                        "desc": "The `page` value for this operation.",
-                        "preselected": True,
                     },
                 },
             },
@@ -4522,58 +3873,6 @@ public class MistralManifest {
                         "display_name": "Properties",
                         "short_desc": "Properties",
                         "desc": "The `properties` value for this operation.",
-                    },
-                    "dataset_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Dataset ID",
-                        "short_desc": "Dataset ID",
-                        "desc": "The `dataset_id` value for this operation.",
-                        "ref_data": "datasets",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "import-dataset-from-campaign",
-                "method": "POST",
-                "path": "/v1/observability/datasets/{dataset_id}/imports/from-campaign",
-                "operation_id": "post_dataset_records_from_campaign_v1_observability_datasets__dataset_id__imports_from_campaign_post",
-                "display_name": "Import Dataset From Campaign",
-                "short_desc": "Import Dataset From Campaign",
-                "desc": "Populate the dataset with a campaign. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Datasets",),
-                "fields": {
-                    "campaign_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Campaign ID",
-                        "short_desc": "Campaign ID",
-                        "desc": "The `campaign_id` value for this operation.",
-                        "ref_data": "campaigns",
-                        "supports_custom_values": True,
-                    },
-                    "dataset_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Dataset ID",
-                        "short_desc": "Dataset ID",
-                        "desc": "The `dataset_id` value for this operation.",
-                        "ref_data": "datasets",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "import-dataset-from-explorer",
-                "method": "POST",
-                "path": "/v1/observability/datasets/{dataset_id}/imports/from-explorer",
-                "operation_id": "post_dataset_records_from_explorer_v1_observability_datasets__dataset_id__imports_from_explorer_post",
-                "display_name": "Import Dataset From Explorer",
-                "short_desc": "Import Dataset From Explorer",
-                "desc": "Populate the dataset with samples from the explorer. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Datasets",),
-                "fields": {
-                    "completion_event_ids": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Completion Event IDs",
-                        "short_desc": "Completion Event IDs",
-                        "desc": "The `completion_event_ids` value for this operation.",
-                        "element_ref_data": "chat-events",
-                        "supports_custom_values": True,
                     },
                     "dataset_id": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Dataset ID",
@@ -4792,30 +4091,6 @@ public class MistralManifest {
                         "short_desc": "Dataset Record IDs",
                         "desc": "The `dataset_record_ids` value for this operation.",
                         "element_ref_data": "dataset-records",
-                        "supports_custom_values": True,
-                    },
-                },
-            },
-            <RestSchemaActionInfo>{
-                "action": "judge-dataset-record",
-                "method": "POST",
-                "path": "/v1/observability/dataset-records/{dataset_record_id}/live-judging",
-                "operation_id": "judge_dataset_record_v1_observability_dataset_records__dataset_record_id__live_judging_post",
-                "display_name": "Judge Dataset Record",
-                "short_desc": "Judge Dataset Record",
-                "desc": "Run Judge on a dataset record based on the given options. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Observability Datasets Records",),
-                "fields": {
-                    "judge_definition": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Judge Definition",
-                        "short_desc": "Judge Definition",
-                        "desc": "The `judge_definition` value for this operation.",
-                    },
-                    "dataset_record_id": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Dataset Record ID",
-                        "short_desc": "Dataset Record ID",
-                        "desc": "The `dataset_record_id` value for this operation.",
-                        "ref_data": "dataset-records",
                         "supports_custom_values": True,
                     },
                 },
@@ -5483,16 +4758,6 @@ public class MistralManifest {
                 },
             },
             <RestSchemaActionInfo>{
-                "action": "get-workflow-worker",
-                "method": "GET",
-                "path": "/v1/workflows/workers/whoami",
-                "operation_id": "get_worker_info_v1_workflows_workers_whoami_get",
-                "display_name": "Get Workflow Worker",
-                "short_desc": "Get Workflow Worker",
-                "desc": "Get Worker Info. Manage automated workflows and inspect their execution.\n\n**Public preview:** Availability depends on your account and permissions.",
-                "groups": ("Workflows Workers",),
-            },
-            <RestSchemaActionInfo>{
                 "action": "get-workflow-events",
                 "method": "GET",
                 "path": "/v1/workflows/events/list",
@@ -5650,28 +4915,6 @@ public class MistralManifest {
                         "display_name": "Input",
                         "short_desc": "The input to the workflow",
                     },
-                    "encoded_input": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Encoded Input",
-                        "short_desc": "Encoded input to the workflow, used when payload encoding is enabled.",
-                        "fields": {
-                            "encoding_options": <RestSchemaFieldOverlayInfo>{
-                                "element_allowed_values": (
-                                    <AllowedValueInfo>{
-                                        "value": "offloaded",
-                                        "display_name": "Offloaded",
-                                    },
-                                    <AllowedValueInfo>{
-                                        "value": "encrypted",
-                                        "display_name": "Encrypted",
-                                    },
-                                    <AllowedValueInfo>{
-                                        "value": "encrypted-partial",
-                                        "display_name": "Encrypted Partial",
-                                    },
-                                ),
-                            },
-                        },
-                    },
                     "wait_for_result": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Wait For Result",
                         "short_desc": "If true, wait for the workflow to complete and return the result directly.",
@@ -5721,28 +4964,6 @@ public class MistralManifest {
                     "input": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Input",
                         "short_desc": "The input to the workflow",
-                    },
-                    "encoded_input": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Encoded Input",
-                        "short_desc": "Encoded input to the workflow, used when payload encoding is enabled.",
-                        "fields": {
-                            "encoding_options": <RestSchemaFieldOverlayInfo>{
-                                "element_allowed_values": (
-                                    <AllowedValueInfo>{
-                                        "value": "offloaded",
-                                        "display_name": "Offloaded",
-                                    },
-                                    <AllowedValueInfo>{
-                                        "value": "encrypted",
-                                        "display_name": "Encrypted",
-                                    },
-                                    <AllowedValueInfo>{
-                                        "value": "encrypted-partial",
-                                        "display_name": "Encrypted Partial",
-                                    },
-                                ),
-                            },
-                        },
                     },
                     "wait_for_result": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Wait For Result",
@@ -5917,10 +5138,6 @@ public class MistralManifest {
                         "short_desc": "Visibility of the connector",
                         "allowed_values": (
                             <AllowedValueInfo>{
-                                "value": "shared_global",
-                                "display_name": "Shared Global",
-                            },
-                            <AllowedValueInfo>{
                                 "value": "shared_org",
                                 "display_name": "Shared Org",
                             },
@@ -5942,16 +5159,6 @@ public class MistralManifest {
                         "sensitive": True,
                         "display_name": "Headers",
                         "short_desc": "Headers",
-                    },
-                    "auth_data": <RestSchemaFieldOverlayInfo>{
-                        "sensitive": True,
-                        "display_name": "Auth Data",
-                        "short_desc": "Optional additional authentication data for the connector.",
-                        "fields": {
-                            "client_secret": <RestSchemaFieldOverlayInfo>{
-                                "sensitive": True,
-                            },
-                        },
                     },
                     "system_prompt": <RestSchemaFieldOverlayInfo>{
                         "display_name": "System Prompt",
@@ -6060,12 +5267,6 @@ public class MistralManifest {
                 "desc": "List tools for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.",
                 "groups": ("Connectors",),
                 "fields": {
-                    "page": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Page",
-                        "short_desc": "Page",
-                        "desc": "The `page` value for this operation.",
-                        "preselected": True,
-                    },
                     "page_size": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Page Size",
                         "short_desc": "Page Size",
@@ -6159,14 +5360,23 @@ public class MistralManifest {
             },
             <RestSchemaActionInfo>{
                 "action": "create-or-update-organization-credentials-for-a-connector",
-                "method": "POST",
-                "path": "/v1/connectors/{connector_id_or_name}/organization/credentials",
-                "operation_id": "connector_create_or_update_organization_credentials_v1",
+                "method": "PATCH",
+                "path": "/v1/connectors/{connector_id_or_name}/{consumer_scope}/credentials",
+                "operation_id": "connector_update_credentials",
                 "display_name": "Create Or Update Organization Credentials For A Connector",
                 "short_desc": "Create Or Update Organization Credentials For A Connector",
                 "desc": "Create or update organization credentials for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.",
                 "groups": ("Connectors",),
                 "fields": {
+                    "consumer_scope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Consumer Scope",
+                        "short_desc": "Always \"organization\" for this action",
+                        "desc": "Fixed to `organization`: this action manages the organization credentials of the connector.",
+                        "required": True,
+                        "default_value": "organization",
+                        "allowed_values": ("organization",),
+                        "preselected": True,
+                    },
                     "name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Name",
                         "short_desc": "Name of the credentials",
@@ -6183,10 +5393,10 @@ public class MistralManifest {
                         "fields": {
                             "oauth": <RestSchemaFieldOverlayInfo>{
                                 "fields": {
-                                    "access_token": <RestSchemaFieldOverlayInfo>{
+                                    "client_secret": <RestSchemaFieldOverlayInfo>{
                                         "sensitive": True,
                                     },
-                                    "refresh_token": <RestSchemaFieldOverlayInfo>{
+                                    "client_private_key": <RestSchemaFieldOverlayInfo>{
                                         "sensitive": True,
                                     },
                                 },
@@ -6247,14 +5457,24 @@ public class MistralManifest {
             },
             <RestSchemaActionInfo>{
                 "action": "create-or-update-workspace-credentials-for-a-connector",
-                "method": "POST",
-                "path": "/v1/connectors/{connector_id_or_name}/workspace/credentials",
-                "operation_id": "connector_create_or_update_workspace_credentials_v1",
+                "method": "PATCH",
+                "path": "/v1/connectors/{connector_id_or_name}/{consumer_scope}/credentials",
+                "operation_id": "connector_update_credentials",
+                "variant_of": "create-or-update-organization-credentials-for-a-connector",
                 "display_name": "Create Or Update Workspace Credentials For A Connector",
                 "short_desc": "Create Or Update Workspace Credentials For A Connector",
                 "desc": "Create or update workspace credentials for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.",
                 "groups": ("Connectors",),
                 "fields": {
+                    "consumer_scope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Consumer Scope",
+                        "short_desc": "Always \"workspace\" for this action",
+                        "desc": "Fixed to `workspace`: this action manages the workspace credentials of the connector.",
+                        "required": True,
+                        "default_value": "workspace",
+                        "allowed_values": ("workspace",),
+                        "preselected": True,
+                    },
                     "name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Name",
                         "short_desc": "Name of the credentials",
@@ -6271,10 +5491,10 @@ public class MistralManifest {
                         "fields": {
                             "oauth": <RestSchemaFieldOverlayInfo>{
                                 "fields": {
-                                    "access_token": <RestSchemaFieldOverlayInfo>{
+                                    "client_secret": <RestSchemaFieldOverlayInfo>{
                                         "sensitive": True,
                                     },
-                                    "refresh_token": <RestSchemaFieldOverlayInfo>{
+                                    "client_private_key": <RestSchemaFieldOverlayInfo>{
                                         "sensitive": True,
                                     },
                                 },
@@ -6335,14 +5555,24 @@ public class MistralManifest {
             },
             <RestSchemaActionInfo>{
                 "action": "create-or-update-user-credentials-for-a-connector",
-                "method": "POST",
-                "path": "/v1/connectors/{connector_id_or_name}/user/credentials",
-                "operation_id": "connector_create_or_update_user_credentials_v1",
+                "method": "PATCH",
+                "path": "/v1/connectors/{connector_id_or_name}/{consumer_scope}/credentials",
+                "operation_id": "connector_update_credentials",
+                "variant_of": "create-or-update-organization-credentials-for-a-connector",
                 "display_name": "Create Or Update User Credentials For A Connector",
                 "short_desc": "Create Or Update User Credentials For A Connector",
                 "desc": "Create or update user credentials for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.",
                 "groups": ("Connectors",),
                 "fields": {
+                    "consumer_scope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Consumer Scope",
+                        "short_desc": "Always \"user\" for this action",
+                        "desc": "Fixed to `user`: this action manages the user credentials of the connector.",
+                        "required": True,
+                        "default_value": "user",
+                        "allowed_values": ("user",),
+                        "preselected": True,
+                    },
                     "name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Name",
                         "short_desc": "Name of the credentials",
@@ -6359,10 +5589,10 @@ public class MistralManifest {
                         "fields": {
                             "oauth": <RestSchemaFieldOverlayInfo>{
                                 "fields": {
-                                    "access_token": <RestSchemaFieldOverlayInfo>{
+                                    "client_secret": <RestSchemaFieldOverlayInfo>{
                                         "sensitive": True,
                                     },
-                                    "refresh_token": <RestSchemaFieldOverlayInfo>{
+                                    "client_private_key": <RestSchemaFieldOverlayInfo>{
                                         "sensitive": True,
                                     },
                                 },
@@ -6381,13 +5611,22 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "delete-organization-credentials-for-a-connector",
                 "method": "DELETE",
-                "path": "/v1/connectors/{connector_id_or_name}/organization/credentials/{credentials_name}",
-                "operation_id": "connector_delete_organization_credentials_v1",
+                "path": "/v1/connectors/{connector_id_or_name}/{consumer_scope}/credentials/{credentials_name}",
+                "operation_id": "connector_delete_credentials",
                 "display_name": "Delete Organization Credentials For A Connector",
                 "short_desc": "Delete Organization Credentials For A Connector",
                 "desc": "Delete organization credentials for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
                 "groups": ("Connectors",),
                 "fields": {
+                    "consumer_scope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Consumer Scope",
+                        "short_desc": "Always \"organization\" for this action",
+                        "desc": "Fixed to `organization`: this action manages the organization credentials of the connector.",
+                        "required": True,
+                        "default_value": "organization",
+                        "allowed_values": ("organization",),
+                        "preselected": True,
+                    },
                     "credentials_name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Credentials Name",
                         "short_desc": "Credentials Name",
@@ -6405,13 +5644,23 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "delete-workspace-credentials-for-a-connector",
                 "method": "DELETE",
-                "path": "/v1/connectors/{connector_id_or_name}/workspace/credentials/{credentials_name}",
-                "operation_id": "connector_delete_workspace_credentials_v1",
+                "path": "/v1/connectors/{connector_id_or_name}/{consumer_scope}/credentials/{credentials_name}",
+                "operation_id": "connector_delete_credentials",
+                "variant_of": "delete-organization-credentials-for-a-connector",
                 "display_name": "Delete Workspace Credentials For A Connector",
                 "short_desc": "Delete Workspace Credentials For A Connector",
                 "desc": "Delete workspace credentials for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
                 "groups": ("Connectors",),
                 "fields": {
+                    "consumer_scope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Consumer Scope",
+                        "short_desc": "Always \"workspace\" for this action",
+                        "desc": "Fixed to `workspace`: this action manages the workspace credentials of the connector.",
+                        "required": True,
+                        "default_value": "workspace",
+                        "allowed_values": ("workspace",),
+                        "preselected": True,
+                    },
                     "credentials_name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Credentials Name",
                         "short_desc": "Credentials Name",
@@ -6429,13 +5678,23 @@ public class MistralManifest {
             <RestSchemaActionInfo>{
                 "action": "delete-user-credentials-for-a-connector",
                 "method": "DELETE",
-                "path": "/v1/connectors/{connector_id_or_name}/user/credentials/{credentials_name}",
-                "operation_id": "connector_delete_user_credentials_v1",
+                "path": "/v1/connectors/{connector_id_or_name}/{consumer_scope}/credentials/{credentials_name}",
+                "operation_id": "connector_delete_credentials",
+                "variant_of": "delete-organization-credentials-for-a-connector",
                 "display_name": "Delete User Credentials For A Connector",
                 "short_desc": "Delete User Credentials For A Connector",
                 "desc": "Delete user credentials for a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
                 "groups": ("Connectors",),
                 "fields": {
+                    "consumer_scope": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Consumer Scope",
+                        "short_desc": "Always \"user\" for this action",
+                        "desc": "Fixed to `user`: this action manages the user credentials of the connector.",
+                        "required": True,
+                        "default_value": "user",
+                        "allowed_values": ("user",),
+                        "preselected": True,
+                    },
                     "credentials_name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Credentials Name",
                         "short_desc": "Credentials Name",
@@ -6460,13 +5719,9 @@ public class MistralManifest {
                 "desc": "Get a connector. Connect assistants to external business tools and manage their access.\n\n**Public preview:** Availability depends on your account and permissions.",
                 "groups": ("Connectors",),
                 "fields": {
-                    "fetch_customer_data": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Fetch Customer Data",
-                        "short_desc": "Fetch the customer data associated with the connector (e.g",
-                    },
-                    "fetch_connection_secrets": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Fetch Connection Secrets",
-                        "short_desc": "Fetch the general connection secrets associated with the connector.",
+                    "fetch_user_data": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Fetch User Data",
+                        "short_desc": "Fetch the user-level data associated with the connector, such as connection credentials",
                     },
                     "connector_id_or_name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connector ID Or Name",
@@ -6504,33 +5759,9 @@ public class MistralManifest {
                         "display_name": "System Prompt",
                         "short_desc": "Optional system prompt for the connector.",
                     },
-                    "connection_config": <RestSchemaFieldOverlayInfo>{
-                        "display_name": "Connection Config",
-                        "short_desc": "Optional new connection config.",
-                    },
-                    "connection_secrets": <RestSchemaFieldOverlayInfo>{
-                        "sensitive": True,
-                        "display_name": "Connection Secrets",
-                        "short_desc": "Optional new connection secrets",
-                    },
                     "server": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Server",
                         "short_desc": "New server url for your mcp connector.",
-                    },
-                    "headers": <RestSchemaFieldOverlayInfo>{
-                        "sensitive": True,
-                        "display_name": "Headers",
-                        "short_desc": "New headers for your mcp connector.",
-                    },
-                    "auth_data": <RestSchemaFieldOverlayInfo>{
-                        "sensitive": True,
-                        "display_name": "Auth Data",
-                        "short_desc": "New authentication data for your mcp connector.",
-                        "fields": {
-                            "client_secret": <RestSchemaFieldOverlayInfo>{
-                                "sensitive": True,
-                            },
-                        },
                     },
                     "connector_id_or_name": <RestSchemaFieldOverlayInfo>{
                         "display_name": "Connector ID Or Name",
@@ -6557,6 +5788,681 @@ public class MistralManifest {
                         "desc": "The `connector_id_or_name` value for this operation.",
                         "ref_data": "connectors",
                         "supports_custom_values": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "search-logs",
+                "method": "POST",
+                "path": "/v1/observability/logs/search",
+                "operation_id": "search_logs_v1_observability_logs_search_post",
+                "display_name": "Search Logs",
+                "short_desc": "Search the logs of your AI activity",
+                "desc": "Search the OpenTelemetry logs recorded for your AI activity with a search expression, in the order you choose. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Logs",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-log-fields",
+                "method": "GET",
+                "path": "/v1/observability/logs/fields",
+                "operation_id": "get_log_fields_v1_observability_logs_fields_get",
+                "display_name": "List Log Fields",
+                "short_desc": "List the fields that log searches can use",
+                "desc": "List the fields that log search expressions can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Logs",),
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-log-field-options",
+                "method": "GET",
+                "path": "/v1/observability/logs/fields/{field_name}/options",
+                "operation_id": "get_log_field_options_v1_observability_logs_fields__field_name__options_get",
+                "display_name": "List Log Field Options",
+                "short_desc": "List the values recorded for a log field",
+                "desc": "List the values recorded for a log field in a time range, for building log search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Logs",),
+                "fields": {
+                    "field_name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Field Name",
+                        "short_desc": "Name of the field",
+                        "desc": "The name of the field, as listed by the field listing action.",
+                        "ref_data": "log-fields",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "search-traces",
+                "method": "POST",
+                "path": "/v1/observability/traces/search",
+                "operation_id": "search_traces_v1_observability_traces_search_post",
+                "display_name": "Search Traces",
+                "short_desc": "Search the traces of your AI activity",
+                "desc": "Search the OpenTelemetry traces recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "aggregate-traces",
+                "method": "POST",
+                "path": "/v1/observability/traces/aggregate",
+                "operation_id": "aggregate_traces_v1_observability_traces_aggregate_post",
+                "display_name": "Aggregate Traces",
+                "short_desc": "Aggregate trace metrics over time",
+                "desc": "Compute a metric over the traces that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-trace-fields",
+                "method": "GET",
+                "path": "/v1/observability/traces/fields",
+                "operation_id": "get_trace_fields_v1_observability_traces_fields_get",
+                "display_name": "List Trace Fields",
+                "short_desc": "List the fields that trace searches can use",
+                "desc": "List the fields that trace search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-trace-field-options",
+                "method": "GET",
+                "path": "/v1/observability/traces/fields/{field_name}/options",
+                "operation_id": "get_trace_field_options_v1_observability_traces_fields__field_name__options_get",
+                "display_name": "List Trace Field Options",
+                "short_desc": "List the values recorded for a trace field",
+                "desc": "List the values recorded for a trace field in a time range, for building trace search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+                "fields": {
+                    "field_name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Field Name",
+                        "short_desc": "Name of the field",
+                        "desc": "The name of the field, as listed by the field listing action.",
+                        "ref_data": "trace-fields",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-trace",
+                "method": "GET",
+                "path": "/v1/observability/traces/{trace_id}",
+                "operation_id": "get_trace_by_id_v1_observability_traces__trace_id__get",
+                "display_name": "Get Trace",
+                "short_desc": "Get a trace by its ID",
+                "desc": "Get a trace by its ID, with its timing, token usage, counts of spans, model calls and tool calls, and its first and last messages. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+                "fields": {
+                    "trace_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Trace ID",
+                        "short_desc": "ID of the trace",
+                        "desc": "The 32-digit hexadecimal ID of the trace.",
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-trace-spans",
+                "method": "GET",
+                "path": "/v1/observability/traces/{trace_id}/spans",
+                "operation_id": "get_trace_spans_v1_observability_traces__trace_id__spans_get",
+                "display_name": "List Trace Spans",
+                "short_desc": "List the spans of a trace",
+                "desc": "List the spans of a trace, to follow each step of an AI request. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+                "fields": {
+                    "trace_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Trace ID",
+                        "short_desc": "ID of the trace",
+                        "desc": "The 32-digit hexadecimal ID of the trace.",
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-trace-span",
+                "method": "GET",
+                "path": "/v1/observability/traces/{trace_id}/spans/{span_id}",
+                "operation_id": "get_span_by_id_v1_observability_traces__trace_id__spans__span_id__get",
+                "display_name": "Get Trace Span",
+                "short_desc": "Get a span of a trace",
+                "desc": "Get one span of a trace by its trace ID and span ID, with its timing, model request settings, messages, tool call and attributes. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Traces",),
+                "fields": {
+                    "trace_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Trace ID",
+                        "short_desc": "ID of the trace",
+                        "desc": "The 32-digit hexadecimal ID of the trace.",
+                        "preselected": True,
+                    },
+                    "span_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Span ID",
+                        "short_desc": "ID of the span",
+                        "desc": "The 16-digit hexadecimal ID of the span.",
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "search-spans",
+                "method": "POST",
+                "path": "/v1/observability/spans/search",
+                "operation_id": "search_spans_v1_observability_spans_search_post",
+                "display_name": "Search Spans",
+                "short_desc": "Search the spans of your AI activity",
+                "desc": "Search the OpenTelemetry spans recorded for your AI activity with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Spans",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "aggregate-spans",
+                "method": "POST",
+                "path": "/v1/observability/spans/aggregate",
+                "operation_id": "aggregate_spans_v1_observability_spans_aggregate_post",
+                "display_name": "Aggregate Spans",
+                "short_desc": "Aggregate span metrics over time",
+                "desc": "Compute a metric over the spans that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Spans",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-span-fields",
+                "method": "GET",
+                "path": "/v1/observability/spans/fields",
+                "operation_id": "get_span_fields_v1_observability_spans_fields_get",
+                "display_name": "List Span Fields",
+                "short_desc": "List the fields that span searches can use",
+                "desc": "List the fields that span search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Spans",),
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-span-field-options",
+                "method": "GET",
+                "path": "/v1/observability/spans/fields/{field_name}/options",
+                "operation_id": "get_span_field_options_v1_observability_spans_fields__field_name__options_get",
+                "display_name": "List Span Field Options",
+                "short_desc": "List the values recorded for a span field",
+                "desc": "List the values recorded for a span field in a time range, for building span search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Spans",),
+                "fields": {
+                    "field_name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Field Name",
+                        "short_desc": "Name of the field",
+                        "desc": "The name of the field, as listed by the field listing action.",
+                        "ref_data": "span-fields",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "search-span-evaluations",
+                "method": "POST",
+                "path": "/v1/observability/spans/evaluations/search",
+                "operation_id": "search_span_evaluations_v1_observability_spans_evaluations_search_post",
+                "display_name": "Search Span Evaluations",
+                "short_desc": "Search the evaluations of spans",
+                "desc": "Search the evaluation results recorded for spans with a search expression. Results are returned one page at a time; pass the returned `cursor` to read the next page. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Span Evaluations",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "search-latest-span-evaluations",
+                "method": "POST",
+                "path": "/v1/observability/spans/evaluations/search/latest",
+                "operation_id": "search_latest_span_evaluations_v1_observability_spans_evaluations_search_latest_post",
+                "display_name": "Search Latest Span Evaluations",
+                "short_desc": "Search the latest span evaluation results",
+                "desc": "Search the evaluation results recorded for spans with a search expression, returning only the latest results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Span Evaluations",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "aggregate-span-evaluations",
+                "method": "POST",
+                "path": "/v1/observability/spans/evaluations/aggregate",
+                "operation_id": "aggregate_span_evaluations_v1_observability_spans_evaluations_aggregate_post",
+                "display_name": "Aggregate Span Evaluations",
+                "short_desc": "Aggregate span evaluation results over time",
+                "desc": "Compute a metric over the span evaluation results that match a search expression, grouped by the dimensions you choose and optionally by time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Span Evaluations",),
+                "fields": {
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-span-evaluation-fields",
+                "method": "GET",
+                "path": "/v1/observability/spans/evaluations/fields",
+                "operation_id": "get_span_evaluation_fields_v1_observability_spans_evaluations_fields_get",
+                "display_name": "List Span Evaluation Fields",
+                "short_desc": "List the fields that evaluation searches can use",
+                "desc": "List the fields that span evaluation search expressions and aggregations can refer to, with their labels and types. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Span Evaluations",),
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-span-evaluation-field-options",
+                "method": "GET",
+                "path": "/v1/observability/spans/evaluations/fields/{field_name}/options",
+                "operation_id": "get_span_evaluation_field_options_v1_observability_spans_evaluations_fields__field_name__options_get",
+                "display_name": "List Span Evaluation Field Options",
+                "short_desc": "List the values recorded for an evaluation field",
+                "desc": "List the values recorded for a span evaluation field in a time range, for building evaluation search expressions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Span Evaluations",),
+                "fields": {
+                    "field_name": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Field Name",
+                        "short_desc": "Name of the field",
+                        "desc": "The name of the field, as listed by the field listing action.",
+                        "ref_data": "span-evaluation-fields",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-pipelines",
+                "method": "GET",
+                "path": "/v1/observability/pipelines",
+                "operation_id": "list_pipelines_v1_observability_pipelines_get",
+                "display_name": "List Pipelines",
+                "short_desc": "List evaluation pipelines",
+                "desc": "List the evaluation pipelines that score your AI activity automatically. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Pipelines",),
+                "fields": {
+                    "enabled": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Enabled",
+                        "short_desc": "Return only enabled or disabled pipelines",
+                        "desc": "When set, return only the pipelines whose enabled state matches.",
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "page": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page",
+                        "short_desc": "Page number to return",
+                        "desc": "The number of the page to return, starting at 1.",
+                        "preselected": True,
+                    },
+                    "q": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Search Text",
+                        "short_desc": "Text to filter by",
+                        "desc": "Text to filter the listed pipelines by.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "create-pipeline",
+                "method": "POST",
+                "path": "/v1/observability/pipelines",
+                "operation_id": "create_pipeline_v1_observability_pipelines_post",
+                "display_name": "Create Pipeline",
+                "short_desc": "Create an evaluation pipeline",
+                "desc": "Create an evaluation pipeline: its selectors choose the telemetry to evaluate (spans, logs or metrics) and its definitions name the judges that score it. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Pipelines",),
+            },
+            <RestSchemaActionInfo>{
+                "action": "get-pipeline",
+                "method": "GET",
+                "path": "/v1/observability/pipelines/{pipeline_id}",
+                "operation_id": "get_pipeline_v1_observability_pipelines__pipeline_id__get",
+                "display_name": "Get Pipeline",
+                "short_desc": "Get an evaluation pipeline",
+                "desc": "Get an evaluation pipeline with its selectors and judge definitions. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Pipelines",),
+                "fields": {
+                    "pipeline_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Pipeline ID",
+                        "short_desc": "Evaluation pipeline",
+                        "desc": "The ID of the evaluation pipeline.",
+                        "ref_data": "pipelines",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "update-pipeline",
+                "method": "PUT",
+                "path": "/v1/observability/pipelines/{pipeline_id}",
+                "operation_id": "update_pipeline_v1_observability_pipelines__pipeline_id__put",
+                "display_name": "Update Pipeline",
+                "short_desc": "Update an evaluation pipeline",
+                "desc": "Update the name, description, selectors, judge definitions or enabled state of an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Pipelines",),
+                "fields": {
+                    "pipeline_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Pipeline ID",
+                        "short_desc": "Evaluation pipeline",
+                        "desc": "The ID of the evaluation pipeline.",
+                        "ref_data": "pipelines",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "delete-pipeline",
+                "method": "DELETE",
+                "path": "/v1/observability/pipelines/{pipeline_id}",
+                "operation_id": "delete_pipeline_v1_observability_pipelines__pipeline_id__delete",
+                "display_name": "Delete Pipeline",
+                "short_desc": "Delete an evaluation pipeline",
+                "desc": "Delete an evaluation pipeline. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.\n\n**Deletion:** This operation can permanently remove the selected resource or access.",
+                "groups": ("Observability Pipelines",),
+                "fields": {
+                    "pipeline_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Pipeline ID",
+                        "short_desc": "Evaluation pipeline",
+                        "desc": "The ID of the evaluation pipeline.",
+                        "ref_data": "pipelines",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "list-pipeline-result-fields",
+                "method": "GET",
+                "path": "/v1/observability/pipelines/{pipeline_id}/results/fields",
+                "operation_id": "get_pipeline_result_fields_v1_observability_pipelines__pipeline_id__results_fields_get",
+                "display_name": "List Pipeline Result Fields",
+                "short_desc": "List the result fields of a pipeline",
+                "desc": "List the fields of the results that an evaluation pipeline records, for searching its results. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Pipelines",),
+                "fields": {
+                    "pipeline_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Pipeline ID",
+                        "short_desc": "Evaluation pipeline",
+                        "desc": "The ID of the evaluation pipeline.",
+                        "ref_data": "pipelines",
+                        "supports_custom_values": True,
+                        "preselected": True,
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "search-pipeline-results",
+                "method": "POST",
+                "path": "/v1/observability/pipeline-results/search",
+                "operation_id": "search_pipeline_results_v1_observability_pipeline_results_search_post",
+                "display_name": "Search Pipeline Results",
+                "short_desc": "Search the results of evaluation pipelines",
+                "desc": "Search the results that evaluation pipelines recorded for the pipeline configurations you name by slug. Results are returned one page at a time. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Pipelines",),
+                "fields": {
+                    "pipeline_config_slugs": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Pipeline Config Slugs",
+                        "short_desc": "Slugs of the pipeline configurations to search",
+                        "desc": "The slugs of the pipeline configurations whose results to search, as listed under `pipeline_configs` of a pipeline; at least one is required.",
+                        "preselected": True,
+                    },
+                    "from": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "From",
+                        "short_desc": "Start of the time range",
+                        "desc": "The start of the time range.",
+                    },
+                    "to": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "To",
+                        "short_desc": "End of the time range",
+                        "desc": "The end of the time range.",
+                    },
+                    "page_size": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Page Size",
+                        "short_desc": "Maximum number of results per page",
+                        "desc": "The maximum number of results to return in one page.",
+                        "preselected": True,
+                    },
+                    "cursor": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Cursor",
+                        "short_desc": "Cursor of the page to return",
+                        "desc": "The `cursor` returned with the previous page; leave it out for the first page.",
+                    },
+                },
+            },
+            <RestSchemaActionInfo>{
+                "action": "import-dataset-from-spans",
+                "method": "POST",
+                "path": "/v1/observability/datasets/{dataset_id}/imports/from-spans",
+                "operation_id": "post_dataset_records_from_spans_v1_observability_datasets__dataset_id__imports_from_spans_post",
+                "display_name": "Import Dataset From Spans",
+                "short_desc": "Import spans into a dataset",
+                "desc": "Populate the dataset with records made from up to 500 spans, mapping span or resource attributes to record payload keys. The import runs as a dataset task; unavailable spans are skipped. Inspect AI activity and evaluate response quality.\n\n**Public preview:** Availability depends on your account and permissions.",
+                "groups": ("Observability Datasets",),
+                "fields": {
+                    "dataset_id": <RestSchemaFieldOverlayInfo>{
+                        "display_name": "Dataset ID",
+                        "short_desc": "Dataset to import into",
+                        "desc": "The ID or workspace-scoped slug of the dataset.",
+                        "ref_data": "datasets",
+                        "supports_custom_values": True,
+                        "preselected": True,
                     },
                 },
             },

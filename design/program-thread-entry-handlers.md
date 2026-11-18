@@ -155,7 +155,8 @@ those members to the scanner, so the cycle is found and collected when nothing o
   `!Program` parameters that take it from its object (`load_user_module_with_program()`,
   `Program::loadUserModuleWithProgram()`, and the C++ API `QoreObject::getAndClearPrivateData()`), and an object
   whose constructor failed, which releases its private data without a destructor. `qore_program_private::del()`
-  asserts that the holder is gone. It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
+  clears the holder if the object still holds the Program when its data is deleted (a Program cleared at the end of
+  the process by `qore_cleanup()` while its owner holds the object, #6088). It is held with a weak reference and changed under `tlock`. Only this object reports the values, so each value is
   reported once. A Program without a Program object (the main Program, one created in C++) reports nothing: no
   object of the cycle could hold it.
 - **Scanning.** `qore_object_private::scanMembers()` probes `CID_PROGRAM` and calls
@@ -217,6 +218,7 @@ All points that change `ThreadData::current_pgm` or `tlpd` were classified:
 | `op_background_thread()` | yes | entry frame for the thread's life |
 | `ProgramRuntimeParseCommitContextHelper` | yes (initializers) | entry frame |
 | JIT direct calls that skip the helper when `exec_pgm == caller_pgm` (`qore_rt_call_fast*`, `qore_rt_call_direct_aot`) | yes | also take the helper when `thread_entry_pending()` |
+| a binary module that skips `QoreExternalProgramContextHelper` for a call within the current Program (ex: module-jni) | yes | also takes the helper when `qore_program_thread_entry_pending()` (exported; `_QORE_HAS_PROGRAM_THREAD_ENTRY_PENDING`) |
 | IR inline calls, JIT/AOT self-recursive and same-program direct native calls (`isApproachBEligible()`) | yes, but only from code already running in the same Program | none needed: the caller's entry covers them |
 | `QoreProgramContextHelper`, `ProgramRuntimeParseContextHelper`, `ProgramRuntimeParseAccessHelper`, `CurrentProgramRuntime*ParseContextHelper`, `thread_ensure_local_program_data()` | no (lookups, parsing, lazy IR build) | none; a call into the Program made under them is an entry through the not-entered path |
 | `QoreThreadList::activate()` | no (sets up the thread's data) | thread initialization moved to the background thread's entry |
@@ -242,3 +244,6 @@ logger bridge gave a sink that went out of scope first, which is fixed (the sink
   with native compilation checked, and with the module and the driver compiled by `qcc`.
 - `examples/test/qore/classes/Program/program-code-cycles.qtest`: cycles through the handlers and the thread
   initialization code are collected (issue #5590); see "Garbage collection".
+- `examples/test/module-cpp-api/program-thread-entry-pending.qtest`: `qore_program_thread_entry_pending()` as a binary
+  module sees it: without and with handlers, from another Program, from inside, from another thread, and for a
+  Program made current with `QoreProgramContextHelper` but not entered.

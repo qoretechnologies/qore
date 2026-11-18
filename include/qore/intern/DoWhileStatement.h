@@ -39,12 +39,20 @@
 
 class DoWhileStatement : public WhileStatement {
 public:
+    DLLLOCAL static DoWhileStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+            QoreValue c, StatementBlock* cd);
     DLLLOCAL DoWhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd)
             : WhileStatement(start_line, end_line, c, cd) {
     }
 
     DLLLOCAL virtual ~DoWhileStatement() {
     }
+
+protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
 private:
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);

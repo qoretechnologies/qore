@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class MemberDoubleInitTest
+
+#! Tests a member declared with an initializer in more than one class of a hierarchy, in the same storage (qore#6411)
+/** A class that declares a parent class's member again, two parent classes that declare the same member, and a
+    class inherited through two private:internal paths each give one member, in which every declaration with an
+    initializer was initialized: a debug build aborted on an assertion, and a release build stored the last value
+    over the earlier one without releasing it.  The declarations are initialized in order: the last one with an
+    initializer gives the value, its initializer reads the value of the earlier one, and the replaced value is
+    released.  Only code without %require-types can declare a member again in a class of the same hierarchy, so the
+    code is old-style, parsed into a Program.
+*/
+class MemberDoubleInitTest inherits QUnit::Test {
+    public {
+        #! the output expected from the code
+        const Expected = (
+            "parent and class: 2",
+            "next class: 20",
+            "no initializer: 1",
+            "two parents: 2",
+            "second parent without initializer: 1",
+            "private:internal paths: [\"p1\", 1]",
+            "containers: [{x: 1, y: 2}, [1, 2], [1, 2], \"new list\"]",
+            "object: [\"child\", [\"parent\", \"list\"]]",
+            "object released: [\"parent\", \"list\", \"new list\", \"child\"]",
+            "assigned in the initializer: [\"given\", [\"assigned\"]]",
+            "exception: [\"INIT-ERROR\", [\"t-parent\"]]",
+        );
+    }
+
+    constructor() : QUnit::Test("MemberDoubleInit", "1.0", \ARGV) {
+        addTestCase("member initialized by more than one declaration", \testInit());
+        set_return_value(main());
+    }
+
+    testInit() {
+        string code = ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "member-double-init-code.q");
+        Program p(0);
+        p.parse(code, "member-double-init-code.q");
+        # more than once, as each object initializes its members again
+        for (int i = 0; i < 3; ++i) {
+            assertEq(Expected, p.callFunction("get_output"), "run " + i);
+        }
+    }
+}

@@ -37,21 +37,30 @@
 class QoreReflectionFunction : public AbstractReflectionObject {
 public:
     const QoreExternalFunction* f = nullptr;
+    //! the namespace that the function was found in, or nullptr if not known
+    /** A call through the handle checks it for the export boundary of a user module (see
+        QoreExternalFunction::evalFunction()), as a call by an importer of the module would.
+    */
+    const QoreNamespace* ns = nullptr;
 
     DLLLOCAL QoreReflectionFunction(QoreProgram* pgm) : AbstractReflectionObject(pgm) {
     }
 
-    DLLLOCAL QoreReflectionFunction(QoreProgram* pgm, const QoreExternalFunction* f) : AbstractReflectionObject(pgm), f(f) {
+    DLLLOCAL QoreReflectionFunction(QoreProgram* pgm, const QoreExternalFunction* f, const QoreNamespace* ns = nullptr)
+            : AbstractReflectionObject(pgm), f(f), ns(ns) {
     }
 
     DLLLOCAL QoreObject* getFunctionObject(ExceptionSink* xsink) const;
 };
 
-DLLLOCAL QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreListNode* args, size_t offset, method_type_e mtype, ExceptionSink* xsink);
+//! finds a variant; for a function (\a mtype MT_None), \a caller limits the search to the variants it can see
+DLLLOCAL QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreListNode* args, size_t offset, method_type_e mtype, ExceptionSink* xsink, const QoreReflectionCaller* caller = nullptr, const QoreNamespace* ns = nullptr);
 
-DLLLOCAL QoreObject* get_variant_object(QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, const QoreExternalVariant* v, ExceptionSink* xsink);
+//! \a ns: the namespace of a function (\a mtype MT_None), recorded in the handle
+DLLLOCAL QoreObject* get_variant_object(QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, const QoreExternalVariant* v, ExceptionSink* xsink, const QoreNamespace* ns = nullptr);
 
-DLLLOCAL void append_variant_objects(QoreListNode& l, QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, ExceptionSink* xsink);
+//! appends the variants; for a function (\a mtype MT_None), only those that \a caller can see
+DLLLOCAL void append_variant_objects(QoreListNode& l, QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, ExceptionSink* xsink, const QoreReflectionCaller* caller = nullptr, const QoreNamespace* ns = nullptr);
 
 DLLEXPORT extern qore_classid_t CID_ABSTRACTREFLECTIONFUNCTION;
 DLLLOCAL extern QoreClass* QC_ABSTRACTREFLECTIONFUNCTION;

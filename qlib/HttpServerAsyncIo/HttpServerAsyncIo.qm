@@ -26,6 +26,7 @@
 # a poll operation refers back to the controller that owns it; see the "@=" comments
 # on those members for why the collector must not follow those edges
 %allow-opaque-references
+%allow-weak-references
 
 %requires Logger
 %requires HttpServerUtil
@@ -68,7 +69,11 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream" - SSE streaming support (HTTP/3)
     - @ref HttpServerAsyncIo::SseEventFormat "SseEventFormat" - Formats SSE event fields, refusing values that the
       event stream format cannot carry
-    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
+    - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events, including the
+      end of a WebSocket connection or SSE stream that a request left open
+      (@ref HttpServerAsyncIo::HttpAsyncTarget::onPersistentRequestEnd() "onPersistentRequestEnd()")
+    - @ref HttpServerAsyncIo::HttpPersistentRequestEnd "HttpPersistentRequestEnd" - Reports the end of such a
+      connection to the target of its request
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
 
     @subsection httpserverasyncio_abstract Protocol-Agnostic Abstractions
@@ -77,9 +82,30 @@ module HttpServerAsyncIo {
     regardless of the underlying HTTP protocol version (HTTP/1.x or HTTP/2):
 
     - @ref HttpServerAsyncIo::AbstractSseConnection "AbstractSseConnection" - Protocol-agnostic SSE interface
+    - @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource" - Source of the events of an SSE response
+      that pushes them when they occur, so that open streams do not hold the threads of the handler pool
     - @ref HttpServerAsyncIo::AbstractWebSocketConnection "AbstractWebSocketConnection" - Protocol-agnostic WebSocket interface
     - @ref HttpServerAsyncIo::Http1SseConnection "Http1SseConnection" - HTTP/1.x SSE wrapper
     - @ref HttpServerAsyncIo::Http1WebSocketConnection "Http1WebSocketConnection" - HTTP/1.x WebSocket wrapper
+
+    @section httpserverasyncio_sse_buffer Bounded Server-Sent Events Streams
+
+    Every SSE stream bounds the data that it holds for its client: the events queued but not yet written to the
+    socket (HTTP/1.x), or buffered for the stream beyond what the client's flow-control window has accepted (HTTP/2
+    and HTTP/3).  The data that the client's flow-control window has accepted is not counted: the transport holds it
+    until the socket takes it, up to the window that the client grants.  The bound is set with
+    @ref HttpServerAsyncIo::AbstractSseConnection::setMaxBufferSize() "AbstractSseConnection::setMaxBufferSize()"; the
+    HTTP server sets it from the \c sse_max_buffer_size listener option (or the option of the same name of a
+    \c ServerSentEventHandler), and it is @ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize"
+    otherwise.
+
+    Queueing an event never waits for the client.  An event that would take the data held for the stream over the
+    bound (when it is not the only data held) drops the client: its stream is ended (an HTTP/1.x connection is
+    closed, an HTTP/2 stream is reset with \c RST_STREAM(CANCEL), an HTTP/3 stream with \c H3_REQUEST_CANCELLED),
+    a warning is logged, the end of the stream is reported as for any other end, and the call that queued the event
+    raises \c SSE-CLIENT-OVERFLOW.  A call that sends to several streams (for example
+    \c ServerSentEventHandler::sendAll() or an Observable streamed by \c SseObservableBridge) never raises an
+    exception for the state of one of them.
 
     @section httpserverasyncio_relnotes Release Notes
 
@@ -113,6 +139,16 @@ public namespace HttpServerAsyncIo {
 
     #! Default SSE heartbeat comment frame
     public const DefaultSseHeartbeatMsg = ":hb\n\n";
+
+    #! Default bound of the data held for the client of an SSE stream, in bytes (1 MiB)
+    /** @see @ref httpserverasyncio_sse_buffer
+    */
+    public const DefaultSseMaxBufferSize = 1048576;
+
+    #! The error raised when queueing an event would take the data held for an SSE stream's client over its bound
+    /** The client has been dropped when it is raised; see @ref httpserverasyncio_sse_buffer
+    */
+    public const SseClientOverflowErr = "SSE-CLIENT-OVERFLOW";
 
     #! Result info for HTTP request callbacks
     public hashdecl HttpRequestResultInfo {
@@ -216,6 +252,14 @@ public namespace HttpServerAsyncIo {
             instead; see @ref HttpConnectionInfo.
         */
         *code<nothing(bool)> after_send;
+
+        #! Reports the end of the WebSocket connection or SSE stream that the request leaves open
+        /** Set by the server for a request whose WebSocket connection or SSE stream stays open after the request
+            returns; the async I/O controller then reports the end of that connection to the target's
+            @ref HttpAsyncTarget::onPersistentRequestEnd() "onPersistentRequestEnd()".  A target that builds its own
+            result for a request handled by the server must keep this field of the server's result.
+        */
+        *HttpPersistentRequestEnd persistent_request_end;
     }
 
     #! Connection info passed to callbacks

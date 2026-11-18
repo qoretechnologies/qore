@@ -36,6 +36,8 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/typed_hash_decl_private.h"
 #include "qore/AbstractPollableIoObjectBase.h"
 #include "qore/intern/qore_qd_private.h"
 #include "qore/intern/ql_crypto.h"
@@ -53,6 +55,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cinttypes>
 #include <cctype>
 #include <cerrno>
 #include <climits>
@@ -576,12 +579,31 @@ bool qore_has_debug() {
 #endif
 }
 
-int parse_check_stack(const QoreProgramLocation* loc) {
-    if (!q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-        return 0;
-    }
-    parse_error(loc ? *loc : loc_builtin, "the code is nested too deeply to be parsed within the stack of this thread");
+int parse_raise_stack_error(const QoreProgramLocation* loc) {
+    parseException(loc ? *loc : loc_builtin, QORE_PARSE_STACK_ERR, new QoreStringNode(QORE_PARSE_STACK_DESC));
     return -1;
+}
+
+const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink) {
+    // a run-time stack error depends on the thread only in a thread whose total stack size is smaller than the default
+    // thread stack size; with at least that much stack, the code that exceeded it is assumed to have a bug
+    bool small_stack = q_thread_stack_smaller_than_default();
+    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+        // the error code can be an inline short string, which has no QoreStringNode
+        QoreStringDataHelper err(e->err);
+        if (!err) {
+            continue;
+        }
+        if (!strcmp(err.c_str(), QORE_PARSE_STACK_ERR)
+                || (small_stack && !strcmp(err.c_str(), "STACK-LIMIT-EXCEEDED"))) {
+            return e;
+        }
+    }
+    return nullptr;
+}
+
+bool qore_has_thread_stack_error(const ExceptionSink& xsink) {
+    return qore_find_thread_stack_error(xsink) != nullptr;
 }
 
 #ifndef NDEBUG
@@ -629,6 +651,29 @@ private:
 };
 }
 
+//! Raises the parse error for an expression that parse_init_value() cannot initialize in the thread's stack
+/** The node is not parse-initialized, so it must not stay where the code containing it continues its own parse
+    initialization: that code would use it as an initialized expression (the values of a hash that has no value types,
+    a variable reference that is not resolved; issue #6047).  The parse has failed, and the expression is replaced
+    with NOTHING of no known type.
+
+    Out of line, so that it does not add to the code of parse_init_value() on its path for every expression
+
+    @return -1
+*/
+static QORE_INTERN_NOINLINE int parse_init_value_stack_exceeded(AbstractQoreNode* n, QoreValue& val,
+        QoreParseContext& parse_context) {
+    const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
+    int rc = parse_raise_stack_error(pn ? pn->loc : nullptr);
+    {
+        ParseExceptionSink xsink;
+        val.discard(*xsink);
+        val = QoreValue();
+    }
+    parse_context.typeInfo = nullptr;
+    return rc;
+}
+
 int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
     parse_context.analysis.clear();
     if (val.hasNode()) {
@@ -636,8 +681,7 @@ int parse_init_value(QoreValue& val, QoreParseContext& parse_context) {
         //printd(5, "parse_init_value() n: %p '%s'\n", n, get_type_name(n));
         // parse initialization recurses with the nesting of the code: it stops while enough stack remains
         if (q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE)) {
-            const ParseNode* pn = dynamic_cast<const ParseNode*>(n);
-            return parse_check_stack(pn ? pn->loc : nullptr);
+            return parse_init_value_stack_exceeded(n, val, parse_context);
         }
         // every nested expression is parse-initialized here, one level deeper than the expression containing it, so
         // flagging the nodes at every QORE_EVAL_STACK_CHECK_INTERVAL'th level makes the evaluation of any chain of
@@ -1035,11 +1079,8 @@ static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStrin
     }
     SimpleRefHolder<QoreStringNode> buf(new QoreStringNode(fmt->getEncoding()));
 
-    // the current program can be nullptr when formatting is performed on a native thread that never
-    // entered a program (ex: an async I/O thread rendering a log message); no program means no
-    // PO_BROKEN_SPRINTF
-    QoreProgram* pgm = ignore_broken_sprintf ? nullptr : getProgram();
-    bool broken_sprintf = pgm && static_cast<bool>(pgm->getParseOptions() & PO_BROKEN_SPRINTF);
+    // Native formatting uses its source-bound invocation, or canonical semantics without a Qore call site.
+    bool broken_sprintf = !ignore_broken_sprintf && qore_get_native_semantic_policy().brokenSprintf();
 
     const char* pstr = fmt->c_str();
     size_t l = fmt->strlen();
@@ -1132,7 +1173,10 @@ void QoreFormatBoundsContext::scan(const QoreValue val) {
     scanIntern(val, 0, nodes);
 }
 
-void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+//! the nesting depth from which the scan of the format bounds continues without recursion (qore#6117)
+static constexpr unsigned QORE_FORMAT_SCAN_RECURSION_LIMIT = 64;
+
+bool QoreFormatBoundsContext::scanEnter(const QoreValue val, unsigned depth, unsigned& nodes) {
     const AbstractQoreNode* node;
     switch (val.getType()) {
         case NT_HASH:
@@ -1141,11 +1185,11 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
             node = val.getInternalNode();
             break;
         default:
-            return;
+            return false;
     }
 
     if (nodes >= max_scan_nodes) {
-        return;
+        return false;
     }
     ++nodes;
 
@@ -1154,11 +1198,103 @@ void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, un
         // the container is already known; count the reference and do not expand it again; this also terminates
         // the scan of recursive references
         ++(i->second);
-        return;
+        return false;
     }
     counts.insert(i, nmap_t::value_type(node, 1));
 
-    if (bounds.max_depth && depth >= bounds.max_depth) {
+    return !bounds.max_depth || depth < bounds.max_depth;
+}
+
+namespace {
+// releases the copy of the data of an object that the scan expands; as in the recursive scan, an exception raised
+// by the release is reported when the sink is destroyed
+struct FormatScanDataDeref {
+    void operator()(QoreHashNode* h) const {
+        ExceptionSink xs;
+        h->deref(&xs);
+    }
+};
+
+// a container whose values the scan without recursion is scanning, and the position in it
+class FormatScanFrame {
+public:
+    FormatScanFrame(const QoreValue val, unsigned depth) : depth(depth) {
+        switch (val.getType()) {
+            case NT_HASH:
+                hash_iter.reset(new ConstHashIterator(val.get<const QoreHashNode>()));
+                break;
+            case NT_LIST:
+                list = val.get<const QoreListNode>();
+                break;
+            case NT_OBJECT: {
+                // any exception here is ignored; the format pass reports it
+                ExceptionSink xs;
+                data.reset(qore_object_private::get(*val.get<const QoreObject>())->copyData(&xs, false));
+                xs.clear();
+                if (data) {
+                    hash_iter.reset(new ConstHashIterator(data.get()));
+                }
+                break;
+            }
+            default:
+                assert(false);
+                break;
+        }
+    }
+
+    // gets the next value in the container; returns false if there are no more
+    bool next(QoreValue& value) {
+        if (list) {
+            if (list_pos == list->size()) {
+                return false;
+            }
+            value = list->retrieveEntry(list_pos++);
+            return true;
+        }
+        if (!hash_iter || !hash_iter->next()) {
+            return false;
+        }
+        value = hash_iter->get();
+        return true;
+    }
+
+    unsigned depth;
+
+private:
+    const QoreListNode* list = nullptr;
+    size_t list_pos = 0;
+    std::unique_ptr<QoreHashNode, FormatScanDataDeref> data;
+    std::unique_ptr<ConstHashIterator> hash_iter;
+};
+}
+
+// cold and not inlined: it must not change how the recursive scan, which scans the values met in practice, is compiled
+__attribute__((cold, noinline)) void QoreFormatBoundsContext::scanWithoutRecursion(const QoreValue val, unsigned depth,
+        unsigned& nodes) {
+    // the values are scanned in the same order as by the recursion in scanIntern()
+    std::vector<FormatScanFrame> stack;
+    stack.emplace_back(val, depth);
+    while (!stack.empty()) {
+        QoreValue value;
+        if (!stack.back().next(value)) {
+            stack.pop_back();
+            continue;
+        }
+        unsigned child_depth = stack.back().depth + 1;
+        if (scanEnter(value, child_depth, nodes)) {
+            stack.emplace_back(value, child_depth);
+        }
+    }
+}
+
+void QoreFormatBoundsContext::scanIntern(const QoreValue val, unsigned depth, unsigned& nodes) {
+    if (!scanEnter(val, depth, nodes)) {
+        return;
+    }
+
+    // a deeply nested value is scanned without recursion, so that it cannot overflow the stack (qore#6117)
+    if (depth >= QORE_FORMAT_SCAN_RECURSION_LIMIT) {
+        scanWithoutRecursion(val, depth, nodes);
         return;
     }
 
@@ -1498,12 +1634,17 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
         if (!self->getClass()->getClass(*meth->getClass(), priv)) {
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
+            // no call reference with the error (issue #5866)
+            return QoreValue();
         }
     }
     if (self) {
         return QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, self, meth, qore_class_private::get(*meth->getClass())));
     }
-    return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, meth));
+    // a value created at run time: it records the permissions of the code creating it, which a call through it runs
+    // with (see ResolvedCallReferenceNodeIntern::getCreatorParseOptions())
+    return QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, meth, ::getProgram(), runtime_get_class(),
+        LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*meth, pcls->cls, runtime_get_class())));
 }
 
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {
@@ -2125,6 +2266,28 @@ long long q_atoll(const char* str) {
    return atoll(str);
 }
 
+#ifdef DEBUG
+// the offset that debug builds add to the system clock, to test code under a step of the system clock (see
+// dbg_set_realtime_offset()); the monotonic clock is not affected
+std::atomic<int64> qore_dbg_realtime_offset_us{0};
+
+// adds the offset of the system clock to a time in seconds and the given number of units per second
+static void q_dbg_apply_realtime_offset(int64& seconds, int& frac, int64 units_per_sec) {
+    int64 off_us = qore_dbg_realtime_offset_us.load(std::memory_order_relaxed);
+    if (!off_us) {
+        return;
+    }
+    int64 total = seconds * units_per_sec + frac + off_us * (units_per_sec / 1000000);
+    seconds = total / units_per_sec;
+    int64 rem = total % units_per_sec;
+    if (rem < 0) {
+        rem += units_per_sec;
+        --seconds;
+    }
+    frac = static_cast<int>(rem);
+}
+#endif
+
 // returns seconds since epoch
 int64 q_epoch() {
 #ifdef HAVE_CLOCK_GETTIME
@@ -2140,7 +2303,12 @@ int64 q_epoch() {
         return 0;
     }
 #endif
-    return ts.tv_sec;
+    int64 seconds = ts.tv_sec;
+#ifdef DEBUG
+    int frac = 0;
+    q_dbg_apply_realtime_offset(seconds, frac, 1000000);
+#endif
+    return seconds;
 }
 
 // returns seconds since epoch and gets microseconds
@@ -2162,7 +2330,11 @@ int64 q_epoch_us(int &us) {
     }
     us = ts.tv_usec;
 #endif
-    return ts.tv_sec;
+    int64 seconds = ts.tv_sec;
+#ifdef DEBUG
+    q_dbg_apply_realtime_offset(seconds, us, 1000000);
+#endif
+    return seconds;
 }
 
 // returns a monotonic-clock timestamp in microseconds (immune to realtime clock adjustments).
@@ -2211,7 +2383,11 @@ int64 q_epoch_ns(int &ns) {
     }
     ns = ts.tv_usec * 1000;
 #endif
-    return ts.tv_sec;
+    int64 seconds = ts.tv_sec;
+#ifdef DEBUG
+    q_dbg_apply_realtime_offset(seconds, ns, 1000000000);
+#endif
+    return seconds;
 }
 
 QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {
@@ -2501,6 +2677,20 @@ int check_lvalue(QoreValue n, bool assignment, qore_lvalue_use_e use) {
 
 static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, qore_lvalue_use_e use);
 
+//! checks the lvalue that an element, member, slice or cast of an lvalue is taken of
+/** NOTHING is an lvalue by itself (an operator on it changes nothing), but it has no elements or members, and a
+    path from it is refused (issue #6480); a cast of NOTHING is folded to NOTHING when it is initialized, so the cast
+    case is reached only by a cast that is not folded
+*/
+static int check_lvalue_base(const QoreProgramLocation* loc, QoreValue n, bool assignment, qore_lvalue_use_e use) {
+    if (n.isNothing()) {
+        parse_error(*loc, "the value NOTHING cannot be the base of an lvalue (an element, member, slice or cast of "
+            "it)");
+        return -2;
+    }
+    return check_lvalue_intern(n, assignment, false, use);
+}
+
 //! Raises a parse error for a slice used as an lvalue and returns -2, as the error is reported
 static int check_lvalue_slice(const QoreProgramLocation* loc) {
     parse_error(*loc, "a slice cannot be used as an lvalue except by the remove and delete operators; a slice is "
@@ -2520,6 +2710,9 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
         }
         if (assignment) {
             vrn->parseAssigned();
+        } else {
+            // code that changes the lvalue, or a reference to it, can give the variable a value (qore#5937)
+            vrn->parseMayBeAssigned();
         }
         return 0;
     }
@@ -2540,7 +2733,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getLeft(), assignment, use);
             }
         }
         {
@@ -2549,7 +2742,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (!slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->get(0), assignment, false, use);
+                return check_lvalue_base(op->loc, op->get(0), assignment, use);
             }
         }
         {
@@ -2558,7 +2751,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getLeft(), assignment, use);
             }
         }
         {
@@ -2580,7 +2773,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                         "the cast instead");
                     return -2;
                 }
-                return check_lvalue_intern(op->getExp(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getExp(), assignment, use);
             }
         }
     }
@@ -2660,6 +2853,176 @@ static bool parse_is_readonly_receiver_node(AbstractQoreNode* node, int pflag) {
 
 bool parse_is_readonly_receiver_expression(QoreValue n, int pflag) {
     return n.hasNode() && parse_is_readonly_receiver_node(n.getInternalNode(), pflag);
+}
+
+//! true if a value of the type is an object (or no value: an element or key that the path names may be missing)
+static bool qore_background_is_object_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::hasType(ti) && (QoreTypeInfo::isType(ti, NT_OBJECT)
+        || QoreTypeInfo::getUniqueReturnClassOrNothing(ti) || ti == objectOrNothingTypeInfo);
+}
+
+//! true if a value of the type can never be an object: a list, a hash, a string or another value container
+static bool qore_background_is_value_type(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseReturns(ti, NT_OBJECT) == QTI_NOT_EQUAL;
+}
+
+//! returns the constant member name of a dereference, or nullptr
+static const char* qore_background_member_name(QoreValue right, QoreString& buf) {
+    if (right.getType() != NT_STRING) {
+        return nullptr;
+    }
+    buf.concat(right.get<const QoreStringNode>()->c_str());
+    return buf.c_str();
+}
+
+//! returns the declared type of a member of a class, or nullptr if it is not known
+static const QoreTypeInfo* qore_background_class_member_type(const QoreTypeInfo* class_ti, const char* mem) {
+    const QoreClass* qc = QoreTypeInfo::getReturnClass(class_ti);
+    if (!qc || !mem) {
+        return nullptr;
+    }
+    const qore_class_private* member_class = nullptr;
+    ClassAccess access;
+    const QoreMemberInfo* mi = qore_class_private::get(*qc)->parseFindMember(mem, member_class, access);
+    return mi ? mi->parseGetTypeInfo() : nullptr;
+}
+
+//! returns the type of the value of a key of a hash of the given type, or nullptr if it is not known
+static const QoreTypeInfo* qore_background_hash_value_type(const QoreTypeInfo* hash_ti, const char* key) {
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(hash_ti)) {
+        if (!key) {
+            return nullptr;
+        }
+        const HashDeclMemberInfo* mi = typed_hash_decl_private::get(*hd)->findMember(key);
+        return mi ? mi->parseGetTypeInfo() : nullptr;
+    }
+    const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexHashOrNothing(hash_ti);
+    return vti ? get_or_nothing_type_check(vti) : nullptr;
+}
+
+//! returns the type of an element of a list of the given type, or nullptr if it is not known
+static const QoreTypeInfo* qore_background_element_type(const QoreTypeInfo* container_ti) {
+    const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(container_ti);
+    return eti ? get_or_nothing_type_check(eti) : nullptr;
+}
+
+//! returns true if the expression is the local variable self
+static bool qore_background_is_self(QoreValue n) {
+    if (n.getType() != NT_VARREF) {
+        return false;
+    }
+    const VarRefNode* vrn = n.get<const VarRefNode>();
+    return vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf();
+}
+
+//! walks the access path of an lvalue from its root: returns what it modifies and sets the type of its value
+/** The types are derived from the declared type of the root along the path, as the nodes of an lvalue do not keep the
+    types of their values (they are parsed for assignment).
+*/
+static qore_background_lvalue_e qore_background_lvalue_walk(QoreValue n, const QoreTypeInfo*& ti) {
+    ti = nullptr;
+    switch (n.getType()) {
+        case NT_VARREF: {
+            const VarRefNode* vrn = n.get<const VarRefNode>();
+            // the background operator takes the value of every variable but a global one when the thread starts (a
+            // local, closure-bound or thread-local variable; see copy_value_and_resolve_lvar_refs())
+            if (vrn->getType() == VT_GLOBAL) {
+                return qore_background_lvalue_e::SHARED;
+            }
+            ti = vrn->getParseTypeInfo();
+            return qore_background_is_self(n) ? qore_background_lvalue_e::MEMBER : qore_background_lvalue_e::LOCAL;
+        }
+        case NT_SELF_VARREF: {
+            const SelfVarrefNode* svn = n.get<const SelfVarrefNode>();
+            ti = svn->getParseTypeInfo();
+            return qore_background_lvalue_e::MEMBER;
+        }
+        case NT_OPERATOR:
+            break;
+        default:
+            return qore_background_lvalue_e::SHARED;
+    }
+    const AbstractQoreNode* node = n.getInternalNode();
+    if (const QoreCastOperatorNode* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+        const QoreTypeInfo* inner_ti;
+        qore_background_lvalue_e kind = qore_background_lvalue_walk(cast->getExp(), inner_ti);
+        ti = cast->getParseTypeInfo();
+        return kind;
+    }
+
+    QoreValue container;
+    bool element = false;
+    bool range = false;
+    const char* key = nullptr;
+    QoreString key_buf;
+    if (const QoreSquareBracketsOperatorNode* op = qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)) {
+        container = op->getLeft();
+        element = true;
+    } else if (const QoreHashObjectDereferenceOperatorNode* op =
+            dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        container = op->getLeft();
+        key = qore_background_member_name(op->getRight(), key_buf);
+    } else if (const QoreSquareBracketsRangeOperatorNode* op =
+            dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        container = op->get(0);
+        range = true;
+    } else {
+        return qore_background_lvalue_e::SHARED;
+    }
+
+    const QoreTypeInfo* cti;
+    qore_background_lvalue_e kind = qore_background_lvalue_walk(container, cti);
+    if (kind == qore_background_lvalue_e::SHARED || kind == qore_background_lvalue_e::UNKNOWN) {
+        return kind;
+    }
+    // a member of the object of the code that starts the thread named through self (self.x): the thread takes its value
+    if (!element && !range && qore_background_is_self(container)) {
+        ti = qore_background_class_member_type(cti, key);
+        return qore_background_lvalue_e::MEMBER;
+    }
+    // a step through an object: the rest of the path is part of the object, which the thread shares
+    if (qore_background_is_object_type(cti)) {
+        return qore_background_lvalue_e::SHARED;
+    }
+    // a value container that cannot hold an object only changes the thread's copy of the local or member
+    if (!qore_background_is_value_type(cti)) {
+        return qore_background_lvalue_e::UNKNOWN;
+    }
+    if (range) {
+        ti = cti;
+    } else if (element) {
+        ti = qore_background_element_type(cti);
+    } else {
+        ti = qore_background_hash_value_type(cti, key);
+    }
+    return kind;
+}
+
+qore_background_lvalue_e parse_check_background_lvalue(QoreValue n) {
+    const QoreTypeInfo* ti;
+    return qore_background_lvalue_walk(n, ti);
+}
+
+void parse_raise_background_lvalue_error(const QoreProgramLocation* loc, qore_background_lvalue_e kind,
+        const char* what) {
+    switch (kind) {
+        case qore_background_lvalue_e::LOCAL:
+            parse_error(*loc, "illegal local variable modification with the background operator in %s", what);
+            break;
+        case qore_background_lvalue_e::MEMBER:
+            // the expression takes the member's value when the thread starts, as it does for local variables
+            parse_error(*loc, "illegal member modification with the background operator in %s", what);
+            break;
+        case qore_background_lvalue_e::UNKNOWN:
+            parse_error(*loc, "illegal modification with the background operator in %s: a value of a local "
+                "variable or member whose type is not known: the thread modifies its own copy of a container, but "
+                "an object's member in the object; declare the variable with an object type, or call a method of "
+                "the object", what);
+            break;
+        default:
+            assert(false);
+            break;
+    }
 }
 
 int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n) {
@@ -2850,19 +3213,25 @@ void qore_machine_backtrace() {
 #endif
 
 #ifdef HAVE_NANOSLEEP
-static int qore_nanosleep(int64 ns) {
+int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*)) {
     struct timespec ts;
     ts.tv_sec = ns / 1000000000ll;
     ts.tv_nsec = (ns - ts.tv_sec * 1000000000);
-    int rc;
     while (true) {
-        rc = nanosleep(&ts, 0);
+        struct timespec rem;
+        int rc = sleep_func(&ts, &rem);
         if (rc && errno == EINTR) {
+            // a signal interrupted the sleep: the time that was left is slept, not the whole time again, which
+            // made each signal extend the sleep by up to its full length (issue #6364)
+            ts = rem;
             continue;
         }
-        break;
+        return rc;
     }
-    return rc;
+}
+
+static int qore_nanosleep(int64 ns) {
+    return qore_nanosleep_with(ns, ::nanosleep);
 }
 #endif
 
@@ -3402,10 +3771,14 @@ int qore_get_ptr_hash(QoreString& str, const void* ptr) {
 static std::atomic<uint64_t> io_obj_id_seq{0};
 
 AbstractPollableIoObjectBase::AbstractPollableIoObjectBase() {
+    // the identity is unique for the life of the process (the sequence number), whatever the object's address, and it
+    // contains no address, so it reveals none where it is shown (a key or an owner of the async I/O controller); it
+    // needs no digest, which cost about 18,000 instructions for every pollable object (every Socket object, every
+    // accepted socket, every controller wrapper)
     uint64_t oid = io_obj_id_seq.fetch_add(1, std::memory_order_relaxed);
-    QoreString tmp;
-    qore_get_object_hash(tmp, this, oid);
-    io_unique_hash = tmp.c_str();
+    char buf[32];
+    snprintf(buf, sizeof buf, "io-%" PRIx64, oid);
+    io_unique_hash = buf;
 }
 
 int AbstractPollableIoObjectBase::holdPollableDescriptor(int fd, std::shared_ptr<void>& hold) const {
@@ -3606,7 +3979,91 @@ void ensure_unique(AbstractQoreNode* *v, ExceptionSink* xsink) {
     }
 }
 
+QoreValue qore_enum_value_copy_for_write(const QoreValue& v) {
+    assert(v.isEnum());
+    QoreValue base = v.getEnumBaseValue();
+    if (base.isShortString()) {
+        char buf[7];
+        base.getShortString(buf);
+        return new QoreStringNode(buf, base.shortStringLen(), QCS_UTF8);
+    }
+    const AbstractQoreNode* n = base.getInternalNode();
+    if (n) {
+        return n->realCopy();
+    }
+    // a base value held inline is not shared
+    return base;
+}
+
+//! Returns true if \a ti is an enum type that cannot hold a plain string (ex: a string enum type)
+/** Only an enum type can be the type of a slot that holds an enum value and refuses a plain string
+*/
+static bool qore_type_refuses_plain_string(const QoreTypeInfo* ti) {
+    return ti && ti != autoTypeInfo && QoreTypeInfo::getReturnEnum(ti)
+        && !QoreTypeInfo::parseAccepts(ti, stringTypeInfo);
+}
+
+// documented in QoreLibIntern.h
+int qore_check_in_place_container_strings(const QoreValue& container, const char* desc, ExceptionSink* xsink) {
+    if (container.getType() == NT_LIST) {
+        const QoreListNode* l = container.get<const QoreListNode>();
+        const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+        if (!qore_type_refuses_plain_string(vti)) {
+            return 0;
+        }
+        ConstListIterator li(l);
+        while (li.next()) {
+            const QoreValue v = li.getValue();
+            if (v.isEnum() && v.getType() == NT_STRING) {
+                vti->doTypeException("lvalue", 0, desc, v.getEnumBaseValue(), xsink);
+                return -1;
+            }
+        }
+        return 0;
+    }
+    assert(container.getType() == NT_HASH);
+    const QoreHashNode* h = container.get<const QoreHashNode>();
+    const qore_hash_private* hp = qore_hash_private::get(*h);
+    // a hashdecl gives each member a type of its own
+    const TypedHashDecl* hd = hp->getHashDecl();
+    const QoreTypeInfo* vti = hd ? nullptr : hp->getValueTypeInfo();
+    if (!hd && !qore_type_refuses_plain_string(vti)) {
+        return 0;
+    }
+    ConstHashIterator hi(h);
+    while (hi.next()) {
+        const QoreValue v = hi.get();
+        if (!v.isEnum() || v.getType() != NT_STRING) {
+            continue;
+        }
+        const QoreTypeInfo* ti = vti;
+        if (hd) {
+            const HashDeclMemberInfo* mem = typed_hash_decl_private::get(*hd)->findMember(hi.getKey());
+            ti = mem ? mem->getTypeInfo() : nullptr;
+        }
+        if (qore_type_refuses_plain_string(ti)) {
+            ti->doTypeException("lvalue", 0, desc, v.getEnumBaseValue(), xsink);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+//! Replaces the enum value \a v with an owned copy of its base value and returns the enum value replaced
+static QORE_INTERN_NOINLINE QoreValue replace_enum_value_for_write(QoreValue& v) {
+    QoreValue copy = qore_enum_value_copy_for_write(v);
+    QoreValue old = v;
+    v = copy;
+    return old;
+}
+
 void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
+    if (v.isEnum()) [[unlikely]] {
+        // replaces the enum value with an owned copy of its base value and releases the enum value
+        replace_enum_value_for_write(v).discard(xsink);
+        return;
+    }
+
     if (v.isShortString()) {
         char buf[7];
         v.getShortString(buf);
@@ -3647,6 +4104,8 @@ QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* copy) {
 }
 
 QoreValue qore_value_copy_on_write(QoreValue& v) {
+    // an enum value does not own its base value's node: its callers replace it with an owned copy instead
+    assert(!v.isEnum());
     AbstractQoreNode* n = v.getInternalNode();
     assert(n && n->getType() != NT_OBJECT);
     if (n->is_unique()) {
@@ -3672,10 +4131,38 @@ int check_self_assignment(const QoreProgramLocation* loc, QoreValue n, LocalVar*
     return 0;
 }
 
+//! returns true if an assignment of a value of the given type to an lvalue of the given type may succeed
+/** the value is assigned to the target of a reference lvalue (ex: a member declared \c reference<int>)
+*/
+static bool lvalue_parse_accepts(const QoreTypeInfo* typeInfo, const QoreTypeInfo* valueTypeInfo) {
+    if (QoreTypeInfo::isReference(typeInfo)) {
+        typeInfo = QoreTypeInfo::getReferenceTarget(typeInfo);
+    }
+    return QoreTypeInfo::parseAccepts(typeInfo, valueTypeInfo) != QTI_NOT_EQUAL;
+}
+
+bool qore_lvalue_converts_result(const QoreTypeInfo* typeInfo, qore_type_t t) {
+    if (QoreTypeInfo::parseAcceptsReturns(typeInfo, t)) {
+        return false;
+    }
+    const QoreTypeInfo* result;
+    switch (t) {
+        case NT_INT: result = bigIntTypeInfo; break;
+        case NT_FLOAT: result = floatTypeInfo; break;
+        case NT_NUMBER: result = numberTypeInfo; break;
+        default: return false;
+    }
+    // only a soft type (ex: softstring, softbool, softfloat), which converts values of other types, also a string,
+    // is meant: a float or number lvalue, which an integer can also be assigned, keeps refusing the integer operators
+    return lvalue_parse_accepts(typeInfo, result) && lvalue_parse_accepts(typeInfo, stringTypeInfo);
+}
+
 int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
-    // make sure the lvalue can be assigned an integer value
+    // make sure the lvalue can be assigned an integer value: as for an assignment, a soft type that converts it
+    // (ex: softstring, softbool) is accepted (qore#6304); the operator then follows the lvalue's type
+    // (qore_lvalue_converts_result())
     // raise a parse exception only if parse exceptions are not suppressed
-    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT)) {
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT) && !qore_lvalue_converts_result(typeInfo, NT_INT)) {
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it an integer value", QoreTypeInfo::getName(typeInfo), name);
@@ -3686,10 +4173,124 @@ int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeIn
     return 0;
 }
 
-int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
-    // make sure the lvalue can be assigned a floating-point value
+int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
+    // make sure the lvalue can be assigned a string value (a softchar lvalue converts a one-character string)
     // raise a parse exception only if parse exceptions are not suppressed
-    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)) {
+    if (!QoreTypeInfo::parseAccepts(typeInfo, stringTypeInfo)) {
+        if (getProgram()->getParseExceptionSink()) {
+            QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
+                "assign it a string value", QoreTypeInfo::getName(typeInfo), name);
+            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+QoreStringNode* qore_plus_equals_char_string(const QoreValue v) {
+    assert(v.isChar());
+    // a char holds a valid codepoint, which UTF-8 always represents; a string that cannot be made is empty
+    QoreStringNode* rv = QoreValue::makeCharString(v.getChar(), QCS_UTF8, nullptr);
+    return rv ? rv : new QoreStringNode;
+}
+
+int64 qore_plus_equals_char_int_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsBigInt();
+}
+
+double qore_plus_equals_char_float_operand(const QoreValue v) {
+    assert(v.isChar());
+    SimpleRefHolder<QoreStringNode> str(qore_plus_equals_char_string(v));
+    return str->getAsFloat();
+}
+
+//! the steps of QoreValue::getAsBigInt(), with a char converted as its string; \a CheckInt is false for a value that
+//! the caller knows is not an inline integer
+/** A copy of QoreValue::getAsBigInt() (lib/QoreValue.cpp), so that a non-char operand costs no more than that
+    conversion: keep both in step when a value tag is added or a step changes.
+*/
+template <bool CheckInt>
+static QORE_INTERN_ALWAYS_INLINE int64 qore_plus_equals_int_operand_steps(const QoreValue v) {
+    if constexpr (CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    if (v.isFloat()) {
+        return q_float_to_int64(v.getDouble());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1 : 0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_int_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_int_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsBigInt() : 0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtoll(buf, nullptr, 10);
+    }
+    if constexpr (!CheckInt) {
+        if (v.isInt()) {
+            return v.getInt();
+        }
+    }
+    return 0;
+}
+
+int64 qore_plus_equals_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<true>(v);
+}
+
+int64 qore_plus_equals_boxed_int_operand(const QoreValue v) {
+    return qore_plus_equals_int_operand_steps<false>(v);
+}
+
+// the steps of QoreValue::getAsFloat() after its test for a float, with a char converted as its string: a copy of
+// QoreValue::getAsFloat() (lib/QoreValue.cpp), so that a non-char operand costs no more than that conversion; keep
+// both in step when a value tag is added or a step changes
+double qore_plus_equals_nonfloat_float_operand(const QoreValue v) {
+    if (v.isInt()) {
+        return static_cast<double>(v.getInt());
+    }
+    if (v.isBool()) {
+        return v.getBool() ? 1.0 : 0.0;
+    }
+    if (v.isChar()) {
+        return qore_plus_equals_char_float_operand(v);
+    }
+    if (v.isEnum()) {
+        return qore_plus_equals_float_operand(v.getEnumMember()->getValue());
+    }
+    if (v.isPointer()) {
+        const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+        return n ? n->getAsFloat() : 0.0;
+    }
+    if (v.isShortString()) {
+        char buf[8];
+        v.getShortString(buf);
+        return strtod(buf, nullptr);
+    }
+    if (v.isFloat()) {
+        return v.getDouble();
+    }
+    return 0.0;
+}
+
+int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
+    // make sure the lvalue can be assigned a number value, also by a conversion of its soft type (qore#6304)
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)
+            && !qore_lvalue_converts_result(typeInfo, NT_NUMBER)) {
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a number value", QoreTypeInfo::getName(typeInfo), name);
@@ -3701,9 +4302,10 @@ int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typ
 }
 
 int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
-    // make sure the lvalue can be assigned a floating-point value
+    // make sure the lvalue can be assigned a floating-point value, also by a conversion of its soft type (qore#6304)
     // raise a parse exception only if parse exceptions are not suppressed
-    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)) {
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)
+            && !qore_lvalue_converts_result(typeInfo, NT_FLOAT)) {
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a float value", QoreTypeInfo::getName(typeInfo), name);
@@ -3714,12 +4316,37 @@ int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& type
     return 0;
 }
 
+int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, const char* name,
+        std::initializer_list<const QoreTypeInfo*> results, const char* value_desc) {
+    // the lvalue's type is checked as for an assignment of each result type: a soft type converts the value (ex: a
+    // softint lvalue accepts a date), and a type that may accept it (ex: auto, a union) is checked at runtime
+    for (const QoreTypeInfo* result : results) {
+        if (lvalue_parse_accepts(typeInfo, result)) {
+            return 0;
+        }
+    }
+    // raise a parse exception only if parse exceptions are not suppressed
+    if (getProgram()->getParseExceptionSink()) {
+        QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will assign it "
+            "%s", QoreTypeInfo::getName(typeInfo), name, value_desc);
+        qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
+    }
+    return -1;
+}
+
 int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
     // make sure the lvalue can be assigned an integer value
     // raise a parse exception only if parse exceptions are not suppressed
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT)
             && !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)
             && !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)) {
+        // a soft type that converts the integer that the operator assigns (ex: softstring, softbool) is accepted, as
+        // for an assignment; the operator's value is then an integer computed from the converted value, but its type
+        // is not known at parse time (qore#6304)
+        if (qore_lvalue_converts_result(typeInfo, NT_INT)) {
+            typeInfo = nullptr;
+            return 0;
+        }
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator only works "
                 "with integer, floating-point, or numeric lvalues", QoreTypeInfo::getName(typeInfo), name);

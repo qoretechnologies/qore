@@ -38,7 +38,20 @@
 #define HE_TAG_CONST        1
 #define HE_TAG_SCOPED_CONST 2
 
+#include <cstdio>
+#include <map>
+#include <string>
 #include <cstring>
+#include "qore/intern/QoreNativeParseInfo.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
+
+//! a method qualifier and the functional domains declared in a callable's attribute list (\c [dom=...])
+struct CallableQualifier {
+    //! the method modifier bits from the qualifier (OFM_CONST)
+    int mod;
+    //! the declared functional domain bits (QDOM_*), or keys seen while parsing an attribute list
+    int64 dom;
+};
 
 class QoreParserLocation {
 public:
@@ -52,6 +65,10 @@ public:
 
    //! the nesting depth of the rule in the parse tree; 0 for a token
    unsigned depth = 0;
+
+   QoreNativeParseInfo native_parse_info;
+   LexicalSemanticPolicy semantic_policy;
+   bool has_semantic_policy = false;
 
    DLLLOCAL void saveFirst() {
       //printd(0, "QoreParserLocation::setFirst: current: %d:%d - %d:%d\n", first_line, first_col, last_line, last_col);
@@ -128,11 +145,44 @@ struct TryModuleError {
 
 //! The state of a parse that the parser shares with its scanner
 struct QoreParseState {
+   //! The token or grammar rule currently constructing executable source nodes.
+   LexicalSemanticPolicy semantic_policy;
    //! true if the parse stops at an error, and the scanner ends the input
    bool stop = false;
    //! true if the scanner has ended the input
    bool ended = false;
+   //! the name after the % of the last line that started with % and a name that no parse directive's rule matched,
+   //! which the scanner gives as a context reference: a syntax error in the statement that it begins (up to the next
+   //! ;, { or } in the code) reports it as an unknown or invalid parse directive (issue #56)
+   std::string line_start_directive;
+   //! the location of line_start_directive (its line and source), or nullptr if there is none
+   const QoreProgramLocation* line_start_directive_loc = nullptr;
+   //! true from line_start_directive until the scanner matches the end of a statement or block (;, { or }): a
+   //! syntax error before it is that of the directive, whose name the scanner gave as a context reference (issue #56)
+   bool line_start_directive_active = false;
+   //! Provenance of the current legacy options; tokens copy it before later directives can restore %modern.
+   QoreNativeParseInfo native_parse_info;
+   //! the line of the last text that no scanner rule matched, which is reported once per line (issue #6512)
+   int unexpected_text_line = 0;
+   //! the extent of the last expression in parentheses that the parser reduced ('(' exp ')'): an operand of the
+   //! chomp, trim or splice operator with this extent is in parentheses of its own (issue #1867)
+   int paren_first_line = 0, paren_first_col = 0, paren_last_line = 0, paren_last_col = 0;
+   //! true if the parentheses of the last expression in parentheses are those of a list: (a, b), not ((a, b)), so
+   //! that its elements are the arguments of a call (issue #1867)
+   bool paren_list = false;
+   //! for each source file that the scanner reads and that has not ended, the first byte of the line that the last
+   //! block read ends in, or -1 if it ends with a newline: a file whose last line is a parse directive without a
+   //! newline gets one at its end, as the rules of the parse directives end with a newline (qore_scanner_read(),
+   //! issue #2740)
+   std::map<FILE*, int> file_line_first;
 };
+
+//! returns the description of a syntax error on a line that starts with % and \a name, which no parse directive's
+//! rule matched: an unknown parse directive, with the closest one, or one with invalid syntax (issue #56)
+DLLLOCAL std::string qore_parse_directive_error(const std::string& name);
+
+//! returns true if \a name is the name of a parse directive (issue #56)
+DLLLOCAL bool qore_parse_directive_known(const std::string& name);
 
 // private interface to bison/flex parser/scanner
 typedef void* yyscan_t;
@@ -142,6 +192,7 @@ DLLLOCAL extern QoreParseState* yyget_extra(yyscan_t scanner);
 DLLLOCAL void qore_scanner_end_input(yyscan_t scanner);
 DLLLOCAL extern int yyparse(yyscan_t yyscanner);
 DLLLOCAL extern struct yy_buffer_state* yy_scan_string(const char*, yyscan_t scanner);
+DLLLOCAL extern struct yy_buffer_state* yy_scan_bytes(const char*, int, yyscan_t scanner);
 DLLLOCAL void yyset_in(FILE* in_str, yyscan_t yyscanner);
 DLLLOCAL int yylex_destroy(yyscan_t yyscanner);
 DLLLOCAL void yyset_lineno(int line_number, yyscan_t yyscanner);

@@ -17,6 +17,10 @@
 %define NoOracle
 %endtry
 
+%try-module pgsql
+%define NoPgsql
+%endtry
+
 %exec-class SqlUtilExpressionCastTest
 
 #! a datasource that records the SQL that it is given, so SQL is generated without a database server
@@ -144,6 +148,9 @@ class SqlUtilExpressionCastTest inherits QUnit::Test {
         if (!ENV.QORE_DB_CONNSTR_PGSQL) {
             testSkip("QORE_DB_CONNSTR_PGSQL is not set");
         }
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
         Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
         on_exit ds.rollback();
         if (ds.getDriverName() != "pgsql") {

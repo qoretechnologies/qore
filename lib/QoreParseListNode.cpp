@@ -73,12 +73,37 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
 
     int err = 0;
 
+    // the element type of the list that this literal is stored in, if it is the value stored; never for the
+    // arguments of a call (issue #5782)
+    const QoreTypeInfo* target_elem_type = nullptr;
+    if (!preserve_varref_types && parse_context.target_value == this) {
+        target_elem_type = QoreTypeInfo::getReturnComplexListOrNothing(parse_context.target_type);
+        if (!target_elem_type) {
+            target_elem_type = QoreTypeInfo::getReturnComplexSoftListOrNothing(parse_context.target_type);
+        }
+    }
+
     for (size_t i = 0; i < values.size(); ++i) {
         bool typed_varref_may_be_nothing = qore_parse_list_literal_varref_may_be_nothing(values[i]);
 
         parse_context.typeInfo = nullptr;
-        int e = parse_init_value(values[i], parse_context);
+        int e;
+        {
+            // the element is the value stored in the list that this literal is stored in, if any (issue #5782)
+            QoreParseTargetHelper target(parse_context, values[i], target_elem_type);
+            e = parse_init_value(values[i], parse_context);
+        }
         vtypes[i] = parse_context.typeInfo;
+        // a date of the other subtype than the element type of the list that the literal is stored in is a parse
+        // error, as for an assignment (issue #5782)
+        if (QoreTypeInfo::isDateSubtypeMismatch(target_elem_type, vtypes[i])) {
+            parseException(*lvec[i], "PARSE-TYPE-ERROR", "element %zu (starting from 0) in the list is type '%s', "
+                "but the list expects '%s'", i, QoreTypeInfo::getName(vtypes[i]),
+                QoreTypeInfo::getName(target_elem_type));
+            if (!e) {
+                e = -1;
+            }
+        }
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
             || qore_parse_list_literal_varref_may_be_nothing(values[i]);
         if (e && !err) {
@@ -95,13 +120,24 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
         //printd(5, "QoreParseListNode::parseInitIntern() this: %p %d: vcommon: %d vt: %p '%s' vtype: %p '%s'\n",
         //  this, i, vcommon, vtypes[i], QoreTypeInfo::getName(vtypes[i]), vtype, QoreTypeInfo::getName(vtype));
 
+        // the value type of the container is that of the run-time values: a date has no subtype then, while the
+        // type of each value keeps it (call arguments are checked with it) (issue #5722)
         if (!i) {
             if (vtypes[0] && vtypes[0] != anyTypeInfo) {
-                vtype = vtypes[0];
+                vtype = QoreTypeInfo::getRuntimeValueType(vtypes[0]);
                 vcommon = true;
             }
-        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vtypes[i])) {
-            vcommon = false;
+        } else if (vcommon) {
+            const QoreTypeInfo* vt = QoreTypeInfo::getRuntimeValueType(vtypes[i]);
+            // the common type of a type parameter and another type is not known before the type parameter is
+            // substituted (QoreTypeInfo::matchCommonType() would treat the type parameter as NOTHING and give the
+            // or-nothing type of the other type): the container's value type is then auto (qore#6000)
+            if (vt != vtype && (qore_type_contains_type_parameter(vtype) || qore_type_contains_type_parameter(vt))) {
+                vtype = nullptr;
+                vcommon = false;
+            } else if (!QoreTypeInfo::matchCommonType(vtype, vt)) {
+                vcommon = false;
+            }
         }
 
         if (!needs_eval && values[i].needsEval()) {
@@ -201,10 +237,17 @@ QoreValue QoreParseListNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
         // issue #2791: ensure that type folding is performed at the source if necessary
         QoreValue val = v.takeReferencedValue();
         if (this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype) && QoreTypeInfo::hasComplexType(vt)) {
-            // this can never throw an exception; it's only used for type folding/stripping
+            // this only folds or strips the type, and cannot raise an exception if the parse type of the element
+            // expression allows its value; when the parse type is wrong (an expression whose type was computed
+            // incorrectly), it raises the type error: the list is not built, as for an exception raised by the
+            // evaluation of the element above (qore#5891)
             QoreTypeInfo::acceptAssignment(this->vtype, "<type folding>", val, xsink);
-            // can be called with xsink == nullptr when called at parse time
-            assert(!xsink || !*xsink);
+            if (xsink && *xsink) {
+                // the value was not taken by the list
+                val.discard(xsink);
+                needs_deref = false;
+                return QoreValue();
+            }
         }
 
         //printd(5, "QoreParseListNode::evalImpl() [%lu] (%p: %s) '%s'\n", i, this->vtype,

@@ -1,0 +1,31 @@
+0/0 empty: null
+0/0 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo0>', but got type 'string' instead
+0/1 empty: null
+0/1 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo0>', but got type 'string' instead
+0/2 empty: null
+0/2 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash<H0>', but got type 'string' instead
+0/3 empty: null
+0/3 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash<H0>', but got type 'string' instead
+0/4 empty: null
+0/5 empty: null
+1/0 empty: null
+1/0 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo1>', but got type 'string' instead
+1/1 empty: null
+1/1 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo1>', but got type 'string' instead
+1/2 empty: null
+1/2 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash<H1>', but got type 'string' instead
+1/3 empty: null
+1/3 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash<H1>', but got type 'string' instead
+1/4 empty: null
+1/5 empty: null
+2/0 empty: null
+2/0 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo2>', but got type 'string' instead
+2/1 empty: null
+2/1 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*object<Foo2>', but got type 'string' instead
+2/2 empty: null
+2/2 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash<H2>', but got type 'string' instead
+2/3 empty: null
+2/3 bad: RUNTIME-TYPE-ERROR: <lvalue> expects type '*hash<H2>', but got type 'string' instead
+2/4 empty: null
+2/5 empty: null
+deleted-library: PROGRAM-ERROR

@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads reading one string value at the same moment
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SharedMiddleSliceTest
+
+#! A slice of a string that does not reach the end of its parent can be read by threads at the same moment (#6239)
+/** A slice that does not reach the end of its parent is not null-terminated in the parent's buffer.  As a view, it
+    copied its bytes out on its first read, also on a const read of a value that other threads shared and read at the
+    same moment: the copy changed the string's storage in place without synchronization (a data race, reported by
+    ThreadSanitizer, that could leak or double-free the buffer or release the parent twice).  Such a slice is now
+    copied when it is taken; a slice that reaches the end of its parent stays a zero-copy view.
+*/
+class SharedMiddleSliceTest inherits QUnit::Test {
+    public {
+        #! the threads that read each value at the same moment
+        const Readers = 8;
+        #! the values read
+        const Rounds = 50;
+        #! upper bound on any wait; reaching it fails the test
+        const Timeout = 60s;
+    }
+
+    private {
+        #! a string of more than QORE_VIEW_SUBSTR_THRESHOLD (4096) bytes, so that substr() takes slices of it
+        string source;
+    }
+
+    constructor() : QUnit::Test("SharedMiddleSliceTest", "1.0") {
+        for (int i = 0; i < 1000; ++i) {
+            source += sprintf("line %05d,", i);
+        }
+        addTestCase("the slices that are copied and the slices that are views", \viewTest());
+        addTestCase("threads read a shared middle slice of substr()", \substrTest());
+        addTestCase("threads read a shared middle field of StringSplitIterator", \splitTest());
+        addTestCase("threads read a shared middle match of RegexMatchIterator", \regexTest());
+        set_return_value(main());
+    }
+
+    viewTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build (dbg_string_is_view())");
+        }
+        assertFalse(isView(source.substr(10, 5000)), "a middle slice of substr() is a copy");
+        assertTrue(isView(source.substr(10)), "a slice to the end of substr() is a view");
+        assertTrue(isView(source.substr(10, source.size() - 10)), "a slice that ends at the end is a view");
+        # a slice of a view to the end
+        string tail = source.substr(10);
+        assertFalse(isView(tail.substr(5, 5000)), "a middle slice of a view is a copy");
+        assertTrue(isView(tail.substr(5)), "a slice of a view to the end is a view");
+
+        list<bool> fields = map isView($1), new StringSplitIterator("a,b,c", ",");
+        assertEq((False, False, True), fields, "only the last field of a split is a view");
+
+        RegexMatchIterator i(new Regex("b+"), "aabbbcc");
+        assertTrue(i.next());
+        assertFalse(isView(i.getMatch()), "a match that does not reach the end of the subject is a copy");
+        RegexMatchIterator j(new Regex("c+$"), "aabbbcc");
+        assertTrue(j.next());
+        assertTrue(isView(j.getMatch()), "a match to the end of the subject is a view");
+
+        # a character offset makes the source's ASCII prefix known beyond the slice taken below
+        string c = source[5100];
+        assertEq("4", c);
+        # the copy is allocated exactly, as a view is when it is materialized: its size, a terminator and 48 bytes,
+        # rounded up to 16 (an append-sized buffer is larger)
+        string copy = source.substr(10, 5000);
+        assertEq(((5000 + 48) / 16 + 1) * 16, call_function("dbg_string_capacity", copy), "exact capacity");
+        RegexMatchIterator m(new Regex("line 00500"), source);
+        assertTrue(m.next());
+        string match = m.getMatch();
+        assertEq(((10 + 48) / 16 + 1) * 16, call_function("dbg_string_capacity", match), "exact capacity of a match");
+        # the ASCII prefix of the parent that the copy holds is known in the copy, which keeps a character offset O(1)
+        assertEq(5000, call_function("dbg_string_ascii_prefix", copy), "the copy's known ASCII prefix");
+        assertEq(source.substr(4000, 1), copy.substr(3990, 1));
+    }
+
+    substrTest() {
+        for (int r = 0; r < Rounds; ++r) {
+            int offset = 7 + r;
+            readShared(source.substr(offset, 5000), source.substr(offset, 5000));
+        }
+    }
+
+    splitTest() {
+        for (int r = 0; r < Rounds; ++r) {
+            StringSplitIterator i(source, ",");
+            for (int k = 0; k <= r; ++k) {
+                assertTrue(i.next());
+            }
+            readShared(i.getValue(), sprintf("line %05d", r));
+        }
+    }
+
+    regexTest() {
+        for (int r = 0; r < Rounds; ++r) {
+            RegexMatchIterator i(new Regex(sprintf("line %05d", r)), source);
+            assertTrue(i.next());
+            readShared(i.getMatch(), sprintf("line %05d", r));
+        }
+    }
+
+    #! threads read \a value at the same moment; each read must give \a expected
+    private readShared(string value, string expected) {
+        Counter ready(Readers);
+        Counter go(1);
+        Counter done(Readers);
+        Queue errors();
+        for (int t = 0; t < Readers; ++t) {
+            background sub () {
+                on_exit done.dec();
+                ready.dec();
+                go.waitForZero();
+                # reads of the bytes, a C string and a character offset
+                string v = value;
+                if (v != expected || v.size() != expected.size() || v[0] != expected[0]
+                        || v.substr(1, 3) != expected.substr(1, 3)) {
+                    errors.push(sprintf("read %y, expected %y", v.substr(0, 20), expected.substr(0, 20)));
+                }
+            }();
+        }
+        assertEq(0, ready.waitForZero(Timeout));
+        go.dec();
+        assertEq(0, done.waitForZero(Timeout));
+        assertEq(0, errors.size(), errors.size() ? errors.get() : "");
+    }
+
+    private static bool isView(string str) {
+        return call_function("dbg_string_is_view", str);
+    }
+}

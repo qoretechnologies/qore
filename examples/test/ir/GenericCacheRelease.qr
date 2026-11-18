@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The specializations of a generic function or method and the concrete declarations of a generic hashdecl made for
+# the types of a Program are freed with the Program (issue #5765); see GenericCacheRelease.qtest.  Needs a debug
+# libqore (dbg_generic_cache_counts()).
+
+# the library: this Program, whose public generics the user Programs inherit
+public class Box<T> { public { T v; } constructor(T v) { self.v = v; } T get() { return v; } }
+public T sub identity<T>(T value) { return value; }
+public hashdecl HBox<T> { T v; int n = 1; }
+
+# a generic function whose specialization starts a thread running a background helper of its own IR
+our Queue q_go = new Queue();
+our Queue q_done = new Queue();
+public int sub startbg<T>(T v) {
+    int x = 5;
+    string s = "abc";
+    background (x ? waitbg(x, s) : waitbg(0, s));
+    return x;
+}
+public sub waitbg(int x, string s) {
+    q_go.get();
+    q_done.push(sprintf("%d %s", x, s));
+}
+
+const UserSrc = "
+class Foo { string n() { return \"foo\"; } }
+string sub run() {
+    string rv;
+    for (int i = 0; i < 3; ++i) {
+        Box<Foo> b(new Foo());
+        rv = b.get().n();
+        Foo f = identity<Foo>(new Foo());
+        rv += f.n();
+        hash<HBox<Foo>> h = cast<hash<HBox<Foo>>>({\"v\": new Foo()});
+        rv += h.v.n();
+        # a derived type argument
+        list<Foo> fl = (new Foo(),);
+        Box<list<Foo>> bl(fl);
+        rv += bl.get()[0].n();
+    }
+    return rv;
+}
+int sub startThread() {
+    return startbg<Foo>(new Foo());
+}
+# a value of a concrete declaration made for this Program's class, returned to the parent
+hash<HBox<*Foo>> sub keep() {
+    return cast<hash<HBox<*Foo>>>({});
+}
+";
+
+ExecMode mode = EM_TIERED;
+foreach string a in (QORE_ARGV) {
+    switch (a) {
+        case "--exec-mode=ast": mode = EM_AST; break;
+        case "--exec-mode=ir": mode = EM_IR; break;
+        case "--exec-mode=jit": mode = EM_JIT; break;
+    }
+}
+
+sub check(string label, bool ok, auto info) {
+    printf("%s: %s\n", label, ok ? "ok" : sprintf("FAILED %y", info));
+}
+
+hash<auto> base = dbg_generic_cache_counts();
+hash<auto> after_first;
+for (int g = 0; g < 20; ++g) {
+    {
+        Program u(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        u.setExecMode(mode);
+        u.parse(UserSrc, "user");
+        string r = u.callFunction("run");
+        if (r != "foofoofoofoo") {
+            check("result " + g, False, r);
+        }
+        if (!g) {
+            hash<auto> live = dbg_generic_cache_counts();
+            # the AST interpreter makes no specialized IR
+            check("specializations made", mode == EM_AST ? live.specializations == base.specializations
+                : live.specializations > base.specializations, live);
+            check("hashdecls made", live.hashdecls > base.hashdecls, live);
+        }
+    }
+    hash<auto> c = dbg_generic_cache_counts();
+    if (!g) {
+        after_first = c;
+        check("specializations freed", c.specializations == base.specializations, c);
+        check("hashdecls freed", c.hashdecls == base.hashdecls, c);
+    } else if (c != after_first) {
+        check("bounded in generation " + g, False, c);
+    }
+}
+check("bounded", dbg_generic_cache_counts() == after_first, dbg_generic_cache_counts());
+
+# a value of a concrete declaration keeps it after its Program is destroyed
+hash<auto> h;
+{
+    Program u(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    u.setExecMode(mode);
+    u.parse(UserSrc, "user");
+    h = u.callFunction("keep");
+}
+check("value keeps its declaration", dbg_generic_cache_counts().hashdecls == base.hashdecls + 1,
+    dbg_generic_cache_counts());
+# only members whose types are not the destroyed Program's are usable: the member typed *Foo names a freed class
+check("value usable", h.n == 1 && h.typeCode() == NT_HASH, h);
+remove h;
+check("declaration freed with its last value", dbg_generic_cache_counts().hashdecls == base.hashdecls,
+    dbg_generic_cache_counts());
+
+# a thread started by a specialization keeps it after the Program whose type it was made for is destroyed: the thread
+# runs the specialization's own helper IR
+{
+    Program u(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    u.setExecMode(mode);
+    u.parse(UserSrc, "user");
+    check("thread started", u.callFunction("startThread") == 5, NOTHING);
+}
+hash<auto> c = dbg_generic_cache_counts();
+check("specialization kept by its thread", mode == EM_AST ? c.specializations == base.specializations
+    : c.specializations == base.specializations + 1, c);
+q_go.push(1);
+check("thread result", q_done.get() == "5 abc", NOTHING);

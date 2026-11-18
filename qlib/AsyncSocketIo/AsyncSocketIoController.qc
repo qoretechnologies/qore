@@ -120,7 +120,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param autostop if @ref True "True", the I/O thread will automatically stop when all
         operations complete (after a 2-second grace period to avoid unnecessary stop/restart cycles)
     */
-    setAutostop(bool autostop = True) {
+    setAutostop(bool autostop = True) [dom=PROCESS_CONTROL] {
         Qore::AsyncIoController::setAutostop(auto_stop: autostop);
     }
 
@@ -356,7 +356,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Sets the logger for the controller
     /** @param logger the logger to use for diagnostic output, or @ref nothing to disable logging
     */
-    setLogger(*LoggerInterface logger) {
+    setLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         LoggerWrapper::setLogger(logger);
         Qore::AsyncIoController::setLogger(logger: logger);
     }
@@ -370,7 +370,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @param max_workers maximum worker count; \c 0 means automatic sizing
     */
-    setMaxCallbackWorkers(int max_workers = 0) {
+    setMaxCallbackWorkers(int max_workers = 0) [dom=PROCESS_CONTROL] {
         Qore::AsyncIoController::setMaxCallbackWorkers(max_workers: max_workers);
     }
 
@@ -446,6 +446,52 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     */
     int addTimer(date deadline, code<nothing()> callback, string owner) {
         return Qore::AsyncIoController::addTimer(deadline, callback, owner);
+    }
+
+    #! Adds a timer that fires after the given delay, measured on the monotonic clock
+    /** As @ref addTimer "addTimer(date, code)", but the timer fires when \a delay has passed since the call: a step
+        of the system clock does not move it, as it moves a timer added for @ref Qore::now_us() "now_us()" plus an
+        interval; use it for heartbeat, idle, retry and timeout timers
+
+        @par Example:
+        @code{.py}
+int timer_id = controller.addTimerDelay(1s, sub () { checkConnection(); });
+        @endcode
+
+        @param delay the time after which the timer fires; zero or a negative value fires it at once
+        @param callback the closure to call when the timer fires
+
+        @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+
+        @par Module Code and Restricted Callers
+        As for @ref addTimer "addTimer(date, code)"; see
+        @ref Qore::AsyncIoController::addTimerDelay() "AsyncIoController::addTimerDelay()"
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
+
+        @since AsyncSocketIo 3.0
+    */
+    int addTimerDelay(timeout delay, code<nothing()> callback) {
+        return Qore::AsyncIoController::addTimerDelay(delay, callback);
+    }
+
+    #! Adds an owner-tagged timer that fires after the given delay, measured on the monotonic clock
+    /** As @ref addTimerDelay "addTimerDelay(timeout, code)", with the callback dispatch tagged with \a owner as with
+        @ref addTimer "addTimer(date, code, string)"
+
+        @param delay the time after which the timer fires; zero or a negative value fires it at once
+        @param callback the closure to call when the timer fires
+        @param owner the owner identifier to tag the callback dispatch with (so it is drainable via
+        @ref flushCallbacksByOwner())
+
+        @return the unique timer ID that can be passed to cancelTimer() to cancel the timer
+
+        @throw INVALID-FUNCTION-ACCESS a caller that may not control threads passed code that is not its own module's
+
+        @since AsyncSocketIo 3.0
+    */
+    int addTimerDelay(timeout delay, code<nothing()> callback, string owner) {
+        return Qore::AsyncIoController::addTimerDelay(delay, callback, owner);
     }
 
     #! Cancels a pending timer

@@ -40,6 +40,8 @@
 #include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 
@@ -53,11 +55,48 @@
 #include <cerrno>
 #include <cstring>
 #include <ctime>
+#include <vector>
 
 #ifndef WARN_MODULES
 // needed so that the Qore default argument value in sinatures below will match a C++ value
 #define WARN_MODULES QP_WARN_MODULES
 #endif
+
+// the hardening options of the compilation of the library, from the macros that the compiler defined for it
+static QoreHashNode* qore_get_library_hardening_info() {
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+#if defined(__SSP_EXPLICIT__)
+    int64 ssp = 4;
+#elif defined(__SSP_ALL__)
+    int64 ssp = 3;
+#elif defined(__SSP_STRONG__)
+    int64 ssp = 2;
+#elif defined(__SSP__)
+    int64 ssp = 1;
+#else
+    int64 ssp = 0;
+#endif
+#ifdef _FORTIFY_SOURCE
+    int64 fortify = _FORTIFY_SOURCE;
+#else
+    int64 fortify = 0;
+#endif
+#ifdef __CET__
+    int64 cet = __CET__;
+#else
+    int64 cet = 0;
+#endif
+#ifdef _GLIBCXX_ASSERTIONS
+    bool glibcxx_assertions = true;
+#else
+    bool glibcxx_assertions = false;
+#endif
+    h->setKeyValue("stack_protector", ssp, nullptr);
+    h->setKeyValue("fortify_source", fortify, nullptr);
+    h->setKeyValue("cet", cet, nullptr);
+    h->setKeyValue("glibcxx_assertions", glibcxx_assertions, nullptr);
+    return h;
+}
 
 static const QoreFunction* get_builtin_func(const QoreStringNode* str, ExceptionSink* xsink) {
    // the name is looked up as a C string, which would be cut at a NUL character and name another function
@@ -127,8 +166,12 @@ QoreProgram* q_get_runtime_call_program(RuntimeConfig& runtime_cfg) {
     return pgm ? pgm : qore_get_call_program_context();
 }
 
-int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
-    switch (v.getType()) {
+// the nesting depth from which q_get_value_byte_size() continues without recursion (qore#6117)
+static constexpr unsigned QORE_VALUE_BYTE_SIZE_RECURSION_LIMIT = 64;
+
+// returns the byte size of a value that is not a list or a hash
+static inline int64 value_byte_size_scalar(qore_type_t type, const QoreValue& v, ExceptionSink* xsink) {
+    switch (type) {
         case NT_NOTHING:
         case NT_NULL:
             return 0;
@@ -147,7 +190,71 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             return 64;  // Estimate for DateTime structure
         case NT_NUMBER:
             return 32;  // Estimate for arbitrary precision number
+        case NT_OBJECT:
+            xsink->raiseException("GET-VALUE-BYTE-SIZE-ERROR",
+                "calculating byte size for objects is not currently supported");
+            return 0;
+        default:
+            return 64;  // Default estimate for other complex types
+    }
+}
+
+// returns the byte size of a deeply nested list or hash, with a work list instead of recursion (qore#6117); the
+// total and the error for an object are those of the recursion, but the values are visited in another order, and
+// cancellation is checked every 100 values of the whole walk rather than of each container
+// cold and not inlined: it must not change how the recursive measurement, which measures the values met in practice, is
+// compiled
+__attribute__((cold, noinline)) static int64 value_byte_size_without_recursion(const QoreValue& v,
+        ExceptionSink* xsink) {
+    std::vector<QoreValue> pending;
+    pending.push_back(v);
+    int64 total = 0;
+    int iter = 0;
+    while (!pending.empty()) {
+        QoreValue cur = pending.back();
+        pending.pop_back();
+        qore_type_t type = cur.getType();
+        switch (type) {
+            case NT_LIST: {
+                ConstListIterator li(cur.get<const QoreListNode>());
+                while (li.next()) {
+                    if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
+                        return 0;
+                    }
+                    pending.push_back(li.getValue());
+                }
+                break;
+            }
+            case NT_HASH: {
+                ConstHashIterator hi(cur.get<const QoreHashNode>());
+                while (hi.next()) {
+                    if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
+                        return 0;
+                    }
+                    total += strlen(hi.getKey());
+                    pending.push_back(hi.get());
+                }
+                break;
+            }
+            default:
+                total += value_byte_size_scalar(type, cur, xsink);
+                if (*xsink) {
+                    return 0;
+                }
+                break;
+        }
+    }
+    return total;
+}
+
+static int64 value_byte_size_intern(const QoreValue& v, ExceptionSink* xsink, unsigned depth) {
+    qore_type_t type = v.getType();
+    switch (type) {
         case NT_LIST: {
+            // a deeply nested value is measured without recursion, so that it cannot overflow the stack (qore#6117)
+            if (depth >= QORE_VALUE_BYTE_SIZE_RECURSION_LIMIT) {
+                return value_byte_size_without_recursion(v, xsink);
+            }
             int64 total = 0;
             const QoreListNode* l = v.get<const QoreListNode>();
             ConstListIterator li(l);
@@ -156,7 +263,7 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
                 if (++iter % 100 == 0 && qore_check_cancel(xsink, "calculating value byte size")) {
                     return 0;
                 }
-                total += q_get_value_byte_size(li.getValue(), xsink);
+                total += value_byte_size_intern(li.getValue(), xsink, depth + 1);
                 if (*xsink) {
                     return 0;
                 }
@@ -164,6 +271,9 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
             return total;
         }
         case NT_HASH: {
+            if (depth >= QORE_VALUE_BYTE_SIZE_RECURSION_LIMIT) {
+                return value_byte_size_without_recursion(v, xsink);
+            }
             int64 total = 0;
             const QoreHashNode* h = v.get<const QoreHashNode>();
             ConstHashIterator hi(h);
@@ -173,20 +283,20 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
                     return 0;
                 }
                 total += strlen(hi.getKey());
-                total += q_get_value_byte_size(hi.get(), xsink);
+                total += value_byte_size_intern(hi.get(), xsink, depth + 1);
                 if (*xsink) {
                     return 0;
                 }
             }
             return total;
         }
-        case NT_OBJECT:
-            xsink->raiseException("GET-VALUE-BYTE-SIZE-ERROR",
-                "calculating byte size for objects is not currently supported");
-            return 0;
         default:
-            return 64;  // Default estimate for other complex types
+            return value_byte_size_scalar(type, v, xsink);
     }
+}
+
+int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
+    return value_byte_size_intern(v, xsink, 0);
 }
 
 // signal constants - if they are not defined define them here
@@ -417,6 +527,18 @@ hashdecl ModuleParseOptionMaskInfo {
     list<string> strip;
     //! the names of the restrictions added to the parse options of modules
     list<string> add;
+}
+
+//! the character set and the media type that an HTTP server reports for the Content-Type of a request
+/** see @ref Qore::get_http_content_type_info() "get_http_content_type_info()"
+
+    @since %Qore 3.0
+*/
+hashdecl HttpContentTypeInfo {
+    //! the character set: the \c charset parameter as given, else the encoding that the body is read in
+    string charset;
+    //! the media type without its \c charset parameter; missing if only a \c charset parameter is left
+    *string body_content_type;
 }
 
 //! a hash describing a parsed URL
@@ -743,6 +865,9 @@ const SignalToName = (
     @param signal The signal number to process, see @ref signal_constants for possible values
     @param handler The code to execute when the signal is caught; this should accept an integer argument giving the signal number
 
+    @note Called by the code of a @ref Qore::Program "Program" whose data is being destroyed (a destructor run when
+    the Program is deleted, for example), this function has no effect; see @ref signal_handler_program_lifetime
+
     @par Example:
     @code{.py}
 set_signal_handler(SIGINT, \signal_handler());
@@ -752,7 +877,8 @@ set_signal_handler(SIGINT, \signal_handler());
 */
 nothing set_signal_handler(softint signal, code handler) [dom=PROCESS;flags=NAMED_ARGS] {
 #ifdef HAVE_SIGNAL_HANDLING
-    if (signal <= 0 || signal > QORE_SIGNAL_MAX)
+    // the handlers are indexed by the signal, and the platform must have it (issue #5829)
+    if (signal <= 0 || signal >= QORE_SIGNAL_MAX || !QoreSignalManager::isValidSignal((int)signal))
         return xsink->raiseException("SET-SIGNAL-HANDLER-ERROR", "" QLLD " is not a valid signal", (int64)signal);
 
     QSM.setHandler(signal, handler, xsink);
@@ -782,7 +908,7 @@ remove_signal_handler(SIGINT);
 */
 nothing remove_signal_handler(softint signal) [dom=PROCESS;flags=NAMED_ARGS] {
 #ifdef HAVE_SIGNAL_HANDLING
-    if (signal <= 0 || signal > QORE_SIGNAL_MAX) {
+    if (signal <= 0 || signal >= QORE_SIGNAL_MAX || !QoreSignalManager::isValidSignal((int)signal)) {
         return xsink->raiseException("REMOVE-SIGNAL-HANDLER-ERROR", "" QLLD " is not a valid signal", (int64)signal);
     }
     QSM.removeHandler(signal, xsink);
@@ -908,6 +1034,92 @@ auto call_function(code callable, ...) {
 
     ProgramCallContextHelper pch(callable->getProgram());
     return callable->invoke(*vargs, xsink);
+}
+
+//! Returns @ref True if the given code is a closure that the initialization of its library module created
+/** Such a closure can be run later as deferred module initialization with call_module_init_closure().  A module that
+    runs initialization code that other modules register with it for later (for example to register their
+    application actions the first time that they are looked up) tests the code when it is registered.
+
+    A closure qualifies only if it was created by the code of a library module (a module found in the process-wide
+    module path, see @ref user_module_declarations) while that module was initialized (its \c init closure and the code that it
+    calls), or while such a closure ran as deferred module initialization; a closure that any other code creates,
+    including other code of the module and code that runs while the module is initialized but is not the module's,
+    does not.
+
+    @param c the code to test
+
+    @return @ref True if \a c is a closure that can be run as deferred module initialization
+
+    @par Example:
+    @code{.py}
+# keep the qualification of an initializer registered with a module
+bool deferred_init = is_module_init_closure(init);
+    @endcode
+
+    @see call_module_init_closure()
+
+    @since %Qore 3.0
+*/
+bool is_module_init_closure(code c) [flags=RET_VALUE_ONLY] {
+    const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(c);
+    return cb && cb->isModuleInit();
+}
+
+//! Runs a closure that the initialization of its library module created as deferred module initialization
+/** Only the code of a library module can call this function, such as a registry module that runs the deferred
+    initialization that other modules registered with it.
+
+    The closure runs as the initialization of its module does: the functional domains that the module's own code
+    declares are not checked against the code that calls this function (see @ref user_module_declarations), and the threads
+    that it starts do not take that code's restrictions.  Code that it calls back that is not the module's is checked
+    as always.
+
+    @param c a closure for which is_module_init_closure() returns @ref True
+
+    @return the value that the closure returns
+
+    @throw MODULE-INIT-CLOSURE-ERROR \a c is not a closure that the initialization of its library module created,
+    or the code that calls this function is not the code of a library module (a module found in the process-wide
+    module path)
+
+    @par Example:
+    @code{.py}
+# run an initializer that a module registered when it was loaded
+if (deferred_init) {
+    call_module_init_closure(init);
+} else {
+    init();
+}
+    @endcode
+
+    @see is_module_init_closure()
+
+    @since %Qore 3.0
+*/
+auto call_module_init_closure(code c) {
+    const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(c);
+    if (!cb || !cb->isModuleInit()) {
+        return xsink->raiseException("MODULE-INIT-CLOSURE-ERROR", "the code given is not a closure that the "
+            "initialization of its library module created");
+    }
+    // only library module code runs deferred module initialization, such as the registry that the closure was
+    // registered with; other code that gets such a closure cannot run it with the exemption (qore#6337)
+    if (!qore_program_is_library_module(getProgram())) {
+        return xsink->raiseException("MODULE-INIT-CLOSURE-ERROR", "call_module_init_closure() can only be called "
+            "by the code of a library module");
+    }
+    // the closure runs as the initialization of its module: the barrier of a library module's initialization, which
+    // names the module's Program, so that the closures that it creates qualify too
+    QoreModuleInitSandboxBarrierHelper barrier(true);
+    // without its own barrier, the program would be set on an outer one (qore#6337)
+    if (!barrier.recorded()) {
+        xsink->outOfMemory();
+        return QoreValue();
+    }
+    qore_module_init_set_program(qore_call_reference_code_program(c));
+    ProgramCallContextHelper pch(c->getProgram());
+    return c->invoke(nullptr, xsink);
 }
 
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
@@ -1533,9 +1745,12 @@ string resolve_url(string base, string reference, int options = 0) [flags=PURE,N
     |JavaScript, form data (\c application/x-www-form-urlencoded)|a byte order mark, else the \c charset parameter, else UTF-8 (RFC 9239, WHATWG URL)
     |any other text|a byte order mark, else the \c charset parameter, else the assumed encoding
 
-    An encoding declared in the body (an XML declaration, a \c meta element, or an \c \@charset rule) is ignored if
-    it is not a supported encoding, and a UTF-16 declaration in HTML or CSS means UTF-8, as the text could not have
-    been read to find it otherwise (WHATWG Encoding).  The \c charset parameter is used as given.
+    A character set name in the \c charset parameter or declared in the body (an XML declaration, a \c meta element,
+    or an \c \@charset rule) is untrusted data: it is used only if it selects an encoding as
+    @ref Qore::get_known_encoding() "get_known_encoding()" does (an encoding that %Qore knows, or a standard character
+    set), and, for a name declared in the body, only if iconv converts to that encoding; it is ignored otherwise, so
+    that the next rule of the table applies; a UTF-16 declaration in HTML or CSS
+    means UTF-8, as the text could not have been read to find it otherwise (WHATWG Encoding).
 
     The \c charset parameter of the \c Content-Type is read as in RFC 9110: parameter names match
     case-insensitively and only as whole names, and a quoted value (ex: <tt>charset="UTF-8"</tt>) is unquoted, with
@@ -1591,6 +1806,98 @@ data body = decode_http_body(resp.headers."content-type", resp.body);
 data decode_http_body(*string content_type, binary body, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return qore_decode_http_body(content_type ? content_type->c_str() : nullptr, body,
         QEM.findCreate(assumed_encoding));
+}
+
+//! Returns the character set and the media type that an HTTP server reports for the Content-Type of a request
+/** An HTTP server reports them in the header information of a request (the \c "charset" and
+    \c "body-content-type" keys of the info hash of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()",
+    and of \c cx."header-info" in an @ref HttpServer::HttpServer "HttpServer" request handler) for every HTTP version:
+
+    - with a \c charset parameter, the character set is its value, and the media type is the field value without
+      the parameter (missing if nothing else is left)
+    - otherwise the character set is the encoding that the body is read in (as determined for
+      @ref Qore::get_http_body_encoding() "get_http_body_encoding()" before the body is known, else
+      \a assumed_encoding), and the media type is the whole field value
+
+    @param content_type the \c Content-Type header value
+    @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+    @return the character set and the media type of the request
+
+    @par Example:
+    @code{.py}
+hash<HttpContentTypeInfo> info = get_http_content_type_info("application/json;charset=utf-8");
+# info.charset: "utf-8", info.body_content_type: "application/json"
+    @endcode
+
+    @since %Qore 3.0
+*/
+hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    // the rule reads the bytes of the field value, which the servers have in UTF-8 or ASCII
+    TempEncodingHelper ct(content_type, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreHttpContentTypeInfo cti = qore_get_http_content_type_info(ct->c_str(), QEM.findCreate(assumed_encoding));
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclHttpContentTypeInfo, xsink), xsink);
+    rv->setKeyValue("charset", new QoreStringNode(cti.charset.c_str(), cti.charset.size(), QCS_DEFAULT), xsink);
+    if (cti.has_body_content_type) {
+        rv->setKeyValue("body_content_type", new QoreStringNode(cti.body_content_type.c_str(),
+            cti.body_content_type.size(), QCS_DEFAULT), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns the response encoding that an HTTP server reports for the Accept-Charset of a request
+/** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
+    of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
+    @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
+    HTTP version, with the values of repeated \c Accept-Charset field lines combined into one list (RFC 9110 section
+    5.3).  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
+    (tokens, case-insensitive) or \c "*", each with an optional weight (<tt>;q=</tt><em>qvalue</em>, section 12.4.2; 1
+    without one), with optional whitespace around the elements and before and after each \c ";"; other parameters,
+    with a token or quoted-string value, are ignored, and an element with an invalid weight or another syntax error
+    (such as a charset name that is not a token) is ignored.  The result is:
+    - \c "utf8" if UTF-8 (\c "utf-8" or \c "utf8") has the highest weight of the acceptable charsets that %Qore
+      supports, also with the same weight as another; \c "*" gives UTF-8 its weight if UTF-8 is not listed
+    - otherwise the name of the acceptable charset with the highest weight that %Qore supports (a name that
+      @ref Qore::get_known_encoding() "get_known_encoding()" accepts, of an encoding that iconv converts to), as given
+      in the value if it is a name or an alias of an encoding that %Qore knows, else (a label of a standard
+      character set, ex: \c "x-sjis") the name of the encoding that it selects; of charsets with the same weight,
+      the first in the list
+    - \c "utf8" if there is no value, or no charset in it is acceptable (a weight of 0 means not acceptable) and
+      supported, also when UTF-8 has a weight of 0 and \c "*" accepts any other charset: any character set is
+      acceptable without the header (RFC 9110 section 12.5.2), and a server may disregard the header otherwise
+
+    @param accept_charset the \c Accept-Charset header value, if any
+
+    @return the response encoding of the request
+
+    @par Example:
+    @code{.py}
+string enc = get_http_accept_charset("iso-8859-2;q=0.9, utf-8;q=0.5");
+# enc: "iso-8859-2"
+    @endcode
+
+    @since %Qore 3.0
+*/
+string get_http_accept_charset(*string accept_charset) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    if (!accept_charset) {
+        return new QoreStringNode("utf8");
+    }
+    // the rule reads the bytes of the field value, which the servers have in UTF-8 or ASCII
+    TempEncodingHelper ac(accept_charset, QCS_DEFAULT, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // leading blanks are skipped, as the header parser does before it applies the rule
+    const char* p = ac->c_str();
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+    std::string rv = qore_get_http_accept_charset(p);
+    // any character set is acceptable without one (RFC 9110 section 12.5.2); UTF-8 is used
+    return rv.empty() ? new QoreStringNode("utf8") : new QoreStringNode(rv.c_str(), rv.size(), QCS_DEFAULT);
 }
 
 //! Returns the URL string passed without any password information
@@ -1716,6 +2023,8 @@ string files = backquote("ls", \rc);
     @throw THREAD-CANCELLED the thread was cancelled while running the command; the process is killed
     @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
     running the command; the process group is killed
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the call does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     @see
     - system()
@@ -3097,6 +3406,7 @@ load_module("mysql");
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw PARSE-STACK-LIMIT-EXCEEDED the module, or a module that it loads, cannot be parsed within the stack of the current thread; see @ref parse_nesting_limit
 
     @see
     - get_module_hash()
@@ -3129,6 +3439,7 @@ load_module("mysql");
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: API incompatibility, module defines symbols already defined in the target object, etc
     @throw LOAD-MODULE-ERROR the module name contains a NUL character; see @ref path_nul_characters
+    @throw PARSE-STACK-LIMIT-EXCEEDED the module, or a module that it loads, cannot be parsed within the stack of the current thread; see @ref parse_nesting_limit
 
     @see
     - get_module_hash()
@@ -3175,6 +3486,9 @@ set_module_parse_option_mask(new ParseOptions(("no-thread-control", "no-thread-c
 
     @throw MODULE-PARSE-OPTION-MASK-ERROR a mask contains an option that is not a restriction (an explicitly-allowed,
     language, style or module option), or an option in both masks; the calling code has a sandbox manager
+    @throw PARSE-OPTION-ERROR a module loaded afterwards cannot be parsed because the restrictions that the mask adds
+    complete @ref modern "%modern" while the module uses a compatibility option that %modern does not allow (the
+    message names the restrictions that the mask adds)
 
     @see @ref module_parse_option_masks
 
@@ -3264,7 +3578,12 @@ load_module_masked("SoapClient", new ParseOptions(("no-thread-control", "no-thre
     @endcode
 
     @throw LOAD-MODULE-ERROR the module cannot be loaded (see load_module())
-    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions); the module is
+    loaded already, and the restrictions that the mask adds complete @ref modern "%modern" while the module has a
+    compatibility option that %modern does not allow (the mask is not applied)
+    @throw PARSE-OPTION-ERROR the module is loaded for the first time and cannot be parsed because the restrictions
+    that the mask adds complete @ref modern "%modern" while it uses a compatibility option that %modern does not
+    allow (the message names the restrictions that the mask adds)
 
     @see @ref module_parse_option_masks
 
@@ -3293,7 +3612,8 @@ load_module_masked("SoapClient", PO_NO_THREAD_CONTROL | PO_NO_THREAD_CLASSES);
     @endcode
 
     @throw LOAD-MODULE-ERROR the module cannot be loaded (see load_module())
-    @throw MODULE-PARSE-OPTION-MASK-ERROR see set_module_parse_option_mask(ParseOptions, *ParseOptions)
+    @throw MODULE-PARSE-OPTION-MASK-ERROR see load_module_masked(string, ParseOptions, *ParseOptions, int)
+    @throw PARSE-OPTION-ERROR see load_module_masked(string, ParseOptions, *ParseOptions, int)
 
     @since %Qore 3.0
 */
@@ -3321,8 +3641,9 @@ nothing load_module_masked(string name, softint strip, softint add = 0, int warn
 add_module_parse_option_mask("WSDL", new ParseOptions(("no-thread-control", "no-thread-classes")));
     @endcode
 
-    @throw MODULE-PARSE-OPTION-MASK-ERROR the module is not loaded; see also
-    set_module_parse_option_mask(ParseOptions, *ParseOptions)
+    @throw MODULE-PARSE-OPTION-MASK-ERROR the module is not loaded; the restrictions that the mask adds complete
+    @ref modern "%modern" while the module has a compatibility option that %modern does not allow (the mask is not
+    applied); see also set_module_parse_option_mask(ParseOptions, *ParseOptions)
 
     @see @ref module_parse_option_masks
 
@@ -3679,6 +4000,23 @@ hash<string, hash<auto>> get_qore_option_hash() [flags=CONSTANT] {
     - \c LDFLAGS: The linker flags used to link the %Qore library
     - \c LLVMVersion: The version of LLVM that the %Qore library was built with (since %Qore 3.0); see
       @ref Qore::LLVMVersion
+    - \c CompilerVersion: The version of the compiler used to build the %Qore library (since %Qore 3.0)
+    - \c BuildType: The build type of the %Qore library, such as \c "release" or \c "debug" (since %Qore 3.0)
+    - \c BuildTypeCFLAGS: The compiler flags of the build type used in addition to \c CFLAGS, such as
+      <tt>-O3 -DNDEBUG</tt> (since %Qore 3.0)
+    - \c SingleCompilationUnit: @ref True if the %Qore library was compiled as one compilation unit (since %Qore 3.0); @ref False if
+      it was compiled as several translation units, including a build that split the single unit into chunks
+    - \c Target: The target triple of the compiler used to build the %Qore library, such as
+      \c "x86_64-linux-gnu", which names the C library (since %Qore 3.0)
+    - \c InterproceduralOptimization: @ref True if the %Qore library was built with link-time optimization (since
+      %Qore 3.0)
+    - \c Hardening: The hardening options in effect when the %Qore library was compiled, as the compiler defines
+      them, many of them by default (since %Qore 3.0):
+      - \c stack_protector: \c 0 none, \c 1 <tt>-fstack-protector</tt>, \c 2 <tt>-fstack-protector-strong</tt>,
+        \c 3 <tt>-fstack-protector-all</tt>, \c 4 <tt>-fstack-protector-explicit</tt>
+      - \c fortify_source: the level of \c _FORTIFY_SOURCE, \c 0 if it is not defined
+      - \c cet: the value of \c __CET__ (<tt>-fcf-protection</tt>), \c 0 if it is not defined
+      - \c glibcxx_assertions: @ref True if \c _GLIBCXX_ASSERTIONS was defined
 
     @par Example:
     @code{.py}
@@ -3707,6 +4045,13 @@ hash<auto> get_qore_library_info() [flags=CONSTANT] {
    h->setKeyValue("CFLAGS", new QoreStringNode(qore_cflags), xsink);
    h->setKeyValue("LDFLAGS", new QoreStringNode(qore_ldflags), xsink);
    h->setKeyValue("LLVMVersion", new QoreStringNode(LLVM_VERSION_STRING), xsink);
+   h->setKeyValue("CompilerVersion", new QoreStringNode(QORE_LIB_CXX_VERSION), xsink);
+   h->setKeyValue("BuildType", new QoreStringNode(QORE_LIB_BUILD_TYPE), xsink);
+   h->setKeyValue("BuildTypeCFLAGS", new QoreStringNode(QORE_LIB_BUILD_TYPE_CFLAGS), xsink);
+   h->setKeyValue("SingleCompilationUnit", (bool)QORE_LIB_SINGLE_COMPILATION_UNIT, xsink);
+   h->setKeyValue("Target", new QoreStringNode(QORE_LIB_TARGET), xsink);
+   h->setKeyValue("InterproceduralOptimization", (bool)QORE_LIB_IPO, xsink);
+   h->setKeyValue("Hardening", qore_get_library_hardening_info(), xsink);
 
    return h;
 }
@@ -3795,7 +4140,10 @@ string get_ex_pos(hash<auto> exception_info) [flags=CONSTANT,NAMED_ARGS] {
 hash<auto> h = get_local_vars(0);
     @endcode
 
-    @param frame the stack frame where 0 is the current stack frame
+    @param frame the stack frame where 0 is the current stack frame; the frame of the top-level code of a
+    @ref Qore::Program "Program", including the main Program of a script, follows the frames of the calls that it
+    makes, and the frames of the code of a Program are followed by those of the code that called it in the thread, also
+    in another Program, such as the code that runs a child Program with @ref Qore::Program::run() "Program::run()"
 
     @return a hash of local variables for the given stack frame; if the stack frame is invalid, an empty hash is returned; hash keys are variable names; hash values are hashes with the following keys:
     - \c "type": can be either "local" or "closure" for closure-bound local variables
@@ -3803,8 +4151,22 @@ hash<auto> h = get_local_vars(0);
     - \c "declaredType": the name of the declared type of the variable, if it has one (since %Qore 3.0)
     - \c "unassigned": @ref True if the variable has no value but its declared type requires one, as for a variable
       that was declared but not assigned (see @ref pitfalls_declaration); missing otherwise (since %Qore 3.0)
+    - \c "unavailable": @ref True if the value of the variable cannot be read, as the
+      @ref exec_mode_aot "AOT-compiled" code of the frame keeps it in native code (see @ref aot_local_variables); the
+      hash then has no \c "value" key; missing otherwise (since %Qore 3.0)
 
+    @throw AOT-FRAME-ERROR the frame, or a frame before it, is a call that @ref exec_mode_aot "AOT-compiled" code made
+    directly to an AOT-compiled function, which has no frame of its own (see @ref aot_local_variables) (since %Qore
+    3.0)
     @throw CIRCULAR-REFERENCE-ERROR circular reference found when retrieving local variable values
+    @throw DEBUGGING the frame is in, or past the frames of, a Program that does not allow debugging (see
+    @ref Qore::PO_NO_DEBUGGING "PO_NO_DEBUGGING")
+
+    @note A function, method or closure compiled with @ref qcc_tool "qcc" (AOT) keeps local variables in native
+    code: a call that AOT-compiled code makes directly to it has no frame of its own, for which this function raises
+    \c AOT-FRAME-ERROR instead of returning the variables of another frame, and in the frame of a call made otherwise,
+    a variable whose value only the native code has is returned with \c "unavailable" set instead of a value; see
+    @ref aot_local_variables
 
     @since %Qore 0.8.13
  */
@@ -3818,15 +4180,24 @@ hash<auto> get_local_vars(int frame) [dom=DEBUGGER;flags=RET_VALUE_ONLY,NAMED_AR
 set_local_var_value(0, "var", 1);
     @endcode
 
-    @param frame the stack frame where 0 is the current or highest stack frame
+    @param frame the stack frame where 0 is the current or highest stack frame; the frames are those of
+    @ref Qore::get_local_vars() "get_local_vars()"
     @param name the name of the local variable
     @param value the value to assign
 
+    @throw AOT-FRAME-ERROR the frame, or a frame before it, is a call that @ref exec_mode_aot "AOT-compiled" code made
+    directly to an AOT-compiled function, which has no frame of its own, or the AOT-compiled code of the frame keeps
+    the variable in native code, which would not see the value (see @ref aot_local_variables) (since %Qore 3.0)
     @throw UNKNOWN-VARIABLE the given local variable is not present in the current stack frame, or the variable name contains a NUL character (since %Qore 3.0)
 
     @note
     - other exceptions could be raised when making the assignment such as incompatible type exceptions
     - pure local variables (i.e. not closure bound and not subject to the reference operator) are not stored with type information at runtime; type information is only enforced at parse / compile time, therefore it's possible to set local variables with invalid values that contradict their declarations with this function
+    - a function, method or closure compiled with @ref qcc_tool "qcc" (AOT) keeps local variables in native
+      code: a call that AOT-compiled code makes directly to it has no frame of its own, for which this function
+      raises \c AOT-FRAME-ERROR instead of setting a variable of another frame, and in the frame of a call made
+      otherwise, it raises \c AOT-FRAME-ERROR for a variable that the native code would not read again; see
+      @ref aot_local_variables
 
     @since %Qore 0.8.13
 */
@@ -3988,12 +4359,14 @@ auto get_app_registry(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 /** @param identifier the string to resolve; function or static class method, can include namespace path
 
     @return the call reference to the given function or static method; the string is resolved as follows:
-    - if in a class method, a non-static method lookup is made
-    - if not found, then a static method lookup is made
+    - a name with a class path (<tt>Class::method</tt>, also with a namespace path) is looked up as a public static
+      method of the class; a non-static method raises \c CALL-REFERENCE-ERROR, as this function runs without an object
     - if not found, then a function lookup is made
     - if not found, an \c CALL-REFERENCE-ERROR exception is thrown
 
-    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context
+    @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context; a
+    non-static method (which needs an object; use <object>::getCallReference() in the object's code); the identifier
+    contains a NUL character (since %Qore 3.0)
 
     @note
     - use <object>::getCallReference() to get call references to non-public class methods; this builtin function
@@ -4141,3 +4514,63 @@ if (stats_before && stats_after) {
 #endif
 }
 ///@}
+
+// Legacy forwarding is selected once when a core builtin variant is registered. No mutable registry, runtime
+// lookup, policy read or branch is added to the ordinary forwarding bodies above.
+template <bool ByReference, bool ListArguments, bool BuiltinOnly = false>
+static QoreValue q_call_function_lexical(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
+    LexicalSemanticPolicy policy = qore_get_native_semantic_policy();
+    ReferenceHolder<QoreListNode> copied_args(xsink);
+    const QoreListNode* forwarded_args;
+    if constexpr (ListArguments) {
+        forwarded_args = get_param_value(args, 1).get<const QoreListNode>();
+    } else {
+        if (num_args(args) > 1) {
+            copied_args = args->copyListFrom(1);
+        }
+        forwarded_args = *copied_args;
+    }
+    if constexpr (ByReference) {
+        const ResolvedCallReferenceNode* callable = get_param_value(args, 0).get<const ResolvedCallReferenceNode>();
+        ProgramCallContextHelper pch(callable->getProgram());
+        return callable->invokeLexical(forwarded_args, xsink, policy);
+    } else {
+        QoreStringNodeValueHelper name_holder(get_param_value(args, 0));
+        const QoreStringNode* name = *name_holder;
+        if constexpr (BuiltinOnly) {
+            const QoreFunction* f = get_builtin_func(name, xsink);
+            return f ? f->evalDynamic(forwarded_args, rc, xsink, policy) : QoreValue();
+        } else {
+            if (q_check_no_nul(name->c_str(), name->size(), "function name", "function names", "NO-FUNCTION", xsink)) {
+                return QoreValue();
+            }
+            return qore_program_private::get(*q_get_runtime_call_program(rc))->callFunction(name->c_str(),
+                forwarded_args, xsink, policy);
+        }
+    }
+}
+
+// qpp emits raw C++ before its generated wrappers, so declare the wrappers used by the immutable table.
+static QoreValue f_call_function_VsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_function_VcVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_function_args_VsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_function_args_VcC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_builtin_function_VsVV(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+static QoreValue f_call_builtin_function_args_VsC15_softlist_auto_(const QoreListNode*, RuntimeConfig&, ExceptionSink*);
+
+q_func_t qore_get_lexical_builtin(q_func_t func) {
+    static const std::pair<q_func_t, q_func_t> forwarding[] = {
+        {f_call_function_VsVV, q_call_function_lexical<false, false>},
+        {f_call_function_VcVV, q_call_function_lexical<true, false>},
+        {f_call_function_args_VsC15_softlist_auto_, q_call_function_lexical<false, true>},
+        {f_call_function_args_VcC15_softlist_auto_, q_call_function_lexical<true, true>},
+        {f_call_builtin_function_VsVV, q_call_function_lexical<false, false, true>},
+        {f_call_builtin_function_args_VsC15_softlist_auto_, q_call_function_lexical<false, true, true>},
+    };
+    for (const auto& entry : forwarding) {
+        if (entry.first == func) {
+            return entry.second;
+        }
+    }
+    return qore_get_lexical_object_builtin(func);
+}

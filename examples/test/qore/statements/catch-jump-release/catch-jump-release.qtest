@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of break, continue and return out of catch blocks
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class CatchJumpReleaseTest
+
+#! A break, continue or return out of a catch block releases the caught exception when it leaves the catch block (#6079)
+/** Native code (JIT, tiered after promotion and qcc) kept the exception's information that the catch block's
+    CatchException made, which holds the exception's argument, in its cleanup slot until the slot was overwritten or
+    the function ended, as it releases nothing on the jump (UnwindTemps), so an object in the argument was destroyed
+    after the function's locals; a return also closed the catch blocks after the locals of the blocks that enclose
+    them, in the IR interpreter too.  The AST interpreter releases the exception with the catch block, after the
+    blocks in it and before the blocks that enclose it.  CatchJumpRelease.q gives the output of the AST interpreter
+    in every execution mode and compiled with qcc.
+*/
+class CatchJumpReleaseTest inherits QUnit::Test {
+    public {
+        #! the output of CatchJumpRelease.q with the AST interpreter
+        const Expected = "b1: [\"~A0\", \"~A1\", \"~A2\", \"after-loop\", \"~z\"]
+b1: [\"~A0\", \"~A1\", \"~A2\", \"after-loop\", \"~z\"]
+b2: [\"oe0\", \"~A0\", \"oe1\", \"~A1\", \"oe2\", \"~A2\", \"after-loop\", \"~z\"]
+b2: [\"oe0\", \"~A0\", \"oe1\", \"~A1\", \"oe2\", \"~A2\", \"after-loop\", \"~z\"]
+c1: [\"~A0\", \"~A1\", \"after-loop\", \"~z\"]
+c1: [\"~A0\", \"~A1\", \"after-loop\", \"~z\"]
+r1: [\"~A\", \"after-call\", \"~z\"]
+r1: [\"~A\", \"after-call\", \"~z\"]
+r2: [\"~A\", \"~z\", \"after-call\"]
+r2: [\"~A\", \"~z\", \"after-call\"]
+n1: [\"~A\", \"~O\", \"after-loop\", \"~z\"]
+n1: [\"~A\", \"~O\", \"after-loop\", \"~z\"]
+l1: [\"~A0\", \"~A1\", \"after-foreach\", \"~W0\", \"~W1\", \"after-while\", \"~z\"]
+l1: [\"~A0\", \"~A1\", \"after-foreach\", \"~W0\", \"~W1\", \"after-while\", \"~z\"]
+i1: [\"~A\", \"~b\", \"after-loop\"]
+i1: [\"~A\", \"~b\", \"after-loop\"]
+r3: [\"~A\", \"~m\", \"~O\", \"after-call\"]
+r3: [\"~A\", \"~m\", \"~O\", \"after-call\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("CatchJumpReleaseTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/CatchJumpRelease.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": a jump out of a catch block", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: a jump out of a catch block", opt), \aotTest(),
+                (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        assertEq(Expected, output, mode + ": the output of the AST interpreter");
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-catch-jump-release-");
+        string exe = tmp.path + DirSep + "catch-jump-release";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        assertEq(Expected, output, sprintf("qcc -O%d: the output of the AST interpreter", opt));
+    }
+}

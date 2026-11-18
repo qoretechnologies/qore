@@ -35,6 +35,7 @@
 
 #include "qore/intern/ParseNode.h"
 
+#include <atomic>
 #include <vector>
 
 class LocalVar;
@@ -87,12 +88,9 @@ class QoreClosureParseNode : public ParseNode, public DeferredCodeObject {
 public:
     DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda = false);
 
-    //! AOT constructor: creates a closure parse node from pre-built function
+    //! AOT constructor: creates a closure parse node from pre-built function, whose class type is set
     DLLLOCAL QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf,
-            bool n_lambda, bool n_in_method)
-        : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(n_in_method) {
-        set_effect_as_root(false);
-    }
+            bool n_lambda, bool n_in_method);
 
     DLLLOCAL ~QoreClosureParseNode();
 
@@ -109,8 +107,47 @@ public:
 
     DLLLOCAL bool isInMethod() const { return in_method; }
 
+    //! returns true if the closure is in generic code: a function with type parameters, a method of a generic class
+    //! or a member default of a generic hashdecl
+    /** Only such a closure is created with the type arguments and the receiver type of the code that creates it
+        (qore#5733, qore#6269)
+    */
+    DLLLOCAL bool needsTypeContext() const { return needs_type_context; }
+
+    //! sets the flag of needsTypeContext() for a closure read from compiled code
+    DLLLOCAL void setNeedsTypeContext(bool n) { needs_type_context = n; }
+
+    //! Returns the class that a closure without an object context was parsed in, if any
+    /** A closure in a static method or in its default values, or in a static member initializer, runs in the class
+        context of its class, also when it is created by a call's default value in the caller's context (issue #5907),
+        and one parsed outside a class runs in no class context (issue #5961)
+    */
+    DLLLOCAL const qore_class_private* getStaticClass() const { return static_class; }
+
+    //! Sets the class that a closure without an object context runs in (from an AOT image)
+    DLLLOCAL void setStaticClass(const qore_class_private* qc) { static_class = qc; }
+
+    //! returns the class of the method that the closure is in, or nullptr
+    DLLLOCAL const qore_class_private* getMethodClass() const { return method_class; }
+
+    //! Marks a closure whose default values use its object: they use self or create a closure (issue #5931)
+    DLLLOCAL void setDefaultsNeedObject() { defaults_need_object = true; }
+
+    //! Returns true if the default values of the closure are evaluated with its object (issue #5931)
+    DLLLOCAL bool defaultsNeedObject() const { return defaults_need_object; }
+
+    //! calls the closure
+    /** @param tmp_args true if \a args is a temporary list whose values the parameters can take over (see
+        UserClosureFunction::evalClosure())
+    */
     DLLLOCAL QoreValue exec(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
-        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink) const;
+        QoreObject* self, const qore_class_private* class_ctx, ExceptionSink* xsink, bool tmp_args = false) const;
+
+    //! calls the closure with arguments in source order with the names in \a arg_names, which are bound to the
+    //! parameters of the closure by name (M4 phase 3)
+    DLLLOCAL QoreValue execNamed(const QoreClosureBase& closure_base, QoreProgram* pgm, const QoreListNode* args,
+            const name_vec_t& arg_names, QoreObject* self, const qore_class_private* class_ctx,
+            ExceptionSink* xsink) const;
 
     DLLLOCAL QoreClosureBase* evalBackground(ExceptionSink* xsink) const;
 
@@ -134,10 +171,25 @@ public:
 
 private:
     UserClosureFunction* uf;
+    //! the class of the method that the closure is in, whose class context the closure runs in (issue #5898)
+    const qore_class_private* method_class = nullptr;
+    //! the class that a closure without an object context was parsed in (see getStaticClass())
+    const qore_class_private* static_class = nullptr;
     qore_class_private* parse_qc = nullptr;
     qore_ns_private* parse_ns = nullptr;
+    //! true while the parse initialization of the closure is deferred (see parseInitDeferred())
+    /** Read without a lock by exec() and execNamed(), which can run in other threads than the commit that
+        initializes the closure (issue #6243); cleared (release) once the initialization has finished.
+    */
+    std::atomic<bool> is_deferred{false};
+    //! true while parseInitDeferred() initializes the closure; read and written with the lock of the deferred
+    //! initialization held
+    bool deferred_init_running = false;
     bool lambda, in_method,
-        is_deferred = false;
+        //! true if the closure is in generic code, whose type arguments it is created with (qore#5733)
+        needs_type_context = false,
+        //! the default values of the closure use its object (see setDefaultsNeedObject())
+        defaults_need_object = false;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
@@ -149,5 +201,18 @@ private:
     DLLLOCAL QoreClosureBase* evalClosure() const;
     DLLLOCAL QoreClosureBase* evalObjectClosure() const;
 };
+
+//! Returns the node as a QoreClosureParseNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const QoreClosureParseNode*>(), from the node type: QoreClosureParseNode has no
+    subclasses, and only its constructors give NT_CLOSURE.  A dynamic_cast searches the class hierarchy with string
+    comparisons of the type names, which costs about 47 instructions on every closure that AOT code creates.
+*/
+DLLLOCAL inline const QoreClosureParseNode* qore_get_closure_parse_node(const AbstractQoreNode* n) {
+    const QoreClosureParseNode* rv = (n && n->getType() == NT_CLOSURE)
+        ? static_cast<const QoreClosureParseNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const QoreClosureParseNode*>(n));
+    return rv;
+}
 
 #endif

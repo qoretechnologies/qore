@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ConstantList.h"
+#include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreException.h"
 #include "qore/intern/qore_program_private.h"
@@ -55,8 +56,21 @@ thread_local unsigned qore_constant_init_depth = 0;
 
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed);
 
-static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value) {
+//! Gives the value that the init function of a constant compiled ahead of time computed the type of the constant
+/** As the AST interpreter does when it initializes a constant (ConstantEntry::parseInit()), the value of a constant
+    with an explicit declared type is retyped to it.  The type of a constant without one is that of the value that the
+    AST interpreter computed at compile time, which the init function can compute with less specific container types
+    (from the parse types of the expressions); its value is retyped to it as well, unless it already has that type:
+    retyping a container to its own type gives the containers that it holds its value type, which drops the more
+    specific types that they have, as the AST interpreter keeps them (#5925).
+*/
+static void reapplyConstantType(const QoreTypeInfo* typeInfo, QoreValue& value, bool explicit_type) {
     if (!typeInfo || value.isNothing()) {
+        return;
+    }
+    // complex types are unique, so the same type is the same pointer; QoreTypeInfo::equal() does not tell a code
+    // type from one with a signature
+    if (!explicit_type && value.getFullTypeInfo() == typeInfo) {
         return;
     }
 
@@ -204,6 +218,10 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
 
+    if (!builtin) {
+        LexicalParsePolicyHelper::capture(semantic_policy);
+    }
+
     const char* mod_name = get_module_context_name();
     if (mod_name) {
         from_module = mod_name;
@@ -214,7 +232,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
 }
 
 ConstantEntry::ConstantEntry(const ConstantEntry& old)
-        : loc(old.loc), pwo(old.pwo), name(old.name),
+        : loc(old.loc), pwo(old.pwo), semantic_policy(old.semantic_policy), name(old.name),
         typeInfo(old.typeInfo),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         explicit_type(old.explicit_type),
@@ -359,7 +377,7 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
-    reapplyConstantType(typeInfo, result);
+    reapplyConstantType(typeInfo, result, explicit_type);
 
 #ifdef DEBUG
     // the last point where a thread copying the entry can run before the store; see dbg_hold_constant_store()
@@ -411,7 +429,7 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
         return;
     }
 
-    reapplyConstantType(typeInfo, resolved);
+    reapplyConstantType(typeInfo, resolved, explicit_type);
 
     {
         std::lock_guard<std::mutex> value_lock(runtimeValueLock());
@@ -453,7 +471,7 @@ void ConstantEntry::materializeAOTParseShellValue(ExceptionSink* xsink) {
         resolved.discard(nullptr);
         return;
     }
-    reapplyConstantType(typeInfo, resolved);
+    reapplyConstantType(typeInfo, resolved, explicit_type);
     aot_parse_shell_value.discard(xsink);
     aot_parse_shell_value = resolved;
 }
@@ -522,6 +540,12 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         //    name.c_str(), val.getFullTypeName(), p, p ? p->name.c_str() : "n/a");
 
         AOTPreloadedSourceSymbolResolutionHelper apssrh;
+        // the exceptions that the initialization raises are those after the last one of the parse sink now: the sink
+        // holds the other exceptions of the parse too
+        const QoreException* prev_tail = nullptr;
+        if (ExceptionSink* psink = getProgram()->getParseExceptionSink()) {
+            prev_tail = qore_es_private::get(*psink)->tail;
+        }
         // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
         // references to hashdecls/classes declared later in the same module resolve correctly; the class/namespace
         // parse context pushed above is in scope, matching the behavior of type inference
@@ -536,7 +560,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         const QoreTypeInfo* declaredTypeInfo = explicit_type ? typeInfo : nullptr;
         parse_context.expected_type_info = declaredTypeInfo;
-        err = parse_init_value(val, parse_context);
+        {
+            // the initializer is the value of the constant of the declared type (issue #5782)
+            QoreParseTargetHelper target(parse_context, val, declaredTypeInfo);
+            err = parse_init_value(val, parse_context);
+        }
         if (declaredTypeInfo) {
             const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
@@ -557,8 +585,33 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         // Enrich exception with constant name for better debugging
         if (err) {
             ExceptionSink* xsink = getProgram()->getParseExceptionSink();
-            if (xsink) {
-                xsink->appendLastDescription(" (while initializing constant '%s')", name.c_str());
+            // the exceptions that the initialization raised (ExceptionSink::appendLastDescription() changes the first
+            // exception of the sink, which can be another one of the parse); none if the sink does not hold the last
+            // exception that it held before any more
+            QoreException* e = xsink ? qore_es_private::get(*xsink)->head : nullptr;
+            if (prev_tail) {
+                while (e && e != prev_tail) {
+                    e = e->next;
+                }
+                if (e) {
+                    e = e->next;
+                }
+            }
+            for (; e; e = e->next) {
+                if (e->desc.getType() == NT_STRING) {
+                    QoreStringNodeHolder desc(e->desc.get<const QoreStringNode>()->copy());
+                    desc->sprintf(" (while initializing constant '%s')", name.c_str());
+                    e->desc.discard(nullptr);
+                    e->desc = desc.release();
+                }
+                // an exception raised outside of user code (ex: by an operator of the initializer folded here,
+                // which runs without a location) is located at the constant, so that it can be reported at its
+                // source (issue #6516)
+                if (e->start_line < 0 && loc) {
+                    e->set(*loc);
+                    e->start_column = loc->start_column;
+                    e->end_column = loc->end_column;
+                }
             }
         }
         assert(!parse_context.lvids);
@@ -576,16 +629,17 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     // do not evaluate expression if any parse exceptions have been thrown
     if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
         if (!QoreTypeInfo::hasType(typeInfo)) {
-            typeInfo = val.getTypeInfo();
+            // a date has the type of its subtype, as a date literal does (issue #5722)
+            typeInfo = QoreTypeInfo::getKnownValueType(val);
         } else if (explicit_type && val && !val.needsEval() && !pgm->parseExceptionRaised()) {
             // only fold the value into the declared type when the declared type actually accepts the
             // initializer expression; if the parse-time type check above already raised a PARSE-TYPE-ERROR,
             // running acceptAssignment() here would report a second, redundant RUNTIME-TYPE-ERROR for the
             // same mismatch
             ExceptionSink type_xsink;
-            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink);
+            QoreTypeInfo::retypeValue(val, typeInfo, &type_xsink, semantic_policy);
             if (!type_xsink) {
-                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink);
+                QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", val, &type_xsink, semantic_policy);
             }
             if (type_xsink) {
                 qore_program_private::addParseException(getProgram(), type_xsink, loc);
@@ -637,6 +691,26 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
     qore_program_private* pgm_priv = qore_program_private::get(*getProgram());
     bool old_parse_commit_in_progress = pgm_priv->parse_commit_in_progress;
     pgm_priv->parse_commit_in_progress = true;
+    // the initializer runs with the parse options of the code that declares the constant, as its compiled form does
+    // (qore#6189), not with those of the code that triggers the evaluation: the statement that parses or loads the
+    // declaring code, or, for a parse at startup, none; any override of that code is suspended, as for the module's
+    // initialization, so that the value of the constant is not shaped by the code that happens to load it
+    // (qore#6205).  Both the thread's options and those of the thread-local RuntimeConfig, which the AST interpreter
+    // reads, are set
+    LoadTimeParseOptionsHelper init_po(pwo.parse_options);
+    struct ConstantInitRcParseOptionsHelper {
+        RuntimeConfig& rc;
+        QoreParseOptions old_po;
+
+        ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+                old_po(rc.getParseOptions()) {
+            rc.setParseOptions(po);
+        }
+
+        ~ConstantInitRcParseOptionsHelper() {
+            rc.setParseOptions(old_po);
+        }
+    } init_rc_po(rc_get_tls_ref(), pwo.parse_options);
     {
         try {
             ValueEvalOptimizedRefHolder v(saved_val, &xsink);
@@ -650,12 +724,13 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
                 saved_val = nv;
                 saved_val_set = true;
                 if (explicit_type) {
-                    QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink);
+                    QoreTypeInfo::retypeValue(saved_val, typeInfo, &xsink, semantic_policy);
                     if (!xsink) {
-                        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink);
+                        QoreTypeInfo::acceptAssignment(typeInfo, "<constant>", saved_val, &xsink, semantic_policy);
                     }
                 } else {
-                    typeInfo = saved_val.getTypeInfo();
+                    // a date has the type of its subtype, as a date literal does (issue #5722)
+                    typeInfo = QoreTypeInfo::getKnownValueType(saved_val);
                 }
                 assert(!saved_val.getInternalNode() || !saved_val.needsEval());
             } else {
@@ -697,6 +772,17 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
         // Enrich exception with constant name for better debugging
         xsink.appendLastDescription(" (while initializing constant '%s')", name.c_str());
         if (runtime_xsink) {
+            // an exception raised outside of user code (ex: by an operator of the initializer, which runs without a
+            // location) is located at the constant, so that it can be reported at its source (issue #6516)
+            if (loc) {
+                for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+                    if (ex->start_line < 0) {
+                        ex->set(*loc);
+                        ex->start_column = loc->start_column;
+                        ex->end_column = loc->end_column;
+                    }
+                }
+            }
             runtime_xsink->assimilate(xsink);
         } else {
             qore_program_private::addParseException(getProgram(), xsink, loc);
@@ -972,7 +1058,9 @@ cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const 
     // keep typeInfo null and let ConstantEntry::parseInit() resolve parseTypeInfo when hashdecls/classes are committed
     const QoreTypeInfo* ti = parseTypeInfo
         ? typeInfo
-        : (typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo());
+        : (typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo
+            // a date has the type of its subtype, as a date literal does (issue #5722)
+            : QoreTypeInfo::getKnownValueType(value));
     ConstantEntry* ce = new ConstantEntry(loc, name, value, ti, pub, false, false, access, parseTypeInfo);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
@@ -1016,6 +1104,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // the defining source file so a folded cross-unit constant/enum
             // reference still triggers a rebuild when that file changes.
             qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
+            qore_aot_record_folded_constant_import(consumer_loc, i->second, ptr);
             return i->second->getParseValue();
         }
         constantTypeInfo = nothingTypeInfo;
@@ -1155,7 +1244,9 @@ void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& n
     // keep typeInfo null and let ConstantEntry::parseInit() resolve parseTypeInfo when hashdecls/classes are committed
     const QoreTypeInfo* ti = parseTypeInfo
         ? typeInfo
-        : (typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo : val.getTypeInfo());
+        : (typeInfo || (val.hasNode() && val.getInternalNode()->needs_eval()) ? typeInfo
+            // a date has the type of its subtype, as a date literal does (issue #5722)
+            : QoreTypeInfo::getKnownValueType(val));
     ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val, ti, false, false, false, access, parseTypeInfo);
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();

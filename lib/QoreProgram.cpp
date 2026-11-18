@@ -40,6 +40,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -74,6 +75,7 @@
 #include <string>
 #include <set>
 #include <typeinfo>
+#include <utility>
 #include <vector>
 
 extern bool threads_initialized;
@@ -85,6 +87,12 @@ extern bool threads_initialized;
 #include <map>
 
 ParseOptionMaps pomaps;
+
+// the insertions into the value sets of the parse options are not under way when fork() copies the process
+// (issue #6177; see SyncParseOptions)
+std::mutex qore_parse_options_values_mutex;
+static QoreForkStdMutex parse_options_values_fork_handler(qore_parse_options_values_mutex, QFLR_LEAF,
+    "parse_options_values");
 
 // Optional callback invoked before program data is cleared (issue #4816)
 // Can be used by modules to perform cleanup before namespace data is freed
@@ -243,6 +251,110 @@ std::string qore_describe_missing_ir_parse_options(const QoreParseOptions& po) {
         rv += ")";
     }
     assert(rv.empty() == qore_parse_options_support_ir(po));
+    return rv;
+}
+
+namespace {
+//! a functional domain as named in a \c [dom=...] attribute list and a module's \c domains key
+/** The names are those of the \c DOM_* constants and of the reflection API (getDomainStringList()); qore#5843
+*/
+struct SourceDomainName {
+    const char* name;
+    int64 dom;
+    //! the parse option that restricts the domain, or that is required for an "allow" domain
+    const char* po_name;
+    //! true for domains that require a PO_ALLOW_* option instead of being restricted by a PO_NO_* option
+    bool allow;
+};
+
+constexpr SourceDomainName source_domain_names[] = {
+    {"DEFAULT", QDOM_DEFAULT, "PO_DEFAULT", false},
+    {"PROCESS_CONTROL", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"NETWORK", QDOM_NETWORK, "PO_NO_NETWORK", false},
+    {"EXTERNAL_PROCESS", QDOM_EXTERNAL_PROCESS, "PO_NO_EXTERNAL_PROCESS", false},
+    {"FILESYSTEM", QDOM_FILESYSTEM, "PO_NO_FILESYSTEM", false},
+    {"THREAD_CLASS", QDOM_THREAD_CLASS, "PO_NO_THREAD_CLASSES", false},
+    {"THREAD_CONTROL", QDOM_THREAD_CONTROL, "PO_NO_THREAD_CONTROL", false},
+    {"DATABASE", QDOM_DATABASE, "PO_NO_DATABASE", false},
+    {"GUI", QDOM_GUI, "PO_NO_GUI", false},
+    {"TERMINAL_IO", QDOM_TERMINAL_IO, "PO_NO_TERMINAL_IO", false},
+    {"EXTERNAL_INFO", QDOM_EXTERNAL_INFO, "PO_NO_EXTERNAL_INFO", false},
+    {"THREAD_INFO", QDOM_THREAD_INFO, "PO_NO_THREAD_INFO", false},
+    {"LOCALE_CONTROL", QDOM_LOCALE_CONTROL, "PO_NO_LOCALE_CONTROL", false},
+    {"MODULE", QDOM_MODULES, "PO_NO_MODULES", false},
+    {"IN_MODULE", QDOM_IN_MODULE, "PO_IN_MODULE", false},
+    {"EMBEDDED_LOGIC", QDOM_EMBEDDED_LOGIC, "PO_NO_EMBEDDED_LOGIC", false},
+    {"REFLECTION", QDOM_REFLECTION, "PO_NO_REFLECTION", false},
+    {"UNCONTROLLED_API", QDOM_UNCONTROLLED_API, "PO_NO_UNCONTROLLED_APIS", false},
+    {"INJECTION", QDOM_INJECTION, "PO_ALLOW_INJECTION", true},
+    {"DEBUGGER", QDOM_DEBUGGER, "PO_ALLOW_DEBUGGER", true},
+};
+
+//! other names accepted for a domain in Qore source: the names that qpp uses
+constexpr SourceDomainName source_domain_aliases[] = {
+    {"PROCESS", QDOM_PROCESS, "PO_NO_PROCESS_CONTROL", false},
+    {"MODULES", QDOM_MODULES, "PO_NO_MODULES", false},
+};
+
+constexpr int64 source_domain_union() {
+    int64 rv = 0;
+    for (const SourceDomainName& i : source_domain_names) {
+        rv |= i.dom;
+    }
+    return rv;
+}
+
+// every functional domain can be declared in Qore source
+static_assert(source_domain_union() == QDOM_ALL, "source_domain_names does not match QDOM_ALL");
+}
+
+int64 qore_get_source_domain(const char* name) {
+    assert(name);
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
+    for (const SourceDomainName& i : source_domain_aliases) {
+        if (!strcasecmp(i.name, name)) {
+            return i.dom;
+        }
+    }
+    return -1;
+}
+
+std::string qore_get_source_domain_names(int64 dom) {
+    std::string rv;
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!i.dom || (dom & i.dom) != i.dom) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ',';
+        }
+        rv += i.name;
+    }
+    return rv;
+}
+
+std::string q_describe_functional_domains(int64 dom) {
+    return qore_describe_source_domains(dom);
+}
+
+std::string qore_describe_source_domains(int64 dom) {
+    std::string rv;
+    for (const SourceDomainName& i : source_domain_names) {
+        if (!i.dom || (dom & i.dom) != i.dom) {
+            continue;
+        }
+        if (!rv.empty()) {
+            rv += ", ";
+        }
+        rv += i.name;
+        rv += i.allow ? " (requires " : " (restricted by ";
+        rv += i.po_name;
+        rv += ')';
+    }
     return rv;
 }
 
@@ -441,26 +553,297 @@ qore_program_private::programid_to_program_map_t qore_program_private::programid
 QoreRWLock qore_program_private::lck_programMap;
 qore_program_id_t qore_program_private::programIdCounter = 1;
 
+namespace {
+//! the lock of the graph of parse lock waits (qore#5693); taken after a Program's plock, never before one
+QoreThreadLock parse_wait_lock;
+//! the graph of parse lock waits: the Program whose parse lock each thread waits for, by TID; under parse_wait_lock
+/** An entry is set and cleared by its own thread in qore_program_private::waitForParseLock(), which the Program's
+    caller keeps alive while it runs
+*/
+qore_program_private* parse_waits[MAX_QORE_THREADS];
+}
+
+namespace {
+//! The entry of a waiting thread in the graph of parse lock waits; removed at the latest when it goes out of scope
+/** Added and removed with the Program's plock and parse_wait_lock held; the destructor runs with plock held (see
+    qore_program_private::waitForParseLock()), so that no exception can leave the entry of a thread that no longer
+    waits in the graph
+*/
+class ParseWaitEntry {
+public:
+    ParseWaitEntry(qore_program_private* pp, int tid) : pp(pp), tid(tid) {
+    }
+
+    ~ParseWaitEntry() {
+        if (added) {
+            AutoLocker al(parse_wait_lock);
+            removeIntern();
+        }
+    }
+
+    //! adds the entry; parse_wait_lock is held
+    void addIntern() {
+        assert(!added && !parse_waits[tid]);
+        parse_waits[tid] = pp;
+        ++pp->parse_lock_waiters;
+        added = true;
+    }
+
+    //! removes the entry if it was added; parse_wait_lock is held
+    void removeIntern() {
+        if (added) {
+            assert(parse_waits[tid] == pp);
+            parse_waits[tid] = nullptr;
+            assert(pp->parse_lock_waiters);
+            --pp->parse_lock_waiters;
+            added = false;
+        }
+    }
+
+    bool isAdded() const {
+        return added;
+    }
+
+private:
+    qore_program_private* pp;
+    int tid;
+    bool added = false;
+};
+}
+
+//! raises the exception for a parse lock wait that would close a cycle of waits
+static void raise_parse_wait_cycle(ExceptionSink* xsink, int owner, int tid) {
+    xsink->raiseException("PROGRAM-ERROR", "cannot wait for the parse lock of the Program, which is held by TID %d: "
+        "that thread waits, directly or through other threads, for a parse lock that this thread (TID %d) holds, so "
+        "the wait would never end", owner, tid);
+}
+
+int qore_program_private::waitForParseLock(int tid, ExceptionSink* xsink) {
+    // a thread unknown to Qore cannot be registered, nor be part of a cycle that a registered thread sees
+    ParseWaitEntry entry(this, tid);
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        bool refuse = false;
+        {
+            AutoLocker al(parse_wait_lock);
+            // the cycle is complete only once its last wait is registered, so the thread that would close it sees it
+            if (parseWaitClosesCycleIntern(tid)) {
+                if (xsink) {
+                    refuse = true;
+                } else {
+                    // a wait without an exception sink cannot be refused: its entry is added in this critical
+                    // section, so the waits of the cycle that can be refused see the cycle when they check it before
+                    // they block, and those that are blocked already are woken to check it (see below)
+                    wakeParseWaitCycleIntern(tid);
+                }
+            }
+            if (!refuse) {
+                entry.addIntern();
+            }
+        }
+        // the exception is raised without the lock of the graph: it reads the locations of the call stack, which
+        // locks the Programs of the stack
+        if (refuse) {
+            raise_parse_wait_cycle(xsink, parse_tid, tid);
+            return -1;
+        }
+    }
+
+    //! what the check made before each block needs
+    struct CycleCheck {
+        qore_program_private* pp;
+        int tid;
+        ParseWaitEntry* entry;
+        bool cycle;
+    } check = {this, tid, &entry, false};
+    // called with plock held after the wait is registered for a wakeup and before the thread blocks: a wait without
+    // an exception sink that closes a cycle later either is seen here or wakes this one (see
+    // QoreCondition::waitWithInterrupt()); a wait that sees the cycle leaves the graph in the same critical section,
+    // so that the other waits of the cycle find it broken and only this one is refused
+    auto before_block = [] (void* arg) -> int {
+        CycleCheck* c = static_cast<CycleCheck*>(arg);
+        AutoLocker al(parse_wait_lock);
+        if (!c->pp->parseWaitClosesCycleIntern(c->tid)) {
+            return 0;
+        }
+        c->entry->removeIntern();
+        c->cycle = true;
+        return 1;
+    };
+
+    int rc = 0;
+    while (parse_tid != -1 && parse_tid != tid && !ptid) {
+        ++thread_waiting;
+        if (xsink) {
+            // a cancellation point; see "Condition waits" in design/cooperative-cancellation.md
+            if (pcond.waitWithInterrupt(plock, xsink, "parse lock wait", entry.isAdded() ? +before_block : nullptr,
+                    &check) == QORE_COND_RESULT_INTERRUPTED) {
+                rc = -1;
+            }
+        } else {
+            pcond.wait(plock);
+        }
+        --thread_waiting;
+        if (check.cycle) {
+            raise_parse_wait_cycle(xsink, parse_tid, tid);
+            rc = -1;
+        }
+        if (rc) {
+            break;
+        }
+    }
+    return rc;
+}
+
+void qore_program_private::wakeParseWaitCycleIntern(int tid) const {
+    // the chain is a cycle back to this thread (see parseWaitClosesCycleIntern()); each thread in it but this one
+    // waits.  Waking never blocks (see QoreThreadList::wakeCondWaiter()); a wait that is not registered for a wakeup
+    // (it has no exception sink, or waits while cancellation is deferred) is not woken
+    int owner = parse_tid;
+    for (unsigned i = 0; i < MAX_QORE_THREADS && owner != tid; ++i) {
+        assert(owner >= 0 && owner < MAX_QORE_THREADS && parse_waits[owner]);
+        thread_list.wakeCondWaiter(owner, true);
+        owner = parse_waits[owner]->parse_tid;
+    }
+}
+
+#ifdef DEBUG
+bool qore_program_private::dbgParseWaitRegistered(int tid) {
+    AutoLocker al(parse_wait_lock);
+    return tid >= 0 && tid < MAX_QORE_THREADS && parse_waits[tid];
+}
+#endif
+
+void qore_program_private::setParseTidWithWaitersIntern(int tid) {
+    AutoLocker al(parse_wait_lock);
+    parse_tid = tid;
+}
+
+bool qore_program_private::parseWaitClosesCycleIntern(int tid) const {
+    // the owner of this Program's lock is stable under plock; that of each Program in the chain is stable under
+    // parse_wait_lock, as a thread waits for it (see setParseTidIntern()).  The chain is followed at most once
+    // through every thread: a cycle that does not include this thread (closed by waits without an exception sink,
+    // which are not refused) ends it as well
+    int owner = parse_tid;
+    for (unsigned i = 0; i < MAX_QORE_THREADS; ++i) {
+        if (owner == tid) {
+            return true;
+        }
+        if (owner < 0 || owner >= MAX_QORE_THREADS) {
+            return false;
+        }
+        const qore_program_private* next = parse_waits[owner];
+        if (!next) {
+            return false;
+        }
+        owner = next->parse_tid;
+    }
+    return false;
+}
+
+void qore_program_private::clearRemainingPrograms() {
+    // the Programs are cleared one at a time, oldest first, and the registry is scanned again after each one: a
+    // Program that an older one holds (a child Program in a global variable of its parent, for example) is cleared
+    // when the older one releases it, as when its owner deletes the older one, so the objects of the child that the
+    // parent holds are destroyed while the child still has its data; a Program that a destructor creates while the
+    // Programs are cleared is cleared as well (its ID is higher than any cleared before it).  The IDs of the Programs
+    // are never reused, so each one is cleared once
+    ExceptionSink xsink;
+    qore_program_id_t last_id = 0;
+    while (true) {
+        QoreProgram* p = nullptr;
+        {
+            QoreAutoRWReadLocker al(&lck_programMap);
+            for (QoreProgram* i : qore_program_set) {
+                // a Program without references is skipped: no reference can be taken to it; it has been cleared if
+                // its last reference was released with an exception sink (see clear()), and it is freed by the code
+                // that holds it otherwise; its references cannot drop to zero meanwhile, as that needs the write lock
+                // (see derefUnregister())
+                qore_program_id_t id = i->priv->programId;
+                if (id > last_id && i->reference_count() > 0 && (!p || id < p->priv->programId)) {
+                    p = i;
+                }
+            }
+            if (!p) {
+                break;
+            }
+            // a reference of its own while it is cleared: no reference of the owner is released
+            p->ref();
+        }
+        last_id = p->priv->programId;
+        printd(5, "qore_program_private::clearRemainingPrograms() clearing pgm: %p pgmid: " QLLD "\n", p,
+            (int64)last_id);
+        p->priv->waitForTerminationAndClear(&xsink);
+        // the owner's references keep the Program; if the Program has lost them while it was cleared, it is released
+        // here as by any other last reference
+        p->deref(&xsink);
+        // each Program's exceptions are reported with it
+        xsink.handleExceptions();
+    }
+}
+
+#ifdef DEBUG
+size_t qore_program_private::dbgGetLiveProgramCount() {
+    QoreAutoRWReadLocker al(&lck_programMap);
+    return qore_program_set.size();
+}
+#endif
+
 void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
     pcond.reinitAfterFork();
-    // the thread counts keep only the forking thread
+    // a thread of the parent that created or destroyed a variant of the Program's code can have held it; the list
+    // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
+    // its locks protect, which fork() handles alike (see design/fork-handlers.md)
+    new (&user_variant_lock) std::mutex();
+    // a leaf lock held briefly by the changes and checks of the parse options; a thread of the parent can have held it
+    new (&po_mutex) std::mutex();
+    // the copies of the external data made by the parent's other threads do not go on in the child, and its waiters
+    // do not exist there
+    ext_copy_count = getOwnExtDataCopies();
+    ext_copy_waiting = 0;
+    ext_copy_cond.reinitAfterFork();
+    // the thread counts keep only the forking thread; the containers of the Program's threads are consistent here, as
+    // fork() waited for every change of them in progress (see qore_program_private_base::thread_container_shards),
+    // and they are changed without the stripe lock, as only this thread exists
     unsigned own = 0;
     ptid_map_t::iterator i = tidmap.find(tid);
     if (i != tidmap.end()) {
         own = i->second;
     }
     tidmap.clear();
+    foreign_tids.clear();
     if (own) {
         tidmap[tid] = own;
+        if (q_thread_is_foreign()) {
+            foreign_tids.insert(tid);
+        }
     }
     thread_count = own;
     thread_waiting = 0;
+    // the holds of the parent's other threads, which do not exist in the child
+    compile_holds = 0;
+    // the background threads of the parent other than the forking thread do not exist in the child; a Program forked
+    // while it was being constructed, after it was registered, has no hub yet
+    if (thread_hub) {
+        thread_hub->forkChild(tid, ++activity_gen, !own);
+    }
     if (parse_tid != tid) {
-        // a thread of the parent was parsing; the parse does not go on in the child
+        // a thread of the parent was parsing; the parse does not go on in the child, nor does its commit
         parse_count = 0;
         parse_tid = -1;
+        commit_entry_restricted = false;
     }
+    // the other threads of the parent do not exist in the child, whose TIDs can be given to other threads
+    // (erased without allocating)
+    for (std::set<int>::iterator i = parse_tids.begin(); i != parse_tids.end();) {
+        if (*i == tid) {
+            ++i;
+        } else {
+            i = parse_tids.erase(i);
+        }
+    }
+    // the threads that waited for the parse lock do not exist in the child (see fixupAllAfterFork())
+    parse_lock_waiters = 0;
     tlock.reinitAfterFork();
     tcond.reinitAfterFork();
     twaiting = 0;
@@ -471,9 +854,11 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     sm_lock.reinitAfterFork();
     featureLock.reinitAfterFork();
     new (&runtime_metadata_lock) std::recursive_mutex();
+    pwo.parse_options.reinitAfterFork();
     ir_fallback_lock.reinitAfterFork();
     plugin_fallback_lock.reinitAfterFork();
-    debug_program_counter.reinitAfterFork();
+    // the debugger calls in progress of the parent's other threads do not exist in the child (issue #6404)
+    debug_program_counter.reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
     lck_breakpoint.reinitAfterFork();
     // the thread data of the parent's other threads remains registered; its lock can be held by its thread
     for (ThreadProgramData* i : tld_registry) {
@@ -483,10 +868,35 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     }
 }
 
+thread_local std::vector<const QoreCounter*> qore_thread_debug_counters;
+
+int qore_thread_debug_counter_share(const QoreCounter* cnt) {
+    int share = 0;
+    for (const QoreCounter* c : qore_thread_debug_counters) {
+        if (c == cnt) {
+            ++share;
+        }
+    }
+    return share;
+}
+
 void qore_program_private::fixupAllAfterFork(int tid, ThreadProgramData* tpd) {
+    // the graph of parse lock waits: only the forking thread exists in the child, and it was not waiting; a thread of
+    // the parent could hold its lock
+    parse_wait_lock.reinitAfterFork();
+    std::fill(std::begin(parse_waits), std::end(parse_waits), nullptr);
+    // the debug programs attached to the Programs, each made consistent once (issue #6404)
+    std::set<qore_debug_program_private*> debug_programs;
     // all instances, also those whose last reference has been released and that are being destroyed
     for (QoreProgram* p : qore_program_set) {
-        qore_program_private::get(*p)->fixupAfterFork(tid, tpd);
+        qore_program_private* pp = qore_program_private::get(*p);
+        pp->fixupAfterFork(tid, tpd);
+        if (qore_debug_program_private* dp = pp->dpgm.load(std::memory_order_relaxed)) {
+            debug_programs.insert(dp);
+        }
+    }
+    for (qore_debug_program_private* dp : debug_programs) {
+        dp->fixupAfterFork();
     }
 }
 
@@ -528,11 +938,67 @@ public:
 };
 
 QoreProgramRegistryForkHandler program_registry_fork_handler;
+
+//! the fork handler of the stripe locks of the Programs' thread containers, which are leaf locks never held together
+//! (see qore_program_private_base::thread_container_shards and QoreForkHandlers.h)
+/** Registered after the Program registry's handler, so that its child handler runs before the registry's, which
+    makes the Programs consistent in the child (fixupAllAfterFork())
+*/
+class ProgramThreadContainersForkHandler : public QoreForkHandler {
+public:
+    static constexpr unsigned count = 1u << qore_program_private_base::ThreadContainerShardBits;
+
+    ProgramThreadContainersForkHandler() : QoreForkHandler(QFLR_LEAF, "program_thread_containers") {
+    }
+
+    void prepare() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (auto& shard : qore_program_private_base::thread_container_shards) {
+                shard.lock.lock();
+            }
+        }
+    }
+
+    void parent() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::thread_container_shards[i - 1].lock.unlock();
+            }
+        }
+    }
+
+    void child() noexcept override {
+        if (QFLM_STRIPED == QFLM_ACQUIRE) {
+            // acquired by this thread in prepare(): plain mutexes, which this thread releases in the child
+            for (unsigned i = count; i; --i) {
+                qore_program_private_base::thread_container_shards[i - 1].lock.unlock();
+            }
+            return;
+        }
+        // not acquired before fork(): a lock can be held by a thread that does not exist in the child
+        for (auto& shard : qore_program_private_base::thread_container_shards) {
+            new (&shard.lock) std::mutex();
+        }
+    }
+};
+
+ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 }
 
-qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options, QoreProgram* p_pgm)
-        : qore_program_private_base(n_pgm, n_parse_options, p_pgm) {
+qore_program_private_base::ThreadContainerShard
+    qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
+
+qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
+        QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
+        : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
+    // a Program that sandboxed code creates, or C++ code acting for it, is sandboxed (issue #5659); decided here, for
+    // every Program wherever it is created, and before the Program is registered and can be found
+    if (qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
+    }
     registerProgram();
+    // the Program's ID is known now
+    thread_hub = new ProgramThreadHub(programId);
     // every member of this object now exists, so the Program can serve as a runtime context; until
     // this point code reached from the base constructor can see the Program but must not switch
     // into it
@@ -550,35 +1016,76 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     }
 }
 
+void qore_program_private::markSandboxedParse() {
+    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
+    if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
+        sandboxed.store(true, std::memory_order_release);
+    }
+}
+
 #ifdef DEBUG
 std::atomic<qore_program_private_base::dbg_teardown_hook_t> qore_program_private_base::dbg_teardown_hook{nullptr};
+std::atomic<qore_program_private_base::dbg_thread_container_hook_t>
+    qore_program_private_base::dbg_thread_container_hook{nullptr};
 #endif
 
 namespace {
-//! the Programs whose data the calling thread deletes, innermost last; see qore_program_torn_down_by_current_thread()
-/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+class QoreProgramTeardownScope;
+
+//! the innermost scope of the Programs whose data the calling thread deletes; see
+//! qore_program_torn_down_by_current_thread()
+/** The scopes are a stack linked through the scopes themselves (they live on the stack of the code that deletes the
+    Program), and this is a plain pointer, not a container: a thread_local object with a destructor, such as a
+    std::vector, is destroyed by the main thread when exit() starts, before the destructors of static objects run, and
+    a static object that owns a Program (a module's, or QoreProgramHelper's) deletes it then, so it used the destroyed
+    container (a heap use-after-free and "corrupted double-linked list" when a script ended normally with a Program
+    held at static scope).  A pointer has no destructor and is valid for the life of the thread.
 */
-thread_local std::vector<const QoreProgram*> qore_programs_torn_down;
+thread_local const QoreProgramTeardownScope* qore_program_teardown_scope = nullptr;
 
 //! records that the calling thread deletes a Program's data while it exists
+/** Only the addresses are compared, so a Program deleted by another thread is never dereferenced
+*/
 class QoreProgramTeardownScope {
 public:
-    QoreProgramTeardownScope(const QoreProgram* pgm) {
-        qore_programs_torn_down.push_back(pgm);
+    QoreProgramTeardownScope(const QoreProgram* pgm) : pgm(pgm), prev(qore_program_teardown_scope) {
+        qore_program_teardown_scope = this;
+        counted = qore_thread_program_teardown_enter();
     }
 
     ~QoreProgramTeardownScope() {
-        qore_programs_torn_down.pop_back();
+        if (counted) {
+            qore_thread_program_teardown_leave();
+        }
+        assert(qore_program_teardown_scope == this);
+        qore_program_teardown_scope = prev;
+    }
+
+    //! returns true if the calling thread is deleting the data of \a p in an enclosing scope
+    static bool contains(const QoreProgram* p) {
+        for (const QoreProgramTeardownScope* i = qore_program_teardown_scope; i; i = i->prev) {
+            if (i->pgm == p) {
+                return true;
+            }
+        }
+        return false;
     }
 
     QoreProgramTeardownScope(const QoreProgramTeardownScope&) = delete;
     QoreProgramTeardownScope& operator=(const QoreProgramTeardownScope&) = delete;
+
+private:
+    //! the Program whose data is deleted
+    const QoreProgram* pgm;
+    //! the enclosing scope of the thread, or nullptr
+    const QoreProgramTeardownScope* prev;
+    //! the thread's data records the teardown (see qore_reference_program_needs_entry())
+    bool counted;
 };
 }
 
 bool qore_program_torn_down_by_current_thread(const QoreProgram* pgm) {
-    return std::find(qore_programs_torn_down.begin(), qore_programs_torn_down.end(), pgm)
-        != qore_programs_torn_down.end();
+    return QoreProgramTeardownScope::contains(pgm);
 }
 
 QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qore_program_id_t id) {
@@ -589,6 +1096,73 @@ QoreProgram* qore_program_private::getReferencedProgram(const QoreProgram* p, qo
     }
     // a registered Program has references (see derefUnregister())
     return i->second->optRef() ? i->second : nullptr;
+}
+
+int QoreDeclaringProgramHelper::raiseDeleted(ExceptionSink* xsink) {
+    if (xsink) {
+        xsink->raiseException("PROGRAM-ERROR", "the Program that declared the member initializer has already been "
+            "deleted and therefore its code cannot be executed");
+    }
+    return -1;
+}
+
+int QoreDeclaringProgramHelper::enter(QoreProgram* p, qore_program_id_t id, std::atomic<bool>& module_lifetime,
+        ExceptionSink* xsink) {
+    assert(p);
+    // the current Program, which the thread is in, and a Program that the thread deletes (which runs the code of its
+    // declarations while it deletes their data, destructors for example) are allocated: their ID tells them from a
+    // later Program at the same address
+    int ctid;
+    if (!qore_reference_program_needs_entry(p, ctid)) {
+        return p->getProgramId() == id ? 0 : raiseDeleted(xsink);
+    }
+    // a module's Program stays allocated while any code can run (module lifetime), as for a call of a module's
+    // function from another Program (see QoreSourceProgramHolder::setVariant())
+    if (module_lifetime.load(std::memory_order_acquire) && qore_module_lifetime_active()) {
+        return 0;
+    }
+    QoreProgram* rp = qore_program_private::getReferencedProgram(p, id);
+    if (!rp) {
+        return raiseDeleted(xsink);
+    }
+    if (qore_program_has_module_lifetime(rp)) {
+        module_lifetime.store(true, std::memory_order_release);
+    }
+    return enterReferenced(rp, xsink);
+}
+
+int QoreDeclaringProgramHelper::enterReferenced(QoreProgram* p, ExceptionSink* xsink) {
+    assert(p);
+    if (pgm) {
+        // the helper holds another Program already
+        if (!next) {
+            next.reset(new QoreDeclaringProgramHelper);
+        }
+        return next->enterReferenced(p, xsink);
+    }
+    int ctid = q_gettid();
+    if (!qore_program_private::get(*p)->enterWithoutContext(ctid)) {
+        // releasing the last reference deletes the Program, which needs a sink for its destructors
+        ExceptionSink local_xsink;
+        p->deref(xsink ? xsink : &local_xsink);
+        return raiseDeleted(xsink);
+    }
+    pgm = p;
+    tid = ctid;
+    leave_xsink = xsink;
+    return 0;
+}
+
+void QoreDeclaringProgramHelper::leave() {
+    assert(pgm);
+    QoreProgram* p = pgm;
+    pgm = nullptr;
+    // leaving the Program can release it, if it was deleted meanwhile, as can releasing the reference; the
+    // destructors run then need a sink
+    ExceptionSink local_xsink;
+    ExceptionSink* xsink = leave_xsink ? leave_xsink : &local_xsink;
+    qore_program_private::decThreadCount(*p, tid, xsink);
+    p->deref(xsink);
 }
 
 bool qore_program_private::runWithRegisteredPrograms(
@@ -614,6 +1188,8 @@ void qore_program_private::registerProgram() {
 }
 
 qore_program_private::~qore_program_private() {
+    // each user variant of the Program's code holds a dependency reference to it until it unregisters
+    assert(!user_variants);
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: " QLLD "\n", this, pgm, (int64)programId);
     if (qore_debug_program_private* dp = dpgm.load(std::memory_order_relaxed)) {
         // if the object is being destroyed when thread is terminating via a deref then we send sync detach event to this thread
@@ -644,8 +1220,18 @@ qore_program_private::~qore_program_private() {
 
     statementByFileIndex.clear();
     statementIds.clear();
+    for (auto& i : aot_closure_debug_blocks) {
+        delete i.second;
+    }
+    aot_closure_debug_blocks.clear();
     reverseStatementIds.clear();
     statementByLabelIndex.clear();
+
+    // threads that have left the Program and have not published FINISHED yet keep the hub
+    if (thread_hub) {
+        thread_hub->deref();
+        thread_hub = nullptr;
+    }
 
     assert(!parseSink);
     assert(!warnSink);
@@ -711,11 +1297,33 @@ void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& lo
     if (!collect_diagnostics) {
         return;
     }
-    for (const QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
+    for (QoreException* e = qore_es_private::get(xsink)->head; e; e = e->next) {
         QoreStringValueHelper err(e->err);
         QoreStringValueHelper desc(e->desc);
         diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
+        e->diagnostic_pgm_id = programId;
     }
+}
+
+void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
+    if (!collect_diagnostics || !xsink || !*xsink) {
+        return;
+    }
+    for (QoreException* e = qore_es_private::get(*xsink)->head; e; e = e->next) {
+        if (e->diagnostic_pgm_id == programId) {
+            continue;
+        }
+        QoreStringValueHelper err(e->err);
+        QoreStringValueHelper desc(e->desc);
+        // an exception without a source location (raised by builtin code) has no file
+        diagnostics.emplace_back(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e,
+            desc->c_str());
+        e->diagnostic_pgm_id = programId;
+    }
+}
+
+void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink) {
+    qore_program_private::get(pgm)->addExceptionDiagnostics(&xsink);
 }
 
 QoreListNode* qore_program_private::getParseDiagnosticList() const {
@@ -1022,6 +1630,47 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
     return *i;
 }
 
+const char* qore_program_private_base::addRuntimeString(const char* str) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+    str_set_t::iterator i = rt_str_set.lower_bound(str);
+    if (i == rt_str_set.end() || strcmp(*i, str)) {
+        rt_str_vec.push_back(strdup(str));
+        i = rt_str_set.insert(i, rt_str_vec.back());
+    }
+    return *i;
+}
+
+const QoreProgramLocation* qore_program_private_base::getRuntimeLocation(const QoreProgramLocation& loc, int sline,
+        int eline) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+    QoreProgramLocation loc1(loc);
+    loc1.start_line = sline;
+    loc1.end_line = eline;
+
+    // the strings that the location refers to are not rolled back either
+    if (loc1.getFile()) {
+        loc1.setFile(addRuntimeString(loc1.getFile()));
+    }
+    if (loc1.getSource()) {
+        loc1.setSource(addRuntimeString(loc1.getSource()));
+    }
+
+    loc_set_t::iterator i = rt_loc_set.find(&loc1);
+    if (i != rt_loc_set.end()) {
+        return *i;
+    }
+    std::unique_ptr<QoreProgramLocation> lp(new QoreProgramLocation(loc1));
+    rt_pgmloc.push_back(lp.get());
+    // owned by rt_pgmloc from here on
+    QoreProgramLocation* rv = lp.release();
+    rt_loc_set.insert(rv);
+    return rv;
+}
+
+const QoreProgramLocation* qore_program_private_base::getRuntimeLocation(int sline, int eline) {
+    return getRuntimeLocation(QoreProgramLocation(sline, eline), sline, eline);
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline, int scol, int ecol) {
     std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc(sline, eline, scol, ecol);
@@ -1081,6 +1730,35 @@ const QoreProgramLocation* qore_program_private_base::getLocation(const QoreProg
     }
 
     return *i;
+}
+
+int64 qore_program_private_base::setModuleOwnDomainsIntern(int64 n_dom, bool apply) {
+    module_own_dom |= n_dom;
+    if (!apply) {
+        return QDOM_DEFAULT;
+    }
+    module_trusted_dom |= n_dom;
+    // the Program's own options: the module header's restrictions are scoped options of the parsing thread, which
+    // the module's code does not have (issue #6207)
+    int64 removed = n_dom & pwo.parse_options.loadShared().getLo();
+    if (!removed) {
+        return QDOM_DEFAULT;
+    }
+    {
+        // a change for the whole Program, made while the module header's options are in effect
+        SharedParseOptionsWrite spw;
+        pwo.parse_options &= ~QoreParseOptions(removed);
+    }
+    // the module's %ifdef directives see the options it has
+    for (auto& i : pomaps.pomap) {
+        if (i.first && (removed & i.first) == i.first) {
+            dmap_t::iterator di = dmap.find(i.second);
+            if (di != dmap.end()) {
+                dmap.erase(di);
+            }
+        }
+    }
+    return removed;
 }
 
 void qore_program_private_base::setDefines() {
@@ -1291,11 +1969,17 @@ void qore_program_private::doThreadInit(ExceptionSink* xsink) {
 
     // if there is any thread-initialization code, execute it here
     ReferenceHolder<ResolvedCallReferenceNode> ti(xsink);
+    QoreThreadRuntimeParseOptions ti_po;
     {
         AutoLocker al(tlock);
         ti = thr_init ? thr_init->refRefSelf() : 0;
+        if (ti) {
+            ti_po = thr_init_po;
+        }
     }
     if (ti) {
+        // the code runs with the options of the code that set it (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&ti_po);
         ValueHolder v(ti->invoke(0, xsink), xsink);
     }
 }
@@ -1414,10 +2098,17 @@ bool qore_program_private::scanMembers(RObject& obj, RSetHelper& rsh) {
 bool qore_program_private::setThreadInit(const ResolvedCallReferenceNode* n_thr_init, ExceptionSink* xsink) {
     // the old code is released after the lock, as releasing it can run destructors
     ReferenceHolder<ResolvedCallReferenceNode> old(xsink);
+    // the options of the code that sets it, which it runs with, without the application of a call of module code,
+    // as it runs for every thread that enters the Program (qore#6208); the old ones are released after the lock, as
+    // their references to Programs can be the last ones
+    QoreThreadRuntimeParseOptions po = n_thr_init ? QoreThreadRuntimeParseOptions::captureForThread()
+        : QoreThreadRuntimeParseOptions();
     {
         AutoLocker al(tlock);
         old = thr_init;
         thr_init = n_thr_init ? n_thr_init->refRefSelf() : nullptr;
+        std::swap(thr_init_po.po, po.po);
+        std::swap(thr_init_po.override, po.override);
         if (scan_holder) {
             scanValuesChangedIntern(program_code_needs_scan(*old), {thr_init});
         }
@@ -1492,6 +2183,14 @@ void qore_program_private_base::newProgram() {
         dmap["QoreHasUserModuleLicense"] = true;
     }
 
+    // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
+    // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
+    // below or QoreDebug, which depend on the build configuration of the library (a qmod compiled by one build of the
+    // library is loaded by another of the same sources) or on the process (HAVE_SIGNAL_HANDLING)
+    for (auto& i : dmap) {
+        builtin_defines.insert(i.first);
+    }
+
     QoreNamespace* ns = QoreNS->findLocalNamespace("Option");
     assert(ns);
     ConstantListIterator cli(qore_ns_private::getConstantList(ns));
@@ -1533,58 +2232,63 @@ void qore_program_private_base::addCreatorChain(const QoreProgram& creator) {
     }
 }
 
-void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options) {
+void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOptions& n_parse_options,
+        const QoreParseOptions* p_parse_options) {
     //printd(5, "qore_program_private_base::setParent() this: %p parent: %p (parent lvl: %p) this: %p (this pgm: %p) "
     //    "parent po: %lld new po: %lld parent no_child_po_restrictions: %d\n", this, p_pgm,
     //    p_pgm->priv->sb.getLVList(), this, pgm, p_pgm->priv->pwo.parse_options, n_parse_options,
     //    p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
 
-    TZ = p_pgm->currentTZ();
+    TZ.store(p_pgm->currentTZ(), std::memory_order_release);
 
     setCreatorChain(*p_pgm);
 
+    // the parent's options are read once, so that the test and the steps below use the same value (issue #6078); the
+    // creator's checks read them already, and the child inherits that value, not one that changed meanwhile (#6176)
+    QoreParseOptions p_po = p_parse_options ? *p_parse_options : p_pgm->priv->pwo.parse_options.load();
     // if children inherit restrictions, then set all child restrictions
-    if (!(p_pgm->priv->pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS)) {
+    if (!(p_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
         // lock child parse options
         po_locked = true;
-        // turn on all restrictions in the child that are set in the parent
-        pwo.parse_options |= p_pgm->priv->pwo.parse_options;
-        // make sure all options that give more freedom and are off in the parent program are turned off in the child;
-        // the mask must be the full-width one: the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+)
-        // positive options, which would then pass to the child unchecked
-        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS);
+        // turn on all restrictions in the child that are set in the parent, and make sure all options that give more
+        // freedom and are off in the parent program are turned off in the child; the mask must be the full-width one:
+        // the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+) positive options, which would then pass to
+        // the child unchecked
+        pwo.parse_options = (pwo.parse_options | p_po) & (p_po | ~QoreParseOptions::POSITIVE_OPTIONS);
+        // the child keeps the restrictions of its parent and those it was created with
+        locked_restrictions = pwo.parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
     } else {
         pwo.parse_options = n_parse_options;
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
+        if (po_locked) {
+            // a locked child keeps the restrictions that it was created with
+            locked_restrictions = n_parse_options & ~QoreParseOptions::POSITIVE_OPTIONS;
+        }
     }
 
     // share the thread-local data of the parent's family
     joinThreadDataFamily(p_pgm);
 
     {
-        // make sure no parsing is running in the parent while we copy namespaces
-        ProgramRuntimeParseAccessHelper rah(0, p_pgm);
+        // keeps the parent from being cleared while its namespaces are copied; it takes no parse lock: the copy is
+        // made under the parent's namespace read lock, and ProgramControl::createEvalProgram() holds the parent's
+        // parse lock as well, so that no code is parsed in it meanwhile.  The parent is the current Program
+        // (Program::constructor()), or a Program that the caller holds a thread count on (createEvalProgram()), so
+        // its data are not cleared while they are copied, also if its deletion starts meanwhile, in which case
+        // entering it fails and the exception is discarded
+        ExceptionSink rah_xsink;
+        ProgramRuntimeParseAccessHelper rah(&rah_xsink, p_pgm);
+        rah_xsink.clear();
         // setup derived namespaces
         RootNS = qore_root_ns_private::copy(*p_pgm->priv->RootNS, n_parse_options, pgm);
     }
     QoreNS = RootNS->rootGetQoreNamespace();
 
-    // Inherit an explicit parent execution mode only while the child has the
-    // same effective parse options.  Otherwise the child must select its
-    // automatic mode from its own parse options (modern -> tiered, legacy ->
-    // AST), even if the parent was started with an explicit optimized mode.
+    // An explicit parent execution mode is inherited for as long as the child's parse options support it, including
+    // after they change (by the child's own %modern, for example); otherwise the child selects its automatic mode from
+    // its own parse options (modern -> tiered, legacy -> AST); see syncExecModeWithParseOptions()
     applyParseOptionImplications();
-    if (p_pgm->priv->user_requested_exec_mode
-        && pwo.parse_options == p_pgm->priv->pwo.parse_options) {
-        exec_mode = p_pgm->priv->exec_mode;
-        user_requested_exec_mode = true;
-        inherited_user_requested_exec_mode = true;
-        inherited_exec_mode_parse_options = pwo.parse_options;
-    } else {
-        inherited_user_requested_exec_mode = false;
-        user_requested_exec_mode = false;
-        applyDefaultExecMode();
-    }
+    inheritExecMode(p_pgm->priv);
 
     // copy parent feature list; this Program is not visible to other threads yet, but the parent's list gains
     // entries while a module is loaded into the parent in another thread
@@ -1623,12 +2327,29 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
 // see InheritAllUserCodeHelper
 thread_local bool q_inherit_all_user_code = false;
 
-#ifdef DEBUG
 namespace {
-// the Program whose external data the current thread copies in copyExternalData(), if any
-thread_local const qore_program_private_base* ext_data_copy_parent = nullptr;
+//! a copy of the external data of a Program made by the current thread in copyExternalData()
+/** The frames of a thread form a stack, as a copy() can create a Program itself, which copies the data of its own
+    parent.  The child of a fork() counts the copies of its forking thread with them: the copies of the parent's other
+    threads do not go on in the child (see qore_program_private::fixupAfterFork()).
+*/
+struct ExtDataCopyFrame {
+    const qore_program_private_base* parent;
+    ExtDataCopyFrame* prev;
+};
+
+thread_local ExtDataCopyFrame* ext_data_copy_frames = nullptr;
 }
-#endif
+
+unsigned qore_program_private_base::getOwnExtDataCopies() const {
+    unsigned rc = 0;
+    for (const ExtDataCopyFrame* f = ext_data_copy_frames; f; f = f->prev) {
+        if (f->parent == this) {
+            ++rc;
+        }
+    }
+    return rc;
+}
 
 void qore_program_private_base::copyExternalData() {
     if (!ext_parent) {
@@ -1659,14 +2380,13 @@ void qore_program_private_base::copyExternalData() {
             parent->ext_copy_cond.broadcast();
         }
     });
-#ifdef DEBUG
-    // a copy() can create a Program itself, which copies the data of its own parent
-    const qore_program_private_base* old_copy_parent = ext_data_copy_parent;
-    ext_data_copy_parent = parent;
-    ON_BLOCK_EXIT([old_copy_parent] () {
-        ext_data_copy_parent = old_copy_parent;
+    // a copy() can create a Program itself, which copies the data of its own parent; the frame is removed before the
+    // count is decremented
+    ExtDataCopyFrame frame = {parent, ext_data_copy_frames};
+    ext_data_copy_frames = &frame;
+    ON_BLOCK_EXIT([&frame] () {
+        ext_data_copy_frames = frame.prev;
     });
-#endif
 
     for (auto& i : parent_data) {
         // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
@@ -1684,6 +2404,40 @@ void qore_program_private_base::copyExternalData() {
     }
 }
 
+int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guard, bool nested) {
+    {
+        // PO_ALLOW_REPARSE is read and the mark set with the write lock of the options held, which the changes of the
+        // options hold as well (see checkReparseOptionChange()); the write lock before plock
+        std::lock_guard<std::recursive_mutex> wl(pwo.parse_options.writeLock());
+        AutoLocker al(plock);
+        if (!nested && checkParseIntern(xsink)) {
+            return -1;
+        }
+        // set in the same critical section as the check that no thread runs the Program's code, so that no thread
+        // enters it between them; a Program without PO_ALLOW_REPARSE makes no such check, and sets the flag when its
+        // code is parsed, as before
+        if ((pwo.parse_options & PO_ALLOW_REPARSE) && !parsing_in_progress) {
+            parsing_in_progress = true;
+            guard.began = true;
+            // the strings and locations that exist now were not added by this parse: expressions created since the
+            // last commit and code that ran meanwhile refer to them, so a rollback of the parse must not delete them
+            // (issue #6354)
+            std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+            str_vec_hwm = str_vec.size();
+            pgmloc_hwm = pgmloc.size();
+        }
+        // the threads that code of an earlier parse or of a debugger evaluation started are not this parse's
+        // (issue #6243)
+        clearParseTidsIntern();
+    }
+#ifdef DEBUG
+    if (qore_dbg_parse_start_gate(pgm, xsink)) {
+        return -1;
+    }
+#endif
+    return 0;
+}
+
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
@@ -1693,15 +2447,20 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
 
     // delete pending statements
     sb.parseRollback();
+    native_parse_info = committed_native_parse_info;
+
+    // the strings and locations are protected by the runtime metadata lock, as code that is deserialized lazily adds
+    // to them (issue #6354)
+    std::unique_lock<std::recursive_mutex> metadata_lock(runtime_metadata_lock);
 
     // free temporary data structures
     str_set.clear();
     loc_set.clear();
 
-    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete pending items added since last commit,
-    // preserving committed state for continued use. Without PO_ALLOW_REPARSE, the program is considered
-    // unusable after rollback anyway, so we just clear the vectors without freeing (the memory will be
-    // cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
+    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete the items that the failed parse added (above the high
+    // water marks, see beginParse()), preserving committed state for continued use. Without PO_ALLOW_REPARSE, the
+    // program is considered unusable after rollback anyway, so we just clear the vectors without freeing (the memory
+    // will be cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
     // could still reference parse locations from failed parses.
     if (pwo.parse_options & PO_ALLOW_REPARSE) {
         // delete pending strings (those added after str_vec_hwm)
@@ -1719,6 +2478,7 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // Note: without PO_ALLOW_REPARSE, we don't clear str_vec/pgmloc - the memory will be freed
     // when the Program object is destroyed. This is intentional to avoid use-after-free when
     // error messages reference parse locations from the failed parse.
+    metadata_lock.unlock();
 
     // issue #2907 delete & clear statement index maps when doing a parse rollback
     for (auto& i : statementByFileIndex) {
@@ -1731,14 +2491,37 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     }
     statementByLabelIndex.clear();
 
-    // roll back pending domain
-    pend_dom = 0;
-
     // with PO_ALLOW_REPARSE, the Program is back in its committed state, so it can be used at runtime again; without
     // it, it cannot be parsed again
     if (atomic_rollback) {
         parsing_in_progress = false;
     }
+    {
+        AutoLocker al(plock);
+        clearParseTidsIntern();
+    }
+}
+
+//! the Programs that are left allocated at the end of the process; never destroyed, so they stay reachable
+static std::set<QoreProgram*>* left_programs = nullptr;
+static std::mutex* left_programs_lock = new std::mutex;
+// a leaf lock: its holders only change or read the set
+static QoreForkStdMutex left_programs_fork_handler(*left_programs_lock, QFLR_LEAF, "left_programs");
+
+void qore_program_private::leaveAllocated() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    if (!left_programs) {
+        left_programs = new std::set<QoreProgram*>;
+    }
+    // the reference is taken once per Program
+    if (left_programs->insert(pgm).second) {
+        depRef();
+    }
+}
+
+bool qore_program_private::hasLeftPrograms() {
+    std::lock_guard<std::mutex> al(*left_programs_lock);
+    return left_programs && !left_programs->empty();
 }
 
 void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
@@ -1768,13 +2551,24 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // we only clear the internal data structures once
     bool clr = false;
     bool need_cleanup = false;
+    bool leave = false;
     {
         ReferenceHolder<QoreListNode> l(xsink);
         {
             AutoLocker al(plock);
             // wait for all threads to terminate
             waitForAllThreadsToTerminateIntern();
-            if (!ptid) {
+            // a foreign thread that runs in the Program at the end of the process is not waited for, and the data
+            // that it uses is not destroyed (see leaveForeignThreads())
+            leave = qore_shutdown.load(std::memory_order_acquire) && !ptid
+                && (getOtherForeignThreadCountIntern() > 0 || leaveForeignThreadsInModuleCode());
+            if (leave) {
+                // the Program is kept allocated for the thread
+                leaveAllocated();
+            } else if (!ptid) {
+                // no foreign thread can enter the Program from now on (see canEnterIntern()): the decision above is
+                // final, and is made before any of the Program's data is destroyed
+                foreign_teardown_tid = qore_shutdown.load(std::memory_order_acquire) ? q_gettid() : 0;
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
@@ -1783,6 +2577,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 need_cleanup = true;
             }
         }
+    }
+
+    if (leave) {
+        printd(5, "qore_program_private::waitForTerminationAndClear() leaving pgm: %p: a foreign thread runs in it\n",
+            pgm);
+        return;
     }
 
     // Call the cleanup callback OUTSIDE plock and BEFORE ptid is set.
@@ -1804,6 +2604,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         AutoLocker al(plock);
         // mark the program so that only code from this thread can run during data destruction
         ptid = q_gettid();
+        // the fast paths that run the code of its variants without entering it take the call path from now on,
+        // which refuses the calls of other threads and of other Programs (qore#5822)
+        markUserVariantsDeleted();
 #ifdef DEBUG
         if (dbg_teardown_hook_t hook = dbg_teardown_hook.load()) {
             hook(pgm, DbgTeardownPoint::BeforeFinalWait);
@@ -1821,11 +2624,28 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         //printd(5, "qore_program_private::waitForTerminationAndClear() this: %p pgm: %p clr: %d\n", this, pgm, clr);
 
+#ifdef HAVE_SIGNAL_HANDLING
+        // issue #5766: the signal handlers of this Program are removed before any of its data is destroyed: a handler
+        // is code that runs in the Program, and its closure can hold the last reference to an object (a server that
+        // the handler stops, for example), whose destructor runs user code; released after the data below, the
+        // object was destroyed in a Program whose data had been deleted, and its destructor raised PROGRAM-ERROR.
+        // The Program's threads have ended and no thread can enter it any more; a callback that is still finishing in
+        // the signal thread (it has left the Program, but its handler is in progress) is waited for, and its handler
+        // is handed over to this thread and released here, as the signal thread cannot enter the Program any more.
+        // The code that runs below sets no handler (see QoreSignalManager::setHandler()), so none is left when the
+        // Program is deleted.
+        QSM.removeProgramHandlers({pgm}, xsink);
+#endif
+
         // Discard the exec-class instance now that all threads have terminated.
         // This must happen before clearLocalVars()/clearNamespaceData() because the
         // instance's destructor may run user code that references globals or namespace data.
         exec_class_inst.discard(xsink);
         exec_class_inst = QoreValue();
+
+        // the del closures of the local modules that a compiled script embeds run while the data of the Program
+        // exists, as the del closure of a source module that a script loads does (qore#6015)
+        runAOTScriptDelClosures();
 
         // release objects captured from languages without deterministic GC (jni, python) while the
         // program is still valid (data not yet cleared, ptid == tid), so their destructors run in a
@@ -1852,6 +2672,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // that runs in the Program on behalf of other threads' data
         setThreadEntryHandler(nullptr, nullptr, xsink);
 
+        // no thread can start in the Program anymore: the lifecycle subscriptions are closed once the threads that
+        // have left it have published their FINISHED events
+        thread_hub->close(xsink);
+
         // free the thread-local data of every thread in this Program's family if it is a root; this is where the
         // data of the tearing-down thread used to be cleared, so that destructors run above can still use it
         freeFamilyThreadData(false, xsink);
@@ -1866,21 +2690,15 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // now clear the original map
         {
             AutoLocker al(tlock);
-            pgm_data_map.clear();
+            {
+                std::lock_guard<std::mutex> cl(threadContainerLock());
+                pgm_data_map.clear();
+            }
             tclear = 0;
 
             if (twaiting)
                 tcond.broadcast();
         }
-#ifdef HAVE_SIGNAL_HANDLING
-        {
-            int_set_t ns = sigset;
-            // clear all signal handlers managed by this program
-            for (int_set_t::iterator i = ns.begin(), e = ns.end(); i != e; ++i)
-                QSM.removeHandler(*i, xsink);
-        }
-#endif
-
         // merge pending parse exceptions into the passed exception sink, if any
         if (pendingParseSink) {
             xsink->assimilate(pendingParseSink);
@@ -1908,11 +2726,15 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         sb.del();
         //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
-        // clear expressions
-        for (auto& i : exp_set) {
+        // clear expressions; they are deleted with the lock released, as their deletion can run code
+        q_exp_set_t exps;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            exps.swap(exp_set);
+        }
+        for (auto& i : exps) {
             delete i;
         }
-        exp_set.clear();
 
         del(xsink);
 
@@ -2070,6 +2892,13 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // the top-level code and the namespaces are not in a class (classes set their own context): the Program can
             // be parsed while a method runs (ex: in Program::parse()), and the method's class is then the thread's class
             ClassOnlySubstitutionHelper class_helper(nullptr);
+            // the functional operators decide which operands are statements of their own when all the code has been
+            // initialized (qore#6288)
+            QoreElementScopeParseHelper element_scope_helper;
+
+            // the missing return checks of the code wait until all of the code is initialized, as they analyze the
+            // code that it calls (issue #5940)
+            QoreMissingReturnCheckHelper mrch(missing_return_checks);
 
             // initialize new statements second (for "our" and "my" declarations)
             // also initializes namespaces, constants, etc
@@ -2077,6 +2906,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
 
             // do the initial parse phase
             qore_root_ns_private::get(*RootNS)->parseInit();
+
+            if (!parseSink->isEvent()) {
+                missing_return_checks.run(pgm);
+            }
 
             printd(5, "QoreProgram::internParseCommit() this: %p RootNS: %p\n", pgm, RootNS);
         }
@@ -2086,7 +2919,29 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             requires_exception = false;
             rc = -1;
         } else { // otherwise commit them
-            parsing_in_progress = false;
+            // the code that the commit runs can enter the Program, other threads cannot until the commit has finished
+            // (issue #6243); both flags are changed in one critical section of plock, which incThreadCount() takes
+            {
+                AutoLocker al(plock);
+                commit_entry_restricted = true;
+                parsing_in_progress = false;
+            }
+            // lifts the restriction when the commit ends, also with an exception
+            class CommitEntryRestrictionHelper {
+            public:
+                CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
+                }
+                ~CommitEntryRestrictionHelper() {
+                    AutoLocker al(pp.plock);
+                    pp.commit_entry_restricted = false;
+                    pp.clearParseTidsIntern();
+                }
+            private:
+                qore_program_private& pp;
+            } cerh(*this);
+#ifdef DEBUG
+            qore_dbg_parse_commit_gate(pgm, 0);
+#endif
             parsing_done = true;
 
             // merge pending namespace additions and run namespace-level runtime init
@@ -2101,13 +2956,13 @@ int qore_program_private::internParseCommit(bool standard_parse) {
 
             // commit pending statements
             sb.parseCommit(pgm);
+            committed_native_parse_info = native_parse_info;
 
+#ifdef DEBUG
+            qore_dbg_parse_commit_gate(pgm, 1);
+#endif
             initDeferredCode();
             assert(dset.empty());
-
-            // commit pending domain
-            dom |= pend_dom;
-            pend_dom = 0;
 
             {
                 // Runtime initialization can admit threads that materialize AOT metadata.
@@ -2121,9 +2976,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             }
 
             // After directives and extension-based defaults are known, choose
-            // the implicit execution mode.  Modern code defaults to tiered,
-            // which also validates the %modern IR-lowerability guarantee below.
-            applyDefaultExecMode();
+            // the execution mode: an inherited explicit mode if the final parse options support it (they may have
+            // been restored without a sync, see restoreParseOptions()), otherwise the implicit mode; modern code
+            // defaults to tiered, which also validates the %modern IR-lowerability guarantee below.
+            syncExecModeWithParseOptions();
 
             // Eagerly compile all functions if --exec-mode=ir, --exec-mode=jit, or --exec-mode=tiered was specified.
             // Gate on PO_MODERN: `ensureIrExecMode` in parseCommit runs
@@ -2151,7 +3007,6 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     } else {
         parsing_in_progress = false;
         assert(!*parseSink);
-        pend_dom = 0;
 
         // free temporary data structures
         {
@@ -2165,7 +3020,7 @@ int qore_program_private::internParseCommit(bool standard_parse) {
     return rc;
 }
 
-void qore_program_private::addStatement(AbstractStatement* s) {
+void qore_program_private::addStatement(AbstractStatement* s, const QoreNativeParseInfo& info) {
     if (expression_mode) {
         if (new_expression) {
             parse_error(*s->loc, "invalid expression; only a single expression can be parsed");
@@ -2181,18 +3036,26 @@ void qore_program_private::addStatement(AbstractStatement* s) {
 
         std::unique_ptr<StatementBlock> block(new StatementBlock(0, 0));
         block->addStatement(exp);
+        block->native_parse_info = info;
 
         // initialize expression
         QoreParseContext parse_context;
-        block->parseInit(parse_context);
+        {
+            QoreElementScopeParseHelper element_scope_helper;
+            block->parseInit(parse_context);
+        }
         // an expression is never committed: it runs the checks that a commit runs for the classes it instantiates,
         // so "new C()" of a class with abstract methods is refused as in any other code, and no check is left for
         // the Program's next commit
         qore_root_ns_private::get(*RootNS)->parseCheckDeferredAbstractNew();
 
-        assert(exp_set.find(block.get()) == exp_set.end());
         new_expression = block.get();
-        exp_set.insert(block.release());
+        {
+            // other threads delete and run the expressions of the Program while this thread parses one (qore#6493)
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            assert(exp_set.find(new_expression) == exp_set.end());
+            exp_set.insert(block.release());
+        }
         return;
     }
 
@@ -2202,6 +3065,8 @@ void qore_program_private::addStatement(AbstractStatement* s) {
         delete s;
     } else {
         sb.addStatement(s);
+        sb.native_parse_info.merge(info);
+        recordNativeParseInfo(info);
     }
 }
 
@@ -2877,14 +3742,16 @@ void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
 void qore_program_private::del(ExceptionSink* xsink) {
     printd(5, "qore_program_private::del() pgm: %p (base_object: %d)\n", pgm, base_object);
 
-    // Idempotent guard: del() may be called twice — once from ModuleManager at
-    // shutdown to break cross-program Type strong refs (issue #4816), and
-    // again from ~qore_program_private() if refcount eventually reaches 0.
-    // RootNS is set to nullptr at the end of del() so this flag detects the
-    // second call and short-circuits.
+    // Idempotent guard: del() is called only from waitForTerminationAndClear(), which can run twice: once from
+    // ModuleManager at shutdown to break cross-program Type strong refs (issue #4816), and again when the reference
+    // count reaches 0.  RootNS is set to nullptr at the end of del() so this flag detects the second call and
+    // short-circuits.
     if (!RootNS) {
         return;
     }
+    // waitForTerminationAndClear() waited for the batch JIT compiles that read the Program's code, after it had set
+    // ptid, which refuses new ones (qore#5874)
+    assert(!compile_holds);
 
     // dereference all external data, once no child Program copies it
     {
@@ -2900,14 +3767,33 @@ void qore_program_private::del(ExceptionSink* xsink) {
     }
     extmap.clear();
 
-    // the Program object released the Program after it had stopped reporting its code (clearScanHolder())
+    // the Program object released the Program after it had stopped reporting its code (clearScanHolder()), unless the
+    // data of the Program is deleted while the object still holds it (a Program cleared at the end of the process by
+    // qore_cleanup(), see clearRemainingPrograms(), while its owner holds the object): the object reports only the
+    // thread initialization code and the thread entry handlers, which are released below, so it stops reporting first;
+    // its later release of the Program finds nothing to clear
+    clearScanHolder();
     assert(!scan_holder);
-    if (thr_init) {
-        thr_init->deref(xsink);
+    ResolvedCallReferenceNode* old_thr_init;
+    // the options of the code that set it, released with it after the lock (qore#6208)
+    QoreThreadRuntimeParseOptions old_thr_init_po;
+    {
+        // the object that survives can still set or get the code (Program::setThreadInit())
+        AutoLocker al(tlock);
+        old_thr_init = thr_init;
+        thr_init = nullptr;
+        std::swap(old_thr_init_po.po, thr_init_po.po);
+        std::swap(old_thr_init_po.override, thr_init_po.override);
+    }
+    if (old_thr_init) {
+        old_thr_init->deref(xsink);
     }
 
     // a Program that never ran waitForTerminationAndClear() can still have handlers
     setThreadEntryHandler(nullptr, nullptr, xsink);
+
+    // and lifecycle subscriptions
+    thread_hub->close(xsink);
 
     base_object = false;
 
@@ -2937,26 +3823,44 @@ void qore_program_private::del(ExceptionSink* xsink) {
     // behind the entire global compile queue.
     QoreJIT::instance().waitForBgCompileQueue(pgm);
 
-    // delete the namespace and all data
-    qore_root_ns_private::get(*RootNS)->deleteData(xsink);
+    {
+        // the declarations of the namespace that survive it (referenced by values or by other Programs) keep the
+        // declarations whose types they name, and the others are destroyed together (issue #5790)
+        QoreTypeOwnerBatch type_owner_batch(*qore_root_ns_private::get(*RootNS));
 
-    // no more code of this Program runs: free the thread-local data of the family for the last time if this
-    // Program is its root, including the data that the destructors run above have saved; the members of the family
-    // that are still alive become roots of families of their own
-    freeFamilyThreadData(true, xsink);
+        // delete the namespace and all data
+        qore_root_ns_private::get(*RootNS)->deleteData(xsink);
 
-    delete RootNS;
-    RootNS = nullptr;
+        // no more code of this Program runs: free the thread-local data of the family for the last time if this
+        // Program is its root, including the data that the destructors run above have saved; the members of the
+        // family that are still alive become roots of families of their own
+        freeFamilyThreadData(true, xsink);
+
+        delete RootNS;
+        RootNS = nullptr;
+    }
 
     // delete all root code
     // method call can be repeated
     sb.del();
+    // and the code compiled from it, which refers to the closures that it creates (qore#5822)
+    sb.delCompiledCode();
 
-    // clear expressions
-    for (auto& i : exp_set) {
-        delete i;
+    // clear expressions; they are deleted with the lock released, as their deletion can run code (qore#6493)
+    {
+        q_exp_set_t exps;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            exps.swap(exp_set);
+        }
+        for (auto& i : exps) {
+            delete i;
+        }
     }
-    exp_set.clear();
+
+    // no code of this Program runs any more and its background compiles are drained: the native code that only it
+    // owns is removed from the JIT (qore#5772)
+    QoreJIT::instance().releaseCodeOwner(pgm);
 
     //printd(5, "QoreProgram::~QoreProgram() this: %p deleting root ns %p\n", this, RootNS);
 
@@ -2977,7 +3881,8 @@ void qore_program_private::del(ExceptionSink* xsink) {
     leaveThreadDataFamily();
 }
 
-const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
+template <bool Native>
+const QoreClass* qore_program_private::runtimeFindClassImpl(const char* class_name, ExceptionSink* xsink) const {
     // acquire safe access to parse structures in the source program
     ProgramRuntimeParseAccessHelper rah(xsink, pgm);
     if (*xsink)
@@ -2985,7 +3890,19 @@ const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, 
 
     // include the ns arg to ensure that namespace-justified classes are resolved properly
     const qore_ns_private* ns;
-    return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns);
+    if constexpr (Native) {
+        return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns);
+    } else {
+        return qore_root_ns_private::runtimeFindClass(*RootNS, class_name, ns, LexicalSemanticPolicy{});
+    }
+}
+
+const QoreClass* qore_program_private::runtimeFindClass(const char* class_name, ExceptionSink* xsink) const {
+    return runtimeFindClassImpl<true>(class_name, xsink);
+}
+
+const QoreClass* qore_program_private::findClassCanonical(const char* path, ExceptionSink* xsink) const {
+    return runtimeFindClassImpl<false>(path, xsink);
 }
 
 int qore_program_private::setGlobalVarValue(const char* name, QoreValue val, ExceptionSink* xsink) {
@@ -3130,6 +4047,21 @@ AbstractStatement* qore_program_private::findIndexedStatementForLocation(const c
         return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
     }
     return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+}
+
+StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramLocation* loc) {
+    AutoLocker al(&plock);
+    if (!loc) {
+        // the block is kept for the life of the Program: its location is never rolled back with a failed parse
+        // (issue #6354)
+        loc = getRuntimeLocation(0, 0);
+    }
+    StatementBlock*& b = aot_closure_debug_blocks[loc];
+    if (!b) {
+        b = new StatementBlock(this, loc);
+        registerStatement(pgm, b, false);
+    }
+    return b;
 }
 
 void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement *statement, bool addToIndex) {
@@ -3283,7 +4215,8 @@ int qore_program_private::initDeferredCode() {
     server side debug library.
 */
 void ThreadLocalProgramData::dbgAttach(ExceptionSink* xsink) {
-    if (runState == DBG_RS_DETACH) {
+    // a thread that the debugger does not want is not offered to it again (#3293)
+    if (runState == DBG_RS_DETACH && !dbg_dont_attach.load(std::memory_order_acquire)) {
         DebugRunStateEnum rs = runState;
         const AbstractStatement* rts = runToStatement;
         functionCallLevel = 0;
@@ -3426,6 +4359,11 @@ void ThreadLocalProgramData::dbgFunctionExit(const StatementBlock* statement, Qo
 }
 
 void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, ExceptionSink* xsink) {
+    // A sink can request thread exit without holding an exception. Only real exceptions have an
+    // exception object for the debugger callback; non-exception unwinds preserve the current run state.
+    if (!xsink || !xsink->isException()) {
+        return;
+    }
     if (runState != DBG_RS_STOPPED && runState != DBG_RS_DETACH) {
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, tid: %d\n", this, runState, runToStatement, q_gettid());
         checkAttach(xsink);
@@ -3437,6 +4375,14 @@ void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, Ex
         getProgram()->priv->onException(statement, rs, rts, xsink);
         setRunState(rs, rts);
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, xsink: %d\n", this, runState, runToStatement, xsink && xsink->isEvent());
+    }
+}
+
+void qore_program_private::dbgRunExit(QoreValue& rv, ExceptionSink* xsink) {
+    // called in the Program's context: the thread-local data is this Program's, if a debugger is attached
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (tlpd) {
+        tlpd->dbgExit(&sb, rv, xsink);
     }
 }
 
@@ -3471,8 +4417,9 @@ QoreProgram::QoreProgram(const QoreParseOptions& po) : priv(new qore_program_pri
 QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
 }
 
-QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn)
-        : priv(new qore_program_private(this, po, pgm)) {
+QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn,
+        const QoreParseOptions* parent_po)
+        : priv(new qore_program_private(this, po, pgm, parent_po)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: " QLLD "\n", this, pgm, priv,
         (int64)priv->getProgramId());
     priv->exec_class = ec;
@@ -3498,7 +4445,11 @@ void QoreProgram::deref() {
     printd(QPP_DBG_LVL, "QoreProgram::deref() this: %p priv: %p %d->%d\n", this, priv, reference_count(),
         reference_count() - 1);
     if (priv->derefUnregister()) {
-        delete this;
+        // the Program's own dependency reference is released, as clear() does, so that the Program is destroyed once
+        // nothing refers to it (the user variants of its code, for example; qore#5822); its code is not deleted here,
+        // so a Program that was never cleared stays allocated with its code (its owner is expected to clear it first
+        // with waitForTerminationAndDeref())
+        priv->depDeref();
     }
 }
 
@@ -3520,6 +4471,9 @@ bool qore_program_private::derefUnregister() {
     programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
     assert(i != programid_to_program_map.end() && i->second == pgm);
     programid_to_program_map.erase(i);
+    // the method lookups cached for code of this Program are no longer known to be stable (the classes that it is the
+    // source Program of raise an error for a call once it is torn down; QoreCallTargetCheckCache, issue #5824)
+    qore_bump_method_dispatch_epoch();
     return true;
 }
 
@@ -3531,8 +4485,10 @@ ExceptionSink* QoreProgram::getParseExceptionSink() {
 }
 
 int QoreProgram::setWarningMask(int wm) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
-        priv->pwo.warn_mask = wm;
+        priv->pwo.setWarnMask(wm);
         return 0;
     }
     return -1;
@@ -3540,8 +4496,10 @@ int QoreProgram::setWarningMask(int wm) {
 
 // returns 0 for success, -1 for error
 int QoreProgram::enableWarning(int code) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
-        priv->pwo.warn_mask |= code;
+        priv->pwo.orWarnMask(code);
         return 0;
     }
     return -1;
@@ -3549,8 +4507,10 @@ int QoreProgram::enableWarning(int code) {
 
 // returns 0 for success, -1 for error
 int QoreProgram::disableWarning(int code) {
+    // the check and the change are atomic with a change of PO_LOCK_WARNINGS (issue #6078)
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
     if (!(priv->pwo.parse_options & PO_LOCK_WARNINGS)) {
-        priv->pwo.warn_mask &= ~code;
+        priv->pwo.andWarnMask(~code);
         return 0;
     }
     return -1;
@@ -3639,7 +4599,82 @@ void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
 }
 
 void QoreProgram::lockOptions() {
+    // atomic with the lock check of a change of the options (issue #6078); the write lock before po_mutex (see
+    // qore_program_private_base::po_mutex); the restrictions that it has now are kept
+    std::lock_guard<std::recursive_mutex> lg(priv->pwo.parse_options.writeLock());
+    std::lock_guard<std::mutex> po_guard(priv->po_mutex);
+    // the restrictions in effect for the caller: in a file with %push-parse-options, the file's own ones
+    QoreParseOptions current = priv->pwo.parse_options.load();
+    priv->locked_restrictions |= current & ~QoreParseOptions::POSITIVE_OPTIONS;
+    // the Program's own compatibility options are locked as well: %modern does not reset them (issue #6382); those of
+    // a file with %push-parse-options end with it
+    priv->locked_compat |= priv->pwo.parse_options.loadShared()
+        & qore_program_private_base::modernIncompatibleOptions();
     priv->po_locked = true;
+    // the restrictions that a file with %push-parse-options locks are kept after it: they are the Program's own from
+    // now on (issue #6207)
+    const ParseOptionsOverlayFrame* frame = q_parse_overlay_find_delta(&priv->pwo.parse_options);
+    if (frame && frame->kind == ParseOptionsOverlayFrame::PUSHED_FILE) {
+        priv->keepLockedRestrictionsIntern();
+    }
+}
+
+QoreParseOptions qore_program_private_base::getCreatorRestrictions(const QoreParseOptions& creator_po) {
+    // the options of style and backward compatibility, %modern's included, are the created Program's own; the
+    // options that decide what user code a child inherits from its parent are not restrictions of a Program that is
+    // not a child (nor is the inheritance of the module data of a parent), and the system options are never
+    // inherited this way; the options that keep system code from a Program are taken, as an independent Program
+    // copies its namespace from the system namespace, not from its creator's
+    static const QoreParseOptions not_inherited = QoreParseOptions::POSITIVE_OPTIONS | lockedMayDisable()
+        | modernImpliedOptions() | modernIncompatibleOptions()
+        | QoreParseOptions(PO_USER_INHERITANCE_OPTIONS | PO_NO_INHERIT_PROGRAM_DATA | PO_SYSTEM_OPS);
+    return creator_po & ~not_inherited;
+}
+
+QoreParseOptions qore_program_private_base::restrictForCreator(const QoreProgram* creator,
+        const QoreParseOptions& po, QoreParseOptions& restrictions, bool& restricted) {
+    restricted = false;
+    restrictions = QoreParseOptions();
+    if (!creator) {
+        return po;
+    }
+    QoreParseOptions creator_po;
+    bool creator_locked;
+    {
+        // the options of the creator may be changed in another thread
+        std::lock_guard<std::mutex> po_guard(creator->priv->po_mutex);
+        creator_po = creator->priv->pwo.parse_options;
+        creator_locked = creator->priv->po_locked;
+    }
+    QoreParseOptions creator_restrictions = getCreatorRestrictions(creator_po);
+    // sandboxed code cannot create a Program that is free of its restrictions
+    const bool sandboxed = qore_caller_is_sandboxed();
+    // code without restrictions that is not locked has none that the Program could escape; such code creates an
+    // independent Program with the options it gives, as before (QoreRepl, for example, creates one with
+    // PO_ALLOW_REPARSE); a locked Program has no positive options that it cannot have, which the new Program does not
+    // get either
+    if (!sandboxed && ((creator_po & PO_NO_CHILD_PO_RESTRICTIONS) || (!creator_restrictions && !creator_locked))) {
+        return po;
+    }
+    restricted = true;
+    restrictions = creator_restrictions;
+    // the restrictions of the creator are added, and the options that give more freedom that it does not have are
+    // removed, as setParent() does for a child; the children of the Program of sandboxed code inherit them;
+    // PO_ALLOW_REPARSE is kept, as it only allows code to be parsed in the new Program more than once (QoreRepl
+    // creates its Program with it)
+    QoreParseOptions allowed = creator_po | ~QoreParseOptions::POSITIVE_OPTIONS | QoreParseOptions(PO_ALLOW_REPARSE);
+    if (sandboxed) {
+        allowed &= ~QoreParseOptions(PO_NO_CHILD_PO_RESTRICTIONS);
+    }
+    return (po | restrictions) & allowed;
+}
+
+void qore_program_private_base::lockCreatorRestrictions(QoreProgram& pgm, const QoreParseOptions& restrictions) {
+    std::lock_guard<std::mutex> po_guard(pgm.priv->po_mutex);
+    // the options were given by restrictForCreator(), so the Program has the restrictions already
+    assert((pgm.priv->pwo.parse_options & restrictions) == restrictions);
+    pgm.priv->locked_restrictions |= restrictions;
+    pgm.priv->po_locked = true;
 }
 
 // setExecClass() NOTE: string passed here will copied
@@ -3664,11 +4699,11 @@ void QoreProgram::depDeref() {
 }
 
 bool QoreProgram::checkWarning(int code) const {
-    return priv->warnSink && (code & priv->pwo.warn_mask);
+    return priv->warnSink && (code & priv->pwo.getWarnMask());
 }
 
 int QoreProgram::getWarningMask() const {
-    return priv->warnSink ? priv->pwo.warn_mask : 0;
+    return priv->warnSink ? priv->pwo.getWarnMask() : 0;
 }
 
 bool QoreProgram::existsFunction(const char* name) {
@@ -3687,6 +4722,263 @@ void QoreProgram::parseSetParseOptions(const QoreParseOptions& po) {
 
 void QoreProgram::parseDisableParseOptions(const QoreParseOptions& po) {
     priv->parseDisableParseOptions(&loc_builtin, po);
+}
+
+namespace {
+//! the parse directives of the options that %modern implies or does not allow (issue #5682)
+struct QoreModernOptionName {
+    const QoreParseOptions* option;
+    int64 legacy_option;
+    const char* directive;
+};
+}
+
+void qore_program_private_base::describeParseOptions(const QoreParseOptions& po, QoreString& str) {
+    static const QoreModernOptionName names[] = {
+        {nullptr, PO_BROKEN_NARROWED_TYPES, "%broken-narrowed-types"},
+        {nullptr, PO_STRICT_BOOLEAN_EVAL, "%strict-bool-eval"},
+        {nullptr, PO_BROKEN_LIST_PARSING, "%broken-list-parsing"},
+        {nullptr, PO_BROKEN_LOGIC_PRECEDENCE, "%broken-logic-precedence"},
+        {nullptr, PO_BROKEN_INT_ASSIGNMENTS, "%broken-int-assignments"},
+        {nullptr, PO_BROKEN_OPERATORS, "%broken-operators"},
+        {nullptr, PO_BROKEN_LOOP_STATEMENT, "%broken-loop-statement"},
+        {nullptr, PO_BROKEN_REFERENCES, "%broken-references"},
+        {nullptr, PO_BROKEN_SPRINTF, "%broken-sprintf"},
+        {nullptr, PO_BROKEN_CAST, "%broken-cast"},
+        {nullptr, PO_BROKEN_NAMESPACE_RESOLUTION, "%broken-namespace-resolution"},
+        {nullptr, PO_BROKEN_RANGE, "%broken-range"},
+        {nullptr, PO_BROKEN_VARARGS, "%broken-varargs"},
+        {nullptr, PO_BROKEN_LIST_RANGE, "%broken-list-range"},
+        {&QoreParseOptions::BROKEN_SOFT_TYPES, 0, "%broken-soft-types"},
+        {&QoreParseOptions::BROKEN_AUTO_CAST, 0, "%broken-auto-cast"},
+        {&QoreParseOptions::NO_STRING_INDEX_CHAR, 0, "%no-string-index-char"},
+        {&QoreParseOptions::NO_SUMMARIZE, 0, "%no-summarize"},
+        {&QoreParseOptions::STREAMING_ANY, 0, "%streaming-any"},
+        {&QoreParseOptions::NEGATIVE_OFFSETS, 0, "%negative-offsets"},
+    };
+    bool first = true;
+    for (const auto& n : names) {
+        QoreParseOptions o = n.option ? *n.option : QoreParseOptions(n.legacy_option);
+        if (!(po & o)) {
+            continue;
+        }
+        if (!first) {
+            str.concat(", ");
+        }
+        first = false;
+        str.concat(n.directive);
+    }
+}
+
+//! The reason that ends the descriptions of the conflicts between %modern and the options it does not allow
+static constexpr const char* qore_modern_conflict_reason = ": the option changes the meaning of code, and %modern "
+    "guarantees a consistent set of parse options";
+
+void qore_program_private_base::describeModernSetConflict(const QoreParseOptions& current, const QoreParseOptions& po,
+        const QoreParseOptions& conflict, const char* verb, QoreString& desc) {
+    if (isModern(current)) {
+        // an option that %modern does not allow is set while %modern is in effect
+        describeParseOptions(conflict & po, desc);
+        desc.sprintf(" cannot be %s while %%modern is in effect", verb);
+    } else {
+        // the options set put %modern in effect: given as such, or completed by the options set
+        desc.concat((po & PO_MODERN) == PO_MODERN ? "%modern" : "%modern (which the options set complete)");
+        QoreParseOptions with = conflict & po;
+        QoreParseOptions in_effect = conflict & ~po;
+        if (with) {
+            desc.concat(" and ");
+            describeParseOptions(with, desc);
+            desc.sprintf(" cannot be %s together", verb);
+            if (in_effect) {
+                desc.concat(", nor while ");
+                describeParseOptions(in_effect, desc);
+                desc.concat(" is in effect");
+            }
+        } else {
+            desc.sprintf(" cannot be %s while ", verb);
+            describeParseOptions(in_effect, desc);
+            desc.concat(" is in effect");
+        }
+    }
+    desc.concat(qore_modern_conflict_reason);
+}
+
+void qore_program_private_base::describeModernSourceDefaultConflict(const char* filename,
+        const QoreParseOptions& conflict, QoreString& desc) {
+    desc.sprintf("'%s' is parsed in %%modern mode by its extension, which cannot be used while ", filename);
+    describeParseOptions(conflict, desc);
+    desc.concat(" is in effect");
+    desc.concat(qore_modern_conflict_reason);
+    desc.concat("; parse the code as a .q file, or without the option");
+}
+
+int qore_program_private_base::checkModernConflict(const QoreParseOptions& current, const QoreParseOptions& po, bool set,
+        const char* what, ExceptionSink* xsink) {
+    QoreParseOptions conflict = getModernConflict(current, po, set);
+    if (!conflict) {
+        return 0;
+    }
+    QoreStringNode* desc = new QoreStringNodeMaker("%s: ", what);
+    if (set) {
+        describeModernSetConflict(current, po, conflict, "set", *desc);
+    } else {
+        describeParseOptions(conflict, *desc);
+        desc->concat(" cannot be disabled while %modern is in effect, which implies the option and guarantees a "
+            "consistent set of parse options");
+    }
+    xsink->raiseException("OPTION-ERROR", desc);
+    return -1;
+}
+
+int qore_program_private_base::parseCheckModernConflict(const QoreProgramLocation* loc, const QoreParseOptions& po,
+        bool set, const QoreParseOptions& reset) {
+    QoreParseOptions current = pwo.parse_options.load() & ~reset;
+    QoreParseOptions conflict = getModernConflict(current, po, set);
+    if (!conflict) {
+        return 0;
+    }
+    QoreStringNode* desc = new QoreStringNode;
+    if (set) {
+        describeModernSetConflict(current, po, conflict, "used", *desc);
+        // %modern is complete only with the restrictions that a module parse option mask added to the Program of the
+        // module: the error names them, as the user did not write %modern (issue #5682)
+        QoreParseOptions all = current | po;
+        if (module_mask_added && isModern(all) && !isModern(all & ~module_mask_added)) {
+            desc->concat("; %modern is complete only with ");
+            describeParseOptions(module_mask_added, *desc);
+            desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                "load_module_masked())");
+            desc->concat("; remove the option, or load the module with a mask that does not add them");
+        } else {
+            desc->concat(isModern(current)
+                ? "; remove the directive, or parse the code without %modern (as a .q file, or after %old-style)"
+                : "; remove the option, or parse the code without %modern");
+        }
+    } else {
+        // %no-negative-offsets is the only directive that disables an option that %modern implies
+        desc->concat("%no-negative-offsets cannot be used while %modern is in effect, which implies ");
+        describeParseOptions(conflict, *desc);
+        desc->concat(" and guarantees a consistent set of parse options");
+        // %modern is complete only with the restrictions that a module parse option mask added (see above)
+        if (module_mask_added && isModern(current) && !isModern(current & ~module_mask_added)) {
+            desc->concat("; %modern is complete only with ");
+            describeParseOptions(module_mask_added, *desc);
+            desc->concat(", which the module parse option mask adds (see set_module_parse_option_mask() and "
+                "load_module_masked()); remove the directive, or load the module with a mask that does not add them");
+        } else {
+            desc->concat("; remove the directive, or parse the code without %modern (as a .q file, or after "
+                "%old-style)");
+        }
+    }
+    qore_program_private::makeParseException(pgm, *loc, "PARSE-OPTION-ERROR", desc);
+    return -1;
+}
+
+int qore_program_private::checkModernSourceDefault(const QoreParseOptions& current, const char* filename,
+        ExceptionSink* xsink) {
+    QoreParseOptions conflict = current & modernIncompatibleOptions();
+    if (!conflict) {
+        return 0;
+    }
+    QoreStringNode* desc = new QoreStringNode;
+    describeModernSourceDefaultConflict(filename, conflict, *desc);
+    xsink->raiseException("PARSE-OPTION-ERROR", desc);
+    return -1;
+}
+
+QoreParseOptions qore_aot_merge_parse_options(const QoreParseOptions& final, const QoreParseOptions& base) {
+    return final | (base & ~qore_program_private_base::modernIncompatibleOptions());
+}
+
+bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error) {
+    if (!qore_program_private_base::isModern(po)) {
+        return true;
+    }
+    QoreParseOptions conflict = po & qore_program_private_base::modernIncompatibleOptions();
+    if (!conflict) {
+        return true;
+    }
+    QoreString desc("PARSE-OPTION-ERROR: ");
+    // the options are given together: nothing is in effect before them
+    qore_program_private_base::describeModernSetConflict(QoreParseOptions(), po, conflict, "set", desc);
+    error = desc.c_str();
+    return false;
+}
+
+QoreParseOptions ParseOptionsOverlayFrame::view(const QoreParseOptions& shared) const {
+    if (kind == STATEMENT) {
+        return po;
+    }
+    QoreParseOptions rv = (shared & ~remove) | add;
+    // a change for the whole Program made while the frame is in effect can conflict with the frame's own options
+    // (%modern with a compatibility option that %modern does not allow)
+    if (qore_program_private_base::isModern(rv)) {
+        QoreParseOptions incompatible = rv & qore_program_private_base::modernIncompatibleOptions();
+        if (incompatible) {
+            if (add & incompatible) {
+                // the frame's code is legacy code with a compatibility option of its own, and the Program got
+                // %modern after the frame began: the frame's code keeps every option of %modern and every option
+                // that %modern implies as it had them, the Program's options when the frame began with the frame's
+                // own changes
+                static const QoreParseOptions modern_related = QoreParseOptions(PO_MODERN)
+                    | qore_program_private_base::modernImpliedOptions() | QoreParseOptions::STRICT_PARSE_ERRORS;
+                rv = (rv & ~modern_related) | (((base & ~remove) | add) & modern_related);
+                // the frame's code was not %modern with its compatibility option (refused when it was set)
+                assert(!qore_program_private_base::isModern(rv));
+                if (qore_program_private_base::isModern(rv)) {
+                    rv &= ~(QoreParseOptions(PO_MODERN) & ~add);
+                }
+            } else {
+                // the frame's code set %modern itself, and the Program got a compatibility option that it does not
+                // allow after the frame began: the frame's %modern wins for its code
+                rv &= ~incompatible;
+            }
+        }
+    }
+    return qore_program_private_base::withImplications(rv);
+}
+
+QoreParseOptions SyncParseOptions::loadView() const {
+    QoreParseOptions shared = loadShared();
+    const ParseOptionsOverlayFrame* frame = q_parse_overlay_find(this);
+    return frame ? frame->view(shared) : shared;
+}
+
+ParseWarnOptions ProgramParseWarnOptions::getView() const {
+    QoreParseOptions shared = parse_options.loadShared();
+    const ParseOptionsOverlayFrame* frame = q_parse_overlay_find(&parse_options);
+    if (!frame) {
+        return ParseWarnOptions(shared, warn_mask.load(std::memory_order_relaxed));
+    }
+    // a statement has a warning mask of its own, the other frames have the Program's own
+    if (frame->kind == ParseOptionsOverlayFrame::STATEMENT) {
+        return ParseWarnOptions(frame->po, frame->warn_mask);
+    }
+    return ParseWarnOptions(frame->view(shared), warn_mask.load(std::memory_order_relaxed));
+}
+
+QoreParseOptions qore_program_private_base::readParseOptions(const QoreProgram& p) {
+    return p.priv->pwo.parse_options;
+}
+
+int qore_program_private_base::checkNewProgramModernOptions(const QoreProgram* parent,
+        const QoreParseOptions& parent_po, const QoreParseOptions& po, ExceptionSink* xsink, const char* what) {
+    // a child Program has its parent's options too, unless the parent allows other options for its children; the
+    // caller read the parent's options once and creates the child with the same value (issues #6078, #6176)
+    QoreParseOptions inherited;
+    if (parent && !(parent_po & PO_NO_CHILD_PO_RESTRICTIONS)) {
+        inherited = parent_po;
+    }
+    if (!isModern(inherited | po)) {
+        return 0;
+    }
+    if (isModern(po) || !isModern(inherited)) {
+        return checkModernConflict(inherited, po, true, what, xsink);
+    }
+    // %modern comes from the parent
+    QoreStringMaker label("%s (the new Program has %%modern from its parent, which can allow other options for its "
+        "child Programs with %%no-child-restrictions, or create an independent Program)", what);
+    return checkModernConflict(inherited, po, true, label.c_str(), xsink);
 }
 
 void QoreProgram::setParseOptions(const QoreParseOptions& po, ExceptionSink* xsink) {
@@ -3720,6 +5012,7 @@ void qore_program_private_base::joinThreadDataFamily(QoreProgram* p_pgm) {
         AutoLocker al(root->tld_lock);
         member = !root->tld_final;
         if (member) {
+            std::lock_guard<std::mutex> cl(root->threadContainerLock());
             root->tld_members.insert(pgm->priv);
         }
     }
@@ -3734,6 +5027,7 @@ void qore_program_private_base::leaveThreadDataFamily() {
     tld_parent_root = nullptr;
     {
         AutoLocker al(root->tld_lock);
+        std::lock_guard<std::mutex> cl(root->threadContainerLock());
         root->tld_members.erase(pgm->priv);
     }
     root->depDeref();
@@ -3785,6 +5079,7 @@ void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink
                     for (qore_program_private* member : tld_members) {
                         member->tld_root.store(member, std::memory_order_release);
                     }
+                    std::lock_guard<std::mutex> cl(threadContainerLock());
                     tld_members.clear();
                 }
                 break;
@@ -3796,6 +5091,7 @@ void qore_program_private::freeFamilyThreadData(bool final, ExceptionSink* xsink
                 tpd->ref();
                 threads.push_back(tpd);
             }
+            std::lock_guard<std::mutex> cl(threadContainerLock());
             tld_registry.clear();
         }
         for (ThreadProgramData* tpd : threads) {
@@ -3859,8 +5155,8 @@ void QoreProgram::parse(const char* code, const char* label, ExceptionSink* xsin
 
 void QoreProgram::parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm,
         bool only_first_except) {
-    priv->only_first_except = only_first_except;
-    priv->parseFile(filename, xsink, wS, wm);
+    // set with the parse lock held (see qore_program_private::parseFile())
+    priv->parseFile(filename, xsink, wS, wm, only_first_except);
 }
 
 void QoreProgram::parsePending(const QoreString* str, const QoreString* lstr, ExceptionSink* xsink, ExceptionSink* wS,
@@ -3898,6 +5194,8 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     ProgramThreadCountContextHelper tch(xsink, this, true);
     if (*xsink)
         return QoreValue();
+    // the frame of the top-level code is a frame of this context (see getContextFrame())
+    tch.setTopLevel();
 
     // the top-level code runs in this Program with no object or class context: the code that runs it, such as the
     // builtin Program::run() method, has the Program object and class and the calling Program as its context, which
@@ -3931,10 +5229,28 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (*xsink) {
         return QoreValue();
     }
-    return priv->sb.exec(xsink);
+    ValueHolder rv(priv->sb.exec(xsink), xsink);
+    // the end of the top-level code of a Program that a debugger ends is a cancellation point: a thread that the
+    // debugger ended while it raised another exception, which the code caught, has a cancellation request, which it
+    // raises here if the code ended with no statement or cancellation point after the catch (qore#5987)
+    if (!*xsink && priv->debugger_terminating.load(std::memory_order_relaxed)) {
+        qore_check_cancel(xsink, "end of the program's top-level code");
+    }
+    // the debugger's exit event of the top-level code gets the value that Program::run() returns, which it can
+    // replace (#3401); after an exception, rv releases the value, and the event gets none
+    QoreValue result = *xsink ? QoreValue() : rv.release();
+    priv->dbgRunExit(result, xsink);
+    if (*xsink) {
+        // nothing is returned with an exception, also if the debugger set a value
+        result.discard(xsink);
+        return QoreValue();
+    }
+    return result;
 }
 
-QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+template <bool LexicalInvocation>
+QORE_INTERN_ALWAYS_INLINE QoreValue qore_program_private::callFunctionImpl(const char* name,
+        const QoreListNode* args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
     SimpleRefHolder<FunctionCallNode> fc;
 
     printd(5, "QoreProgram::callFunction() creating function call to %s()\n", name);
@@ -3943,10 +5259,10 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
 
     // need to grab parse lock for safe access to the user function map and imported function map
     {
-        ProgramRuntimeParseAccessHelper pah(xsink, this);
+        ProgramRuntimeParseAccessHelper pah(xsink, pgm);
         if (*xsink)
             return QoreValue();
-        fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, name);
+        fe = qore_root_ns_private::runtimeFindFunctionEntry(*RootNS, name, policy);
     }
 
     if (!fe) {
@@ -3960,7 +5276,13 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     // like load_module() operating on the target, and privileged builtins like set_save_object_callback()
     // invoked by a trusted caller on a sandboxed target).  Hand-rolling the parse-option handling here
     // gets one of those cases wrong; the shared path handles all of them.
-    fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), this);
+    if constexpr (LexicalInvocation) {
+        fc = qore_make_function_call<FunctionCallNode>(policy, get_runtime_location(), fe,
+            const_cast<QoreListNode*>(args), pgm);
+        ParseNode::bindSemanticPolicy(*fc, policy);
+    } else {
+        fc = new FunctionCallNode(get_runtime_location(), fe, const_cast<QoreListNode*>(args), pgm);
+    }
     QoreValue rv = !*xsink ? fc->eval(xsink) : QoreValue();
 
     // let caller delete function arguments if necessary
@@ -3969,7 +5291,22 @@ QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, 
     return rv;
 }
 
+QoreValue QoreProgram::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink) {
+    return priv->callFunctionImpl<false>(name, args, xsink, {});
+}
+
+QoreValue qore_program_private::callFunction(const char* name, const QoreListNode* args, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) {
+    return callFunctionImpl<true>(name, args, xsink, policy);
+}
+
 void QoreProgram::parseCommit(ExceptionSink* xsink, ExceptionSink* wS, int wm) {
+    // before the commit switches to the Program: a sandboxed caller stays the caller of the initializers that the
+    // commit runs (see QoreCallerSandboxHelper)
+    QoreCallerSandboxHelper caller_sandbox(this, xsink);
+    if (*xsink) {
+        return;
+    }
     ProgramRuntimeParseCommitContextHelper pch(xsink, this);
     if (*xsink)
         return;
@@ -3982,8 +5319,8 @@ int QoreProgram::parseRollback(ExceptionSink* xsink) {
 
 void QoreProgram::setExecMode(qore_exec_mode_t mode, bool user_requested) {
     priv->exec_mode = mode;
-    priv->user_requested_exec_mode = user_requested;
-    priv->inherited_user_requested_exec_mode = false;
+    priv->user_requested_exec_mode.store(user_requested, std::memory_order_release);
+    priv->inherited_user_requested_exec_mode.store(false, std::memory_order_release);
 }
 
 qore_exec_mode_t QoreProgram::getExecMode() const {
@@ -4058,6 +5395,9 @@ void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
         // waitForTerminationAndClear() after all threads have terminated.
         priv->exec_class_inst.discard(xsink);
         priv->exec_class_inst = qc->execConstructor((QoreListNode*)0, xsink);
+        // the debugger's exit event of the exec class gets the value that Program::run() returns (the return value
+        // that the class set), which it can replace (#3401)
+        priv->dbgRunExit(priv->exec_class_rv, xsink);
     }
 }
 
@@ -4284,6 +5624,12 @@ void QoreProgram::parseCmdLineDefines(const std::map<std::string, std::string> d
 }
 
 void QoreProgram::parseCmdLineDefines(ExceptionSink& xs, ExceptionSink& ws, int wm, const std::map<std::string, std::string>& defmap) {
+    // before the parse switches to the Program, as for any parse (see qore_program_private::parse())
+    QoreCallerSandboxHelper caller_sandbox(this, &xs);
+    if (xs) {
+        return;
+    }
+    priv->markSandboxedParse();
     ProgramRuntimeParseCommitContextHelper pch(&xs, this);
 
     if (xs) {
@@ -4328,7 +5674,7 @@ AbstractQoreProgramExternalData* QoreProgram::getExternalData(const char* owner)
 
 AbstractQoreProgramExternalData* QoreProgram::removeExternalData(const char* owner) {
     // the removal waits until the copies of the data are made, so a copy() must not remove the data it copies
-    assert(ext_data_copy_parent != priv);
+    assert(!ext_data_copy_frames || ext_data_copy_frames->parent != priv);
     return priv->removeExternalData(owner);
 }
 
@@ -4500,6 +5846,10 @@ void QoreDebugProgram::removeProgram(QoreProgram *pgm) {
 
 QoreListNode* QoreDebugProgram::getAllProgramObjects() {
    return priv->getAllProgramObjects();
+}
+
+bool QoreDebugProgram::attachThread(QoreProgram* pgm, int tid) const {
+   return priv->attachThread(pgm, tid);
 }
 
 int QoreDebugProgram::breakProgramThread(QoreProgram *pgm, int tid) const {
@@ -4725,6 +6075,15 @@ private:
             addCall(call->getVariant(), call->loc, nullptr, "constructor");
             return;
         }
+        // a declaration that creates an object: "C c(args)"
+        if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+            if (vrn->isObjectConstruct()) {
+                addArgs(vrn->getParseArgs(), vrn->getArgs());
+                addCall(vrn->getVariant(), vrn->loc, QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo()),
+                    "constructor");
+            }
+            return;
+        }
         if (auto* call = dynamic_cast<const AbstractMethodCallNode*>(node)) {
             addArgs(call->getParseArgs(), call->getArgs());
             addCall(call->getVariant(), call->loc, call->getClass(), call->getName());
@@ -4734,7 +6093,7 @@ private:
             addArgs(call->getParseArgs(), call->getArgs());
             // a function whose variant is chosen at runtime is stepped into only if it has user code
             if (!call->getVariant()) {
-                auto* fc = dynamic_cast<const FunctionCallNode*>(call);
+                auto* fc = qore_get_function_call_node(call);
                 const QoreFunction* f = fc ? fc->getFunction() : nullptr;
                 if (f && !f->hasUser()) {
                     return;
@@ -4947,8 +6306,15 @@ void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
         if (sm) {
             // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
+            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
+            priv->sandboxed.store(true, std::memory_order_release);
         }
         old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
+        // after the manager is published: a thread that finds the new generation finds the manager (see
+        // ProgramThreadCountContextHelper::sandboxChainClear())
+        if (sm) {
+            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
+        }
     }
     if (old) {
         old->deref(nullptr);
@@ -4996,11 +6362,27 @@ const QoreExternalFunction* QoreProgram::findFunction(const char* path) const {
     return reinterpret_cast<const QoreExternalFunction*>(fe ? fe->getFunction() : nullptr);
 }
 
-const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+const QoreExternalFunction* QoreProgram::findFunction(const char* path, const QoreNamespace*& pns) const {
+    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(*priv->RootNS, path);
+    if (!fe) {
+        pns = nullptr;
+        return nullptr;
+    }
+    pns = fe->getNamespace()->ns;
+    return reinterpret_cast<const QoreExternalFunction*>(fe->getFunction());
+}
+
+func_ns_vec_t QoreProgram::findAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+        ExceptionSink* xsink) const {
+    return qore_root_ns_private::get(*priv->RootNS)->runtimeFindAllFunctionsRegexNs(pattern, re_opts, xsink);
+}
+
+template <bool Native>
+const TypedHashDecl* qore_program_private::findHashDeclImpl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 
-    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
-        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*priv->RootNS, path);
+    if (parsing_in_progress || parse_commit_in_progress) {
+        TypedHashDecl* hd = qore_root_ns_private::parseTryFindHashDecl(*RootNS, path);
         if (hd) {
             pns = hd->getNamespace();
             return hd;
@@ -5008,18 +6390,32 @@ const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNames
     }
 
     const qore_ns_private* pns_priv;
-    const TypedHashDecl* th = qore_root_ns_private::runtimeFindHashDecl(*priv->RootNS, path, pns_priv);
+    const TypedHashDecl* th;
+    if constexpr (Native) {
+        th = qore_root_ns_private::runtimeFindHashDecl(*RootNS, path, pns_priv);
+    } else {
+        th = qore_root_ns_private::runtimeFindHashDecl(*RootNS, path, pns_priv, LexicalSemanticPolicy{});
+    }
     if (th) {
         pns = pns_priv->ns;
     }
     return th;
 }
 
-const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+const TypedHashDecl* QoreProgram::findHashDecl(const char* path, const QoreNamespace*& pns) const {
+    return priv->findHashDeclImpl<true>(path, pns);
+}
+
+const TypedHashDecl* qore_program_private::findHashDeclCanonical(const char* path, const QoreNamespace*& pns) const {
+    return findHashDeclImpl<false>(path, pns);
+}
+
+template <bool Native>
+const QoreEnumDecl* qore_program_private::findEnumImpl(const char* path, const QoreNamespace*& pns) const {
     pns = nullptr;
 
-    if (priv->parsing_in_progress || priv->parse_commit_in_progress) {
-        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*priv->RootNS, path);
+    if (parsing_in_progress || parse_commit_in_progress) {
+        const QoreEnumDecl* e = qore_root_ns_private::parseTryFindEnum(*RootNS, path);
         if (e) {
             pns = e->getNamespace();
             return e;
@@ -5027,11 +6423,24 @@ const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*
     }
 
     const qore_ns_private* pns_priv;
-    const QoreEnumDecl* e = qore_root_ns_private::runtimeFindEnum(*priv->RootNS, path, pns_priv);
+    const QoreEnumDecl* e;
+    if constexpr (Native) {
+        e = qore_root_ns_private::runtimeFindEnum(*RootNS, path, pns_priv);
+    } else {
+        e = qore_root_ns_private::runtimeFindEnum(*RootNS, path, pns_priv, LexicalSemanticPolicy{});
+    }
     if (e) {
         pns = pns_priv->ns;
     }
     return e;
+}
+
+const QoreEnumDecl* QoreProgram::findEnum(const char* path, const QoreNamespace*& pns) const {
+    return priv->findEnumImpl<true>(path, pns);
+}
+
+const QoreEnumDecl* qore_program_private::findEnumCanonical(const char* path, const QoreNamespace*& pns) const {
+    return findEnumImpl<false>(path, pns);
 }
 
 // issue #1796: include a non-const variant for binary modules
@@ -5407,11 +6816,20 @@ QoreObject* QoreBreakpoint::getQoreObject() {
 void QoreBreakpoint::setQoreObject(QoreObject *n_qo) {
 }
 
-QoreExternalProgramContextHelper::QoreExternalProgramContextHelper(ExceptionSink* xsink, QoreProgram* pgm) : priv(new ProgramThreadCountContextHelper(xsink, pgm, true)) {
+QoreExternalProgramContextHelper::QoreExternalProgramContextHelper(ExceptionSink* xsink, QoreProgram* pgm) {
+    // a C++ exception of the entry propagates to the C++ code that enters the Program, once the thread is as it was
+    // (issue #6198); the interpreter's entries raise it as a Qore exception instead (issue #6255)
+    std::unique_ptr<ProgramThreadCountContextHelper> p(new ProgramThreadCountContextHelper);
+    p->setRethrow(xsink, pgm, true);
+    priv = p.release();
 }
 
 QoreExternalProgramContextHelper::~QoreExternalProgramContextHelper() {
     delete priv;
+}
+
+bool qore_program_thread_entry_pending(const QoreProgram* pgm) {
+    return pgm && thread_entry_pending(pgm);
 }
 
 class QoreExternalProgramCallContextHelperPriv : ProgramCallContextHelper {
@@ -5440,9 +6858,17 @@ struct QoreExitHook {
     QoreProgram* pgm;
     //! the hook; referenced
     ResolvedCallReferenceNode* code;
+    //! the run-time parse options of the code that registered the hook, which the hook runs with (qore#6208)
+    /** A hook that is a call reference to builtin code sets no options of its own, and the thread that runs the hooks
+        (the one that deletes the Program, or the main thread at the end of the process) has its own
+    */
+    QoreThreadRuntimeParseOptions po;
 
     //! Releases the hook's references; called without the registry lock
     void release(ExceptionSink* xsink) {
+        // the options' references to Programs are released here, not when the object is overwritten or destroyed
+        // with the registry lock held (qore#6208)
+        po = QoreThreadRuntimeParseOptions();
         code->deref(xsink);
         pgm->depDeref();
     }
@@ -5522,6 +6948,9 @@ void qore_run_exit_hook(QoreExitHook& hook) {
     {
         // the hook runs in its Program, without the policy of a sandboxed caller that deletes a Program; a Program
         // that is being deleted meanwhile refuses it with an exception
+        // the hook runs with the options of the code that registered it (qore#6208), installed before the Program
+        // is entered, whose thread entry handler and initialization run then
+        QoreThreadRuntimeParseOptionsHelper po_helper(&hook.po);
         ProgramThreadCountContextHelper tch(&xsink, hook.pgm, true);
         if (!xsink) {
             QoreSandboxPolicyBarrierHelper barrier;
@@ -5561,7 +6990,7 @@ int64 qore_register_exit_hook(const ResolvedCallReferenceNode* code, ExceptionSi
     int64 id = ++exit_hook_seq;
     // taking the references cannot fail, and releasing them takes no lock
     pgm->depRef();
-    exit_hooks.push_back({id, pgm, code->refRefSelf()});
+    exit_hooks.push_back({id, pgm, code->refRefSelf(), QoreThreadRuntimeParseOptions::capture()});
     return id;
 }
 

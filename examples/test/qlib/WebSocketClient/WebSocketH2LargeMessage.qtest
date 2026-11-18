@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 WebSocket connections over TLS and their flow control
+
+/*  WebSocketH2LargeMessage.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# qore#5820: an HTTP/2 WebSocket client grants the stream credit of a message as the application takes it; a message
+# larger than the stream's window (1 MiB) must still arrive, as the credit of the message in progress is granted in
+# advance
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires AsyncSocketIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketH2LargeMessageTest
+
+#! Echoes every message
+class LargeEchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+class LargeEchoHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new LargeEchoConnection(self);
+    }
+}
+
+class WebSocketH2LargeMessageTest inherits QUnit::Test {
+    private {
+        const Timeout = 60s;
+    }
+
+    constructor() : QUnit::Test("WebSocketH2LargeMessage", "1.0") {
+        addTestCase("HTTP/2: messages larger than the stream window arrive", \testLargeMessages());
+        set_return_value(main());
+    }
+
+    testLargeMessages() {
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        on_exit {
+            server.stop();
+        }
+        server.setDefaultHandler("ws", new LargeEchoHandler());
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "auto",
+        });
+        server.waitForAsyncIo();
+
+        Queue received();
+        WebSocketClient wsc(sub (*data msg) {
+            if (exists msg) {
+                received.push(msg);
+            }
+        }, {
+            "url": sprintf("wss://localhost:%d", linfo.port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        assertTrue(wsc.isHttp2(), "the WebSocket uses HTTP/2");
+
+        # three messages of 3 MiB each: each is larger than the stream's window, and the client takes them one at a
+        # time
+        foreach int i in (xrange(3)) {
+            binary msg = binary(strmul(sprintf("%d", i), 3 * 1024 * 1024));
+            wsc.send(msg);
+            auto echo = received.get(Timeout);
+            assertEq(msg.size(), echo.size(), sprintf("message %d: the echo arrives whole", i));
+            assertTrue(echo == msg, sprintf("message %d: the echo is the message", i));
+        }
+    }
+}

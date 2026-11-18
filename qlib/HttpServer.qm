@@ -243,6 +243,18 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the thread of a persistent HTTP/1.x connection (a handler that called
+      @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the handler pool for the
+      life of the connection, so it does not count against \c max_handler_threads and the other requests of the
+      server are still served however many persistent connections are open (issue #5758)
+    - every Server-Sent Events stream bounds the data held for its client (the \c sse_max_buffer_size listener
+      option, default 1 MiB): queueing an event never waits for a client that stops reading, on HTTP/1.x, HTTP/2 and
+      HTTP/3 alike, and a client whose data would exceed the bound is dropped, with a warning in the listener's log
+      and the end of its stream reported as for any other end (see @ref httpserverasyncio_sse_buffer)
+    - an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441, RFC 9220) that a handler answers with an ordinary
+      (non-streaming) 2xx response, such as a catch-all handler serving a page, is refused with @c 501 instead of
+      being sent as a response that promises a tunnel and ends the stream at once (issue #5667); see
+      @ref HttpServer::HttpServer::refuseNonTunnelExtendedConnectResponse() "refuseNonTunnelExtendedConnectResponse()"
     - added @ref HttpServer::HttpServer::addFastRoute() "fast routes": a path that is answered on the async I/O thread,
       without a hand-off to a worker thread and without calling a handler, for the requests that qualify
       (@ref HttpServer::HttpServer::addFastRoute(), @ref HttpServer::HttpServer::removeFastRoute(),
@@ -254,7 +266,10 @@ log("started listener on %s", lh.desc);
     - fixed @ref HttpServer::HttpServer::setListenerLogOptions() "setListenerLogOptions()": logging response bodies
       was set by @ref HttpServer::LLO_RECV_BODY "LLO_RECV_BODY" instead of @ref HttpServer::LLO_SEND_BODY "LLO_SEND_BODY"
     - request and response log messages are masked and formatted only if they will be logged; added
-      @ref HttpServer::HttpServer::isLogInfoEnabled() "HttpServer::isLogInfoEnabled()"
+      @ref HttpServer::HttpServer::isLogInfoEnabled() "HttpServer::isLogInfoEnabled()"; whether the request line,
+      the request body and the response of a request are logged at the \c INFO level is decided once when the request
+      starts (for each request of a persistent session too), so a change of the log level applies to them from the
+      next request
     - fixed the \c hdr option of @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" with values that all
       have the same type, such as a literal <tt>{"X-Instance": 1}</tt>: responses failed with status 500
       (\c RUNTIME-TYPE-ERROR); @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" also accepts extra
@@ -321,7 +336,8 @@ log("started listener on %s", lh.desc);
     - fixed sending two conflicting response header fields when a handler or the server configuration used a
       name in another case than the server, as with \c "content-type": the server added its own
       \c Content-Type, \c Date, \c Server, or \c Connection field, and a configured header was not replaced by
-      the handler's; header names are now matched case-insensitively (see
+      the handler's; header names are now matched case-insensitively, also for the configured headers that a
+      subclass sets or changes after the constructor, such as security headers like \c X-Frame-Options (see
       @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()")
     - a multipart request body is delivered to the handler as binary data, since the request charset describes
       neither the container nor the parts inside it, each of which carries its own encoding
@@ -332,6 +348,11 @@ log("started listener on %s", lh.desc);
       handler that never returns; the no-argument call is unchanged
     - new @ref HttpServer::HttpServer::getRunningListenerCount() "getRunningListenerCount()" method, so callers
       can report what is still in flight after a bounded wait times out
+    - @ref HttpServer::HttpServer::stop() "stop()" lets the requests in progress finish before it closes the
+      connections (HTTP/2 and HTTP/3 \c GOAWAY, HTTP/1.1 \c Connection: \c close), waiting at most the new
+      \c drain_timeout option (the \c quic_drain_timeout option is a deprecated alias);
+      @ref HttpServer::HttpServer::stopNoWait() "stopNoWait()" does the same in the background, and the new
+      @ref HttpServer::HttpServer::stopImmediate() "stopImmediate()" stops at once, as \c stop() did before
     - fixed keeping the connection open after the response to an HTTP/1.0 request without the \c keep-alive
       connection option, or to a request with the \c close option (RFC 9112 section 9.3): a handler can close a
       connection, but a handler response can no longer keep open a connection that the request requires to close
@@ -693,6 +714,11 @@ public hashdecl HttpServerOptionInfo {
     /** Controls the maximum number of concurrent threads that can be used for request processing.
         Set to 0 (default) for unlimited.
 
+        The thread of a persistent HTTP/1.x connection (a handler that called
+        @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the pool for the life
+        of the connection and does not count against this limit (only against the thread limit of a sandbox, see
+        @ref sandbox_resources), so persistent connections never take every thread of the pool.
+
         @since HttpServer 1.6
     */
     int max_handler_threads = 0;
@@ -786,18 +812,27 @@ public hashdecl HttpServerOptionInfo {
     */
     int alt_svc_max_age = 3600;
 
-    #! QUIC GOAWAY drain timeout — duration to wait for in-flight requests during graceful shutdown
-    /** Per RFC 9114 Section 5.2, the server sends a GOAWAY notice first, then waits
-        for in-flight requests to complete before sending the final GOAWAY.  This
-        timeout controls that waiting period.
+    #! The maximum time that @ref HttpServer::HttpServer::stop() "HttpServer::stop()" waits for the requests in progress to finish
+    /** When the server stops, it accepts no new connections and tells its clients that it is closing their
+        connections (HTTP/2 and HTTP/3: \c GOAWAY; HTTP/1.1: \c Connection: \c close), then waits at most this long
+        for the requests that it has accepted to be answered before it closes whatever is left (see
+        @ref HttpServer::HttpServer::stop() "HttpServer::stop()").
 
-        The default (5s) allows sufficient time for remote clients to receive the
-        GOAWAY notice and for in-flight requests to complete.  For localhost or
-        low-latency testing, a shorter value (e.g. 100ms) may be used.
+        The default is 5 seconds; zero or a negative value means that the server does not wait, as with
+        @ref HttpServer::HttpServer::stopImmediate() "HttpServer::stopImmediate()".
+
+        @since HttpServer 1.7
+    */
+    *timeout drain_timeout;
+
+    #! Deprecated: use \c drain_timeout instead
+    /** Used as the \c drain_timeout option when that option is not set.
+
+        @deprecated use \c drain_timeout, which applies to every HTTP version
 
         @since HttpServer 1.6
     */
-    timeout quic_drain_timeout = 5s;
+    *timeout quic_drain_timeout;
 
     #! The maximum time to wait for an HTTP/1.x client to close its side of the connection after the last response
     /** When the server closes an HTTP/1.x connection after a response, the client may still be sending data that
@@ -901,6 +936,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         const ReadTimeout = HttpServer::ReadTimeout;  # recvs timeout after 30 seconds
         #! default poll timeout in ms
         const PollTimeout = 250ms;
+
+        #! The default maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
+        /** @since HttpServer 1.7
+        */
+        const DefaultDrainTimeout = 5s;
 
         # logging options
         const LP_LOGPARAMS = HttpServer::LP_LOGPARAMS;
@@ -1047,6 +1087,12 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! True while stop() is in progress
         bool stopping = False;
 
+        #! Signaled with stop_m when a stop in progress has ended
+        Condition stop_cond();
+
+        #! The maximum time that stop() waits for the requests in progress (the \c drain_timeout option)
+        timeout drain_timeout = DefaultDrainTimeout;
+
         # permanent handlers; these handlers are never removed
         HttpHandlerList handlers();
 
@@ -1076,10 +1122,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         # other misc response headers
         hash<auto> hdr;
-
-        # the lower-case names of the configured response headers that are not managed by the server, each between
-        # newlines; see getMergedResponseHeaders()
-        list<string> hdr_merge_names();
 
         #! override message body encoding if none is received from the sender
         /** @note http://tools.ietf.org/html/rfc2616#section-3.7.1 states that it must be iso-8850-1
@@ -1159,6 +1201,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         *HttpServerAsyncIo::HttpAsyncTarget asyncTarget;
 
+        #! Keeps the Program of this server alive while a connection that its handler manages externally is open
+        /** See @ref Priv::ExternalConnectionKeeper (qore#5752)
+        */
+        Priv::ExternalConnectionKeeper external_connections();
+
         #! Cached HTTP date header value
         static string cached_date_header;
 
@@ -1187,6 +1234,16 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         const MaxCachedEncodingPreferences = 64;
         const MaxCachedEncodingHeaderLength = 256;
+    }
+
+    private:internal {
+        #! The information about the names of the fields of the configured response headers (\c hdr)
+        /** A subclass can change \c hdr after the constructor and while requests are served; each response reads
+            \c hdr and this once and compares the headers that this was made for with its own, so that the names are
+            examined again only when the headers change (see getConfiguredHeaderInfo()).  It is replaced as a whole,
+            so that the information read is that of the headers that it was made for
+        */
+        *hash<Priv::ConfiguredHeaderInfo> hdr_info;
     }
     #! @endcond
 
@@ -1332,8 +1389,10 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
     }
 
     #! calls stop() and destroys the object
+    /** If a stop is in progress (for example one started with stopNoWait()), waits for it to end first
+    */
     destructor() {
-        stop();
+        stopIntern(True, True);
     }
 
     #! Returns default response headers
@@ -1774,6 +1833,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         if (!opts.cert || !opts.key) {
             throw "HTTP3-ERROR", "QUIC requires SSL certificate and private key for TLS 1.3";
         }
+        checkSseMaxBufferSize(opts);
 
         # Create a UDP socket and bind it
         Socket udp_sock();
@@ -1821,6 +1881,7 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             "get_remote_certs": opts.get_remote_certs,
             "max_request_body_size": opts.max_request_body_size,
             "max_decoded_body_size": opts.max_decoded_body_size,
+            "sse_max_buffer_size": opts.sse_max_buffer_size,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -2027,31 +2088,32 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         return listeners.size();
     }
 
-    #! stops all listeners; does not wait for all connections on the listeners to close
+    #! Starts stopping the server in the background, as stop() does, and returns at once
+    /** The server stops accepting connections and drains the connections that it has, then closes whatever is
+        left, exactly as stop() does, in a thread of its own; use waitStop() to wait for the stop to end, with a
+        timeout to bound the wait.
+
+        @note before HttpServer 1.7, this method stopped the listeners without closing the connections that the server
+        had: they were served until the server was destroyed
+
+        @see
+        - stop()
+        - stopImmediate()
+        - waitStop()
+    */
     stopNoWait() {
-        # Wake dedicated persistent-handler threads (see HttpListener::handleQueuedPersistentConnection)
-        # so they return immediately instead of waiting up to their idle TTL in
-        # Queue::get().  Without this, HttpListener::stop()'s cThreads.wait()
-        # below blocks for the full TTL even though all I/O is already async.
-        # (The synchronous HttpServer::stop() path does this via asyncIo.stop();
-        # stopNoWait() users must get the same fast-exit behaviour.)
-        if (asyncIo) {
+        # the stop is claimed here, so that a stop() or the destructor called while it runs does not start another
+        if (beginStop(False)) {
             try {
-                asyncIo.signalPersistentQueuesToClose();
-            } catch () {
-                # asyncIo may already be stopped; safe to ignore
+                background runStop(True);
+            } catch (hash<ExceptionInfo> ex) {
+                # no thread could be started: the stop is not claimed any more
+                AutoLock al(stop_m);
+                stopping = False;
+                stop_cond.broadcast();
+                rethrow;
             }
         }
-
-        # stop all listeners
-        {
-            lm.enter();
-            on_exit lm.exit();
-
-            map $1.stopNoWait(), listeners.iterator();
-        }
-
-        threadPool.stop();
     }
 
     #! waits for all listeners to be stopped; call after calling HttpServer::stopNoWait()
@@ -2191,31 +2253,96 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         #printf("stopped %s c=%y\n", l.getAddress(), c.getCount());
     }
 
-    #! Stops the HTTP server and releases all resources
+    #! Stops the HTTP server and releases all resources, letting the requests in progress finish first
     /** Performs a synchronous, ordered shutdown:
+        -# Starts draining the connections: closes the listening sockets, and tells the clients that their connections
+           are closing: HTTP/2 and HTTP/3 connections are sent a \c GOAWAY frame with the last request that the server
+           processed, an idle HTTP/1.1 connection is closed, and a request in progress on an HTTP/1.1 connection is
+           answered with \c Connection: \c close; each connection is closed when it has answered its requests.  A
+           protocol upgrade or an event stream that a handler starts now is refused with a 503 response, and a
+           CONNECT tunnel is ended
         -# Closes the dedicated connections with their protocol's closing handshake, all at the same time: WebSocket
            connections are sent a close frame (code 1001, going away), and the server waits for the clients' close
            frames at most the close timeout of their handlers in total (see
            @ref WebSocketHandler::WebSocketHandler::setCloseTimeout() "WebSocketHandler::setCloseTimeout()")
         -# Signals streaming handlers (SSE, WebSocket) to stop
+        -# Waits for the drain to end, at most the \c drain_timeout option from the start of the stop (5 seconds by
+           default; see @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), woken by the last connection
+           that closes
         -# Stops the async I/O controller (cancels all accept, connection, and streaming
-           operations and waits for in-flight handler tasks to complete)
+           operations that are left and waits for in-flight handler tasks to complete)
         -# Cancels remaining ops by owner on the global async I/O controller
         -# Stops listeners and waits for all listener-stopped callbacks
         -# Flushes any remaining async callbacks and stops the internal thread pool
 
         This method blocks until all connections are closed and handler tasks complete.
 
-        @note HttpServer instances are not restartable after \c stop(). Create a new
-        HttpServer if a restart is needed.
+        @note
+        - HttpServer instances are not restartable after \c stop(). Create a new HttpServer if a restart is needed.
+        - if a stop is in progress (for example one started with stopNoWait()), this method returns at once; use
+          waitStop() to wait for it
+        - before HttpServer 1.7, this method did not wait for the requests in progress: it closed the connections at
+          once, as stopImmediate() does
+
+        @see
+        - stopImmediate()
+        - stopNoWait()
     */
     stop() {
-        {
-            AutoLock al(stop_m);
-            if (stopped || stopping) {
-                return;
+        stopIntern(True, False);
+    }
+
+    #! Stops the HTTP server and releases all resources without waiting for the requests in progress
+    /** Performs the same shutdown as stop() without draining the connections: HTTP/2 and HTTP/3 clients are sent a
+        \c GOAWAY frame, and all connections are closed at once.
+
+        This method blocks until all connections are closed and handler tasks complete.
+
+        @since HttpServer 1.7
+
+        @see
+        - stop()
+    */
+    stopImmediate() {
+        stopIntern(False, False);
+    }
+
+    #! Stops the server, draining the connections first if \a drain is @ref True
+    /** @param drain if @ref True, the connections are drained (see stop()) before the controller is stopped
+        @param wait_in_progress if @ref True and a stop is in progress, waits for it to end (used by the destructor,
+        which must not destroy the object under a stop that runs in another thread)
+    */
+    private stopIntern(bool drain, bool wait_in_progress) {
+        if (beginStop(wait_in_progress)) {
+            runStop(drain);
+        }
+    }
+
+    #! Claims the stop of the server; returns @ref True if the caller is to run it with runStop()
+    /** A stop that is in progress or done is not run again: the call returns @ref False at once, or, with
+        \a wait_in_progress, when the stop in progress has ended
+    */
+    private bool beginStop(bool wait_in_progress) {
+        AutoLock al(stop_m);
+        if (stopping && wait_in_progress) {
+            while (stopping) {
+                stop_cond.wait(stop_m);
             }
-            stopping = True;
+        }
+        if (stopped || stopping) {
+            return False;
+        }
+        stopping = True;
+        return True;
+    }
+
+    #! Runs a stop claimed with beginStop()
+    private runStop(bool drain) {
+        # the stop is ended (and waiting destructors woken) whatever happens below
+        on_exit {
+            AutoLock al(stop_m);
+            stopping = False;
+            stop_cond.broadcast();
         }
         # the global controller logs through this server's logger until the server has stopped
         on_exit restoreControllerLogger();
@@ -2226,10 +2353,32 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
             }
             callback_appender = NOTHING;
         }
+        # A drain starts first: the server accepts no new connection and takes no new long-lived stream, so that
+        # nothing new starts while the long-lived connections are closed below; a drain timeout of zero or less
+        # means no drain
+        bool do_drain = drain && asyncIo && drain_timeout > 0;
+        int drain_start_us = clock_get_monotonic_us();
+        if (do_drain) {
+            asyncIo.startDrain();
+        }
+
         # Close the dedicated connections (for example WebSocket connections) with their protocol's closing handshake
-        # first, while the I/O that the handshakes need still runs; all of them close at the same time, so this
+        # while the I/O that the handshakes need still runs; all of them close at the same time, so this
         # waits at most one handshake timeout in total
         closeDedicatedConnections();
+
+        # Wait for the requests in progress to be answered, at most what is left of the drain timeout; the other
+        # long-lived streams (SSE, persistent handler loops) are ended first, as they have no end that a drain could
+        # wait for
+        if (do_drain) {
+            signalStreamingHandlersToStop();
+            asyncIo.signalPersistentQueuesToClose();
+            int remaining_ms = drain_timeout - (clock_get_monotonic_us() - drain_start_us) / 1000;
+            if (remaining_ms <= 0 || !asyncIo.waitDrain(remaining_ms)) {
+                log("stop: the requests in progress did not finish in the drain timeout (%y); closing the connections "
+                    "that are left", drain_timeout);
+            }
+        }
 
         # Cancel operations owned by this server on the global controller FIRST
         # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
@@ -3323,6 +3472,20 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         }
     }
 
+    #! Takes the handler thread that runs the current request out of the async I/O handler pool
+    /** Called when an HTTP/1.x handler enters persistent mode, whose thread stays with the connection until
+        persistence ends: the thread then no longer counts against \c max_handler_threads, so the other requests of
+        the server are still served however many persistent connections are open (qore#5758).
+
+        @return @ref True if the thread was detached from the handler pool, @ref False if the server does not use
+        async I/O or the current thread is not a thread of its handler pool
+
+        @since HttpServer 1.7
+    */
+    bool detachHandlerThread() {
+        return asyncIo ? asyncIo.detachHandlerThread() : False;
+    }
+
     #! Closes an HTTP/1.x connection after its last response, which the current handler thread sent
     /** The connection is closed with a lingering close, so the client receives the response even if it is still
         sending data that the server did not read; see the \c lingering_close_timeout option in
@@ -3414,6 +3577,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     #! Common constructor code
     private init(hash<HttpServerOptionInfo> opts) {
+        drain_timeout = opts.drain_timeout ?? opts.quic_drain_timeout ?? DefaultDrainTimeout;
         # checked before anything is created
         compression_levels = checkCompressionLevels(opts.compression_levels ?? {});
         int idle_threads = opts.idle_threads;
@@ -3443,11 +3607,6 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         hdr = opts.hdr.val()
             ? http_canonicalize_reply_header_names(opts.hdr)
             : {"X-Powered-By": "Qore/" + Qore::VersionString};
-        {
-            # see getMergedResponseHeaders()
-            hash<string, bool> managed = map {$1.lwr(): True}, HttpServerManagedHeaderNames;
-            hdr_merge_names = map "\n" + $1.lwr() + "\n", keys hdr, !managed{$1.lwr()};
-        }
         protect_last_listener = opts.protect_last_listener ?? False;
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
         date effective_ttl = opts.ttl ? opts.ttl : HttpServer::DefaultTtl;
@@ -3468,7 +3627,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             "max_handler_threads": opts.max_handler_threads,
             "min_idle_handler_threads": opts.min_idle_handler_threads,
             "max_idle_handler_threads": opts.max_idle_handler_threads,
-            "quic_drain_timeout": opts.quic_drain_timeout,
+            "quic_drain_timeout": drain_timeout,
             "quic_headers_only": opts.quic_headers_only,
             "lingering_close_timeout": opts.lingering_close_timeout,
             "peer_hostname_lookup": opts.peer_hostname_lookup,
@@ -3585,7 +3744,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     /** @param listener_id the TCP listener ID (from cx."listener-id")
         @return the base response headers with Alt-Svc for this listener's QUIC counterpart
     */
-    private hash<auto> getResponseHeaders(int listener_id) {
+    private:internal hash<auto> getResponseHeaders(int listener_id) {
         # the headers are copied to an "auto!" local: the hdr option may be narrowed (e.g. hash<string, int> for
         # {"X-Instance": 1}), and every response adds string headers to them
         hash<auto!> rv = self.hdr;
@@ -3595,29 +3754,80 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         return rv;
     }
 
+    #! Returns @ref True if an HTTP/2 or HTTP/3 extended CONNECT that a handler answered with an ordinary 2xx response is refused
+    /** Any 2xx response to an extended CONNECT establishes a tunnel (RFC 8441 section 4, RFC 9220); a handler that
+        answers one with an ordinary (non-streaming) 2xx response, such as a catch-all handler that serves a page for
+        every path, cannot accept the protocol, so the server answers @c 501 instead of sending the response as it
+        is.  A subclass can override this method to send such responses unchanged, as a server without this check
+        did, for example to test how clients handle them; a production server should not override it, as clients
+        take such a response for an accepted tunnel.
+
+        @param cx the call context hash
+        @param hdr the request headers
+        @param rv the handler's response
+
+        @return @ref True (the default) to answer @c 501, @ref False to send the handler's response as it is
+
+        @since HttpServer 1.7
+    */
+    private bool refuseNonTunnelExtendedConnectResponse(hash<auto> cx, hash<auto> hdr, hash<auto> rv) {
+        return True;
+    }
+
     #! Returns the configured response headers of the listener merged with a handler's response headers
-    /** @param listener_id the listener ID
+    /** @param conf_hdr the configured response headers (\c hdr), read once for the response
+        @param info the information about the names of the fields of \a conf_hdr; see getConfiguredHeaderInfo()
+        @param listener_id the listener ID
         @param hdr the response headers of the handler; the names of the fields managed by the server must be
         canonical (see @ref HttpServer::http_canonicalize_reply_header_names())
 
         @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
     */
-    private hash<auto> getMergedResponseHeaders(int listener_id, *hash<auto> hdr) {
-        hash<auto> base = getResponseHeaders(listener_id);
+    private:internal hash<auto> getMergedResponseHeaders(hash<auto> conf_hdr, hash<Priv::ConfiguredHeaderInfo> info,
+            int listener_id, *hash<auto> hdr) {
+        # the headers of getResponseHeaders(), built here, as this is called for every response and a call of that
+        # method costs more than building them
+        hash<auto!> base = conf_hdr;
+        *string alt_svc = listener_alt_svc{listener_id};
+        if (alt_svc) {
+            base."Alt-Svc" = alt_svc;
+        }
         if (!hdr) {
             return base;
         }
-        # this is called for every response: the managed fields have canonical names in both hashes, so they are
-        # replaced by the plain hash addition, and only the other configured fields can be named in another case
-        if (hdr_merge_names) {
+        # this is called for every response: the plain hash addition gives the merged headers when the handler's
+        # headers have no field of the configured headers in any case; when they have one, the merge removes the
+        # configured field, so that the handler's field is sent in its own place, as any other field of the handler
+        if (info.merge_names || alt_svc) {
             string names = "\n" + (keys hdr).join("\n").lwr() + "\n";
-            foreach string name in (hdr_merge_names) {
+            if (alt_svc && names.find("\nalt-svc\n") >= 0) {
+                return mergeResponseHeaders(base, hdr);
+            }
+            foreach string name in (info.merge_names) {
                 if (names.find(name) >= 0) {
                     return mergeResponseHeaders(base, hdr);
                 }
             }
         }
         return base + hdr;
+    }
+
+    #! Returns the information about the names of the fields of the configured response headers given
+    /** Called by sendReply() when the configured headers (\c hdr) of a response are not equal to those that
+        \c hdr_info was made for (a subclass can change \c hdr after the constructor and while requests are served);
+        the information is kept in \c hdr_info for the next responses.  It depends only on the names of the fields,
+        which equal headers share, so a response uses it with its own configured headers, whose fields can be in
+        another order
+    */
+    private:internal hash<Priv::ConfiguredHeaderInfo> getConfiguredHeaderInfo(hash<auto> conf_hdr) {
+        hash<Priv::ConfiguredHeaderInfo> info = <Priv::ConfiguredHeaderInfo>{
+            "hdr": conf_hdr,
+            # the canonical names replace the others, so the keys differ unless they are all canonical
+            "canonical": http_canonicalize_reply_header_names(conf_hdr) == conf_hdr,
+            "merge_names": map "\n" + $1.lwr() + "\n", keys conf_hdr,
+        };
+        hdr_info = info;
+        return info;
     }
 
     #! Returns \a hdr merged into \a base; a field in \a hdr replaces the fields of \a base with the same name in any case
@@ -3693,6 +3903,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         if (!exists info.node && !exists info.service) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("missing both \"node\" and \"service\" from listener option hash: %y", info);
         }
+        checkSseMaxBufferSize(info);
 
         string sock = (exists info.service ? sprintf("%s:%s", info.node ?? "*", info.service) : info.node);
 
@@ -3804,6 +4015,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # the QUIC listener enforces the same body size limits as its TCP listener
                         "max_request_body_size": info.max_request_body_size,
                         "max_decoded_body_size": info.max_decoded_body_size,
+                        # and the same bound of the data held for the clients of SSE streams
+                        "sse_max_buffer_size": info.sse_max_buffer_size,
                     };
                     if (info.additional_info) {
                         quic_opts.additional_info = info.additional_info;
@@ -4145,6 +4358,288 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     }
 
     #! @cond nodoc
+    #! Reads the body of a request for handleRequest()
+    /** @return a hash with the body in its \c body key, or @ref nothing if the request has been answered (an error
+        response was sent or captured)
+    */
+    private *hash<auto> getRequestBody(HttpListener listener, Socket s, reference<hash<auto>> cx, hash<auto> hdr,
+            *HttpServer::AbstractHttpRequestHandler handler, int max_body, bool is_multiplexed, bool want_streaming,
+            hash<auto> info, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        *data body;
+        if (cx."header-info".body_streaming && !want_streaming) {
+            # Handler doesn't support streaming — buffer body on handler thread
+            # for backward compatibility (body was previously read by I/O thread)
+            #
+            # Resume the h2/h3 poll operation on the I/O thread when this block exits
+            # (normal flow, early return on error, or exception).  This ensures the
+            # connection stays alive (PING, SETTINGS, WINDOW_UPDATE) while the handler
+            # processes the request — critical for long-running handlers like bulk
+            # object creation.  The controller also has a safety-net resume after
+            # handler return to cover wantsBodyStreaming() handlers that skip this block.
+            on_exit {
+                if (cx."header-info".resume_body_streaming) {
+                    cx."header-info".resume_body_streaming();
+                }
+            }
+            int sid = cx."header-info".stream_id;
+            binary body_data = binary();
+            # set when the body read stops because the body exceeds the maximum size
+            bool hit_max_body = False;
+            if (cx."header-info".http3) {
+                # HTTP/3: use QUIC stream data methods (CV-based; I/O thread stays active)
+                int session_id = cx."header-info".session_id;
+                try {
+                    while (True) {
+                        *binary chunk = s.readQuicStreamDataBlock(session_id, sid, 30s);
+                        if (!chunk) {
+                            break;
+                        }
+                        body_data += chunk;
+                        # Incremental size check: reject early instead of buffering the full body
+                        if (max_body > 0 && body_data.size() > max_body) {
+                            break;
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "QUIC-STREAM-TIMEOUT") {
+                        listener.logError("HTTP/3 request body read timeout from %s",
+                            cx."peer-info".address_desc);
+                        cx.close = True;
+                        if (async_response_out) {
+                            async_response_out = buildAsyncErrorResponse(408,
+                                "Request Timeout", cx, listener, s, !is_multiplexed);
+                        } else {
+                            sendRequestError(listener, \cx, s, 408, "Request Timeout",
+                                NOTHING, NOTHING, cx."response-encoding",
+                                hdr.method == "HEAD");
+                        }
+                        return NOTHING;
+                    }
+                    if (ex.err != "HTTP-BODY-TOO-LARGE") {
+                        rethrow;
+                    }
+                    # the I/O layer stopped reading a body that exceeds the limit; the bytes it buffered
+                    # until then were delivered first
+                    hit_max_body = True;
+                }
+                # trailers sent after the body
+                if (*hash<auto> trailers = s.getQuicStreamTrailers(session_id, sid)) {
+                    cx.trailers = trailers;
+                }
+                # NOTE: cleanupQuicStream is called by the controller's on_exit handler
+            } else {
+                # HTTP/2: drive inbound DATA frames through register_body_queue.
+                # The I/O thread drains frames into the Queue (NOTHING sentinel
+                # = END_STREAM) so the handler thread never touches the H2
+                # session lock.
+                *code<nothing(Queue)> register_body_queue
+                    = cx."header-info".register_body_queue;
+                if (!register_body_queue) {
+                    throw "HTTP2-BODY-STREAMING-ERROR",
+                        sprintf("body_streaming dispatch missing register_body_queue "
+                            "closure for stream %d", sid);
+                }
+                Queue body_queue(-1);
+                register_body_queue(body_queue);
+
+                bool h2_complete = False;
+                while (True) {
+                    auto chunk;
+                    try {
+                        chunk = body_queue.get(30s);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "QUEUE-TIMEOUT") {
+                            break;
+                        }
+                        rethrow;
+                    }
+                    if (chunk.typeCode() == NT_HASH) {
+                        if (chunk.err != "HTTP-BODY-TOO-LARGE") {
+                            # the body ended before END_STREAM (HTTP-BODY-INCOMPLETE): the handler must not
+                            # get the part received for the complete body
+                            throw chunk.err, chunk.desc;
+                        }
+                        # the I/O layer stopped buffering a body that exceeds the limit; the bytes it
+                        # buffered until then were delivered first, and the rest of the body is discarded
+                        hit_max_body = True;
+                        break;
+                    }
+                    if (!(chunk instanceof binary)) {
+                        # NOTHING sentinel → END_STREAM observed by I/O thread
+                        h2_complete = True;
+                        break;
+                    }
+                    body_data += chunk;
+                    # Incremental size check: reject early instead of buffering the full body
+                    if (max_body > 0 && body_data.size() > max_body) {
+                        hit_max_body = True;
+                        break;
+                    }
+                }
+                # trailers sent after the body
+                if (h2_complete) {
+                    if (*hash<auto> trailers = s.getHttp2StreamTrailers(sid)) {
+                        cx.trailers = trailers;
+                    }
+                }
+                if (!h2_complete && !hit_max_body) {
+                    listener.logError("HTTP/2 request body read timeout from %s",
+                        cx."peer-info".address_desc);
+                    cx.close = True;
+                    if (async_response_out) {
+                        async_response_out = buildAsyncErrorResponse(408,
+                            "Request Timeout", cx, listener, s, !is_multiplexed);
+                    } else {
+                        sendRequestError(listener, \cx, s, 408, "Request Timeout",
+                            NOTHING, NOTHING, cx."response-encoding",
+                            hdr.method == "HEAD");
+                    }
+                    return NOTHING;
+                }
+                # Defensive consistency check: if Content-Length advertised a
+                # non-zero body but END_STREAM arrived with no DATA chunks
+                # delivered, the request body was lost in transit
+                # (intermittent multiplexed-dispatch race observed on Alpine
+                # ARM64 CI).  Fail the request explicitly with 502 instead
+                # of silently dispatching the handler with an empty body —
+                # which would otherwise be auto-converted to 204 No Content
+                # and corrupt application semantics for echo/upload paths.
+                if (h2_complete && !body_data.size() && hdr."content-length"
+                        && int(hdr."content-length") > 0) {
+                    string etxt = sprintf(
+                        "HTTP/2 request body delivery race: Content-Length "
+                        "%y advertised but no DATA chunks received before "
+                        "END_STREAM (stream=%d)",
+                        hdr."content-length", sid);
+                    listener.logError("%s: from %s", etxt,
+                        cx."peer-info".address_desc);
+                    cx.close = True;
+                    if (async_response_out) {
+                        async_response_out = buildAsyncErrorResponse(502, etxt,
+                            cx, listener, s, !is_multiplexed);
+                    } else {
+                        sendRequestError(listener, \cx, s, 502, etxt, NOTHING,
+                            NOTHING, cx."response-encoding",
+                            hdr.method == "HEAD");
+                    }
+                    return NOTHING;
+                }
+            }
+            # Apply max body size check
+            if (hit_max_body || (max_body > 0 && body_data.size() > max_body)) {
+                string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
+                    cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
+                    body_data.size(), max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                if (async_response_out) {
+                    async_response_out = buildAsyncErrorResponse(413, etxt, cx,
+                        listener, s, !is_multiplexed);
+                } else {
+                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                        cx."response-encoding", hdr.method == "HEAD");
+                }
+                return NOTHING;
+            }
+            if (body_data.size()) {
+                # a multipart container's octets are not text in the request charset: each part
+                # carries its own encoding, so the container is handed over as bytes
+                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                        || hdr."content-type" =~ /^application\/connect\+/
+                        || hdr."content-type" =~ /^multipart\//i) {
+                    body = body_data;
+                } else {
+                    body = decodeRequestText(hdr, body_data);
+                }
+            }
+        } else if (cx."header-info".body) {
+            # Body pre-read by I/O controller (H1 async, H2, or H3)
+            # Check body size against limit (body was already read by the
+            # async I/O layer; this is a secondary check)
+            if (max_body > 0 && cx."header-info".body.size() > max_body) {
+                string proto = cx."header-info".http3 ? "HTTP/3"
+                    : (cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x");
+                string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
+                    proto, cx."header-info".body.size(), max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # Body is always binary from the I/O layer — convert to string if text content type;
+            # a multipart container stays binary, as its parts carry their own encodings
+            if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                    || hdr."content-type" =~ /^application\/connect\+/
+                    || hdr."content-type" =~ /^multipart\//i) {
+                body = cx."header-info".body;
+            } else {
+                # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
+                body = decodeRequestText(hdr, cx."header-info".body);
+            }
+        } else if (exists hdr."content-length" && !is_multiplexed) {
+            # HTTP/1.x only: the request body is read from the raw socket here.
+            #
+            # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
+            # delivered as DATA frames by the multiplexed session and surface either
+            # in cx."header-info".body (pre-read by the I/O controller) or through
+            # the body_streaming branch above, where the handler reads the stream
+            # itself.  Reaching a synchronous socket read on a multiplexed connection
+            # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
+            # that still owns the socket, turning a valid request into a 400.
+            # the length is the digits of the header and nothing else: a value that another parser would read
+            # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
+            # conversion would make a length of 0 or less, for which the read below would wait for the connection
+            # to close (RFC 9110 section 8.6)
+            *int content_length = http_parse_content_length(hdr."content-length");
+            if (!exists content_length) {
+                string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # Pre-read Content-Length check against max body size limit
+            if (max_body > 0 && content_length > max_body) {
+                string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
+                    content_length, max_body);
+                listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
+                    cx."response-encoding", hdr.method == "HEAD");
+                return NOTHING;
+            }
+            # HTTP/1.x: read body from socket; a length of 0 is no body
+            try {
+                if (!content_length) {
+                    # nothing to read
+                # a multipart container stays binary here too, so that a direct read and a
+                # buffered one hand the handler the same bytes
+                } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                        || hdr."content-type" =~ /^multipart\//i) {
+                    body = s.recvBinary(content_length, HttpServer::ReadTimeout);
+                } else {
+                    # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
+                    # body was buffered
+                    body = decodeRequestText(hdr, s.recvBinary(content_length, HttpServer::ReadTimeout));
+                }
+                #printf("HTTP DEBUG: %s\n", body);
+            } catch (hash<ExceptionInfo> ex) {
+                string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
+                    content_length, ex.err, ex.desc);
+                string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
+                    cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
+                listener.logError("%s", str);
+                cx.close = True;
+                sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
+                    hdr.method == "HEAD");
+                return NOTHING;
+            }
+        }
+        return {"body": body};
+    }
+
     #! Handles incoming requests
     /** This method is called by listeners when a request is received.
 
@@ -4356,280 +4851,18 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 && handler
                 && handler.wantsBodyStreaming(cx, hdr);
 
-            *data body;
-            if (cx."header-info".body_streaming && !want_streaming) {
-                # Handler doesn't support streaming — buffer body on handler thread
-                # for backward compatibility (body was previously read by I/O thread)
-                #
-                # Resume the h2/h3 poll operation on the I/O thread when this block exits
-                # (normal flow, early return on error, or exception).  This ensures the
-                # connection stays alive (PING, SETTINGS, WINDOW_UPDATE) while the handler
-                # processes the request — critical for long-running handlers like bulk
-                # object creation.  The controller also has a safety-net resume after
-                # handler return to cover wantsBodyStreaming() handlers that skip this block.
-                on_exit {
-                    if (cx."header-info".resume_body_streaming) {
-                        cx."header-info".resume_body_streaming();
-                    }
-                }
-                int sid = cx."header-info".stream_id;
-                binary body_data = binary();
-                # set when the body read stops because the body exceeds the maximum size
-                bool hit_max_body = False;
-                if (cx."header-info".http3) {
-                    # HTTP/3: use QUIC stream data methods (CV-based; I/O thread stays active)
-                    int session_id = cx."header-info".session_id;
-                    try {
-                        while (True) {
-                            *binary chunk = s.readQuicStreamDataBlock(session_id, sid, 30s);
-                            if (!chunk) {
-                                break;
-                            }
-                            body_data += chunk;
-                            # Incremental size check: reject early instead of buffering the full body
-                            if (max_body > 0 && body_data.size() > max_body) {
-                                break;
-                            }
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err == "QUIC-STREAM-TIMEOUT") {
-                            listener.logError("HTTP/3 request body read timeout from %s",
-                                cx."peer-info".address_desc);
-                            cx.close = True;
-                            if (async_response_out) {
-                                async_response_out = buildAsyncErrorResponse(408,
-                                    "Request Timeout", cx, listener, s, !is_multiplexed);
-                            } else {
-                                sendRequestError(listener, \cx, s, 408, "Request Timeout",
-                                    NOTHING, NOTHING, cx."response-encoding",
-                                    hdr.method == "HEAD");
-                            }
-                            return;
-                        }
-                        if (ex.err != "HTTP-BODY-TOO-LARGE") {
-                            rethrow;
-                        }
-                        # the I/O layer stopped reading a body that exceeds the limit; the bytes it buffered
-                        # until then were delivered first
-                        hit_max_body = True;
-                    }
-                    # trailers sent after the body
-                    if (*hash<auto> trailers = s.getQuicStreamTrailers(session_id, sid)) {
-                        cx.trailers = trailers;
-                    }
-                    # NOTE: cleanupQuicStream is called by the controller's on_exit handler
-                } else {
-                    # HTTP/2: drive inbound DATA frames through register_body_queue.
-                    # The I/O thread drains frames into the Queue (NOTHING sentinel
-                    # = END_STREAM) so the handler thread never touches the H2
-                    # session lock.
-                    *code<nothing(Queue)> register_body_queue
-                        = cx."header-info".register_body_queue;
-                    if (!register_body_queue) {
-                        throw "HTTP2-BODY-STREAMING-ERROR",
-                            sprintf("body_streaming dispatch missing register_body_queue "
-                                "closure for stream %d", sid);
-                    }
-                    Queue body_queue(-1);
-                    register_body_queue(body_queue);
-
-                    bool h2_complete = False;
-                    while (True) {
-                        auto chunk;
-                        try {
-                            chunk = body_queue.get(30s);
-                        } catch (hash<ExceptionInfo> ex) {
-                            if (ex.err == "QUEUE-TIMEOUT") {
-                                break;
-                            }
-                            rethrow;
-                        }
-                        if (chunk.typeCode() == NT_HASH) {
-                            if (chunk.err != "HTTP-BODY-TOO-LARGE") {
-                                # the body ended before END_STREAM (HTTP-BODY-INCOMPLETE): the handler must not
-                                # get the part received for the complete body
-                                throw chunk.err, chunk.desc;
-                            }
-                            # the I/O layer stopped buffering a body that exceeds the limit; the bytes it
-                            # buffered until then were delivered first, and the rest of the body is discarded
-                            hit_max_body = True;
-                            break;
-                        }
-                        if (!(chunk instanceof binary)) {
-                            # NOTHING sentinel → END_STREAM observed by I/O thread
-                            h2_complete = True;
-                            break;
-                        }
-                        body_data += chunk;
-                        # Incremental size check: reject early instead of buffering the full body
-                        if (max_body > 0 && body_data.size() > max_body) {
-                            hit_max_body = True;
-                            break;
-                        }
-                    }
-                    # trailers sent after the body
-                    if (h2_complete) {
-                        if (*hash<auto> trailers = s.getHttp2StreamTrailers(sid)) {
-                            cx.trailers = trailers;
-                        }
-                    }
-                    if (!h2_complete && !hit_max_body) {
-                        listener.logError("HTTP/2 request body read timeout from %s",
-                            cx."peer-info".address_desc);
-                        cx.close = True;
-                        if (async_response_out) {
-                            async_response_out = buildAsyncErrorResponse(408,
-                                "Request Timeout", cx, listener, s, !is_multiplexed);
-                        } else {
-                            sendRequestError(listener, \cx, s, 408, "Request Timeout",
-                                NOTHING, NOTHING, cx."response-encoding",
-                                hdr.method == "HEAD");
-                        }
-                        return;
-                    }
-                    # Defensive consistency check: if Content-Length advertised a
-                    # non-zero body but END_STREAM arrived with no DATA chunks
-                    # delivered, the request body was lost in transit
-                    # (intermittent multiplexed-dispatch race observed on Alpine
-                    # ARM64 CI).  Fail the request explicitly with 502 instead
-                    # of silently dispatching the handler with an empty body —
-                    # which would otherwise be auto-converted to 204 No Content
-                    # and corrupt application semantics for echo/upload paths.
-                    if (h2_complete && !body_data.size() && hdr."content-length"
-                            && int(hdr."content-length") > 0) {
-                        string etxt = sprintf(
-                            "HTTP/2 request body delivery race: Content-Length "
-                            "%y advertised but no DATA chunks received before "
-                            "END_STREAM (stream=%d)",
-                            hdr."content-length", sid);
-                        listener.logError("%s: from %s", etxt,
-                            cx."peer-info".address_desc);
-                        cx.close = True;
-                        if (async_response_out) {
-                            async_response_out = buildAsyncErrorResponse(502, etxt,
-                                cx, listener, s, !is_multiplexed);
-                        } else {
-                            sendRequestError(listener, \cx, s, 502, etxt, NOTHING,
-                                NOTHING, cx."response-encoding",
-                                hdr.method == "HEAD");
-                        }
-                        return;
-                    }
-                }
-                # Apply max body size check
-                if (hit_max_body || (max_body > 0 && body_data.size() > max_body)) {
-                    string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
-                        cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
-                        body_data.size(), max_body);
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    if (async_response_out) {
-                        async_response_out = buildAsyncErrorResponse(413, etxt, cx,
-                            listener, s, !is_multiplexed);
-                    } else {
-                        sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
-                            cx."response-encoding", hdr.method == "HEAD");
-                    }
-                    return;
-                }
-                if (body_data.size()) {
-                    # a multipart container's octets are not text in the request charset: each part
-                    # carries its own encoding, so the container is handed over as bytes
-                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                            || hdr."content-type" =~ /^application\/connect\+/
-                            || hdr."content-type" =~ /^multipart\//i) {
-                        body = body_data;
-                    } else {
-                        body = decodeRequestText(hdr, body_data);
-                    }
-                }
-            } else if (cx."header-info".body) {
-                # Body pre-read by I/O controller (H1 async, H2, or H3)
-                # Check body size against limit (body was already read by the
-                # async I/O layer; this is a secondary check)
-                if (max_body > 0 && cx."header-info".body.size() > max_body) {
-                    string proto = cx."header-info".http3 ? "HTTP/3"
-                        : (cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x");
-                    string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
-                        proto, cx."header-info".body.size(), max_body);
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
-                        cx."response-encoding", hdr.method == "HEAD");
-                    return;
-                }
-                # Body is always binary from the I/O layer — convert to string if text content type;
-                # a multipart container stays binary, as its parts carry their own encodings
-                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                        || hdr."content-type" =~ /^application\/connect\+/
-                        || hdr."content-type" =~ /^multipart\//i) {
-                    body = cx."header-info".body;
-                } else {
-                    # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
-                    body = decodeRequestText(hdr, cx."header-info".body);
-                }
-            } else if (exists hdr."content-length" && !is_multiplexed) {
-                # HTTP/1.x only: the request body is read from the raw socket here.
-                #
-                # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
-                # delivered as DATA frames by the multiplexed session and surface either
-                # in cx."header-info".body (pre-read by the I/O controller) or through
-                # the body_streaming branch above, where the handler reads the stream
-                # itself.  Reaching a synchronous socket read on a multiplexed connection
-                # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
-                # that still owns the socket, turning a valid request into a 400.
-                # the length is the digits of the header and nothing else: a value that another parser would read
-                # differently (a sign, hexadecimal, an exponent, a list) is refused, as is one that a general
-                # conversion would make a length of 0 or less, for which the read below would wait for the connection
-                # to close (RFC 9110 section 8.6)
-                *int content_length = http_parse_content_length(hdr."content-length");
-                if (!exists content_length) {
-                    string etxt = sprintf("invalid Content-Length %y", hdr."content-length");
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
-                        hdr.method == "HEAD");
-                    return;
-                }
-                # Pre-read Content-Length check against max body size limit
-                if (max_body > 0 && content_length > max_body) {
-                    string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
-                        content_length, max_body);
-                    listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 413, etxt, NOTHING, NOTHING,
-                        cx."response-encoding", hdr.method == "HEAD");
-                    return;
-                }
-                # HTTP/1.x: read body from socket; a length of 0 is no body
-                try {
-                    if (!content_length) {
-                        # nothing to read
-                    # a multipart container stays binary here too, so that a direct read and a
-                    # buffered one hand the handler the same bytes
-                    } else if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                            || hdr."content-type" =~ /^multipart\//i) {
-                        body = s.recvBinary(content_length, HttpServer::ReadTimeout);
-                    } else {
-                        # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
-                        # body was buffered
-                        body = decodeRequestText(hdr, s.recvBinary(content_length, HttpServer::ReadTimeout));
-                    }
-                    #printf("HTTP DEBUG: %s\n", body);
-                } catch (hash<ExceptionInfo> ex) {
-                    string etxt = sprintf("error reading body in %s (Content-Length: %d): %s: %s", hdr.method,
-                        content_length, ex.err, ex.desc);
-                    string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
-                        cx."peer-info".address_desc, cx."socket-info".address_desc, hdr);
-                    listener.logError("%s", str);
-                    cx.close = True;
-                    sendRequestError(listener, \cx, s, 400, etxt, NOTHING, NOTHING, cx."response-encoding",
-                        hdr.method == "HEAD");
-                    return;
-                }
+            # the request body, read in a method of its own so that its locals and early returns are not part of the
+            # frame of this method, which every request runs (qore#5759); NOTHING if the request was answered there
+            *hash<auto> body_info = getRequestBody(listener, s, \cx, hdr, handler, max_body, is_multiplexed,
+                want_streaming, info, \async_response_out);
+            if (!body_info) {
+                return;
             }
+            *data body = body_info.body;
 
-            listener.doLogRecvBody(body, cx, hdr, info);
+            if (request_helper.log_info) {
+                listener.doLogRecvBody(body, cx, hdr, info);
+            }
 
             hash<HttpResponseInfo> rv;
 
@@ -4908,8 +5141,25 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
     private sendReply(RequestHelper request_helper, HttpListener listener, Socket s,
             *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, reference<hash> cx, hash<auto> hdr,
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
-        listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
-            rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
+        # a stopping server takes no new long-lived connection, which would hold its drain until the drain timeout:
+        # a protocol upgrade (HTTP/1.1 101, or an HTTP/2 or HTTP/3 extended CONNECT), a CONNECT tunnel or an event
+        # stream is refused (qore#5899)
+        if (stopping && (rv."code" == 101 || hdr.method == "CONNECT"
+                || (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse))) {
+            listener.log("cid %d: refusing %s from handler %y: the server is stopping", cx.id,
+                (rv."code" == 101 || hdr.method == "CONNECT") ? "a protocol upgrade or tunnel" : "an event stream",
+                cx.handler_name);
+            cx.close = True;
+            rv = <HttpResponseInfo>{
+                "code": 503,
+                "body": "the server is stopping",
+                "hdr": {"Content-Type": "text/plain", "Connection": "close"},
+            };
+        }
+        if (request_helper.log_info) {
+            listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
+                rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
+        }
         # a handler can close a connection, but it cannot keep open one that the request requires to close: an
         # HTTP/1.0 request without the keep-alive option, or any request with the close option (RFC 9112 section
         # 9.3); every hash<HttpResponseInfo> has a "close" key, so a False value is not a request to keep it open
@@ -4938,6 +5188,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             string str = sprintf("%s handler returned an invalid response rv: %y", cx.handler_name, rv);
             cx.close = True;
             remove cx.persistent;
+            # an event source of the response is not used; it releases what it registered
+            if (rv.sse_source instanceof HttpServerAsyncIo::AbstractSseEventSource) {
+                try {
+                    rv.sse_source.stop();
+                } catch (hash<ExceptionInfo> ex) {
+                    listener.logError("cid %d: the unused SSE event source of handler %y could not be stopped: %s",
+                        cx.id, cx.handler_name, get_exception_string(ex));
+                }
+            }
 
             if (async_response_out) {
                 # the async I/O controller sends the error response; sending it here as well sent a second error
@@ -4964,8 +5223,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         # MUST NOT include a message-body. All other responses do include a
         # message-body, although it MAY be of zero length.
 
+        # the configured headers of this response, read once, as a subclass can change them while requests are served,
+        # and the information about their names, made again only when they change
+        hash<auto> conf_hdr = self.hdr;
+        *hash<Priv::ConfiguredHeaderInfo> hdr_info = self.hdr_info;
+        if (!hdr_info || hdr_info.hdr !== conf_hdr) {
+            hdr_info = getConfiguredHeaderInfo(conf_hdr);
+        }
         # the names of the fields managed by the server are canonical from here on
-        rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
+        rv.hdr = getMergedResponseHeaders(conf_hdr, hdr_info, cx."listener-id",
+            http_canonicalize_reply_header_names(rv.hdr));
 
         # a response to a HEAD request has the headers of the GET response (RFC 9110 section 9.3.2)
         if (head && rv."code" >= 200 && rv."code" != 204 && rv."code" != 304) {
@@ -4988,12 +5255,26 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         bool is_sse = False;
         if (rv.hdr."Content-Type") {
             string ct = rv.hdr."Content-Type".lwr();
+            # the exact media type check is made only for a value that can be an event stream, as this runs for every
+            # response
             if (ct.startsWith(MimeTypeSse)) {
-                is_sse = True;
+                is_sse = isEventStreamMediaType(ct);
             }
         }
 
         bool is_h1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
+
+        # the source of an event stream that pushes its events to a stream sent by the async I/O controller, so that no
+        # thread waits for them (qore#5758): it is replaced by its run (see takeSseSource()); no local variable is
+        # added to this method, which every response runs
+        if (rv.sse_source) {
+            rv.sse_source = takeSseSource(rv, listener, cx, is_sse && !head && rv."code" >= 200 && rv."code" < 300
+                && (!is_h1 || exists async_response_out));
+            if (rv.sse_source.isUsed()) {
+                remove rv.send_callback;
+            }
+        }
+
         # a response to an HTTP/1.0 request must not have Transfer-Encoding (RFC 9112 section 6.1); a message body of
         # unknown length is delimited by closing the connection instead (RFC 9112 section 6.3)
         bool chunked_allowed = !is_h1 || HttpServer::requestAllowsChunked(hdr);
@@ -5037,14 +5318,46 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
         rv.hdr.Date = getDateHeader();
 
-        HttpServer::http_set_reply_headers(s, cx, \rv);
+        # the names of the fields managed by the server are canonical since getMergedResponseHeaders() above if they
+        # are canonical in the configured headers, as the handler's headers were made canonical and the server sets
+        # only canonical names after that; whether they are canonical in the configured headers merged above is known
+        # from getConfiguredHeaderInfo(), which costs less than finding the names of the merged headers canonical again
+        HttpServer::http_set_reply_headers(s, cx, \rv, NOTHING, hdr_info.canonical);
 
         # Detect HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
         bool ext_connect = is_extended_connect(cx, hdr);
 
+        # any 2xx response to an extended CONNECT establishes the tunnel (RFC 8441 section 4, RFC 9220): a handler
+        # that is not a socket handler and answers with an ordinary (non-streaming) 2xx response, such as a catch-all
+        # handler that serves a page for every path, cannot accept the protocol; sent as it is, the response would
+        # promise a tunnel and end the stream at once (issue #5667).  The request is refused instead, so that a
+        # client in automatic HTTP-version mode can fall back to an HTTP/1.1 Upgrade and one that requested HTTP/2 or
+        # HTTP/3 gets a clear error
+        if (ext_connect && !rv.streaming && rv."code" >= 200 && rv."code" < 300
+                && refuseNonTunnelExtendedConnectResponse(cx, hdr, rv)) {
+            string proto_label = (cx."header-info".http3 ?? False) ? "HTTP/3" : "HTTP/2";
+            listener.logError("cid %d: %s extended CONNECT (protocol %y) answered by handler %y with a %d response "
+                "that does not establish a tunnel; refusing the request", cx.id, proto_label, hdr.":protocol",
+                cx.handler_name, rv."code");
+            # the refusal replaces the handler's response and is sent as an error response below, which also works
+            # with the asynchronous I/O controller (HTTP/2 multiplexing, HTTP/3)
+            rv."code" = 501;
+            rv.body = sprintf("the resource does not support the requested protocol (%s extended CONNECT)",
+                proto_label);
+            remove rv.chunked_body;
+            remove rv.send_callback;
+            # the headers of the handler's response describe the representation that is not sent (ETag,
+            # Content-Range, Set-Cookie, ...): the refusal has only the listener's headers and the standard ones
+            # (RFC 9110 sections 8.8 and 14.4)
+            rv.hdr = getMergedResponseHeaders(conf_hdr, hdr_info, cx."listener-id", NOTHING)
+                + {"Date": getDateHeader()};
+            HttpServer::http_set_reply_headers(s, cx, \rv);
+        }
+
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
-            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                request_helper.log_info);
         } else if (rv."code" >= 400) {
             # a send_callback provides the message body
             if (!head && !rv.body && !rv.hasKeyValue("chunked_body") && !rv.send_callback) {
@@ -5063,7 +5376,8 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         rv.hdr."Content-Type" = default_content_type;
                     }
                 }
-                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                    request_helper.log_info);
             } else {
                 sendHttpError(listener, cx, s, rv."code", rv.body,
                     rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
@@ -5079,9 +5393,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
             # the Content-Type of a body without one depends on the data, which compression below turns into
-            # binary data
-            *string default_content_type = getDefaultContentType(rv, cx."response-encoding"
-                ?? s.getEncoding().lwr());
+            # binary data; compression does not set a Content-Type, so it is determined only for a response without one
+            *string default_content_type = rv.hdr."Content-Type"
+                ? NOTHING
+                : getDefaultContentType(rv, cx."response-encoding" ?? s.getEncoding().lwr());
 
             # compress body if eligible for compression; skip InputStream bodies (streaming),
             # send_callback responses, and handlers that manage their own content encoding
@@ -5121,13 +5436,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             # For HTTP/2 and HTTP/3 extended CONNECT streaming, don't send response here -
             # it's handled in the dedicated socket section
             if (!rv.streaming || !ext_connect) {
-                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out,
+                    request_helper.log_info);
             }
         }
 
         # a response that does not end the exchange (a Server-Sent Events stream, a protocol upgrade, or an extended
         # CONNECT response) is never completely sent
-        if (after_send && ((rv.streaming && ext_connect) || rv.hdr."Content-Type" == MimeTypeSse
+        if (after_send && ((rv.streaming && ext_connect) || (rv.sse_source && rv.sse_source.isUsed())
+                || rv.hdr."Content-Type" == MimeTypeSse
                 || rv."code" == 101)) {
             if (async_response_out) {
                 remove async_response_out.after_send;
@@ -5166,6 +5483,12 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 AbstractHttpSocketHandlerInterface sockhandler
                     = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
                 if (listener.registerDedicatedSocket(request_helper, sock_id, sockhandler)) {
+                    # holds the request helper for the server's end of a stream whose handler takes it over
+                    # (WebSocketHandler), which then runs ws_end when the stream ends: no thread of the handler pool
+                    # waits for the stream (qore#5752)
+                    Priv::DedicatedConnectionHolder holder(request_helper, external_connections);
+                    # reports the end of the stream to the request's async target if the handler takes it over
+                    HttpServerAsyncIo::HttpPersistentRequestEnd pend();
                     try {
                         int stream_id = cx."header-info".stream_id;
                         hash<auto> resp_hdr = rv.hdr ?? {};
@@ -5192,6 +5515,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
 
                         hash<auto> sock_cx = cx + {"listener": listener, "id": sock_id};
+                        sock_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, NOTHING, sock_id,
+                            cx.handler_name, pend);
+                        sock_cx."header-info".ws_accept_end = sub () { holder.accept(); };
+                        sock_cx."header-info".ws_submit = getHandlerPoolSubmitter();
                         if (sockhandler.start(listener.getID(), sock_cx, hdr, s)) {
                             request_helper.setDedicatedExternal();
                         }
@@ -5206,6 +5533,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                             listener.logError("cid %d: error in %s extended CONNECT handler %y: %s",
                                 cx.id, proto_label, cx.handler_name, desc);
                         }
+                    }
+                    # a handler that did not take over the end of the stream does not need the holder: the request
+                    # helper then counts the stream until this request ends, as before
+                    if (!request_helper.isDedicatedExternal() || !holder.isAccepted()) {
+                        holder.release();
+                    } else {
+                        # the stream stays open after the request returns
+                        request_helper.persistent_end = pend;
                     }
                     if (request_helper.isDedicatedExternal()) {
                         listener.log("cid %d: %s extended CONNECT handler %y managed externally",
@@ -5222,144 +5557,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             }
             return;
         }
-        if (rv.hdr."Content-Type" == MimeTypeSse) {
-            # SSE response — set up async SSE connection via the I/O controller.
-            # The write path depends on the HTTP version:
-            # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
-            #   controller's Sse state to drain via chunked encoding
-            # - HTTP/2: Http2SseStream pushes DATA frames directly via
-            #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
-            #   (driven by h2op on the I/O thread) flushes them to the socket
-            # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
-            #   submitQuicStreamData()
-            bool sse_is_http2 = cx."header-info".http2 ?? False;
-            bool sse_is_http3 = cx."header-info".http3 ?? False;
-            # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
-            # by the connection close anyway
-            if (handler_close) {
-                string err = sprintf("SSE response (Content-Type: %s) returned from handler %y with "
-                    "connection close flag set — SSE requires a persistent connection",
-                    MimeTypeSse, cx.handler_name);
-                listener.logError("cid %d: %s", cx.id, err);
-                logViaHandlerIfPossible(handler, cx.id, err);
-                throw "SSE-HANDLER-ERROR", err;
-            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
-                string err = sprintf("SSE response (Content-Type: %s) returned from handler %y, but the "
-                    "handler does not inherit AbstractHttpSocketHandlerInterface (class: %y) — SSE "
-                    "requires a handler that implements setupAsyncSseConnection{,Http2,Http3}()",
-                    MimeTypeSse, cx.handler_name, handler.className());
-                listener.logError("cid %d: %s", cx.id, err);
-                logViaHandlerIfPossible(handler, cx.id, err);
-                throw "SSE-HANDLER-ERROR", err;
-            } else if (sse_is_http2 || sse_is_http3) {
-                # HTTP/2 / HTTP/3 SSE: multiplexed streams — submit response
-                # headers directly on the stream and hand the stream to a
-                # protocol-specific SSE writer.  The handler now owns this
-                # stream lifecycle, so mark request_helper as dedicated; the
-                # async I/O controller's multiplexed-result dispatcher will
-                # leave the stream alone.
-                try {
-                    int stream_id = cx."header-info".stream_id;
-                    hash<auto> resp_hdr = rv.hdr ?? {};
-                    # HTTP/2 and HTTP/3 do not use chunked Transfer-Encoding
-                    remove resp_hdr."Transfer-Encoding";
-                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
-                    Socket sse_sock = s;
-                    *code<nothing()> wake_cb;
-                    if (ctrl) {
-                        wake_cb = sub () { ctrl.wakeSocket(sse_sock); };
-                    }
-                    string cid = sprintf("%d:%d", cx.id, stream_id);
-                    # the setup methods are resolved by name, so a handler that is not a
-                    # ServerSentEventHandler may implement them and return nothing; that costs
-                    # it the peer-close notification below but must not break its stream
-                    *HttpServerAsyncIo::AbstractSseConnection sse_conn;
-                    if (sse_is_http3) {
-                        int session_id = cx."header-info".session_id;
-                        s.submitQuicResponseStreaming(session_id, stream_id,
-                            rv."code" ?? 200, resp_hdr);
-                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
-                            s, cx, hdr, cid, session_id, stream_id, wake_cb);
-                    } else {
-                        s.submitHttp2StreamingResponseHeaders(stream_id,
-                            rv."code" ?? 200, resp_hdr);
-                        if (wake_cb) {
-                            wake_cb();
-                        }
-                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
-                            s, cx, hdr, cid, stream_id, wake_cb);
-                    }
-                    # Deregister the connection when the peer goes away.  On
-                    # HTTP/1.x the socket is the stream, so the SSE poll
-                    # operation's close callback covers this (see the branch
-                    # below); HTTP/2 and HTTP/3 multiplex, so the transport has
-                    # to report the teardown of this one stream explicitly, and
-                    # the controller supplies the hook that wires it up.
-                    *code<nothing(object)> register_sse_close_notify =
-                        cx."header-info"."register_sse_close_notify";
-                    if (sse_conn && register_sse_close_notify) {
-                        AbstractHttpSocketHandlerInterface mux_sse_handler =
-                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
-                        sse_conn.setPeerCloseCallback(sub () {
-                            mux_sse_handler.deregisterConnection(cid);
-                        });
-                        register_sse_close_notify(sse_conn);
-                    } else {
-                        listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close "
-                            "notification (%s); the connection will stay registered after the peer "
-                            "disconnects", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
-                            cx.handler_name, sse_conn
-                                ? "the async I/O controller supplied no hook"
-                                : "the handler returned no SSE connection object");
-                    }
-                    # Tell the controller this stream is owned by the handler
-                    request_helper.setDedicated();
-                    # Wake the I/O thread to flush the HEADERS frame now (and
-                    # any DATA queued by the connection's registered() hook)
-                    if (ctrl) {
-                        ctrl.wakeSocket(s);
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    listener.logError("cid %d: error setting up %s SSE connection for handler %y: %s: %s",
-                        cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2", cx.handler_name, ex.err, ex.desc);
-                }
-            } else if (async_response_out) {
-                # HTTP/1.x SSE path — use the poll-op state machine in the
-                # async I/O controller.  See setupAsyncSseConnection() for the
-                # H1 poll loop; setWakeCallback() wires the async controller
-                # to re-run continuePoll() when events are queued.
-                try {
-                    string cid = string(cx.id);
-                    HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
-                        call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid);
-                    # Wire a wake callback so that events queued by a Qore-side
-                    # handler thread (e.g. via ServerSentEventConnection::send())
-                    # immediately trigger the async controller to re-run
-                    # continuePoll() and drain the event_channel.  Without
-                    # this, server-push SSE events sit in the channel until
-                    # the client sends something — which it never does.
-                    *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
-                    if (ctrl) {
-                        Socket sse_sock = s;
-                        poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
-                    }
-                    # Tell the async controller to manage this socket as an SSE stream
-                    async_response_out.code = rv."code";
-                    async_response_out.hdr = rv.hdr;
-                    async_response_out.streaming = True;
-                    async_response_out.stream_type =
-                        HttpServerAsyncIo::HttpConnectionState::Sse;
-                    async_response_out.stream_operation = poll_op;
-                    AbstractHttpSocketHandlerInterface sse_handler =
-                        cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
-                    poll_op.setCloseCallback(sub () {
-                        sse_handler.deregisterConnection(cid);
-                    });
-                } catch (hash<ExceptionInfo> ex) {
-                    listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
-                        cx.id, cx.handler_name, ex.err, ex.desc);
-                }
-            }
+        # a response with an event source (see takeSseSource()) is an event stream only if the source is used, and
+        # never needs a socket handler; the stream is set up in a method of its own, so that its locals are not part
+        # of the frame of this method, which every response runs (qore#5758)
+        if (rv.sse_source ? rv.sse_source.isUsed() : rv.hdr."Content-Type" == MimeTypeSse) {
+            setupSseResponse(request_helper, listener, s, handler, rv, cx, hdr, handler_close, \async_response_out);
         } else if (rv."code" == 101) {
             # WebSocket upgrade — use async I/O controller
             if (handler_close) {
@@ -5379,10 +5581,19 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 throw "WEBSOCKET-HANDLER-ERROR", err;
             } else {
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
+                    # True if the handler manages the connection after start() returns (an asynchronous HTTP/1.1
+                    # WebSocket connection): the server's end of the connection (ws_end below) then runs when the
+                    # connection ends, not here (qore#5752)
+                    bool externally_managed = False;
+                    # holds the request helper for the server's end of an externally managed connection
+                    Priv::DedicatedConnectionHolder holder(request_helper, external_connections);
                     on_exit {
                         cx.close = True;
-                        listener.removeDedicatedSocket(cx.id);
-                        listener.log("cid %d: stopped dedicated socket handler: %y", cx.id, cx.handler_name);
+                        if (!externally_managed) {
+                            holder.release();
+                            listener.removeDedicatedSocket(cx.id);
+                            listener.log("cid %d: stopped dedicated socket handler: %y", cx.id, cx.handler_name);
+                        }
                     }
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
@@ -5419,13 +5630,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         delete async_response_out;
                     }
                     on_exit {
-                        if (ws_poll_op) {
+                        if (ws_poll_op && !externally_managed) {
                             asyncIo.deregisterH1WebSocketConnection(s);
                         }
                     }
 
                     # Pass poll_op and async I/O context to handler via header-info
                     hash<auto> ws_cx = cx + {"listener": listener};
+                    # reports the end of the connection to the request's async target if the handler takes it over
+                    *HttpServerAsyncIo::HttpPersistentRequestEnd pend;
                     if (ws_poll_op) {
                         ws_cx."header-info".ws_poll_op = ws_poll_op;
                         # the controller keeps this context in the connection's entry for the life of the
@@ -5434,6 +5647,15 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         # HttpAsyncSocketIoController::connections)
                         ws_cx."header-info".async_io_controller @= asyncIo;
                         ws_cx."header-info".async_target = asyncTarget;
+                        # the server's end of a connection that the handler manages externally, which the handler
+                        # runs when the connection ends; it holds the request helper, so the listener's count of
+                        # dedicated connections (dThreads, which a stop of the listener waits for) includes the
+                        # connection until then
+                        pend = new HttpServerAsyncIo::HttpPersistentRequestEnd();
+                        ws_cx."header-info".ws_end = getAsyncWebSocketEnd(holder, listener, s, cx.id,
+                            cx.handler_name, pend);
+                        # called by a handler that takes over the end of the connection (WebSocketHandler)
+                        ws_cx."header-info".ws_accept_end = sub () { holder.accept(); };
                     }
 
                     # test hook: deterministically widen the pre-start window between
@@ -5447,7 +5669,14 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         }
                     }
                     try {
-                        sockhandler.start(listener.getID(), ws_cx, hdr, s);
+                        # an asynchronous HTTP/1.1 WebSocket connection returns as soon as it is set up, and its
+                        # handler runs ws_end when it ends; no thread of the handler pool waits for it
+                        externally_managed = sockhandler.start(listener.getID(), ws_cx, hdr, s)
+                            && holder.isAccepted();
+                        if (externally_managed) {
+                            # the connection stays open after the request returns
+                            request_helper.persistent_end = pend;
+                        }
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
                             listener.logError("cid %d: dedicated socket handler %y: socket closed by remote", cx.id,
@@ -5466,6 +5695,417 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 }
             }
         }
+    }
+
+    #! Returns the server's end of an asynchronous HTTP/1.1 WebSocket connection that its handler manages externally
+    /** The handler calls the code when the connection has ended (see \c WebSocketHandler::startImpl()); it
+        deregisters the connection from the async I/O controller, which closes its socket, removes it from the
+        listener's dedicated sockets, and logs its end, as the server did when the handler's start() returned while it
+        waited for the connection.  The code holds the request helper, so the listener's count of dedicated
+        connections (which a stop of the listener waits for) includes the connection until the code is released, and
+        it runs its actions once.
+
+        @param holder holds the connection's request helper until the connection has ended; the server releases it
+        itself when the handler does not manage the connection externally, so that code kept by a handler that does
+        not call it holds nothing
+        @param listener the connection's listener
+        @param s the connection's socket, for an HTTP/1.1 connection, which the code deregisters from the async I/O
+        controller
+        @param sock_id the ID of the dedicated socket
+        @param handler_name the name of the handler
+        @param pend reports the end of the connection to the async target of the request, if the request leaves the
+        connection open (see HttpServerAsyncIo::HttpAsyncTarget::onPersistentRequestEnd())
+
+        @return the code that ends the connection in the server
+    */
+    private code<nothing()> getAsyncWebSocketEnd(Priv::DedicatedConnectionHolder holder, HttpListener listener,
+            *Socket s, softstring sock_id, *string handler_name, HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
+        # the controller and the handler keep this code for the life of the connection, so its references to the
+        # controller and to the listener (which references the server) are weak, as the context's own reference to
+        # the controller is (see the 101 path); the connection's context still references the listener, so the
+        # Program is kept running while the connection is open (see Priv::ExternalConnectionKeeper)
+        hash<auto> refs;
+        refs.ctrl @= asyncIo;
+        refs.listener @= listener;
+        return sub () {
+            # runs once
+            if (!holder.claim()) {
+                return;
+            }
+            # the end is reported to the request's target once the server's end of the connection is complete
+            on_exit pend.setEnded();
+            # the listener counts the connection until its end is complete
+            on_exit holder.release();
+            *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
+            # the listener, unless it has been deleted
+            *HttpListener l = refs.listener;
+            if (s && ctrl) {
+                try {
+                    ctrl.deregisterH1WebSocketConnection(s);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (l) {
+                        l.logError("dedicated socket %y: error deregistering the WebSocket connection of handler "
+                            "%y: %s: %s", sock_id, handler_name, ex.err, ex.desc);
+                    }
+                }
+            }
+            if (l) {
+                l.removeDedicatedSocket(sock_id);
+                l.log("dedicated socket %y: stopped dedicated socket handler: %y", sock_id, handler_name);
+            }
+        };
+    }
+
+    #! Returns code that runs code on a thread of the handler pool, with the dispatch context of the async target
+    /** For the end of a multiplexed WebSocket stream that its handler manages externally (see
+        \c WebSocketHandler::startImpl()); the end runs user code, which must not run on the async I/O callback
+        worker that reports the end of the stream.  Code that the pool does not take (when it is stopping) runs on a
+        thread of its own, or, if no thread can be started, in the calling thread.
+    */
+    private code<nothing(code<nothing()>)> getHandlerPoolSubmitter() {
+        # held in the connection's context, so the references to the controller and the target are weak
+        hash<auto> refs;
+        refs.ctrl @= asyncIo;
+        refs.target @= asyncTarget;
+        return sub (code<nothing()> c) {
+            *HttpServerAsyncIo::HttpAsyncSocketIoController ctrl = refs.ctrl;
+            *HttpServerAsyncIo::HttpAsyncTarget target = refs.target;
+            if (ctrl && target) {
+                try {
+                    ctrl.submitToHandlerPool(target, c);
+                    return;
+                } catch () {
+                    # the pool is stopping or refuses the task: run it on a thread of its own
+                }
+            }
+            try {
+                background c();
+            } catch () {
+                # no thread can be started (a thread limit): the end must still run, so it runs here
+                c();
+            }
+        };
+    }
+
+    #! Returns @ref True if a Content-Type value has the media type of an event stream (\c text/event-stream)
+    /** The media type is compared case-insensitively and its parameters are ignored (RFC 9110 section 8.3.1), as the
+        socket layer does when it decides that a response without a message body has no \c Content-Length.
+    */
+    private static bool isEventStreamMediaType(auto ct) {
+        return ct.typeCode() == NT_STRING && ct =~ /^[ \t]*text\/event-stream[ \t]*(;|$)/i;
+    }
+
+    #! Sets up the stream of a Server-Sent Events response on the async I/O controller
+    /** Called by sendReply() for an event stream: a response of a socket handler with the \c text/event-stream
+        \c Content-Type, or a response with an event source that is used (see takeSseSource()).
+    */
+    private setupSseResponse(RequestHelper request_helper, HttpListener listener, Socket s,
+            *HttpServer::AbstractHttpRequestHandler handler, hash<auto> rv, hash<auto> cx, hash<auto> hdr,
+            bool handler_close, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+        # the run of the response's event source, if any
+        *Priv::SseEventSourceRun sse_run = rv.sse_source;
+        # SSE response — set up async SSE connection via the I/O controller.
+        # The write path depends on the HTTP version:
+        # - HTTP/1.x: HttpSseStreamPollOperation queues events for the I/O
+        #   controller's Sse state to drain via chunked encoding
+        # - HTTP/2: Http2SseStream pushes DATA frames directly via
+        #   sendHttp2StreamData(); the nghttp2 session's sendPendingData()
+        #   (driven by h2op on the I/O thread) flushes them to the socket
+        # - HTTP/3: Http3SseStream pushes DATA on the QUIC stream via
+        #   submitQuicStreamData()
+        bool sse_is_http2 = cx."header-info".http2 ?? False;
+        bool sse_is_http3 = cx."header-info".http3 ?? False;
+        # the bound of the data held for the client, which a socket handler's setup applies before it registers the
+        # connection (unless it has its own); applied below to a stream that its setup left without one
+        cx.sse_max_buffer_size = listener.getSseMaxBufferSize();
+        # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
+        # by the connection close anyway
+        if (handler_close) {
+            string err = sprintf("SSE response (Content-Type: %s) returned from handler %y with "
+                "connection close flag set — SSE requires a persistent connection",
+                MimeTypeSse, cx.handler_name);
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            throw "SSE-HANDLER-ERROR", err;
+        } else if (!sse_run && !(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+            string err = sprintf("SSE response (Content-Type: %s) returned from handler %y, but the "
+                "handler does not inherit AbstractHttpSocketHandlerInterface (class: %y) — SSE "
+                "requires a handler that implements setupAsyncSseConnection{,Http2,Http3}()",
+                MimeTypeSse, cx.handler_name, handler.className());
+            listener.logError("cid %d: %s", cx.id, err);
+            logViaHandlerIfPossible(handler, cx.id, err);
+            throw "SSE-HANDLER-ERROR", err;
+        } else if (sse_is_http2 || sse_is_http3) {
+            # HTTP/2 / HTTP/3 SSE: multiplexed streams — submit response
+            # headers directly on the stream and hand the stream to a
+            # protocol-specific SSE writer.  The handler now owns this
+            # stream lifecycle, so mark request_helper as dedicated; the
+            # async I/O controller's multiplexed-result dispatcher will
+            # leave the stream alone.
+            try {
+                int stream_id = cx."header-info".stream_id;
+                hash<auto> resp_hdr = rv.hdr ?? {};
+                # HTTP/2 and HTTP/3 do not use chunked Transfer-Encoding
+                remove resp_hdr."Transfer-Encoding";
+                *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                Socket sse_sock = s;
+                *code<nothing()> wake_cb;
+                if (ctrl) {
+                    wake_cb = sub () { ctrl.wakeSocket(sse_sock); };
+                }
+                string cid = sprintf("%d:%d", cx.id, stream_id);
+                # the setup methods are resolved by name, so a handler that is not a
+                # ServerSentEventHandler may implement them and return nothing; that costs
+                # it the peer-close notification below but must not break its stream
+                *HttpServerAsyncIo::AbstractSseConnection sse_conn;
+                # a handler that is not a socket handler gets the stream from the server, for its event source
+                bool sock_handler = handler instanceof HttpServer::AbstractHttpSocketHandlerInterface;
+                if (sse_is_http3) {
+                    int session_id = cx."header-info".session_id;
+                    s.submitQuicResponseStreaming(session_id, stream_id,
+                        rv."code" ?? 200, resp_hdr);
+                    if (sock_handler) {
+                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp3",
+                            s, cx, hdr, cid, session_id, stream_id, wake_cb);
+                    } else {
+                        sse_conn = new HttpServerAsyncIo::Http3SseStream(s, session_id, stream_id, wake_cb,
+                            True);
+                    }
+                } else {
+                    s.submitHttp2StreamingResponseHeaders(stream_id,
+                        rv."code" ?? 200, resp_hdr);
+                    if (wake_cb) {
+                        wake_cb();
+                    }
+                    if (sock_handler) {
+                        sse_conn = call_object_method(handler, "setupAsyncSseConnectionHttp2",
+                            s, cx, hdr, cid, stream_id, wake_cb);
+                    } else {
+                        sse_conn = new HttpServerAsyncIo::Http2SseStream(s, stream_id, wake_cb, True);
+                    }
+                }
+                if (sse_conn) {
+                    configureSseStream(listener, cid, sse_conn);
+                }
+                # Deregister the connection when the peer goes away.  On
+                # HTTP/1.x the socket is the stream, so the SSE poll
+                # operation's close callback covers this (see the branch
+                # below); HTTP/2 and HTTP/3 multiplex, so the transport has
+                # to report the teardown of this one stream explicitly, and
+                # the controller supplies the hook that wires it up.
+                *code<nothing(object)> register_sse_close_notify =
+                    cx."header-info"."register_sse_close_notify";
+                if (sse_conn && register_sse_close_notify) {
+                    sse_conn.setPeerCloseCallback(getSseStreamEndCallback(sock_handler
+                        ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
+                        : NOTHING, cid, sse_run));
+                    register_sse_close_notify(sse_conn);
+                    # the stream stays open after the request returns: its end is reported to the request's async
+                    # target, whichever side ends it
+                    HttpServerAsyncIo::HttpPersistentRequestEnd pend();
+                    sse_conn.setEndCallback(getPersistentEndCallback(pend));
+                    request_helper.persistent_end = pend;
+                } else if (sse_run) {
+                    # an event source is stopped only when the end of its stream is reported: without the
+                    # notification, the stream is not started and is reset
+                    listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close notification "
+                        "(%s); resetting the stream of its event source", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
+                        cx.handler_name, sse_conn
+                            ? "the async I/O controller supplied no hook"
+                            : "no SSE connection object");
+                    try {
+                        if (sse_conn) {
+                            sse_conn.abort();
+                        } else if (sse_is_http3) {
+                            s.cancelQuicStream(cx."header-info".session_id, stream_id);
+                        } else {
+                            s.resetHttp2Stream(stream_id);
+                        }
+                    } catch () {
+                        # the stream has already ended
+                    }
+                    remove sse_conn;
+                    # a socket handler's connection, which its setup registered, has ended
+                    if (sock_handler) {
+                        try {
+                            cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler).deregisterConnection(cid);
+                        } catch (hash<ExceptionInfo> ex) {
+                            listener.logError("cid %d: error deregistering SSE connection %y of handler %y: %s",
+                                cx.id, cid, cx.handler_name, get_exception_string(ex));
+                        }
+                    }
+                } else {
+                    listener.logError("cid %d: the %s SSE stream of handler %y has no peer-close "
+                        "notification (%s); the connection will stay registered after the peer "
+                        "disconnects", cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2",
+                        cx.handler_name, sse_conn
+                            ? "the async I/O controller supplied no hook"
+                            : "the handler returned no SSE connection object");
+                }
+                # Tell the controller this stream is owned by the handler
+                request_helper.setDedicated();
+                # the event source pushes the events of the stream from now on
+                if (sse_run && sse_conn) {
+                    sse_run.start(sse_conn);
+                }
+                # Wake the I/O thread to flush the HEADERS frame now (and
+                # any DATA queued by the connection's registered() hook)
+                if (ctrl) {
+                    ctrl.wakeSocket(s);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                listener.logError("cid %d: error setting up %s SSE connection for handler %y: %s: %s",
+                    cx.id, sse_is_http3 ? "HTTP/3" : "HTTP/2", cx.handler_name, ex.err, ex.desc);
+            }
+        } else if (async_response_out) {
+            # HTTP/1.x SSE path — use the poll-op state machine in the
+            # async I/O controller.  See setupAsyncSseConnection() for the
+            # H1 poll loop; setWakeCallback() wires the async controller
+            # to re-run continuePoll() when events are queued.
+            try {
+                string cid = string(cx.id);
+                HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
+                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
+                    ? call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr, cid)
+                    # a handler that is not a socket handler gets the stream from the server, for its event
+                    # source
+                    : new HttpServerAsyncIo::HttpSseStreamPollOperation(s);
+                # Wire a wake callback so that events queued by a Qore-side
+                # handler thread (e.g. via ServerSentEventConnection::send())
+                # immediately trigger the async controller to re-run
+                # continuePoll() and drain the event_channel.  Without
+                # this, server-push SSE events sit in the channel until
+                # the client sends something — which it never does.
+                *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
+                if (ctrl) {
+                    Socket sse_sock = s;
+                    poll_op.setWakeCallback(sub () { ctrl.wakeSocket(sse_sock); });
+                }
+                configureSseStream(listener, cid, poll_op);
+                # Tell the async controller to manage this socket as an SSE stream
+                async_response_out.code = rv."code";
+                async_response_out.hdr = rv.hdr;
+                async_response_out.streaming = True;
+                async_response_out.stream_type =
+                    HttpServerAsyncIo::HttpConnectionState::Sse;
+                async_response_out.stream_operation = poll_op;
+                # reports the end of the stream, which stays open after the request returns, to the request's async
+                # target
+                HttpServerAsyncIo::HttpPersistentRequestEnd pend();
+                # the controller calls it exactly once when the stream has ended, for any reason
+                poll_op.setCloseCallback(getSseStreamEndCallback(
+                    (handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)
+                    ? cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler)
+                    : NOTHING, cid, sse_run, pend));
+                request_helper.persistent_end = pend;
+                # the event source pushes the events of the stream from now on; they are sent after the
+                # response headers
+                if (sse_run) {
+                    sse_run.start(new HttpServerAsyncIo::Http1SseConnection(poll_op));
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
+                    cx.id, cx.handler_name, ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Takes the event source of a response out of it and returns its run
+    /** Called by sendReply() only for a response with an event source; the work is done here so that the frame of
+        sendReply(), which every response runs, does not change (qore#5758).
+
+        @param rv the response; the caller removes its \c sse_source, and its \c send_callback too if the source is
+        used
+        @param listener the listener
+        @param cx the request context
+        @param use @ref True if the response is an event stream that the server sends on the async I/O controller
+
+        @return the run of the source; a source that is not used (see SseEventSourceRun::isUsed()) has been stopped,
+        unless the response's \c send_callback still sends its events
+
+        @throw SSE-HANDLER-ERROR the \c sse_source is not an @ref HttpServerAsyncIo::AbstractSseEventSource
+    */
+    private Priv::SseEventSourceRun takeSseSource(hash<auto> rv, HttpListener listener, hash<auto> cx, bool use) {
+        if (!(rv.sse_source instanceof HttpServerAsyncIo::AbstractSseEventSource)) {
+            string err = sprintf("handler %y returned an sse_source of class %y; expecting "
+                "HttpServerAsyncIo::AbstractSseEventSource", cx.handler_name, rv.sse_source.className());
+            listener.logError("cid %d: %s", cx.id, err);
+            throw "SSE-HANDLER-ERROR", err;
+        }
+        Priv::SseEventSourceRun run(rv.sse_source, listener, cx.id, cx.handler_name, getHandlerPoolSubmitter(), use);
+        if (!use && !rv.send_callback) {
+            # a source that is not used at all is stopped at once, so that it releases what it registered
+            run.stopHere();
+        }
+        return run;
+    }
+
+    #! Raises an exception if the \c sse_max_buffer_size listener option is not positive
+    private static checkSseMaxBufferSize(hash<HttpListenerOptionInfo> info) {
+        if (info.sse_max_buffer_size <= 0) {
+            throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("listener option \"sse_max_buffer_size\" must be > 0; got "
+                "%d", info.sse_max_buffer_size);
+        }
+    }
+
+    #! Applies the listener's bound and warning log to an HTTP/2 or HTTP/3 SSE stream that its handler did not
+    #! configure
+    private static configureSseStream(HttpListener listener, string cid, HttpServerAsyncIo::AbstractSseConnection sse) {
+        if (!sse.hasMaxBufferSize()) {
+            sse.setMaxBufferSize(listener.getSseMaxBufferSize());
+        }
+        if (!sse.hasWarningCallback()) {
+            sse.setWarningCallback(getSseWarningCallback(listener, cid));
+        }
+    }
+
+    #! Applies the listener's bound and warning log to an HTTP/1.x SSE stream that its handler did not configure
+    private static configureSseStream(HttpListener listener, string cid,
+            HttpServerAsyncIo::HttpSseStreamPollOperation sse) {
+        if (!sse.hasMaxBufferSize()) {
+            sse.setMaxBufferSize(listener.getSseMaxBufferSize());
+        }
+        if (!sse.hasWarningCallback()) {
+            sse.setWarningCallback(getSseWarningCallback(listener, cid));
+        }
+    }
+
+    #! Returns the callback that logs the warning of an SSE stream whose client is dropped in the listener's log
+    private static code<nothing(string)> getSseWarningCallback(HttpListener listener, string cid) {
+        return sub (string msg) {
+            listener.logWarn("SSE connection %y: %s", cid, msg);
+        };
+    }
+
+    #! Returns the code that reports the end of a stream to the async target of its request
+    /** A closure, which keeps the object (a call reference to its method would not), made in a static method, so that
+        it does not refer to the server, which can be deleted before the stream ends
+    */
+    private static code<nothing()> getPersistentEndCallback(HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
+        return sub () {
+            pend.setEnded();
+        };
+    }
+
+    #! Returns the code that is called when an SSE stream has ended: by the async I/O controller, or, for a client dropped for its bound, on the thread that queued the data
+    /** Deregisters a socket handler's connection, ends the run of the stream's event source, if any, and reports the
+        end to the request's async target, if given.  Created here so that the frame of sendReply() keeps no locals
+        for it.
+    */
+    private static code<nothing()> getSseStreamEndCallback(*AbstractHttpSocketHandlerInterface sse_handler, string cid,
+            *Priv::SseEventSourceRun run, *HttpServerAsyncIo::HttpPersistentRequestEnd pend) {
+        return sub () {
+            # the end is reported to the request's target also if the code below raises an exception
+            on_exit if (pend) {
+                pend.setEnded();
+            }
+            if (sse_handler) {
+                sse_handler.deregisterConnection(cid);
+            }
+            if (run) {
+                run.end();
+            }
+        };
     }
 
     #! Executes an async poll operation using the global async I/O controller
@@ -5542,8 +6182,10 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
 
     # chunked_allowed: False for a response to an HTTP/1.0 request, where a streamed message body is delimited by
     # closing the connection instead of chunked transfer encoding
+    # log_info: if True, the request's INFO messages are logged (RequestHelper::log_info)
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv, bool chunked_allowed,
-            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out,
+            bool log_info) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
             # Capture callback for the response-sending code
@@ -5618,8 +6260,11 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
             is.unassignThread();
             body = NOTHING;
         }
-        listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
-            rv."code", body ? body.size() : 0, exists is);
+        # the message is built only if it is logged; whether it is was decided when the request started
+        if (log_info) {
+            listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
+                rv."code", body ? body.size() : 0, exists is);
+        }
         async_response_out = <HttpAsyncResponseInfo>{
             "code": rv."code",
             "hdr": rv.hdr ?? {},
@@ -5633,7 +6278,7 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
         };
         # the response is logged by the code that sends it, as above; an event stream and a protocol upgrade are sent by
         # sendReply() itself, which does not log them
-        if (rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse) {
+        if (rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse || (rv.sse_source && rv.sse_source.isUsed())) {
             listener.logResponse(cx, rv);
         }
     }
@@ -5721,6 +6366,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         */
         bool no_new_dedicated = False;
         int id;
+
+        #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
+        static *code<nothing(HttpListener)> dbg_stopping_hook;
 
         # socket handler hash
         hash<string, AbstractHttpSocketHandlerInterface> shh;
@@ -6034,6 +6682,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> hdr, AbstractHttpRequestHandler handler, hash<auto> header_info) {
         try {
             hash<HttpResponseInfo> resp = handler.handleInlineRequest(cx, hdr, NOTHING);
+            # the handler released the last reference to the server, whose stop closed the connections: the request
+            # has no response to give (qore#6508)
+            if (!serv) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+            }
             if ((resp.body instanceof InputStream) || resp.chunked_body || resp.send_callback) {
                 throw "INLINE-HANDLER-ERROR", "the handler returned a streamed message body; an inline handler must "
                     "return the message body as a string or binary value";
@@ -6136,7 +6789,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     # Returns True if informational messages of this listener will be logged
     private bool isLogInfoEnabled() {
-        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : serv.isLogInfoEnabled();
+        # nothing is logged through a server that has been destroyed (qore#6508)
+        return logger ? logger.isEnabledFor(LoggerLevel::INFO) : (serv ? serv.isLogInfoEnabled() : False);
     }
 
     doLogRecvBody(*data body, hash<auto> cx, hash<auto> hdr, hash<auto> info) {
@@ -6222,6 +6876,42 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             rv = serv.getMaxRequestBodySize();
         }
         return rv;
+    }
+
+    #! Returns the bound in bytes of the data held for the client of each Server-Sent Events stream of the listener
+    /** @see @ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"
+
+        @since HttpServer 1.7
+    */
+    int getSseMaxBufferSize() {
+        return opts.sse_max_buffer_size ?? HttpServerAsyncIo::DefaultSseMaxBufferSize;
+    }
+
+    #! Logs a warning in the listener's log
+    /** @since HttpServer 1.7
+    */
+    logWarn(string fmt, ...) {
+        softlist<auto> args = fmt;
+        if (argv) {
+            args += argv;
+        }
+        args[0] = sprintf("%y (%s): %s", name, socket_info.desc, args[0]);
+        if (logger) {
+            try {
+                logger.logArgs(LoggerLevel::WARN, "HTTP " + args[0], args[1..]);
+                return;
+            } catch (hash<ExceptionInfo> ex) {
+                # falls back to the server's error log
+            }
+        }
+        if (serv) {
+            args[0] = "WARNING: " + args[0];
+            try {
+                serv.logErrorArgs(args);
+            } catch () {
+                # ignore if server was deleted
+            }
+        }
     }
 
     #! Returns the effective maximum size in bytes of a decompressed request body for this listener
@@ -6413,7 +7103,30 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         background stop();
     }
 
+    #! @cond nodoc
+    #! Sets the test hook that stop() calls once it has marked the listener as stopping; a debug build of the library only
+    /** @param hook the hook, called with the listener in the thread of the stop, or @ref nothing to remove it
+
+        @throw HTTPLISTENER-DEBUG-ERROR the library is not a debug build
+    */
+    static dbgSetStoppingHook(*code<nothing(HttpListener)> hook) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            throw "HTTPLISTENER-DEBUG-ERROR", "the test hooks of HttpListener need a debug build of the library";
+        }
+        dbg_stopping_hook = hook;
+    }
+    #! @endcond
+
     stop(*bool silent) {
+        # A stop that runs in a thread that runs a request of this listener does not wait for that request, which
+        # ends only when the stop has returned to it: the request released the last reference to the server, whose
+        # destructor stops it (the program released the server while the request ran), or it stopped the server.
+        # This applies as well to a stop that is in progress in another thread (stopNoWait(), qore#6508), which waits
+        # for the request while this thread waits for that stop (the server's stop waits for its listeners' stops)
+        if (*Priv::RequestHelper own_request = Priv::current_request) {
+            own_request.releaseForStop(cThreads);
+        }
+
         {
             m.lock();
             on_exit m.unlock();
@@ -6427,6 +7140,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             exit = True;
+        }
+
+        # test hook (a debug build of the library only): the listener is marked as stopping, so that another stop
+        # returns at once (see dbgSetStoppingHook())
+        if (Option::HAVE_LIBRARY_DEBUGGING && dbg_stopping_hook) {
+            dbg_stopping_hook(self);
         }
 
         # wait for all connection threads to terminate
@@ -6594,8 +7313,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     log(string fmt, ...) {
-        # this is called several times for every request: the message is built only if the logger logs it
-        if (logger && !logger.isEnabledFor(LoggerLevel::INFO)) {
+        # this is called several times for every request: the message is built only if it is logged, by the
+        # listener's logger or, for a listener without one, by the server's
+        if (logger ? !logger.isEnabledFor(LoggerLevel::INFO) : (!serv || !serv.isLogInfoEnabled())) {
             return;
         }
         softlist<auto> args = fmt;
@@ -6866,6 +7586,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> hdr, hash<auto> header_info) {
         cThreads.add();
         RequestHelper request_helper(cThreads, dThreads);
+        request_helper.log_info = isLogInfoEnabled();
+        # a stop of this listener that runs in this thread does not wait for this request (see stop())
+        *Priv::RequestHelper prev_request = Priv::current_request;
+        Priv::current_request = request_helper;
+        on_exit Priv::current_request = prev_request;
 
         bool is_multiplexed = (header_info.http2 ?? False) || (header_info.http3 ?? False);
         string sock_key;
@@ -6925,7 +7650,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         if (hdr."content-type") {
             hdr."_qore_orig_content_type" = hdr."content-type";
         }
-        # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
+        # the content type without its charset parameter, as reported for every HTTP version (qore#6318); it is not set
+        # when nothing but a charset parameter is given
         if (header_info."body-content-type".val()) {
             hdr."content-type" = header_info."body-content-type";
             if (hdr."content-type".typeCode() == NT_LIST) {
@@ -6943,8 +7669,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Check if we need to close the connection (from HTTP version negotiation)
         cx.close = header_info.close;
 
-        # Log the request
-        {
+        # Log the request; the message is built only if it is logged
+        if (request_helper.log_info) {
             string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
             string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
                 cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
@@ -6986,6 +7712,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Call handleRequest with async capture
         handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info, \async_response);
+
+        # the server was destroyed in this request (the program released it while the request ran, and the request
+        # released the last reference to it): its stop closed the connections, so the request has no response to give
+        # and no session to continue; a dedicated connection belongs to its handler (qore#6508).  The per-request
+        # cleanup below (multiplexed body streams, persistent session state) is not needed: the stop has closed the
+        # connections and stops the handler pool, whose thread this is
+        if (!serv) {
+            return request_helper.isDedicated()
+                ? <HttpServerAsyncIo::HttpRequestResultInfo>{
+                    "dedicated": True,
+                    "persistent_request_end": request_helper.persistent_end,
+                }
+                : <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+        }
 
         # Manage persistent handler state after request processing
         if (is_multiplexed && phi.handler && phi.handler.isPersistent()
@@ -7089,6 +7829,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             };
             register_fn(sock_key, pq);
             on_exit deregister_fn(sock_key);
+            # this thread stays with the connection until persistence ends: it leaves the handler pool, so that it
+            # does not count against max_handler_threads for that time (qore#5758)
+            serv.detachHandlerThread();
             if (!cx.close && s.isOpen()) {
                 serv.returnConnectionToAsyncIo(s, cx, self);
             }
@@ -7104,7 +7847,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # by a dedicated handler
         if (!async_response) {
             if (request_helper.isDedicated()) {
-                return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                    "dedicated": True,
+                    "persistent_request_end": request_helper.persistent_end,
+                };
             }
             # Response was sent directly by the handler
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
@@ -7159,6 +7905,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "code": async_response.code,
                 "status_message": HttpServer::HttpCodes{async_response.code},
                 "hdr": async_response.hdr,
+                "persistent_request_end": request_helper.persistent_end,
             };
         }
 
@@ -7173,7 +7920,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 hdr."Content-Length" = string(async_response.body.size());
             }
             # Log the response
-            logResponse(cx, async_response);
+            if (request_helper.log_info) {
+                logResponse(cx, async_response);
+            }
 
             # For multiplexed protocols (HTTP/2, HTTP/3), don't close the connection
             # based on cx.close — the stream is closed independently
@@ -7210,7 +7959,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         if (request_helper.isDedicated()) {
             # Connection was handed to a dedicated handler (WebSocket/SSE)
-            return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "dedicated": True,
+                "persistent_request_end": request_helper.persistent_end,
+            };
         }
 
         # No response captured - handler may have sent response directly or failed
@@ -7807,8 +8559,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
-                # Reset context for new request
+                # Reset context for new request; whether its INFO messages are logged is decided for each request
                 cx = cx_listener;
+                request_helper.log_info = isLogInfoEnabled();
 
                 # Context setup — mirrors processNativeRequest()
                 cx.raw_path = req_hdr.path;
@@ -7837,8 +8590,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 cx."response-encoding" = conn_info.header_info."accept-charset";
                 cx.close = conn_info.header_info.close;
 
-                # Log the request
-                {
+                # Log the request; the message is built only if it is logged
+                if (request_helper.log_info) {
                     string http_ver = req_hdr.http_version =~ /^HTTP\//
                         ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                     string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
@@ -8033,6 +8786,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> req_hdr = conn_info.hdr;
 
             cx = cx_listener;
+            # whether the request's INFO messages are logged is decided for each request
+            request_helper.log_info = isLogInfoEnabled();
             cx.raw_path = req_hdr.path;
             req_hdr.path = decodeRequestPath(req_hdr.path);
             cx += {
@@ -8059,8 +8814,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             cx."response-encoding" = conn_info.header_info."accept-charset";
             cx.close = conn_info.header_info.close;
 
-            # Log the request
-            {
+            # Log the request; the message is built only if it is logged
+            if (request_helper.log_info) {
                 string http_ver = req_hdr.http_version =~ /^HTTP\//
                     ? req_hdr.http_version : "HTTP/" + req_hdr.http_version;
                 string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y",
@@ -8153,6 +8908,16 @@ hashdecl ControllerLoggerInfo {
     LoggerInterface logger;
     #! the controller's logger that the server's replaced, restored when the server stops
     *LoggerInterfaceBase prev;
+}
+
+#! the information about the names of the fields of the configured response headers of a server (HttpServer::hdr_info)
+hashdecl ConfiguredHeaderInfo {
+    #! the configured response headers that the information is about
+    hash<auto> hdr;
+    #! @ref True if the names of the fields managed by the server are canonical in \c hdr
+    bool canonical;
+    #! the lower-case names of the fields in \c hdr, each between newlines
+    list<string> merge_names;
 }
 
 # class containing handler info
@@ -8823,6 +9588,358 @@ class ResponseAfterSendNotifier {
 } # namespace Priv
 
 namespace Priv {
+#! Runs the event source of a Server-Sent Events stream: starts it with the stream and stops it exactly once
+/** The stream's end (the controller's close callback on HTTP/1.x, the peer-close notification on HTTP/2 and HTTP/3,
+    or a close by the source itself) calls @ref end(), which runs the source's stop on a thread of the handler pool;
+    a source whose stream could not be set up is stopped by the request's thread (@ref stopHere()).  See qore#5758.
+*/
+class SseEventSourceRun {
+    private {
+        #! the source; released when it has been stopped, as it can refer to its stream, which refers to this object
+        *HttpServerAsyncIo::AbstractSseEventSource source;
+        HttpListener listener;
+        softstring cid;
+        *string handler_name;
+        #! runs code on a thread of the handler pool (see HttpServer::getHandlerPoolSubmitter())
+        code<nothing(code<nothing()>)> submitter;
+        Mutex m();
+        bool started;
+        bool stopped;
+        #! True if the source pushes the events of a stream of the async I/O controller
+        bool used;
+    }
+
+    constructor(HttpServerAsyncIo::AbstractSseEventSource source, HttpListener listener, softstring cid,
+            *string handler_name, code<nothing(code<nothing()>)> submitter, bool used) {
+        self.source = source;
+        self.listener = listener;
+        self.cid = cid;
+        self.handler_name = handler_name;
+        self.submitter = submitter;
+        self.used = used;
+    }
+
+    #! A used source whose stream was never set up (the run is no longer referenced before start() was called) is
+    #! stopped here, so that it always releases what it registered
+    /** A source that is not used is stopped by HttpServer::takeSseSource(), unless the response's \c send_callback
+        still sends its events after this object is gone.
+    */
+    destructor() {
+        if (used && !started) {
+            stopHere();
+        }
+    }
+
+    #! Returns @ref True if the source pushes the events of a stream of the async I/O controller
+    bool isUsed() {
+        return used;
+    }
+
+    #! Returns @ref True once @ref start() has been called
+    bool isStarted() {
+        AutoLock al(m);
+        return started;
+    }
+
+    #! Starts the source with the stream; never throws
+    /** An exception of the source is logged and closes the stream, whose end stops the source.
+    */
+    start(HttpServerAsyncIo::AbstractSseConnection conn) {
+        {
+            AutoLock al(m);
+            started = True;
+        }
+        *HttpServerAsyncIo::AbstractSseEventSource src;
+        {
+            AutoLock al(m);
+            src = source;
+        }
+        # stopped already (the stream ended before it was started)
+        if (!src) {
+            return;
+        }
+        SseEventSourceStream stream(conn, self);
+        try {
+            src.start(stream);
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logError("cid %s: the SSE event source of handler %y failed to start; closing the stream: %s",
+                cid, handler_name, get_exception_string(ex));
+            stream.close();
+        }
+    }
+
+    #! Called when the stream has ended; stops the source once, on a thread of the handler pool
+    /** The submitted code holds this object in a local variable: a closure does not keep the object of the method
+        that creates it alive, and the end of the stream can release every other reference to this object before the
+        pool runs the code
+    */
+    end() {
+        if (!claim()) {
+            return;
+        }
+        SseEventSourceRun run = self;
+        try {
+            submitter(sub () {
+                run.stopIntern();
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the stop must still run once
+            stopIntern();
+        }
+    }
+
+    #! Stops the source once in the calling thread; used when its stream was never set up
+    stopHere() {
+        if (!claim()) {
+            return;
+        }
+        stopIntern();
+    }
+
+    private bool claim() {
+        AutoLock al(m);
+        if (stopped) {
+            return False;
+        }
+        stopped = True;
+        return True;
+    }
+
+    private stopIntern() {
+        *HttpServerAsyncIo::AbstractSseEventSource src;
+        {
+            AutoLock al(m);
+            src = remove source;
+        }
+        if (!src) {
+            return;
+        }
+        try {
+            src.stop();
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logError("cid %s: the SSE event source of handler %y could not be stopped: %s", cid,
+                handler_name, get_exception_string(ex));
+        }
+    }
+}
+
+#! The stream given to an SSE event source: a close or abort by the source also ends the source's run
+/** On HTTP/2 and HTTP/3 a stream that the server ends itself is not reported by the peer-close notification, so
+    the source's own close ends its run here; the other end paths are reported by the transport.
+*/
+class SseEventSourceStream inherits HttpServerAsyncIo::AbstractSseConnection {
+    private {
+        HttpServerAsyncIo::AbstractSseConnection conn;
+        SseEventSourceRun run;
+    }
+
+    constructor(HttpServerAsyncIo::AbstractSseConnection conn, SseEventSourceRun run) {
+        self.conn = conn;
+        self.run = run;
+    }
+
+    string getProtocol() {
+        return conn.getProtocol();
+    }
+
+    queueEvent(*string event_type, string data, *string id, *int retry) {
+        conn.queueEvent(event_type, data, id, retry);
+    }
+
+    queueRawEvent(hash<auto> event) {
+        conn.queueRawEvent(event);
+    }
+
+    queueRawString(string data) {
+        conn.queueRawString(data);
+    }
+
+    setHeartbeat(int interval_ms, string msg = HttpServerAsyncIo::DefaultSseHeartbeatMsg) {
+        conn.setHeartbeat(interval_ms, msg);
+    }
+
+    setMaxBufferSize(int size) {
+        conn.setMaxBufferSize(size);
+    }
+
+    int getMaxBufferSize() {
+        return conn.getMaxBufferSize();
+    }
+
+    bool hasMaxBufferSize() {
+        return conn.hasMaxBufferSize();
+    }
+
+    setWarningCallback(*code<nothing(string)> cb) {
+        conn.setWarningCallback(cb);
+    }
+
+    bool hasWarningCallback() {
+        return conn.hasWarningCallback();
+    }
+
+    bool isOpen() {
+        return conn.isOpen();
+    }
+
+    bool isDisconnected() {
+        return conn.isDisconnected();
+    }
+
+    int getQueueSize() {
+        return conn.getQueueSize();
+    }
+
+    close() {
+        on_exit run.end();
+        conn.close();
+    }
+
+    abort() {
+        on_exit run.end();
+        conn.abort();
+    }
+}
+
+#! Holds the request helper of a dedicated connection that its handler manages externally until it has ended
+/** The request helper counts the connection in the listener's dedicated connections (which a stop of the listener
+    waits for) until it is destroyed; the holder is released by the server's end of the connection when the
+    connection has ended, or by the server at once when the handler does not manage the connection externally.
+*/
+class DedicatedConnectionHolder {
+    private {
+        Mutex m();
+        *RequestHelper rh;
+        #! counts the connection from accept() until release()
+        ExternalConnectionKeeper keeper;
+        bool claimed;
+        bool accepted;
+    }
+
+    constructor(RequestHelper rh, ExternalConnectionKeeper keeper) {
+        self.rh = rh;
+        self.keeper = keeper;
+    }
+
+    #! Called by the handler when it takes over the end of the connection (it runs the server's end when the
+    #! connection has ended)
+    /** From here on the connection keeps the Program of the server alive until it has ended (see
+        @ref ExternalConnectionKeeper)
+    */
+    accept() {
+        AutoLock al(m);
+        if (accepted || !rh) {
+            return;
+        }
+        accepted = True;
+        keeper.connectionOpened();
+    }
+
+    #! Returns @ref True if the handler took over the end of the connection
+    bool isAccepted() {
+        AutoLock al(m);
+        return accepted;
+    }
+
+    #! Claims the end of the connection; returns @ref True for the first call only
+    bool claim() {
+        AutoLock al(m);
+        if (claimed) {
+            return False;
+        }
+        claimed = True;
+        return True;
+    }
+
+    #! Releases the request helper, which then no longer counts the connection, once the connection has ended
+    release() {
+        *RequestHelper r;
+        bool counted;
+        {
+            AutoLock al(m);
+            r = remove rh;
+            counted = r && accepted;
+        }
+        # the connection is no longer counted, also if the destruction of the helper raises an exception
+        on_exit if (counted) {
+            keeper.connectionEnded();
+        }
+        # the helper is destroyed here if this was its last reference, outside the lock
+        r = NOTHING;
+    }
+}
+
+#! Keeps the Program of a server alive while a connection that its handler manages externally is open
+/** A connection whose handler manages it externally (an asynchronous WebSocket connection, see
+    \c WebSocketHandler::startImpl()) has no thread that waits for it, so nothing keeps the Program that runs the
+    server from ending while it is open: once the Program has ended (all its threads have), it is deleted, the end of
+    the connection, which runs the connection's close callbacks in the Program, can no longer run, and the objects that
+    those callbacks release (often ones that hold the connection's context, and with it the listener and the server)
+    keep the server and the threads of its handler pool alive, so the process never ends (qore#5752; seen with
+    \c qdbg-server, whose debugged program ends before its debugger's connection closes).  When a thread of the
+    handler pool waited for each connection, the Program waited for the connection as it waits for its threads.
+
+    One thread, which is not a thread of the handler pool, waits while the server has such connections: the Program
+    then waits for them as before, and their ends always run in it.  A stop of the server ends the connections, and
+    with them the thread.
+*/
+class ExternalConnectionKeeper {
+    private {
+        Mutex m();
+        Condition cond();
+        #! the number of open connections
+        int count;
+        #! True while the waiting thread runs
+        bool waiting;
+    }
+
+    #! Counts an open connection; starts the waiting thread if it does not run
+    connectionOpened() {
+        AutoLock al(m);
+        ++count;
+        if (waiting) {
+            return;
+        }
+        try {
+            background waitForConnections();
+            waiting = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # no thread can be started (a thread limit): the connection works, but the Program does not wait for it
+        }
+    }
+
+    #! Ends the count of a connection that has ended
+    connectionEnded() {
+        AutoLock al(m);
+        @assert(count > 0, "ExternalConnectionKeeper::connectionEnded() without connectionOpened()");
+        if (!--count) {
+            cond.broadcast();
+        }
+    }
+
+    #! The waiting thread: returns when no connection is open
+    private waitForConnections() {
+        # a cancellation of this thread while it takes the lock leaves waiting set, so that no thread waits for the
+        # server's connections any more; the Program then ends as it did without this class
+        AutoLock al(m);
+        # a later connection starts a new thread (the lock is still held when this runs)
+        on_exit waiting = False;
+        try {
+            while (count) {
+                cond.wait(m);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # the thread was cancelled: the Program no longer waits for the connections
+        }
+    }
+}
+
+#! The helper of the request that the current thread runs (see HttpListener::processNativeRequest())
+/** A stop of the request's listener that runs in this thread does not wait for this request, which ends only when the
+    stop has returned (see RequestHelper::releaseForStop())
+*/
+thread_local *RequestHelper current_request;
+
 #! Helper class for managing HTTP request lifecycle and thread counter tracking
 /**
     This class manages the lifecycle of HTTP connections and ensures proper counter
@@ -8857,13 +9974,28 @@ namespace Priv {
 
     The WaitGroup add() happens BEFORE RequestHelper is created (in processNativeRequest
     or similar). The done() happens in the destructor. This ensures:
-    - Every add() has a matching done()
+    - Every add() has a matching done(), which releaseForStop() gives early for a stop of the listener that runs in
+      the request's thread (the destructor then gives none)
     - Server shutdown can wait for all WaitGroups to reach zero
 
     @see HttpListener::cThreads
     @see HttpListener::dThreads
 */
 class RequestHelper {
+    public {
+        #! if True, the request's INFO messages are logged
+        /** decided once when the request starts, as the check costs a call to the logger for each message; a change
+            of the log level applies from the next request
+        */
+        bool log_info = True;
+
+        #! Reports the end of the WebSocket connection or SSE stream that the request leaves open to the async target
+        /** Set when the request's connection or stream stays open after the request returns; returned in the
+            request's result (see HttpListener::processNativeRequest())
+        */
+        *HttpServerAsyncIo::HttpPersistentRequestEnd persistent_end;
+    }
+
     private {
         #! WaitGroup for normal connection threads (decremented if we stay in normal mode)
         WaitGroup cThreads;
@@ -8875,6 +10007,8 @@ class RequestHelper {
         Socket s;
         #! If True, socket is managed externally (e.g., by WebSocket handler) and won't be closed in destructor
         bool dedicated_external = False;
+        #! True while the request counts in the active WaitGroup (c); see releaseForStop()
+        bool counted = True;
     }
 
     /**
@@ -8899,7 +10033,7 @@ class RequestHelper {
     #! Destructor ensures counter is decremented and socket is cleaned up if needed
     /**
         - If not dedicated_external and socket exists and is open: shutdown and close the socket
-        - Always decrements the active counter (c) to signal this connection is complete
+        - Decrements the active counter (c) to signal this connection is complete, unless releaseForStop() did
 
         This allows HttpListener::stop() to wait for all connections to finish via
         cThreads.wait() and dThreads.wait().
@@ -8916,7 +10050,9 @@ class RequestHelper {
                 # Ignore close errors - socket may already be in error state
             }
         }
-        c.done();
+        if (counted) {
+            c.done();
+        }
     }
 
     #! Switches from normal connection mode to dedicated connection mode
@@ -8931,8 +10067,10 @@ class RequestHelper {
     */
     setDedicated() {
         @assert(c === cThreads);
-        dThreads.add();
-        cThreads.done();
+        if (counted) {
+            dThreads.add();
+            cThreads.done();
+        }
         c = dThreads;
     }
 
@@ -8957,11 +10095,30 @@ class RequestHelper {
         # Only adjust counters if not already in dedicated mode
         # (setDedicated() may have been called first in registerDedicatedSocket)
         if (c === cThreads) {
-            dThreads.add();
-            cThreads.done();
+            if (counted) {
+                dThreads.add();
+                cThreads.done();
+            }
             c = dThreads;
         }
         dedicated_external = True;
+    }
+
+    #! Ends the count of the request for a stop of its listener that runs in the request's thread
+    /** Called by HttpListener::stop() for the request that the current thread runs (see current_request): the
+        stop waits for the requests of the listener, and this request ends only when the stop has returned to it, as
+        when the request released the last reference to the server, whose destructor stops it.  The request does not
+        count from here on; the destructor does not end its count again.
+
+        @param listener_cthreads the counter of the normal connection threads of the listener that is stopped; the
+        count of a request of another listener is not ended
+    */
+    releaseForStop(WaitGroup listener_cthreads) {
+        if (!counted || cThreads !== listener_cthreads) {
+            return;
+        }
+        counted = False;
+        c.done();
     }
 
     #! Returns True if this connection is in dedicated mode (WebSocket, SSE)

@@ -1,0 +1,199 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ReferenceProgramEntryTest
+
+#! Regression test: a thread uses an lvalue of another Program through a reference while it is in that Program
+/** A reference to a variable of a Program P, held by a local variable, a closure-bound variable or a parameter of
+    another Program, was resolved in P (the RuntimeReferenceHelper entered P and switched to it), but the helper left
+    P when the lvalue had been resolved, before the caller assigned it: the deletion of P could then release the
+    thread's value of a thread_local variable of P, or P's global variable, while the thread wrote it.  The thread now
+    stays in P until the lvalue has been used: the helper hands its entry into P over to the LValueHelper, which leaves
+    P when it releases the lvalue.
+
+    The debug build holds the thread after it assigned the lvalue (dbg_hold_reference_lvalue()), where P's thread list
+    must still name it, which makes the deletion of P wait for the thread (waitForAllThreadsToTerminateIntern()).
+    Before the fix, the thread was not in P there.  P is also deleted while the thread is held: the assignment
+    succeeds, and the deletion completes once the thread has left P.
+*/
+class ReferenceProgramEntryTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for each step
+        const StepTimeout = 60000;
+
+        #! the code of the Program whose variables are referenced
+        const Code = "%new-style\n"
+            "thread_local *int tlx;\n"
+            "our *int gx;\n"
+            "reference<*int> sub get_tl() { return \\tlx; }\n"
+            "reference<*int> sub get_g() { return \\gx; }\n";
+
+        #! the functions of the Program that return a reference, by kind of variable
+        const Getters = {
+            "thread_local": "get_tl",
+            "global": "get_g",
+        };
+
+        #! the ways the thread holds the reference and assigns its lvalue
+        const Holders = ("local", "closure", "parameter");
+
+        #! the value assigned; the thread is held after the assignment of this value through the reference
+        const Value = 4242424242;
+    }
+
+    constructor() : QUnit::Test("ReferenceProgramEntryTest", "1.0", \ARGV) {
+        addTestCase("entry", \entryTest());
+        addTestCase("deletion", \deletionTest());
+        addTestCase("no hold", \noHoldTest());
+        set_return_value(main());
+    }
+
+    #! the thread stays in the Program of the reference until it has assigned the lvalue
+    entryTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the reference lvalue hold requires a debug build");
+        }
+        foreach string kind in (keys Getters) {
+            foreach string holder in (Holders) {
+                Program p(PO_NEW_STYLE);
+                p.parse(Code, "reference-program-entry");
+                hash<auto> r = runHeld(p, Getters{kind}, holder, sub (int tid) {
+                    assertEq(True, inlist(tid, p.getThreadList()), sprintf("%s held by a %s: the thread is in the "
+                        "Program while it uses the lvalue", kind, holder));
+                }, True);
+                assertEq(NOTHING, r.err, sprintf("%s held by a %s: no exception", kind, holder));
+                assertEq(r.value, r.read, sprintf("%s held by a %s: the value assigned is read back", kind, holder));
+                # the thread checks itself once it has used the lvalue: the end of the thread, which follows,
+                # enters the Program again to release the thread's value of its thread_local variable
+                assertEq(False, r.in_program, sprintf("%s held by a %s: the thread has left the Program once it has "
+                    "used the lvalue", kind, holder));
+                # runHeld() has joined the thread, so the release of its thread_local value has ended as well
+                assertEq((), p.getThreadList(), sprintf("%s held by a %s: the thread has left the Program", kind,
+                    holder));
+            }
+        }
+    }
+
+    #! the Program is deleted while a thread uses one of its lvalues through a reference
+    deletionTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the reference lvalue hold requires a debug build");
+        }
+        foreach string kind in (keys Getters) {
+            foreach string holder in (Holders) {
+                Program p(PO_NEW_STYLE);
+                p.parse(Code, "reference-program-entry");
+                Counter deleted(1);
+                *hash<ExceptionInfo> delete_ex;
+                hash<auto> r = runHeld(p, Getters{kind}, holder, sub (int tid) {
+                    # the deletion waits for the held thread to leave the Program
+                    background sub () {
+                        on_exit deleted.dec();
+                        try {
+                            delete p;
+                        } catch (hash<ExceptionInfo> ex) {
+                            delete_ex = ex;
+                        }
+                    }();
+                }, False);
+                assertEq(NOTHING, r.err, sprintf("%s held by a %s: no exception", kind, holder));
+                assertEq(0, deleted.waitForZero(StepTimeout), sprintf("%s held by a %s: the deletion completed",
+                    kind, holder));
+                assertEq(NOTHING, delete_ex, sprintf("%s held by a %s: the deletion raised no exception", kind,
+                    holder));
+            }
+        }
+    }
+
+    #! a hold that is not armed is refused
+    noHoldTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the reference lvalue hold requires a debug build");
+        }
+        assertThrows("DBG-ARGUMENT-ERROR", "no thread is held",
+            sub () { call_function("dbg_continue_reference_lvalue", 100); });
+        assertEq(False, call_function("dbg_wait_reference_lvalue_held", 10));
+    }
+
+    #! runs a thread that takes a reference from the Program and assigns its lvalue, holding it after the assignment
+    /** @param p the Program
+        @param getter the function of the Program that returns the reference
+        @param holder how the thread holds the reference: in a local variable, in a closure-bound variable or in a
+        parameter
+        @param check called with the thread's TID while the thread is held
+        @param read_back true to read the lvalue back after the assignment, and to check whether the thread is in the
+        Program once it has used the lvalue; false where the Program is deleted meanwhile
+
+        @return a hash: \c value: the value assigned, \c read: the value read back, \c in_program: whether the
+        thread was in the Program once it had used the lvalue, \c err: the exception raised
+
+        The thread has terminated when this method returns: its end enters the Program to release the thread's
+        value of a thread_local variable of the Program after the thread has pushed its result, so a check of the
+        Program's threads after the result only would race with that release
+    */
+    private hash<auto> runHeld(Program p, string getter, string holder, code check, bool read_back) {
+        Queue tidq();
+        Queue result();
+        call_function("dbg_hold_reference_lvalue", Value);
+        on_error {
+            # a thread that is held is let go
+            if (call_function("dbg_wait_reference_lvalue_held", 0)) {
+                call_function("dbg_continue_reference_lvalue", StepTimeout);
+            }
+        }
+        int bg_tid = background ReferenceProgramEntryTest::assignThroughReference(p, getter, holder, read_back, tidq,
+            result);
+        int tid = tidq.get(StepTimeout);
+        assertEq(bg_tid, tid, "the thread's TID");
+        assertEq(True, call_function("dbg_wait_reference_lvalue_held", StepTimeout), "the thread is held");
+        check(tid);
+        assertEq(True, call_function("dbg_continue_reference_lvalue", StepTimeout), "the thread continued");
+        hash<auto> rv = result.get(StepTimeout);
+        assertEq(True, thread_join(tid, StepTimeout), "the thread terminated");
+        return rv;
+    }
+
+    #! takes a reference from the Program and assigns its lvalue as \a holder says; see runHeld()
+    private static assignThroughReference(Program p, string getter, string holder, bool read_back, Queue tidq,
+            Queue result) {
+        # the value types of the hash vary, so its literal is not used: its type would be hash<string, int>
+        hash<auto> rv = {};
+        rv.value = Value;
+        try {
+            reference<*int> r = p.callFunction(getter);
+            tidq.push(gettid());
+            switch (holder) {
+                case "local":
+                    r = rv.value;
+                    break;
+                case "closure": {
+                    code c = sub (int v) { r = v; };
+                    c(rv.value);
+                    break;
+                }
+                case "parameter":
+                    ReferenceProgramEntryTest::assignParameter(\r, rv.value);
+                    break;
+            }
+            if (read_back) {
+                rv.read = r;
+                rv.in_program = inlist(gettid(), p.getThreadList());
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rv.err = ex.err + ": " + ex.desc;
+        }
+        result.push(rv);
+    }
+
+    #! assigns the lvalue of a reference held by a parameter
+    private static assignParameter(reference<*int> r, int v) {
+        r = v;
+    }
+}

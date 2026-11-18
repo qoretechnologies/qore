@@ -33,11 +33,13 @@
 #include <qore/QoreSandboxManager.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/ThreadPool.h"
+#include "qore/intern/QoreForkHandlers.h"
 
 #include <cassert>
 #include <cctype>
@@ -48,6 +50,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -91,6 +94,10 @@ struct QoreSandboxMembers {
 
 struct qore_fs_security_private {
     std::shared_ptr<const QoreSandboxMembers> composition;
+    //! the uncontrolled-API policy of the QoreSandboxManager (see QoreSandboxManager::setUncontrolledApiPolicy());
+    //! state of the whole manager, kept here as the composition is, so that the layout of QoreSandboxManager, which is
+    //! part of the C++ API, does not change
+    std::atomic<bool> uncontrolled_api_allowed{false};
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
@@ -337,18 +344,41 @@ int QoreFilesystemSecurityManager::addDeniedPath(const char* path, ExceptionSink
     return 0;
 }
 
+// removes the allowed path rule that setSandboxRoot() added for the root; does not throw
+static void remove_sandbox_root_rule(std::vector<PathRule>& rules, const std::string& root) noexcept {
+    if (root.empty()) {
+        return;
+    }
+    for (auto i = rules.rbegin(), e = rules.rend(); i != e; ++i) {
+        if (i->mode == QSEC_ALL && i->path == root) {
+            rules.erase(std::next(i).base());
+            return;
+        }
+    }
+}
+
 int QoreFilesystemSecurityManager::setSandboxRoot(const char* path, ExceptionSink* xsink) {
     std::string canon = priv->canonicalize(path, xsink);
     if (*xsink) return -1;
 
-    priv->sandbox_root = canon;
+    // everything that can throw is done first, so that a failure leaves the old root and the old rules untouched:
+    // the rule that implicitly allows the sandbox root with all access, and room for it
+    PathRule rule(canon, QSEC_ALL);
+    priv->allowed_paths.reserve(priv->allowed_paths.size() + 1);
 
-    // Implicitly allow the sandbox root with all access
-    priv->allowed_paths.emplace_back(canon, QSEC_ALL);
+    // commit with operations that do not throw: replacing a root removes the rule of the previous one
+    remove_sandbox_root_rule(priv->allowed_paths, priv->sandbox_root);
+    priv->allowed_paths.push_back(std::move(rule));
+    priv->sandbox_root = std::move(canon);
     return 0;
 }
 
 void QoreFilesystemSecurityManager::clearSandboxRoot() {
+    // setSandboxRoot() adds exactly one allowed path rule for the root (and changes nothing else, in particular not
+    // the default policy); remove that rule, so that the configuration is the one from before the root was set.  A
+    // rule equal to it that was added separately is indistinguishable from it, and one of the two remains; rules
+    // added after the root remain
+    remove_sandbox_root_rule(priv->allowed_paths, priv->sandbox_root);
     priv->sandbox_root.clear();
 }
 
@@ -358,6 +388,21 @@ void QoreFilesystemSecurityManager::setDefaultPolicy(bool allow) {
 
 bool QoreFilesystemSecurityManager::getDefaultPolicy() const {
     return priv->default_allow;
+}
+
+bool QoreFilesystemSecurityManager::isRestricting() const {
+    // a composition holds no state of its own: it restricts if any member does
+    if (priv->composition) {
+        for (const auto* manager : priv->composition->managers) {
+            if (manager->filesystem().isRestricting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // the sandbox root confines every access to a subtree, so it restricts like a path rule
+    return !priv->default_allow || !priv->allowed_paths.empty() || !priv->denied_paths.empty()
+        || !priv->sandbox_root.empty();
 }
 
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
@@ -836,12 +881,32 @@ void QoreNetworkSecurityManager::allowHTTPSOnly() {
     addAllowedPort(443, QSEC_NET_TCP);
 }
 
+bool QoreNetworkSecurityManager::allowsPort(int port, int proto) const {
+    return priv->isPortAllowed(port, proto);
+}
+
 void QoreNetworkSecurityManager::setDefaultPolicy(bool allow) {
     priv->default_allow = allow;
 }
 
 bool QoreNetworkSecurityManager::getDefaultPolicy() const {
     return priv->default_allow;
+}
+
+bool QoreNetworkSecurityManager::isRestricting() const {
+    // a composition holds no state of its own: it restricts if any member does
+    if (priv->composition) {
+        for (const auto* manager : priv->composition->managers) {
+            if (manager->network().isRestricting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+    // allowed host patterns alone are not a restriction: with the default policy "allow" they restrict nothing, and
+    // with "deny" the default policy counts
+    return !priv->default_allow || !priv->allowed_ranges.empty() || !priv->denied_ranges.empty()
+        || !priv->allowed_ports.empty();
 }
 
 bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, socklen_t len,
@@ -1045,7 +1110,56 @@ QoreSandboxManager::QoreSandboxManager()
     mem_account(new QoreSandboxMemoryAccount), active_threads(0) {
 }
 
+namespace {
+//! the managers that code that is not trusted created, with the ID of the Program it ran in (issue #5659)
+/** Kept apart from QoreSandboxManager, so that its layout, which is part of the C++ API, does not change
+*/
+std::mutex untrusted_creators_lock;
+std::unordered_map<const QoreSandboxManager*, qore_program_id_t> untrusted_creators;
+
+//! returns the ID of the current Program, or QORE_NO_PROGRAM_ID
+qore_program_id_t qore_sandbox_caller_pgm_id() {
+    QoreProgram* pgm = getProgram();
+    return pgm ? pgm->getProgramId() : QORE_NO_PROGRAM_ID;
+}
+}
+
+void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm) {
+    if (!sm || !qore_calling_code_is_untrusted()) {
+        return;
+    }
+    qore_program_id_t id = qore_sandbox_caller_pgm_id();
+    std::lock_guard<std::mutex> lck(untrusted_creators_lock);
+    untrusted_creators[sm] = id;
+}
+
+int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink) {
+    if (!qore_calling_code_is_untrusted()) {
+        return 0;
+    }
+    qore_program_id_t id = qore_sandbox_caller_pgm_id();
+    {
+        std::lock_guard<std::mutex> lck(untrusted_creators_lock);
+        auto i = untrusted_creators.find(sm);
+        if (i != untrusted_creators.end() && i->second == id) {
+            return 0;
+        }
+    }
+    xsink->raiseException("SANDBOX-ACCESS-ERROR", "%s: sandboxed code, or code whose functional domains are "
+        "restricted, can lift a restriction only of a SandboxManager that its own Program created; not of one that "
+        "governs it or another Program", what);
+    return -1;
+}
+
 QoreSandboxManager::~QoreSandboxManager() {
+    // an interrupt requested of a manager that is destroyed is no longer pending anywhere
+    if (interrupt_flags.load(std::memory_order_seq_cst) & QSB_INTR_REQUESTED) {
+        qore_sandbox_interrupt_count.fetch_sub(1, std::memory_order_seq_cst);
+    }
+    {
+        std::lock_guard<std::mutex> lck(untrusted_creators_lock);
+        untrusted_creators.erase(this);
+    }
     // the account lives on while data charged to it is alive
     mem_account->deref();
 }
@@ -1079,6 +1193,28 @@ static T sandbox_intersection_limit(const QoreSandboxManager* manager, T own,
         }
     }
     return own;
+}
+
+void QoreSandboxManager::setUncontrolledApiPolicy(bool allow) {
+    fs_mgr.priv->uncontrolled_api_allowed.store(allow, std::memory_order_release);
+}
+
+bool QoreSandboxManager::getUncontrolledApiPolicy() const {
+    // a composition allows them only if every member does
+    if (const auto* members = QoreSandboxComposition::members(this)) {
+        for (const auto* member : *members) {
+            if (!member->getUncontrolledApiPolicy()) {
+                return false;
+            }
+        }
+        return !members->empty();
+    }
+    return fs_mgr.priv->uncontrolled_api_allowed.load(std::memory_order_acquire);
+}
+
+bool QoreSandboxManager::trustsUncontrolledApis() const {
+    // there is no unreadable state; a composition is true only if every member is (getUncontrolledApiPolicy())
+    return getUncontrolledApiPolicy();
 }
 
 void QoreSandboxManager::setMaxThreads(int count) {
@@ -1126,6 +1262,24 @@ void QoreSandboxManager::setMaxStackSize(int64 bytes) {
 
 int64 QoreSandboxManager::getMaxStackSize() const {
     return sandbox_intersection_limit<int64>(this, max_stack_size.load(), &QoreSandboxManager::getMaxStackSize);
+}
+
+bool QoreSandboxManager::networkRestricts() const {
+    return net_mgr.isRestricting();
+}
+
+bool QoreSandboxManager::filesystemRestricts() const {
+    return fs_mgr.isRestricting();
+}
+
+bool QoreSandboxManager::limitsRestrict() const {
+    // the getters report the tightest positive limit of the members of a composition
+    return getMaxThreads() > 0 || getWallTimeLimit() > 0 || getCPUTimeLimit() > 0 || getMaxStackSize() > 0
+        || getMemoryLimit() > 0;
+}
+
+bool QoreSandboxManager::restricts() const {
+    return networkRestricts() || filesystemRestricts() || limitsRestrict();
 }
 
 int QoreSandboxManager::acquireThreadSlot(ExceptionSink* xsink) {
@@ -1260,10 +1414,28 @@ void QoreSandboxManager::releaseThreadSlotQuiet() {
     (void)prev;
 }
 
+std::atomic<int> qore_sandbox_interrupt_count{0};
+
+#ifdef DEBUG
+thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm) = nullptr;
+#endif
+
 void QoreSandboxManager::requestInterrupt() {
     // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check interrupt) to
-    // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
-    interrupt_flags.fetch_or(QSB_INTR_REQUESTED, std::memory_order_seq_cst);
+    // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt; the count of requested interrupts, which
+    // cancellation points read first, is incremented before the waiters are woken as well.  It is incremented before
+    // the bit is set, so that it is never less than the number of set bits: a concurrent clearInterrupt() decrements
+    // it only after clearing a set bit (see qore_sandbox_interrupt_count)
+    qore_sandbox_interrupt_count.fetch_add(1, std::memory_order_seq_cst);
+#ifdef DEBUG
+    if (qore_sandbox_interrupt_request_hook) {
+        qore_sandbox_interrupt_request_hook(this);
+    }
+#endif
+    if (interrupt_flags.fetch_or(QSB_INTR_REQUESTED, std::memory_order_seq_cst) & QSB_INTR_REQUESTED) {
+        // the bit was already set and counted
+        qore_sandbox_interrupt_count.fetch_sub(1, std::memory_order_seq_cst);
+    }
 
     // Wake any threads currently blocked in QoreCondition::waitWithInterrupt — they re-check their
     // cancel/interrupt state on wakeup.  We don't filter by program (no back-ref from manager to
@@ -1293,7 +1465,9 @@ void QoreSandboxManager::requestInterrupt() {
 }
 
 void QoreSandboxManager::clearInterrupt() {
-    interrupt_flags.fetch_and(~QSB_INTR_REQUESTED, std::memory_order_seq_cst);
+    if (interrupt_flags.fetch_and(~QSB_INTR_REQUESTED, std::memory_order_seq_cst) & QSB_INTR_REQUESTED) {
+        qore_sandbox_interrupt_count.fetch_sub(1, std::memory_order_seq_cst);
+    }
 }
 
 bool QoreSandboxManager::isInterruptRequested() const {
@@ -1367,6 +1541,7 @@ QoreHashNode* QoreSandboxManager::getConfiguration(ExceptionSink* xsink) const {
     config->setKeyValue("memory_limit", static_cast<int64>(mem_account->limit.load()), xsink);
     config->setKeyValue("interrupt_requested", static_cast<bool>(interrupt_flags.load() & QSB_INTR_REQUESTED),
         xsink);
+    config->setKeyValue("uncontrolled_api_policy", getUncontrolledApiPolicy(), xsink);
 
     return config.release();
 }
@@ -1452,6 +1627,8 @@ QoreSandboxManager* QoreSandboxManager::copy() const {
     result->cpu_time_limit = cpu_time_limit.load();
     result->max_stack_size = max_stack_size.load();
     result->mem_account->limit.store(mem_account->limit.load());
+    // the effective policy: a copy of a composition allows them only if every member does
+    result->setUncontrolledApiPolicy(getUncontrolledApiPolicy());
     // Don't copy interrupt state
 
     return result;
@@ -1527,6 +1704,84 @@ QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
         return sm;
     }
     return nullptr;
+}
+
+bool qore_program_is_sandboxed(const QoreProgram* pgm) {
+    if (!pgm) {
+        return false;
+    }
+    const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    // the flag is set whenever a manager is set; the manager is read as well, so that the answer never depends on
+    // the order of the two stores
+    return pp->sandboxed.load(std::memory_order_acquire) || pp->sandbox_manager.load(std::memory_order_acquire);
+}
+
+void qore_program_mark_sandboxed(QoreProgram& pgm) {
+    qore_program_private::get(pgm)->sandboxed.store(true, std::memory_order_release);
+}
+
+namespace {
+//! the Programs with module lifetime, each with a dependency reference; see qore_program_set_module_lifetime()
+struct ModuleProgramPins {
+    std::mutex m;
+    //! leaf lock: only the reference count is changed while it is held
+    QoreForkStdMutex fork_handler{m, QFLR_LEAF, "module_program_pins"};
+    std::vector<QoreProgram*> pgms;
+};
+
+ModuleProgramPins& module_program_pins() {
+    // never destroyed: the pins are released by qore_cleanup(), which can run after static destructors started
+    static ModuleProgramPins* p = new ModuleProgramPins;
+    return *p;
+}
+}
+
+// written under ModuleProgramPins::m; constant-initialized, so it is valid before and after static initialization
+std::atomic<bool> qore_module_lifetime_flag{true};
+
+void qore_program_set_module_lifetime(QoreProgram& pgm) {
+    qore_program_private* pp = qore_program_private::get(pgm);
+    if (pp->module_lifetime.load(std::memory_order_acquire)) {
+        return;
+    }
+    ModuleProgramPins& pins = module_program_pins();
+    std::lock_guard<std::mutex> l(pins.m);
+    if (!qore_module_lifetime_flag.load(std::memory_order_relaxed)
+            || pp->module_lifetime.load(std::memory_order_relaxed)) {
+        return;
+    }
+    pins.pgms.push_back(&pgm);
+    pgm.depRef();
+    // published after the reference has been taken
+    pp->module_lifetime.store(true, std::memory_order_release);
+}
+
+bool qore_program_has_module_lifetime(const QoreProgram* pgm) {
+    return pgm && qore_module_lifetime_flag.load(std::memory_order_acquire)
+        && qore_program_private::get(*const_cast<QoreProgram*>(pgm))->module_lifetime.load(
+            std::memory_order_acquire);
+}
+
+void qore_get_module_lifetime_programs(std::vector<QoreProgram*>& pgms) {
+    ModuleProgramPins& pins = module_program_pins();
+    std::lock_guard<std::mutex> l(pins.m);
+    pgms = pins.pgms;
+}
+
+void qore_release_module_program_pins() {
+    ModuleProgramPins& pins = module_program_pins();
+    std::vector<QoreProgram*> pgms;
+    {
+        std::lock_guard<std::mutex> l(pins.m);
+        qore_module_lifetime_flag.store(false, std::memory_order_release);
+        pgms.swap(pins.pgms);
+    }
+    // the method lookups cached for classes of Programs with module lifetime are no longer known to be stable
+    // (QoreCallTargetCheckCache, issue #5824)
+    qore_bump_method_dispatch_epoch();
+    for (QoreProgram* pgm : pgms) {
+        pgm->depDeref();
+    }
 }
 
 //------------------------------------------------------------------------------
@@ -1606,6 +1861,14 @@ QoreSandboxManagerHelper::QoreSandboxManagerHelper(Purpose purpose) {
     ptr = purpose == Policy
         ? qore_find_thread_sandbox_policy_manager_ref()
         : qore_find_thread_sandbox_manager_ref();
+}
+
+bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose purpose) {
+    // the governing managers are resolved as QoreSandboxManagerHelper(purpose) resolves them, without combining them
+    // (which would allocate a composition on every call of an uncontrolled API): the composition allows them only if
+    // every member does
+    assert(purpose == QoreSandboxManagerHelper::Policy || purpose == QoreSandboxManagerHelper::All);
+    return qore_thread_sandbox_allows_uncontrolled_apis(purpose == QoreSandboxManagerHelper::Policy);
 }
 
 QoreSandboxManagerHelper::QoreSandboxManagerHelper(QoreProgram* pgm) {

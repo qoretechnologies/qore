@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <algorithm>
 #include <atomic>
@@ -194,6 +195,10 @@ public:
     */
     DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 
+    //! Records on the stream's frame state that the application sends its close frame itself; see
+    //! ChannelAction::markFrameStateCloseSent()
+    DLLLOCAL int markFrameStateCloseSent(int64_t stream_id, ExceptionSink* xsink);
+
     //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
     /** Attaches a WebSocketStreamFrameState to the ChannelAction already
         registered for @a stream_id.  The install drains items buffered in
@@ -254,6 +259,29 @@ public:
         return s == H3State::READING || s == H3State::WAIT_READ;
     }
 
+    //! Waits for the server's HTTP/3 SETTINGS before an extended CONNECT request (RFC 9220); raises and returns -1 on
+    //! timeout
+    /** The connection is ready at the end of the QUIC handshake, and the server's SETTINGS, the first frame of its
+        control stream (RFC 9114 section 6.2.1), can arrive after it; a client must not send an extended CONNECT
+        before the SETTINGS advertised SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 section 3), and every other request
+        is sent at once (RFC 9114 section 7.2.4.2).  The wait ends when the SETTINGS arrive or the connection is
+        closed (then the submission reports why), or at the connect deadline (see setConnectTimeout()), with
+        HTTP3-EXTENDED-CONNECT-ERROR.  The I/O thread and the continuePoll() workers never wait, as the I/O thread
+        reads the SETTINGS: there, a request made before the SETTINGS arrived gets HTTP3-EXTENDED-CONNECT-ERROR from
+        QuicSession::checkExtendedConnectAllowed()
+    */
+    DLLLOCAL int waitForExtendedConnectSettings(ExceptionSink* xsink);
+
+    //! Sets the connect timeout, which also bounds the wait of an extended CONNECT for the server's SETTINGS
+    /** Called once at construction, before the connection starts; the deadline is the time of the call plus the
+        timeout (see waitForExtendedConnectSettings()); 0 or less means no deadline
+    */
+    DLLLOCAL void setConnectTimeout(int64_t connect_timeout_ms) {
+        settings_deadline_us = connect_timeout_ms > 0
+            ? q_clock_getmicros_monotonic() + connect_timeout_ms * 1000
+            : 0;
+    }
+
     //! Sets the state of the open connection (READING or WAIT_READ) unless it was closed meanwhile; I/O thread only
     /** H3State::CLOSED is final.  Other threads close the operation too: a submitting thread records a refused
         submission with setSubmitError(), and abort() runs on any thread.  Such a close can happen while the I/O
@@ -267,25 +295,28 @@ public:
     DLLLOCAL void setOpenState(H3State s, const char* site);
 
 
-    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
+    //! Can be called from any thread: reads @ref has_error, which is set when the error is stored under the stream lock
     DLLLOCAL bool hasError() const {
-        AutoLocker al(stream_lock);
-        return error_info != nullptr;
+        return has_error.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @c stream_lock, which the writers (setError(), setSubmitError()) hold while they record the error,
+        so the hash is returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
+
+    //! Returns the code and description of the recorded error; returns false if no error was recorded
+    /** Read under @c stream_lock, as getErrorInfo()
+    */
+    DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
 
     //! Returns the number of active streams
     /** Read under @c stream_lock: every write happens under that lock, so an
         unlocked read is a data race that can return a stale count on a
         weakly-ordered host.  The connection manager's checkout reads this value
-        twice — once unlocked via isConnectionAlive(), once under the Qore
-        connection Mutex via tryReserveStream() — and a stale non-zero followed by a
+        twice — once unlocked via isConnectionAlive(), once under the
+        reservation lock of the connection via tryReserveStream() — and a stale non-zero followed by a
         true zero makes an expired pooled connection look busy to the eviction check
         and free to the capacity check.  Matches
         Http2ClientPollOperationPriv::getActiveStreamCount().
@@ -295,7 +326,9 @@ public:
         return active_stream_count;
     }
 
+    //! Returns the stream limit set with setQuicStreamLimit(); read under @c stream_lock, which the setter holds
     DLLLOCAL int getQuicStreamLimit() const {
+        AutoLocker al(stream_lock);
         return quic_stream_limit;
     }
 
@@ -312,7 +345,7 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
         if (sock_obj) {
-            sock_obj->setMaxResponseBodySize(max_size);
+            qore_socket_object_private(sock_obj).setMaxResponseBodySize(max_size);
         }
     }
 
@@ -320,7 +353,7 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int64_t getDataIdleUs() const {
-        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+        return sock_obj ? qore_socket_object_private(sock_obj).getDataIdleUs() : -1;
     }
 
     DLLLOCAL int64_t getSessionId() const {
@@ -333,7 +366,7 @@ public:
     DLLLOCAL void releaseStream(int64_t stream_id) {
         int64_t sid = session_id.load(std::memory_order_acquire);
         if (sock_obj && sid) {
-            sock_obj->releaseQuicStream(sid, stream_id);
+            qore_socket_object_private(sock_obj).releaseQuicStream(sid, stream_id);
         }
     }
 
@@ -342,6 +375,13 @@ public:
     */
     DLLLOCAL int getAddressFamily() const {
         return inner_op ? inner_op->getAddressFamily() : AF_UNSPEC;
+    }
+
+    //! Returns true once the QUIC handshake has completed, also after the connection has closed
+    /** Can be called from any thread
+    */
+    DLLLOCAL bool isHandshakeComplete() const {
+        return inner_op && inner_op->isHandshakeComplete();
     }
 
     DLLLOCAL bool isQuicSessionOpen() const {
@@ -428,12 +468,37 @@ public:
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
 private:
     //! Inner C++ QUIC client poll operation (ref'd)
     SocketQuicClientPollOperation* inner_op;
+
+#ifdef DEBUG
+    //! True if the test hook held the responses during the last read pass; I/O thread only (issue #5839)
+    bool dbg_read_pass_held = false;
+#endif
 
     //! The socket object (ref'd)
     QoreSocketObject* sock_obj;
@@ -446,6 +511,11 @@ private:
 
     //! True when GOAWAY received from server
     std::atomic<bool> goaway_received{false};
+
+    //! The deadline of the wait of an extended CONNECT for the server's SETTINGS (monotonic us; 0 = none)
+    /** The start of the connection plus its connect timeout (see setConnectTimeout()); immutable after construction
+    */
+    int64_t settings_deadline_us = 0;
 
     //! A connection migration requested by an application thread with requestMigration()
     struct MigrationRequest {
@@ -564,6 +634,9 @@ private:
 
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Connection C++ priv pointer guarded by @ref stream_lock.
     /** The constructor takes an explicit C++ ref for this pointer so the
@@ -628,8 +701,18 @@ private:
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void cleanupPendingState();
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
+
+    //! Wakes the threads waiting for the server's SETTINGS when the connection is closed
+    DLLLOCAL void wakeSettingsWaiters();
 };
 
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& qorens);
+
+//! Holds a reference to an HTTP/3 client poll operation taken by a reader of its connection
+/** The connection releases the operation in a teardown that can run at any time, so a reader takes a reference of its
+    own; a reader holds it while it runs in the connection's method (under its method guard, or under a lock of the
+    caller), so its release must not run the operation's cleanup in the reader's thread
+*/
+typedef QorePollOpOffThreadRef<Http3ClientPollOperationPriv> Http3PollOperationReaderRef;
 
 #endif // _QORE_CLASS_HTTP3CLIENTPOLLOPERATIONBASE_H

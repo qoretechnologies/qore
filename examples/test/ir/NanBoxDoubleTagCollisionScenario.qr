@@ -178,7 +178,16 @@ code sub makeNegate() {
     return float sub (float x) { return -x; };
 }
 
-const LeakIterations = 200000;
+#! the iterations of each pattern
+/** The heap values are counted exactly, so that a pattern that leaves one value behind in each iteration leaves a
+    thousand behind, and the count shows each of them; the iterations repeat each pattern's variants (the indexes and
+    branches that depend on the iteration) many times.  The test runs this script with ExecModeHarness, whose
+    synchronous compiles (QORE_JIT_SYNC_COMPILE) compile each function at its first call, so that the measured call
+    runs native code with JIT and tiered execution whatever the count; run without it, the compile in the
+    background can end after the measured call.  The count of 200000 was that of the resident memory checks,
+    which a leak had to grow by megabytes, and made the leak checks run long in a debug build.
+*/
+const LeakIterations = 1000;
 
 #! the heap floats and heap ints that exist in the process
 hash<string, int> sub liveNodes() {

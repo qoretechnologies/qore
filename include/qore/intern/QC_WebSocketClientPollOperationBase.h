@@ -37,6 +37,7 @@
 #include "qore/SocketPollOperation.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/QoreQueue.h"
+#include "qore/QoreThreadLock.h"
 #include "qore/WebSocketFrameCodec.h"
 
 #include <atomic>
@@ -160,18 +161,14 @@ public:
         }
     }
 
-    //! Returns true if the error state is set
-    DLLLOCAL bool hasError() const {
-        return error_info != nullptr;
-    }
+    //! Returns true if an error was recorded; can be called from any thread (reads @ref has_error, without a lock)
+    DLLLOCAL bool hasError() const;
 
-    //! Returns ref'd error info hash or nullptr
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @ref error_lock, which the writer holds while it stores the complete error hash, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     //! Sets whether extensions are active
     /** When extensions are active, RSV bit validation is skipped in C++
@@ -280,7 +277,7 @@ public:
     DLLLOCAL void setHeartbeat(int64 ms) {
         heartbeat_interval_ms = ms;
         if (ms > 0 && last_recv_activity_ms == 0) {
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
         }
     }
 
@@ -294,7 +291,7 @@ public:
     DLLLOCAL void setIdleTimeout(int64 ms) {
         idle_timeout_ms = ms;
         if (ms > 0 && last_recv_activity_ms == 0) {
-            last_recv_activity_ms = q_clock_getmillis();
+            last_recv_activity_ms = monotonicMs();
         }
     }
 
@@ -310,12 +307,33 @@ public:
     }
 
     //! Returns the cause tag if the client initiated the close (e.g. "idle-timeout")
-    DLLLOCAL const std::string& getCloseCause() const {
-        return close_cause;
+    //! Returns the reason tag of a close that the client started, or an empty string; can be called from any thread
+    DLLLOCAL const char* getCloseCause() const {
+        return close_cause.load(std::memory_order_acquire);
     }
 
     //! Releases all internal references
     DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
 protected:
     DLLLOCAL const char* getStateImpl() const override;
@@ -329,6 +347,38 @@ private:
 
     WebSocketFrameDecoder decoder;          //!< stateful frame decoder
     WebSocketFrameReassembler reassembler;  //!< fragment reassembler
+    //! the size of the fragments received of the message being reassembled, checked against the maximum frame size
+    //! as they arrive (issue #5861)
+    size_t fragment_bytes = 0;
+
+    //! the bytes still to discard of a frame rejected on its header (issue #5878)
+    uint64_t skip_bytes = 0;
+
+    //! set when the peer sent a frame that is a protocol error: once the close frame is written, the connection ends
+    //! with 1002 without waiting for the peer's close, which cannot be read any more (issue #5878)
+    bool protocol_failed = false;
+    //! the reason of the protocol error
+    std::string protocol_reason;
+
+    //! Rejects the message being received: discards what was received of it, and starts closing with the code given
+    /** Data frames are discarded from then on, whether or not the close frame could be queued (issue #5878)
+    */
+    DLLLOCAL void rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink);
+
+    //! Ends the operation for a lost connection: with 1006, or with the protocol error that the client closed for
+    DLLLOCAL void endConnectionLost(const char* reason, ExceptionSink* xsink);
+
+    //! Appends received data to the decoder, after discarding the rest of a frame rejected on its header
+    DLLLOCAL void feedDecoder(const void* data, size_t len);
+
+    //! Rejects the next frame on its header (issue #5878)
+    /** A data frame whose declared length takes the message over the limit is rejected with 1009, and its payload
+        is discarded as it arrives, so it is never buffered; an invalid length, a control frame over 125 bytes or a
+        reserved opcode is a protocol error, rejected with 1002, after which everything received is discarded.
+
+        @return true if a frame was rejected
+    */
+    DLLLOCAL bool rejectOversizedFrame(ExceptionSink* xsink);
 
     //! Current send inner operation (nullptr when not sending)
     SocketSendPollOperation* send_op = nullptr;
@@ -371,10 +421,16 @@ private:
     */
     DLLLOCAL void setCloseInfo(uint16_t code, const char* reason, bool final = false);
     bool close_initiated = false;           //!< true if we initiated the close handshake
+    //! true if the operation started the close itself because of an error (for example a message that is too big),
+    //! not because the application asked for it (issue #5861)
+    bool close_for_error = false;
     //! How long a close started by the client waits for the server's close frame (milliseconds, 0 = no bound)
     int64 close_timeout_ms = DefaultCloseTimeoutMs;
-    //! When a close started by the client stops waiting for the server's close frame (monotonic ms, 0 = never)
-    int64 close_deadline_ms = 0;
+    //! When a close started by the client stops waiting for the server's close frame (monotonic us, 0 = never)
+    /** In microseconds: a deadline in whole milliseconds, from a truncated clock reading, ended the wait up to a
+        millisecond before the close timeout
+    */
+    int64 close_deadline_us = 0;
     bool has_extensions = false;            //!< true if extensions are active (skip RSV validation)
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
@@ -392,10 +448,20 @@ private:
     */
     int64 heartbeat_interval_ms = 0;
 
-    //! Timestamp of last received data (milliseconds, monotonic clock)
+    //! Returns the time of the monotonic clock in milliseconds, at least 1, for the heartbeat, idle and send timers
+    /** The timers measure intervals, which a step of the system clock must not change: a step forward closed idle
+        connections at once, and a step back suppressed the heartbeat and the idle close for the size of the step.
+        Never 0, as 0 marks a timestamp that is not set.
+    */
+    DLLLOCAL static int64 monotonicMs() {
+        int64 ms = q_clock_getmicros_monotonic() / 1000;
+        return ms > 0 ? ms : 1;
+    }
+
+    //! Timestamp of last received data (milliseconds, monotonic clock; see monotonicMs())
     int64 last_recv_activity_ms = 0;
 
-    //! Timestamp of last PING frame sent (milliseconds, monotonic clock)
+    //! Timestamp of last PING frame sent (milliseconds, monotonic clock; see monotonicMs())
     /** Tracked separately from last_recv_activity_ms so outgoing PINGs do
         not mask peer silence — idle-timeout detection relies on
         last_recv_activity_ms reflecting real incoming traffic only.
@@ -409,10 +475,20 @@ private:
     bool closed_on_idle = false;
 
     //! Reason tag for client-initiated close (e.g. "idle-timeout"), surfaced to observers
-    std::string close_cause;
+    /** A string literal: set by the thread that drives the operation and read by any thread (getCloseCause())
+    */
+    std::atomic<const char*> close_cause{""};
 
-    //! Error information (ref'd or nullptr)
+    //! Protects @ref error_info, which the thread driving the operation records and any thread reads
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock error_lock;
+
+    //! Error information (ref'd or nullptr); protected by @ref error_lock
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! Pending send data — pre-encoded frame bytes ready to send
     /** Populated from send_queue when no send_op is active.
@@ -453,7 +529,7 @@ private:
 
     //! Sets the close deadline of a close started by the client
     DLLLOCAL void startCloseWait() {
-        close_deadline_ms = close_timeout_ms ? q_clock_getmicros_monotonic() / 1000 + close_timeout_ms : 0;
+        close_deadline_us = close_timeout_ms ? q_clock_getmicros_monotonic() + close_timeout_ms * 1000 : 0;
     }
 
     //! Ends the operation closed without a close frame from the server, and reports it as a "closed" message

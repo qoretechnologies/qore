@@ -36,6 +36,58 @@
 # Test servers use IPv4 unless a case explicitly selects another family. Keep endpoints on IPv4 loopback because an
 # unrelated IPv6-only listener can independently own the same ephemeral port number.
 
+#! a logger appender that reports the ends of the connections of an HTTP server
+/** The controller logs the end of an HTTP/1.x connection (\c "Connection closed: ...") and of an HTTP/2 connection
+    (\c "HTTP/2 connection closed...", at the \c DEBUG level) in the callback that removes the connection and then
+    cancels its operation (qore#6479)
+*/
+class ConnectionCloseAppender inherits LoggerAppenderWithLayout {
+    private {
+        #! the ends of HTTP/1.x connections
+        Queue h1_closed();
+        #! the ends of HTTP/2 connections
+        Queue h2_closed();
+    }
+
+    constructor() : LoggerAppenderWithLayout("connection-close", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type != EVENT_LOG) {
+            return;
+        }
+        if (params =~ /^Connection closed: /) {
+            h1_closed.push(params);
+        } else if (params =~ /^HTTP\/2 connection closed/) {
+            h2_closed.push(params);
+        }
+    }
+
+    #! Waits for the given number of connections to end
+    /** @param http2 True for HTTP/2 connections, False for HTTP/1.x connections
+        @param count the number of connections
+        @param max_wait a guard against a hang: the connections that end in the time are not checked
+
+        @return the number of the connections that ended
+    */
+    int wait(bool http2, int count, timeout max_wait = 2m) {
+        Queue q = http2 ? h2_closed : h1_closed;
+        int ended = 0;
+        try {
+            while (ended < count) {
+                q.get(max_wait);
+                ++ended;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+        return ended;
+    }
+}
+
 class AltHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         return makeResponse(201, "a1, " + hdr.method + ", " + hdr.path + ", " + cx.raw_path);
@@ -275,6 +327,93 @@ class TestWsHandler inherits WebSocketHandler {
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         return new TestWsConnection(self);
+    }
+}
+
+#! An HTTP/1.1 server that answers the first request on its first connection and then goes silent on it without
+#! closing it (a half-open connection); it answers every request on later connections
+class HalfOpenH1Server {
+    private {
+        Socket listener();
+        int port;
+        Counter done(1);
+        bool stop_flag = False;
+        Mutex m();
+        int conn_count = 0;
+        #! the silent connection, kept open until the server is stopped
+        *Socket stalled_client;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    string getUrl() {
+        return "http://127.0.0.1:" + port;
+    }
+
+    int getConnectionCount() {
+        AutoLock al(m);
+        return conn_count;
+    }
+
+    stop() {
+        stop_flag = True;
+        listener.close();
+        done.waitForZero(30s);
+        if (stalled_client) {
+            stalled_client.close();
+        }
+    }
+
+    private run() {
+        on_exit done.dec();
+        try {
+            while (!stop_flag) {
+                *Socket client = listener.accept(500ms);
+                if (!client) {
+                    continue;
+                }
+                int n;
+                {
+                    AutoLock al(m);
+                    n = ++conn_count;
+                }
+                if (n == 1) {
+                    # the first connection: the first request is answered, then the connection goes silent
+                    *hash<auto> hdr = client.readHTTPHeader(2s);
+                    if (hdr) {
+                        client.send(makeResponse());
+                    }
+                    stalled_client = client;
+                    continue;
+                }
+                # later connections: every request is answered
+                while (!stop_flag) {
+                    *hash<auto> hdr;
+                    try {
+                        hdr = client.readHTTPHeader(1s);
+                    } catch () {
+                        break;
+                    }
+                    if (!hdr) {
+                        break;
+                    }
+                    client.send(makeResponse());
+                }
+                client.close();
+            }
+        } catch () {
+        }
+    }
+
+    private static string makeResponse() {
+        string body = "{\"ok\": true}";
+        return sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n"
+            "Connection: keep-alive\r\n\r\n%s", body.size(), body);
     }
 }
 
@@ -3626,10 +3765,14 @@ public class HttpServerTest inherits QUnit::Test {
         running.
     */
     asyncModeCacheCleanupTest() {
-        Logger logger("async-cache-cleanup-test", LoggerLevel::getLevelInfo());
+        # the DEBUG level for the end of an HTTP/2 connection
+        Logger logger("async-cache-cleanup-test", LoggerLevel::getLevelDebug());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
+        # the cache is checked when the server has handled the end of each connection, not after a time (qore#6479)
+        ConnectionCloseAppender closes();
+        logger.addAppender(closes);
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
@@ -3680,22 +3823,12 @@ public class HttpServerTest inherits QUnit::Test {
                 clients += client;
             }
 
-            # Verify cache has grown (connections are active); the async I/O
-            # system may not have registered all connections yet, so allow a
-            # brief window for the cache to update
-            int active_cache_size;
-            int retries = 0;
-            while (True) {
-                active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
-                if (active_cache_size > baseline_cache_size || retries >= 20) {
-                    break;
-                }
-                usleep(50ms);
-                ++retries;
-            }
+            # Verify cache has grown (connections are active): the callbacks of the requests have resubmitted the
+            # connections' operations
+            waitForAsyncCallbacks(server);
+            int active_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
-                printf("Active cache size with %d connections: %d (after %d retries)\n",
-                    num_connections, active_cache_size, retries);
+                printf("Active cache size with %d connections: %d\n", num_connections, active_cache_size);
             }
             assertTrue(active_cache_size > baseline_cache_size,
                 "cache should grow when connections are active");
@@ -3704,22 +3837,9 @@ public class HttpServerTest inherits QUnit::Test {
             map $1.disconnect(), clients;
             delete clients;
 
-            # Wait for the async I/O system to process disconnects and clean
-            # up cache entries
-            int final_cache_size;
-            int cleanup_retries = 0;
-            while (True) {
-                final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
-                if (final_cache_size <= baseline_cache_size || cleanup_retries >= 100) {
-                    break;
-                }
-                usleep(50ms);
-                ++cleanup_retries;
-            }
-            if (m_options.verbose > 1) {
-                printf("Cache cleanup took %d retries (%d ms)\n",
-                    cleanup_retries, cleanup_retries * 50);
-            }
+            # Wait until the server has handled the end of each connection and canceled its operation
+            waitForConnectionsClosed(server, closes, False, num_connections);
+            int final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
                 printf("Final cache size after disconnect: %d\n", final_cache_size);
             }
@@ -3731,6 +3851,8 @@ public class HttpServerTest inherits QUnit::Test {
             verify_client.connect();
             assertEq("GET, test2, /test2", verify_client.get("/test2"));
             verify_client.disconnect();
+            # its end must not change the HTTP/2 cache sizes below
+            waitForConnectionsClosed(server, closes, False, 1);
         }
 
         # Test 2: HTTP/2 connections - same test with HTTP/2 over SSL
@@ -3745,6 +3867,7 @@ public class HttpServerTest inherits QUnit::Test {
             int ssl_port = ssl_info.port;
 
             # Get baseline after adding SSL listener (includes accept ops for both listeners)
+            waitForAsyncCallbacks(server);
             int h2_baseline = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
                 printf("HTTP/2 baseline cache size: %d\n", h2_baseline);
@@ -3762,21 +3885,11 @@ public class HttpServerTest inherits QUnit::Test {
                 clients += client;
             }
 
-            # Verify cache has grown (HTTP/2 connections are active); allow a
-            # brief window for the async I/O system to register them
-            int h2_active;
-            int retries = 0;
-            while (True) {
-                h2_active = server.getHttpAsyncIo().getTotalCacheSize();
-                if (h2_active > h2_baseline || retries >= 20) {
-                    break;
-                }
-                usleep(50ms);
-                ++retries;
-            }
+            # Verify cache has grown (HTTP/2 connections are active)
+            waitForAsyncCallbacks(server);
+            int h2_active = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
-                printf("HTTP/2 active cache size with %d connections: %d (after %d retries)\n",
-                    num_connections, h2_active, retries);
+                printf("HTTP/2 active cache size with %d connections: %d\n", num_connections, h2_active);
             }
             assertTrue(h2_active > h2_baseline,
                 "cache should grow when HTTP/2 connections are active");
@@ -3785,22 +3898,9 @@ public class HttpServerTest inherits QUnit::Test {
             map $1.disconnect(), clients;
             delete clients;
 
-            # Wait for the async I/O system to process disconnects and clean
-            # up cache entries
-            int h2_final;
-            int h2_cleanup_retries = 0;
-            while (True) {
-                h2_final = server.getHttpAsyncIo().getTotalCacheSize();
-                if (h2_final <= h2_baseline || h2_cleanup_retries >= 100) {
-                    break;
-                }
-                usleep(50ms);
-                ++h2_cleanup_retries;
-            }
-            if (m_options.verbose > 1) {
-                printf("HTTP/2 cache cleanup took %d retries (%d ms)\n",
-                    h2_cleanup_retries, h2_cleanup_retries * 50);
-            }
+            # Wait until the server has handled the end of each connection and canceled its operation
+            waitForConnectionsClosed(server, closes, True, num_connections);
+            int h2_final = server.getHttpAsyncIo().getTotalCacheSize();
             if (m_options.verbose > 1) {
                 printf("HTTP/2 final cache size after disconnect: %d\n", h2_final);
             }
@@ -3816,6 +3916,22 @@ public class HttpServerTest inherits QUnit::Test {
 
             server.stopListenerID(ssl_info.id);
         }
+    }
+
+    #! Waits until the callbacks of the async I/O controller have run and the I/O threads have handled what they submitted
+    private waitForAsyncCallbacks(HttpServer server) {
+        server.getGlobalAsyncCtrl().flushCallbacks();
+        assertTrue(server.waitForAsyncIo(2m), "async I/O should process the submitted operations");
+    }
+
+    #! Waits until the server has handled the end of the given number of connections
+    /** The callback that logs the end of a connection then cancels its operation: the operation is out of the cache
+        when the callback has returned
+    */
+    private waitForConnectionsClosed(HttpServer server, ConnectionCloseAppender closes, bool http2, int count) {
+        assertEq(count, closes.wait(http2, count), sprintf("the server should handle the end of %d HTTP/%s "
+            "connection(s)", count, http2 ? "2" : "1.1"));
+        waitForAsyncCallbacks(server);
     }
 
     /** Test that server handles bad SSL handshakes without blocking I/O thread.
@@ -4179,121 +4295,80 @@ public class HttpServerTest inherits QUnit::Test {
         # to the first request, then goes silent.  The client sends a second
         # request but gets no response and no close notification.
         #
-        # Recovery model (curl-aligned, post-conn-mgr-hardening): no in-band
-        # stale-detect timer.  The half-open silence is caught by the
-        # application-level request_timeout (15s here), which surfaces as
-        # HTTPCLIENT-TIMEOUT.  isConnectionErrorStatic recognises that error
-        # as retryable, so the conn-mgr replays the request on a fresh
-        # connection (conn 2) which the server handles normally.  Total
-        # elapsed: request_timeout + retry overhead ≈ 16s on a healthy host.
-        #
-        # This is curl's Curl_retry_request model — slower fast-fail than the
-        # old 5s in-band timer but doesn't mistake slow legitimate responses
-        # for dead connections (the bug that motivated this rework).
+        # The request's timeout is a hard deadline for the whole request (#6429): the
+        # half-open silence is caught by it, and the request raises HTTPCLIENT-TIMEOUT;
+        # it is not sent again on a fresh connection, as no attempt starts once the
+        # request's time has run out.  A stale connection is recovered within the
+        # request's time with io_timeout (scenario 4c).
         {
-            bool srv4_stop = False;
-            Socket srv4_listener();
-            srv4_listener.bind("127.0.0.1:0");
-            srv4_listener.listen();
-            int srv4_port = srv4_listener.getSocketInfo().port;
+            HalfOpenH1Server srv();
+            on_exit srv.stop();
 
-            Counter srv4Done(1);
-            *Socket srv4_stalled_client;
-            background sub () {
-                on_exit srv4Done.dec();
-                try {
-                    int conn_num = 0;
-                    while (!srv4_stop) {
-                        *Socket client = srv4_listener.accept(500ms);
-                        if (!client) {
-                            continue;
-                        }
-                        ++conn_num;
-                        if (conn_num == 1) {
-                            # First connection: respond to first request, then stall
-                            *hash<auto> hdr = client.readHTTPHeader(2s);
-                            if (hdr) {
-                                string body = "{\"ok\": true}";
-                                string resp = sprintf(
-                                    "HTTP/1.1 200 OK\r\n"
-                                    "Content-Type: application/json\r\n"
-                                    "Content-Length: %d\r\n"
-                                    "Connection: keep-alive\r\n"
-                                    "\r\n"
-                                    "%s", body.size(), body);
-                                client.send(resp);
-                            }
-                            # Hold the socket open (no close, no FIN) —
-                            # srv4_stalled_client keeps the reference alive so
-                            # the socket stays open without blocking the accept loop
-                            srv4_stalled_client = client;
-                        } else {
-                            # Subsequent connections: respond normally
-                            while (!srv4_stop) {
-                                *hash<auto> hdr;
-                                try {
-                                    hdr = client.readHTTPHeader(1s);
-                                } catch () {
-                                    break;
-                                }
-                                if (!hdr) {
-                                    break;
-                                }
-                                string body = "{\"ok\": true}";
-                                string resp = sprintf(
-                                    "HTTP/1.1 200 OK\r\n"
-                                    "Content-Type: application/json\r\n"
-                                    "Content-Length: %d\r\n"
-                                    "Connection: keep-alive\r\n"
-                                    "\r\n"
-                                    "%s", body.size(), body);
-                                client.send(resp);
-                            }
-                            client.close();
-                        }
-                    }
-                } catch () {}
-            }();
-
-            on_exit {
-                srv4_stop = True;
-                srv4_listener.close();
-                srv4Done.waitForZero(5s);
-            }
-
+            CapturingLoggerAppender appender();
+            Logger logger("scenario4", LoggerLevel::getLevelDebug());
+            logger.addAppender(appender);
             RestClientIo rc({
-                "url": "http://127.0.0.1:" + srv4_port,
+                "url": srv.getUrl(),
                 "data": "json",
                 "connect_timeout": 5s,
-                "timeout": 15s,
+                "timeout": 3s,
+                "logger": logger,
             });
 
             # First request succeeds
             rc.restGet("/health");
 
-            # Second request: server stalls (no response, no close on conn 1).
-            # request_timeout (15s) fires, HTTPCLIENT-TIMEOUT is treated as
-            # a retryable connection error, the conn-mgr retries on a fresh
-            # connection (conn 2) which the server handles normally.
             date start = now_us();
-            bool recovered = False;
+            *hash<ExceptionInfo> err;
             try {
                 rc.restGet("/health");
-                recovered = True;
             } catch (hash<ExceptionInfo> ex) {
-                if (m_options.verbose > 1) {
-                    printf("scenario4: %s: %s\n", ex.err, ex.desc);
-                }
+                err = ex;
             }
             date elapsed = now_us() - start;
-            assertTrue(recovered, "scenario4: retry on fresh connection must succeed");
-            # Bound: request_timeout (15s) + retry overhead (~1s typical,
-            # generous headroom for slow CI).  The assertion guards against
-            # the retry NOT firing (which would manifest as elapsed >= 30s
-            # — two full request_timeout windows — or the test failing on
-            # `recovered` above).
-            assertTrue(elapsed < 18s,
-                sprintf("scenario4: took %y, expected < 18s", elapsed));
+            assertEq("HTTPCLIENT-TIMEOUT", err.err, sprintf("scenario4: the request times out; got %s: %s",
+                err.err, err.desc));
+            assertFalse(appender.hasMessageContaining("evicting stale connection and retrying"),
+                "scenario4: the request is not sent again after its time ran out");
+            assertEq(1, srv.getConnectionCount(), "scenario4: no fresh connection is made");
+            # a guard against the old retry path, which took a second full timeout after the first one; generous
+            # enough for a loaded host or valgrind
+            assertTrue(elapsed < 13s, sprintf("scenario4: took %y, expected < 13s (timeout + 10s)", elapsed));
+        }
+
+        # --- Scenario 4c: the same half-open server, recovered through io_timeout ---
+        # io_timeout (1s) is shorter than the request's timeout: the stale attempt fails
+        # on its inactivity timeout, and the request is sent again once on a fresh
+        # connection within its remaining time, which the server answers.
+        {
+            HalfOpenH1Server srv();
+            on_exit srv.stop();
+
+            CapturingLoggerAppender appender();
+            Logger logger("scenario4c", LoggerLevel::getLevelDebug());
+            logger.addAppender(appender);
+            RestClientIo rc({
+                "url": srv.getUrl(),
+                "data": "json",
+                "connect_timeout": 5s,
+                "timeout": 30s,
+                "io_timeout": 1s,
+                "logger": logger,
+            });
+
+            rc.restGet("/health");
+
+            *hash<ExceptionInfo> err;
+            try {
+                rc.restGet("/health");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+            assertEq(NOTHING, err ? sprintf("%s: %s", err.err, err.desc) : NOTHING,
+                "scenario4c: the request recovers on a fresh connection");
+            assertTrue(appender.hasMessageContaining("evicting stale connection and retrying"),
+                "scenario4c: the stale connection is retried");
+            assertEq(2, srv.getConnectionCount(), "scenario4c: one fresh connection is made");
         }
 
         # --- Scenario 4b: server reads request then closes (FIN delivered) ---

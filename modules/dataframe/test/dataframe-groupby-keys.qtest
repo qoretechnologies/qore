@@ -1,0 +1,240 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-groupby-keys.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%allow-weak-references
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameGroupByKeysTest
+
+#! groupBy() puts two float keys in one group only if they are equal (with -0.0 equal to 0.0) or both NaN, in a
+#! float64 column and in a column that holds any value (qore#6107)
+class DataFrameGroupByKeysTest inherits QUnit::Test {
+    constructor() : Test("DataFrameGroupByKeysTest", "1.0", \ARGV) {
+        addTestCase("float64 keys", \floatTest());
+        addTestCase("float keys in a column of any value", \autoTest());
+        addTestCase("several key columns", \multiTest());
+        addTestCase("count()", \countTest());
+        addTestCase("lists, hashes and binary values", \containerTest());
+        addTestCase("values of different types", \typeTest());
+        addTestCase("dates and numbers", \dateNumberTest());
+        addTestCase("weak references", \weakTest());
+        addTestCase("values in containers", \nestedTest());
+        addTestCase("numbers of any precision", \numberTest());
+        set_return_value(main());
+    }
+
+    #! floats that differ after the sixth decimal place, or in the last bit, make different groups
+    floatTest() {
+        DataFrame::DataFrame df({
+            "k": (1.0000001, 1.0000002, 0.1 + 0.2, 0.3, -0.0, 0.0, @nan@, -@nan@, 1e-300, 2e-300),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512),
+        });
+        assertEq("float64", df.dtypes()[0]);
+        DataFrame::DataFrame g = df.groupBy(("k",)).agg({"v": "sum"});
+        assertEq((1.0, 2.0, 4.0, 8.0, 48.0, 192.0, 256.0, 512.0), g.getColumn("v"), "sums");
+        list<auto> gkeys = g.getColumn("k");
+        assertEq(8, gkeys.size(), "groups");
+        assertTrue(gkeys[2] == 0.1 + 0.2 && gkeys[3] == 0.3, "0.1 + 0.2 and 0.3");
+        # nunique counts the same values
+        DataFrame::DataFrame u = (new DataFrame::DataFrame({"g": (map 1, df.getColumn("k")), "k": df.getColumn("k")}))
+            .groupBy(("g",)).agg({"k": "nunique"});
+        assertEq((8,), u.getColumn("k"), "nunique");
+    }
+
+    #! a float in a column that holds any value is keyed as in a float64 column
+    autoTest() {
+        DataFrame::DataFrame df({
+            "k": (c'z', 1.0000001, 1.0000002, 0.1 + 0.2, 0.3, -0.0, 0.0, @nan@, @nan@),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256),
+        });
+        assertEq("auto", df.dtypes()[0]);
+        DataFrame::DataFrame g = df.groupBy(("k",)).agg({"v": "sum"});
+        assertEq((1.0, 2.0, 4.0, 8.0, 16.0, 96.0, 384.0), g.getColumn("v"), "sums");
+        DataFrame::DataFrame u = (new DataFrame::DataFrame({"g": (map 1, df.getColumn("k")), "k": df.getColumn("k")}))
+            .groupBy(("g",)).agg({"k": "nunique"});
+        assertEq((7,), u.getColumn("k"), "nunique");
+    }
+
+    #! float keys with other key columns
+    multiTest() {
+        DataFrame::DataFrame df({
+            "a": ("x", "x", "x", "y"),
+            "k": (1.0000001, 1.0000002, 1.0000001, 1.0000001),
+            "v": (1, 2, 4, 8),
+        });
+        DataFrame::DataFrame g = df.groupBy(("a", "k")).agg({"v": "sum"});
+        assertEq((5.0, 2.0, 8.0), g.getColumn("v"), "sums");
+    }
+
+    #! lists, hashes and binary values in a column that holds any value are grouped by their elements and bytes
+    containerTest() {
+        DataFrame::DataFrame df({
+            "k": (c'z', <0102>, <0304>, (1, 2), (3, 4), {"a": 1}, {"a": 2}, (1, 2), <0102>, {"a": 1}, (1.0000001,),
+                (1.0000002,)),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048),
+        });
+        assertEq((1.0, 258.0, 4.0, 136.0, 16.0, 544.0, 64.0, 1024.0, 2048.0),
+            df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        assertEq(9, df.groupBy(("k",)).count().numRows(), "count()");
+        # nunique counts the same values
+        DataFrame::DataFrame u = (new DataFrame::DataFrame({"g": (map 1, df.getColumn("k")), "k": df.getColumn("k")}))
+            .groupBy(("g",)).agg({"k": "nunique"});
+        assertEq((9,), u.getColumn("k"), "nunique");
+        # equal hashes with their keys in another order make one group; two closures make two
+        code c1 = sub () {};
+        code c2 = sub () {};
+        DataFrame::DataFrame h({
+            "k": (c'z', {"a": 1, "b": 2}, {"b": 2, "a": 1}, c1, c2, c1),
+            "v": (1, 2, 4, 8, 16, 32),
+        });
+        assertEq((1.0, 6.0, 40.0, 16.0), h.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "hashes and closures");
+        # a deeply nested value is keyed with no recursion
+        auto deep = 1;
+        for (int i = 0; i < 100000; ++i) {
+            deep = (deep,);
+        }
+        DataFrame::DataFrame d({"k": (c'z', deep, deep), "v": (1, 2, 4)});
+        assertEq((1.0, 6.0), d.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "deeply nested lists");
+    }
+
+    #! values of different types make different groups, in groupBy(), nunique and valueCounts() (qore#6107)
+    typeTest() {
+        DataFrame::DataFrame df({"k": (1, 1.0, "1", True, c'1', 1n, 1, "1"), "v": (1, 2, 4, 8, 16, 32, 64, 128)});
+        assertEq("auto", df.dtypes()[0]);
+        assertEq((65.0, 2.0, 132.0, 8.0, 16.0, 32.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        assertEq(6, df.nunique("k"), "nunique()");
+        assertEq(6, df.valueCounts("k").numRows(), "valueCounts()");
+    }
+
+    #! dates are grouped by their instant or length, and numbers by their exact value (qore#6107)
+    dateNumberTest() {
+        DataFrame::DataFrame df({
+            "k": (c'z',
+                # absolute dates: microseconds apart, and the same instant in two time zones
+                2024-01-01T00:00:00.1Z, 2024-01-01T00:00:00.9Z, 2024-01-01T00:00:00Z, 2024-01-01T01:00:00+01:00,
+                # durations: of the same length, and of different lengths with the same string form
+                24h, 1D, 0s, 999999us, 500ms,
+                # numbers: equal, and different beyond the printed precision; -0 and 0
+                1.1n, 1.10n, 1.10000000000000000000001n, -0n, 0n),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384),
+        });
+        assertEq((1.0, 2.0, 4.0, 24.0, 96.0, 128.0, 256.0, 512.0, 3072.0, 4096.0, 24576.0),
+            df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        # numbers of different precisions: equal values make one group, different values two, whatever their forms
+        number a = 0.1n;
+        number a2 = a + 0.000000000000000000000000000000000000000000000000000000000000000000000000000n;
+        number hi = 0.1000000000000000000000000000000000000000000000000000000000000000000000000000n;
+        DataFrame::DataFrame n({
+            "k": (c'z', a, a2, hi, @nan@n, @nan@n, -@inf@n, @inf@n),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128),
+        });
+        assertEq((1.0, 6.0, 8.0, 48.0, 64.0, 128.0), n.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"),
+            "numbers of different precisions");
+        # NULL and NOTHING in a container differ, as with ==
+        DataFrame::DataFrame u({"k": (c'z', (NULL,), (NOTHING,), (NULL,)), "v": (1, 2, 4, 8)});
+        assertEq((1.0, 10.0, 4.0), u.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "NULL and NOTHING");
+    }
+
+    #! a weak reference is grouped as the object, hash or list that it refers to (qore#6107)
+    weakTest() {
+        object o1 = new Mutex();
+        object o2 = new Mutex();
+        hash<auto> h1 = {"a": 1};
+        list<auto> l1 = (1, 2);
+        list<auto> k = (c'z', o1, NOTHING, o2, NOTHING, h1, NOTHING, l1);
+        k[2] := o1;
+        k[4] := o2;
+        k[6] := h1;
+        list<auto> wl;
+        wl := l1;
+        k += (wl,);
+        DataFrame::DataFrame df({"k": k, "v": (1, 2, 4, 8, 16, 32, 64, 128, 256)});
+        assertEq((1.0, 6.0, 24.0, 96.0, 384.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        # a weak reference whose object is deleted makes a group of its own, apart from the null values
+        object o3 = new Mutex();
+        list<auto> d = (c'z', NOTHING, 1, NOTHING);
+        d[3] := o3;
+        delete o3;
+        DataFrame::DataFrame dead({"k": d, "v": (1, 2, 4, 8)});
+        assertEq((1.0, 2.0, 4.0, 8.0), dead.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "a deleted object");
+    }
+
+    #! values in lists and hashes are keyed as at the top level
+    nestedTest() {
+        object o1 = new Mutex();
+        object o2 = new Mutex();
+        code c1 = sub () {};
+        code c2 = sub () {};
+        code r1 = \get_default_encoding();
+        code r2 = \get_script_dir();
+        DataFrame::DataFrame df({
+            "k": (c'z',
+                # objects, closures and call references in a list and a hash
+                (o1, c1, r1), (o1, c1, r1), (o2, c1, r1), (o1, c2, r1), (o1, c1, r2),
+                {"o": o1, "c": c1}, {"o": o1, "c": c1}, {"o": o2, "c": c1},
+                # a hash reordered below the top level
+                ({"a": 1, "b": 2},), ({"b": 2, "a": 1},),
+                # NaN and -0.0 in a container
+                (@nan@, -0.0), (@nan@, 0.0)),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096),
+        });
+        assertEq((1.0, 6.0, 8.0, 16.0, 32.0, 192.0, 256.0, 1536.0, 6144.0),
+            df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "sums");
+        # a deeply nested hash is keyed with no recursion
+        auto deep = 1;
+        for (int i = 0; i < 100000; ++i) {
+            deep = {"a": deep};
+        }
+        DataFrame::DataFrame d({"k": (c'z', deep, deep), "v": (1, 2, 4)});
+        assertEq((1.0, 6.0), d.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"), "deeply nested hashes");
+    }
+
+    #! numbers are keyed by their exact values at any precision, up to the maximum, in groupBy(), nunique(),
+    #! valueCounts() and pivot() (qore#6107)
+    numberTest() {
+        # 0.1 at the default precision, widened to the maximum (an equal value), and at a higher precision (another
+        # value); 1e-1000 has more than 4096 bits, and is equal to itself widened
+        # a zero of the maximum precision: a number string has about 5 bits per character
+        number zmax = number("0." + strmul("0", 1700));
+        number a = 0.1n;
+        number a2 = a + zmax;
+        number hi = number("0.1000000000000000000000000000000000000000000000000000000000000000000000000000");
+        number t = number("1e-1000");
+        number t2 = t + zmax;
+        DataFrame::DataFrame df({
+            "k": (c'z', a, a2, hi, t, t2, -0n, 0n, @nan@n, @nan@n),
+            "v": (1, 2, 4, 8, 16, 32, 64, 128, 256, 512),
+        });
+        assertEq((1.0, 6.0, 8.0, 48.0, 192.0, 768.0), df.groupBy(("k",)).agg({"v": "sum"}).getColumn("v"),
+            "groupBy()");
+        assertEq(6, df.nunique("k"), "nunique()");
+        assertEq(6, df.valueCounts("k").numRows(), "valueCounts()");
+        # pivot(): equal numbers of two precisions make one index row
+        DataFrame::DataFrame p({"k": (c'z', 1.5n, 1.5n + zmax), "c": ("x", "x", "x"), "v": (1, 2, 4)});
+        assertEq(2, p.pivot("k", "c", "v").numRows(), "pivot()");
+    }
+
+    #! count() gives the key values of a float64 column and of a column of durations
+    countTest() {
+        DataFrame::DataFrame df({"f": (1.5, 1.5, 2.5, NOTHING), "d": (1h, 1h, 2h, NOTHING)});
+        DataFrame::DataFrame c = df.groupBy(("f",)).count();
+        assertEq((1.5, 2.5, NOTHING), c.getColumn("f"), "float keys");
+        assertEq((2, 1, 1), c.getColumn("count"), "float counts");
+        c = df.groupBy(("d",)).count();
+        list<auto> d = c.getColumn("d");
+        assertTrue(is_date_relative(d[0]) && d[0] == 1h && is_date_relative(d[1]) && d[1] == 2h && !exists d[2],
+            sprintf("duration keys of count(): %y", d));
+        d = df.groupBy(("d",)).agg({"f": "sum"}).getColumn("d");
+        assertTrue(is_date_relative(d[0]) && d[0] == 1h && is_date_relative(d[1]) && d[1] == 2h && !exists d[2],
+            sprintf("duration keys of agg(): %y", d));
+    }
+}

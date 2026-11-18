@@ -82,7 +82,8 @@ public:
     DLLEXPORT int reset(const ReferenceNode* ref, ExceptionSink* xsink);
 
     //! returns true if the reference is valid, false if not
-    /** false will only be returned if a Qore-language exception was raised in the constructor
+    /** Returns false after a failed binding or after removeHashObjKey() invokes a native member gate or accessor.
+        After a native removal, use reset() before accessing a value again, or close() when finished.
     */
     DLLEXPORT operator bool() const;
 
@@ -175,7 +176,12 @@ public:
     DLLEXPORT int assign(QoreValue val);
 
     //! returns the reference's value
-    /** @return the value of the lvalue reference
+    /** @return the value of the lvalue reference, which is valid only while this helper exists and which the caller
+        does not own; a caller that keeps the value after that must take its own reference to it
+
+        @note a large integer or a special float that the lvalue stores natively is returned in a new node, which this
+        helper keeps until it is destroyed; each call makes another one, so a caller that needs the value more than
+        once (in a loop, for example) reads it once and keeps the value for the helper's lifetime
     */
     DLLEXPORT const QoreValue getValue() const;
 
@@ -194,6 +200,17 @@ public:
     DLLEXPORT int moveToHashObjKey(const char* key, bool for_remove = false);
 
     //! Removes the given key of the current hash or object
+    /** @param key the hash key or object member to remove
+        @return the removed value, with a new reference
+        @throw REMOVE-KEY-ERROR the current value is neither a hash nor an object
+        @throw an exception raised by member access checks or a native member callback
+
+        @note A removal through a native member gate or accessor invalidates this helper and releases its locks
+        before calling the module: the callback may replace or remove the parent lvalue. Afterwards operator bool()
+        and isLocked() return false; call reset(ref, xsink) before further value access, or close() when finished.
+        The parent is not reacquired automatically, and the callback's changes are preserved. Ordinary hash keys
+        and ordinary Qore members do not invalidate the helper.
+    */
     DLLEXPORT QoreValue removeHashObjKey(const char* key);
 
     //! Returns the ExceptionSink object

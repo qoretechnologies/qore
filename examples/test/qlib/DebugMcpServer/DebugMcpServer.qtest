@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 %requires json
@@ -36,7 +37,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
         #! a program that ends with an exception that matches a common pitfall
         const TrapProgram = "%modern\n"                                     # 1
             "sub f() {\n"                                                    # 2
-            "    *int src;\n"                                                # 3
+            "    *int src = (*int sub () { return; })();\n"                  # 3
             "    int count = src;\n"                                         # 4
             "}\n"                                                            # 5
             "f();\n";                                                        # 6
@@ -94,7 +95,7 @@ public class DebugMcpServerTest inherits QUnit::Test {
 
     #! returns the qore executable to run the tools with; a relative path is made absolute
     static string getQoreExecutable() {
-        string exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string exe = TestInterpreter::qore_interpreter();
         if (exe =~ /\// && !absolute_path(exe)) {
             exe = normalize_dir(getcwd() + DirSep + exe);
         }

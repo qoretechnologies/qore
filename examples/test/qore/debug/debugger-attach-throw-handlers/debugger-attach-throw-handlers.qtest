@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation of the debugger's step hooks in the handlers that an exception runs
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class DebuggerAttachThrowHandlersTest
+
+#! A debugger attached in a call that then raises an exception gets the step events of the caller's handlers (#6284)
+/** AttachThrowDebugger.q calls a function of AttachThrowTarget.q in a Program that does not allow a debugger, once
+    without and once with a debugger in its own Program (through ProgramControl::resolveProgramId()), which the callee
+    attaches while it runs, before it raises an exception: the caller runs as native code with JIT and tiered
+    execution, with the IR interpreter with IR execution and on the IR tier of tiered execution, and with the AST
+    interpreter with AST execution.  The debugger steps; the exception runs the on_exit and on_error handlers of the
+    caller (of the function and of a block in its loop), whose block and statement step events every execution mode
+    reports as the AST interpreter does.
+
+    The IR interpreter, with IR execution and on the IR tier of tiered execution, refreshed whether a debugger is
+    active only when it dispatched an instruction: the exception of the call, whose instruction it dispatched before
+    the debugger attached, ran the handlers with no debug context, and the debugger got none of their events.
+*/
+class DebuggerAttachThrowHandlersTest inherits QUnit::Test {
+    public {
+        #! the result, the values logged and the step events of the AST interpreter; a step event is given by the tag
+        #! of its line, that of a block as "b:<tag>"
+        const Cases = (
+            {"function": "caller_on_exit",
+                "log": (),
+                "steps": ("callee_first", "callee_if", "b:callee_throw", "callee_throw", "b:on_exit_function",
+                    "on_exit_function"),
+            },
+            {"function": "caller_on_error",
+                "log": ("error",),
+                "steps": ("callee_first", "callee_if", "b:callee_throw", "callee_throw", "b:on_error_error",
+                    "on_error_error", "b:on_error_exit", "on_error_exit"),
+            },
+            {"function": "caller_block",
+                "log": ("block exit 0", "block exit 1", "block exit 2", "block error 2"),
+                "steps": ("callee_first", "callee_if", "b:callee_throw", "callee_throw", "b:block_exit", "block_exit",
+                    "b:block_error", "block_error", "b:block_function", "block_function"),
+            },
+        );
+    }
+
+    private {
+        string qore_bin;
+        #! the lines of the tags of AttachThrowTarget.q
+        hash<string, int> tags;
+    }
+
+    constructor() : QUnit::Test("DebuggerAttachThrowHandlers", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        tags = getTags();
+        foreach hash<auto> c in (Cases) {
+            addTestCase(c.function, \checkCase(), (c,));
+        }
+        set_return_value(main());
+    }
+
+    #! returns the 1-based line numbers of the lines of AttachThrowTarget.q tagged "### <tag>"
+    private static hash<string, int> getTags() {
+        hash<string, int> ret = {};
+        list<string> lines = ReadOnlyFile::readTextFile(get_script_dir() + "/AttachThrowTarget.q").split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z_]+)$/;
+            if (tag) {
+                ret{tag[0]} = i + 1;
+            }
+        }
+        return ret;
+    }
+
+    #! returns the output line of AttachThrowDebugger.q expected for a case
+    private string getExpected(hash<auto> c) {
+        list<auto> steps = map $1 =~ /^b:/ ? sprintf("b%d", tags{$1.substr(2)}) : tags{$1}, c.steps;
+        # each tag is in the target
+        assertEq(c.steps.size(), (select steps, $1.toInt() || $1 =~ /^b[1-9][0-9]*$/).size(), c.function + ": tags");
+        return sprintf("RESULT:ATTACH-THROW:  LOG:%y STEPS:%y", c.log, steps);
+    }
+
+    #! returns the output line of AttachThrowDebugger.q
+    private static string getOutput(string out) {
+        *list<*string> line = out =~ x/^(RESULT:.*)$/m;
+        return line ? line[0] : out;
+    }
+
+    #! runs a case in every execution mode and on the IR tier and compares the results with the expected ones
+    checkCase(hash<auto> c) {
+        string dir = get_script_dir();
+        string args = sprintf("%s/AttachThrowDebugger.q %s/AttachThrowTarget.q %s", dir, dir, c.function);
+        string expected = getExpected(c);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --enable-debug "
+                "--exec-mode=%s %s", qore_bin, mode, args));
+            ExecModeHarness::check_native(r);
+            assertEq(expected, getOutput(r.out), sprintf("%s: %s", c.function, mode));
+            # the caller runs as native code when the debugger attaches with JIT and tiered execution
+            if (mode == "jit" || mode == "tiered") {
+                string name = "'" + c.function + "@";
+                assertTrue((select r.trace, ExecModeHarness::is_native_compilation($1) && $1.find(name) >= 0)
+                    ? True : False, sprintf("%s: %s: %s() was compiled to native code", c.function, mode,
+                    c.function));
+            }
+        }
+        assertEq(expected, getOutput(ExecModeHarness::run_ir_tier(sprintf("%s --enable-debug --exec-mode=tiered %s",
+            qore_bin, args))), sprintf("%s: %s", c.function, ExecModeHarness::IRTierName));
+    }
+}

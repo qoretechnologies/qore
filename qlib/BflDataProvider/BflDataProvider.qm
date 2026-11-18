@@ -30,6 +30,8 @@
 %requires RestClientIo
 
 module BflDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.1";
     desc = "user module providing a data provider API for Black Forest Labs (FLUX)";
     author = "David Nichols <david@qore.org>";

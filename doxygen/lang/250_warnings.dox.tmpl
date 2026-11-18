@@ -144,8 +144,12 @@ AMBIGUOUS-CALL-RESOLUTION: call to function 'f()' is ambiguous; matches: 'A::f()
     such as reading a non-optional local before it is definitely assigned, comparing @ref NULL with
     @ref NOTHING, truth-testing a container-valued hash member, using numeric multiplication where one operand
     is a parse-time-known string, applying @ref exists to an optional reference, or assigning a direct map result
-    with a statically optional source to a required list. Each condition has a distinct structured diagnostic ID
-    and a targeted hint.
+    with a statically optional source to a required list, or declaring a function, class, constant, hashdecl or
+    global variable with the name of a symbol of the same kind in the @ref Qore "Qore" namespace, which
+    @ref unqualified_symbol_resolution "unqualified resolution" reaches instead (it is raised once, at the
+    declaration, and not in a @ref user_modules "user module" nor with
+    @ref broken-namespace-resolution "%broken-namespace-resolution"). Each condition has a distinct structured
+    diagnostic ID and a targeted hint.
 
     This is a strict warning: it is not included in @ref enable-all-warnings "%enable-all-warnings". Enable
     it by name, with @ref strict-warnings "%strict-warnings", or with @ref Qore::WARN_LANGUAGE_TRAPS "WARN_LANGUAGE_TRAPS" through the

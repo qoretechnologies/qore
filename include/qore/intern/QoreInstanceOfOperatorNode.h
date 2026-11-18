@@ -35,6 +35,10 @@
 
 class QoreInstanceOfOperatorNode : public QoreSingleExpressionOperatorNode<QoreOperatorNode> {
 public:
+    DLLLOCAL static QoreInstanceOfOperatorNode* create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, QoreParseTypeInfo* type);
+    DLLLOCAL static QoreInstanceOfOperatorNode* create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, QoreValue exp, const QoreTypeInfo* type);
     DLLLOCAL QoreInstanceOfOperatorNode(const QoreProgramLocation* loc, QoreValue exp, QoreParseTypeInfo* ref)
             : QoreSingleExpressionOperatorNode<QoreOperatorNode>(loc, exp), r(ref) {
     }
@@ -64,13 +68,26 @@ public:
         if (*xsink)
             return nullptr;
         assert(ti);
-        return new QoreInstanceOfOperatorNode(loc, n_exp.release(), ti);
+        return create(getSemanticPolicy(), loc, n_exp.release(), ti);
     }
 
     //! Returns the resolved type info for the instanceof check (for AOT serialization)
     DLLLOCAL const QoreTypeInfo* getInstanceTypeInfo() const { return ti; }
 
+    //! Returns true if \a ti accepts \a val as the instanceof operator checks it in every execution mode
+    /** A weak reference is checked as its target.  The type parameters of a generic class or of generic code in
+        \a ti are those of the code that runs, as for a variable or parameter declared with them: the type arguments
+        of the instantiation (qore#6016)
+
+        @param ti the type of the operator; a specialized IR function, whose type parameters are bound statically and
+        not current at run time, passes it with them substituted (QoreIRFunction::specializeType())
+        @param val the value checked
+    */
+    DLLLOCAL static bool runtimeInstanceOf(const QoreTypeInfo* ti, QoreValue val);
+
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     QoreParseTypeInfo* r = nullptr;
     const QoreTypeInfo* ti = nullptr;
 

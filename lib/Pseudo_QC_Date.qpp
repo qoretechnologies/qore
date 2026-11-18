@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/qore_date_private.h"
 
 //! Methods in this pseudo-class can be executed on @ref date "date/time value types"
 /**
@@ -279,10 +280,16 @@ int us = PT2M15S3u.durationMilliseconds(); # returns 135000
     - <date>::durationSeconds()
     - <date>::durationMicroseconds()
 
+    @throw INVALID-DATE the duration in milliseconds does not fit a signed 64-bit integer (since %Qore 3.0)
+
     @since %Qore 0.8.7
 */
 int <date>::durationMilliseconds() [const;flags=CONSTANT] {
-   return dt->getRelativeMilliseconds();
+    int64 rv;
+    if (qore_relative_time::getPrivate(dt)->getDuration(rv, 1000, "<date>::durationMilliseconds()", xsink)) {
+        return QoreValue();
+    }
+    return rv;
 }
 
 //! Returns an integer value representing the the number of microseconds of time duration in the date value (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
@@ -308,10 +315,17 @@ int us = PT2M15S3u.durationMicroseconds(); # returns 135000003
     - <date>::durationSeconds()
     - <date>::durationMilliseconds()
 
+    @throw INVALID-DATE the duration in microseconds does not fit a signed 64-bit integer, as for a relative date of
+    more than about 292000 years (since %Qore 3.0)
+
     @since %Qore 0.8.7
 */
 int <date>::durationMicroseconds() [const;flags=CONSTANT] {
-   return dt->getRelativeMicroseconds();
+    int64 rv;
+    if (qore_relative_time::getPrivate(dt)->getDuration(rv, 1, "<date>::durationMicroseconds()", xsink)) {
+        return QoreValue();
+    }
+    return rv;
 }
 
 //! Returns a floating-point value representing the the number of seconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)

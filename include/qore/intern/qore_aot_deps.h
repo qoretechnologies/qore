@@ -39,6 +39,8 @@
 #include <unordered_set>
 #include <vector>
 
+class QoreParseOptions;
+
 class QoreProgramLocation;
 class QoreProgram;
 class QoreClass;
@@ -128,6 +130,21 @@ DLLLOCAL bool qore_aot_set_source_parse_active(bool active);
 //! with sibling `.qo` metadata preloaded.
 DLLEXPORT bool qore_aot_source_parse_active();
 
+//! Returns false with the description of the conflict in \a error if the parse options have %modern and a compatibility
+//! option that it does not allow (issue #5682)
+/** For the paths that create a Program from options given together: qcc --parse-option, AOT artifacts and their
+    entry points, and QoreProgramHelper; such options are refused, as by Program::constructor().  The bare C++
+    QoreProgram constructors have no exception sink: callers must not give them such options
+*/
+DLLEXPORT bool qore_check_modern_parse_options(const QoreParseOptions& po, std::string& error);
+
+//! Returns the parse options that an AOT executable records for code compiled in a Program created with \a base
+/** The options of the Program at the end of the parse (\a final) with the options given for it (the command line),
+    except the compatibility options that %modern does not allow: one that the Program no longer has was disabled or
+    reset by the code's own %modern (issue #6382), and must not be added back
+*/
+DLLEXPORT QoreParseOptions qore_aot_merge_parse_options(const QoreParseOptions& final, const QoreParseOptions& base);
+
 //! Set the active build-group source-symbol manifest for the current thread.
 /** The manifest lets standalone source compiles prefer declarations provided by
     the current build group over same-name symbols from already-loaded modules
@@ -171,6 +188,28 @@ DLLLOCAL void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
     provider when that `.qo` is later preloaded independently. */
 DLLLOCAL void qore_aot_record_resolved_source_parse_class_import(QoreProgram* pgm,
         const QoreProgramLocation* loc, const QoreClass* resolved_class);
+
+struct ClassNs;
+class ConstantEntry;
+
+//! Returns the path that the symbol index publishes for a constant of a namespace or class
+/** @param ptr the namespace or class that holds the constant
+    @param name the name of the constant
+*/
+DLLLOCAL std::string qore_aot_constant_symbol_path(const ClassNs& ptr, const char* name);
+
+//! Records that the AOT source parse of \a consumer_loc folded the value of a constant of another source file
+/** The symbol index of the compiled object then imports the constant with the hashes it had, so linking it with a
+    provider whose value has changed is refused as stale, as it is for a changed function or class (qore#5798).
+    No-op unless an AOT source parse is active, or if the constant is a system constant or is declared in the same
+    source file.
+
+    @param consumer_loc the location of the reference
+    @param ce the constant
+    @param ptr the namespace or class that holds the constant
+*/
+DLLLOCAL void qore_aot_record_folded_constant_import(const QoreProgramLocation* consumer_loc,
+        const ConstantEntry* ce, const ClassNs& ptr);
 
 //! Record the source file of a referenced declaration into the active sink.
 /** No-op if no sink is active, the location is null, or the file is synthetic
@@ -235,5 +274,14 @@ DLLEXPORT void qore_aot_set_module_dep_sink(std::vector<std::string>* sink);
 
     See design/aot-linked-module-sources.md. */
 DLLEXPORT void qore_aot_set_module_closure_dep_sink(std::vector<std::string>* sink);
+
+//! Sink for the paths where the modules of the failed %try-module directives of an AOT module compile could be
+//! installed, but are not (qore#6145)
+/** qcc writes them beside the depfile of an AOT module (<depfile>.optional), so that a build rebuilds the module
+    when one of the modules becomes available: the module was compiled without it, and the module loader refuses
+    such a module as out of date (AOT-MODULE-STALE).  No-op (one thread-local load) when no sink is active. The
+    caller owns the vector and must clear the sink (pass nullptr) before it is destroyed.
+*/
+DLLEXPORT void qore_aot_set_optional_module_candidate_sink(std::vector<std::string>* sink);
 
 #endif

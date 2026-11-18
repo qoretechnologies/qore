@@ -53,6 +53,11 @@ class TestConnectProxy {
         return port;
     }
 
+    #! Returns True while the proxy's listening socket is open (until shutdown())
+    bool isListening() {
+        return listener.isOpen();
+    }
+
     #! Returns a copy of the requests received
     list<hash<auto>> getRequests() {
         AutoLock al(m);

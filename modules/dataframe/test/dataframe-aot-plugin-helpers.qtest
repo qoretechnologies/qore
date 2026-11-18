@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-aot-plugin-helpers.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - its probes run in child processes that set their own --exec-mode and in qcc executables
+# test-platform: macos - AOT code generation and linking of qcc executables and modules that call plugin helpers
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameAotPluginHelpersTest
+
+#! The plugin operations of the dataframe module with LLVM codegen extensions run in each execution mode, in qcc
+#! executables and in a qcc-compiled module, whose code calls the module's helpers through pointers resolved at run
+#! time (qore#6130)
+class DataFrameAotPluginHelpersTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! every plugin operation of the module that has an LLVM codegen extension, in functions run more than once
+        #! (the call sites resolve their helpers in the first call)
+        const Functions = "
+public list<auto> sub df_column(DataFrame::DataFrame df, string name) {
+    return df[name];
+}
+
+public hash<auto> sub df_row(DataFrame::DataFrame df, int i) {
+    return df[i];
+}
+
+public list<auto> sub df_selected(DataFrame::DataFrame df) {
+    DataFrame::ColumnRef score = df.column(\"score\");
+    DataFrame::ColumnRef name = df.column(\"name\");
+    DataFrame::RowMask high = score >= 90.0;
+    DataFrame::RowMask low = score < 85;
+    DataFrame::RowMask mid = (score > 80.0) & (score <= 92.0);
+    DataFrame::RowMask bob = name == \"Bob\";
+    DataFrame::RowMask not_bob = name != \"Bob\";
+    DataFrame::RowMask either = high | low;
+    DataFrame::RowMask changed = either ^ mid;
+    DataFrame::RowMask inverted = ~changed;
+    return (
+        df[high][\"name\"],
+        df[low][\"name\"],
+        df[mid][\"name\"],
+        df[bob][\"name\"],
+        df[not_bob][\"name\"],
+        either.toList(),
+        changed.toList(),
+        inverted.toList(),
+    );
+}
+";
+
+        #! the calls of the functions
+        const Calls = "
+DataFrame::DataFrame df(
+    ({\"id\": 1, \"name\": \"Alice\", \"score\": 95.5},
+     {\"id\": 2, \"name\": \"Bob\",   \"score\": 88.0},
+     {\"id\": 3, \"name\": \"Carol\", \"score\": 92.0},
+     {\"id\": 4, \"name\": \"Dave\",  \"score\": 79.0}));
+
+for (int i = 0; i < 3; ++i) {
+    printf(\"%y\\n\", df_column(df, \"id\"));
+    printf(\"%y\\n\", df_column(df, \"name\"));
+    printf(\"%y\\n\", df_row(df, i));
+    printf(\"%y\\n\", df_selected(df));
+}
+";
+    }
+
+    constructor() : QUnit::Test("DataFrameAotPluginHelpersTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("plugin helpers in each mode, in qcc executables and in a qcc module", \testPluginHelpers());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    testPluginHelpers() {
+        TmpDir tmp("qore-dataframe-aot-plugin-helpers-");
+        string src = tmp.path + "/plugin-helpers.q";
+        write(src, "%modern\n%requires dataframe\n" + Functions + Calls);
+
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+        string expected = run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, src));
+        assertEq("[1, 2, 3, 4]", expected.split("\n")[0], "AST baseline");
+
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(expected, run(sprintf("%s QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s",
+                env, qore_bin, mode, src)), mode + " matches AST");
+        }
+
+        # the functions in a module compiled with qcc, called from a script
+        string mod_src = tmp.path + "/DataFrameAotProbe.qm";
+        write(mod_src, "%modern\n%requires dataframe\nmodule DataFrameAotProbe {\n    version = \"1.0\";\n"
+            "    desc = \"test\";\n    author = \"test\";\n    url = \"https://qore.org\";\n}\n" + Functions);
+        string probe = tmp.path + "/probe.q";
+        write(probe, sprintf("%%modern\n%%requires dataframe\n%%append-module-path %s/mods\n"
+            "%%requires DataFrameAotProbe\n", tmp.path) + Calls);
+
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + "/plugin-helpers" + opt;
+            string compile_out = run(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, src));
+            assertTrue(is_file(exe), sprintf("qcc %s links the executable: %s", opt, compile_out));
+            if (is_file(exe)) {
+                assertEq(expected, run(sprintf("%s %s", env, exe)), sprintf("qcc %s executable matches AST", opt));
+            }
+
+            string mod_dir = tmp.path + "/mods";
+            if (!is_dir(mod_dir)) {
+                mkdir(mod_dir);
+            }
+            string qmod = mod_dir + "/DataFrameAotProbe.qmod";
+            if (is_file(qmod)) {
+                unlink(qmod);
+            }
+            compile_out = run(sprintf("%s %s --module %s --output %s %s", env, qcc_bin, opt, qmod, mod_src));
+            assertTrue(is_file(qmod), sprintf("qcc %s compiles the module: %s", opt, compile_out));
+            if (is_file(qmod)) {
+                assertEq(expected, run(sprintf("%s %s --exec-mode=ir %s", env, qore_bin, probe)),
+                    sprintf("qcc %s module matches AST", opt));
+            }
+        }
+    }
+}

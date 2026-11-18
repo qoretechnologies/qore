@@ -1,0 +1,101 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a trusted module whose public variables and static class members every importer shares (qore#5664)
+
+%modern
+
+module OurVarMod {
+    version = "1.0";
+    desc = "test module with public state";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+
+public namespace OurVarMod {
+    public class Obj {
+        public {
+            int x = 1;
+            static int sx = 1;
+            static list<int> sl;
+        }
+
+        #! the module's own setter of a static member: a method runs in the module's Program
+        static set_sx(int v) {
+            sx = v;
+        }
+
+        #! creates an object in the module's code, which reflection binds to the module's Program
+        static Obj make() {
+            return new Obj();
+        }
+
+        static resetStatic() {
+            sx = 1;
+            sl = (1, 2, 3);
+        }
+    }
+
+    #! a class with declared members and a member gate
+    public class G {
+        public {
+            int x = 1;
+        }
+
+        private {
+            int p = 7;
+        }
+
+        auto memberGate(string m) {
+            return "gate:" + m;
+        }
+    }
+
+    public our int i;
+    public our list<int> l;
+    public our hash<auto> h;
+    public our string s;
+    public our Obj o;
+    public our G g;
+    public our hash<auto> hn;
+    # a value that is not equal to itself
+    public our float f;
+    public our hash<auto> hnan;
+    # not exported, but reachable with reflection through the module's namespace
+    our int priv;
+
+    public int sub get_priv() {
+        return priv ?? 0;
+    }
+
+    public sub reset() {
+        i = 1;
+        l = (1, 2, 3);
+        h = {"a": 1, "b": 2};
+        s = "abc";
+        o = new Obj();
+        g = new G();
+        hn = {"a": {"b": 1}};
+        f = @nan@;
+        hnan = {"n": @nan@};
+        Obj::resetStatic();
+    }
+
+    #! a function of the module currently runs in the Program that calls it, with its restrictions (until module
+    #! functions run in the module's Program as methods do)
+    public sub set_sx_func(int v) {
+        Obj::sx = v;
+    }
+
+    public string sub state() {
+        return sprintf("%y|%y|%y|%s|%y|%y|%y|%y", i, l, h, s, o.x, hn, Obj::sx, Obj::sl);
+    }
+
+    public sub set_i(int v) {
+        i = v;
+    }
+
+    public sub push_l(int v) {
+        push l, v;
+    }
+}

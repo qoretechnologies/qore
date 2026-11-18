@@ -140,6 +140,15 @@ typedef std::vector<int> sig_vec_t;
 //! defined for QoreClass::addBuiltinMemberWithAccessors()
 #define _QORE_HAS_BUILTIN_MEMBER_ACCESSORS 1
 
+//! defined for the forms of QoreClass::addMember() and QoreClass::addBuiltinMemberWithAccessors() with an
+//! ExceptionSink* argument, which raise CLASS-MEMBER-ADD-ERROR once code in other threads can reach the class (#6422)
+#define _QORE_HAS_CLASS_MEMBER_ADD_XSINK 1
+
+//! defined for QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts(), limitsRestrict() and
+//! trustsUncontrolledApis(), and for
+//! the isRestricting() methods of QoreNetworkSecurityManager and QoreFilesystemSecurityManager
+#define _QORE_HAS_SANDBOX_RESTRICTS_API 1
+
 /** @defgroup qore_code_flags Qore Code Flags
     Flags describing properties of a builtin function or method variant.
 
@@ -151,7 +160,7 @@ typedef std::vector<int> sig_vec_t;
 ///@{
 // qore code flags
 #define QCF_NO_FLAGS                     0   //!< no flag
-#define QCF_NOOP                   (1 << 0)  //!< this variant is a noop, meaning it returns a constant value with the given argument types
+#define QCF_NOOP                   (1 << 0)  //!< this variant is a noop, meaning it returns a constant value with the given argument types; not a candidate for programs with %require-types or %strict-args (PO_REQUIRE_TYPES, PO_STRICT_ARGS), at parse time or at run time
 #define QCF_USES_EXTRA_ARGS        (1 << 1)  //!< code accesses arguments beyond the declared parameter list
 #define QCF_CONSTANT_INTERN        (1 << 2)  //!< internal constant flag, use QCF_CONSTANT instead
 #define QCF_DEPRECATED             (1 << 3)  //!< function or method is deprecated and will be removed in a later release
@@ -1262,11 +1271,25 @@ DLLEXPORT void q_enforce_stack_size_on_primary_thread(size_t max_size, size_t pr
 */
 DLLEXPORT bool q_active_exception();
 
+//! Returns a description of functional domains for error messages
+/** Each domain is given by the name of its \c DOM_* constant with the parse option that restricts it, or that it
+    requires, ex: <tt>PROCESS_CONTROL (restricted by PO_NO_PROCESS_CONTROL), NETWORK (restricted by
+    PO_NO_NETWORK)</tt>, as in the messages of libqore that refuse a call for its functional domains
+
+    @param dom the functional domain bits (\c QDOM_*)
+
+    @return the description; empty if \a dom has no domain bits
+
+    @since %Qore 3.0
+*/
+DLLEXPORT std::string q_describe_functional_domains(int64 dom);
+
 //! Add the given module to the module blacklist
 /** @param name the name of the module
     @param msg the message that will be included in any exception when the module is attempted to be loaded
 
-    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+    @return 0 = module added, -1 = module already loaded or its load is in progress (in any thread), cannot be
+    blacklisted, -2 = module already in blacklist
 
     @since %Qore 2.1
 */

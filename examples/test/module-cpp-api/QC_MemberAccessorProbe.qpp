@@ -141,6 +141,12 @@ static QoreValue member_accessor_probe_get(QoreObject* self, AbstractPrivateData
     if (*xsink) {
         return QoreValue();
     }
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode("get"), xsink);
+    ValueHolder reentered(self->evalMethod("reenter", *args, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     return probe->get(member);
 }
 
@@ -157,6 +163,12 @@ static void member_accessor_probe_set(QoreObject* self, AbstractPrivateData* dat
     if (*xsink) {
         return;
     }
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    args->push(new QoreStringNode("set"), xsink);
+    ValueHolder reentered(self->evalMethod("reenter", *args, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
     static_cast<MemberAccessorProbeData*>(data)->set(member, value, xsink);
 }
 
@@ -170,6 +182,24 @@ static void add_probe_member(QoreClass& qc, const char* name, ClassAccess access
     // the class takes ownership of the module data
     qc.addBuiltinMemberWithAccessors(name, access, type, member_accessor_probe_get, member_accessor_probe_set,
         m.release(), member_accessor_probe_del);
+}
+
+// adds a member with the API's form that reports a refusal; returns -1 if it is refused
+static int add_probe_member_xsink(QoreClass& qc, const char* name, ExceptionSink* xsink) {
+    std::unique_ptr<MemberAccessorProbeMember> m(new MemberAccessorProbeMember(name, MemberAccessorProbeMember::Normal));
+    // the class takes ownership of the module data; a refused addition releases it
+    return qc.addBuiltinMemberWithAccessors(name, Public, autoTypeInfo, member_accessor_probe_get,
+        member_accessor_probe_set, m.release(), member_accessor_probe_del, xsink);
+}
+
+void add_member_accessor_probe_init_late_members(QoreClass& qc) {
+    // the class is committed and frozen, but not reachable before the module's initialization returns
+    for (int i = 0; i < 5; ++i) {
+        ExceptionSink xsink;
+        std::string name = "late" + std::to_string(i);
+        add_probe_member_xsink(qc, name.c_str(), &xsink);
+        assert(!xsink);
+    }
 }
 
 // the external storage of a static variable of MemberAccessorProbe, as a module holds a value that a static
@@ -300,6 +330,14 @@ MemberAccessorProbe::destructor() {
     probe->deref(xsink);
 }
 
+//! overridden by test subclasses to reenter Qore from a native accessor
+/** @param operation either \c "get" or \c "set"
+    @return zero
+    @throw none */
+int MemberAccessorProbe::reenter(string operation) [flags=CONSTANT] {
+    return 0;
+}
+
 //! returns accessor call counts in get, set order
 /** @return the number of getter and setter calls for the object
     @throw none */
@@ -325,6 +363,77 @@ auto MemberAccessorProbe::raw(string key) [flags=CONSTANT] {
     @throw none */
 nothing MemberAccessorProbe::setRaw(string key, auto value) {
     probe->setRaw(key->c_str(), value, xsink);
+}
+
+//! tests the representation received at a native call boundary, before an assignment can convert it
+/** @param value the evaluated value
+    @return true when the value still holds an opaque reference
+    @throw none */
+static bool MemberAccessorProbe::isOpaqueValue(auto value) [flags=CONSTANT] {
+    return value.isOpaque();
+}
+
+//! exercises removal, binding validity and reset/reuse through the public native reference API
+/** @param target the hash or object containing the member
+    @param reuse_target an integer lvalue used after resetting the helper
+    @param member the member name
+    @return the removal result, validity flags and values before and after reuse
+    @throw an exception from resolving or writing either reference, or from the native member callback */
+static hash<auto> MemberAccessorProbe::referenceRemove(reference target, reference<int> reuse_target,
+        string member) {
+    // The removed value outlives the reference helper's locks and pending notifications.
+    ValueHolder removed(xsink);
+    QoreTypeSafeReferenceHelper helper(target, xsink);
+    if (!helper) {
+        return QoreValue();
+    }
+    removed = helper.removeHashObjKey(member->c_str());
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool valid = helper;
+    bool locked = helper.isLocked();
+    if (helper.reset(reuse_target, xsink)) {
+        return QoreValue();
+    }
+    int64 before = helper.getValue().getAsBigInt();
+    if (helper.assign(QoreValue(before + 1))) {
+        return QoreValue();
+    }
+    int64 after = helper.getValue().getAsBigInt();
+    helper.close();
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("removed", removed.release(), xsink);
+    result->setKeyValue("valid", valid, xsink);
+    result->setKeyValue("locked", locked, xsink);
+    result->setKeyValue("before", before, xsink);
+    result->setKeyValue("after", after, xsink);
+    return result.release();
+}
+
+//! adds a public member held in external storage to this class, which is refused: the class is reachable (#6422)
+/** @param name the name of the member
+
+    @throw CLASS-MEMBER-ADD-ERROR the class is reachable by code in other threads
+*/
+static nothing MemberAccessorProbe::addLateMember(string name) {
+    add_probe_member_xsink(*QC_MEMBERACCESSORPROBE, name->c_str(), xsink);
+}
+
+//! adds a public member held in external storage to the class of an object, which can be a published Qore class
+/** For the test of a member added to a class that other threads use (#6422): the addition is refused, as the class is
+    reachable by code in other threads
+
+    @throw CLASS-MEMBER-ADD-ERROR the class is reachable by code in other threads
+
+    @param obj an object of the class
+    @param name the name of the member
+*/
+static nothing MemberAccessorProbe::addLateMemberTo(object obj, string name) {
+    add_probe_member_xsink(*const_cast<QoreClass*>(obj->getClass()), name->c_str(), xsink);
 }
 
 //! creates an object from C++ without running the Qore constructor

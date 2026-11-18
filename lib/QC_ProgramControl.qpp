@@ -35,6 +35,7 @@
 #include "qore/intern/QC_Breakpoint.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
@@ -160,9 +161,12 @@ ProgramControl::destructor() {
     Program, classes are the same classes, so the objects of this Program can be used, and global variables are
     shared.  This Program is not changed; code that is added to it later is not inherited.
 
-    @param parse_options the parse options of the new Program; the restrictions of this Program apply as well;
-    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" is kept also when this Program does not have it, as it only
-    allows code to be parsed in the new Program more than once
+    @param parse_options the parse options of the new Program; the restrictions of this Program apply as well, and
+    so do those of the Program whose code calls this method when it is restricted, locked or sandboxed (see
+    @ref locked_parse_options "locked parse options"): the new Program takes them, they cannot be disabled in it,
+    and it does not get the options that give more freedom that the calling Program lacks;
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE" is kept also when this Program or the calling Program does not
+    have it, as it only allows code to be parsed in the new Program more than once
 
     @return the new Program
 
@@ -174,7 +178,9 @@ auto v = pgm.callFunction("eval");
     @endcode
 
     @throw PROGRAM-OPTION-ERROR the parse options contain options that can only be set by the system
-    @throw PROGRAM-ERROR this Program is being parsed
+    @throw OPTION-ERROR the new Program would have @ref modern "%modern" and a compatibility option that it does not
+    allow, given or from this Program (see @ref modern_option_consistency)
+    @throw PROGRAM-ERROR this Program is being parsed, or has been deleted
 
     @since %Qore 3.0
 */
@@ -183,24 +189,52 @@ Program ProgramControl::createEvalProgram(softint parse_options = PO_DEFAULT) [f
         return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted "
             "options that can only be set by the system", parse_options);
     }
-    // the namespace of this Program is copied when the new Program is created
-    if (qore_program_private::get(*p)->parsing_in_progress) {
-        return xsink->raiseException("PROGRAM-ERROR", "the Program is currently undergoing parsing; its code "
-            "cannot be inherited");
+    // the namespace of this Program is copied when the new Program is created: the Program is held while it is
+    // copied, so that its data cannot be cleared meanwhile, and its parse lock is held, so that no code is parsed in
+    // it meanwhile; a Program that is deleted or being parsed, or whose parse lock another thread holds, is refused
+    // (see qore_program_private::EvalCopyHolder)
+    qore_program_private::EvalCopyHolder copy_holder(*p, xsink);
+    if (*xsink) {
+        return QoreValue();
     }
+    // the code that creates the Program controls it, as does this Program, its parent
+    const QoreProgram* creator = getProgram();
+    // the new Program is a child of this Program, not of the calling code, but it takes and locks the restrictions
+    // of the calling code as a child of it would, so that code with access to the debugger cannot get a Program
+    // with fewer restrictions than its own (see qore_program_private::restrictForCreator())
+    bool restricted = false;
+    QoreParseOptions restrictions;
+    QoreParseOptions po = (creator && creator != p)
+        ? qore_program_private::restrictForCreator(creator, QoreParseOptions(parse_options), restrictions, restricted)
+        : QoreParseOptions(parse_options);
+    // the new Program has this Program's options too: %modern cannot be in effect with a compatibility option that it
+    // does not allow, given or inherited (issue #5682)
+    // this Program's options are read once: the check and the options that the new Program inherits use the same
+    // value, also if they change meanwhile (issue #6176)
+    QoreParseOptions parent_po = qore_program_private::readParseOptions(*p);
+    if (qore_program_private::checkNewProgramModernOptions(p, parent_po, po, xsink,
+            "ProgramControl::createEvalProgram()")) {
+        return QoreValue();
+    }
+#ifdef DEBUG
+    // tests hold the creation here to change this Program's options after the check
+    qore_dbg_child_program_create_hold();
+#endif
     QoreProgram* pgm;
     {
         InheritAllUserCodeHelper all_user_code;
-        pgm = new QoreProgram(p, parse_options);
+        pgm = new QoreProgram(p, po, false, nullptr, &parent_po);
+    }
+    copy_holder.release();
+    if (restricted) {
+        qore_program_private::lockCreatorRestrictions(*pgm, restrictions);
     }
     // a child Program has only the positive options of its parent; this one only allows the new Program to be
     // parsed again
     if (parse_options & PO_ALLOW_REPARSE) {
         qore_program_private::get(*pgm)->setParseOptionsIntern(PO_ALLOW_REPARSE);
     }
-    // the code that creates the Program controls it, as does this Program, its parent, whose chain the new Program
-    // already has
-    const QoreProgram* creator = getProgram();
+    // the new Program already has the creator chain of this Program, its parent
     if (creator) {
         qore_program_private::addCreator(*pgm, *creator);
     }
@@ -338,6 +372,29 @@ static list<ProgramControl> ProgramControl::getAllPrograms() [flags=RET_VALUE_ON
 */
 list<int> ProgramControl::getThreadList() [flags=CONSTANT] {
    return p->getThreadList();
+}
+
+//! Requests cooperative cancellation of one of this Program's threads, scoped to this Program
+/** As @ref Qore::Program::cancelThread() "Program::cancelThread()": the request applies only while the thread runs
+    in this Program or in a call that originated in it, so that a thread that called into this Program and returned
+    does not raise it in its own code; a debugger ends the threads of a program with it (see
+    DebugProgramControl::terminateProgram())
+
+    @param tid positive thread ID
+    @param reason optional explanation
+
+    @return true if cancellation was requested, false if the thread is no longer active here
+
+    @throw PROGRAM-THREAD-ERROR invalid ID or self-cancellation
+
+    @since %Qore 3.0
+*/
+bool ProgramControl::cancelThread(int tid, *string reason) [dom=THREAD_CONTROL] {
+   if (tid <= 0 || tid > INT_MAX) {
+      xsink->raiseException("PROGRAM-THREAD-ERROR", "thread ID must be a positive native integer");
+      return false;
+   }
+   return p->cancelThread(tid, reason ? reason->c_str() : nullptr, xsink);
 }
 
 //! Checks if a user function exists in the program object
@@ -635,11 +692,12 @@ list<int> ProgramControl::findStatementIds(string file, int line) [flags=NAMED_A
    blocks of the statement and of closures that it creates; also calls whose called code is only known at runtime,
    such as calls of methods of objects of unknown classes and of call references, whose \c statement_id is 0; calls
    of builtin code and of the user code of other Programs are not given, as a debugger of this Program does not
-   stop in them.  A debugger steps into a call by matching the functions that the statement calls with the
-   \c function of the call and the number of earlier calls with it in the list; when an operand of a conditional
-   operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated, a later call with the same
-   \c function can be stepped into instead
-   (<a href="https://github.com/qoretechnologies/qore/issues/5564">issue 5564</a>)
+   stop in them.  The call stack frame of called code is located at its call
+   (@ref Qore::CallStackInfo "CallStackInfo"), so a debugger steps into a call by matching the location of the
+   frame of the code that the statement calls with the location of the call, which stays exact when an operand of
+   a conditional operator, such as <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt>, is not evaluated; where the columns of
+   a call are not known, as in AOT-compiled code, by matching the functions that the statement calls with the
+   \c function of the call and the number of earlier calls with it in the list
 
    @par Example:
    @code{.py}

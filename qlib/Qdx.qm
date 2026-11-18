@@ -2219,6 +2219,34 @@ string doxygen_output = proc.process();
         @endcode
     */
     public class AstProcessor {
+        #! the parse option references for the functional domains of a [dom=...] attribute list
+        /** The names of the \c DOM_* constants, and the names that qpp writes for two of them (\c PROCESS,
+            \c MODULES), which Qore source accepts too (issue #5843)
+        */
+        const DomainRestrictionRefs = {
+            "PROCESS_CONTROL": "@ref Qore::PO_NO_PROCESS_CONTROL",
+            "PROCESS": "@ref Qore::PO_NO_PROCESS_CONTROL",
+            "NETWORK": "@ref Qore::PO_NO_NETWORK",
+            "EXTERNAL_PROCESS": "@ref Qore::PO_NO_EXTERNAL_PROCESS",
+            "FILESYSTEM": "@ref Qore::PO_NO_FILESYSTEM",
+            "THREAD_CLASS": "@ref Qore::PO_NO_THREAD_CLASSES",
+            "THREAD_CONTROL": "@ref Qore::PO_NO_THREAD_CONTROL",
+            "DATABASE": "@ref Qore::PO_NO_DATABASE",
+            "GUI": "@ref Qore::PO_NO_GUI",
+            "TERMINAL_IO": "@ref Qore::PO_NO_TERMINAL_IO",
+            "EXTERNAL_INFO": "@ref Qore::PO_NO_EXTERNAL_INFO",
+            "THREAD_INFO": "@ref Qore::PO_NO_THREAD_INFO",
+            "LOCALE_CONTROL": "@ref Qore::PO_NO_LOCALE_CONTROL",
+            "MODULE": "@ref Qore::PO_NO_MODULES",
+            "MODULES": "@ref Qore::PO_NO_MODULES",
+            "IN_MODULE": "@ref Qore::PO_IN_MODULE",
+            "EMBEDDED_LOGIC": "@ref Qore::PO_NO_EMBEDDED_LOGIC",
+            "REFLECTION": "@ref Qore::PO_NO_REFLECTION",
+            "UNCONTROLLED_API": "@ref Qore::PO_NO_UNCONTROLLED_APIS",
+            "INJECTION": "MUST HAVE: @ref Qore::PO_ALLOW_INJECTION",
+            "DEBUGGER": "MUST HAVE: @ref Qore::PO_ALLOW_DEBUGGER",
+        };
+
         private {
             #! The AST nodes to process
             list<auto> nodes;
@@ -2608,7 +2636,7 @@ string doxygen_output = proc.process();
             }
 
             # Output doc comment if present
-            *string doc = getDocForNode(method);
+            *string doc = addDomainRestrictions(getDocForNode(method), method.callableAttributes);
             if (exists doc) {
                 writeDocComment(doc);
             }
@@ -2654,10 +2682,40 @@ string doxygen_output = proc.process();
             }
         }
 
+        #! Returns the doc comment with the restrictions of the functional domains declared in the attribute list
+        /** as qpp documents the functional domains of builtin code: a "@par Restrictions:" paragraph that references
+            the parse options restricting the code
+        */
+        private *string addDomainRestrictions(*string doc, *string attrs) {
+            if (!attrs) {
+                return doc;
+            }
+            *string doms = (attrs =~ x/dom\s*=\s*([A-Za-z_,\s]+)/)[0];
+            if (!doms) {
+                return doc;
+            }
+            list<string> refs = ();
+            foreach string d in (doms.split(",")) {
+                trim d;
+                *string ref = DomainRestrictionRefs{d.upr()};
+                if (ref) {
+                    refs += ref;
+                }
+            }
+            if (!refs) {
+                return doc;
+            }
+            string par = "@par Restrictions:\n    " + refs.join(", ") + "\n";
+            if (doc && doc =~ /\*\/\s*$/) {
+                return regex_subst(doc, "\\*/\\s*$", "\n" + par + "*/");
+            }
+            return (doc ? doc + "\n" : "") + "/** " + par + "*/";
+        }
+
         #! Processes a function declaration
         private processFunction(hash<auto> func) {
             # Output doc comment if present
-            *string doc = getDocForNode(func);
+            *string doc = addDomainRestrictions(getDocForNode(func), func.callableAttributes);
             if (exists doc) {
                 writeDocComment(doc);
             }

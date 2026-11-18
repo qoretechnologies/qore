@@ -11,6 +11,8 @@
 %requires DataProvider
 %requires SqlUtil
 %requires Sqlite3SqlUtil
+%requires BulkSqlUtil
+%requires DbDataProvider
 %requires QUnit
 
 %try-module sqlite3
@@ -21,6 +23,17 @@
 
 #! Primary keys, unique indexes, upsert and duplicate-row detection on an in-memory SQLite database
 class Sqlite3KeysTest inherits QUnit::Test {
+    public {
+        #! the rows that the upsert tests start with
+        const SeedRows = (
+            {"id": 1, "name": "a", "v": 10},
+            {"id": 2, "name": "b", "v": 20},
+        );
+
+        #! the APIs that upsert a row
+        const UpsertPaths = ("table", "bulk closure", "bulk operation", "provider record", "provider bulk");
+    }
+
     private {
         *Datasource ds;
     }
@@ -46,6 +59,10 @@ class Sqlite3KeysTest inherits QUnit::Test {
         addTestCase("a unique key that a foreign constraint references is aligned in either order of the tables",
             \referencedKeys());
         addTestCase("upsert uses the key", \upsert());
+        addTestCase("an upsert conflicting with another unique key raises it and changes no other row",
+            \upsertOtherKeyConflict());
+        addTestCase("an upsert of a row with an existing key still updates or skips it", \upsertExistingKey());
+        addTestCase("an automatic upsert inserts first only into an empty table", \upsertAuto());
         addTestCase("a select that locks rows is refused", \forUpdateRefused());
         addTestCase("duplicate rows are recognized", \duplicateRows());
         set_return_value(main());
@@ -58,6 +75,7 @@ class Sqlite3KeysTest inherits QUnit::Test {
         ds.exec("create table composite_pk (a integer, b varchar(10), v varchar(10), primary key (b, a))");
         ds.exec("create table unique_col (id integer primary key, code varchar(10) unique, v varchar(10))");
         ds.exec("create table no_pk (x integer)");
+        ds.exec("create table upsert_uk (id integer primary key, name text not null unique, v integer not null)");
         ds.exec("create table quoted (\"id\" integer, \"code\" varchar(10), \"name\" varchar(10))");
         ds.exec("create unique index \"quoted_code\" on \"quoted\" (\"code\")");
         ds.exec("create index quoted_name on quoted (name collate nocase)");
@@ -829,6 +847,146 @@ class Sqlite3KeysTest inherits QUnit::Test {
         assertEq(({"a": 1, "b": "x", "v": "2"},), composite.selectRows());
     }
 
+    #! every strategy and path that can insert a row raises a conflict with a unique key other than the upsert key
+    upsertOtherKeyConflict() {
+        Datasource ds = getDatasource();
+        # the row keyed by id 6 does not exist; its name conflicts with row 1
+        hash<auto> row = {"id": 6, "name": "a", "v": 1};
+        foreach string strategy in (AbstractTable::UpsertStrategyDescriptionMap.keys()) {
+            int code = AbstractTable::UpsertStrategyDescriptionMap{strategy};
+            foreach string path in (UpsertPaths) {
+                string desc = sprintf("%s %s", strategy, path);
+                on_exit ds.rollback();
+                seedUpsertTable(ds);
+                if (code == AbstractTable::UpsertUpdateOnly) {
+                    # no row has the key, so there is nothing to update
+                    upsertWith(ds, path, row, code);
+                } else {
+                    assertUpsertConflict(desc, SQLITE_CONSTRAINT_UNIQUE, sub () {
+                        upsertWith(ds, path, row, code);
+                    });
+                }
+                assertEq(SeedRows, getUpsertRows(ds), desc + ": no row is changed or deleted");
+            }
+
+            # upserted by the unique name, a row with a new name conflicts with the primary key of row 2
+            string desc = sprintf("%s keyed by name", strategy);
+            on_exit ds.rollback();
+            seedUpsertTable(ds);
+            Table table(ds, "upsert_uk");
+            hash<auto> name_row = {"id": 2, "name": "c", "v": 1};
+            if (code == AbstractTable::UpsertUpdateOnly) {
+                table.upsert(name_row, code, {"upsert_columns": ("name",)});
+            } else {
+                assertUpsertConflict(desc, SQLITE_CONSTRAINT_PRIMARYKEY, sub () {
+                    table.upsert(name_row, code, {"upsert_columns": ("name",)});
+                });
+            }
+            assertEq(SeedRows, getUpsertRows(ds), desc + ": no row is changed or deleted");
+        }
+    }
+
+    #! a row whose upsert key exists is still updated or skipped by every strategy and path
+    upsertExistingKey() {
+        Datasource ds = getDatasource();
+        hash<auto> row = {"id": 1, "name": "c", "v": 11};
+        foreach string strategy in (AbstractTable::UpsertStrategyDescriptionMap.keys()) {
+            int code = AbstractTable::UpsertStrategyDescriptionMap{strategy};
+            foreach string path in (UpsertPaths) {
+                string desc = sprintf("%s %s", strategy, path);
+                on_exit ds.rollback();
+                seedUpsertTable(ds);
+                upsertWith(ds, path, row, code);
+                list<hash<auto>> expected = code == AbstractTable::UpsertInsertOnly
+                    ? SeedRows
+                    : ({"id": 1, "name": "c", "v": 11}, SeedRows[1]);
+                assertEq(expected, getUpsertRows(ds), desc);
+            }
+        }
+
+        # a row of key columns only whose key exists has nothing to update
+        Table composite(ds, "composite_pk");
+        foreach int code in ((AbstractTable::UpsertInsertFirst, AbstractTable::UpsertInsertOnly)) {
+            on_exit ds.rollback();
+            composite.insert({"a": 1, "b": "x", "v": "1"});
+            int rc = composite.upsert({"a": 1, "b": "x"}, code);
+            assertEq(code == AbstractTable::UpsertInsertOnly ? AbstractTable::UR_Unchanged
+                : AbstractTable::UR_Verified, rc, AbstractTable::UpsertStrategyMap{code});
+            assertEq(({"a": 1, "b": "x", "v": "1"},), composite.selectRows(), AbstractTable::UpsertStrategyMap{code});
+        }
+    }
+
+    #! the automatic strategy inserts first into an empty table and updates first otherwise
+    upsertAuto() {
+        Datasource ds = getDatasource();
+        on_exit ds.rollback();
+        StrategyRecordingSqlite3Table table(ds, "upsert_uk");
+        table.upsert({"id": 1, "name": "a", "v": 10});
+        assertEq("insert-first", table.used, "an empty table");
+        table.upsert({"id": 2, "name": "b", "v": 20});
+        assertEq("update-first", table.used, "a table with rows");
+        assertEq(SeedRows, getUpsertRows(ds));
+    }
+
+    private seedUpsertTable(Datasource ds) {
+        foreach hash<auto> row in (SeedRows) {
+            ds.vexec("insert into upsert_uk (id, name, v) values (%v, %v, %v)", row.values());
+        }
+    }
+
+    private list<hash<auto>> getUpsertRows(Datasource ds) {
+        return ds.selectRows("select id, name, v from upsert_uk order by id");
+    }
+
+    private upsertWith(Datasource ds, string path, hash<auto> row, int code) {
+        hash<auto> rows = map {$1.key: ($1.value,)}, row.pairIterator();
+        switch (path) {
+            case "table": {
+                Table table(ds, "upsert_uk");
+                table.upsert(row, code);
+                break;
+            }
+            case "bulk closure": {
+                Table table(ds, "upsert_uk");
+                table.getBulkUpsertClosure(row, code)(rows);
+                break;
+            }
+            case "bulk operation": {
+                Table table(ds, "upsert_uk");
+                BulkUpsertOperation bulk(table, {"upsert_strategy": code});
+                on_error bulk.discard();
+                bulk.queueData(rows);
+                bulk.flush();
+                break;
+            }
+            case "provider record": {
+                DbTableDataProvider provider(new Sqlite3Table(ds, "upsert_uk"));
+                provider.upsertRecord(row, {"upsert_strategy": AbstractTable::UpsertStrategyMap{code}});
+                break;
+            }
+            case "provider bulk": {
+                DbTableDataProvider provider(new Sqlite3Table(ds, "upsert_uk"));
+                provider.upsertRecordsBulk(rows, {"upsert_strategy": AbstractTable::UpsertStrategyMap{code}});
+                break;
+            }
+            default:
+                throw "TEST-ERROR", sprintf("unknown upsert path %y", path);
+        }
+    }
+
+    private assertUpsertConflict(string desc, int extended_code, code upsert) {
+        try {
+            upsert();
+            fail(desc + ": the upsert succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SQLITE3-EXEC", ex.err, desc + ": " + get_exception_string(ex));
+            # an older driver reports no result codes
+            if (ex.arg.typeCode() == NT_HASH && exists ex.arg.extended_code) {
+                assertEq(extended_code, ex.arg.extended_code, desc);
+            }
+        }
+    }
+
     duplicateRows() {
         Datasource ds = getDatasource();
         Table single(ds, "single_pk");
@@ -870,5 +1028,25 @@ class VersionedDatasource inherits Datasource {
 
     auto getServerVersion() {
         return version;
+    }
+}
+
+#! A table that records the strategy that an automatic upsert resolves to
+class StrategyRecordingSqlite3Table inherits Sqlite3Table {
+    public {
+        *string used;
+    }
+
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    private code<int(hash<auto>)> getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+        used = "insert-first";
+        return Sqlite3Table::getUpsertInsertFirst(cols, example_row, opt);
+    }
+
+    private code<int(hash<auto>)> getUpsertUpdateFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
+        used = "update-first";
+        return Sqlite3Table::getUpsertUpdateFirst(cols, example_row, opt);
     }
 }

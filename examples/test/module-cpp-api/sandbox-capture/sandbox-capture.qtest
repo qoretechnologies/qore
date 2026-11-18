@@ -1,0 +1,316 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SandboxCaptureApiTest
+
+#! trusted code whose capture() method tenant B's code makes a call reference to
+class Capturer {
+    #! captures the sandbox of the current thread; returns the handle of the capture
+    int capture() {
+        return sb_capture();
+    }
+}
+
+#! Tests QoreSandboxCapture::getPolicyManagerRef() and the QoreSandboxCapture copy constructor (issue #5644)
+/** A native bridge that captures the sandbox of the code that creates one of its objects (for example the Policy
+    object of module-jni) must check later operations against that captured policy wherever the check runs.  Applying
+    the capture with QoreSandboxCaptureHelper governs a thread only as its outermost caller: a sandboxed Program
+    running on the thread decides instead, and inside a policy barrier no sandbox does.  getPolicyManagerRef() returns
+    the captured policy manager independently of the thread.
+*/
+class SandboxCaptureApiTest inherits QUnit::Test {
+    public {
+        #! the exception that a denied filesystem access raises
+        const DeniedErr = "FILESYSTEM-ACCESS-DENIED";
+    }
+
+    private {
+        TmpDir dir;
+        string secret;
+        string other;
+        string pub;
+        Program tenant_a;
+        Program tenant_b;
+        #! a Program with tenant B's sandbox whose code creates a call reference to a method of a trusted object
+        Program tenant_b_ref;
+        #! the captures made by the test cases, released at the end
+        list<int> handles = ();
+        #! a system-policy capability that checks a path with a capture applied and with its policy manager
+        code system_check;
+    }
+
+    constructor() : QUnit::Test("SandboxCaptureApiTest", "1.0", \ARGV) {
+        dir = new TmpDir("sandbox-capture-");
+        secret = dir.path + "/secret";
+        other = dir.path + "/other";
+        pub = dir.path + "/public";
+
+        # tenant A denies the secret path; tenant B, a looser sandbox, denies only another path
+        SandboxManager sm_a();
+        sm_a.setFilesystemDefaultPolicy(True);
+        sm_a.addFilesystemDeniedPath(secret);
+        tenant_a = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant_a.setSandboxManager(sm_a);
+        SandboxManager sm_b();
+        sm_b.setFilesystemDefaultPolicy(True);
+        sm_b.addFilesystemDeniedPath(other);
+        tenant_b = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant_b.setSandboxManager(sm_b);
+        # the module functions are called by trusted code that the sandboxed code calls, which runs in its call
+        string code = "%modern\nauto sub call(code c) { return c(); }";
+        tenant_a.parse(code, "tenant-a");
+        tenant_b.parse(code, "tenant-b");
+        tenant_b_ref = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant_b_ref.setSandboxManager(sm_b);
+        tenant_b_ref.parse("%modern\ncode sub ref(object o) { return \\o.capture(); }", "tenant-b-ref");
+        # registered during trusted initialization, as system-policy capabilities must be
+        system_check = SandboxManager::createSystemPolicyCall(hash<auto> sub (int h, string path) {
+            hash<auto> rv;
+            try {
+                sb_capture_applied_check_read(h, path);
+                rv.applied = "allowed";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.applied = ex.err;
+            }
+            try {
+                sb_capture_check_read(h, path);
+                rv.explicit = "allowed";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.explicit = ex.err;
+            }
+            return rv;
+        });
+
+        addTestCase("a capture made in a sandbox checks against its policy", \testCapturedPolicy());
+        addTestCase("the captured policy applies inside a policy barrier", \testPolicyBarrier());
+        addTestCase("the captured policy applies on another tenant's thread", \testOtherTenant());
+        addTestCase("a thread that only an inherited sandbox governs keeps its policy", \testInheritedOnly());
+        addTestCase("the captured policy includes the provenance of the capturing code", \testProvenance());
+        addTestCase("captures are copied, checked and released concurrently", \testConcurrentCopies());
+        addTestCase("a copy keeps the captured sandbox", \testCopy());
+        addTestCase("an unsandboxed capture has no policy", \testUnsandboxed());
+        addTestCase("a capture made in a system-policy call has no policy", \testSystemPolicyCapture());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        map sb_capture_free($1), handles;
+        handles = ();
+    }
+
+    #! returns a capture made in tenant B's sandbox
+    private int captureB() {
+        int h = tenant_b.callFunction("call", \sb_capture());
+        handles += h;
+        return h;
+    }
+
+    #! returns a capture made in tenant A's sandbox
+    private int captureA() {
+        int h = tenant_a.callFunction("call", \sb_capture());
+        handles += h;
+        return h;
+    }
+
+    testCapturedPolicy() {
+        int h = captureA();
+        assertTrue(sb_capture_is_sandboxed(h));
+        assertTrue(sb_capture_has_policy(h));
+        assertThrows(DeniedErr, \sb_capture_check_read(), (h, secret), "the captured policy denies the path");
+        sb_capture_check_read(h, pub);
+        # the trusted thread has no sandbox
+        sb_thread_check_read(secret);
+        assertThrows(DeniedErr, \sb_capture_check_read(), (h, secret), "the check does not depend on the thread");
+        assertThrows(DeniedErr, \sb_capture_applied_check_read(), (h, secret),
+            "applied on a thread with no sandbox, the capture governs it");
+    }
+
+    #! a system-policy capability, called from tenant A's sandbox, uses a capture of tenant A's sandbox
+    testPolicyBarrier() {
+        int h = captureA();
+        hash<auto> r = tenant_a.callFunction("call", auto sub () { return system_check(h, secret); });
+        # applying the capture does not govern a thread in a system-policy call: no sandbox decides (fail-open)
+        assertEq("allowed", r.applied, "the applied capture does not decide in the system-policy call");
+        assertEq(DeniedErr, r.explicit, "the captured policy manager denies the path");
+        # the same from trusted code with no sandbox on the stack
+        r = system_check(h, secret);
+        assertEq("allowed", r.applied);
+        assertEq(DeniedErr, r.explicit);
+    }
+
+    #! tenant B's thread uses a capture of tenant A's sandbox
+    testOtherTenant() {
+        int h = captureA();
+        hash<auto> r = tenant_b.callFunction("call", hash<auto> sub () {
+            hash<auto> rv;
+            try {
+                sb_capture_check_read(h, secret);
+                rv.explicit = "allowed";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.explicit = ex.err;
+            }
+            # the capture applied: tenant B's Program decides, as the capture governs the thread only as its
+            # outermost caller (the failure of the approach before getPolicyManagerRef())
+            try {
+                sb_capture_applied_check_read(h, secret);
+                rv.applied = "allowed";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.applied = ex.err;
+            }
+            try {
+                sb_thread_check_read(other);
+                rv.thread_other = "allowed";
+            } catch (hash<ExceptionInfo> ex) {
+                rv.thread_other = ex.err;
+            }
+            # a copy made on tenant B's thread copies tenant A's capture
+            rv.copy = sb_capture_copy(h);
+            return rv;
+        });
+        handles += r.copy;
+        assertEq(DeniedErr, r.thread_other, "tenant B's sandbox governs its thread");
+        assertEq(DeniedErr, r.explicit, "tenant A's captured policy denies the path on tenant B's thread");
+        assertEq("allowed", r.applied, "the applied capture does not decide on tenant B's thread: tenant B's "
+            "sandbox does, which allows the path");
+        assertTrue(sb_capture_same(h, r.copy), "the copy made on tenant B's thread has tenant A's sandbox");
+        assertThrows(DeniedErr, \sb_capture_check_read(), (r.copy, secret));
+    }
+
+    #! a capture applied inside another one, on a thread that only the outer capture's inherited context governs
+    /** Applying a capture replaces the inherited context of the thread (an unsandboxed capture clears it), so the
+        policy of the thread must be resolved before the capture is applied, as documented for
+        QoreSandboxCapture::getPolicyManagerRef(); resolved afterwards, tenant B's policy is lost.
+    */
+    testInheritedOnly() {
+        int hb = captureB();
+        int ha = captureA();
+        int ht = sb_capture();
+        handles += ht;
+        assertThrows(DeniedErr, \sb_capture_applied_check_read(), (hb, other), "tenant B governs the thread");
+        foreach hash<auto> i in ({"tenant A's (looser for the path) capture": ha,
+                "a trusted capture": ht}.pairIterator()) {
+            assertThrows(DeniedErr, \sb_capture_nested_check_read(), (hb, i.value, other, True),
+                i.key + ": the thread's policy resolved first keeps tenant B's sandbox");
+            # the order that the documentation warns against: the inner capture replaces tenant B's context
+            sb_capture_nested_check_read(hb, i.value, other, False);
+        }
+        # the inner capture's own policy applies in either order
+        assertThrows(DeniedErr, \sb_capture_nested_check_read(), (hb, ha, secret, True));
+        assertThrows(DeniedErr, \sb_capture_nested_check_read(), (hb, ha, secret, False));
+    }
+
+    #! a capture made in a call that tenant B's code set up and tenant A's code makes has the provenance of tenant B
+    /** The call reference to the trusted Capturer::capture() method is created at run time by tenant B's code, so
+        calling it from tenant A's code runs the capture with tenant B's provenance: getPolicyManagerRef() combines
+        tenant A's policy with tenant B's, and the capture differs from one that tenant A makes directly.
+    */
+    testProvenance() {
+        # the method reference does not keep the object alive
+        Capturer capturer();
+        code ref = tenant_b_ref.callFunction("ref", capturer);
+        int h = tenant_a.callFunction("call", ref);
+        handles += h;
+        assertTrue(sb_capture_has_policy(h));
+        assertThrows(DeniedErr, \sb_capture_check_read(), (h, secret), "tenant A's policy");
+        assertThrows(DeniedErr, \sb_capture_check_read(), (h, other), "the policy of tenant B's provenance");
+        sb_capture_check_read(h, pub);
+        int ha = captureA();
+        assertFalse(sb_capture_same(h, ha), "the provenance makes the sandbox different");
+        sb_capture_check_read(ha, other);
+        # a copy keeps the provenance
+        int c = sb_capture_copy(h);
+        handles += c;
+        assertTrue(sb_capture_same(h, c));
+        assertThrows(DeniedErr, \sb_capture_check_read(), (c, other));
+    }
+
+    #! copies of one capture are made, checked and released on many threads at the same time
+    testConcurrentCopies() {
+        int h = captureA();
+        const int Threads = 16;
+        const int Rounds = 500;
+        Counter done(Threads);
+        Queue errors();
+        for (int t = 0; t < Threads; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < Rounds; ++i) {
+                    int c = sb_capture_copy(h);
+                    try {
+                        sb_capture_check_read(c, secret);
+                        errors.push(sprintf("round %d: the copy allowed the path", i));
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != DeniedErr) {
+                            errors.push(sprintf("round %d: %s: %s", i, ex.err, ex.desc));
+                        }
+                    }
+                    sb_capture_free(c);
+                }
+            }();
+        }
+        done.waitForZero();
+        list<string> errs = ();
+        while (errors.size()) {
+            errs += errors.get();
+        }
+        assertEq((), errs);
+        assertTrue(sb_capture_has_policy(h), "the original is intact");
+        assertThrows(DeniedErr, \sb_capture_check_read(), (h, secret));
+    }
+
+    testCopy() {
+        int h = tenant_a.callFunction("call", \sb_capture());
+        # released by the test case, or by globalTearDown() if an assertion fails before
+        handles += h;
+        int c = sb_capture_copy(h);
+        handles += c;
+        assertTrue(sb_capture_same(h, c));
+        assertTrue(sb_capture_is_sandboxed(c));
+        # the copy stays valid after the original is released
+        sb_capture_free(h);
+        handles = select handles, $1 != h;
+        assertThrows("SB-CAPTURE-ERROR", \sb_capture_check_read(), (h, secret), "the original is released");
+        assertTrue(sb_capture_has_policy(c));
+        assertThrows(DeniedErr, \sb_capture_check_read(), (c, secret), "the copy denies the path");
+        sb_capture_check_read(c, pub);
+        # a copy of an unsandboxed capture is unsandboxed
+        int u = sb_capture();
+        handles += u;
+        int uc = sb_capture_copy(u);
+        handles += uc;
+        assertFalse(sb_capture_is_sandboxed(uc));
+        assertFalse(sb_capture_same(c, uc));
+    }
+
+    testUnsandboxed() {
+        int h = sb_capture();
+        handles += h;
+        assertFalse(sb_capture_is_sandboxed(h));
+        assertFalse(sb_capture_has_policy(h));
+        sb_capture_check_read(h, secret);
+        sb_capture_applied_check_read(h, secret);
+        assertFalse(sb_capture_same(h, captureA()), "an unsandboxed capture differs from a sandboxed one");
+    }
+
+    #! a capture made in a system-policy capability called from tenant A is sandboxed but has the system policy
+    testSystemPolicyCapture() {
+        code capture = SandboxManager::createSystemPolicyCall(\sb_capture());
+        int h = tenant_a.callFunction("call", auto sub () { return capture(); });
+        handles += h;
+        assertTrue(sb_capture_is_sandboxed(h), "the capture is sandboxed");
+        assertFalse(sb_capture_has_policy(h), "the system policy applies");
+        sb_capture_check_read(h, secret);
+        sb_capture_applied_check_read(h, secret);
+    }
+}

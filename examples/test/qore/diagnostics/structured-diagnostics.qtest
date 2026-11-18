@@ -335,8 +335,9 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
     }
 
     testUninitializedLocalWarning() {
+        # the unassigned value is deliberate: the warning for it is tested, so it must not be a parse error
         list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
-            "nothing sub trapTest() { int value; int copy = value; }");
+            "%no-strict-parse-errors\nnothing sub trapTest() { int value; int copy = value; }");
         assertEq(1, diags.size());
         assertEq("warning", diags[0].severity);
         assertEq("LANGUAGE-TRAP", diags[0].code);

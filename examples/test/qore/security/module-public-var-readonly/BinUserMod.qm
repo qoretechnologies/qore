@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a trusted module that uses a binary module whose class has static members held by the binary module (qore#5664)
+
+%modern
+
+%requires cppapiuser
+
+module BinUserMod {
+    version = "1.0";
+    desc = "test module using a binary module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+
+public namespace BinUserMod {
+    public int sub get() {
+        return Qore::CppApiTest::MemberAccessorProbe::scount;
+    }
+}

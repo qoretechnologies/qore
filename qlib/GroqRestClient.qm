@@ -44,6 +44,8 @@ module GroqRestClient {
         ConnectionSchemeCache::registerScheme("groq", GroqRestConnection::ConnectionScheme);
         QoreLlmUtils::LlmProviderRegistry::registerFactory(new GroqLlmProviderFactory());
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage GroqRestClient Module

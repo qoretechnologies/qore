@@ -109,13 +109,18 @@ private:
     friend RuntimeConfig rc_get_parse_time();
     friend RuntimeConfig& rc_get_current_ref();
     friend RuntimeConfig& rc_get_tls_ref();
+    friend QoreProgram* rc_get_current_program(const RuntimeConfig& rc);
     friend void rc_sync_to_thread(const RuntimeConfig& rc);
+    friend class QoreRuntimeFlags;
     friend class RuntimeConfigHelper;
+    friend class RuntimeConfigCallRefAccess;
     friend class RuntimeConfigLocationHelper;
     friend class RuntimeConfigObjectHelper;
     friend class RuntimeConfigClosureHelper;
     friend class RuntimeConfigElementHelper;
     friend class RuntimeConfigStackHelper;
+    friend class QoreRcCallSiteHelper;
+    friend void rc_tls_set_call_site_ptr(const QoreProgramLocation** call_site_ptr);
 };
 
 #endif // _QORE_RUNTIMECONFIG_H

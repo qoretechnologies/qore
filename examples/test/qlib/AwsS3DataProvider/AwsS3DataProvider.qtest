@@ -37,6 +37,11 @@
 %requires FileLocationHandler
 %requires AwsS3DataProvider
 
+# the S3 API returns XML, which the provider reads with the xml module (S3-XML-UNAVAILABLE without it)
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
 %exec-class AwsS3DataProviderTest
 
 #! One event delivered to an observer
@@ -689,6 +694,9 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         apart is to run a cycle and assert on what was delivered.
     */
     watchCycleTest() {
+%ifdef NoXml
+        testSkip("no xml module: the S3 responses are XML");
+%endif
         FakeAwsRestClient rest();
         RecordingObserver obs();
         TestObjectWatch w({"restclient": rest, "bucket": "b", "start_date": 2026-01-01Z});
@@ -886,6 +894,14 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
                 "object_keys": (map sprintf("k%d", $1), xrange(0, MaxDeleteKeys + 1)),
             });
         });
+        # an empty batch is refused before any request
+        assertThrows("S3-DELETE-ERROR", "no object keys", sub () {
+            dp.doRequest({"bucket": "b", "object_keys": ()});
+        });
+%ifdef NoXml
+        # the rest reads the XML responses of the requests
+        testSkip("no xml module: the S3 responses are XML");
+%endif
         # ... and exactly the cap is accepted, since an off-by-one here would reject a legal batch
         rest.bodies = ('<?xml version="1.0" encoding="UTF-8"?><DeleteResult></DeleteResult>',);
         hash<auto> full = dp.doRequest({
@@ -894,9 +910,6 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         });
         assertEq(0, full.error_count, "a batch of exactly the maximum size is accepted");
         rest.served = 0;
-        assertThrows("S3-DELETE-ERROR", "no object keys", sub () {
-            dp.doRequest({"bucket": "b", "object_keys": ()});
-        });
 
         # a batch delete can succeed as a request while refusing individual keys, so the failures must be
         # reported rather than the response being assumed empty
@@ -1052,6 +1065,9 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         upload was a single request whatever its size.
     */
     multipartUploadTest() {
+%ifdef NoXml
+        testSkip("no xml module: the S3 responses are XML");
+%endif
         FakeAwsRestClient rest();
         AwsS3FileTransferProvider prov(rest);
 
@@ -1250,9 +1266,16 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
                     "<Message>The specified key does not exist.</Message></Error>",
             },
         };
+%ifdef NoXml
+        # without the xml module the error document cannot be read, so the original error is reported
+        assertThrows("S3-API-ERROR", "REST-RESPONSE-ERROR: HTTP 404 response received", sub () {
+            runPoller(handler.getIoPollerForLocation("conn", "b/gone.txt", {}));
+        }, NOTHING, "without the xml module, the HTTP error is reported");
+%else
         assertThrows("S3-API-ERROR", "NoSuchKey", sub () {
             runPoller(handler.getIoPollerForLocation("conn", "b/gone.txt", {}));
         }, NOTHING, "the S3 error document is unpacked rather than reported as an HTTP status");
+%endif
         assertEq(0, rest.poll_retries, "a response error is not retried");
     }
 

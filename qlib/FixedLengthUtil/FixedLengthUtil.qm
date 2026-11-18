@@ -32,6 +32,8 @@
 %modern
 
 module FixedLengthUtil {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.7";
     desc    = "user module for working with files with fixed length lines";
     author  = "Jiri Vaclavik <jiri.vaclavik@qoretechnologies.com>";
@@ -140,6 +142,10 @@ module FixedLengthUtil {
 
 
     @section fixedlengthutil_v1_7 Version 1.7
+    - \c "int", \c "float" and \c "number" field values are validated: a value that is not a number of the field's
+      type (ex: \c "12abc", read as \c 12 before) raises \c FIELD-VALUE-ERROR when read and \c FIELD-INPUT-ERROR when
+      written, and \c "int" fields are read in their number format; see @ref fixedlengthnumericvalues
+      (<a href="https://github.com/qoretechnologies/qore/issues/300">issue 300</a>)
     - field lengths are bytes, as documented, also when a line has characters of more than one byte (ex: non-ASCII
       text in UTF-8, or UTF-16): fields were extracted by character while lines were matched by byte length, so their
       values were shifted; a field that would start or end inside a character raises
@@ -203,7 +209,9 @@ module FixedLengthUtil {
     - \c "eol": the end of line characters for parsing or generation
     - \c "file_flags": additional writer @ref file_open_constants; @ref Qore::O_WRONLY | @ref Qore::O_CREAT are used by default. Use eg. @ref Qore::O_EXCL to ensure not to overwrite the target or @ref Qore::O_TRUNC to replace any existing file
     - \c "ignore_empty": if @ref True "True" then ignore empty lines
-    - \c "number_format": the default number format for \c "float" or \c "number" fields (see @ref Qore::parse_number() and @ref Qore::parse_float() for the value in these cases)
+    - \c "number_format": the default number format for \c "int", \c "float" or \c "number" fields (see
+      @ref Qore::parse_int(), @ref Qore::parse_number() and @ref Qore::parse_float() for the value in these cases, and
+      @ref fixedlengthnumericvalues)
     - \c "timezone": a string giving a time zone region name or an integer offset in seconds east of UTC
     - \c "truncate": The flag controls whether to truncate an output field value if its bigger than its specified \a length. Default is \c "False".
     - \c "tab2space": Controls whether to replace tabs with spaces and its value determines how many spaces to output in place of one tab character.
@@ -257,7 +265,7 @@ const Specs = (
     |!Key|!Type|!Description
     | \c length|integer|the size of the field in bytes
     | \c type|string|the type of data bound to the field @ref fixedlengthspectypes
-    | \c format|string|a date mask if the \a type of the field is \c "date"; see @ref date_formatting "date formatting" for more information
+    | \c format|string|a date mask if the \a type of the field is \c "date"; see @ref date_formatting "date formatting" for more information; a number format for an \c "int", \c "float" or \c "number" field; see @ref fixedlengthnumericvalues
     | \c timezone|string|override global timezone for current "date" field
     | \c padding|string|set padding of the field "left" (default) or "right"; used only in writers; if not given then the default padding depends on the field's \a type: \c "int" fields get left padding (right justification) and all others get right padding (left justification)
     | \c padding_char|string|a string with size 1 to use for \c padding. Default <tt>&quot; &quot;</tt> (space). Used only in writers
@@ -275,6 +283,20 @@ const Specs = (
     - \c "int"
     - \c "number"
     - \c "string"
+
+    @subsection fixedlengthnumericvalues Numeric Field Values
+
+    The value of an \c "int", \c "float" or \c "number" field must be a number of the field's type; a field of only
+    spaces is read as zero.  A value with any other character (ex: \c "12abc", or \c "1.5" in an \c "int" field)
+    raises \c FIELD-VALUE-ERROR when it is read, and a string value that is not such a number raises
+    \c FIELD-INPUT-ERROR when it is written, as does a \c float or \c number value with decimals written to an
+    \c "int" field.
+
+    With a number format (the field's \c "format" key or the \c "number_format" option), a value read can have the
+    format's thousands and decimal separators (ex: \c "1.234,5" with format \c ".,"); an \c "int" value cannot have
+    the decimal separator.  The writers convert \c "float" and \c "number" values to a number to format them, so a
+    string value written to such a field must be a plain number without separators; a string value of an \c "int"
+    field is written as given, in the number format, if any.
 
     @section fixedlengthrecordtyperesolution Record Type Resolution
 

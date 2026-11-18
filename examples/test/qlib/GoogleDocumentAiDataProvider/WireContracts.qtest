@@ -297,24 +297,50 @@ class DocumentAiWireTest inherits QUnit::Test {
         });
     }
 
+    #! Returns the wait action with a clock that only its sleeps advance
+    /** The wait deadline is then decided by the polls the action makes, not by the time the requests to the fixture
+        take (issue #6068).  The time left of the deadline is also the timeout of each status request, which the
+        fixture answers in real time, so the deadlines and intervals of the tests are long: a status request has at
+        least 10 minutes, which no run of a test reaches
+
+        @param waits the waits between the status requests are appended to this list
+    */
+    private GoogleDocumentAiWaitOperationDataProvider waitAction(reference<list<int>> waits) {
+        GoogleDocumentAiWaitOperationDataProvider rv = cast<GoogleDocumentAiWaitOperationDataProvider>(
+            action("wait-for-operation"));
+        date now = 2026-01-01T00:00:00Z;
+        rv.setClock(date sub () { return now; });
+        rv.setSleeper(nothing sub (timeout t) {
+            waits += int(t);
+            now += milliseconds(int(t));
+        });
+        return rv;
+    }
+
     private operationsTest() {
+        list<int> waits = ();
         handler.responses = ({"name": Operation, "done": False},
             {"name": Operation, "done": True, "error": {"code": 7, "message": "Fixture permission failure"}});
-        auto result = action("wait-for-operation").doRequest({"operation_id": Operation, "poll_interval": 1ms});
+        auto result = waitAction(\waits).doRequest({"operation_id": Operation, "poll_interval": 1ms});
         assertEq(7, result.error.code);
+        assertEq((1,), waits);
         handler.response = {"name": "job-1", "done": True, "response": {}};
         assertThrows("GOOGLE-DOCUMENTAI-OPERATION-ERROR", sub () {
-            action("wait-for-operation").doRequest({"operation_id": Operation});
+            waitAction(\waits).doRequest({"operation_id": Operation});
         });
         handler.response = {"name": Operation, "done": False};
+        waits = ();
         try {
-            action("wait-for-operation").doRequest({"operation_id": "job-1", "operation_timeout": 150ms, "poll_interval": 40ms});
+            waitAction(\waits).doRequest({"operation_id": "job-1", "operation_timeout": 1h,
+                "poll_interval": 25m});
             assertTrue(False, "expected timeout");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", ex.err);
             assertEq(Operation, ex.arg.job_id);
             assertEq(Operation, ex.arg.last_status.name);
         }
+        # status requests at 0, 25 and 50 minutes; the last wait reaches the deadline
+        assertEq((1500000, 1500000, 600000), waits);
     }
 
     private genericTest() {

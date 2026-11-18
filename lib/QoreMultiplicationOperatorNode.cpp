@@ -29,7 +29,10 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreArithmeticParseType.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/qore_date_private.h"
 
 QoreString QoreMultiplicationOperatorNode::multiplication_str("* operator expression");
 
@@ -51,10 +54,10 @@ static void set_binary_analysis_mul(QoreParseContext& parse_context,
 }
 
 QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -67,16 +70,7 @@ QoreValue QoreMultiplicationOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 
     // relative date * int/float/number => relative date
     if (lt == NT_DATE || rt == NT_DATE) {
-        const DateTimeNode* dt = lt == NT_DATE ? lh->get<DateTimeNode>() : rh->get<DateTimeNode>();
-        int64 us = dt->getRelativeMicroseconds();
-        if (lt == NT_FLOAT || rt == NT_FLOAT) {
-            double factor = lt == NT_FLOAT ? lh->getAsFloat() : rh->getAsFloat();
-            us = (int64)(us * factor);
-        } else {
-            int64 factor = (lt == NT_INT || lt == NT_CHAR) ? lh->getAsBigInt() : rh->getAsBigInt();
-            us *= factor;
-        }
-        return DateTimeNode::makeRelativeFromSeconds(us / 1000000, (int)(us % 1000000));
+        return qore_date_private::multiply(*lh, *rh, xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {
@@ -183,6 +177,31 @@ int QoreMultiplicationOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
                 NT_NUMBER)) {
                 returnTypeInfo = numberTypeInfo;
             }
+        }
+    }
+
+    // the result type of every combination of the values that the operand types allow, as the operator gives it at
+    // runtime (qore#5663): the rules above take the type of one operand when it has one value type, whatever values
+    // the other operand can have
+    {
+        const QoreTypeInfo* arith_ti;
+        bool single;
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Multiply, leftTypeInfo, rightTypeInfo, arith_ti, single)) {
+            case QoreArithParseResult::Scalar:
+                returnTypeInfo = arith_ti;
+                break;
+            case QoreArithParseResult::Container:
+                // with one value type on each side, the rules above give a container type more precisely (ex: its
+                // element type), if they give the container that the operator returns
+                if (!single || !qore_arith_container_rule_matches(returnTypeInfo, arith_ti)) {
+                    returnTypeInfo = arith_ti;
+                }
+                break;
+            case QoreArithParseResult::Untyped:
+                if (!bufferResultTypeInfo) {
+                    returnTypeInfo = nullptr;
+                }
+                break;
         }
     }
 

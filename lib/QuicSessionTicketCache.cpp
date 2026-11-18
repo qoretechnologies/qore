@@ -33,6 +33,11 @@
 
 #include "qore/intern/QuicSessionTicketCache.h"
 
+// returns the time for the expiry of the tickets: seconds on the monotonic clock (#6166)
+static int64_t ticketNow() {
+    return q_get_monotonic_us() / 1000000;
+}
+
 QuicSessionTicketCache& QuicSessionTicketCache::instance() {
     static QuicSessionTicketCache cache;
     return cache;
@@ -51,8 +56,8 @@ void QuicSessionTicketCache::store(const std::string& origin, QuicCachedTicket&&
         int64_t oldest_expiry = INT64_MAX;
         std::string oldest_key;
         for (const auto& entry : cache_) {
-            if (entry.second.expiry_epoch < oldest_expiry) {
-                oldest_expiry = entry.second.expiry_epoch;
+            if (entry.second.expiry < oldest_expiry) {
+                oldest_expiry = entry.second.expiry;
                 oldest_key = entry.first;
             }
         }
@@ -63,8 +68,10 @@ void QuicSessionTicketCache::store(const std::string& origin, QuicCachedTicket&&
 
     // Compute expiry from session timeout
     if (ticket.session) {
+        // the lifetime is an interval, measured on the monotonic clock, which a step of the system clock does not
+        // change (#6166)
         long timeout = SSL_SESSION_get_timeout(ticket.session);
-        ticket.expiry_epoch = static_cast<int64_t>(time(nullptr)) + timeout;
+        ticket.expiry = ticketNow() + timeout;
     }
 
     // Store (replaces any existing entry for this origin via move assignment)
@@ -72,7 +79,7 @@ void QuicSessionTicketCache::store(const std::string& origin, QuicCachedTicket&&
 
     printd(5, "QuicSessionTicketCache::store(): cached ticket for '%s' (expiry in %llds, %zu entries)\n",
         origin.c_str(),
-        (long long)(cache_[origin].expiry_epoch - time(nullptr)),
+        (long long)(cache_[origin].expiry - ticketNow()),
         cache_.size());
 }
 
@@ -86,7 +93,7 @@ bool QuicSessionTicketCache::lookup(const std::string& origin, SSL_SESSION** ses
     }
 
     // Check expiry
-    if (it->second.expiry_epoch <= static_cast<int64_t>(time(nullptr))) {
+    if (it->second.expiry <= ticketNow()) {
         printd(5, "QuicSessionTicketCache::lookup(): expired ticket for '%s'\n", origin.c_str());
         cache_.erase(it);
         return false;
@@ -118,10 +125,10 @@ void QuicSessionTicketCache::remove(const std::string& origin) {
 
 void QuicSessionTicketCache::evictExpired() {
     // NOTE: caller must hold mtx_
-    int64_t now = static_cast<int64_t>(time(nullptr));
+    int64_t now = ticketNow();
     auto it = cache_.begin();
     while (it != cache_.end()) {
-        if (it->second.expiry_epoch <= now) {
+        if (it->second.expiry <= now) {
             printd(5, "QuicSessionTicketCache::evictExpired(): evicting '%s'\n", it->first.c_str());
             it = cache_.erase(it);
         } else {

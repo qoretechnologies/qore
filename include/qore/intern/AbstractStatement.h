@@ -35,6 +35,7 @@
 
 #include <qore/common.h>
 #include "qore/intern/ParseWarnOptions.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 
 #define RC_RETURN       1
 #define RC_BREAK        2
@@ -48,11 +49,21 @@
 #define PF_TOP_LEVEL             (1 << 5) //!< parsing at the top-level of the program
 #define PF_BREAK_OK              (1 << 6)
 #define PF_CONTINUE_OK           (1 << 7)
-#define PF_NO_TOP_LEVEL_LVARS    (1 << 8)
+// (1 << 8) was PF_NO_TOP_LEVEL_LVARS
 #define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
 #define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
 #define PF_IN_TRY                (1 << 12) //!< parsing the body of a try statement of the function being parsed
+//! parsing anywhere in a background expression, also in the arguments of its calls: the expression may not modify the
+//! local variables or the members of the code that starts the thread (PF_BACKGROUND is set for the expression run in
+//! the new thread only, not for the arguments of its calls)
+#define PF_BACKGROUND_EXPR       (1 << 13)
+//! parsing code that an operator or a foreach statement runs for each element with the element's index as the
+//! implicit element (\c $#); a \c $# parsed without it is a parse error (qore#5690, qore#803)
+#define PF_IMPLICIT_ELEMENT      (1 << 14)
+//! parsing the operand of the reference (\\x), delete or remove operator, which does not read a variable that is the
+//! operand (qore#5937)
+#define PF_LVALUE_NOT_READ       (1 << 15)
 
 // all definitions in this file are private to the library and subject to change
 // forward references
@@ -68,6 +79,17 @@ class qore_program_private_base;
 class AbstractStatement {
 public:
     const QoreProgramLocation* loc;
+
+    //! Binds a condition's own source context before parse initialization (not the later body context).
+    DLLLOCAL void setSemanticPolicy(LexicalSemanticPolicy policy) {
+        semantic_policy = policy;
+        semantic_policy_bound = true;
+    }
+
+    //! Returns the semantic policy of the statement
+    DLLLOCAL LexicalSemanticPolicy getSemanticPolicy() const {
+        return semantic_policy;
+    }
     struct ParseWarnOptions pwo;
 
     DLLLOCAL AbstractStatement(qore_program_private_base* p);
@@ -133,10 +155,6 @@ public:
         return false;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return false;
-    }
-
     //! Returns false only when this statement provably opens no nested lexical scope with locals
     /** Used to decide whether a block carrying on_exit/on_error handlers has to anchor an
         exception target so the scopes nested inside it can destroy their locals before the
@@ -157,6 +175,9 @@ public:
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 protected:
+    //! Captured before publication; authority restrictions remain in the existing runtime option context.
+    LexicalSemanticPolicy semantic_policy;
+    bool semantic_policy_bound = false;
     QoreBreakpointList_t* breakpoints = nullptr;
     volatile bool breakpointFlag = false;  // fast access to check if breakpoints are non-empty
     bool in_try = false;  // in the body of a try statement of its function; see isInTry()

@@ -241,6 +241,11 @@ hash<auto> desc = {
 
 
     @section sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - implemented @ref select_option_recursive "recursive queries", which need SQLite 3.8.3 or later
+      (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
+      described with a default value (the string \c 'null' or \c 0)
+      (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
     - fixed @ref SqlUtil::op_substr() "op_substr()" in where clauses, which generated the ANSI
       <tt>substring(... from ... for ...)</tt> syntax that SQLite does not have, so the query failed with
       \c SQLITE3-PREPARE-ERROR; SQLite's \c substr() function is now used
@@ -302,6 +307,10 @@ hash<auto> desc = {
     - made SQL \c like, \c contains, \c startsWith, and \c endsWith expression behavior honor the
       DataProvider case-sensitivity contract instead of inheriting SQLite's case-insensitive ASCII \c LIKE
       behavior; a \c "[", \c "*" or \c "?" in a \c like pattern matches itself
+    - fixed upserts that inserted first, including upserts with the default strategy and bulk upserts through
+      \c BulkSqlUtil and \c DbDataProvider, dropping a row that conflicts with a unique key other than the upsert
+      key without an error; the conflict now raises \c SQLITE3-EXEC, and no other row is changed (see
+      @ref sqlutilv3_11_0 "SqlUtil v3.11.0")
 
     @section sqlite3sqlutilv11 Sqlite3SqlUtil_1_1 Sqlite3SqlUtil Module v1.1
     - implemented support for generating queries based on generic expressions using the DataProvider module's generic
@@ -346,6 +355,13 @@ public namespace Sqlite3SqlUtil {
         @since Sqlite3SqlUtil 1.2
     */
     public const SQLITE_ALTER_COLUMN_NOT_NULL_VERSION = "3.53.0";
+
+    #! the first SQLite version that supports recursive queries (\c WITH \c RECURSIVE)
+    /** @see @ref select_option_recursive
+
+        @since Sqlite3SqlUtil 1.2
+    */
+    public const SQLITE_RECURSIVE_QUERY_VERSION = "3.8.3";
 
     #! returns a Sqlite3Table object corresponding to the arguments
     public Sqlite3Table sub get_table(AbstractDatasource nds, string nname, *hash<auto> opts) {
@@ -1215,6 +1231,20 @@ string sql = pk.getTableConstraintSql();
             return new Sqlite3View(name, row.sql);
         }
 
+        #! Returns a view object for a view of a schema description
+        private AbstractView makeViewImpl(string name, string src) {
+            return new Sqlite3View(name, src);
+        }
+
+        #! Compares the query of a view with the query of a view of a schema description
+        /** SQLite keeps the statement that created the view as it was given, of which the query follows \c AS
+        */
+        private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
+            string src = live.src;
+            src =~ s/^\s*create\s+(temp\s+|temporary\s+)?view\s+(if\s+not\s+exists\s+)?("(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|\S+)\s+as\s+//is;
+            return AbstractDatabase::normalizeViewSource(src) == AbstractDatabase::normalizeViewSource(tmpl.src);
+        }
+
         private AbstractFunction makeFunctionImpl(string name, string src, *hash<auto> opts) {
             throw "UNSUPPORTED";
         }
@@ -1610,6 +1640,10 @@ string sql = pk.getTableConstraintSql();
 
         #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
         string getSqlName() {
+            # issue #3544: the common table expression of a recursive query has no schema
+            if (recursive_cte) {
+                return sqlite3_get_sql_identifier(name);
+            }
             return sqlite3_get_sql_object_name(name);
         }
 
@@ -1722,7 +1756,9 @@ string sql = pk.getTableConstraintSql();
             hash<string, AbstractColumn> rv;
             foreach hash<auto> row in (qh.contextIterator()) {
                 row.type = row.type.lwr();
-                auto defval = exists row.dflt_value && row.dflt_value !== NULL && row.dflt_value != "NULL"
+                # issue #1746: SQLite keeps the text of a "default null" declaration as given (ex: null, (NULL))
+                auto defval = exists row.dflt_value && row.dflt_value !== NULL
+                        && row.dflt_value !~ /^\(*\s*null\s*\)*$/i
                     ? row.dflt_value
                     : NOTHING;
                 *hash<auto> th = Sqlite3TypeMap{row.type};
@@ -1865,7 +1901,7 @@ string sql = pk.getTableConstraintSql();
             # position in the constraint (seq), the referenced table, the column (from) and the referenced column
             # (to), which is null when the constraint references the primary key of the table
             *hash<auto> qh = ds.select("pragma foreign_key_list(" + getSqlName() + ")");
-            hash<string, hash<auto>> fks;
+            hash<string, hash<auto>> fks = {};
             foreach hash<auto> row in (qh.contextIterator()) {
                 string id = sprintf("%06d", row.id.toInt());
                 string pos = sprintf("%06d", row.seq.toInt());
@@ -2355,6 +2391,17 @@ string str = table.getSqlValue(date);
             if (info.query_hash.offset) {
                 sql += " offset %v";
                 info.args += info.query_hash.offset.toInt();
+            }
+        }
+
+        #! Returns @ref nothing if the SQLite library supports recursive queries, which need SQLite 3.8.3
+        /** @since Sqlite3SqlUtil 1.2
+        */
+        private *string getRecursiveQueryUnsupportedReasonImpl() {
+            string version = ds.getServerVersion();
+            if (compare_version(version, SQLITE_RECURSIVE_QUERY_VERSION) < 0) {
+                return sprintf("recursive queries need SQLite %s or later; the SQLite library's version is %s",
+                    SQLITE_RECURSIVE_QUERY_VERSION, version);
             }
         }
 

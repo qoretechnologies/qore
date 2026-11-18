@@ -30,6 +30,8 @@ class SocketSyncIoTest inherits QUnit::Test {
         addTestCase("a large send waits for the reader", \testLargeSend());
         addTestCase("cancel_thread ends a waiting recv", \testCancelRecv());
         addTestCase("cancel_thread ends a waiting accept", \testCancelAccept());
+        addTestCase("a recv after a cancelled recv gets the data", \testRecvAfterCancelledRecv());
+        addTestCase("an accept after a cancelled accept gets the connection", \testAcceptAfterCancelledAccept());
         addTestCase("close from another thread ends a waiting recv", \testCloseWakesRecv());
         addTestCase("a peer's close is reported", \testPeerClose());
         addTestCase("the descriptor count does not grow", \testNoDescriptorLeak());
@@ -160,6 +162,42 @@ class SocketSyncIoTest inherits QUnit::Test {
         Socket s = listener();
         *hash<ExceptionInfo> ex = cancelled(sub () { s.accept(Timeout); });
         assertEq("THREAD-CANCELLED", ex.err);
+    }
+
+    #! The operation of a cancelled call does not outlive it
+    /** The call ends with THREAD-CANCELLED; its operation on the async I/O controller must end with it: an operation
+        left waiting keeps the socket's receive direction, so the next receive fails with SOCKET-NON-BLOCK-ERROR, or
+        takes the data that arrives next, which no caller gets.
+    */
+    testRecvAfterCancelledRecv() {
+        Socket s = listener();
+        int port = s.getPort();
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        Socket a = s.accept(Timeout);
+        *hash<ExceptionInfo> ex = cancelled(sub () { a.recv(4, Timeout); });
+        assertEq("THREAD-CANCELLED", ex.err);
+        c.send("data");
+        # a short timeout: with the cancelled operation still waiting, this receive would wait in vain
+        assertEq("data", a.recv(4, 10s));
+    }
+
+    #! An accept after a cancelled accept gets the connection that arrives next
+    testAcceptAfterCancelledAccept() {
+        Socket s = listener();
+        int port = s.getPort();
+        *hash<ExceptionInfo> ex = cancelled(sub () { s.accept(Timeout); });
+        assertEq("THREAD-CANCELLED", ex.err);
+        Socket c();
+        c.connect("127.0.0.1:" + port);
+        # with the cancelled operation still waiting, it would take the connection and this accept would time out
+        *Socket a = s.accept(10s);
+        assertTrue(exists a, "the accept gets the connection");
+        if (!a) {
+            return;
+        }
+        c.send("data");
+        assertEq("data", a.recv(4, Timeout));
     }
 
     testCloseWakesRecv() {

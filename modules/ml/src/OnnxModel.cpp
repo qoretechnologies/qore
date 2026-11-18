@@ -5945,12 +5945,24 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
                 target_size = 1;
             }
 
-            // a batch combines requests with the same outputs that were submitted under the same sandbox; the
-            // batch runs under that sandbox
-            const AsyncRequest& front = *async_requests.front();
-            const std::string output_signature = front.output_signature;
+            // a batch combines requests with the same outputs that were submitted under the same sandbox as the
+            // request at the front of the queue; the batch runs under that sandbox
+            // another leader can run at the same time (a request submitted to an empty queue starts one while this
+            // leader runs a batch), and it can take and settle the front request while this leader waits below
+            // with the lock released, so the front request is looked up again after each wait, never kept
+            const AsyncRequest* front = async_requests.front().get();
+            std::string output_signature = front->output_signature;
             auto matches = [&](const AsyncRequest& request) {
-                return request.output_signature == output_signature && request.sandbox.sameSandbox(front.sandbox);
+                return request.output_signature == output_signature && request.sandbox.sameSandbox(front->sandbox);
+            };
+            // looks the front request up again after a wait; false if the queue is empty
+            auto refresh_front = [&]() {
+                if (async_requests.empty()) {
+                    return false;
+                }
+                front = async_requests.front().get();
+                output_signature = front->output_signature;
+                return true;
             };
             auto matching_count = [&]() {
                 size_t count = 0;
@@ -5965,10 +5977,15 @@ void QoreOnnxSessionPool::processDynamicRunQueue(ExceptionSink* xsink) {
             if (dynamic_batch_wait_ms > 0 && matching_count() < target_size) {
                 auto deadline = std::chrono::steady_clock::now()
                     + std::chrono::milliseconds(dynamic_batch_wait_ms);
-                while (matching_count() < target_size) {
-                    if (async_cv.wait_until(lock, deadline) == std::cv_status::timeout) {
+                while (true) {
+                    bool timed_out = async_cv.wait_until(lock, deadline) == std::cv_status::timeout;
+                    if (!refresh_front() || timed_out || matching_count() >= target_size) {
                         break;
                     }
+                }
+                if (async_requests.empty()) {
+                    // another leader took every request while this one waited
+                    continue;
                 }
             }
 

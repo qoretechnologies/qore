@@ -166,6 +166,18 @@ objects in lists and hashes it holds - in each removal path (the AST `LValueRemo
 scans, whose `commit()` skips them. `examples/test/qore/misc/dgc-removed-values.qtest` checks that such a value,
 including a cycle attached only through the removed edge, is collected by the write's release of it.
 
+Removal bookkeeping uses a bounded-inline identity tracker: two distinct objects fit in the space formerly used
+by its vector, with no allocation. Flat containers with at most two distinct objects (or only scalars) use that
+same path. A third distinct object or the first nested list/hash lazily creates an open-addressed object membership table
+and a hash set of visited container identities. The object table stays at most half full and grows geometrically,
+without allocating a separate node for each object. The parent is registered before descending into a child container, so shared
+subgraphs are traversed once, while every edge is inspected a bounded number of times. The scan's orphan check
+uses the same object membership set instead of searching a vector for every orphan. The tracker borrows identities
+from the removed values, which stay referenced and cannot be modified without copying until the scan finishes;
+it neither follows object members nor owns references. Debug visit, identity-probe and allocation counters in
+`examples/test/qore/misc/dgc-removal-scaling/dgc-removal-scaling.qtest` check the work bound and the flat-container
+allocation path without timing thresholds.
+
 ### Watched nodes
 
 Releasing an outside reference to a list, hash, closure or reference in a recursive set does not dereference any
@@ -1006,6 +1018,50 @@ freed variable (AOT-compiled `HttpServerAsyncIo` on arm64 macOS; `ut_closure_var
 In debug builds `RObject::tDeref()` asserts that it never frees an object with a dereference in progress on the same
 thread (`qore_robject_deref_inprogress_on_this_thread()`), so a dereference path without the guard fails at the free
 rather than at a later use of the freed memory.
+
+### The deletion's reference is taken while the object is marked
+
+An object holds one base weak reference while it has references; once the object is being destroyed, the
+dereference that takes the count to zero releases it (`robject_dereference_helper::finalDeref()` with no references
+left, or `qore_object_private::obliterate()`). The deletion holds a reference of its own while the destructor runs,
+and the release of that reference is normally the one that takes the count to zero.
+
+A dereference that collects an object with its recursive set decides while references remain: all of them are held
+by other members of the set. Another thread can still release them, by reaching a member through a weak reference
+(which a scan does not count) and clearing the member's reference. The deletion's reference used to be taken in
+`qore_object_private::doDeleteIntern()`, after the object had been marked as being destroyed and after the deciding
+dereference had completed. A release in between took the count to zero, found the object being destroyed and
+released the base weak reference; the deletion then raised the count from zero without a weak reference, and its own
+release released the base weak reference a second time. The object's memory was freed while other weak references
+to it were held. A crash of `RestClientIoResend.qtest` in the CI has this signature: the async I/O controller
+released an HTTP/2 client poll operation's private data last, and the release of its self reference
+(`SocketPollOperationBase::self`) used the poll operation's object, which a cycle collection had freed. A release
+made while the deciding dereference was still in progress waited for it,
+and the deletion failed the assertion "ref_inprogress || !del" in `RObject::derefDone()` instead.
+
+The deciding dereference now takes the deletion's reference in the critical section that marks the object
+(`qore_object_private::takeDeleteReference()`), so every release made after the marking finds the reference, and
+`doDeleteIntern()` takes none for a deletion that a dereference decided (`deleteNow()`). When the deciding
+dereference released the last reference itself, its release is the deletion's and no weak reference is taken. When
+references remained and were released before the marking, the dereference that took the count to zero releases the
+base weak reference; the deletion's reference, taken when the count is zero, then takes a weak reference of its own,
+as any reference taken when the count is zero does (`qore_object_private::customRefIntern()`).
+
+Debug builds count the weak references that dereferences to zero may release
+(`qore_object_private::dbg_zero_count_weak_refs`: the base weak reference, plus one for each reference taken when the
+count was zero) and assert that none releases one beyond them (`dbgReleaseZeroCountWeakRef()`).
+
+A dereference that releases the last reference before the object is marked, and takes the object's lock after the
+marking, hands the deletion off and waits in `RObject::derefDone()` for the deciding dereference to complete before
+it releases the base weak reference (`wait_only`). The deciding dereference can then complete while it waits; this is
+safe, as the deletion holds its own reference with its own weak reference, and the assertion in `derefDone()` only
+rejects a deleting dereference that completes while another deleting dereference waits for it
+(`RObject::dbg_del_waiting` in debug builds).
+
+`examples/test/qore/misc/dgc-collect-weak-release-race.qtest` releases the last reference through a weak reference
+while the collector is held after it has marked the object (`dbg_hold_deref_marked()`), after its dereference has
+completed (`dbg_hold_deref_delete()`), and before it marks the object, holding the release before it takes the
+object's lock (`dbg_hold_deref_collect()` and `dbg_hold_deref_last()`).
 
 ### A scan may be re-entered under a write lock the calling thread already holds
 

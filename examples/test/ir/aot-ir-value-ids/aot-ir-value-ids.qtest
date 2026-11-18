@@ -1,0 +1,309 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every run is a child process that sets its own execution mode
+# test-platform: macos - the AOT module loader and the IR interpreter run patched, ad hoc re-signed modules
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%exec-class AotIrValueIdsTest
+
+#! qore#6451: the value ids of the IR of an AOT module are checked before the IR is used
+/** AotIrIdsMod.qm has closures, an on_exit handler and a background expression with every kind of instruction that
+    holds value ids in fields of its own; an AOT module keeps their IR, which it reads when it is loaded, and which
+    runs when a debugger is attached (runner.q with AOT_IR_VALUE_IDS_DEBUGGER).
+    - the AOT module gives the results of its source in every execution mode, with and without a debugger, and from
+      an executable compiled with qcc;
+    - the value ids of the IR of the module (the result and the operands of each instruction, which the IR trace of
+      the reader locates in the metadata: QORE_AOT_TRACE_IR_DESER) are patched, at most MaxIdPositions evenly spaced
+      positions, with ids beyond any of the module: each patched module is loaded and run with a debugger, which reads
+      and runs its IR, and must end normally (refused, or with the results of the module), without a signal, a
+      sanitizer report or a failed assertion; qcc --dump-info and --dump-index-json, which read the metadata of the
+      file without loading it, must end normally on each.
+
+    The systematic check of every field of every such instruction, also of the ids in fields of their own and of the
+    handles of objects, is aot_ir_value_ids.cpp (AOTIRValueIds.qtest).  A patch that changes an id to another valid
+    one, or that changes the control flow, gives valid IR with other semantics, which only a full verification of the
+    IR read from a module could refuse (see qore#6451).
+*/
+class AotIrValueIdsTest inherits QUnit::Test {
+    public {
+        #! the magic number of the metadata ("QORD")
+        const Magic = binary("QORD");
+        const HeaderSize = 60;
+        const SectionEntrySize = 12;
+        #! the offset of the feature flags in the header of the metadata
+        const FeatureFlagsOffset = 52;
+        #! QORE_AOT_FEAT_WIDE_IR_OPERANDS: the operand count of an IR instruction is a u16, not a u8
+        const WideIrOperands = 1 << 37;
+        #! the most value id positions patched
+        const MaxIdPositions = 200;
+        #! the values written: ids beyond any of the module
+        const PatchValues = (0x400, 0x7fffffff, 0xffffffff);
+        #! the number of runs at once
+        const Workers = 4;
+        #! the CPU time limit of a run in seconds
+        const CpuLimitSecs = 120;
+    }
+
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        string libqore_dir;
+        TmpDir tmp("aot-ir-value-ids-");
+        binary qmod;
+        string expected;
+        #! the offset of the metadata in the module file
+        int meta_pos = -1;
+        #! the length of the metadata of the unpatched module, without its checksum
+        int meta_len;
+        #! the tool that sets the checksum of patched metadata again (qore#6451)
+        string reseal_bin;
+        #! the file positions of the value ids of the IR instructions
+        list<int> id_positions = ();
+        int variant_id = 0;
+    }
+
+    constructor() : QUnit::Test("AOT IR value ids", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qore_bin) + "/qore-aot-reseal";
+        addTestCase("the AOT module gives the results of its source", \valid());
+        addTestCase("patched IR value ids", \patched());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        if (!qcc_bin || !is_file(qcc_bin)) {
+            testSkip("qcc is not available");
+        }
+        if (!is_file(reseal_bin)) {
+            testSkip("qore-aot-reseal is not available at " + reseal_bin);
+        }
+        string src_dir = tmp.path + "/src";
+        mkdir(src_dir);
+        copy_file(get_script_dir() + "/AotIrIdsMod.qm", src_dir + "/AotIrIdsMod.qm");
+        hash<auto> r = run(src_dir);
+        if (r.out !~ /^result: /) {
+            throw "SOURCE-ERROR", sprintf("the source module does not run: %s", r.out);
+        }
+        expected = r.out;
+        string out_path = tmp.path + "/AotIrIdsMod.qmod";
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -m "
+            "--aot-metadata-compression=none -o %s %s/AotIrIdsMod.qm 2>&1", libqore_dir, libqore_dir, src_dir, qcc_bin,
+            out_path, src_dir), \rc);
+        if (rc || !is_file(out_path)) {
+            throw "QCC-ERROR", sprintf("qcc could not compile the module: %s", out);
+        }
+        qmod = ReadOnlyFile::readBinaryFile(out_path);
+        findMetadata();
+        findIdPositions();
+    }
+
+    #! finds the uncompressed metadata of the module
+    private findMetadata() {
+        int pos = 0;
+        while ((pos = qmod.find(Magic, pos)) >= 0) {
+            int count = u32(pos + 16);
+            if (qmod[pos + 34] == 0 && qmod[pos + 35] == 0 && count >= 1 && count <= 1000) {
+                int pool_size_pos = pos + HeaderSize + count * SectionEntrySize;
+                if (pool_size_pos + 4 <= qmod.size() && pool_size_pos + 4 + u32(pool_size_pos) <= qmod.size()) {
+                    # the metadata ends with the section that ends last in the data area
+                    int data_pos = pool_size_pos + 4 + u32(pool_size_pos);
+                    int data_end = data_pos;
+                    for (int i = 0; i < count; ++i) {
+                        int e = pos + HeaderSize + i * SectionEntrySize;
+                        data_end = max(data_end, data_pos + u32(e + 4) + u32(e + 8));
+                    }
+                    meta_pos = pos;
+                    meta_len = data_end - pos;
+                    return;
+                }
+            }
+            ++pos;
+        }
+        throw "NO-METADATA", "no AOT metadata found in the module";
+    }
+
+    #! finds the positions of the value ids of the IR instructions with the IR trace of the reader
+    /** Each traced instruction gives its offset in the metadata; an instruction starts with its opcode (u16), its
+        group (u8), its result id (u32), its operand count (u8, or u16 with QORE_AOT_FEAT_WIDE_IR_OPERANDS) and the
+        operand ids (u32 each)
+    */
+    private findIdPositions() {
+        string dir = writeModule(qmod, ++variant_id);
+        int rc;
+        string trace = backquote(sprintf("QORE_AOT_TRACE_IR_DESER= AOT_IR_VALUE_IDS_DEBUGGER=1 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1 >/dev/null", libqore_dir, libqore_dir, dir,
+            qore_bin, get_script_dir() + "/runner.q"), \rc);
+        bool wide = ((u32(meta_pos + FeatureFlagsOffset + 4) << 32 | u32(meta_pos + FeatureFlagsOffset))
+            & WideIrOperands) != 0;
+        hash<string, bool> seen;
+        foreach string line in (trace.split("\n")) {
+            *list<*string> m = (line =~ x/ meta_off=([0-9]+) /);
+            if (!m) {
+                continue;
+            }
+            int inst = meta_pos + m[0].toInt();
+            if (seen{inst}) {
+                continue;
+            }
+            seen{inst} = True;
+            int result = inst + 3;
+            int count = wide ? u16(inst + 7) : qmod[inst + 7];
+            int operands = inst + (wide ? 9 : 8);
+            if (u32(result)) {
+                id_positions += result;
+            }
+            for (int i = 0; i < count; ++i) {
+                id_positions += operands + i * 4;
+            }
+        }
+        if (!id_positions) {
+            throw "NO-IR", sprintf("the IR trace of the module locates no instruction: %s", trace);
+        }
+    }
+
+    private int u16(int pos) {
+        return qmod[pos] | (qmod[pos + 1] << 8);
+    }
+
+    private int u32(int pos) {
+        return qmod[pos] | (qmod[pos + 1] << 8) | (qmod[pos + 2] << 16) | (qmod[pos + 3] << 24);
+    }
+
+    #! writes the module (patched) in a directory of its own and returns the directory
+    private string writeModule(binary data, int id) {
+        string dir = sprintf("%s/v%d", tmp.path, id);
+        mkdir(dir);
+        string path = dir + "/AotIrIdsMod.qmod";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(data);
+        f.close();
+        # the checksum of the patched metadata is set again, so that the readers behind it are checked (qore#6451)
+        int rc;
+        string out = backquote(sprintf("%s %s %d %d 2>&1", reseal_bin, path, meta_pos, meta_len), \rc);
+        if (rc) {
+            throw "RESEAL-ERROR", sprintf("%s: %s", path, out);
+        }
+        if (PlatformOS == "Darwin") {
+            # a patched module loses its code signature: it is signed again ad hoc
+            system(sprintf("codesign -f -s - %s >/dev/null 2>&1", path));
+        }
+        return dir;
+    }
+
+    #! runs runner.q with the module from the directory; returns its output and exit status
+    private hash<auto> run(string dir, *string mode, bool debug = False, *string exe) {
+        int rc;
+        string cmd = exe ?? sprintf("%s -b %s%s", qore_bin, mode ? "--exec-mode=" + mode + " " : "",
+            get_script_dir() + "/runner.q");
+        string out = backquote(sprintf("ulimit -t %d 2>/dev/null; %sLD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s "
+            "QORE_MODULE_DIR=%s %s 2>&1", CpuLimitSecs, debug ? "AOT_IR_VALUE_IDS_DEBUGGER=1 " : "", libqore_dir,
+            libqore_dir, dir, cmd), \rc);
+        return {"out": out, "rc": rc};
+    }
+
+    valid() {
+        string dir = writeModule(qmod, ++variant_id);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            foreach bool debug in ((False, True)) {
+                hash<auto> r = run(dir, mode, debug);
+                string label = sprintf("%s%s", mode, debug ? ", debugger" : "");
+                assertEq(0, r.rc, label + ": " + r.out);
+                assertEq(expected, r.out, label);
+            }
+        }
+        # an executable compiled with qcc
+        string exe = tmp.path + "/runner";
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s -o %s %s 2>&1", libqore_dir,
+            libqore_dir, qcc_bin, exe, get_script_dir() + "/runner.q"), \rc);
+        assertEq(0, rc, "qcc runner: " + out);
+        foreach bool debug in ((False, True)) {
+            hash<auto> r = run(dir, NOTHING, debug, exe);
+            assertEq(0, r.rc, sprintf("qcc runner%s: %s", debug ? ", debugger" : "", r.out));
+            assertEq(expected, r.out, sprintf("qcc runner%s", debug ? ", debugger" : ""));
+        }
+    }
+
+    patched() {
+        # evenly spaced value id positions
+        list<hash<auto>> variants = ();
+        int step = max(1, id_positions.size() / MaxIdPositions);
+        for (int i = 0; i < id_positions.size(); i += step) {
+            foreach int value in (PatchValues) {
+                variants += {
+                    "label": sprintf("value id at %d = 0x%x", id_positions[i], value),
+                    "pos": id_positions[i], "value": value, "debug": True, "id": ++variant_id,
+                };
+            }
+        }
+        Queue q();
+        map q.push($1), variants;
+        for (int i = 0; i < Workers; ++i) {
+            q.push(NOTHING);
+        }
+        Mutex m();
+        list<hash<auto>> results = ();
+        Counter done(Workers);
+        for (int i = 0; i < Workers; ++i) {
+            background sub () {
+                on_exit done.dec();
+                while (*hash<auto> v = q.get()) {
+                    binary data = qmod.substr(0, v.pos) + binary(chr(v.value & 0xff) + chr((v.value >> 8) & 0xff)
+                        + chr((v.value >> 16) & 0xff) + chr((v.value >> 24) & 0xff)) + qmod.substr(v.pos + 4);
+                    string dir = writeModule(data, v.id);
+                    hash<auto> r = run(dir, NOTHING, v.debug);
+                    # qcc reads the metadata of the module file without loading it
+                    hash<auto> dump = qccDump(dir);
+                    m.lock();
+                    on_exit m.unlock();
+                    results += {"label": v.label, "r": r, "dump": dump};
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(variants.size(), results.size(), "every variant ran");
+        foreach hash<auto> res in (results) {
+            # runner.q ends normally whether the module loads and runs or not
+            assertEq(0, res.r.rc, res.label + ": " + res.r.out);
+            assertEq(-1, res.r.out.find("Sanitizer"), res.label + ": no sanitizer report: " + res.r.out);
+            assertEq(-1, res.r.out.find("Assertion"), res.label + ": no failed assertion: " + res.r.out);
+            assertTrue(res.r.out == expected || res.r.out =~ /(^|\n)error: /,
+                res.label + ": the results of the module or refused: " + res.r.out);
+            {
+                # qcc may refuse the metadata, but ends normally
+                string label = res.label + ": qcc --dump-info and --dump-index-json";
+                assertTrue(res.dump.rc == 0 || res.dump.rc == 1, sprintf("%s: exit status %d: %s", label, res.dump.rc,
+                    res.dump.out));
+                assertEq(-1, res.dump.out.find("Sanitizer"), label + ": no sanitizer report: " + res.dump.out);
+                assertEq(-1, res.dump.out.find("Assertion"), label + ": no failed assertion: " + res.dump.out);
+            }
+        }
+    }
+
+    #! runs qcc --dump-info and --dump-index-json on the module in the directory; returns the output and the highest
+    #! exit status
+    private hash<auto> qccDump(string dir) {
+        string path = dir + "/AotIrIdsMod.qmod";
+        string out;
+        int max_rc = 0;
+        foreach string opt in (("--dump-info", "--dump-index-json")) {
+            int rc;
+            out += backquote(sprintf("ulimit -t %d 2>/dev/null; LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s %s "
+                "2>&1 >/dev/null; echo \"rc=$?\"", CpuLimitSecs, libqore_dir, libqore_dir, qcc_bin, opt, path), \rc);
+            *list<*string> m = (out =~ x/rc=([0-9]+)\n$/);
+            max_rc = max(max_rc, m ? m[0].toInt() : 255, rc);
+        }
+        return {"out": out, "rc": max_rc};
+    }
+}

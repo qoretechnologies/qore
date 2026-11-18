@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-string-predicates.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameStringPredicatesTest
+
+#! The contains, startswith and endswith filters compare a cell with the value in the encoding of the cell, for a
+#! string column and for a column that holds any value (qore#6092)
+class DataFrameStringPredicatesTest inherits QUnit::Test {
+    private {
+        #! the cells of the columns, each in the default encoding
+        list<auto> cells = ("café", "é", "", "x", NOTHING);
+
+        #! the filter values, in several encodings
+        list<string> values = (
+            "é", "café", "caf", "", "x", "y",
+            convert_encoding("é", "ISO-8859-1"), convert_encoding("café", "ISO-8859-1"),
+            convert_encoding("caf", "ISO-8859-1"), convert_encoding("é", "UTF-16LE"),
+        );
+    }
+
+    constructor() : Test("DataFrameStringPredicatesTest", "1.0", \ARGV) {
+        addTestCase("string column", \stringColumnTest());
+        addTestCase("auto column", \autoColumnTest());
+        addTestCase("conversion error", \conversionErrorTest());
+        set_return_value(main());
+    }
+
+    stringColumnTest() {
+        list<hash<auto>> rows = map ("id": $#, "v": $1), cells;
+        checkColumn(new DataFrame::DataFrame(rows), "string");
+    }
+
+    autoColumnTest() {
+        # a char cell first makes the column hold any value
+        list<hash<auto>> rows = ({"id": -1, "v": c'z'},) + map ("id": $#, "v": $1), cells;
+        checkColumn(new DataFrame::DataFrame(rows), "auto");
+    }
+
+    #! a value that cannot be converted to the encoding of the cells raises the conversion error if a cell is not
+    #! null, as for a column that holds any value
+    conversionErrorTest() {
+        # a single byte is not a UTF-16 character
+        string value = binary_to_string(<41>, "UTF-16LE");
+        DataFrame::DataFrame typed(({"v": "x"},));
+        DataFrame::DataFrame any(({"v": c'z'}, {"v": "x"}));
+        # a string column whose only cell is null
+        DataFrame::DataFrame nulls = (new DataFrame::DataFrame(({"v": "x"}, {"v": NOTHING}))).filter("v", "is_null",
+            NOTHING);
+        assertEq(("string", "auto", "string"), (typed.dtypes()[0], any.dtypes()[0], nulls.dtypes()[0]),
+            "column types");
+        foreach string op in (("contains", "startswith", "endswith")) {
+            assertThrows("ENCODING-CONVERSION-ERROR", \typed.filter(), ("v", op, value), "string column " + op);
+            assertThrows("ENCODING-CONVERSION-ERROR", \any.filter(), ("v", op, value), "auto column " + op);
+            assertEq(0, nulls.filter("v", op, value).numRows(), "string column of null cells " + op);
+        }
+    }
+
+    #! checks every predicate with every value; the expected rows are computed from the cells
+    private checkColumn(DataFrame::DataFrame df, string dtype) {
+        assertEq(dtype, df.dtypes()[1], "the column has the expected type");
+        list<string> mismatches = ();
+        foreach string value in (values) {
+            foreach string op in (("contains", "startswith", "endswith")) {
+                list<int> expected = ();
+                foreach hash<auto> row in (df.toRecords()) {
+                    # a cell that is not a string (the char of the auto column) is compared as a string
+                    if (exists row.v && matches(op, sprintf("%s", row.v), value)) {
+                        expected += row.id;
+                    }
+                }
+                list<auto> actual = df.filter("v", op, value).getColumn("id") ?? ();
+                if (actual != expected) {
+                    mismatches += sprintf("%s v %s %s %y: expected rows %y, got %y", dtype, op, value.encoding(),
+                        value, expected, actual);
+                }
+            }
+        }
+        assertEq((), mismatches, sprintf("%s column predicates compare the value in the cell's encoding", dtype));
+    }
+
+    #! returns True if the cell matches the predicate with the value converted to the encoding of the cell
+    private bool matches(string op, string cell, string value) {
+        binary c = binary(cell);
+        binary v = binary(convert_encoding(value, cell.encoding()));
+        if (!v.size()) {
+            return True;
+        }
+        if (v.size() > c.size()) {
+            return False;
+        }
+        switch (op) {
+            case "startswith":
+                return c.substr(0, v.size()) == v;
+            case "endswith":
+                return c.substr(c.size() - v.size()) == v;
+        }
+        for (int i = 0; i + v.size() <= c.size(); ++i) {
+            if (c.substr(i, v.size()) == v) {
+                return True;
+            }
+        }
+        return False;
+    }
+}

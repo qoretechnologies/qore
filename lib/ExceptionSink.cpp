@@ -92,6 +92,8 @@ void qore_es_private::assimilate(qore_es_private& xs) {
         assert(!xs.head);
         assert(!xs.count);
     }
+    syncPending();
+    xs.syncPending();
 }
 
 void qore_es_private::insert(QoreException *e) {
@@ -102,6 +104,7 @@ void qore_es_private::insert(QoreException *e) {
         tail->next = e;
     }
     tail = e;
+    pending = true;
 
     // increment exception counts
     if (!externally_managed) {
@@ -122,10 +125,7 @@ ExceptionSink::~ExceptionSink() {
 
 void ExceptionSink::raiseThreadExit() {
     priv->thread_exit = true;
-}
-
-bool ExceptionSink::isEvent() const {
-    return priv->head || priv->thread_exit;
+    priv->pending = true;
 }
 
 bool ExceptionSink::isThreadExit() const {
@@ -136,12 +136,15 @@ bool ExceptionSink::isException() const {
     return priv->head;
 }
 
-// Intended as a alternative to isException():
-// ExceptionSink xsink;
-// if (xsink) { .. }
-ExceptionSink::operator bool () const {
-    assert(this);
-    return priv->head || priv->thread_exit;
+// ExceptionSink::isEvent() and ExceptionSink::operator bool() are inline in libqore (see qore/intern/QoreException.h,
+// qore#6369); taking their addresses here makes the compiler emit the copies that the library exports for modules
+static bool (ExceptionSink::* const qore_es_is_event_export)() const __attribute__((used)) = &ExceptionSink::isEvent;
+static bool (ExceptionSink::* const qore_es_operator_bool_export)() const __attribute__((used))
+    = &ExceptionSink::operator bool;
+
+QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* xsink) {
+    rv.discard(xsink);
+    return QoreValue();
 }
 
 void ExceptionSink::overrideLocation(const QoreProgramLocation& loc) {
@@ -162,6 +165,7 @@ void ExceptionSink::setLastLocation(const QoreProgramLocation& loc) {
 QoreException* ExceptionSink::catchException() {
     QoreException* e = priv->head;
     priv->head = priv->tail = nullptr;
+    priv->syncPending();
     if (priv->count) {
         assert(!priv->externally_managed);
         inc_active_exceptions(-priv->count);
@@ -189,6 +193,7 @@ void ExceptionSink::handleExceptions() {
         clear();
     } else {
         priv->thread_exit = false;
+        priv->pending = false;
     }
 }
 
@@ -230,6 +235,7 @@ void ExceptionSink::clear() {
     priv->clearIntern();
     priv->head = priv->tail = nullptr;
     priv->thread_exit = false;
+    priv->pending = false;
     priv->rethrown = false;
 }
 
@@ -476,9 +482,22 @@ int qore_teardown_exit_status(int rc, uint64_t count) {
     return (!rc && thread_unhandled_exception_count != count) ? 3 : rc;
 }
 
+//! writes the report of an unhandled exception or of a warning to standard error
+/** The report is written with the stream's lock held (qore_stdio_write()), so that output that other threads write
+    to the stream meanwhile, such as the traces of native compilation (QORE_JIT_TIMING), comes before or after it and
+    not between the parts of its lines
+*/
+static void write_report(const QoreString& out) {
+    if (!out.empty()) {
+        qore_stdio_write(stderr, out.c_str(), out.size(), nullptr, "printe");
+    }
+}
+
 // static member function
 void ExceptionSink::defaultExceptionHandler(QoreException* e) {
     ExceptionSink xsink;
+    // the report is written whole (write_report()), so that the output of other threads is not mixed into it
+    QoreString out;
 
     if (e) {
         ++thread_unhandled_exception_count;
@@ -495,7 +514,7 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
 
     while (e) {
         //printd(5, "ExceptionSink::defaultExceptionHandler() cs size=%d\n", cs->size());
-        printe("unhandled QORE %s exception thrown in TID %d at %s",
+        out.sprintf("unhandled QORE %s exception thrown in TID %d at %s",
             e->type == CT_USER ? "User" : "System", q_gettid(), nstr.getBuffer());
 
         QoreListNode* cs = e->callStack;
@@ -524,24 +543,24 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
                 QoreExceptionLocation loc;
                 e->getLocation(loc);
 
-                printe(" in %s() (", func->c_str());
+                out.sprintf(" in %s() (", func->c_str());
                 const char* fns = !loc.file.empty() ? loc.file.c_str() : nullptr;
                 const char* srcs = !loc.source.empty() ? loc.source.c_str() : nullptr;
                 const char* langs = !loc.lang.empty() ? loc.lang.c_str() : nullptr;
-                outputExceptionLocation(fns, loc.start_line, loc.end_line, srcs, loc.offset, langs, type->c_str());
-                printe(")\n");
+                outputExceptionLocation(out, fns, loc.start_line, loc.end_line, srcs, loc.offset, langs, type->c_str());
+                out.sprintf(")\n");
             }
         }
 
         if (!found) {
-            printe(" at ");
+            out.sprintf(" at ");
 
             const char* fns = !e->file.empty() ? e->file.c_str() : nullptr;
             const char* srcs = !e->source.empty() ? e->source.c_str() : nullptr;
             const char* langs = !e->lang.empty() ? e->lang.c_str() : nullptr;
-            outputExceptionLocation(fns, e->start_line, e->end_line, srcs, e->offset, langs,
+            outputExceptionLocation(out, fns, e->start_line, e->end_line, srcs, e->offset, langs,
                 e->type == CT_USER ? "user" : "builtin");
-            printe("\n");
+            out.sprintf("\n");
         }
 
         bool hdr = false;
@@ -550,29 +569,29 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
             assert(!err->empty());
             QoreStringValueHelper desc(e->desc);
             assert(!desc->empty());
-            printe("%s: %s", err->c_str(), desc->c_str());
+            out.sprintf("%s: %s", err->c_str(), desc->c_str());
             hdr = true;
         } else {
             if (!e->err.isNothing()) {
                 if (e->err.getType() == NT_STRING) {
                     QoreStringValueHelper err(e->err);
-                    printe("%s", err->c_str());
+                    out.sprintf("%s", err->c_str());
                 } else {
                     QoreNodeAsStringHelper str(e->err, FMT_NORMAL, &xsink);
-                    printe("EXCEPTION: %s", str->c_str());
+                    out.sprintf("EXCEPTION: %s", str->c_str());
                     hdr = true;
                 }
             } else {
-                printe("EXCEPTION");
+                out.sprintf("EXCEPTION");
             }
 
             if (!e->desc.isNothing()) {
                 if (e->desc.getType() == NT_STRING) {
                     QoreStringValueHelper desc(e->desc);
-                    printe("%s%s", hdr ? ", desc: " : ": ", desc->c_str());
+                    out.sprintf("%s%s", hdr ? ", desc: " : ": ", desc->c_str());
                 } else {
                     QoreNodeAsStringHelper str(e->desc, FMT_NORMAL, &xsink);
-                    printe(", desc: %s", str->c_str());
+                    out.sprintf(", desc: %s", str->c_str());
                     if (!hdr) {
                         hdr = true;
                     }
@@ -587,7 +606,7 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
                 // a runtime diagnostic is shown as a hint with its suggestions
                 QoreStringValueHelper id(diag->getKeyValue("id"));
                 QoreStringValueHelper hint(diag->getKeyValue("hint"));
-                printe("\nhint (%s): %s", id->c_str(), hint->c_str());
+                out.sprintf("\nhint (%s): %s", id->c_str(), hint->c_str());
                 const QoreListNode* sl = diag->getKeyValue("suggestions").getType() == NT_LIST
                     ? diag->getKeyValue("suggestions").get<const QoreListNode>()
                     : nullptr;
@@ -595,30 +614,30 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
                     ConstListIterator li(sl);
                     while (li.next()) {
                         QoreStringValueHelper suggestion(li.getValue());
-                        printe("\n  - %s", suggestion->c_str());
+                        out.sprintf("\n  - %s", suggestion->c_str());
                     }
                 }
             } else if (e->arg.getType() == NT_STRING) {
                 QoreStringValueHelper arg(e->arg);
-                printe("%s%s", hdr ? ", arg: " : ": ", arg->c_str());
+                out.sprintf("%s%s", hdr ? ", arg: " : ": ", arg->c_str());
             } else {
                 QoreNodeAsStringHelper str(e->arg, FMT_NORMAL, &xsink);
-                printe(", arg: %s", str->c_str());
+                out.sprintf(", arg: %s", str->c_str());
             }
         }
-        printe("\n");
+        out.sprintf("\n");
 
         if (cs->size()) {
-            printe("call stack:\n");
+            out.sprintf("call stack:\n");
             for (unsigned i = 0; i < cs->size(); i++) {
                 int pos = cs->size() - i;
                 QoreHashNode* h = cs->retrieveEntry(i).get<QoreHashNode>();
                 QoreStringValueHelper strtype(h->getKeyValue("type"));
                 const char* type = strtype->c_str();
                 int typecode = (int)h->getKeyValue("typecode").getAsBigInt();
-                if (!strcmp(type, "new-thread"))
-                    printe(" %2d: *thread start*\n", pos);
-                else {
+                if (!strcmp(type, "new-thread")) {
+                    out.sprintf(" %2d: *thread start*\n", pos);
+                } else {
                     QoreStringValueHelper fn(h->getKeyValue("file"));
                     const char* fns = !fn->empty() ? fn->c_str() : nullptr;
                     int start_line = (int)h->getKeyValue("line").getAsBigInt();
@@ -631,25 +650,25 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
                     QoreStringValueHelper lang(h->getKeyValue("lang"));
                     const char* langs = !lang->empty() ? lang->c_str() : nullptr;
 
-                    printe(" %2d: ", pos);
+                    out.sprintf(" %2d: ", pos);
 
                     if (typecode == CT_RETHROW) {
-                        printe("RETHROW at ");
+                        out.sprintf("RETHROW at ");
                         if (!fn->empty()) {
-                            printe("%s:", fn->getBuffer());
+                            out.sprintf("%s:", fn->getBuffer());
                         } else {
-                            printe("line");
+                            out.sprintf("line");
                         }
-                        printe("%d", start_line);
+                        out.sprintf("%d", start_line);
                         if (srcs) {
-                            printe(" (source %s:%d)", srcs, offset + start_line);
+                            out.sprintf(" (source %s:%d)", srcs, offset + start_line);
                         }
                     } else {
                         QoreStringValueHelper fs(h->getKeyValue("function"));
-                        printe("%s() (", fs->getBuffer());
-                        outputExceptionLocation(fns, start_line, end_line, srcs, offset, langs, type);
+                        out.sprintf("%s() (", fs->getBuffer());
+                        outputExceptionLocation(out, fns, start_line, end_line, srcs, offset, langs, type);
                     }
-                    printe(")\n");
+                    out.sprintf(")\n");
                 }
             }
         }
@@ -657,91 +676,95 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
         if (e) {
             ++ecnt;
             if (ecnt == Q_MAX_EXCEPTIONS) {
-                printe("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
+                out.sprintf("*** maximum exception count reached (%d); suppressing further output\n", ecnt);
                 break;
             }
-            printe("chained exception:\n");
+            out.sprintf("chained exception:\n");
         }
     }
+    write_report(out);
 }
 
 // static
-void ExceptionSink::outputExceptionLocation(const char* fns, int start_line, int end_line, const char* srcs, int offset,
-    const char* langs, const char* types) {
+void ExceptionSink::outputExceptionLocation(QoreString& out, const char* fns, int start_line, int end_line,
+        const char* srcs, int offset, const char* langs, const char* types) {
     if (fns) {
-        printe("%s:", fns);
+        out.sprintf("%s:", fns);
         if (!start_line) {
-            printe("<init>");
+            out.sprintf("<init>");
         } else if (start_line == end_line) {
-            printe("%d", start_line);
+            out.sprintf("%d", start_line);
         } else {
-            printe("%d-%d", start_line, end_line);
+            out.sprintf("%d-%d", start_line, end_line);
         }
     } else {
         if (!start_line) {
-            printe("<init>");
+            out.sprintf("<init>");
         } else if (start_line == end_line) {
-            printe("line %d", start_line);
+            out.sprintf("line %d", start_line);
         } else {
-            printe("line %d - %d", start_line, end_line);
+            out.sprintf("line %d - %d", start_line, end_line);
         }
     }
 
     bool openparen = false;
     if (langs) {
-        printe(" (%s", langs);
+        out.sprintf(" (%s", langs);
         openparen = true;
     }
     if (srcs) {
-        printe(" ");
+        out.sprintf(" ");
         if (!openparen) {
-            printe("(");
+            out.sprintf("(");
             openparen = true;
         }
         if (!start_line) {
-            printe("source %s", srcs);
+            out.sprintf("source %s", srcs);
         } else if (start_line == end_line) {
-            printe("source %s:%d", srcs, start_line + offset);
+            out.sprintf("source %s:%d", srcs, start_line + offset);
         } else {
-            printe("source %s:%d-%d", srcs, start_line + offset, end_line + offset);
+            out.sprintf("source %s:%d-%d", srcs, start_line + offset, end_line + offset);
         }
     }
     if (types) {
-        printe(" ");
+        out.sprintf(" ");
         if (!openparen) {
-            printe("(");
+            out.sprintf("(");
             openparen = true;
         }
-        printe("%s code", types);
+        out.sprintf("%s code", types);
     }
     if (openparen) {
-        printe(")");
+        out.sprintf(")");
     }
 }
 
 // static member function
 void ExceptionSink::defaultWarningHandler(QoreException* e) {
     ExceptionSink xsink;
+    // the report is written whole (write_report()), as that of an exception
+    QoreString out;
 
     while (e) {
-        printe("warning encountered at ");
+        out.sprintf("warning encountered at ");
         const char* fns = !e->file.empty() ? e->file.c_str() : nullptr;
         const char* srcs = !e->source.empty() ? e->source.c_str() : nullptr;
         const char* langs = !e->lang.empty() ? e->lang.c_str() : nullptr;
-        outputExceptionLocation(fns, e->start_line, e->end_line, srcs, e->offset, langs,
+        outputExceptionLocation(out, fns, e->start_line, e->end_line, srcs, e->offset, langs,
             e->type == CT_USER ? "user" : "builtin");
-        printe("\n");
+        out.sprintf("\n");
 
         QoreStringValueHelper err(e->err);
         QoreStringValueHelper desc(e->desc);
 
-        printe("%s: %s\n", err->c_str(), desc->c_str());
+        out.sprintf("%s: %s\n", err->c_str(), desc->c_str());
 
         e = e->next;
         if (e) {
-            printe("next warning:\n");
+            out.sprintf("next warning:\n");
         }
     }
+    write_report(out);
 }
 
 QoreStackLocation::QoreStackLocation() {

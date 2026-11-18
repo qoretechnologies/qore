@@ -1,0 +1,10 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+cmake_minimum_required(VERSION 3.16)
+project(QoreLexicalNativeProbe LANGUAGES CXX)
+find_package(Qore REQUIRED)
+find_package(Threads REQUIRED)
+add_library(compatprobe MODULE compatprobe.cpp)
+target_compile_features(compatprobe PRIVATE cxx_std_17)
+target_include_directories(compatprobe PRIVATE ${QORE_INCLUDE_DIRS})
+target_link_libraries(compatprobe PRIVATE ${QORE_LIBRARY} Threads::Threads)
+set_target_properties(compatprobe PROPERTIES PREFIX "" SUFFIX ".qmod")

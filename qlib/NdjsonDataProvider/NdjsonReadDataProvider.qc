@@ -284,9 +284,11 @@ public class NdjsonRecordIterator inherits DataProvider::AbstractDataProviderRec
         return iter.valid();
     }
 
-    #! Returns the record type
-    *AbstractDataProviderType getRecordType() {
-        return record_type;
+    #! Returns the record description, as AbstractDataProviderRecordIterator::getRecordType(), which this overrides
+    /** @return the fields of the record type, if any (the generic \c auto type of NDJSON records has none)
+    */
+    *hash<string, AbstractDataField> getRecordType() {
+        return record_type.getFields();
     }
 }
 }

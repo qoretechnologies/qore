@@ -423,6 +423,9 @@ DatasourcePool::destructor() {
     @code{.py}
 DatasourcePool new_dsp = dsp.copy();
     @endcode
+
+    @note The code that copies the pool and the creators of the original are the creators of the copy and of each of
+    its connections, whatever code later grows the copy (since %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
  */
 DatasourcePool::copy() {
    self->setPrivate(CID_DATASOURCEPOOL, new DatasourcePool(*ds, xsink));

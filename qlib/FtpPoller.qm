@@ -32,6 +32,8 @@
 %requires(reexport) DataProvider
 
 module FtpPoller {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "2.2";
     desc = "user module providing FTP polling functionality";
     author = "Alzhan Turlybekov <alzhan.turlybekov@qoretechnologies.com>";
@@ -149,18 +151,50 @@ poller.waitStop();
     transferred files and the @ref FtpPoller::FtpPoller::postSingleFileEvent() "FtpPoller::postSingleFileEvent()" by
     deleting / moving / renaming the files so that they would not be acquired on the next poll.
 
+    @section ftppollererrors FtpPoller Errors and Retries
+
+    An @ref FtpPoller::FtpPoller "FtpPoller" handles errors while polling as follows:
+    - an FTP error while files are listed or transferred, or while a new connection given with
+      @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is set up, is logged, and the poll is
+      retried after the \c "error_delay" option's delay
+    - an error raised while a polled file is handled, by
+      @ref FtpPoller::FtpPoller::singleFileEvent() "FtpPoller::singleFileEvent()" or by an observer of an
+      @ref FtpPoller::FtpPollerDataProvider "FtpPollerDataProvider" that refuses or fails to handle the file event, is
+      logged, the remote file is kept, and the poll is retried after the \c "error_delay" option's delay, so the
+      file is handled again; the files of the poll after it are handled only in a later poll, so a file that is
+      refused every time is retried on every poll and blocks the files after it in the order of the poll
+    - an error after a file was handled, in
+      @ref FtpPoller::FtpPoller::postSingleFileEvent() "FtpPoller::postSingleFileEvent()" or while the remote file is
+      deleted or moved, stops polling, as continuing could handle the file more than once
+
     @section ftpollersandbox FtpPoller Module in Sandboxed Programs
 
     The @ref FtpPoller::FtpPoller "FtpPoller" class includes support for running in sandboxed Program objects with the
     following parse options set:
     - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
       @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "sleep" option is required in
-      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
+      @ref FtpPoller::FtpPoller::constructor() "FtpPoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 
     @section ftppollerrelnotes FtpPoller Module Release Notes
 
     @section ftppollerv2_2 Version 2.2
+    - a failed setup of a new FTP connection given with
+      @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is retried after the \c "error_delay"
+      option's delay, and the login directory, user and URL of the previous connection are not kept for the new
+      one; the setup was never retried, and polling could stop or poll with the state of the previous connection
+      (<a href="https://github.com/qoretechnologies/qore/issues/6456">issue 6456</a>)
+    - a relative \c "path" is polled relative to the login directory; a relative path failed on every poll
+      (<a href="https://github.com/qoretechnologies/qore/issues/6457">issue 6457</a>)
+    - an error raised while a polled file is handled (ex: an observer that refuses the file event) is logged, the
+      remote file is kept, and the poll is retried after the \c "error_delay" option's delay; previously polling
+      stopped (see
+      @ref ftppollererrors; <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
+    - an empty \c "regex_mask" option matches every file; it caused the constructor to throw an
+      \c INVALID-MEMBER exception
+      (<a href="https://github.com/qoretechnologies/qore/issues/3377">issue 3377</a>)
     - FTP errors during polling are now logged with the new \c "log_error" callback (falling back to \c "log_info" if
       not set) instead of being reported only as informational messages
     - added the \c "error_delay" option so that the delay before retrying a poll after an FTP error can be configured
@@ -266,7 +300,7 @@ public class FtpPoller {
         int port;
 
         #! user
-        string user;
+        *string user;
 
         #! url
         string url;
@@ -313,6 +347,9 @@ public class FtpPoller {
 
         #! internal "get files" flag
         bool get_files;
+
+        #! internal flag: True while singleFileEvent() handles a file (see @ref ftppollererrors)
+        bool in_event;
 
         #! internal fatal error flag
         bool fatal = False;
@@ -370,6 +407,9 @@ public class FtpPoller {
 
         #! Connection to update while polling
         FtpClient new_ftp;
+
+        #! lock for new_ftp, which updateOptions() sets while polling
+        Qore::Thread::Mutex new_ftp_m();
     }
 
     #! creates the FtpPoller object from the @ref Qore::FtpClient "FtpClient" argument and configuration hash argument passed
@@ -379,7 +419,8 @@ public class FtpPoller {
           files to a temporary filename during transfer
         - \c delete_remote_file: if @ref True then the remote file is deleted on the FTP server after processing.
           Cannot be set if \c move_remote_file is also set
-        - \c error_delay: the delay in seconds before the poll is retried after an FTP error (default: 60
+        - \c error_delay: the delay in seconds before the poll is retried after an FTP error or an error handling a
+          polled file (see @ref ftppollererrors; default: 60
           seconds; must be > 0 if given)
         - \c local_dir: a local directory to use to transfer remote files so large file data does not appear in events
         - \c log_debug: a @ref closure "closure" or @ref call_reference "call reference" for logging verbose
@@ -395,11 +436,14 @@ public class FtpPoller {
         - \c move_remote_file: the remote target directory on the FTP server where files will be moved to after
           processing; cannot be set if \c delete_remote_file is also set
         - \c path: the remote path(s) for retrieving the files; if a list of strings is given then each path will be
-          polled for matching files according to the \c "mask" or \c "regex_mask" option
+          polled for matching files according to the \c "mask" or \c "regex_mask" option; a relative path is
+          relative to the login directory, and the \c "filepath" of the file events of a path other than \c "." is
+          absolute
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
-        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value)
+        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value); an empty string
+          matches every file
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
-        - \c sleep: (required when imported into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+        - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
@@ -454,10 +498,14 @@ public class FtpPoller {
         }
 
         bool re = False;
-        if (conf.regex_mask) {
-            mask = remove conf.regex_mask;
-            re = True;
-            conf -= "mask";
+        # an empty regex_mask is a regex that matches every file; it must be removed from the options in any case
+        if (conf.hasKey("regex_mask")) {
+            *string regex_mask = remove conf.regex_mask;
+            if (exists regex_mask) {
+                mask = regex_mask;
+                re = True;
+                conf -= "mask";
+            }
         }
 
         # set options
@@ -483,7 +531,8 @@ public class FtpPoller {
           files to a temporary filename during transfer
         - \c delete_remote_file: if @ref True then the remote file is deleted on the FTP server after processing.
           Cannot be set if \c move_remote_file is also set
-        - \c error_delay: the delay in seconds before the poll is retried after an FTP error (default: 60
+        - \c error_delay: the delay in seconds before the poll is retried after an FTP error or an error handling a
+          polled file (see @ref ftppollererrors; default: 60
           seconds; must be > 0 if given)
         - \c host: (required) the hostname or address to connect to
         - \c local_dir: a local directory to use to transfer remote files so large file data does not appear in events
@@ -500,16 +549,18 @@ public class FtpPoller {
         - \c move_remote_file: the remote target directory on the FTP server where files will be moved to after
           processing; cannot be set if \c delete_remote_file is also set
         - \c pass: the password to use for the connection
-        - \c path: the remote path(s) for retrieving the files
+        - \c path: the remote path(s) for retrieving the files; a relative path is relative to the login directory, and
+          the \c "filepath" of the file events of a path other than \c "." is absolute
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
         - \c port: the integer port number to connect to (default 21; must be > 0 if given)
         - \c protocol: either \c "ftp" (the detault) or \c "ftps" for secure FTP
-        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value)
+        - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value); an empty string
+          matches every file
         - \c reopts: regular expression match options (ex RE_Caseless for case-insensitive matches)
         - \c start_thread: (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
           thread ID (if not set then @ref background will be used)
-        - \c sleep: (required when imported into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+        - \c sleep: (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c tempfile_template: (used when \c local_dir and \c atomic_transfer are set) the temporary filename prefix
@@ -565,10 +616,14 @@ public class FtpPoller {
         }
 
         bool re = False;
-        if (conf.regex_mask) {
-            mask = remove conf.regex_mask;
-            re = True;
-            conf -= "mask";
+        # an empty regex_mask is a regex that matches every file; it must be removed from the options in any case
+        if (conf.hasKey("regex_mask")) {
+            *string regex_mask = remove conf.regex_mask;
+            if (exists regex_mask) {
+                mask = regex_mask;
+                re = True;
+                conf -= "mask";
+            }
         }
 
         # set options
@@ -610,7 +665,11 @@ public class FtpPoller {
     }
 
     #! Updates options
+    /** The poller sets up the new connection before its next poll; a failed setup is logged and retried after the
+        \c "error_delay" option's delay (see @ref ftppollererrors)
+    */
     updateOptions(FtpClient ftp) {
+        AutoLock al(new_ftp_m);
         new_ftp = ftp;
     }
 
@@ -619,48 +678,67 @@ public class FtpPoller {
         return pollcnt;
     }
 
+    #! returns the absolute directory of a path to poll
+    /** A relative path is resolved against the login directory of the FTP connection (\a root, by default
+        \c rootFtpPath)
+    */
+    private string getPollDir(string dir, *string root) {
+        if (!exists root) {
+            root = rootFtpPath;
+        }
+        # a path that starts with "~" is left for the server to resolve, like an absolute path
+        if (dir !~ /^[\/~]/) {
+            if (dir.empty() || dir == ".") {
+                return root;
+            }
+            dir = root + (root =~ /\/$/ ? "" : "/") + dir;
+        }
+        # remove any trailing "/", except from the root directory
+        dir =~ s/(.)\/+$/$1/;
+        return dir;
+    }
+
+    #! sets up the poller with an FTP connection
+    /** The state of the connection (the client, its login directory, user, password, port and URL) is taken from
+        \a ftp only when the setup succeeds, so that a failed setup leaves no state of the new connection, and the
+        state of a previous connection is not kept for the new one (issue #6456)
+    */
     private setup(FtpClient ftp) {
-        # assign FtpClient object
-        self.ftp = ftp;
+        *string n_user = ftp.getUserName();
+        *string n_pass = ftp.getPassword();
+        int n_port = ftp.getPort();
+        string n_url = sprintf("%s://%s@%s:%d", protocol, n_user ?? "<none>", ftp.getHostName(), n_port);
 
         if (!ftp.isConnected()) {
-            logDetail("%s: logging in", url);
+            logDetail("%s: logging in", n_url);
             # connect to the remote system
             ftp.connect();
         }
 
-        rootFtpPath = ftp.pwd();
+        string root = ftp.pwd();
+        logInfo("%s: root path: %y", n_url, root);
 
-        {
-            *string str = ftp.getUserName();
-            if (str) {
-                user = str;
-            }
-            str = ftp.getPassword();
-            if (str) {
-                pass = str;
-            }
+        logInfo("%s: polling path is %y", n_url, path);
+        if (path && path.size() == 1 && !path[0].empty() && path[0] != ".") {
+            string dir = getPollDir(path[0], root);
+            logInfo("%s: changing directory to %y", n_url, dir);
+            # change to the target directory
+            ftp.cwd(dir);
+        } else {
+            logInfo("%s: connected", n_url);
         }
 
-        port = ftp.getPort();
-
-        url = sprintf("%s://%s@%s:%d", protocol, user ?? "<none>", ftp.getHostName(), port);
-
+        # the setup succeeded: take the state of the connection
+        self.ftp = ftp;
+        rootFtpPath = root;
+        user = n_user;
+        pass = n_pass;
+        port = n_port;
+        url = n_url;
         urlh = parse_url(ftp.getURL());
 
         if (mask) {
             logDetail("%s: file regex mask: %s", url, mask);
-        }
-
-        logInfo("%s: root path: %y", url, rootFtpPath);
-
-        logInfo("%s: polling path is %y", url, path);
-        if (path && path.size() == 1 && !path[0].empty() && path[0] != ".") {
-            logInfo("%s: changing directory to %y", url, path[0]);
-            # change to the target directory
-            ftp.cwd(path[0]);
-        } else {
-            logInfo("%s: connected", url);
         }
     }
 
@@ -938,20 +1016,22 @@ public class FtpPoller {
     }
 
     #! runs a single poll (useful for checking for errors inline before starting a background thread)
+    /** An error raised by an event handler is raised to the caller; only the polling thread logs it and continues
+        polling (see @ref ftppollererrors)
+    */
     bool runOnce() {
         ++pollcnt;
         bool ret = False;
         foreach string subdir in (path) {
             get_files = True;
-            if (path.size() > 1) {
-                ftp.cwd(rootFtpPath);
-                ftp.cwd(subdir);
-            }
-            string pwd = ftp.pwd();
+            in_event = False;
+            # each poll changes to the absolute directory of the path, so that a relative path is resolved once
+            # against the login directory, like an absolute path (issue #6457)
+            string pwd = getPollDir(subdir);
             logInfo("polling %y", pwd);
 
             subdir =~ s/\/+$//;
-            list<hash<FtpPollerFileEventInfo>> files = getFiles(subdir);
+            list<hash<FtpPollerFileEventInfo>> files = getFiles(pwd);
 
             if (files) {
                 logDetail("got new files in %y: %y", pwd, files);
@@ -959,7 +1039,9 @@ public class FtpPoller {
                 if (fileEvent(files)) {
                     foreach hash<FtpPollerFileEventInfo> event in (files) {
                         get_files = True;
-                        event.filepath = subdir == "." ? event.name : (subdir + DirSep + event.name);
+                        # remote paths use "/" on every platform
+                        event.filepath = subdir == "." ? event.name
+                            : (pwd + (pwd =~ /\/$/ ? "" : "/") + event.name);
                         if (local_dir) {
                             if (atomic_transfer) {
                                 event = retrieveTempFile(event);
@@ -969,10 +1051,14 @@ public class FtpPoller {
                         } else {
                             event = getRemoteFileData(event);
                         }
-                        # make sure any errors after this point cause the polling operation to stop
                         get_files = False;
 
+                        # an error raised by the event handler (ex: an observer that refuses the event) leaves the
+                        # remote file in place, and the poll is retried after the error delay (issue #6400)
+                        in_event = True;
                         singleFileEvent(event);
+                        # make sure any errors after this point cause the polling operation to stop
+                        in_event = False;
 
                         # set the "fatal" flag if an exception is thrown in postSingleFileEvent()
                         on_error fatal = True;
@@ -1114,8 +1200,32 @@ public class FtpPoller {
 
         while (runflag) {
             try {
-                if (new_ftp.val()) {
-                    setup(remove new_ftp);
+                # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
+                get_files = True;
+                in_event = False;
+                *FtpClient nftp;
+                {
+                    AutoLock al(new_ftp_m);
+                    nftp = new_ftp;
+                }
+                if (nftp) {
+                    # the new client is kept until its setup succeeds, so that a failed setup is retried after the
+                    # error delay like any FTP error (issue #6456)
+                    try {
+                        setup(nftp);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the retry logs in again
+                        try {
+                            nftp.disconnect();
+                        } catch () {
+                        }
+                        rethrow;
+                    }
+                    # updateOptions() may have given another client meanwhile
+                    AutoLock al(new_ftp_m);
+                    if (new_ftp == nftp) {
+                        remove new_ftp;
+                    }
                 }
                 runOnce();
                 ftpSleep(poll_interval);
@@ -1123,6 +1233,12 @@ public class FtpPoller {
                 if (get_files) {
                     logError("FTP error in %y: %s: %s; waiting %ds for next try", path, ex.err, ex.desc,
                         error_delay);
+                    ftpSleep(error_delay);
+                } else if (in_event) {
+                    # the event handler refused or failed to handle the file, which is left in place
+                    in_event = False;
+                    logError("event handler error in %y: %s: %s; the remote file is kept; waiting %ds for next try",
+                        path, ex.err, ex.desc, error_delay);
                     ftpSleep(error_delay);
                 } else {
                     # error thrown in "post transfer" code
@@ -1143,7 +1259,8 @@ public class FtpPoller {
     }
 
     #! called for each matching file individually whenever matching files are polled
-    /** If any error occurs here, the error is logged and the polling operation is retried
+    /** If any error occurs here, the error is logged, the remote file is kept, and the poll is retried after the
+        \c "error_delay" option's delay (see @ref ftppollererrors)
 
         @param event a hash of file data
     */
@@ -1255,8 +1372,8 @@ public class FtpPollerDataProviderBase inherits DataProvider::AbstractDataProvid
                 "display_name": "Error Retry Delay",
                 "short_desc": "The delay in seconds before retrying after an FTP error",
                 "type": AbstractDataProviderTypeMap."int",
-                "desc": "The number of seconds to wait before polling again after an FTP error; the error is logged "
-                    "at error level, and then polling continues after this delay.\n\n"
+                "desc": "The number of seconds to wait before polling again after an FTP error and after a refused "
+                    "file; the error is logged at error level, and then polling continues after this delay.\n\n"
                     "Transient problems such as a network interruption or a server restart are common with FTP; a "
                     "low value recovers from such problems quickly, while a high value reduces the load on a server "
                     "that is failing persistently.\n\n"

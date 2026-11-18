@@ -219,7 +219,8 @@ bool qore_fork_child_exits_quickly() {
 }
 
 void qore_fork_child_quick_exit(int rc) {
-    if (qore_fork_child_exits_quickly()) {
+    // a JIT compile left running in LLVM at exit would use LLVM's static objects while exit() destroys them
+    if (qore_fork_child_exits_quickly() || qore_jit_exit_quickly()) {
         // no atexit() handler and no static destructor runs; the buffered output of the standard I/O streams is
         // written, as exit() would
         fflush(nullptr);
@@ -326,7 +327,17 @@ void QoreForkThreadLock::child() noexcept {
     for (QoreCondition* c : conds) {
         c->reinitAfterFork();
     }
-    // held by this thread since prepare(), or by a thread that no longer exists, or not held at all
+    // a lock that this thread acquired in prepare() is released, so that the release is seen (by ThreadSanitizer,
+    // which otherwise considers it held for the rest of the child's life, and reports a lock order inversion for any
+    // lock that the child takes after it which was taken before it in the parent); a recursive lock cannot be released
+    // in the child on glibc (its owner is the parent's thread ID), and a lock that was not acquired here can be held
+    // by a thread that does not exist in the child: they are initialized again
+    if (acquired && !recursive) {
+        acquired = false;
+        l.unlock();
+        return;
+    }
+    acquired = false;
     l.reinitAfterFork(recursive ? qore_recursive_mutex_attr() : nullptr);
 }
 
@@ -369,6 +380,15 @@ void QoreForkStdMutex::child() noexcept {
     // destroyed, since destroying a condition variable waits for its waiters
     for (std::condition_variable* c : conds) {
         new (c) std::condition_variable();
+    }
+    // a mutex that this thread acquired in prepare() is released, so that the release is seen (by ThreadSanitizer,
+    // which otherwise considers it held for the rest of the child's life, and reports a lock order inversion for any
+    // lock that the child takes after it which was taken before it in the parent); one that was not acquired here can
+    // be held by a thread that does not exist in the child, and is created again
+    if (acquired) {
+        acquired = false;
+        m.unlock();
+        return;
     }
     new (&m) std::mutex();
 }

@@ -37,7 +37,7 @@ class CMakeGenericRebuildTest inherits CMakeBuildHelpersTestBase::GenericQccObje
         - the batch stamp removed and the provider changed: the stale tree is rebuilt
     */
     testRebuildAndAdoption() {
-        TmpDir tmp("qore-cmake-qcc-rebuild-");
+        TmpDir tmp("qore-cmake-qcc-rebuild-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
 
         string build_dir = project.build_dir;

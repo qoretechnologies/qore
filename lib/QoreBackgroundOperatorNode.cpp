@@ -65,7 +65,7 @@ int QoreBackgroundOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
 
     // issue #2993: turn on "return value ignored" flag when parsing background expressions
     QoreParseContextFlagHelper fh(parse_context);
-    fh.setFlags(PF_BACKGROUND | PF_RETURN_VALUE_IGNORED);
+    fh.setFlags(PF_BACKGROUND | PF_BACKGROUND_EXPR | PF_RETURN_VALUE_IGNORED);
     parse_context.typeInfo = nullptr;
     QoreParseAnalysis operand_analysis;
     {

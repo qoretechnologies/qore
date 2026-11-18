@@ -4,7 +4,7 @@
 # The cases of the CMakeBuildHelpers-<n>.qtest tests: each runs one part of them, so that each takes a
 # short time, and together they run every case (see addPartCase()); the helpers are those of
 # CMakeBuildHelpersTestBase.qm, which the generic qcc object helper scenarios
-# (CMakeBuildHelpers-generic-*.qtest) and the incremental preload cases (CMakeBuildHelpers-preload.qtest) share
+# (CMakeBuildHelpers-generic-*.qtest) and the incremental preload cases (CMakeBuildHelpersPreload.qc) share
 
 class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
     private {
@@ -44,6 +44,8 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
             \testExternalQmodsTrackQoreRuntime());
         addPartCase(2, "cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
+        addPartCase(2, "a qmod is rebuilt when a module of its %try-module directives is installed",
+            \testQmodOptionalModuleInstalled());
         addPartCase(3, "a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
         addPartCase(3, "a partial aggregate of a group links the contracts its members baked",
@@ -64,7 +66,7 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
         list reflects what configure decided, which is where the glob result lands.
     */
     private list<string> installedModuleSources(string build_dir, string module) {
-        hash<string, bool> names;
+        hash<string, bool> names = {};
         string marker = "/qlib/" + module + "/";
         foreach string token in (read(build_dir + "/cmake_install.cmake").split("\"")) {
             int ix = token.find(marker);
@@ -88,7 +90,7 @@ class CMakeBuildHelpersBase inherits CMakeBuildHelpersTestBase::CMakeBuildTest {
         directory, so the AOT artifact goes stale against a file it consumes.
     */
     testModuleSourceGlobTracking() {
-        TmpDir tmp("qore-module-source-glob-");
+        TmpDir tmp("qore-module-source-glob-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string stage_dir = tmp.path + "/stage";
@@ -158,7 +160,7 @@ qore_user_modules(\"qlib/Fixture\")
     }
 
     testSourceQmodSymlinkFreshness() {
-        TmpDir tmp("qore-source-qmod-links-");
+        TmpDir tmp("qore-source-qmod-links-", NOTHING, cmakeTmpBase());
         string source_qlib = tmp.path + "/qlib";
         string build_qmods = tmp.path + "/qlib-qmod";
         string source_module = source_qlib + "/Fixture";
@@ -205,7 +207,7 @@ qore_user_modules(\"qlib/Fixture\")
         first tree away from its tests.
     */
     testSourceQmodSymlinkOtherBuildTree() {
-        TmpDir tmp("qore-source-qmod-trees-");
+        TmpDir tmp("qore-source-qmod-trees-", NOTHING, cmakeTmpBase());
         string source_qlib = tmp.path + "/qlib";
         string remove_script = realpath(get_script_dir() + "/../../../cmake/RemoveSourceQmodSymlinks.cmake");
         string ensure_script = realpath(get_script_dir() + "/../../../cmake/EnsureSourceQmodSymlinks.cmake");
@@ -236,6 +238,27 @@ qore_user_modules(\"qlib/Fixture\")
         mkdir(tmp.path + "/debug/qlib-qmod/ModC", 0755, True);
         write(tmp.path + "/debug/qlib-qmod/ModC/ModC.qmod", "fixture qmod\n");
         symlink("../../debug/qlib-qmod/ModC/ModC.qmod", source_modc + "/ModC.qmod");
+        # and an absolute link that names tree "debug" otherwise than QORE_BUILD_QMOD_DIR (on macOS, CMake names
+        # /private/tmp/... as /tmp/..., and a link to /private/tmp/... was kept)
+        string source_modd = source_qlib + "/ModD";
+        mkdir(source_modd, 0755, True);
+        mkdir(tmp.path + "/debug/qlib-qmod/ModD", 0755, True);
+        write(tmp.path + "/debug/qlib-qmod/ModD/ModD.qmod", "fixture qmod\n");
+        symlink(tmp.path + "/debug/./qlib-qmod/ModD/ModD.qmod", source_modd + "/ModD.qmod");
+        # a link that names tree "debug" through a symbolic link to it is removed too, while a link into a sibling
+        # directory whose name extends the tree's qmod directory (qlib-qmod2) is kept
+        string debug_alias = tmp.path + "/debug-alias";
+        symlink(tmp.path + "/debug", debug_alias);
+        hash<string, string> extra_links;
+        foreach hash<auto> h in ({"module": "ModE", "dir": debug_alias + "/qlib-qmod"},
+                {"module": "ModF", "dir": tmp.path + "/debug/qlib-qmod2"}) {
+            string source_module = source_qlib + "/" + h.module;
+            mkdir(source_module, 0755, True);
+            mkdir(tmp.path + "/debug/" + basename(h.dir) + "/" + h.module, 0755, True);
+            write(tmp.path + "/debug/" + basename(h.dir) + "/" + h.module + "/" + h.module + ".qmod", "fixture qmod\n");
+            extra_links{h.module} = source_module + "/" + h.module + ".qmod";
+            symlink(h.dir + "/" + h.module + "/" + h.module + ".qmod", extra_links{h.module});
+        }
 
         # the format-change cleanup of tree "debug" removes only its own links
         string out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -P %s",
@@ -244,11 +267,27 @@ qore_user_modules(\"qlib/Fixture\")
         assertEq(qmods.ModA, readlink(links.ModA), "the link into the other build tree is unchanged: " + out);
         assertFalse(is_link(links.ModB), "the link into the cleaning build tree is removed: " + out);
         assertFalse(is_link(source_modc + "/ModC.qmod"), "a relative link into the cleaning tree is removed: " + out);
-        assertTrue(out.find("Removed 2 generated source qmod symlink(s)") >= 0, out);
+        assertFalse(is_link(source_modd + "/ModD.qmod"),
+            "an absolute link into the cleaning tree named otherwise is removed: " + out);
+        assertFalse(is_link(extra_links.ModE),
+            "a link into the cleaning tree through a symbolic link to it is removed: " + out);
+        assertTrue(is_link(extra_links.ModF), "a link into a sibling qmod directory (qlib-qmod2) is kept: " + out);
+        assertTrue(out.find("Removed 4 generated source qmod symlink(s)") >= 0, out);
 
         # the stale-artifact check of tree "debug" does not remove tree "release"'s link to a fresh qmod
         string format_stamp = tmp.path + "/debug/qcc-format.stamp";
         write(format_stamp, "format=1\n");
+        foreach string mod in ("ModG", "ModH") {
+            mkdir(source_qlib + "/" + mod, 0755, True);
+            write(source_qlib + "/" + mod + "/" + mod + ".qm",
+                sprintf("%%modern\nmodule %s { version = \"1.0\"; }\n", mod));
+            string qmod = tmp.path + "/debug/qlib-qmod/" + mod + "/" + mod + ".qmod";
+            mkdir(dirname(qmod), 0755, True);
+            write(qmod, "fixture qmod\n");
+            TestFileTime::set_file_times(2026-01-01T00:00:00Z, qmod);
+        }
+        symlink(tmp.path + "/debug/./qlib-qmod/ModG/ModG.qmod", source_qlib + "/ModG/ModG.qmod");
+        symlink(debug_alias + "/qlib-qmod/ModH/ModH.qmod", source_qlib + "/ModH/ModH.qmod");
         TestFileTime::set_file_times(2026-01-01T00:00:00Z, debug_moda);
         TestFileTime::set_file_times(2026-01-01T00:01:00Z, format_stamp);
         assertTrue(mtime(debug_moda) < mtime(format_stamp),
@@ -258,6 +297,12 @@ qore_user_modules(\"qlib/Fixture\")
             shellQuote(ensure_script)));
         assertTrue(is_link(links.ModA), "a stale artifact in another tree keeps the link: " + out);
         assertEq(qmods.ModA, readlink(links.ModA), "a stale artifact in another tree leaves the link alone: " + out);
+        # a link to a stale artifact of tree "debug" is removed however it names the artifact (with ./, or through a
+        # symbolic link to the tree)
+        assertFalse(is_link(source_qlib + "/ModG/ModG.qmod"),
+            "a link to a stale artifact of the tree spelled with ./ is removed: " + out);
+        assertFalse(is_link(source_qlib + "/ModH/ModH.qmod"),
+            "a link to a stale artifact of the tree through a symbolic link to it is removed: " + out);
 
         # the cleanup requires the build tree whose links it removes
         assertNeq(0, system(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -P %s > /dev/null 2>&1",
@@ -276,7 +321,7 @@ qore_user_modules(\"qlib/Fixture\")
         if (!qore_dir || !is_file(qore_dir + "/QoreBuildTree.cmake")) {
             testSkip("the build tree's QoreConfig.cmake is not available for the build under test");
         }
-        TmpDir tmp("qore-moved-build-tree-");
+        TmpDir tmp("qore-moved-build-tree-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string moved_dir = tmp.path + "/moved";
         string link_dir = tmp.path + "/link";
@@ -315,7 +360,7 @@ message(STATUS \"qore cmake dir: ${QORE_CMAKE_DIR}\")
     }
 
     testDownstreamCatalogInstallRoot() {
-        TmpDir tmp("qore-cmake-downstream-catalog-");
+        TmpDir tmp("qore-cmake-downstream-catalog-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -499,7 +544,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogInstallReconciliation() {
-        TmpDir tmp("qore-cmake-catalog-reconcile-");
+        TmpDir tmp("qore-cmake-catalog-reconcile-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string other_src_dir = tmp.path + "/other-src";
@@ -594,7 +639,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogOwnedOrphanRetirement() {
-        TmpDir tmp("qore-cmake-catalog-orphan-");
+        TmpDir tmp("qore-cmake-catalog-orphan-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -642,7 +687,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogManifestEntryValidation() {
-        TmpDir tmp("qore-cmake-catalog-manifest-");
+        TmpDir tmp("qore-cmake-catalog-manifest-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -680,7 +725,7 @@ find_package(Qore REQUIRED)
     }
 
     testCatalogInstallDestdirStaging() {
-        TmpDir tmp("qore-cmake-catalog-destdir-");
+        TmpDir tmp("qore-cmake-catalog-destdir-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string install_dir = tmp.path + "/install";
@@ -840,7 +885,7 @@ find_package(Qore REQUIRED)
             testSkip("QoreMacros.cmake is not available beside the test");
         }
 
-        TmpDir tmp("qore-qcc-deps-libqore-");
+        TmpDir tmp("qore-qcc-deps-libqore-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -912,7 +957,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/deps.txt\"
         if (!qore_dir) {
             testSkip("QoreConfig.cmake is not available for the build under test");
         }
-        TmpDir tmp("qore-external-qmod-runtime-");
+        TmpDir tmp("qore-external-qmod-runtime-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string tool_dir = tmp.path + "/tools";
@@ -1010,8 +1055,157 @@ qore_external_user_module(\"qlib/Fixture\" \"\")
         assertEq(3, compiles(), "no module is compiled with a qcc that reports no identity");
     }
 
+    #! A qmod compiled without the module of a failed %try-module directive is rebuilt once the module is installed
+    #! where it could be found, and not when another file is added there (qore#6145)
+    testQmodOptionalModuleInstalled() {
+        if (!qore_dir) {
+            testSkip("QoreConfig.cmake is not available for the build under test");
+        }
+        TmpDir tmp("qore-qmod-optional-module-", NOTHING, cmakeTmpBase());
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string tool_dir = tmp.path + "/tools";
+        string module_dir = tmp.path + "/modules";
+        mkdir(src_dir + "/qlib", 0755, True);
+        mkdir(tool_dir);
+        mkdir(module_dir);
+        write(src_dir + "/qlib/OptFixture.qm", "%modern\n"
+            "%try-module OptionalDep6145\n"
+            "%endtry\n"
+            "module OptFixture {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module fixture\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQmodOptionalModule NONE)
+find_package(Qore REQUIRED)
+qore_external_user_module(\"qlib/OptFixture.qm\" \"\")
+qore_external_user_module(\"qlib/OptParen.qm\" \"\")
+");
+        # the directive with its exception variable right after it, without a space
+        write(src_dir + "/qlib/OptParen.qm", "%modern\n"
+            "%try-module($ex) OptionalDep6145Paren\n"
+            "%endtry\n"
+            "module OptParen {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module fixture\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        # a qcc that lists the path where the optional module could be installed while it is not there, as qcc does
+        # (<depfile>.optional), and nothing once it is: the module is then available, and compiled in
+        string candidate = module_dir + "/OptionalDep6145.qmod";
+        string log = tool_dir + "/compiles.log";
+        string qcc = tool_dir + "/qcc";
+        write(qcc, sprintf("#!/bin/sh\n"
+            "if [ \"$1\" = --version ]; then\n"
+            "    echo 'qcc (Qore Code Compiler) v1.0'\n"
+            "    echo 'AOT runtime identity: aaaa'\n"
+            "    exit 0\n"
+            "fi\n"
+            "out=\n"
+            "while [ $# -gt 0 ]; do\n"
+            "    case \"$1\" in\n"
+            "        -o) out=$2; shift ;;\n"
+            "        --depfile=*) dep=${1#--depfile=} ;;\n"
+            "    esac\n"
+            "    shift\n"
+            "done\n"
+            "echo compile >> %s\n"
+            "echo qmod > \"$out\"\n"
+            "[ -n \"$dep\" ] && echo \"$out:\" > \"$dep\"\n"
+            "if [ -n \"$dep\" ]; then\n"
+            "    case \"$out\" in\n"
+            "        *OptFixture.qmod)\n"
+            "            if [ -f %s ]; then : > \"$dep.optional\"; else echo %s > \"$dep.optional\"; fi ;;\n"
+            "        *) : > \"$dep.optional\" ;;\n"
+            "    esac\n"
+            "fi\n"
+            "exit 0\n", shellQuote(log), shellQuote(candidate), shellQuote(candidate)));
+        chmod(qcc, 0755);
+
+        string configure = run(sprintf("cmake -S %s -B %s -DQore_DIR=%s -DQORE_QCC_EXECUTABLE=%s "
+            "-DQORE_BUILD_AOT_MODULES=ON", shellQuote(src_dir), shellQuote(build_dir), shellQuote(qore_dir),
+            shellQuote(qcc)));
+        code<int()> compiles = int sub () {
+            return is_file(log) ? (read(log).split("\n").size()) : 0;
+        };
+        string qmod = build_dir + "/qlib-qmod/OptFixture.qmod";
+        string build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertTrue(is_file(qmod), "the fixture qmod is compiled: " + configure + build);
+        # each module is compiled once
+        assertEq(2, compiles());
+        assertTrue(is_file(qmod + ".optional.stamp"), "the module with a %try-module directive has a stamp");
+        assertTrue(is_file(build_dir + "/qlib-qmod/OptParen.qmod.optional.stamp"),
+            "a %try-module($ex) directive is found too");
+
+        # nothing changed: nothing is recompiled
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(2, compiles(), "an unchanged build recompiles nothing");
+
+        # another file in the directory where the module could be installed: nothing is recompiled
+        write(module_dir + "/Unrelated.qmod", "another module\n");
+        write(module_dir + "/notes.txt", "a file\n");
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(2, compiles(), "an unrelated file in the module directory recompiles nothing");
+
+        # the optional module is installed: the qmod is recompiled, once
+        write(candidate, "the optional module\n");
+        build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(3, compiles(), "the installed optional module recompiles the qmod: " + build);
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(3, compiles(), "the build after the recompile recompiles nothing");
+
+        # the module is removed and the qmod is recompiled without it; installing it again recompiles it again
+        unlink(candidate);
+        TestFileTime::set_file_times(now() + 2s, src_dir + "/qlib/OptFixture.qm");
+        run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(4, compiles(), "a changed source recompiles the qmod");
+        TestFileTime::set_file_times(now() + 4s, build_dir + "/qlib-qmod/OptFixture.qmod.d.optional");
+        write(candidate, "the optional module again\n");
+        build = run(sprintf("cmake --build %s", shellQuote(build_dir)));
+        assertEq(5, compiles(), "the module installed again recompiles the qmod: " + build);
+
+        # the real qcc lists the paths where a module of a failed %try-module directive could be installed
+        string real_qcc = qore_build_dir + "/qcc";
+        if (!is_executable(real_qcc)) {
+            return;
+        }
+        string probe_dir = tmp.path + "/probe";
+        mkdir(probe_dir);
+        string probe = probe_dir + "/OptProbe.qm";
+        write(probe, "%modern\n"
+            "%try-module OptionalDep6145Probe\n"
+            "%endtry\n"
+            "module OptProbe {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"optional module probe\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n");
+        string out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -m %s --depfile=%s -o %s 2>&1",
+            shellQuote(qore_build_dir), shellQuote(module_dir), shellQuote(real_qcc), shellQuote(probe),
+            shellQuote(probe_dir + "/OptProbe.qmod.d"), shellQuote(probe_dir + "/OptProbe.qmod")));
+        assertTrue(is_file(probe_dir + "/OptProbe.qmod.d.optional"), "qcc writes the candidate list: " + out);
+        list<string> listed = read(probe_dir + "/OptProbe.qmod.d.optional").split("\n");
+        assertTrue(inlist(module_dir + "/OptionalDep6145Probe.qmod", listed),
+            "the candidate paths include the module directory: " + (listed.join(", ")));
+        assertTrue(inlist(module_dir + "/OptionalDep6145Probe.qm", listed),
+            "and the source module: " + (listed.join(", ")));
+        # a module that is available is not listed
+        write(module_dir + "/OptionalDep6145Probe.qm", "%modern\nmodule OptionalDep6145Probe {\n"
+            "    version = \"1.0\";\n    desc = \"d\";\n    author = \"a\";\n    license = \"MIT\";\n}\n");
+        out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -m %s --depfile=%s -o %s 2>&1",
+            shellQuote(qore_build_dir), shellQuote(module_dir), shellQuote(real_qcc), shellQuote(probe),
+            shellQuote(probe_dir + "/OptProbe.qmod.d"), shellQuote(probe_dir + "/OptProbe.qmod")));
+        assertEq("", read(probe_dir + "/OptProbe.qmod.d.optional"), "an available module is not listed: " + out);
+    }
+
     testExportedHelpers() {
-        TmpDir tmp("qore-cmake-build-helpers-");
+        TmpDir tmp("qore-cmake-build-helpers-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         mkdir(src_dir);
@@ -1128,7 +1322,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/helper-vars.txt\"
         shared parse's depfile, so an edit to it rebuilt nothing.
     */
     testGroupExternalInputsDepfile() {
-        TmpDir tmp("qore-cmake-qcc-external-inputs-");
+        TmpDir tmp("qore-cmake-qcc-external-inputs-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1253,7 +1447,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
     }
 
     testCyclicComponentBuilds() {
-        TmpDir tmp("qore-cmake-qcc-cycle-");
+        TmpDir tmp("qore-cmake-qcc-cycle-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1528,7 +1722,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
         provider never published and the aggregate failed with "body_contract=<hash> actual=".
     */
     testPartialAggregateBodyContracts() {
-        TmpDir tmp("qore-cmake-qcc-partial-agg-");
+        TmpDir tmp("qore-cmake-qcc-partial-agg-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";
@@ -1611,7 +1805,7 @@ add_custom_target(all-qo ALL DEPENDS ${AGG_STAMPS} ${AGG_PARTIAL_STAMP} ${AGG_FU
     }
 
     testManagedQccOutputPruning() {
-        TmpDir tmp("qore-cmake-qcc-prune-");
+        TmpDir tmp("qore-cmake-qcc-prune-", NOTHING, cmakeTmpBase());
         string src_dir = tmp.path + "/src";
         string build_dir = tmp.path + "/build";
         string snippets_dir = src_dir + "/srcs";

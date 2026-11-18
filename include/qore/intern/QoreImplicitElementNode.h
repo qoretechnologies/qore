@@ -40,8 +40,24 @@ private:
     DLLLOCAL virtual ~QoreImplicitElementNode() {
     }
 
+    //! a \c $# outside the code that an operator or foreach statement runs for each element is a parse error (qore#803)
+    /** \c $# is the index of the element of the operator or foreach statement whose per-element code encloses it in
+        the same function (PF_IMPLICIT_ELEMENT, qore#5690); a function, method or closure body, a fold expression, a
+        default argument, a member or variable initializer and top-level code outside any such code do not inherit
+        it, so a \c $# there is refused instead of always giving NOTHING.
+    */
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         parse_context.typeInfo = bigIntTypeInfo;
+        if (!(parse_context.pflag & PF_IMPLICIT_ELEMENT)) {
+            parseException(*loc, "IMPLICIT-INDEX-NOT-ALLOWED", "the implicit index ($#) is only set in the code "
+                "that a foreach statement or a map, select, hash map or streaming predicate (first, any, all, "
+                "count, takewhile, takeuntil) operator runs for each element; it is not inherited by a function, "
+                "method or closure called from or defined in that code, and a fold expression does not set it");
+            return -1;
+        }
+        // a context statement or find expression whose expressions read it is an observer of the implicit element
+        // at run time (qore#6341)
+        ++parse_context.implicit_element_reads;
         return 0;
     }
 

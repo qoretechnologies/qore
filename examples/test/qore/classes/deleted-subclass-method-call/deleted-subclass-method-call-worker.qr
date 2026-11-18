@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks the error of a method call on a deleted object; run by deleted-subclass-method-call.qtest
+
+/** The AST interpreter calls the method found at parse time on an object of the parse-time class or of the method's
+    class, and names that class and the signature in the error for a deleted object; for an object of another class,
+    such as a subclass, it dispatches the call by name and names the object's class.  A program compiled with qcc
+    named the method's class for a subclass object (qore#6025).  Each check prints "name=error".
+*/
+
+class Base {
+    m2(int x) {
+    }
+
+    int get() {
+        return 1;
+    }
+}
+
+class Gone inherits Base {
+}
+
+class Override inherits Base {
+    m2(int x) {
+    }
+}
+
+int sub side_effect(reference<int> r) {
+    return ++r;
+}
+
+#! returns the description of the exception that the call raises
+string sub err(code c) {
+    try {
+        c();
+        return "no exception";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+
+#! calls m2() at one call site, whose dispatch the compiled code keeps for the class of the object
+sub call_m2(Base g) {
+    g.m2(1);
+}
+
+#! a call site whose dispatch is kept for the subclass by an earlier call, then called with a deleted object
+string sub cached_dispatch() {
+    call_m2(new Gone());
+    Gone d = new Gone();
+    Base g = d;
+    delete d;
+    return err(sub () { call_m2(g); });
+}
+
+#! returns a deleted object of the given class through a variable of type Base
+Base sub deleted(string cls) {
+    Base o = cls == "Gone" ? new Gone() : (cls == "Override" ? new Override() : new Base());
+    Base h = o;
+    delete h;
+    return o;
+}
+
+hash<string, string> sub checks() {
+    return {
+        "subclass": err(sub () { Base g = deleted("Gone"); g.m2(1); }),
+        "subclass-override": err(sub () { Base g = deleted("Override"); g.m2(1); }),
+        "subclass-return-value": err(sub () { Base g = deleted("Gone"); int i = g.get(); }),
+        "subclass-argument-side-effect": err(sub () { int n = 0; Base g = deleted("Gone"); g.m2(side_effect(\n)); }),
+        "subclass-auto": err(sub () { auto g = deleted("Gone"); g.m2(1); }),
+        "subclass-hash-member": err(sub () { hash<auto> h = {"o": deleted("Gone")}; h.o.m2(1); }),
+        "same-class": err(sub () { Base g = deleted("Base"); g.m2(1); }),
+        "cached-dispatch": cached_dispatch(),
+    };
+}
+
+# called three times, so that the checks run again after their first call
+hash<string, string> first = checks();
+bool stable = True;
+for (int i = 0; i < 2; ++i) {
+    if (checks() != first) {
+        stable = False;
+    }
+}
+map printf("%s=%s\n", $1.key, $1.value), first.pairIterator();
+printf("stable=%y\n", stable);

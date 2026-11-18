@@ -72,6 +72,15 @@ option(SINGLE_COMPILATION_UNIT
        "Build libqore as a single compilation unit for faster builds"
        ON)
 
+set(SINGLE_COMPILATION_UNIT_CHUNKS 1 CACHE STRING
+    "With SINGLE_COMPILATION_UNIT: split libqore into this many unity chunks compiled in parallel (1 = one single compilation unit; see cmake/QoreScuChunks.cmake)")
+if (NOT SINGLE_COMPILATION_UNIT_CHUNKS MATCHES "^[1-9][0-9]?[0-9]?$" OR SINGLE_COMPILATION_UNIT_CHUNKS GREATER 256)
+    message(FATAL_ERROR "SINGLE_COMPILATION_UNIT_CHUNKS must be a positive integer, got '${SINGLE_COMPILATION_UNIT_CHUNKS}'")
+endif ()
+if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1 AND NOT SINGLE_COMPILATION_UNIT)
+    message(WARNING "SINGLE_COMPILATION_UNIT_CHUNKS=${SINGLE_COMPILATION_UNIT_CHUNKS} is ignored because SINGLE_COMPILATION_UNIT is OFF")
+endif ()
+
 option(ENABLE_ALLOC_TRACKING
        "Enable malloc/free interposer for memory leak tracking (adds overhead to all allocations; debug only)"
        OFF)
@@ -92,6 +101,10 @@ option(QORE_REQUIRE_SYSTEM_DEPENDENCIES
 option(QORE_BUILD_WITH_EXTERNAL_MODULES
        "Allow installed Qore modules to provide optional features in build outputs"
        ON)
+
+option(QORE_STACK_USAGE_REPORT
+       "Compile libqore with -fstack-usage for tools/check-stack-usage.py (frame sizes of the per-call path)"
+       OFF)
 
 option(QORE_INSTALL_DEPENDS_ON_ALL
        "Make the install target build the all target before installing"
@@ -331,6 +344,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_EncodingConversionOutputStream.qpp
     lib/QC_StreamPipe.qpp
     lib/QC_Digest.qpp
+    lib/QC_WebSocketCloseRecord.qpp
     lib/QC_PipeInputStream.qpp
     lib/QC_PipeOutputStream.qpp
     lib/QC_StreamWriter.qpp
@@ -514,6 +528,8 @@ endif()
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(MPFR REQUIRED)
+# libqore calls GMP directly (qore#6278): it is linked explicitly, not only through libmpfr
+find_package(GMP REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(LibYAML REQUIRED)
 
@@ -872,7 +888,10 @@ pkg_check_modules(BROTLI_ENC QUIET libbrotlienc)
 pkg_check_modules(BROTLI_DEC QUIET libbrotlidec)
 if(BROTLI_ENC_FOUND AND BROTLI_DEC_FOUND)
     message(STATUS "Found Brotli: ${BROTLI_ENC_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LIBRARIES} ${BROTLI_DEC_LIBRARIES})
+    # link the full paths that pkg-config's library directories resolve to (as for zstd below): the bare names in
+    # BROTLI_*_LIBRARIES only resolve when the library is on the linker's default search path, which Homebrew's
+    # /opt/homebrew on Apple Silicon is not
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${BROTLI_ENC_LINK_LIBRARIES} ${BROTLI_DEC_LINK_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${BROTLI_ENC_INCLUDE_DIRS})
 else()
     # Try to find Brotli without pkg-config
@@ -942,7 +961,8 @@ set(HAVE_ZSTD TRUE)
 pkg_check_modules(LZ4 QUIET liblz4)
 if(LZ4_FOUND)
     message(STATUS "Found LZ4: ${LZ4_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LIBRARIES})
+    # full paths, as for Brotli above
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${LZ4_LINK_LIBRARIES})
     list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${LZ4_INCLUDE_DIRS})
 else()
     # Try to find LZ4 without pkg-config
@@ -1442,7 +1462,8 @@ endif()
 
 if (WIN32 OR MINGW OR MSYS)
     SET(CMAKE_DL_LIBS dl)
-    SET(MPFR_LIBRARIES mpfr gmp)
+    SET(MPFR_LIBRARIES mpfr)
+    SET(GMP_LIBRARIES gmp)
     SET(OPENSSL_LIBRARIES ssl crypto)
     SET(WINSOCKET_LIBRARIES ws2_32)
     SET(NO_SIGNAL_HANDLING ON)
@@ -1541,6 +1562,14 @@ HAVE_USELOCALE)
 # net/if_dl.h is not self-contained
 include(CheckIncludeFiles)
 check_include_files("sys/types.h;sys/socket.h;net/if_dl.h" HAVE_NET_IF_DL_H)
+
+# the debug hook dbg_reset_socket() reads the receive window that the peer of a TCP socket last advertised: the
+# tcpi_snd_wnd member of struct tcp_info (Linux) or of struct tcp_connection_info (macOS)
+include(CheckStructHasMember)
+check_struct_has_member("struct tcp_info" tcpi_snd_wnd "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h"
+    HAVE_TCP_INFO_TCPI_SND_WND LANGUAGE CXX)
+check_struct_has_member("struct tcp_connection_info" tcpi_snd_wnd
+    "sys/types.h;sys/socket.h;netinet/in.h;netinet/tcp.h" HAVE_TCP_CONNECTION_INFO_TCPI_SND_WND LANGUAGE CXX)
 
 qore_search_libs(LIBQORE_LIBS setsockopt socket)
 qore_search_libs(LIBQORE_LIBS gethostbyname nsl)
@@ -1716,6 +1745,7 @@ set(LIBQORE_CPP_SRC
     lib/ForStatement.cpp
     lib/ForEachStatement.cpp
     lib/TryStatement.cpp
+    lib/QoreCompletionAnalysis.cpp
     lib/RethrowStatement.cpp
     lib/ThrowStatement.cpp
     lib/AssertStatement.cpp
@@ -1731,6 +1761,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreStandardException.cpp
     lib/QoreXSinkException.cpp
     lib/QoreClass.cpp
+    lib/QoreClassGivenArgs.cpp
     lib/TypedHashDecl.cpp
     lib/QoreEnumDecl.cpp
     lib/QoreReflection.cpp
@@ -1745,6 +1776,7 @@ set(LIBQORE_CPP_SRC
     lib/WeakHashReferenceNode.cpp
     lib/QoreProgram.cpp
     lib/QoreProgramHelper.cpp
+    lib/ProgramThreadHub.cpp
     lib/QoreNamespace.cpp
     lib/QoreNet.cpp
     lib/QoreURL.cpp
@@ -1839,13 +1871,18 @@ set(LIBQORE_CPP_SRC
     lib/QoreTypeSpecMatchRegistry.cpp
     lib/QoreIRExprRegistry.cpp
     lib/JITRuntime.cpp
+    lib/JITRuntimeGivenArgs.cpp
+    lib/JITRuntimeTakeOver.cpp
     lib/QoreIRInterpreter.cpp
+    lib/QoreIRInterpreterGivenArgs.cpp
     lib/QoreIRIntrinsic.cpp
     lib/QoreIRBuilder.cpp
     lib/QoreIRAnalysis.cpp
     lib/QoreIRLowering.cpp
     lib/QoreIRToLLVM.cpp
+    lib/QoreIRFrameCheck.cpp
     lib/QoreIRVerifier.cpp
+    lib/QoreIRTakeOver.cpp
     lib/QoreAOT.cpp
     lib/QoreAOTBatchMemory.cpp
     lib/QoreAOTRuntime.cpp
@@ -2073,6 +2110,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ForStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ForEachStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/TryStatement.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreCompletionAnalysis.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ThrowStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AssertStatement.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DebugStatement.cpp\"
@@ -2105,6 +2143,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/ThreadLocalVariableData.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreProgram.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreProgramHelper.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/ProgramThreadHub.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNamespace.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreNet.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreURL.cpp\"
@@ -2408,6 +2447,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FileOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamPipe.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Digest.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_WebSocketCloseRecord.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PipeInputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PipeOutputStream.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_StreamWriter.cpp\"
@@ -2487,6 +2527,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseContext.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp\"
@@ -2519,12 +2560,31 @@ if (SINGLE_COMPILATION_UNIT)
     # with "can't write output file" (job 175756).  Keeping the mtime stable
     # means a reconfigure (e.g. the post-module-install AOT re-probe) does
     # not relink libqore at all.
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
-        "${_scu_content}")
-    configure_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
-        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        COPYONLY)
+    if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
+        # several unity chunks instead of the one wrapper (qore-test-base image builds, where the single unit
+        # compiles on one core for many minutes); the chunk assignment rule is in cmake/QoreScuChunks.cmake
+        include(cmake/QoreScuChunks.cmake)
+        # a change of the cost table changes the assignment, so it must trigger a reconfigure
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/cmake/scu-chunk-costs.txt)
+        qore_scu_split_chunks("${_scu_content}" ${SINGLE_COMPILATION_UNIT_CHUNKS}
+            ${CMAKE_SOURCE_DIR}/cmake/scu-chunk-costs.txt
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk LIBQORE_SCU_SRC LIBQORE_SCU_ISOLATED_SRC)
+        # a stale single wrapper from an earlier configure must not be picked up by anything
+        file(REMOVE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
+    else ()
+        file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
+            "${_scu_content}")
+        configure_file(
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
+            ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+            COPYONLY)
+        set(LIBQORE_SCU_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp)
+        # chunk files of an earlier chunked configure of this build directory are not used any more
+        file(GLOB _scu_old_chunks ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit-chunk*)
+        if (_scu_old_chunks)
+            file(REMOVE ${_scu_old_chunks})
+        endif ()
+    endif ()
     unset(_scu_content)
     # Files that must be compiled separately from the SCU:
     # - qore-main.cpp: includes platform dynamic-loader headers such as
@@ -2532,7 +2592,19 @@ if (SINGLE_COMPILATION_UNIT)
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
     # - qore_aot_runtime_identity.cpp: so AOT runtime identity changes only recompile this tiny file
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp)
+    # - JITRuntimeGivenArgs.cpp, QoreIRInterpreterGivenArgs.cpp: the code of the calls that give the references of
+    #   their temporary arguments to the callee (issue #5882); in the SCU, it would change how the compiler inlines
+    #   the helpers that the code of the calls that give nothing uses, and so that code
+    # - QoreIRTakeOver.cpp, QoreClassGivenArgs.cpp, JITRuntimeTakeOver.cpp: the analysis of the parameters that take
+    #   their arguments over, and the calls with the arguments given to them of the code that a member holds and of
+    #   the callees that the JIT runtime finds at run time (issue #5958), for the same reason
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp lib/qore_aot_runtime_identity.cpp
+        lib/JITRuntimeGivenArgs.cpp lib/QoreIRInterpreterGivenArgs.cpp lib/QoreIRTakeOver.cpp
+        lib/QoreClassGivenArgs.cpp lib/JITRuntimeTakeOver.cpp)
+    if (SINGLE_COMPILATION_UNIT_CHUNKS GREATER 1)
+        # sources that cannot share a translation unit with the LLVM users (see cmake/QoreScuChunks.cmake)
+        list(APPEND LIBQORE_EXTRA_SRC ${LIBQORE_SCU_ISOLATED_SRC})
+    endif ()
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
         list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
@@ -2548,20 +2620,20 @@ if (SINGLE_COMPILATION_UNIT)
     # #include lines keeps it exactly in sync with what is actually compiled and
     # forces a recompile whenever any member changes (or a .qpp -> .cpp is
     # regenerated by qpp).
-    file(STRINGS ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        _scu_include_lines REGEX "^#include \"")
-    set(_scu_object_deps "")
-    foreach (_scu_line ${_scu_include_lines})
-        string(REGEX REPLACE "^#include \"([^\"]+)\".*$" "\\1" _scu_inc "${_scu_line}")
-        if (_scu_inc AND NOT _scu_inc STREQUAL _scu_line)
-            list(APPEND _scu_object_deps "${_scu_inc}")
-        endif ()
+    foreach (_scu_file ${LIBQORE_SCU_SRC})
+        file(STRINGS ${_scu_file} _scu_include_lines REGEX "^#include \"")
+        set(_scu_object_deps "")
+        foreach (_scu_line ${_scu_include_lines})
+            string(REGEX REPLACE "^#include \"([^\"]+)\".*$" "\\1" _scu_inc "${_scu_line}")
+            if (_scu_inc AND NOT _scu_inc STREQUAL _scu_line)
+                list(APPEND _scu_object_deps "${_scu_inc}")
+            endif ()
+        endforeach ()
+        list(REMOVE_DUPLICATES _scu_object_deps)
+        set_source_files_properties(${_scu_file} PROPERTIES OBJECT_DEPENDS "${_scu_object_deps}")
     endforeach ()
-    list(REMOVE_DUPLICATES _scu_object_deps)
-    set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
-        PROPERTIES OBJECT_DEPENDS "${_scu_object_deps}")
 
-    add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
+    add_library(libqore SHARED ${LIBQORE_SCU_SRC} ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)
     add_library(libqore SHARED ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC} ${LIBQORE_SOURCE_HEADERS})
 endif (SINGLE_COMPILATION_UNIT)
@@ -2597,9 +2669,9 @@ if (WIN32 OR MINGW OR MSYS)
 endif (WIN32 OR MINGW OR MSYS)
 
 # Include CMAKE_BINARY_DIR first so QPP-generated files take precedence over autotools-generated ones
-target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+target_include_directories(libqore PUBLIC ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/include ${BZIP2_INCLUDE_DIR} ${ICONV_INCLUDE_DIR} ${MPFR_INCLUDE_DIRS} ${GMP_INCLUDE_DIRS} ${LIBQORE_OPTIONAL_INCLUDE_DIRS} ${OPENSSL_INCLUDE_DIR} ${PCRE2_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
 
-set(QORE_LIBS ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
+set(QORE_LIBS ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} ${ICONV_LIBRARY} ${LIBQORE_LIBS} ${LIBQORE_OPTIONAL_LIBS} ${MPFR_LIBRARIES} ${GMP_LIBRARIES} ${OPENSSL_LIBRARIES} ${PCRE2_LDFLAGS} ${ZLIB_LIBRARIES})
 
 # every shared library linked into libqore that uses OpenSSL must use the OpenSSL that Qore found
 include("${CMAKE_SOURCE_DIR}/cmake/QoreCheckSslConsumers.cmake")
@@ -2722,6 +2794,89 @@ if (ADDRESS_SANITIZER)
     target_link_options(libqore PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 endif()
 
+# warnings about code that nothing uses: libqore and qcc were compiled without any warning flag, so static functions
+# that nothing calls were never reported (ten were found by a manual sweep, qore#6163); a static function whose only
+# caller is itself is still not reported by the compilers, only by a sweep
+set(QORE_UNUSED_WARNING_FLAGS "-Wunused-function -Wunused-variable -Wunused-but-set-variable" CACHE STRING
+    "warnings about unused code enabled for libqore and qcc (gcc and clang; empty to disable)")
+set(QORE_UNUSED_WARNINGS_ENABLED FALSE)
+if (QORE_UNUSED_WARNING_FLAGS AND (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
+    separate_arguments(_qore_unused_flags UNIX_COMMAND "${QORE_UNUSED_WARNING_FLAGS}")
+    target_compile_options(libqore PRIVATE ${_qore_unused_flags})
+    set(QORE_UNUSED_WARNINGS_ENABLED TRUE)
+endif()
+
+# What decides the frame sizes of libqore besides its code (issue #5852), as get_qore_library_info() reports it and
+# tools/check-stack-usage.py checks it: the build type and its flags (a multi-config generator chooses the
+# configuration at build time, so it has none here), the target triple, which names the C library
+# (x86_64-linux-gnu, x86_64-alpine-linux-musl), and link-time optimization
+get_property(_qore_lib_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if (_qore_lib_multi_config)
+    set(QORE_LIB_BUILD_TYPE_VALUE "multi-config")
+    set(_qore_lib_build_type_flags "")
+else()
+    set(QORE_LIB_BUILD_TYPE_VALUE "${CMAKE_BUILD_TYPE}")
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" _qore_lib_build_type_upper)
+    set(_qore_lib_build_type_flags "${CMAKE_CXX_FLAGS_${_qore_lib_build_type_upper}}")
+endif()
+execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpmachine OUTPUT_VARIABLE QORE_LIB_TARGET_VALUE
+    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+# link-time optimization is enabled for all configurations or for the build type (INTERPROCEDURAL_OPTIMIZATION_<CONFIG>,
+# initialized from CMAKE_INTERPROCEDURAL_OPTIMIZATION_<CONFIG>)
+get_target_property(_qore_lib_ipo libqore INTERPROCEDURAL_OPTIMIZATION)
+if (NOT _qore_lib_multi_config AND _qore_lib_build_type_upper)
+    # the property of the configuration, if it is set, decides for that configuration (ON or OFF)
+    get_target_property(_qore_lib_ipo_config libqore INTERPROCEDURAL_OPTIMIZATION_${_qore_lib_build_type_upper})
+    if (NOT _qore_lib_ipo_config STREQUAL "_qore_lib_ipo_config-NOTFOUND")
+        set(_qore_lib_ipo "${_qore_lib_ipo_config}")
+    endif()
+endif()
+if (_qore_lib_ipo)
+    set(QORE_LIB_IPO_VALUE 1)
+else()
+    set(QORE_LIB_IPO_VALUE 0)
+endif()
+
+# The frame sizes of libqore's functions for tools/check-stack-usage.py, which checks the per-call path of interpreted
+# code against tools/stack-usage-budgets.txt (issue #5852): -fstack-usage writes a .su file next to each object and
+# does not change the generated code.  It is a target option, not part of CMAKE_CXX_FLAGS, so it does not change the
+# AOT identity (qcc-format-config.txt).
+if (QORE_STACK_USAGE_REPORT)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        message(FATAL_ERROR "QORE_STACK_USAGE_REPORT needs a compiler with -fstack-usage (GCC or Clang), not "
+            "${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    target_compile_options(libqore PRIVATE -fstack-usage)
+    # the hardening macros that the compiler driver predefines with these flags (stack protector, fortification,
+    # control-flow protection, libstdc++ assertions): distributions' compilers enable different ones by default
+    separate_arguments(_qore_stack_usage_flags UNIX_COMMAND "${CMAKE_CXX_FLAGS} ${_qore_lib_build_type_flags}")
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} ${_qore_stack_usage_flags} -dM -E -x c++ /dev/null
+        OUTPUT_VARIABLE _qore_stack_usage_macros ERROR_QUIET)
+    string(REGEX MATCHALL "#define (_FORTIFY_SOURCE|__SSP__|__SSP_STRONG__|__SSP_ALL__|__SSP_EXPLICIT__|__CET__|_GLIBCXX_ASSERTIONS) [^\n]*"
+        _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    list(SORT _qore_stack_usage_macros)
+    string(REPLACE "#define " "" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE " " "=" _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    string(REPLACE ";" " " _qore_stack_usage_macros "${_qore_stack_usage_macros}")
+    # the budgets are calibrated for the single compilation unit; a chunked or separate-units build inlines differently
+    if (SINGLE_COMPILATION_UNIT AND SINGLE_COMPILATION_UNIT_CHUNKS EQUAL 1)
+        set(_qore_stack_usage_scu 1)
+    else ()
+        set(_qore_stack_usage_scu 0)
+    endif ()
+    file(WRITE "${CMAKE_BINARY_DIR}/stack-usage-config.txt"
+        "# written by CMake for tools/check-stack-usage.py\n"
+        "compiler=${CMAKE_CXX_COMPILER_ID}\n"
+        "compiler-version=${CMAKE_CXX_COMPILER_VERSION}\n"
+        "build-type=${QORE_LIB_BUILD_TYPE_VALUE}\n"
+        "build-type-flags=${_qore_lib_build_type_flags}\n"
+        "cxx-flags=${CMAKE_CXX_FLAGS}\n"
+        "hardening=${_qore_stack_usage_macros}\n"
+        "ipo=${QORE_LIB_IPO_VALUE}\n"
+        "single-compilation-unit=${_qore_stack_usage_scu}\n"
+        "target=${QORE_LIB_TARGET_VALUE}\n")
+endif()
+
 # prepare qore target
 add_executable(qore ${QORE_CPP_SRC})
 add_dependencies(qore qore-aot-link-config)
@@ -2731,6 +2886,26 @@ add_executable(qore-substring-view-test EXCLUDE_FROM_ALL
 target_include_directories(qore-substring-view-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-substring-view-test PRIVATE libqore)
+add_executable(qore-substring-view-mutation-test examples/test/qore/strings/substring_view_mutation.cpp)
+target_include_directories(qore-substring-view-mutation-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-substring-view-mutation-test PRIVATE libqore)
+add_executable(qore-char-offsets-test examples/test/qore/strings/char-offsets/char_offsets.cpp)
+target_include_directories(qore-char-offsets-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-char-offsets-test PRIVATE libqore)
+add_executable(qore-byte-offsets-test examples/test/qore/strings/byte-offsets/byte_offsets.cpp)
+target_include_directories(qore-byte-offsets-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-byte-offsets-test PRIVATE libqore)
+add_executable(qore-ascii-string-index-test examples/test/qore/strings/ascii_string_index.cpp)
+target_include_directories(qore-ascii-string-index-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-ascii-string-index-test PRIVATE libqore)
+add_executable(qore-ir-pointer-slot-test examples/test/ir/ir-pointer-slot/ir_pointer_slot.cpp)
+target_include_directories(qore-ir-pointer-slot-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-ir-pointer-slot-test PRIVATE libqore)
 add_executable(qore-number-round-trip-test EXCLUDE_FROM_ALL
     examples/test/qore/vars/number_round_trip.cpp)
 target_include_directories(qore-number-round-trip-test PRIVATE
@@ -2748,10 +2923,43 @@ add_executable(qore-hash-lookup-test examples/test/qore/misc/hash_lookup.cpp)
 target_include_directories(qore-hash-lookup-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-hash-lookup-test PRIVATE libqore)
+add_executable(qore-aot-ir-instruction-test examples/test/ir/aot_ir_instruction_validation.cpp)
+target_include_directories(qore-aot-ir-instruction-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-instruction-test PRIVATE libqore)
+add_executable(qore-aot-metadata-checksum-test examples/test/ir/aot_metadata_checksum.cpp lib/xxhash.cpp)
+target_include_directories(qore-aot-metadata-checksum-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-metadata-checksum-test PRIVATE libqore)
+add_executable(qore-aot-ir-value-ids-test examples/test/ir/aot_ir_value_ids.cpp)
+target_include_directories(qore-aot-ir-value-ids-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-value-ids-test PRIVATE libqore)
+add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path_ref_rv.cpp)
+target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-lvalue-path-ref-rv-test PRIVATE libqore)
+add_executable(qore-aot-ir-verify-test examples/test/ir/aot_ir_verify.cpp)
+target_include_directories(qore-aot-ir-verify-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-verify-test PRIVATE libqore)
+add_executable(qore-aot-builtin-type-path-test examples/test/ir/aot_builtin_type_path_cache.cpp)
+target_include_directories(qore-aot-builtin-type-path-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-builtin-type-path-test PRIVATE libqore)
+add_executable(qore-aot-concrete-hashdecl-test examples/test/ir/aot_concrete_hashdecl_cache.cpp)
+target_include_directories(qore-aot-concrete-hashdecl-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-concrete-hashdecl-test PRIVATE libqore)
 add_executable(qore-declaration-owner-test examples/test/qore/misc/declaration_owner.cpp)
 target_include_directories(qore-declaration-owner-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-declaration-owner-test PRIVATE libqore)
+# Exercise the production AOT IR decoder with crafted serialized instructions.
+add_executable(qore-aot-ir-opcode-test examples/test/ir/aot_ir_opcode_validation.cpp)
+target_include_directories(qore-aot-ir-opcode-test PRIVATE
+    ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-opcode-test PRIVATE libqore)
 # the module cleanup test uses POSIX APIs (mkdtemp(), alarm())
 if (UNIX)
     add_executable(qore-module-cleanup-unlocked-test examples/test/qore/misc/module_cleanup_unlocked.cpp)
@@ -2768,6 +2976,15 @@ target_include_directories(qore-stream-peek-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
 # the readers keep an IconvHelper for text in stateful encodings, which is inline
 target_link_libraries(qore-stream-peek-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-stream-writer-ints-test examples/test/qore/streams/stream_writer_ints.cpp)
+target_include_directories(qore-stream-writer-ints-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
+# the readers keep an IconvHelper for text in stateful encodings, which is inline
+target_link_libraries(qore-stream-writer-ints-test PRIVATE libqore ${ICONV_LIBRARY})
+add_executable(qore-string-offset-bounds-test examples/test/qore/strings/string_offset_bounds.cpp)
+target_include_directories(qore-string-offset-bounds-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-string-offset-bounds-test PRIVATE libqore)
 add_executable(qore-utf8-validation-test examples/test/qore/strings/utf8_validation.cpp)
 target_include_directories(qore-utf8-validation-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include ${OPENSSL_INCLUDE_DIR} ${ICONV_INCLUDE_DIR})
@@ -2776,6 +2993,10 @@ target_link_libraries(qore-utf8-validation-test PRIVATE libqore ${ICONV_LIBRARY}
 # the keep-alive interval policy of QUIC connections is header-only, so the test needs no library
 add_executable(qore-quic-keep-alive-test examples/test/qore/misc/quic_keep_alive.cpp)
 target_include_directories(qore-quic-keep-alive-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+# the poll timeout policy of QUIC operations is header-only, so the test needs no library
+add_executable(qore-quic-poll-timeout-test examples/test/qore/misc/quic_poll_timeout.cpp)
+target_include_directories(qore-quic-poll-timeout-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 # the lock-free publication of the state of the HTTP fast routes (HttpFastPublished) uses only the C++ standard
 # library, so the test needs no libqore
@@ -2808,7 +3029,7 @@ endif()
 #target_link_libraries(qr libqore)
 
 if (SINGLE_COMPILATION_UNIT)
-    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC})
+    set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${LIBQORE_SCU_SRC} ${LIBQORE_EXTRA_SRC})
 else (SINGLE_COMPILATION_UNIT)
     set(QORE_IR_PHASE0_SMOKE_RUNTIME_SRC ${LIBQORE_QPP_CPP_SRC} ${LIBQORE_CPP_SRC} ${LIBQORE_ASM_SRC})
 endif (SINGLE_COMPILATION_UNIT)
@@ -2834,6 +3055,7 @@ target_include_directories(qore-ir-phase0-smoke PRIVATE
     ${BZIP2_INCLUDE_DIR}
     ${ICONV_INCLUDE_DIR}
     ${MPFR_INCLUDE_DIRS}
+    ${GMP_INCLUDE_DIRS}
     ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
     ${PCRE2_INCLUDE_DIRS}
@@ -2882,6 +3104,10 @@ add_executable(qore-xxhash-compat-test EXCLUDE_FROM_ALL
     examples/test/hash/xxhash_compat.cpp lib/xxhash.cpp)
 target_include_directories(qore-xxhash-compat-test PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
+# Sets the checksum of the AOT metadata of a module again after a test patched it (qore#6451).
+add_executable(qore-aot-reseal examples/test/ir/aot_reseal.cpp lib/xxhash.cpp)
+target_include_directories(qore-aot-reseal PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
@@ -2903,6 +3129,7 @@ target_include_directories(qore-ir-plugin-registry-smoke PRIVATE
     ${BZIP2_INCLUDE_DIR}
     ${ICONV_INCLUDE_DIR}
     ${MPFR_INCLUDE_DIRS}
+    ${GMP_INCLUDE_DIRS}
     ${LIBQORE_OPTIONAL_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
     ${PCRE2_INCLUDE_DIRS}
@@ -2942,6 +3169,9 @@ add_subdirectory(examples/plugins/sample-buffer EXCLUDE_FROM_ALL)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
+if (QORE_UNUSED_WARNINGS_ENABLED)
+    target_compile_options(qcc PRIVATE ${_qore_unused_flags})
+endif()
 # qcc's test hooks run a command named in the environment at fixed points of a compile (QORE_QCC_TEST_*_COMMAND, see
 # qcc_run_test_hook() in qcc-main.cpp), for the tests that change a source while qcc compiles; a qcc that is
 # packaged must never run a command taken from its environment, so they are only in a debug build by default, and
@@ -2994,6 +3224,16 @@ set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 # .cpp files, but this custom command does not inherit compiler depfile
 # scanning from the libqore/qcc compilation rules.
 set(_qcc_format_sources
+    # Lexical compatibility semantics change AST/native runtime boundaries without changing the AOT layout.
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/LexicalSemanticPolicy.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/ParseNode.h
+    # Lexical native eligibility changes which source bodies/initializers qcc can compile.
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreNativeParseInfo.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/ParserSupport.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/StatementBlock.h
+    ${CMAKE_SOURCE_DIR}/lib/parser.ypp
+    ${CMAKE_SOURCE_DIR}/lib/scanner.lpp
+    ${CMAKE_SOURCE_DIR}/lib/StatementBlock.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOT.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBinary.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprNodeRegistry.h
@@ -3007,8 +3247,15 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRFrameCheck.h
+    # the NaN-boxing constants that the code generators emit
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreValueEncoding.h
+    # generated code tests qore_es_private::pending at its offset (QoreIRToLLVM::emitPendingExceptionTest(), #6370)
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreException.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
+    # the layout of the data that generated code reads by index (QoreNativeEntrySlots) and the runtime helpers it calls
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/JITRuntime.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreCastOperatorNode.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h
@@ -3033,7 +3280,10 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRFrameCheck.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
+    # the analysis of the parameters that take their arguments over, compiled from QoreIRVerifier.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRTakeOver.cpp
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
 
@@ -3051,7 +3301,15 @@ set(_qcc_format_sources
 #                      the AOT compiler shared with it, extractLValueBaseVarRef(),
 #                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
 #                      calls into the interpreter again, this decision changes.
+#                      QoreIRInterpreterGivenArgs.cpp compiles part of it (its
+#                      calls that give their temporary arguments) in a unit of
+#                      its own, and is out for the same reason.
 #   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+#   QoreIRPointerSlot  how the IR interpreter keeps the addresses of the objects
+#                      that a frame owns in its value slots, at run time; native
+#                      code keeps these handles in SSA values, and the runtime
+#                      functions that allocate them only check that their types
+#                      are aligned for it.
 #   QoreAOTBatchMemory the memory admission of batch codegen workers: it decides
 #                      how many objects are compiled at once, never what they
 #                      contain (the objects are the same with any worker count).
@@ -3059,8 +3317,10 @@ set(_qcc_format_excluded_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBatchMemory.h
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBatchMemory.cpp
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPointerSlot.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
     ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreterGivenArgs.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp
 )
 
@@ -3128,9 +3388,8 @@ if (NOT _qcc_format_config_old STREQUAL _qcc_format_config_content)
     file(WRITE "${_qcc_format_config}" "${_qcc_format_config_content}")
 endif()
 
-# Rebuild qmods when this source set itself changes.  Otherwise an existing
-# build tree can miss a newly-added dependency if the file is older than the
-# current fingerprint.
+# The fingerprint names each source with its label, so it also changes when
+# this source set itself changes, and every qmod is rebuilt then.
 set(_qcc_format_sources_manifest ${CMAKE_BINARY_DIR}/qcc-format-sources.txt)
 set(_qcc_format_sources_labels ${CMAKE_BINARY_DIR}/qcc-format-source-labels.txt)
 set(_qcc_format_sources_manifest_content "")
@@ -3153,25 +3412,6 @@ if (NOT _qcc_format_sources_manifest_old STREQUAL _qcc_format_sources_manifest_c
 endif()
 
 set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
-add_custom_command(
-    OUTPUT ${QCC_FORMAT_STAMP}
-    COMMAND ${CMAKE_COMMAND}
-        -DINPUT_LIST=${_qcc_format_sources_manifest}
-        -DINPUT_LABELS=${_qcc_format_sources_labels}
-        -DOUTPUT=${QCC_FORMAT_STAMP}
-        -DSUCCESS_STAMP=${QCC_FORMAT_STAMP}
-        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
-    DEPENDS
-        ${_qcc_format_sources}
-        ${_qcc_format_config}
-        ${_qcc_format_sources_manifest}
-        ${_qcc_format_sources_labels}
-        ${CMAKE_SOURCE_DIR}/cmake/QoreWriteContentDigest.cmake
-    COMMENT "Updating qcc format-version fingerprint"
-    VERBATIM
-)
-add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
-add_dependencies(qcc qcc-format-version)
 
 # The AOT runtime identity of libqore: a digest of the source entries of the qcc format fingerprint above.  qcc
 # records it in every AOT module it compiles, and the module loader refuses an AOT module compiled for a different
@@ -3179,24 +3419,18 @@ add_dependencies(qcc qcc-format-version)
 # contract has changed (see cmake/QoreWriteAOTRuntimeIdentity.cmake and design/aot-object-files-and-module-artifacts.md
 # "AOT Module Runtime Identity").  Only lib/qore_aot_runtime_identity.cpp includes the header, and the header is only
 # rewritten when the identity changes.
+#
+# The qcc-format-version target writes the fingerprint and then the header in every build, each only when its content
+# changes; libqore depends on qore-aot-runtime-identity and every qmod on qcc-format-version, so both are current
+# before libqore, qcc or any qmod is built (see qore_aot_runtime_identity_targets() in cmake/QoreMacrosIntern.cmake
+# for why no custom command writes them).
 set(QORE_AOT_RUNTIME_IDENTITY_HEADER ${CMAKE_BINARY_DIR}/include/qore/intern/qore_aot_runtime_identity.h)
-add_custom_command(
-    OUTPUT ${QORE_AOT_RUNTIME_IDENTITY_HEADER}
-    COMMAND ${CMAKE_COMMAND}
-        -DINPUT=${QCC_FORMAT_STAMP}
-        -DOUTPUT=${QORE_AOT_RUNTIME_IDENTITY_HEADER}
-        -P ${CMAKE_SOURCE_DIR}/cmake/QoreWriteAOTRuntimeIdentity.cmake
-    DEPENDS
-        ${QCC_FORMAT_STAMP}
-        ${CMAKE_SOURCE_DIR}/cmake/QoreWriteAOTRuntimeIdentity.cmake
-    COMMENT "Updating the AOT runtime identity"
-    VERBATIM
-)
-add_custom_target(qore-aot-runtime-identity DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
-# The header is derived from the fingerprint, which the qcc-format-version target writes: without this target-level
-# dependency, a build can compile libqore with the previous identity before it regenerates the fingerprint, and qmods
-# compiled after the fingerprint changed then record that previous identity and are never rebuilt for the new one
-add_dependencies(qore-aot-runtime-identity qcc-format-version)
+qore_aot_runtime_identity_targets(
+    STAMP ${QCC_FORMAT_STAMP}
+    INPUT_LIST ${_qcc_format_sources_manifest}
+    INPUT_LABELS ${_qcc_format_sources_labels}
+    HEADER ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
+add_dependencies(qcc qcc-format-version)
 set_source_files_properties(${CMAKE_SOURCE_DIR}/lib/qore_aot_runtime_identity.cpp
     PROPERTIES OBJECT_DEPENDS ${QORE_AOT_RUNTIME_IDENTITY_HEADER})
 
@@ -3209,10 +3443,14 @@ add_custom_command(
         -P ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
     COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     DEPENDS ${QCC_FORMAT_STAMP} ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
+        ${CMAKE_SOURCE_DIR}/cmake/QoreQmodPathUtils.cmake
     COMMENT "Removing stale source qmod symlinks after qcc format changes"
     VERBATIM
 )
 add_custom_target(qcc-format-source-qmod-clean DEPENDS ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP})
+# the stamp is a byproduct of the qcc-format-version target: only CMake 3.16 and later add the target dependency for a
+# byproduct named in DEPENDS by themselves, and the build requires 3.14
+add_dependencies(qcc-format-source-qmod-clean qcc-format-version)
 
 # Ensure the installed qore binary can resolve @rpath/libqore.20.dylib.
 set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
@@ -3228,6 +3466,14 @@ if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 include(cmake/QoreRecordedCFlags.cmake)
 qore_record_cflags(QORE_LIB_CFLAGS_VALUE "${QORE_LIB_CFLAGS_VALUE}")
+# the build type and its flags, which get_qore_library_info() reports with the compiler version: they decide the frame
+# sizes of the library (see examples/test/qore/stack/recursion-frame-budget.qtest)
+qore_record_cflags(QORE_LIB_BUILD_TYPE_CFLAGS_VALUE "${_qore_lib_build_type_flags}")
+if (SINGLE_COMPILATION_UNIT AND SINGLE_COMPILATION_UNIT_CHUNKS EQUAL 1)
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 1)
+else()
+    set(QORE_LIB_SINGLE_COMPILATION_UNIT_VALUE 0)
+endif()
 message(STATUS "Generating unix-config.h")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/unix-config.h.cmake
                ${CMAKE_BINARY_DIR}/include/qore/intern/unix-config.h)
@@ -3265,7 +3511,7 @@ install(FILES ${QCC_FORMAT_STAMP}
 #install(TARGETS qore qpp qr libqore
 #        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR}
 #        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR})
-install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake
+install(FILES ${CMAKE_BINARY_DIR}/cmake/install/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cmake/QoreConfigVersion.cmake cmake/QoreMacros.cmake cmake/QoreOptionalModuleStamp.cmake cmake/QoreWriteContentDigest.cmake cmake/QoreWriteQccRuntimeStamp.cmake cmake/QoreWriteSourceContentDigests.cmake cmake/QoreReconcileCatalogInstall.cmake cmake/QoreRemoveStaleModuleApiFiles.cmake
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
@@ -3338,8 +3584,8 @@ if (DOXYGEN_FOUND)
     add_custom_target(docs-lib
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/library/html
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/doxygen/Doxyfile.lib
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html
-        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html
+        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/*.html ${CMAKE_BINARY_DIR}/docs/library/html/*.js
+        COMMAND ${CMAKE_COMMAND} -E env ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/library/html/search/*.html ${CMAKE_BINARY_DIR}/docs/library/html/search/*.js
         COMMENT "Generating API documentation with Doxygen for: lib"
         VERBATIM
     )
@@ -3520,29 +3766,17 @@ set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
 
 # metadata extraction for qlib modules (uses build-tree qore + astparser)
 # QM metadata extraction needs the json binary module (via QoreApiMetadata), which is built
-# from this tree -- see modules/json.  It is listed in QORE_QM_METADATA_MODULE_DIRS below so
-# the build-tree qore can load it, and in QORE_AOT_BINARY_MODULE_TARGETS so it is always built
-# before any metadata scan runs.  Metadata extraction is therefore unconditional; it no longer
+# from this tree -- see modules/json.  It is on QORE_QM_METADATA_MODULE_DIRS below so the
+# build-tree qore can load it, and in QORE_AOT_BINARY_MODULE_TARGETS so it is always built
+# before any metadata scan runs; both are made from the modules that QORE_BINARY_MODULE_QORE()
+# records.  Metadata extraction is therefore unconditional; it no longer
 # depends on a compatible qore+json pair already being installed on the build host.
 set(QORE_EXECUTABLE ${CMAKE_BINARY_DIR}/qore)
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
-set(QORE_QM_METADATA_MODULE_DIRS
-    ${CMAKE_BINARY_DIR}/modules/astparser
-    ${CMAKE_BINARY_DIR}/modules/avro
-    ${CMAKE_BINARY_DIR}/modules/json
-    ${CMAKE_BINARY_DIR}/modules/yaml
-    ${CMAKE_BINARY_DIR}/modules/reflection
-    ${CMAKE_BINARY_DIR}/modules/i18n
-    ${CMAKE_BINARY_DIR}/modules/logger_bin
-    ${CMAKE_BINARY_DIR}/modules/linenoise
-    ${CMAKE_BINARY_DIR}/modules/krb5
-    ${CMAKE_BINARY_DIR}/modules/mongodb
-    ${CMAKE_BINARY_DIR}/modules/ml
-    ${CMAKE_BINARY_DIR}/modules/tokenizer
-    ${CMAKE_BINARY_DIR}/modules/ocr
-    ${CMAKE_BINARY_DIR}/modules/dataframe
-    ${CMAKE_BINARY_DIR}/modules/protobuf)
+# the build directories of the in-tree binary modules, which QORE_BINARY_MODULE_QORE() records as the modules are
+# declared above, so that a new module is on the module path of the metadata extraction without a list to keep in sync
+get_property(QORE_QM_METADATA_MODULE_DIRS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_DIRS)
 string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
 set(QORE_BUILD_EXTERNAL_MODULE_DIRS)
 if (QORE_BUILD_WITH_EXTERNAL_MODULES)
@@ -3568,6 +3802,15 @@ if (QORE_BUILD_WITH_EXTERNAL_MODULES)
     list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
 endif()
 string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
+# The directories of the installed (external) modules that the qlib qmods are compiled against: run_tests.sh appends
+# them to QORE_MODULE_DIR, so that the tests find the modules that the qmods of this build require.  Otherwise a qmod
+# compiled against a module installed outside this build's prefix cannot load it at test time and falls back to its
+# source (BINARY-MODULE-SOURCE-FALLBACK).  Empty when QORE_BUILD_WITH_EXTERNAL_MODULES is OFF.
+file(WRITE ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in "${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}\n")
+configure_file(
+    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt.in
+    ${CMAKE_BINARY_DIR}/qore-external-module-dirs.txt
+    COPYONLY)
 set(QORE_BUILD_MODULE_DIRS_STR
     "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib")
 if (QORE_BUILD_EXTERNAL_MODULE_DIRS_STR)
@@ -3583,12 +3826,11 @@ if (NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     # becomes a hard dependency of the resulting AOT artifact.
     list(APPEND QORE_QM_METADATA_ENV "QORE_MODULE_DIR_ONLY=1")
 endif()
-set(QORE_AOT_BINARY_MODULE_TARGETS)
-foreach(_qore_build_module astparser avro json yaml reflection i18n logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
-    if(TARGET ${_qore_build_module})
-        list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
-    endif()
-endforeach()
+# every in-tree binary module (QORE_BINARY_MODULE_QORE()) installs its qmod with the qore-bootstrap component, so the
+# qore-bootstrap target builds each of them; the list is recorded as the modules are declared above, so a new module
+# cannot be left out (a module missing from a list kept by hand failed only at install time: "file INSTALL cannot find
+# ...-api-<x>.qmod")
+get_property(QORE_AOT_BINARY_MODULE_TARGETS GLOBAL PROPERTY QORE_INTREE_BINARY_MODULE_TARGETS)
 set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 
 # QM metadata extraction is unconditional: json is built from this tree and is guaranteed to
@@ -3621,8 +3863,11 @@ if(NOT QORE_BUILD_WITH_EXTERNAL_MODULES)
     endforeach()
 elseif(_qore_exe)
     foreach(_pm ${_qore_aot_probe_modules})
+        # The probe searches the external module directories that the AOT compile searches (QORE_QM_METADATA_ENV)
+        # and not those of the environment cmake runs in, so that it records the modules the qmods are compiled with.
         execute_process(
-            COMMAND ${_qore_exe} -l ${_pm} -ne
+            COMMAND ${CMAKE_COMMAND} -E env "QORE_MODULE_DIR=${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}"
+                ${_qore_exe} -l ${_pm} -ne
                 "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
             RESULT_VARIABLE _pm_rc
             OUTPUT_VARIABLE _pm_api
@@ -4399,6 +4644,34 @@ endif()
     if (MONGOC_FOUND)
         add_dependencies(docs-lang-final docs-mongodb)
     endif()
+
+    # Tag files imported by each bundled native module's final documentation pass: the modules whose pages the
+    # module's documentation links to (see qore_bundled_module_two_phase_docs()); importing every module's tag
+    # file instead copies all their symbols into the module's search index (#6350).  A missing entry fails the
+    # module's final pass with an error that names the module to add here (doxygen/check-module-doc-references.py,
+    # #6367); do not widen the set.  A name that is not a module fails the configure.  Like
+    # QORE_DOC_EXTRA_MODULES_<mod> for user modules, these are the documentation references.
+    set(QORE_DOC_REFERENCE_MODULES_astparser Qdx QoreApiMetadata QoreCodeFormat)
+    set(QORE_DOC_REFERENCE_MODULES_avro AvroUtil DataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_dataframe DataProvider DataProviderDataFrame SqlUtil ml)
+    set(QORE_DOC_REFERENCE_MODULES_i18n ParseOptions Util)
+    set(QORE_DOC_REFERENCE_MODULES_json A2aClient A2aClientDataProvider A2aServerHandler AgUi Connect DataProvider
+        FhirRestClient FhirRestDataProvider HttpClientIo HttpServerUtil JsonFileDataProvider JsonLd JsonPatch
+        JsonRpcClientIo JsonRpcConnection JsonRpcHandler McpClient McpClientDataProvider McpServerHandler
+        NdjsonDataProvider OneRecordClient OneRecordServerHandler QUnit Schema dataframe)
+    set(QORE_DOC_REFERENCE_MODULES_krb5 Krb5Util)
+    set(QORE_DOC_REFERENCE_MODULES_linenoise DebugLinenoiseCmdLine QoreHistory)
+    set(QORE_DOC_REFERENCE_MODULES_logger_bin Logger Util)
+    set(QORE_DOC_REFERENCE_MODULES_ml DataProvider DataProviderML QoreMLUtils QoreModelRegistry QoreOnnxExport
+        QoreOnnxTools QoreRagUtils QoreTokenizerUtils dataframe tokenizer)
+    set(QORE_DOC_REFERENCE_MODULES_mongodb MongoDbDataProvider)
+    set(QORE_DOC_REFERENCE_MODULES_ocr QoreOcrUtils)
+    set(QORE_DOC_REFERENCE_MODULES_protobuf Connect QoreOnnxExport Schema)
+    set(QORE_DOC_REFERENCE_MODULES_reflection ConnectionProvider DataProvider QoreApiMetadata)
+    set(QORE_DOC_REFERENCE_MODULES_tokenizer DataProviderML QoreTokenizerUtils ml)
+    set(QORE_DOC_REFERENCE_MODULES_yaml Connect ConnectDataProvider DataProvider DataStreamClient
+        DataStreamClientIo DataStreamRequestHandler DataStreamUtil HttpClientIo HttpServerUtil RestClient Schema
+        YamlDocumentDataProvider YamlRpcClient YamlRpcClientIo YamlRpcHandler YamlSchema YamlTagHandler)
 
     # Native module landing pages link back into qlib. Keep their final rendering
     # behind all initial indexes, and keep the shared language index immutable.

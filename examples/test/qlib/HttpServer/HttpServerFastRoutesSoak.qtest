@@ -74,7 +74,8 @@ class HttpServerFastRoutesSoakTest inherits QUnit::Test {
             }
             ++n;
         }
-        assertGt(1000, n, "many requests were served");
+        # the number of requests depends on the speed of the host, so it is not checked: the requests follow each other
+        # without a pause for longer than the operation timeout, which is what keeps the connection busy
         assertEq(0, not_fast, "every request was answered by the route");
         # still open after longer than the operation timeout
         c.send(req);

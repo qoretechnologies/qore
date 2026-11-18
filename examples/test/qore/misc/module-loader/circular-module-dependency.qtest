@@ -13,15 +13,14 @@
 # CIRCULAR-MODULE-DEPENDENCY instead of deadlocking.
 #
 # Two threads concurrently load a mutually-dependent module pair (CrossCycleA requires CrossCycleB at
-# init time and vice versa) into separate Programs.  Whether the cross-thread cycle actually forms is
-# timing-dependent: if one thread loads both modules serially before the other reserves its feature,
-# there is no cycle (a valid non-cyclic resolution, "OK").  Each attempt globally caches the modules
-# (as loaded or failed), so an attempt is only meaningful in a fresh process; the test therefore runs
-# the single-attempt driver in fresh subprocesses, retrying until a cycle is observed.
+# init time and vice versa) into separate Programs.  The init of each module waits until the init of the other one
+# started (CrossCycleGate.qm) before it loads the other module, so both features are reserved when either thread asks
+# for the other's, and the cross-thread cycle forms in every attempt; before, it formed only when the threads happened
+# to interleave so, and a loaded run could miss it in every attempt (issue #6517).  The modules are cached in the
+# process (as loaded or failed), so the attempt runs in a fresh process.
 #
-# It asserts:
-#   - the detector fires (at least one attempt yields CYCLE -> CIRCULAR-MODULE-DEPENDENCY), and
-#   - no attempt ever HANGs (deadlock) or fails with any OTHER error or a crash.
+# It asserts that the detector fires (the attempt yields CYCLE -> CIRCULAR-MODULE-DEPENDENCY), and that it neither
+# HANGs (deadlock) nor fails with any OTHER error or a crash.
 #
 # When this test itself runs under valgrind, each attempt runs under valgrind too, and must report no memory errors
 # and no definitely or possibly lost memory: the failure path of a detected cycle releases everything it created.
@@ -30,17 +29,12 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires Util
 
 %exec-class CircularModuleDependencyTest
 
 class CircularModuleDependencyTest inherits QUnit::Test {
-    private {
-        # each attempt forms the cycle ~19/20 of the time; retrying makes a missed cycle
-        # astronomically unlikely (0.05^MaxAttempts) without any dependence on timing
-        const MaxAttempts = 12;
-    }
-
     constructor() : Test("Circular module dependency test", "1.0") {
         addTestCase("cross-thread cycle detection", \crossThreadCycleTest());
         set_return_value(main());
@@ -60,7 +54,7 @@ class CircularModuleDependencyTest inherits QUnit::Test {
         }
         # run the driver against the local (in-development) qore/libqore under test, with the fixture
         # modules (absolute) prepended to the inherited module path
-        string qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string modpath = dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         string driver = dir + "/cross-cycle-attempt.qr";
 
@@ -72,43 +66,32 @@ class CircularModuleDependencyTest inherits QUnit::Test {
             assertEq(0, which_rc, "the valgrind that runs this test is in the PATH");
         }
 
-        bool saw_cycle = False;
-        int attempts = 0;
-        for (int i = 0; i < MaxAttempts && !saw_cycle; ++i) {
-            ++attempts;
-            # do not cd: keep the harness working directory so any relative entries inherited in
-            # QORE_MODULE_DIR stay valid; reference the driver and fixtures by absolute path
-            string cmd;
-            *string log;
-            if (valgrind) {
-                # valgrind's own report goes to a file, so the output is only the attempt's outcome
-                log = sprintf("%s%scross-cycle-attempt-%d-%d.valgrind", tmp_location(), DirSep, getpid(), i);
-                cmd = sprintf("QORE_MODULE_DIR=%y %y -q --leak-check=full --errors-for-leak-kinds=definite,possible "
-                    "--error-exitcode=97 --log-file=%y %y -b --enable-debug %y 2>&1", modpath, valgrind, log,
-                    qore_bin, driver);
-            } else {
-                cmd = sprintf("QORE_MODULE_DIR=%y %y --enable-debug %y 2>&1", modpath, qore_bin, driver);
-            }
-            on_exit if (log) {
-                unlink(log);
-            }
-            int rc;
-            string out = trim(backquote(cmd, \rc));
-            on_error printf("attempt %d output: %y\n", i, out);
-            if (log) {
-                # neither memory errors nor lost memory
-                assertEq(0, rc, sprintf("attempt %d under valgrind: %s", i, ReadOnlyFile::readTextFile(log)));
-            }
-            # the driver must never hang or fail with an unexpected error/crash
-            assertFalse(out == "HANG", "attempt did not deadlock");
-            assertFalse(out =~ /^OTHER:/, "attempt did not fail with an unexpected error");
-            assertTrue(out == "CYCLE" || out == "OK",
-                sprintf("attempt produced a valid outcome (got %y)", out));
-            if (out == "CYCLE") {
-                saw_cycle = True;
-            }
+        # do not cd: keep the harness working directory so any relative entries inherited in
+        # QORE_MODULE_DIR stay valid; reference the driver and fixtures by absolute path
+        string cmd;
+        *string log;
+        if (valgrind) {
+            # valgrind's own report goes to a file, so the output is only the attempt's outcome
+            log = sprintf("%s%scross-cycle-attempt-%d.valgrind", tmp_location(), DirSep, getpid());
+            cmd = sprintf("QORE_MODULE_DIR=%y %y -q --leak-check=full --errors-for-leak-kinds=definite,possible "
+                "--error-exitcode=97 --log-file=%y %y -b --enable-debug %y 2>&1", modpath, valgrind, log,
+                qore_bin, driver);
+        } else {
+            cmd = sprintf("QORE_MODULE_DIR=%y %y --enable-debug %y 2>&1", modpath, qore_bin, driver);
         }
-        assertTrue(saw_cycle,
-            sprintf("cross-thread CIRCULAR-MODULE-DEPENDENCY detected within %d attempts", attempts));
+        on_exit if (log) {
+            unlink(log);
+        }
+        int rc;
+        string out = trim(backquote(cmd, \rc));
+        on_error printf("attempt output: %y\n", out);
+        if (log) {
+            # neither memory errors nor lost memory
+            assertEq(0, rc, sprintf("the attempt under valgrind: %s", ReadOnlyFile::readTextFile(log)));
+        }
+        # the driver must never hang or fail with an unexpected error/crash, and the cycle always forms
+        assertFalse(out == "HANG", "the attempt did not deadlock");
+        assertFalse(out =~ /^OTHER:/, "the attempt did not fail with an unexpected error");
+        assertEq("CYCLE", out, "the cross-thread cycle formed and CIRCULAR-MODULE-DEPENDENCY was detected");
     }
 }

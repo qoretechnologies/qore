@@ -6,8 +6,9 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
 
-string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
     ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
@@ -27,6 +28,8 @@ string sub findFastNativeLine(string dump, string qore_path) {
 }
 
 string code = "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub readHash(hash<string, int> row) {
     return row.a + row.b + row.c + row.d;

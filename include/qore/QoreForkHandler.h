@@ -221,6 +221,12 @@ DLLEXPORT bool qore_fork_child_exits_quickly();
     streams and ends the process with \c _exit() and @p rc, so that no exit-time handler runs; otherwise it returns.
     The \c qore and \c qr programs call it at the end of their main program.
 
+    A native compilation that the JIT's background compiler still runs in LLVM when the library is torn down is
+    waited for by qore_cleanup(), so a program can return from \c main() after qore_cleanup() whether or not it calls
+    this function.  In a process that ends without qore_cleanup(), this function also ends the process with
+    \c _exit() if such a compilation still runs, as its static objects, which the compilation uses, would be destroyed
+    under it by \c exit().
+
     @param rc the exit status of the process
 
     @since %Qore 3.0

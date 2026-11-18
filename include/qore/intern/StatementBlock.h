@@ -33,9 +33,11 @@
 
 #define _QORE_STATEMENT_BLOCK_H
 
+#include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -126,6 +128,9 @@ class StatementBlock : public AbstractStatement {
 public:
     typedef safe_dslist<AbstractStatement*> statement_list_t;
 
+    //! Parse-only eligibility of the complete body (including its signature defaults).
+    QoreNativeParseInfo native_parse_info;
+
     //! Metadata-only block with an explicit program-owned location.
     DLLLOCAL StatementBlock(qore_program_private_base* p, const QoreProgramLocation* loc);
 
@@ -210,11 +215,9 @@ public:
         return on_block_exit_list;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        if (statement_list.empty())
-            return false;
-
-        return (*statement_list.last())->hasFinalReturn();
+    //! Returns true once the block has been parse-initialized
+    DLLLOCAL bool isParseInitialized() const {
+        return parse_initialized;
     }
 
     DLLLOCAL void setupLVList(QoreParseContext& parse_context) {
@@ -231,12 +234,16 @@ protected:
     statement_list_t statement_list;
     block_list_t on_block_exit_list;
     LVList* lvars = nullptr;
+    //! true once the block has been parse-initialized; the analysis of the code that calls the function, method or
+    //! closure of the block reads it (issue #5940)
+    bool parse_initialized = false;
 
     // start must be the element before the start position
     DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, statement_list_t::iterator start);
     DLLLOCAL void parseCommitIntern(statement_list_t::iterator start);
-    DLLLOCAL bool hasLastReturn(AbstractStatement* as);
-    DLLLOCAL int parseCheckReturn();
+    //! Checks that the end of the code of the variant cannot be reached without a return statement if it has a declared
+    //! return type that does not accept NOTHING (issue #5940)
+    DLLLOCAL int parseCheckReturn(const UserVariantBase* uvb);
 
     DLLLOCAL int execIntern(QoreValue& return_value, ExceptionSink* xsink);
     DLLLOCAL int execIntern(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
@@ -251,6 +258,15 @@ public:
     }
 
     DLLLOCAL virtual ~TopLevelStatementBlock();
+
+    //! Frees the code compiled from the top-level statements (IR, AOT context) when the Program's code is deleted
+    /** The IR of the top-level code refers to the closures that the code creates (QoreClosureParseNode), whose
+        variants keep the Program allocated while they live (UserVariantBase::setProgram()): freeing it only when the
+        Program is destroyed would keep both forever (qore#5822).  Called by qore_program_private::del() once no thread
+        runs the Program's code and its background compiles are drained (QoreJIT::waitForBgCompileQueue()), as a
+        background compile can lower the closures' code.
+    */
+    DLLLOCAL void delCompiledCode();
 
     using StatementBlock::parseInit;
     DLLLOCAL int parseInit();
@@ -270,6 +286,20 @@ public:
         }
 
         statement_list.erase_to_end(hwm);
+        native_parse_info = committed_native_parse_info;
+
+        // the top-level local variables that the failed parse declared are not the Program's, and a parse that no
+        // other one has committed is still the first one, which can declare them (issue #678)
+        first = committed_first;
+        if (lvars) {
+            assert(lvars->size() >= committed_lvars);
+            if (committed_lvars) {
+                lvars->lv.resize(committed_lvars);
+            } else {
+                delete lvars;
+                lvars = nullptr;
+            }
+        }
     }
 
     // local vars are not instantiated here because they are instantiated by the QoreProgram object
@@ -287,6 +317,7 @@ public:
         assert(!lvars);
         lvars = new LVList(*lvl);
         inherited_lvars = lvl->size();
+        markCommitted();
     }
 
     DLLLOCAL void setupLVList(QoreParseContext& parse_context) {
@@ -303,12 +334,59 @@ public:
     }
 
 protected:
+    QoreNativeParseInfo committed_native_parse_info;
     // iterator to last commit element in statement list (for parsing)
     statement_list_t::iterator hwm;
-    // iterator to last executed element in statement list (for REPARSE mode execution)
+    // iterator to the last element of the statement list that a run has executed or is executing (for REPARSE mode
+    // execution, where a run claims each statement before it executes it: issue #6511)
     statement_list_t::iterator ehwm;
+    //! serializes the changes of ehwm by the threads that run the top-level code (issues #6475, #6511)
+    std::mutex ehwm_lock;
+    //! true once the top-level code compiled ahead of time has run in REPARSE mode, which runs it once (issue #6474)
+    //! guarded by ehwm_lock (see claimAOTToplevelRun())
+    bool aot_toplevel_ran = false;
+
+    //! Records the statements that the code has when a run starts as executed (issue #6475)
+    /** A run outside of REPARSE mode executes all of them, so a run after PO_ALLOW_REPARSE is set later executes only
+        the statements of later parses; the statements after one that raised an exception are recorded as well, as
+        the code that runs outside of REPARSE mode does not record the last one that it ran.  The list cannot change
+        while the code runs, as the Program cannot be parsed while threads run it.
+    */
+    DLLLOCAL void markExecuted() {
+        if (!statement_list.empty()) {
+            std::lock_guard<std::mutex> lg(ehwm_lock);
+            ehwm = statement_list.last();
+        }
+    }
+
+    //! Claims the run of the top-level code compiled ahead of time in REPARSE mode, which runs it once (issue #6474)
+    /** The statements that the code has are recorded as executed in the same step, under the lock that the runs that
+        execute the statements claim them with, so that a run in another thread that does not run the compiled code
+        does not execute them too (issue #6511).
+        @return true if this run runs the compiled code
+    */
+    DLLLOCAL bool claimAOTToplevelRun() {
+        std::lock_guard<std::mutex> lg(ehwm_lock);
+        if (aot_toplevel_ran) {
+            return false;
+        }
+        aot_toplevel_ran = true;
+        if (!statement_list.empty()) {
+            ehwm = statement_list.last();
+        }
+        return true;
+    }
     // true only the first time parseInit() is called
     bool first;
+    // the values of first and of the size of lvars that a rollback restores: those of the last commit (issue #678)
+    bool committed_first = true;
+    size_t committed_lvars = 0;
+
+    //! Records the top-level local variables and the state of the first parse that a rollback restores
+    DLLLOCAL void markCommitted() {
+        committed_first = first;
+        committed_lvars = lvars ? lvars->size() : 0;
+    }
     // the number of the local vars at the beginning of lvars that are inherited from the parent program; they are
     // instantiated at runtime for the code of the parent program, but they are not visible to the code of this program
     unsigned inherited_lvars = 0;
@@ -317,6 +395,10 @@ protected:
     mutable QoreIRFunction* cached_toplevel_ir = nullptr;
     mutable std::once_flag toplevel_ir_once;
     mutable bool toplevel_ir_failed = false;
+    //! the parse options of the code of \a cached_toplevel_ir, which it runs with (see toplevelCodeParseOptions())
+    mutable QoreParseOptions cached_toplevel_ir_po;
+    //! true if \a cached_toplevel_ir_po is set: the IR was lowered from statements
+    mutable bool cached_toplevel_ir_po_set = false;
     // Reason string recorded on IR-lowering failure; used to raise
     // IR-COMPILATION-ERROR from subsequent execImpl calls under %modern.
     mutable std::string toplevel_ir_fail_reason;
@@ -329,6 +411,20 @@ protected:
     using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
     mutable AotFunctionPtr cached_toplevel_aot_fn = nullptr;
     mutable QoreAOTContext* cached_toplevel_aot_ctx = nullptr;
+    //! the debug IR of top-level code compiled ahead of time, which runs while a debugger is attached (qore#5851)
+    mutable QoreIRFunction* cached_toplevel_aot_debug_ir = nullptr;
+    mutable std::mutex toplevel_aot_debug_ir_mutex;
+
+    //! Runs the IR of the top-level code: compiled by the JIT if \a use_jit, or in the IR interpreter
+    //! returns the parse options of the top-level code, which its lowered code runs with
+    DLLLOCAL QoreParseOptions toplevelCodeParseOptions() const;
+    DLLLOCAL int execIR(QoreIRFunction* ir_func, bool use_jit, const QoreParseOptions& runtime_parse_options,
+            QoreProgram* pgm, QoreValue& return_value, ExceptionSink* xsink);
+
+    //! Returns the debug IR of top-level code compiled ahead of time, made from its image on first use (qore#5851)
+    /** @return the debug IR, or nullptr with an exception in \a xsink
+    */
+    DLLLOCAL QoreIRFunction* getAOTDebugIR(ExceptionSink* xsink) const;
 
 public:
     //! Register a pre-compiled AOT function pointer for top-level code
@@ -460,9 +556,20 @@ public:
 //! Helper class to save and merge local-variable assignment state for branch tracking
 class AssignedStateHelper {
 private:
-    typedef std::vector<std::pair<LocalVar*, bool>> state_map_t;
+    //! the flow-sensitive assignment state of a local variable
+    struct assigned_state_t {
+        //! assigned on every path
+        bool assigned;
+        //! assigned on some path; see LocalVar::mayBeAssigned()
+        bool may_be_assigned;
+    };
+    typedef std::vector<std::pair<LocalVar*, assigned_state_t>> state_map_t;
     state_map_t saved_states;
     std::vector<state_map_t> branch_states;
+    //! the point of the sequence of changes of the assignment state when the state was saved
+    uint64_t saved_seq = 0;
+
+    DLLLOCAL static assigned_state_t getState(const LocalVar* lvar);
 
 public:
     //! Save the current assignment state of all visible local variables
@@ -482,6 +589,45 @@ public:
 
     //! Record the saved state as an implicit branch
     DLLLOCAL void recordSavedAsImplicitBranch();
+
+    //! Applies the changes made since the state was saved to the current state of the saved variables
+    /** A variable that may have been assigned since the save may be assigned, and one that was the operand of
+        \c delete or \c remove since the save is not definitely assigned.  Used where control can leave code in the
+        middle of it, so that the state at the end of the code does not describe every path out of it: at the end of
+        a loop, which \c break and \c continue leave, at the start of a \c catch block, which an exception in the
+        \c try block reaches, and at the start of a \c case block, which the previous one can fall through to
+        (qore#5937).  Does not allocate memory.
+    */
+    DLLLOCAL void applyChangesSinceSave();
+
+    //! Merges the state of code that can run any number of times, including none, into the saved state
+    /** The state after the code is the merge of the saved state and the current one, with the changes since the save
+        applied; see applyChangesSinceSave().  Does not allocate memory.
+    */
+    DLLLOCAL void mergeLoopAndApply();
+
+    //! Records the changes since the state was saved as effects of an on_exit, on_success or on_error block, which
+    //! apply when the enclosing block exits; see parse_add_block_exit_effect()
+    DLLLOCAL void recordChangesAsBlockExitEffects() const;
+};
+
+//! Merges the assignment state of local variables in code that can run any number of times, including none, when it
+//! goes out of scope; see AssignedStateHelper::mergeLoopAndApply()
+class ParseLoopAssignedStateHelper {
+public:
+    DLLLOCAL ParseLoopAssignedStateHelper() {
+        ash.saveState();
+    }
+
+    DLLLOCAL ~ParseLoopAssignedStateHelper() {
+        ash.mergeLoopAndApply();
+    }
+
+    ParseLoopAssignedStateHelper(const ParseLoopAssignedStateHelper&) = delete;
+    ParseLoopAssignedStateHelper& operator=(const ParseLoopAssignedStateHelper&) = delete;
+
+private:
+    AssignedStateHelper ash;
 };
 
 #endif // _QORE_STATEMENT_BLOCK_H

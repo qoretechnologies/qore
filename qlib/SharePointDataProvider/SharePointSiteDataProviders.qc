@@ -80,7 +80,7 @@ public class SharePointSitesDataProvider inherits SharePointDataProviderBase {
         return RecordType.getFields();
     }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return new DefaultRecordIterator<hash<auto>>(
             new ListIterator<hash<auto>>(getSites(search_options.search)), where_cond);
@@ -190,7 +190,7 @@ public class SharePointDrivesDataProvider inherits SharePointDataProviderBase {
         return RecordType.getFields();
     }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         string path = getSiteBasePath(search_options) + "/drives?$select=id,name,description,driveType,"
             "webUrl,createdDateTime,lastModifiedDateTime&$top=" + MaxPageSize;

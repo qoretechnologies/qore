@@ -67,6 +67,20 @@ hash<Container> h4 = new hash<Container>(("i": 2));
     In such cases, the initialization expression for the members being overridden is never executed and the
     supplied value is used instead.
 
+    @anchor hashdecl_initializer_program
+    The initialization expressions are code of the @ref Qore::Program "Program" that declared the
+    <tt><b>hashdecl</b></tt>, also when the hash is created by the code of another Program (one that inherited or
+    imported the declaration, or that has a value of the type and converts a hash to it with the
+    @ref reflectionintro "reflection" API): once the declaring Program has been deleted, creating a hash that needs
+    one of them evaluated raises a \c PROGRAM-ERROR exception (see @ref threads_and_program_deletion); an initial
+    value that needs no evaluation, such as a literal, is still assigned.
+
+    @anchor hashdecl_initializer_scope
+    The initialization expressions are parsed in their own scope, not in the scope of the code that first uses the
+    <tt><b>hashdecl</b></tt>: they can refer to the top-level local variables of the program, whose value is that of
+    the thread that evaluates the expression (see @ref threading_and_variables), and to global variables, but not to
+    the local variables of a function, method or closure, so naming one is a parse error.
+
     Note that it's illegal to assign a value to an unassigned lvalue declared as a typed hash; in such cases a
     \c HASHDECL-IMPLICIT-CONSTRUCTION-ERROR exception is thrown as in the following example:
     @code{.py}
@@ -201,6 +215,14 @@ while (it.next()) {
     only be assigned values of the given type; use the @ref cast "cast<>" operator to convert
     untyped hashes or type-safe hashes of another type to the target type for assignment.
 
+    The members of a type-safe hash have no single value type, so a type-safe hash is not a
+    @ref hash_complex_type "hash with a declared value type" with a specific value type (ex:
+    <tt>hash&lt;string, string&gt;</tt>), even when every member has that type: assigning one to such a variable or
+    passing it for such a parameter is an error (\c PARSE-TYPE-ERROR when the types are known at parse time,
+    otherwise \c RUNTIME-TYPE-ERROR or \c RUNTIME-OVERLOAD-ERROR); use the
+    @ref cast "cast<>" operator to convert it (ex: <tt>cast&lt;hash&lt;string, string&gt;&gt;(h)</tt>).  A
+    <tt>hash&lt;auto&gt;</tt> or <tt>hash&lt;string, auto&gt;</tt> accepts it as it is.
+
     @par Example:
     @code{.py}
 hashdecl Container1 {
@@ -274,6 +296,9 @@ printf("x: %d\n", p.x);  # Prints: x: 1
 
     @note The reverse is not true: assigning a parent hashdecl value to a child hashdecl variable requires an
     explicit cast.
+
+    The sum of a parent and a child hashdecl value (<tt>p + c</tt> or <tt>c + p</tt>) is a hash of the child
+    hashdecl; see @ref plus_operator.
 
     @section hashdecl_object_comparison Comparison of Type-Safe Hashes and Objects
 

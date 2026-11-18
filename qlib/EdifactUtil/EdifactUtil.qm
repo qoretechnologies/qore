@@ -32,6 +32,8 @@
 %modern
 
 module EdifactUtil {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module for working with UN/EDIFACT messages";
     author = "David Nichols <david@qore.org>";
@@ -533,6 +535,7 @@ while (i.next()) {
     Options for @ref EdifactUtil::EdifactSchemaRegistry::loadRelease() "EdifactSchemaRegistry::loadRelease()":
 
     - \c dir: directory containing flat files for the release
+    - \c cache_dir: the cache root directory (default: \c QORE_EDIFACT_DIRCACHE or \c ~/.qore/edifact)
     - \c reload: ignore the in-memory registry and reload
     - \c skip_cache_read: do not read from the on-disk cache
     - \c cache_only: load only from cache (throws on cache miss)

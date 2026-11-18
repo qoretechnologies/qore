@@ -25,6 +25,8 @@ static void yaml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void yaml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void yaml_module_delete();
 
+extern QoreNamespace YNS;
+
 extern "C" DLLEXPORT void yaml_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "yaml";
     mod_info.version = PACKAGE_VERSION;
@@ -36,6 +38,8 @@ extern "C" DLLEXPORT void yaml_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = yaml_module_init;
     mod_info.ns_init = yaml_module_ns_init;
     mod_info.del = yaml_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &YNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

@@ -51,6 +51,14 @@
 #include <vector>
 #include <list>
 
+//! the guidance given when a module declares a public thread_local variable or an AOT module image holds one
+/** A module's public variable is one variable shared by every Program that imports the module (qore#5662).
+*/
+#define QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP "a module's public variable is one variable shared by every Program " \
+    "that imports the module, so any importer could set a value on a thread that any other importer reads on the " \
+    "same thread; keep it private (declare it without 'public') and export public functions or methods that read " \
+    "and set it"
+
 class qore_root_ns_private;
 class qore_ns_private;
 class qore_class_private;
@@ -187,6 +195,12 @@ public:
         builtin,  // is this namespace builtin?
         imported = false, // was this namespace imported?
         parseCommitRuntimeInitDone = false; // has parseCommitRuntimeInit() been called?
+
+    //! set for the namespace that a binary module registered with QoreModuleInfo::ns
+    /** Its content is released when the module is deleted (see QoreNamespace::purge()), never by a C++ static
+        destructor; debug builds assert that it is empty if it is destroyed after the types were freed
+    */
+    bool module_owned = false;
 
     // pointer to parent namespace (nullptr if this is the root namespace or an unattached namespace)
     const qore_ns_private* parent = nullptr;
@@ -383,6 +397,15 @@ public:
         }
     }
 
+    //! releases all content of the namespace, leaving it empty; see QoreNamespace::purge()
+    DLLLOCAL void purgeAll(ExceptionSink* xsink);
+
+    //! returns true if the namespace holds nothing, including key-value properties
+    DLLLOCAL bool isReleased() const {
+        AutoLocker al(kvlck);
+        return isEmpty() && kvmap.empty();
+    }
+
     // destroys the object and frees all associated memory
     DLLLOCAL void purge() {
         constant.reset();
@@ -476,6 +499,9 @@ public:
     DLLLOCAL void clearConstants(QoreListNode& l);
     DLLLOCAL void clearData(ExceptionSink* xsink);
     DLLLOCAL void deleteData(ExceptionSink* xsink);
+
+    //! Adds the user class, hashdecl and enum declarations of the namespace and its subnamespaces (issue #5790)
+    DLLLOCAL void getTypeOwners(std::vector<QoreTypeOwner*>& owners);
     //! marks the class lists of the namespace tree as owned by a Program releasing its values; see QoreClassList::setVarsReleased()
     DLLLOCAL void setVarsReleased();
     //DLLLOCAL void deleteClearData(ExceptionSink* xsink);
@@ -702,7 +728,7 @@ public:
 
         //printd(5, "qore_ns_private::addBuiltinVariant('%s', %p, flags=%lld, domain=%lld, ret=%s, num_params=%d, "
         //    "...)\n", name, f, flags, functional_domain, QoreTypeInfo::getName(returnTypeInfo), num_params);
-        addBuiltinVariant(name, new B(f, flags, functional_domain, returnTypeInfo, typeList, defaultArgList,
+        addBuiltinVariant(name, B::create(f, flags, functional_domain, returnTypeInfo, typeList, defaultArgList,
             nameList));
     }
 
@@ -723,11 +749,50 @@ public:
     }
 
     DLLLOCAL void scanMergeCommittedNamespace(const qore_ns_private& mns, QoreModuleContext& qmc) const;
-    DLLLOCAL void copyMergeCommittedNamespace(const qore_ns_private& mns);
+    //! Merges the exported declarations of a module's namespace into this namespace of an importing Program
+    /** @param mns the module's namespace
+        @param module_var_importer the importing Program if the module is trusted, whose references to the module's
+        public variables are then read-only when it is restricted (qore#5664), otherwise nullptr
+    */
+    DLLLOCAL void copyMergeCommittedNamespace(const qore_ns_private& mns, QoreProgram* module_var_importer);
+
+    //! Marks the references to trusted modules' public variables that a new Program got with this namespace
+    /** Called for each namespace of a new Program's root namespace copied from \a src_pgm (qore#5664)
+        @param importer the new Program
+        @param src_trusted_module true if the namespace was copied from the Program of a trusted module
+    */
+    DLLLOCAL void markCopiedModuleVarImports(QoreProgram* importer, bool src_trusted_module);
 
     DLLLOCAL int parseInitGlobalVars();
 
     DLLLOCAL int checkGlobalVarDecl(Var* v, const NamedScope& vname);
+
+    //! raises a parse exception if a public thread_local variable is declared in a module
+    /** A module's public variable is one variable shared by every Program that imports the module, so a public
+        thread_local variable would let any importer set a value on a thread that any other importer reads on the same
+        thread (qore#5662).  A public thread_local variable of a Program, which the Program passes to the child Programs
+        it creates, is allowed.
+
+        @return 0 if the declaration is allowed, -1 if a parse exception was raised
+    */
+    DLLLOCAL static int checkPublicThreadLocalDecl(const Var& v);
+
+    //! appends the path of each public thread_local variable in an exported namespace tree to a list
+    /** A module parsed from source cannot declare one (see checkPublicThreadLocalDecl()); an AOT module image compiled
+        before the declaration was refused, by a qcc with the same AOT runtime identity, can still hold one, and the
+        module merge refuses it (see qore_root_ns_private::scanMergeCommittedNamespace()).
+
+        The check is not made when the image's GLOBALS section is deserialized: the deserializer is an AOT runtime
+        identity input, and with a changed identity every image compiled before the change is refused anyway, so a
+        check there could never see such an image.
+
+        @param mns the namespace to scan, with its exported subnamespaces
+        @param path the namespace path of \a mns, ending with \c "::", or empty for the root namespace
+        @param list the list to append to: each path is quoted and separated from the previous one by \c ", "
+    */
+    DLLLOCAL static void scanExportedThreadLocals(const qore_ns_private& mns, const std::string& path,
+            std::string& list);
+
     DLLLOCAL void parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
             QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type);
 
@@ -1413,7 +1478,7 @@ protected:
         if (runtime_namespace_writer_tid.load(std::memory_order_acquire) == q_gettid()) {
             return false;
         }
-        int rc = runtime_namespace_lock.rdlock();
+        [[maybe_unused]] int rc = runtime_namespace_lock.rdlock();
         assert(!rc);
 #ifdef DEBUG
         ++runtime_namespace_read_depth;
@@ -1427,7 +1492,7 @@ protected:
             assert(runtime_namespace_read_depth);
             --runtime_namespace_read_depth;
 #endif
-            int rc = runtime_namespace_lock.unlock();
+            [[maybe_unused]] int rc = runtime_namespace_lock.unlock();
             assert(!rc);
         }
     }
@@ -1449,7 +1514,7 @@ protected:
             ++runtime_namespace_writer_depth;
             return;
         }
-        int rc = runtime_namespace_lock.wrlock();
+        [[maybe_unused]] int rc = runtime_namespace_lock.wrlock();
         assert(!rc);
         assert(!runtime_namespace_writer_depth);
         runtime_namespace_writer_depth = 1;
@@ -1461,7 +1526,7 @@ protected:
         assert(runtime_namespace_writer_depth);
         if (!--runtime_namespace_writer_depth) {
             runtime_namespace_writer_tid.store(-1, std::memory_order_release);
-            int rc = runtime_namespace_lock.unlock();
+            [[maybe_unused]] int rc = runtime_namespace_lock.unlock();
             assert(!rc);
         }
     }
@@ -1641,8 +1706,12 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const char* name, const qore_ns_private*& ns) const {
+        return runtimeFindClassIntern(name, ns, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const QoreClass* runtimeFindClassIntern(const char* name, const qore_ns_private*& ns, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name, ns)) {
                 return qc;
             }
@@ -1670,8 +1739,12 @@ protected:
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const NamedScope& name, const qore_ns_private*& ns) const;
 
     DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const char* name, const qore_ns_private*& ns) {
+        return runtimeFindHashDeclIntern(name, ns, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const char* name, const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const TypedHashDecl* hd = runtimeFindQoreHashDeclIntern(name, ns)) {
                 return hd;
             }
@@ -1697,8 +1770,12 @@ protected:
     }
 
     DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
+        return runtimeFindEnumIntern(name, ns, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const QoreEnumDecl* ed = runtimeFindQoreEnumIntern(name, ns)) {
                 return ed;
             }
@@ -1722,8 +1799,12 @@ protected:
     }
 
     DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const char* name) {
+        return runtimeFindFunctionEntryIntern(name, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const char* name, LexicalSemanticPolicy policy) {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const FunctionEntry* fe = runtimeFindQoreFunctionEntryIntern(name)) {
                 return fe;
             }
@@ -1779,6 +1860,52 @@ protected:
 
     DLLLOCAL void parseWarnAmbiguousFunctionCall(const QoreProgramLocation* loc, const char* fname,
             const FunctionEntry* resolved) const;
+
+    //! Raises the language-traps warning for a function that unqualified calls cannot reach (qore#6034)
+    /** The unqualified resolution of a function name finds a function of the Qore namespace (or of one of its
+        namespaces) before any other, so a function of the same name that the program declares is reached only by a
+        call with a namespace path; this warns once, at the declaration of the first variant of the function.
+
+        Nothing is raised if the warning is off, in a user module, if the program uses
+        \c %broken-namespace-resolution (the declared function is found first then), or for a function of the Qore
+        namespace itself.
+
+        @param loc the location of the declaration
+        @param fname the name of the function
+        @param declaring_ns the namespace that declares the function
+        @param declared the entry of the function that is declared
+    */
+    DLLLOCAL void parseWarnShadowedByQoreFunction(const QoreProgramLocation* loc, const char* fname,
+            const qore_ns_private* declaring_ns, const FunctionEntry* declared);
+
+    //! Returns true if a symbol that is declared in \a declaring_ns can be reported as one that unqualified resolution
+    //! cannot reach (qore#6034): the strict language-traps warning is on, and the program does not use
+    //! %broken-namespace-resolution, is not a user module, and the namespace is not the Qore namespace or under it
+    DLLLOCAL bool parseShadowWarningEnabled(const qore_ns_private* declaring_ns);
+
+    //! Raises the warning for a class, constant, hashdecl or global variable of the program with the name of one of the
+    //! Qore namespace (the check of parseShadowWarningEnabled() is made by the caller)
+    /** @param kind the kind of the symbol: "class", "constant", "hashdecl" or "global variable"
+        @param qore_symbol_ns the namespace of the symbol of the Qore namespace, if known
+    */
+    DLLLOCAL void parseWarnShadowedByQoreSymbol(const QoreProgramLocation* loc, const char* kind, const char* name,
+            const qore_ns_private* declaring_ns, const qore_ns_private* qore_symbol_ns);
+
+    //! Checks, and raises the warning, for a class declared in \a declaring_ns
+    DLLLOCAL void parseCheckClassShadowedByQore(const QoreProgramLocation* loc, const QoreClass* oc,
+            const qore_ns_private* declaring_ns);
+
+    //! Checks, and raises the warning, for a constant declared in \a declaring_ns
+    DLLLOCAL void parseCheckConstantShadowedByQore(const QoreProgramLocation* loc, const char* cname,
+            const qore_ns_private* declaring_ns);
+
+    //! Checks, and raises the warning, for a hashdecl declared in \a declaring_ns
+    DLLLOCAL void parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
+            const qore_ns_private* declaring_ns);
+
+    //! Checks, and raises the warning, for a global variable declared in \a declaring_ns
+    DLLLOCAL void parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
+            const qore_ns_private* declaring_ns);
 
     DLLLOCAL const FunctionEntry* parseResolveFunctionEntryIntern(const QoreProgramLocation* loc, const char* fname) {
         QORE_TRACE("qore_root_ns_private::parseResolveFunctionEntryIntern()");
@@ -2049,8 +2176,12 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* name) const {
+        return runtimeFindClass(name, qore_get_native_semantic_policy());
+    }
+
+    DLLLOCAL const QoreClass* runtimeFindClass(const char* name, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!policy.brokenNamespace()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name)) {
                 return qc;
             }
@@ -2212,13 +2343,22 @@ protected:
     DLLLOCAL Var* runtimeFindGlobalVar(const NamedScope& nscope, const qore_ns_private*& vns) const;
 
     DLLLOCAL Var* runtimeFindGlobalVar(const char* vname, const qore_ns_private*& vns) const {
+        return runtimeFindGlobalVarImpl<true>(vname, vns, {});
+    }
+
+    DLLLOCAL Var* runtimeFindGlobalVar(const char* vname, const qore_ns_private*& vns, LexicalSemanticPolicy policy) const {
+        return runtimeFindGlobalVarImpl<false>(vname, vns, policy);
+    }
+
+    template <bool Native>
+    DLLLOCAL Var* runtimeFindGlobalVarImpl(const char* vname, const qore_ns_private*& vns, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
         if (strstr(vname, "::")) {
             NamedScope nscope(vname);
             return runtimeFindGlobalVar(nscope, vns);
         }
 
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!(Native ? useBrokenNamespaceResolutionRuntime() : policy.brokenNamespace())) {
             if (Var* v = runtimeFindQoreGlobalVarIntern(vname, vns)) {
                 return v;
             }
@@ -2237,13 +2377,22 @@ protected:
             const qore_ns_private*& cns) const;
 
     DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstant(const char* cname, const qore_ns_private*& cns) const {
+        return runtimeFindNamespaceConstantImpl<true>(cname, cns, {});
+    }
+
+    DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstant(const char* cname, const qore_ns_private*& cns, LexicalSemanticPolicy policy) const {
+        return runtimeFindNamespaceConstantImpl<false>(cname, cns, policy);
+    }
+
+    template <bool Native>
+    DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstantImpl(const char* cname, const qore_ns_private*& cns, LexicalSemanticPolicy policy) const {
         RuntimeNamespaceReadLocker rnl(*this);
         if (strstr(cname, "::")) {
             NamedScope nscope(cname);
             return runtimeFindNamespaceConstant(nscope, cns);
         }
 
-        if (!useBrokenNamespaceResolutionRuntime()) {
+        if (!(Native ? useBrokenNamespaceResolutionRuntime() : policy.brokenNamespace())) {
             if (const ConstantEntry* ce = runtimeFindQoreConstantEntryIntern(cname, cns)) {
                 return ce;
             }
@@ -2453,9 +2602,16 @@ public:
         // always set the module public flag to true in the root namespace
         pub = true;
 
+        // the references to trusted modules' public variables that the copy made are read-only in a restricted
+        // Program, as when it imports the modules (qore#5664)
+        markCopiedModuleVarImportsFrom(old);
+
         // rebuild root indexes - only for committed objects
         rebuildAllIndexes();
     }
+
+    //! Marks the references to trusted modules' public variables in this new root namespace copied from \a src
+    DLLLOCAL void markCopiedModuleVarImportsFrom(const qore_root_ns_private& src);
 
     DLLLOCAL ~qore_root_ns_private() {
     }
@@ -2520,6 +2676,12 @@ public:
         Var* var = tns.var_list.import(v, xsink, readonly, import_as);
         if (!var) {
             return;
+        }
+        // a trusted module's public variable that the source Program imported stays read-only in this Program when
+        // it is restricted, whatever the source Program allows (qore#5664)
+        if (v->isTrustedModuleVarImport()) {
+            assert(pgm);
+            var->setTrustedModuleVarImport(pgm, *v, tns.path);
         }
         varmap.update(var->getName(), &tns, var);
     }
@@ -2714,6 +2876,9 @@ public:
     DLLLOCAL func_vec_t runtimeFindAllFunctionsRegex(const QoreString& pattern, int re_opts,
             ExceptionSink* xsink) const;
 
+    DLLLOCAL func_ns_vec_t runtimeFindAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+            ExceptionSink* xsink) const;
+
     DLLLOCAL ns_vec_t runtimeFindAllNamespacesRegex(const QoreString& pattern, int re_opts,
             ExceptionSink* xsink) const;
 
@@ -2801,6 +2966,15 @@ public:
         return rns.rpriv->runtimeFindClassIntern(name, ns);
     }
 
+    DLLLOCAL static const QoreClass* runtimeFindClass(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindClassIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindClassIntern(name, ns, policy);
+    }
+
     DLLLOCAL static const TypedHashDecl* runtimeFindHashDecl(RootQoreNamespace& rns, const char* name,
             const qore_ns_private*& ns) {
         if (strstr(name, "::")) {
@@ -2808,6 +2982,15 @@ public:
             return rns.rpriv->runtimeFindHashDeclIntern(nscope, ns);
         }
         return rns.rpriv->runtimeFindHashDeclIntern(name, ns);
+    }
+
+    DLLLOCAL static const TypedHashDecl* runtimeFindHashDecl(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindHashDeclIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindHashDeclIntern(name, ns, policy);
     }
 
     DLLLOCAL static TypedHashDecl* parseTryFindHashDecl(RootQoreNamespace& rns, const char* name) {
@@ -2829,6 +3012,15 @@ public:
         return rns.rpriv->runtimeFindEnumIntern(name, ns);
     }
 
+    DLLLOCAL static const QoreEnumDecl* runtimeFindEnum(RootQoreNamespace& rns, const char* name,
+            const qore_ns_private*& ns, LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindEnumIntern(nscope, ns);
+        }
+        return rns.rpriv->runtimeFindEnumIntern(name, ns, policy);
+    }
+
     DLLLOCAL static const QoreFunction* runtimeFindFunction(RootQoreNamespace& rns, const char* name,
             const qore_ns_private*& ns) {
         const FunctionEntry* fe = runtimeFindFunctionEntry(rns, name);
@@ -2845,6 +3037,15 @@ public:
             return rns.rpriv->runtimeFindFunctionEntryIntern(nscope);
         }
         return rns.rpriv->runtimeFindFunctionEntryIntern(name);
+    }
+
+    DLLLOCAL static const FunctionEntry* runtimeFindFunctionEntry(RootQoreNamespace& rns, const char* name,
+            LexicalSemanticPolicy policy) {
+        if (strstr(name, "::")) {
+            NamedScope nscope(name);
+            return rns.rpriv->runtimeFindFunctionEntryIntern(nscope);
+        }
+        return rns.rpriv->runtimeFindFunctionEntryIntern(name, policy);
     }
 
     DLLLOCAL static bool runtimeExistsFunction(RootQoreNamespace& rns, const char* name) {
@@ -3089,15 +3290,33 @@ public:
 
     DLLLOCAL static void scanMergeCommittedNamespace(const RootQoreNamespace& ns, const RootQoreNamespace& mns,
             QoreModuleContext& qmc) {
+        // every module merge (source, AOT, and runtime) scans the module first, so this check covers each of them;
+        // all the variables are named in one error
+        std::string public_thread_locals;
+        qore_ns_private::scanExportedThreadLocals(*(mns.priv), std::string(), public_thread_locals);
+        if (!public_thread_locals.empty()) {
+            qmc.error("the module was compiled by an earlier version of qcc and exports public thread_local " \
+                "variable(s) %s; it must be changed and recompiled: " QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP,
+                public_thread_locals.c_str());
+        }
         ns.priv->scanMergeCommittedNamespace(*(mns.priv), qmc);
     }
 
+    //! Merges the exported declarations of a module's root namespace into the root namespace of an importing Program
     DLLLOCAL static void copyMergeCommittedNamespace(RootQoreNamespace& ns, const RootQoreNamespace& mns) {
-        ns.priv->copyMergeCommittedNamespace(*(mns.priv));
+        ns.rpriv->copyMergeCommittedModuleNamespace(*mns.rpriv);
     }
+
+    //! Merges a module's root namespace into this root namespace; see copyMergeCommittedNamespace()
+    DLLLOCAL void copyMergeCommittedModuleNamespace(const qore_root_ns_private& mns);
 
     DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns) {
         return rns.rpriv->runtimeFindGlobalVar(vname, vns);
+    }
+
+    DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns,
+            LexicalSemanticPolicy policy) {
+        return rns.rpriv->runtimeFindGlobalVar(vname, vns, policy);
     }
 
     DLLLOCAL static Var* runtimeCreateVar(RootQoreNamespace& rns, QoreNamespace& vns, const char* vname, const QoreTypeInfo* typeInfo, bool builtin = false) {
@@ -3117,8 +3336,18 @@ public:
         return rns.rpriv->runtimeFindClass(name);
     }
 
+    DLLLOCAL static const QoreClass* runtimeFindClass(RootQoreNamespace& rns, const char* name,
+            LexicalSemanticPolicy policy) {
+        return rns.rpriv->runtimeFindClass(name, policy);
+    }
+
     DLLLOCAL static const ConstantEntry* runtimeFindNamespaceConstant(const RootQoreNamespace& rns, const char* cname, const qore_ns_private*& cns) {
         return rns.rpriv->runtimeFindNamespaceConstant(cname, cns);
+    }
+
+    DLLLOCAL static const ConstantEntry* runtimeFindNamespaceConstant(const RootQoreNamespace& rns, const char* cname, const qore_ns_private*& cns,
+            LexicalSemanticPolicy policy) {
+        return rns.rpriv->runtimeFindNamespaceConstant(cname, cns, policy);
     }
 
 private:
@@ -3127,7 +3356,7 @@ private:
     }
 
     DLLLOCAL bool useBrokenNamespaceResolutionRuntime() const {
-        return static_cast<bool>(getProgram()->getParseOptions() & PO_BROKEN_NAMESPACE_RESOLUTION);
+        return qore_get_native_semantic_policy().brokenNamespace();
     }
 
     DLLLOCAL bool isUnderQoreNamespace(const qore_ns_private* ns, const qore_ns_private* qore_ns) const {
@@ -3348,7 +3577,9 @@ private:
         while (nsi.next()) {
             const QoreNamespace* ns = nsi.get();
             const qore_ns_private* ns_priv = qore_ns_private::get(*ns);
-            if (!isUnderQoreNamespace(ns_priv, qore_ns)) {
+            // Skip empty function tables before entering the hash lookup. Keeping this guard at the scan
+            // avoids hashing the same name for every empty namespace when findNode() is inlined.
+            if (!isUnderQoreNamespace(ns_priv, qore_ns) || ns_priv->func_list.empty()) {
                 continue;
             }
             const FunctionEntry* fe = ns_priv->func_list.findNode(name);

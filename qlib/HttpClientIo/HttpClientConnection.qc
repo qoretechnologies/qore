@@ -42,7 +42,9 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! URL info (host, port, scheme)
         hash<auto> url_info;
 
-        #! Lock for Qore-level shared members (last_activity, controller_ref, pending_stream_count)
+        #! Lock for Qore-level shared members (last_activity, controller_ref); the stream reservations are counted
+        #! in the C++ connection (HttpClientConnectionBase::tryReservePendingStream()), whose operation's idle timeout
+        #! does not close a connection with a reservation (#6184)
         /** @note Connection state (state, ready_cond) is in the C++ base class
             AbstractHttpPollConnection. This lock only protects Qore members.
         */
@@ -98,9 +100,6 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! Reference to AsyncSocketIoController for wake notifications
         *AsyncSocketIoController controller_ref;
 
-        #! Number of pending stream reservations (threads assigned but not yet submitted)
-        int pending_stream_count = 0;
-
         #! Proxy connection info (if using a proxy)
         *hash<auto> proxy_info;
 
@@ -120,6 +119,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             (see @ref HttpClientConnectionManager::pinConnection()).  Used to keep a
             connection-scoped persistent transaction (HTTP/1.1) on exactly one socket. */
         bool leased = False;
+
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -259,7 +259,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return (cs == HttpClientConnectionState::Ready
                 || cs == HttpClientConnectionState::Connecting)
             && (!max_concurrent_streams
-                || (getPollOperation().getActiveStreamCount() + pending_stream_count)
+                || (getPollOperation().getActiveStreamCount() + getPendingStreamCount())
                     < max_concurrent_streams);
     }
 
@@ -273,7 +273,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         @par Thread Safety
         The check and reservation happen under \c lock in one critical section,
         eliminating the TOCTOU gap that exists with separate
-        \c canAcceptStream() + manual reservation.
+        \c canAcceptStream() + manual reservation..
     */
     bool tryReserveStream() {
         AutoLock al(lock);
@@ -282,12 +282,11 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = getPollOperation().getActiveStreamCount() + pending_stream_count;
-        if (max_concurrent_streams && total >= max_concurrent_streams) {
-            return False;
-        }
-        ++pending_stream_count;
-        return True;
+        # the reservation is counted in the C++ connection, where the idle timeout of its operation sees it (#6184)
+        # the active streams of the operation are read under the reservation lock of the C++ connection, so that a
+        # request that is being submitted, whose reservation is released after its active stream is counted, cannot
+        # leave its stream to another reservation
+        return tryReservePendingStream(getPollOperation(), max_concurrent_streams);
     }
 
     #! Releases a pending stream reservation
@@ -295,9 +294,24 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         active stream) or when the request is abandoned before submission.
     */
     releaseStreamReservation() {
-        AutoLock al(lock);
-        if (pending_stream_count > 0) {
-            --pending_stream_count;
+        HttpClientConnectionBase::releaseStreamReservation();
+    }
+
+    #! Releases the stream reservation of a request whose time ran out before the connection was ready
+    /** Several requests can reserve streams of a connection that is still connecting, each with its own deadline
+        (see @ref tryReserveStream()), and asynchronous waiters can wait for it with a notifier.  A request whose
+        deadline passes gives up only its own reservation, and the connection is not closed: the deadline belongs to
+        the request, not to the connection, which keeps connecting, bounded by its own connect timeout, for the other
+        waiters and, once ready, for later requests; the connection manager's idle eviction does not close a
+        connection with a reservation (#6184, #6429, #6430).
+
+        @param reserved @ref True if the request holds a reservation of the connection, which is released
+
+        @since HttpClientIo 1.0
+    */
+    releaseExpiredReservation(bool reserved) {
+        if (reserved) {
+            HttpClientConnectionBase::releaseStreamReservation();
         }
     }
 
@@ -323,7 +337,10 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     int getOutstandingStreamCount() {
         AutoLock al(lock);
-        return getPollOperation().getActiveStreamCount() + pending_stream_count;
+        # the reservations are read first: a submit counts its active stream before it releases its reservation, so
+        # a request that is being submitted shows in one of the two counts (#6194)
+        int pending = getPendingStreamCount();
+        return pending + getPollOperation().getActiveStreamCount();
     }
 
     #! Returns the connection ID
@@ -438,12 +455,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         # Release the pending reservation AFTER successful submit —
         # active_stream_count was incremented inside submitRequestImpl().
         # If submitRequestImpl() throws, the caller releases the reservation.
-        {
-            AutoLock al(lock);
-            if (pending_stream_count > 0) {
-                --pending_stream_count;
-            }
-        }
+        HttpClientConnectionBase::releaseStreamReservation();
 
         if (!suppress_wake && ctl) {
             ctl.wakeSocket(sock: getSocket());
@@ -501,12 +513,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         }
         @assert(stream_id >= 0);
 
-        {
-            AutoLock al(lock);
-            if (pending_stream_count > 0) {
-                --pending_stream_count;
-            }
-        }
+        HttpClientConnectionBase::releaseStreamReservation();
 
         if (ctl) {
             ctl.wakeSocket(sock: getSocket());
@@ -602,8 +609,14 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             if (http_is_terminal_connection_error(err)) {
                 throw err.err, err.desc, err;
             }
-            throw "HTTPCLIENT-CONNECT-ERROR",
-                sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"),
+            # a connection closed locally, by its owner, can wake a waiting request before the error of the abort is
+            # recorded (#6430)
+            if (!err.err) {
+                throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection %d to %s:%d was closed without an error %s",
+                    connection_id, url_info.host ?? "<unknown>", url_info.port ?? 0,
+                    ready ? "after it became ready" : "before the request could use it"), err;
+            }
+            throw "HTTPCLIENT-CONNECT-ERROR", sprintf("connection closed: %s: %s", err.err, err.desc ?? "unknown"),
                 err;
         }
 
@@ -631,14 +644,19 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     close(*timeout close_timeout) {
         log(LoggerLevel::DEBUG, "closing connection");
         closeImpl(close_timeout);
+        # the connection and its poll operation reference each other: the cycle is broken once the connection is
+        # closed, or neither is ever released (#6286)
+        getPollOperation().clearConnection();
     }
 
     #! Marks (or unmarks) the connection as exclusively leased for a persistent session
     /** While leased, the pool reuse scan skips this connection so no other request borrows
-        it; see @ref HttpClientConnectionManager::leaseConnection(). */
+        it, and its idle timeout does not close it between the requests of the session (#6194);
+        see @ref HttpClientConnectionManager::leaseConnection(). */
     setLeased(bool l) {
         AutoLock al(lock);
         leased = l;
+        setIdleCloseHold(l);
     }
 
     #! Returns @ref True while the connection is exclusively leased out of the pool

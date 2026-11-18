@@ -1,0 +1,228 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Sandboxed or restricted code can lift a restriction only of a sandbox manager that its own Program created (issue
+# #5659): it cannot loosen the sandbox that governs it, or one that governs another Program, by changing the manager
+# (it can get the manager with Program::getSandboxManager()) or by replacing it with Program::setSandboxManager();
+# adding restrictions, and giving a manager to a Program that has none, stays allowed.  Trusted code can change any
+# manager.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class UntrustedChangesTest
+
+class UntrustedChangesTest inherits QUnit::Test {
+    public {
+        #! the code of every Program of the test: reads a file
+        const ReadSource = "%modern
+string sub rd(string path) {
+    try {
+        ReadOnlyFile f(path);
+        return f.read(-1);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+        #! the code of the Programs that are not trusted: changes managers
+        const ChangeSource = ReadSource + "
+string sub replace_manager(Program p, SandboxManager sm) {
+    try {
+        p.setSandboxManager(sm);
+        return 'replaced';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub loosen_new(Program p) {
+    SandboxManager lax();
+    lax.setFilesystemDefaultPolicy(True);
+    return replace_manager(p, lax);
+}
+string sub change(Program p, string method, softlist<auto> args) {
+    *SandboxManager sm = p.getSandboxManager();
+    if (!sm) {
+        return 'no-manager';
+    }
+    try {
+        call_object_method_args(sm, method, args);
+        return 'changed';
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub own_manager(Program p, string path) {
+    # a manager that this code creates: it can change it, give it to a Program that has none, and change it again
+    SandboxManager sm();
+    sm.setFilesystemDefaultPolicy(False);
+    string r = replace_manager(p, sm);
+    if (r != 'replaced') {
+        return r;
+    }
+    sm.addFilesystemAllowedPath(path, QSEC_READ);
+    sm.setFilesystemDefaultPolicy(True);
+    return 'ok';
+}
+";
+    }
+
+    private {
+        TmpDir tmp("qore-untrusted-changes-");
+        string secret;
+    }
+
+    constructor() : QUnit::Test("UntrustedChangesTest", "1.0", \ARGV) {
+        secret = tmp.path + "/secret.txt";
+        File f();
+        f.open2(secret, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("TOPSECRET");
+        f.close();
+
+        addTestCase("a sandbox cannot replace the manager of another Program", \replaceOtherTest());
+        addTestCase("a sandbox cannot replace its own manager", \replaceOwnTest());
+        addTestCase("a sandbox cannot change the manager that governs it", \changeGoverningTest());
+        addTestCase("a sandbox cannot change the manager of another Program", \changeOtherTest());
+        addTestCase("a sandbox can add restrictions to the manager that governs it", \tightenTest());
+        addTestCase("allowHTTPSOnly() on a port allowlist that lacks 443", \httpsOnlyTest());
+        addTestCase("restricted code follows the same rule", \restrictedTest());
+        addTestCase("code that is not trusted can change the managers that it creates", \ownManagerTest());
+        addTestCase("trusted code can change any manager", \trustedTest());
+
+        set_return_value(main());
+    }
+
+    #! returns a Program with the given sandbox manager (if any) and parse options
+    private Program pgm(*SandboxManager sm, string src = ReadSource, int po = 0) {
+        Program p(PO_NEW_STYLE | po);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(src, "pgm");
+        return p;
+    }
+
+    #! returns a manager that denies the filesystem
+    private SandboxManager strict() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        return sm;
+    }
+
+    replaceOtherTest() {
+        Program x = pgm(strict());
+        Program s = pgm(strict(), ChangeSource);
+        assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("loosen_new", x));
+        assertEq("FILESYSTEM-ACCESS-DENIED", x.callFunction("rd", secret));
+    }
+
+    replaceOwnTest() {
+        Program s = pgm(strict(), ChangeSource);
+        assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("loosen_new", s));
+        assertEq("FILESYSTEM-ACCESS-DENIED", s.callFunction("rd", secret));
+    }
+
+    changeGoverningTest() {
+        Program s = pgm(strict(), ChangeSource);
+        # every kind of change: policy, paths, limits and interrupts
+        list<list<auto>> changes = (
+            ("setFilesystemDefaultPolicy", (True,)),
+            ("addFilesystemAllowedPath", (tmp.path, QSEC_READ)),
+            ("clearFilesystemSandboxRoot", ()),
+            ("setNetworkDefaultPolicy", (True,)),
+            ("setMemoryLimit", (0,)),
+            ("setWallTimeLimit", (0,)),
+            ("setMaxThreads", (0,)),
+            ("clearInterrupt", ()),
+        );
+        foreach list<auto> c in (changes) {
+            assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("change", s, c[0], c[1]), c[0]);
+        }
+        assertEq("FILESYSTEM-ACCESS-DENIED", s.callFunction("rd", secret));
+    }
+
+    tightenTest() {
+        Program s = pgm(strict(), ChangeSource);
+        list<list<auto>> changes = (
+            ("setFilesystemDefaultPolicy", (False,)),
+            ("addFilesystemDeniedPath", (tmp.path + "/other",)),
+            ("setNetworkDefaultPolicy", (False,)),
+            ("blockLocalhost", ()),
+            ("blockPrivateNetworks", ()),
+            ("setMemoryLimit", (1024 * 1024 * 1024,)),
+            ("setMaxThreads", (100,)),
+        );
+        foreach list<auto> c in (changes) {
+            assertEq("changed", s.callFunction("change", s, c[0], c[1]), c[0]);
+        }
+        # a lower limit is stricter, a higher one is not
+        assertEq("changed", s.callFunction("change", s, "setMaxThreads", 50));
+        assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("change", s, "setMaxThreads", 200));
+        assertEq("FILESYSTEM-ACCESS-DENIED", s.callFunction("rd", secret));
+    }
+
+    httpsOnlyTest() {
+        # with no port rule every port is allowed, so allowing only 443/TCP restricts the ports
+        Program s = pgm(strict(), ChangeSource);
+        assertEq("changed", s.callFunction("change", s, "allowHTTPSOnly", ()));
+        # it is allowed again when 443/TCP is allowed already
+        assertEq("changed", s.callFunction("change", s, "allowHTTPSOnly", ()));
+        # an allowlist of port 80 only: adding 443/TCP would loosen it, as addNetworkAllowedPort(443) would
+        SandboxManager sm = strict();
+        sm.addNetworkAllowedPort(80);
+        Program s80 = pgm(sm, ChangeSource);
+        assertEq("SANDBOX-ACCESS-ERROR", s80.callFunction("change", s80, "allowHTTPSOnly", ()));
+        assertEq("SANDBOX-ACCESS-ERROR", s80.callFunction("change", s80, "addNetworkAllowedPort", 443));
+        # the allowlist is unchanged
+        list<auto> ports = sm.getNetworkConfiguration().allowed_ports;
+        assertEq(1, ports.size());
+        assertEq(80, ports[0].low);
+        assertEq(80, ports[0].high);
+    }
+
+    changeOtherTest() {
+        Program x = pgm(strict());
+        Program s = pgm(strict(), ChangeSource);
+        assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("change", x, "setFilesystemDefaultPolicy", True));
+        assertEq("FILESYSTEM-ACCESS-DENIED", x.callFunction("rd", secret));
+    }
+
+    restrictedTest() {
+        # no sandbox governs this code, but its Program restricts a functional domain
+        Program r = pgm(NOTHING, ChangeSource, PO_NO_PROCESS_CONTROL);
+        Program x = pgm(strict());
+        assertEq("SANDBOX-ACCESS-ERROR", r.callFunction("loosen_new", x));
+        assertEq("SANDBOX-ACCESS-ERROR", r.callFunction("change", x, "setFilesystemDefaultPolicy", True));
+        assertEq("FILESYSTEM-ACCESS-DENIED", x.callFunction("rd", secret));
+    }
+
+    ownManagerTest() {
+        Program s = pgm(strict(), ChangeSource);
+        # a Program without a manager
+        Program t = pgm();
+        assertEq("ok", s.callFunction("own_manager", t, tmp.path));
+        assertEq("TOPSECRET", t.callFunction("rd", secret));
+        # it cannot replace the manager now that the Program has one
+        assertEq("SANDBOX-ACCESS-ERROR", s.callFunction("loosen_new", t));
+        # nor loosen a manager that another Program's code created
+        Program s2 = pgm(strict(), ChangeSource);
+        assertEq("SANDBOX-ACCESS-ERROR", s2.callFunction("change", t, "setFilesystemDefaultPolicy", True));
+    }
+
+    trustedTest() {
+        SandboxManager sm = strict();
+        Program x = pgm(sm);
+        assertEq("FILESYSTEM-ACCESS-DENIED", x.callFunction("rd", secret));
+        sm.setFilesystemDefaultPolicy(True);
+        assertEq("TOPSECRET", x.callFunction("rd", secret));
+        x.setSandboxManager(strict());
+        assertEq("FILESYSTEM-ACCESS-DENIED", x.callFunction("rd", secret));
+    }
+}

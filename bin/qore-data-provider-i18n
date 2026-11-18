@@ -287,7 +287,7 @@ class QoreDataProviderI18nCmd {
 
         int stale = 0;
         int translation_count = 0;
-        hash<string, list<hash<auto>>> domain_roots;
+        hash<string, list<hash<auto>>> domain_roots = {};
         foreach hash<auto> root in (roots) {
             domain_roots{root.domain} += root;
         }
@@ -308,7 +308,7 @@ class QoreDataProviderI18nCmd {
                 hash<auto> catalog = I18n::load_native_catalog(root.path, DataProviderPresentation::MaxCatalogFileBytes);
                 I18n::MessageCatalog validated(catalog,
                     {"literal_messages": True});
-                if (sort(keys catalog.locales)
+                if (sort((keys catalog.locales) ?? ())
                         != (DataProviderPresentation::RootLocale,)) {
                     ++stale;
                     stderr.printf("%s %s must contain only locale %y\n",
@@ -421,7 +421,7 @@ class QoreDataProviderI18nCmd {
             load_module(module_name);
         }
 
-        hash<string, hash<string, hash<auto>>> owner_catalogs;
+        hash<string, hash<string, hash<auto>>> owner_catalogs = {};
         foreach string owner in (sort(keys owner_modules)) {
             owner_catalogs{owner} = moduleCatalogs(owner);
         }
@@ -450,7 +450,7 @@ class QoreDataProviderI18nCmd {
             hash<auto> catalog = I18n::load_native_catalog(root.path, DataProviderPresentation::MaxCatalogFileBytes);
             I18n::MessageCatalog validated(catalog,
                 {"literal_messages": True});
-            if (sort(keys catalog.locales)
+            if (sort((keys catalog.locales) ?? ())
                     != (DataProviderPresentation::RootLocale,)) {
                 ++stale;
                 stderr.printf("%s %s must contain only locale %y\n",
@@ -565,7 +565,7 @@ class QoreDataProviderI18nCmd {
             load_module(module_name);
         }
 
-        hash<string, hash<string, hash<auto>>> owner_catalogs;
+        hash<string, hash<string, hash<auto>>> owner_catalogs = {};
         foreach string owner in (sort(keys owner_modules)) {
             owner_catalogs{owner} = moduleCatalogs(owner);
         }
@@ -574,7 +574,7 @@ class QoreDataProviderI18nCmd {
         # This prevents a late duplicate, orphan, or new-domain error from
         # leaving an otherwise repairable tree only partly regenerated.
         hash<string, hash<string, bool>> seen;
-        hash<string, hash<auto>> roots_by_path;
+        hash<string, hash<auto>> roots_by_path = {};
         foreach hash<auto> root in (owned_roots) {
             if (seen{root.owner}{root.domain}) {
                 throw "DATA-PROVIDER-I18N-ERROR", sprintf(
@@ -988,7 +988,7 @@ class QoreDataProviderI18nCmd {
             int new_texts = (select new_messages.iterator(), !old_sources{$1.source}).size();
             map totals{$1.key} += $1.value, stats.pairIterator();
             totals.new_texts += new_texts;
-            bool changed = sort(keys new_messages) != sort(keys old_messages);
+            bool changed = sort((keys new_messages) ?? ()) != sort((keys old_messages) ?? ());
             if (changed) {
                 ++totals.changed;
             }
@@ -1294,7 +1294,7 @@ class QoreDataProviderI18nCmd {
             return 0;
         }
 
-        hash<string, string> paths;
+        hash<string, string> paths = {};
         Dir dir();
         if (!dir.chdir(output)) {
             throw "DATA-PROVIDER-I18N-ERROR",

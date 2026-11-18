@@ -32,9 +32,15 @@
 #ifndef _QORE_QORESQUAREBRACKETSOPERATORNODE_H
 #define _QORE_QORESQUAREBRACKETSOPERATORNODE_H
 
-class QoreSquareBracketsOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
+
+#include <atomic>
+class QoreSquareBracketsOperatorNode final : public QoreBinaryOperatorNode<>, public FunctionalOperator {
 OP_COMMON
 public:
+    //! the keys of the lvalue path that ends with this step, if they are evaluated before it is resolved
+    /** computed from the path the first time that it is resolved (LValueHelper::evalPathKeys(), qore#5753) */
+    mutable QoreLValuePathKeyCache lvalue_path_keys;
+
     DLLLOCAL QoreSquareBracketsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreBinaryOperatorNode<>(loc, left, right) {
     }
@@ -48,10 +54,23 @@ public:
     DLLLOCAL static bool normalizeIndex(int64& offset, int64 size, bool negative_offsets);
 
     DLLLOCAL static QoreValue doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
-            bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
+            bool string_index_char, bool negative_offsets, bool broken_list_range, ExceptionSink* xsink);
 
     DLLLOCAL static QoreValue doSquareBrackets(const QoreValue l, const QoreValue r, bool list_ok,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink);
+
+    //! Returns the iterator of the evaluated sequence \a lhs with the evaluated selectors \a rhs (no range)
+    /** As the AST interpreter iterates the operator (getFunctionalIteratorImpl()): a list with a list of indices is
+        iterated lazily by an iterator that keeps both, which it takes from the holders (with their references if they
+        are temporaries, or with references of its own); any other value is made first.  The IR tiers create the
+        iterator of a foreach statement with it (QoreIROpcode::IteratorCreateSource).
+    */
+    DLLLOCAL static FunctionalOperatorInterface* getIndexesIterator(ValueEvalRefHolder& lhs, ValueEvalRefHolder& rhs,
+            bool string_index_char, bool negative_offsets, FunctionalValueType& value_type, ExceptionSink* xsink);
+
+    //! Returns the iterator of the value \a res of the operator, which it takes: nullptr for NOTHING
+    DLLLOCAL static FunctionalOperatorInterface* getResultIterator(ValueHolder& res, FunctionalValueType& value_type,
+            ExceptionSink* xsink);
 
     //! Returns true if the RHS is a list with a range (e.g., list[1..3])
     DLLLOCAL bool hasRhsListRange() const {
@@ -71,10 +90,19 @@ public:
         return negative_offsets;
     }
 
+    //! sets what parseInit() sets for %modern code, for an operator of compiled code
+    /** For an operator that a reader of compiled code (AOT) creates, whose parseInit() is not called (qore#6294):
+        compiled code is %modern (negative offsets, string index characters), and an offset list with a range is a
+        list of ranges, as parseCheckValueTypes() finds
+    */
+    DLLLOCAL void setCompiledCodeOptions();
+
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
     // is the RHS a list with a range?
     bool rhs_list_range = false;
+    // does the index need evaluation (set at parse time; qore#6204)?
+    bool right_needs_eval = true;
     // is the offset operand a list at parse time?
     bool slice = false;
     bool string_index_char = true;
@@ -100,8 +128,14 @@ class QoreFunctionalSquareBracketsOperator : public FunctionalOperatorInterface 
 public:
     DLLLOCAL QoreFunctionalSquareBracketsOperator(ValueEvalRefHolder& lhs, ValueEvalRefHolder& rhs,
             bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
-            : leftValue(*lhs, lhs.isTemp(), xsink),
-              rightList(rhs->get<const QoreListNode>()),
+            // a sequence read from a variable is borrowed: the iterator holds its own reference, since the loop body
+            // or the operator's expression can assign the variable another value, which released the only
+            // reference to the sequence while it was iterated (qore#5675)
+            : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
+              // the list of indices is held as the sequence is: a list that the selectors evaluated to is a temporary
+              // whose reference the iterator takes, which was never released (qore#5684)
+              rightValue(rhs.isTemp() ? *rhs : rhs->refSelf(), true, xsink),
+              rightList(rightValue->get<const QoreListNode>()),
               string_index_char(string_index_char),
               negative_offsets(negative_offsets) {
         lhs.clearTemp();
@@ -116,6 +150,8 @@ public:
 
 protected:
     ValueOptionalRefHolder leftValue;
+    //! the list of indices
+    ValueOptionalRefHolder rightValue;
     const QoreListNode* rightList;
     qore_offset_t offset = -1;
     bool string_index_char = true;
@@ -125,11 +161,15 @@ protected:
 class QoreFunctionalSquareBracketsComplexOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalSquareBracketsComplexOperator(ValueEvalRefHolder& lhs, const QoreParseListNode* rpl,
-            bool string_index_char, bool negative_offsets, ExceptionSink* xsink)
-            : leftValue(*lhs, lhs.isTemp(), xsink),
+            bool string_index_char, bool negative_offsets, bool broken_list_range, ExceptionSink* xsink)
+            // a sequence read from a variable is borrowed: the iterator holds its own reference, since the loop body
+            // or the operator's expression can assign the variable another value, which released the only
+            // reference to the sequence while it was iterated (qore#5675)
+            : leftValue(lhs.isTemp() ? *lhs : lhs->refSelf(), true, xsink),
             rightParseList(rpl),
             string_index_char(string_index_char),
-            negative_offsets(negative_offsets) {
+            negative_offsets(negative_offsets),
+            broken_list_range(broken_list_range) {
         lhs.clearTemp();
     }
 
@@ -143,9 +183,23 @@ protected:
     ValueOptionalRefHolder leftValue;
     const QoreParseListNode* rightParseList;
     qore_offset_t offset = -1;
-    std::unique_ptr<class QoreFunctionalRangeOperator> rangeIter;
+    //! true while the indices of a range selector are iterated
+    bool inRange = false;
+    //! true if the range is the effective range of a range with a negative bound, which checks for cancellation
+    bool rangeCheckCancel = false;
+    //! the next index and the last index of the current range, and the step between them
+    int64 rangeIndex = 0;
+    int64 rangeStop = 0;
+    int64 rangeStep = 1;
+    //! counts the indices of an effective range for the cancellation check
+    unsigned cancelCheck = 0;
     bool string_index_char = true;
     bool negative_offsets = false;
+
+    bool broken_list_range = false;
+
+    //! Starts the iteration of the range selector \a range, whose bounds it evaluates; returns -1 for an exception
+    DLLLOCAL int startRange(const class QoreRangeOperatorNode* range, ExceptionSink* xsink);
 };
 
 #endif

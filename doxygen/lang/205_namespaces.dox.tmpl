@@ -37,7 +37,7 @@
     |3|All namespaces|Every namespace in the tree is searched, and the match in the shallowest namespace wins.
     |4|Class handlers|Namespaces with a class handler installed by a binary module are queried in order of increasing depth.  This step applies to classes only.
 
-    Step 1 means that a user-defined symbol can never shadow a symbol in the @ref Qore "Qore" namespace when the symbol is used without a namespace path; use an explicit @ref namespace_paths "namespace path" to reach a user-defined symbol whose name collides with a built-in symbol.\n\n
+    Step 1 means that a user-defined symbol can never shadow a symbol in the @ref Qore "Qore" namespace when the symbol is used without a namespace path; use an explicit @ref namespace_paths "namespace path" to reach a user-defined symbol whose name collides with a built-in symbol.  The strict @ref warning-language-traps "language-traps" warning reports a user-defined function, class, constant, hashdecl or global variable declared with the name of a symbol of the same kind in the @ref Qore "Qore" namespace, once at its declaration, unless @ref broken-namespace-resolution "%broken-namespace-resolution" is set or the symbol is declared in a @ref user_modules "user module".\n\n
     Two additional lookups are made before the steps above when the context allows it:
     - when resolving a @ref constants "constant" or a bareword inside a class, the class's own constants (including those inherited from base classes) are searched first
     - when resolving a @ref qore_functions "function" call inside a class, the class's methods are searched first

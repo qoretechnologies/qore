@@ -1271,7 +1271,10 @@ void RObject::derefDone(bool del, bool wait_only) {
     if (ref_waiting) {
         // we have to use broadcast here because the condition variable is shared
         rcond.broadcast();
-        assert(ref_inprogress || !del);
+        // a deleting dereference never completes while another deleting dereference waits for it; a dereference
+        // that handed the deletion off and waits before releasing a weak reference (wait_only) can wait for the
+        // deleting one, which holds its own reference to the object (qore_object_private::takeDeleteReference())
+        assert(ref_inprogress || !del || !dbg_del_waiting);
     }
     if (del || wait_only) {
         // either we will delete the object ourselves, or we handed off deletion but still need
@@ -1291,7 +1294,17 @@ void RObject::derefDone(bool del, bool wait_only) {
 #endif
         while (ref_inprogress > own) {
             ++ref_waiting;
+#ifdef DEBUG
+            if (del) {
+                ++dbg_del_waiting;
+            }
+#endif
             rcond.wait(rlck);
+#ifdef DEBUG
+            if (del) {
+                --dbg_del_waiting;
+            }
+#endif
             --ref_waiting;
         }
     }
@@ -1912,6 +1925,9 @@ robject_dereference_helper::~robject_dereference_helper() {
     // references it counted as recursive are released later, and the last of them releases the base reference;
     // releasing it here as well freed the object while those dereferences still used it.
     if (qo && !refs) {
+#ifdef DEBUG
+        qo->dbgReleaseZeroCountWeakRef();
+#endif
         qo->tDeref();
     }
 }
@@ -2133,9 +2149,10 @@ void RSetHelper::startNode(int id) {
             lvalue_ref::get(static_cast<ReferenceNode*>(n.ptr))->scanReference(*this);
             break;
         case NodeKind::BoundCallback: {
-            const auto* callback = qore_get_sandbox_bound_callback(static_cast<ResolvedCallReferenceNode*>(n.ptr));
-            if (callback) {
-                checkNode(const_cast<ResolvedCallReferenceNode*>(callback));
+            // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+            const AbstractQoreNode* held = qore_get_call_reference_scan_node(static_cast<AbstractQoreNode*>(n.ptr));
+            if (held) {
+                checkNode(const_cast<AbstractQoreNode*>(held));
             }
             break;
         }
@@ -2571,7 +2588,7 @@ private:
     RScanHelper& rsh;
 };
 
-RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<const RObject*>* write_removed)
+RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const QoreRemovedValueTracker* write_removed)
         : xsink(xsink), write_removed(write_removed) {
     if (q_disable_gc) {
         return;
@@ -3021,8 +3038,7 @@ void RSetHelper::commit() {
         // again.
         if (!o->rrefs.load(std::memory_order_acquire)
                 && o->references.load(std::memory_order_acquire) <= o->rcount
-                && !(write_removed
-                    && std::find(write_removed->begin(), write_removed->end(), o) != write_removed->end())) {
+                && !(write_removed && write_removed->contains(o))) {
             o->tRef();
             recheck_objects.push_back(o);
         }
@@ -3232,9 +3248,10 @@ void qore_dgc_value_stored(RObject& holder, const QoreValue& v) {
             }
 
             case NT_FUNCREF: {
-                const auto* callback = qore_get_sandbox_bound_callback(n);
-                if (callback && needs_scan(callback)) {
-                    todo.push_back(callback);
+                // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+                const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
+                if (held && needs_scan(held)) {
+                    todo.push_back(held);
                 }
                 break;
             }

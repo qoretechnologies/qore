@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks instanceof with a type parameter of generic code; run by instanceof-type-param.qtest
+
+/** A type parameter of a generic class, function or method is the type argument of the instantiation that runs, as
+    for a variable or parameter declared with it, so \c v \c instanceof \c T tests \c v against that type argument
+    (qore#6016).  Each check prints "name=result".
+*/
+
+class Base {
+}
+
+class Derived inherits Base {
+}
+
+class Holder<T> {
+    bool isT(auto v) {
+        return v instanceof T;
+    }
+
+    #! a constant operand is not folded at parse time
+    bool oneIsT() {
+        return 1 instanceof T;
+    }
+
+    #! the type parameter in a type of its own
+    bool isListOfT(auto v) {
+        return v instanceof list<T>;
+    }
+
+    #! the type parameter in a closure of the method
+    bool closureIsT(auto v) {
+        code c = bool sub () {
+            return v instanceof T;
+        };
+        return c();
+    }
+
+    #! a type parameter of the method beside the class's
+    bool isU<U>(auto v) {
+        return v instanceof U;
+    }
+
+    #! the type parameter in a background thread of the method
+    bool backgroundIsT(auto v) {
+        Queue q();
+        background q.push(v instanceof T);
+        return q.get();
+    }
+
+    #! the type parameter as the type argument of a generic function
+    bool viaFunction(auto v) {
+        return isUFn<T>(v);
+    }
+
+    #! the type parameter as the type argument of a generic method of the class
+    bool viaMethod(auto v) {
+        return isU<T>(v);
+    }
+
+    static bool staticIsT(auto v) {
+        return v instanceof T;
+    }
+}
+
+#! a subclass of an instantiation
+class IntHolder inherits Holder<int> {
+}
+
+bool sub isUFn<U>(auto v) {
+    return v instanceof U;
+}
+
+#! calls of generic code from generic code: the type argument is the caller's type parameter
+bool sub isUIndirect<U>(auto v) {
+    return isUFn<U>(v);
+}
+
+#! the type parameter in a closure of a generic function
+bool sub closureIsU<U>(auto v) {
+    code c = bool sub () {
+        return v instanceof U;
+    };
+    return c();
+}
+
+#! the type parameter in a background thread of a generic function
+bool sub backgroundIsU<U>(auto v) {
+    Queue q();
+    background q.push(v instanceof U);
+    return q.get();
+}
+
+#! a type argument inferred from an argument
+bool sub inferredIsU<U>(U sample, auto v) {
+    return v instanceof U;
+}
+
+#! the results of instanceof checks of one generic method and one generic function, called in turn with two
+#! instantiations in one thread: "T" for True, "F" for False
+/** The type of an instanceof in compiled code can be resolved once and kept, but its type parameter is the type
+    argument of each instantiation that runs (#5976, qore#6016)
+*/
+string sub alternating() {
+    Holder<int> hi();
+    Holder<string> hs();
+    string rv;
+    for (int i = 0; i < 4; ++i) {
+        rv += hi.isT(1) ? "T" : "F";
+        rv += hs.isT(1) ? "T" : "F";
+        rv += isUFn<int>(1) ? "T" : "F";
+        rv += isUFn<string>(1) ? "T" : "F";
+    }
+    return rv;
+}
+
+hash<string, bool> sub checks() {
+    Holder<Base> hb();
+    Holder<int> hi();
+    Holder<*int> hoi();
+    IntHolder ih();
+    hash<string, bool> rv = {
+        "class-same": hb.isT(new Base()),
+        "class-subclass": hb.isT(new Derived()),
+        "class-other": hb.isT(1),
+        "class-int": hi.isT(1),
+        "class-int-other": hi.isT("x"),
+        "class-nothing": hi.isT(NOTHING),
+        "class-or-nothing": hoi.isT(NOTHING),
+        "class-const-int": hi.oneIsT(),
+        "class-const-other": hb.oneIsT(),
+        "class-list": hi.isListOfT((1, 2)),
+        "class-list-other": hi.isListOfT(("a", "b")),
+        "class-closure": hb.closureIsT(new Derived()),
+        "class-closure-other": hi.closureIsT("x"),
+        "inherited": ih.isT(1),
+        "inherited-other": ih.isT("x"),
+        "method-param": hi.isU<string>("x"),
+        "method-param-other": hi.isU<string>(1),
+        "function": isUFn<int>(1),
+        "function-other": isUFn<string>(1),
+        "function-subclass": isUFn<Base>(new Derived()),
+        "function-indirect": isUIndirect<int>(1),
+        "function-indirect-other": isUIndirect<int>("x"),
+        "function-closure": closureIsU<int>(1),
+        "function-closure-other": closureIsU<int>("x"),
+        "function-background": backgroundIsU<string>("x"),
+        "function-background-other": backgroundIsU<string>(1),
+        "function-inferred": inferredIsU(1, 2),
+        "function-inferred-other": inferredIsU(1, "x"),
+        "class-background": hi.backgroundIsT(1),
+        "class-background-other": hi.backgroundIsT("x"),
+        "class-via-function": hi.viaFunction(1),
+        "class-via-function-other": hi.viaFunction("x"),
+        "class-via-method": hi.viaMethod(1),
+        "class-via-method-other": hi.viaMethod("x"),
+    };
+    # static calls of generic classes in separate statements (see qore#6037)
+    rv."static" = Holder<int>::staticIsT(1);
+    rv."static-other" = Holder<int>::staticIsT("x");
+    return rv;
+}
+
+map printf("%s=%y\n", $1.key, $1.value), checks().pairIterator();
+printf("alternating=%s\n", alternating());

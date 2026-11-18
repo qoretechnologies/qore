@@ -34,10 +34,12 @@
 #define _QORE_QORETYPEINFO_H
 
 #include <map>
+#include <set>
 #include "qore/intern/qore_string_private.h"
 #include <vector>
 #include <utility>
 #include <functional>
+#include "qore/intern/QoreTypeOwner.h"
 #include <atomic>
 #include <memory>
 
@@ -48,6 +50,15 @@ class QoreComplexBufferTypeInfo;
 class QoreProgramLocation;
 class QoreTypeInfo;
 class LValueHelper;
+class LexicalSemanticPolicy;
+
+//! Creates a code-owned initializer conversion target; an empty result means use the actual declared type.
+/** The descriptor is never a value's type, a public declaration type or an AOT artifact. */
+DLLLOCAL std::shared_ptr<const QoreTypeInfo> qore_make_initializer_filter(const QoreTypeInfo* type_info,
+        LexicalSemanticPolicy policy, bool instance_member);
+
+//! Explicit soft-boolean conversion used by legacy declaration and invocation filters.
+DLLLOCAL void qore_lexical_soft_bool_filter(QoreValue& value, ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
 //! The kind of container whose value type produced an lvalue's declared type, if any
 /** Carried into the runtime type-error path so a rejected assignment can be explained in terms of
@@ -87,6 +98,17 @@ static inline void validate_date_variant(QoreValue& n, ExceptionSink* xsink, boo
     }
 }
 
+class QoreTypeInfo;
+
+#ifdef DEBUG
+//! Registers and unregisters the types that exist, for the assertions of the bookkeeping of the declarations that
+//! outlive their Program, which name types by pointer (debug builds; see qore_type_info_is_live())
+DLLLOCAL void qore_type_info_created(const QoreTypeInfo* ti);
+DLLLOCAL void qore_type_info_destroyed(const QoreTypeInfo* ti);
+//! Returns true if \a ti is a type that has not been freed
+DLLLOCAL bool qore_type_info_is_live(const QoreTypeInfo* ti);
+#endif
+
 class QoreTypeInfo {
 public:
     const q_return_vec_t return_vec;
@@ -94,9 +116,18 @@ public:
     DLLLOCAL QoreTypeInfo(const char* name, const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec)
             : accept_vec(a_vec), return_vec(r_vec), tname(name) {
         setSimpleName();
+#ifdef DEBUG
+        qore_type_info_created(this);
+#endif
     }
 
+#ifdef DEBUG
+    DLLLOCAL virtual ~QoreTypeInfo() {
+        qore_type_info_destroyed(this);
+    }
+#else
     DLLLOCAL virtual ~QoreTypeInfo() = default;
+#endif
 
     DLLLOCAL signed char getContainsTypeParameterCache() const {
         return contains_type_parameter_cache.load(std::memory_order_relaxed);
@@ -201,7 +232,42 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseReturns(const QoreTypeInfo* ti, QoreTypeSpec t) {
+        // a value of a type parameter returns what its bound returns, or anything if it has none (qore#5774)
+        if (const QoreTypeInfo* src = getTypeParameterSourceType(ti)) {
+            ti = src;
+        }
         return ti && hasType(ti) ? ti->parseReturns(t) : QTI_WILDCARD;
+    }
+
+    //! Returns true if the type returns only scalar values and strings (int, float, number, bool, string, date,
+    //! binary, NOTHING, NULL), none of which is an object or a container that can hold one
+    /** The check of such a value against the type does not depend on the class context it runs in; false for a type
+        that is not given (\c auto) or that can return any other value
+    */
+    DLLLOCAL static bool returnsOnlyScalars(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return false;
+        }
+        for (auto& i : ti->return_vec) {
+            if (i.spec.getTypeSpec() != QTS_TYPE) {
+                return false;
+            }
+            switch (i.spec.getType()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_STRING:
+                case NT_DATE:
+                case NT_BINARY:
+                case NT_NOTHING:
+                case NT_NULL:
+                    break;
+                default:
+                    return false;
+            }
+        }
+        return true;
     }
 
     // static version of method, checking for null pointer
@@ -253,6 +319,17 @@ public:
     DLLLOCAL static qore_type_result_e runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n,
             int& quality, bool& content_dependent);
 
+    //! Explicit-policy counterpart used by declaration- and invocation-bound argument filters.
+    DLLLOCAL static qore_type_result_e runtimeAcceptsCallArg(const QoreTypeInfo* ti, const QoreValue& n,
+            int& quality, bool& content_dependent, LexicalSemanticPolicy policy);
+
+    DLLLOCAL static qore_type_result_e runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue& n,
+            LexicalSemanticPolicy policy, bool fold = false);
+
+    template <typename MatchPolicy>
+    DLLLOCAL static qore_type_result_e runtimeAcceptsCallArgImpl(const QoreTypeInfo* ti, const QoreValue& n,
+            int& quality, bool& content_dependent, MatchPolicy policy);
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second) {
         if (first == second) {
@@ -289,6 +366,15 @@ public:
             bool& may_not_match, bool& may_need_filter, qore_type_result_e& max_result,
             bool known_initial_assignment = false);
 
+    //! Returns the type that a value of a type parameter has in generic code, if \a ti is a type parameter
+    /** A value of a bounded type parameter (\c T: \c int) has its bound (an upper bound); a value of an unbounded one
+        can have any type, so it is a may-match checked at run time (\c auto); \c *T has the or-nothing type of its
+        bound (qore#5774)
+
+        @return the type, or nullptr if \a ti is not a type parameter
+    */
+    DLLLOCAL static const QoreTypeInfo* getTypeParameterSourceType(const QoreTypeInfo* ti);
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeTypeMatch(const QoreTypeInfo* first, const QoreTypeInfo* second) {
         //printd(5, "QoreTypeInfo::runtimeTypeMatch() %p '%s' (ht: %d) <=> %p '%s' (ht: %d)\n", first,
@@ -303,6 +389,55 @@ public:
         return QoreTypeInfo::hasType(first) ? first->runtimeTypeMatch(second) : QTI_AMBIGUOUS;
     }
 
+    //! Returns the subtype of a date type: 1 for date<absolute>, 2 for date<relative> (with or without NOTHING), 0 for
+    //! any other type (issue #5722)
+    DLLLOCAL static int getDateSubtype(const QoreTypeInfo* ti) {
+        if (ti == dateAbsoluteTypeInfo || ti == dateAbsoluteOrNothingTypeInfo) {
+            return 1;
+        }
+        if (ti == dateRelativeTypeInfo || ti == dateRelativeOrNothingTypeInfo) {
+            return 2;
+        }
+        return 0;
+    }
+
+    //! Returns the type of a value known at parse time, such as the value of a constant: a date has the type of its
+    //! subtype, as a date literal does (issue #5722)
+    DLLLOCAL static const QoreTypeInfo* getKnownValueType(const QoreValue& val) {
+        if (val.getType() == NT_DATE) {
+            return val.get<const DateTimeNode>()->isRelative() ? dateRelativeTypeInfo : dateAbsoluteTypeInfo;
+        }
+        return val.getTypeInfo();
+    }
+
+    //! Returns the type of the run-time values of a type: date<absolute> and date<relative> are date (issue #5722)
+    /** A date value has no subtype at run time, so a type that the parser keeps for code that follows, such as the
+        value type of a container built from a literal, the common type of a ternary or the narrowed type of a local,
+        is the plain date type, while the expression itself keeps its subtype for the checks of its own use.
+    */
+    DLLLOCAL static const QoreTypeInfo* getRuntimeValueType(const QoreTypeInfo* ti) {
+        if (ti == dateAbsoluteTypeInfo || ti == dateRelativeTypeInfo) {
+            return dateTypeInfo;
+        }
+        if (ti == dateAbsoluteOrNothingTypeInfo || ti == dateRelativeOrNothingTypeInfo) {
+            return dateOrNothingTypeInfo;
+        }
+        return ti;
+    }
+
+    //! Returns true if one type is date<absolute> and the other date<relative>, with or without NOTHING (issue #5722)
+    /** Both accept and return dates, so only their subtypes tell them apart; a value of one is never a value of the
+        other.
+    */
+    DLLLOCAL static bool isDateSubtypeMismatch(const QoreTypeInfo* first, const QoreTypeInfo* second) {
+        int first_subtype = getDateSubtype(first);
+        if (!first_subtype) {
+            return false;
+        }
+        int second_subtype = getDateSubtype(second);
+        return second_subtype && second_subtype != first_subtype;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_t getSingleReturnType(const QoreTypeInfo* ti) {
         if (!hasType(ti) || ti->return_vec.size() > 1)
@@ -311,8 +446,11 @@ public:
     }
 
     // static version of method, checking for null pointer
+    /** false for a type parameter, whose value has a type known only when the code runs (qore#5774)
+    */
     DLLLOCAL static bool returnsSingle(const QoreTypeInfo* ti) {
-        return ti && hasType(ti) ? ti->return_vec.size() == 1 : false;
+        return ti && hasType(ti) ? ti->return_vec.size() == 1 && !ti->return_vec[0].spec.getTypeParameterTypeInfo()
+            : false;
     }
 
     // static version of method, checking for null pointer
@@ -341,8 +479,12 @@ public:
         return nullptr;
     }
 
-    // static version of method, checking for null pointer
-    DLLLOCAL static const QoreParameterizedClassTypeInfo* getParameterizedClassType(const QoreTypeInfo* ti) {
+    // static version of method, checking for null pointer; always inlined: tryExecuteInterpreterInlineIRMethod() is
+    // forced into the IR interpreter's execute() by the early inliner, before its callees are inlined into it, and
+    // after that GCC's own inlining into the very large execute() is held back by its growth limits, which left this
+    // function as an out-of-line call on the IR method call path (issue #6381)
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE const QoreParameterizedClassTypeInfo* getParameterizedClassType(
+            const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.empty() || !hasType(ti)) {
             return nullptr;
         }
@@ -486,6 +628,19 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getReturnComplexHashOrNothing(const QoreTypeInfo* ti);
 
+    // static version of method, checking for null pointer; returns the value type of reference<T> or *reference<T>
+    DLLLOCAL static const QoreTypeInfo* getReturnComplexReferenceOrNothing(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return nullptr;
+        }
+        if (ti->return_vec.size() > 1) {
+            if (ti->return_vec.size() != 2 || ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT) {
+                return nullptr;
+            }
+        }
+        return ti->return_vec[0].spec.getComplexReference();
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getReturnComplexListOrNothing(const QoreTypeInfo* ti) {
         if (!ti || !hasType(ti))
@@ -587,6 +742,9 @@ public:
         }
     }
 
+    DLLLOCAL static void acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name,
+            QoreValue& n, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
     // static version of method, checking for null pointer
     DLLLOCAL static void acceptInputMember(const QoreTypeInfo* ti, const char* member_name, QoreValue& n,
             ExceptionSink* xsink) {
@@ -595,6 +753,18 @@ public:
                 return;
             }
             ti->acceptInputIntern(xsink, "member", true, -1, member_name, n);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink);
+        }
+    }
+
+    DLLLOCAL static void acceptInputMember(const QoreTypeInfo* ti, const char* member_name, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        if (hasType(ti)) {
+            if (ti->acceptsRuntimeValueWithoutFilter(n)) {
+                return;
+            }
+            ti->acceptInputIntern(xsink, "member", true, -1, member_name, n, policy);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink);
         }
@@ -610,8 +780,17 @@ public:
         }
     }
 
+    DLLLOCAL static void acceptInputKey(const QoreTypeInfo* ti, const char* key, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "key", false, -1, key, n, policy);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink);
+        }
+    }
+
     // static version of method, checking for null pointer
-    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
@@ -626,15 +805,49 @@ public:
         }
     }
 
+    //! Native assignment APIs inherit only their active native invocation; untyped assignments need no lookup.
+    DLLLOCAL static void acceptAssignmentNative(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LValueHelper* lvhelper) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, qore_get_native_semantic_policy(), nullptr,
+                lvalueValueTypeSource(lvhelper));
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, lvhelper);
+        }
+    }
+
+    //! Filters a source operation with its immutable compatibility policy.
+    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy, LValueHelper* lvhelper = nullptr) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, policy, nullptr,
+                lvalueValueTypeSource(lvhelper));
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, lvhelper);
+        }
+    }
+
     //! As above, for a caller that knows the container kind but has no LValueHelper
     /** compiled code stores container elements through runtime helpers instead of an LValueHelper, and must report
         the same diagnostic as the AST interpreter for the same assignment
     */
-    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
             ExceptionSink* xsink, q_lvalue_vts_e vts) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
             ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, nullptr, vts);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, nullptr);
+        }
+    }
+
+    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy, q_lvalue_vts_e vts) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, policy, nullptr, vts);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink, nullptr);
         }
@@ -661,6 +874,13 @@ public:
     //! Re-applies declared hash/list/hashdecl container metadata to a value.
     DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
             ExceptionSink* xsink);
+
+    DLLLOCAL static bool retypeValue(QoreValue& v, const QoreTypeInfo* target_ti,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    template <typename FilterPolicy>
+    DLLLOCAL static bool retypeValueImpl(QoreValue& v, const QoreTypeInfo* target_ti,
+            ExceptionSink* xsink, FilterPolicy policy);
 
     // static version of method, checking for null pointer
     DLLLOCAL static bool hasDefaultValue(const QoreTypeInfo* ti) {
@@ -711,6 +931,57 @@ public:
         return hta || htb ? false : true;
     }
 
+    //! Returns true if every value of type @a source is accepted by @a target unchanged
+    /** A compiled call or store can then skip @a target's input check.  Unlike isInputIdentical(), which compares
+        signatures (date<absolute> and date are the same signature), this is false when @a target validates the
+        values of the types it accepts: a date value must still be checked for a date<absolute> parameter.
+    */
+    DLLLOCAL static bool acceptsInputUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        // the same type, the common case, is decided where the function is called; the other cases are compared out
+        // of line, as the comparison of container value types recurses (issue #5782)
+        if (target == source) {
+            return true;
+        }
+        return acceptsInputUncheckedDifferent(target, source);
+    }
+
+    //! Compares two different types for acceptsInputUnchecked() (issue #5782)
+    DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
+            const QoreTypeInfo* source) {
+        if (!isInputIdentical(target, source)) {
+            return false;
+        }
+        if (!target) {
+            return true;
+        }
+        if (target->validatesInputImpl()) {
+            return false;
+        }
+        // a container accepts the values of another one unchecked only if its value type accepts the other's: a
+        // list<date> must still be checked for list<date<absolute>> (issue #5782)
+        return acceptsValuesUnchecked(target, source);
+    }
+
+    //! Returns true if the values of the container type @a source are accepted unchecked by the container type
+    //! @a target, or if @a target is not a hash, list or softlist type (issue #5782)
+    /** Called only for two types with the same signature (see acceptsInputUnchecked()).
+    */
+    DLLLOCAL static bool acceptsValuesUnchecked(const QoreTypeInfo* target, const QoreTypeInfo* source) {
+        const QoreTypeInfo* target_value = getReturnComplexHashOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexHashOrNothing(source));
+        }
+        target_value = getReturnComplexListOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexListOrNothing(source));
+        }
+        target_value = getReturnComplexSoftListOrNothing(target);
+        if (target_value) {
+            return acceptsInputUnchecked(target_value, getReturnComplexSoftListOrNothing(source));
+        }
+        return true;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static bool isOutputIdentical(const QoreTypeInfo* a, const QoreTypeInfo* b) {
         if (a == b)
@@ -754,6 +1025,17 @@ public:
         if (hasType(second))
             return first == second ? true : first->outputSuperSetOf(second);
         return false;
+    }
+
+    //! Returns true if each type that \a second returns is a type that \a first returns, with no conversion
+    /** A missing type returns any value: \a first without a type accepts any output, and \a second without one is
+        accepted only by \a first without a type
+    */
+    DLLLOCAL static bool outputAccepts(const QoreTypeInfo* first, const QoreTypeInfo* second) {
+        if (!hasType(first) || first == second) {
+            return true;
+        }
+        return hasType(second) ? first->outputAccepts(second) : false;
     }
 
     // static version of method, checking for null pointer
@@ -850,6 +1132,41 @@ public:
         return ti->return_vec[0].spec.getEnum();
     }
 
+    //! returns true if the type returns only plain values of the given base type
+    /** The type of an enum returns the values of its members, which are \c TAG_ENUM values and not values of the
+        enum's base type, although isType() and parseReturns() give its base type; a fast path that holds or passes
+        on values of the type as native or plain values of the base type would lose their enum type (qore#6236)
+    */
+    DLLLOCAL static bool isPlainType(const QoreTypeInfo* ti, qore_type_t t) {
+        return isType(ti, t) && !getReturnEnum(ti);
+    }
+
+    //! returns true if the type returns exactly plain values of the given base type; see isPlainType()
+    /** A type parameter is not plain, although parseReturns() gives its bound: the values of \c T: \c int are the
+        members of an int enum when the type argument is the enum, as are those of \c T: \c EI (isType() is false for a
+        type parameter)
+    */
+    DLLLOCAL static bool parseReturnsPlain(const QoreTypeInfo* ti, qore_type_t t) {
+        return parseReturns(ti, t) == QTI_IDENT && !getReturnEnum(ti) && !getTypeParameterSourceType(ti);
+    }
+
+    //! returns true if any of the types that the type returns is an enum, also one that is not its first (a union)
+    /** getReturnEnum() gives only the enum of the first return type: a union whose enum is another member (ex:
+        union<string, E>) returns the members of the enum as well, and accepts no plain value of its base type that
+        another member does not accept (qore#6259); see isPlainType()
+    */
+    DLLLOCAL static bool returnsEnum(const QoreTypeInfo* ti) {
+        if (!hasType(ti)) {
+            return false;
+        }
+        for (auto& i : ti->return_vec) {
+            if (i.spec.getEnum()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexHashValueType(const QoreTypeInfo* ti);
 
@@ -918,6 +1235,15 @@ public:
             const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr,
             q_lvalue_vts_e vts = QLVTS_None) const;
 
+    DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+            const char* param_name, QoreValue& n, LexicalSemanticPolicy policy, LValueHelper* lvhelper = nullptr,
+            q_lvalue_vts_e vts = QLVTS_None) const;
+
+    template <typename FilterPolicy>
+    DLLLOCAL void acceptInputInternImpl(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
+            const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts,
+            FilterPolicy policy) const;
+
     //! Returns the container kind an lvalue's type came from; QLVTS_None without a helper
     /** Defined in Variable.cpp, where LValueHelper is a complete type.
     */
@@ -942,14 +1268,27 @@ public:
         container_nesting = n;
     }
 
+    //! Returns the identity serial of the type; see qore_get_type_identity_serial()
+    DLLLOCAL uint64_t getIdentitySerial() const {
+        return identity_serial;
+    }
+
 protected:
     QoreString tname;
     QoreString sname;
     unsigned container_nesting = 0;
+    //! the instance serial number of the class, hashdecl or enum that made this type as its own type, otherwise 0
+    /** Set by the constructors of the types of classes, hashdecls and enums, which are freed with their owners; see
+        qore_get_type_identity_serial()
+    */
+    uint64_t identity_serial = 0;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
         setSimpleName();
+#ifdef DEBUG
+        qore_type_info_created(this);
+#endif
     }
 
     DLLLOCAL void setSimpleName() {
@@ -989,6 +1328,13 @@ protected:
 
     // returns true if "this"'s output is a superset of the argument's output with a strict interpretation that the order of return declarations must also be the same
     DLLLOCAL bool outputSuperSetOf(const QoreTypeInfo* t) const;
+
+    //! Returns true if each type that \a t returns is a type that this type returns, with no conversion
+    /** Unlike outputSuperSetOf(), the order of the return types is not significant, and a match that may need a
+        conversion (filter) is refused: a soft type is compared by the types it returns (\c softlist<string> returns
+        \c list<string>), not by the types it accepts.
+    */
+    DLLLOCAL bool outputAccepts(const QoreTypeInfo* t) const;
 
     DLLLOCAL qore_type_t getSingleType() const {
         if (accept_vec.size() == 1 && return_vec.size() == 1) {
@@ -1041,6 +1387,16 @@ protected:
     DLLLOCAL bool isType(qore_type_t t) const {
         if (return_vec.size() > 1)
             return false;
+        // a type parameter (and a wildcard) has no concrete type: it is not "nothing", which QoreTypeSpec::getType()
+        // gives for it to keep it apart from untyped auto/any (qore#5774)
+        switch (return_vec[0].spec.getTypeSpec()) {
+            case QTS_TYPEPARAM:
+            case QTS_WILDCARD:
+            case QTS_INITIALIZER_FILTER:
+                return false;
+            default:
+                break;
+        }
         return t == return_vec[0].spec.getType();
     }
 
@@ -1082,11 +1438,16 @@ protected:
         \c %broken-soft-types parse option (QoreParseOptions::BROKEN_SOFT_TYPES), as these types did before
         %Qore 3.0.
     */
-    DLLLOCAL bool acceptsBrokenSoftNull(const QoreValue& n) const;
+    DLLLOCAL bool acceptsBrokenSoftNull(const QoreValue& n, LexicalSemanticPolicy policy) const;
 
     // returns true if this type could contain an object or a closure
     DLLLOCAL virtual bool needsScanImpl() const {
         return true;
+    }
+
+    //! returns true if this type rejects some values of the types its accept specs match (see acceptsInputUnchecked())
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return false;
     }
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -1121,7 +1482,23 @@ protected:
 
     DLLLOCAL static void ptext(QoreString& str, const char* arg_type, int param_num, const char* param_name);
 
-    DLLLOCAL static void stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr);
+    // Keep scalar no-narrow assignments inline; their type-stripping switch has no effect.
+    DLLLOCAL static QORE_INTERN_ALWAYS_INLINE void stripTypeInfo(QoreValue& n, ExceptionSink* xsink,
+            LValueHelper* lvhelper = nullptr);
+
+public:
+    //! Returns true for an AOT deferred placeholder type (QoreAOTDeferredTypeInfo in QoreTypeInfo.cpp)
+    /** Every type comparison asks it (see qore_type_info_aot_deferred_compare()), so it is a flag that the
+        placeholder's constructor sets, and not a dynamic_cast, which cost about 400 instructions per comparison of
+        two types that are not placeholders.
+    */
+    DLLLOCAL bool isAotDeferredPlaceholder() const {
+        return aot_deferred_placeholder;
+    }
+
+protected:
+    //! true for an AOT deferred placeholder type only
+    bool aot_deferred_placeholder = false;
 
 private:
     const q_accept_vec_t accept_vec;
@@ -1170,10 +1547,19 @@ public:
 
 class QoreClassTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path)
+    //! Creates the type of a class
+    /** @param qc the class
+        @param name the class's name
+        @param path the class's path
+        @param serial the instance serial number of the class (qore_class_private::getInstanceSerial()), as the type
+        is freed with the class; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreClassTypeInfo(const QoreClass* qc, const char* name, const char* path, uint64_t serial)
         : QoreTypeInfo(q_accept_vec_t {{qc, nullptr, true}}, q_return_vec_t {{qc, true}},
             QoreStringMaker("object<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "object<";
         pname.append(path);
         pname.append(">");
@@ -1202,13 +1588,16 @@ protected:
 
 class QoreClassOrNothingTypeInfo : public QoreClassTypeInfo {
 public:
-    DLLLOCAL QoreClassOrNothingTypeInfo(const QoreClass* qc, const char* name, const char* path)
+    //! Creates the or-nothing type of a class; see QoreClassTypeInfo::QoreClassTypeInfo()
+    DLLLOCAL QoreClassOrNothingTypeInfo(const QoreClass* qc, const char* name, const char* path, uint64_t serial)
             : QoreClassTypeInfo(q_accept_vec_t {
                 {qc, nullptr},
                 {NT_NOTHING, nullptr},
                 {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             }, q_return_vec_t {{qc}, {NT_NOTHING}}, QoreStringMaker("*object<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "*object<";
         pname.append(path);
         pname.append(">");
@@ -1275,16 +1664,37 @@ public:
     DLLLOCAL QoreTypeParameterTypeInfo(const UserSignature* owner, size_t index, const char* name, bool or_nothing,
             const QoreTypeParameterTypeInfo* value_type = nullptr);
 
+    //! Returns the class that declares the type parameter, if any; nullptr once the class is destroyed
     DLLLOCAL const QoreClass* getOwnerClass() const {
-        return owner_class;
+        return owner_class.load(std::memory_order_relaxed);
     }
 
+    //! Returns the hashdecl that declares the type parameter, if any; nullptr once the hashdecl is destroyed
     DLLLOCAL const TypedHashDecl* getOwnerHashDecl() const {
-        return owner_hashdecl;
+        return owner_hashdecl.load(std::memory_order_relaxed);
     }
 
+    //! Returns the signature that declares the type parameter, if any; nullptr once the signature is destroyed
     DLLLOCAL const UserSignature* getOwnerSignature() const {
-        return owner_signature;
+        return owner_signature.load(std::memory_order_relaxed);
+    }
+
+    //! Returns true if the declaration of the type parameter was destroyed (see orphan())
+    DLLLOCAL bool isOrphaned() const {
+        return !getOwnerClass() && !getOwnerHashDecl() && !getOwnerSignature();
+    }
+
+    //! Clears the pointer to the declaration of the type parameter, which is being destroyed (issue #6419)
+    /** The type is not freed with its declaration: it is kept until library cleanup with the other derived types
+        (qore_purge_derived_types()), so that its declaration does not have to be kept for it.  Only the declaration's
+        own code, which is destroyed with it, and the types derived from the type parameter use the type; a type
+        check against it substitutes nothing once it is orphaned.  The pointers are atomic, so that a type check that
+        reads them in another thread reads either the declaration or nullptr.
+    */
+    DLLLOCAL void orphan() const {
+        owner_class.store(nullptr, std::memory_order_relaxed);
+        owner_hashdecl.store(nullptr, std::memory_order_relaxed);
+        owner_signature.store(nullptr, std::memory_order_relaxed);
     }
 
     DLLLOCAL size_t getIndex() const {
@@ -1299,10 +1709,16 @@ public:
         return or_nothing;
     }
 
+    //! Returns the bound of the type parameter (its upper bound), or nullptr if it has none or it is not resolved
+    /** the bound of a type parameter of a function or method is resolved with its signature, that of a class with the
+        class (qore_class_private::initializeIntern()); a type parameter of a hashdecl has none here (qore#5774)
+    */
+    DLLLOCAL const QoreTypeInfo* getBoundTypeInfo() const;
+
 protected:
-    const QoreClass* owner_class = nullptr;
-    const TypedHashDecl* owner_hashdecl = nullptr;
-    const UserSignature* owner_signature = nullptr;
+    mutable std::atomic<const QoreClass*> owner_class{nullptr};
+    mutable std::atomic<const TypedHashDecl*> owner_hashdecl{nullptr};
+    mutable std::atomic<const UserSignature*> owner_signature{nullptr};
     size_t index;
     std::string param_name;
     bool or_nothing;
@@ -1353,10 +1769,19 @@ protected:
 
 class QoreHashDeclTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
+    //! Creates the type of a hashdecl
+    /** @param hd the hashdecl
+        @param name the hashdecl's name
+        @param path the hashdecl's path
+        @param serial the instance serial number of the hashdecl (typed_hash_decl_private::getInstanceSerial()), as
+        the type is freed with the hashdecl; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path, uint64_t serial)
             : QoreTypeInfo(q_accept_vec_t {{hd, nullptr, true}}, q_return_vec_t {{hd, true}},
             QoreStringMaker("hash<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "hash<";
         pname.append(path);
         pname.append(">");
@@ -1391,13 +1816,17 @@ protected:
 
 class QoreHashDeclOrNothingTypeInfo : public QoreHashDeclTypeInfo {
 public:
-    DLLLOCAL QoreHashDeclOrNothingTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
+    //! Creates the or-nothing type of a hashdecl; see QoreHashDeclTypeInfo::QoreHashDeclTypeInfo()
+    DLLLOCAL QoreHashDeclOrNothingTypeInfo(const TypedHashDecl* hd, const char* name, const char* path,
+            uint64_t serial)
             : QoreHashDeclTypeInfo(q_accept_vec_t {
                 {hd, nullptr},
                 {NT_NOTHING, nullptr},
                 {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
             }, q_return_vec_t {{hd}, {NT_NOTHING}}, QoreStringMaker("*hash<%s>", name)) {
         assert(path && *path);
+        assert(serial);
+        identity_serial = serial;
         pname = "*hash<";
         pname.append(path);
         pname.append(">");
@@ -1424,7 +1853,14 @@ protected:
 
 class QoreEnumTypeInfo : public QoreTypeInfo {
 public:
-    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+    //! Creates the type of an enum
+    /** @param ed the enum
+        @param name the enum's name
+        @param path the enum's path
+        @param serial the instance serial number of the enum (qore_enum_decl_private::getInstanceSerial()), as the
+        type is freed with the enum; see qore_get_type_identity_serial()
+    */
+    DLLLOCAL QoreEnumTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial);
 
     //! Constructor with explicit accept/return vectors for or-nothing variant
     DLLLOCAL QoreEnumTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname,
@@ -1460,7 +1896,8 @@ protected:
 
 class QoreEnumOrNothingTypeInfo : public QoreEnumTypeInfo {
 public:
-    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path);
+    //! Creates the or-nothing type of an enum; see QoreEnumTypeInfo::QoreEnumTypeInfo()
+    DLLLOCAL QoreEnumOrNothingTypeInfo(const QoreEnumDecl* ed, const char* name, const char* path, uint64_t serial);
 
 protected:
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -2452,6 +2889,10 @@ protected:
         return false;
     }
 
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
+    }
+
     DLLLOCAL virtual bool hasDefaultValueImpl() const {
         return true;
     }
@@ -2478,6 +2919,10 @@ protected:
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
     }
+
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
+    }
 };
 
 class QoreRelativeDateTypeInfo : public QoreTypeInfo {
@@ -2494,6 +2939,10 @@ protected:
 
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
+    }
+
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
     }
 
     DLLLOCAL virtual bool hasDefaultValueImpl() const {
@@ -2522,13 +2971,28 @@ protected:
     DLLLOCAL virtual bool needsScanImpl() const {
         return false;
     }
+
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
+    }
 };
 
 DLLLOCAL void map_get_plain_hash(QoreValue&, ExceptionSink*);
 DLLLOCAL void map_get_plain_hash_lvalue(QoreValue&, ExceptionSink*, LValueHelper*);
 
+//! returns true if a list or hash assigned to or returned through \a ti loses its complex type
+/** \c any and a plain \c auto! (not a subtype such as \c hash<auto!>) strip complex type information; \c auto keeps it
+    (qore#6058, qore#6059)
+*/
+DLLLOCAL inline bool q_type_strips_complex_type(const QoreTypeInfo* ti) {
+    return ti == anyTypeInfo || ti == autoNoNarrowTypeInfo;
+}
+
 //! strips no-narrow (hash<auto!>/list<auto!>) container tags like LValueHelper::assign(); copies shared containers
-DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink);
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink);
+DLLLOCAL void q_apply_no_narrow_hash_type(QoreValue& val, ExceptionSink* xsink);
+DLLLOCAL void q_apply_no_narrow_list_type(QoreValue& val, ExceptionSink* xsink);
 
 class QoreHashTypeInfo : public QoreTypeInfo {
 public:
@@ -3367,29 +3831,23 @@ public:
    DLLLOCAL QoreSoftBoolTypeInfo() : QoreTypeInfo("softbool", q_accept_vec_t {
          {NT_BOOLEAN, nullptr, true},
          {NT_FLOAT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
       }, q_return_vec_t {{NT_BOOLEAN, true}}) {
    }
 
@@ -3423,29 +3881,23 @@ public:
    DLLLOCAL QoreSoftBoolOrNothingTypeInfo() : QoreTypeInfo("*softbool", q_accept_vec_t {
          {NT_BOOLEAN, nullptr},
          {NT_FLOAT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_INT, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_CHAR, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_NUMBER, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(n.getAsBool()), xsink);
-            }
-         },
+               discard(n.assign(LexicalSemanticPolicy::getAsBoolDefault(n)), xsink);
+            }, false, qore_lexical_soft_bool_filter},
          {NT_NOTHING, nullptr},
          {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); }},
       }, q_return_vec_t {{NT_BOOLEAN}, {NT_NOTHING}}) {
@@ -3787,7 +4239,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode;
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{NT_LIST, true}}) {
@@ -3825,7 +4279,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode;
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{NT_LIST}, {NT_NOTHING}}) {
@@ -3862,7 +4318,9 @@ public:
                         default: {
                             QoreListNode* l = new QoreListNode(autoTypeInfo);
                             l->push(n, nullptr);
-                            n.assign(l);
+                            // the list owns the value now: it is replaced without being released, as assign() would release
+                            // an enum value (qore#6355)
+                            n = QoreValue(l);
                             break;
                         }
                     }
@@ -3883,7 +4341,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo), true}}, QoreString("softlist<auto>")) {
@@ -3906,7 +4366,9 @@ public:
                         default: {
                             QoreListNode* l = new QoreListNode(autoTypeInfo);
                             l->push(n, nullptr);
-                            n.assign(l);
+                            // the list owns the value now: it is replaced without being released, as assign() would release
+                            // an enum value (qore#6355)
+                            n = QoreValue(l);
                             break;
                         }
                     }
@@ -3917,7 +4379,9 @@ public:
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
                     QoreListNode* l = new QoreListNode(autoTypeInfo);
                     l->push(n, nullptr);
-                    n.assign(l);
+                    // the list owns the value now: it is replaced without being released, as assign() would release
+                    // an enum value (qore#6355)
+                    n = QoreValue(l);
                 }
             },
         }, q_return_vec_t {{QoreComplexSoftListTypeSpec(autoTypeInfo)}, {NT_NOTHING}}, QoreString("*softlist<auto>")) {
@@ -4054,9 +4518,12 @@ constexpr size_t QORE_MAX_UNION_MEMBERS = 100;
 class QoreUnionTypeInfo : public QoreTypeInfo {
 public:
     //! Constructor for explicit union types
+    /** @param members the member types as declared (without duplicates)
+    */
     DLLLOCAL QoreUnionTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec,
-            const QoreString& name, bool or_nothing = false)
-            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing) {
+            const QoreString& name, type_vec_t members, bool or_nothing = false)
+            : QoreTypeInfo(std::move(a_vec), std::move(r_vec), name), orNothing(or_nothing),
+            members(std::move(members)) {
     }
 
     //! Returns true if this is an or-nothing union type
@@ -4064,21 +4531,18 @@ public:
         return orNothing;
     }
 
-    //! Returns the member types of this union
+    //! Returns the member types of this union as declared
+    /** The return types of the union give only the base type of a member (ex: \c hash for <tt>hash<H></tt>, \c object
+        for a class, \c string for a string enum), so the members are kept as declared (qore#5858)
+    */
     DLLLOCAL type_vec_t getMemberTypes() const {
-        type_vec_t result;
-        for (const auto& rt : return_vec) {
-            const QoreTypeInfo* ti = rt.spec.getBaseTypeInfo();
-            // Skip NOTHING type for or-nothing unions
-            if (ti && ti != nothingTypeInfo) {
-                result.push_back(ti);
-            }
-        }
-        return result;
+        return members;
     }
 
 protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
+    //! the member types as declared, without duplicates
+    const type_vec_t members;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);
@@ -4128,8 +4592,48 @@ struct QoreTypeParamInstantiation {
     }
 };
 
+class qore_type_decl_refs_private;
+
+//! Keeps the declarations (classes, hashdecls and enums) that types refer to, for a value that holds the types
+/** The type of a class, hashdecl or enum is freed with its declaration, which the Program that declared it releases
+    when it is deleted; a value that holds types without being a value of them (the explicit type arguments of a call
+    reference, the type arguments that a closure captures) keeps their declarations with this object, as
+    QoreExternalTypeDeclRefs does for the API (issue #6489).  Nothing is allocated for types without declarations.
+*/
+class QoreTypeDeclRefs {
+public:
+    DLLLOCAL QoreTypeDeclRefs() = default;
+
+    //! Releases the references
+    DLLLOCAL ~QoreTypeDeclRefs();
+
+    DLLLOCAL QoreTypeDeclRefs(const QoreTypeDeclRefs&) = delete;
+    DLLLOCAL QoreTypeDeclRefs& operator=(const QoreTypeDeclRefs&) = delete;
+
+    //! References the declarations that the types refer to, in addition to those already referenced
+    DLLLOCAL void add(const type_vec_t& types);
+
+    //! References the declarations that the type refers to, in addition to those already referenced
+    DLLLOCAL void add(const QoreTypeInfo* ti);
+
+private:
+    qore_type_decl_refs_private* priv = nullptr;
+};
+
 //! Returns the current call-local generic type-parameter instantiation, if any
 DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
+
+//! Resolves the type arguments of an explicit instantiation against the instantiation that is running
+/** An explicit type argument can be a type parameter of the generic code that makes the call (\c inner<T>() in a
+    generic function): the callee must be instantiated with the type that the running instantiation gives it.  Call it
+    before the callee's instantiation is made current.
+
+    @param inst the explicit instantiation of a call
+    @param resolved receives the instantiation with the type arguments substituted, if any of them changed
+    @return true if \a resolved was set (use it instead of \a inst), false if \a inst is used unchanged
+*/
+DLLLOCAL bool qore_resolve_explicit_type_param_instantiation(const QoreTypeParamInstantiation& inst,
+    QoreTypeParamInstantiation& resolved);
 
 // qore_get_union_type / qore_get_union_or_nothing_type are now declared DLLEXPORT in
 // include/qore/QoreType.h so module qpp signatures can use union<...> types.
@@ -4165,6 +4669,115 @@ DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSi
 */
 DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
 
+
+//! What a generic cache removed, released after every lock is released
+/** A removed entry can hold the last reference to an object whose destruction purges types
+    (qore_purge_derived_types()) and so runs a cache eviction itself: a specialization's IR or a concrete declaration
+    of a generic hashdecl.  Each element releases its object when the list is cleared or destroyed.
+*/
+class qore_generic_cache_release_list_t {
+public:
+    DLLLOCAL qore_generic_cache_release_list_t() = default;
+    qore_generic_cache_release_list_t(const qore_generic_cache_release_list_t&) = delete;
+    qore_generic_cache_release_list_t& operator=(const qore_generic_cache_release_list_t&) = delete;
+
+    //! Releases everything added, in the order added
+    DLLLOCAL ~qore_generic_cache_release_list_t() {
+        for (auto& i : entries) {
+            i.second(i.first);
+        }
+    }
+
+    //! Adds an object to release with \a release
+    /** Allocates no memory when it fails: the caller removes the entry from its cache only once this has succeeded,
+        so an allocation failure leaves the entry in the cache instead of releasing it under the caller's locks.
+
+        @return true if the object was added, false if no memory could be allocated
+    */
+    DLLLOCAL bool add(void* p, void (*release)(void*)) {
+        try {
+            entries.emplace_back(p, release);
+        } catch (std::bad_alloc&) {
+            return false;
+        }
+        return true;
+    }
+
+private:
+    std::vector<std::pair<void*, void (*)(void*)>> entries;
+};
+
+//! A cache whose keys name types that can be destroyed: the specializations of a generic variant, the concrete
+//! declarations of a generic hashdecl (issue #5765)
+/** The cache registers the types of each key it adds (qore_generic_cache_insert()); when one of those types is
+    destroyed, qore_purge_derived_types() calls evictDeadTypes() of every cache that registered it, so the memory of a
+    specialization or declaration made for the types of a destroyed Program is freed.  A cache unregisters itself with
+    qore_generic_cache_unregister() before it is destroyed.
+*/
+class QoreGenericTypeCache {
+public:
+    DLLLOCAL virtual ~QoreGenericTypeCache() = default;
+
+    //! Removes the entries whose key names a type in \a dead
+    /** Called with the registry locked; takes the cache's own lock.  Nothing may be released here: each removed
+        entry is moved to \a release, which is cleared after every lock is released.
+    */
+    DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+            qore_generic_cache_release_list_t& release) = 0;
+};
+
+//! Adds an entry to a generic cache and registers the types of its key
+/** \a insert adds the entry under the cache's own lock; it runs with the registry locked, so an eviction of one of
+    \a types cannot run between the insertion and the registration.
+
+    @param cache the cache
+    @param types the types of the key of the entry (null pointers are ignored)
+    @param insert adds the entry to the cache
+*/
+DLLLOCAL void qore_generic_cache_insert(QoreGenericTypeCache* cache, const std::vector<const QoreTypeInfo*>& types,
+        const std::function<void()>& insert);
+
+//! Adds an entry to a cache whose key identifies types without naming them, and registers the types of its key
+/** As qore_generic_cache_insert(), but the registration does not count as a name of the types: a declaration whose
+    types only such entries identify is freed when its last reference is released, not kept for the cache (see
+    QoreTypeOwner), and its types are evicted from the cache then, before their memory can be reused.  For caches of
+    information about types that must not keep them alive, such as the IR guard type profiles (issue #6421).
+*/
+DLLLOCAL void qore_generic_cache_insert_weak(QoreGenericTypeCache* cache,
+        const std::vector<const QoreTypeInfo*>& types, const std::function<void()>& insert);
+
+//! The number of live specialized IR functions (generic function and method specializations), for debug checks
+DLLLOCAL extern std::atomic<int64_t> qore_live_generic_specializations;
+//! The number of live concrete declarations of generic hashdecls, for debug checks
+DLLLOCAL extern std::atomic<int64_t> qore_live_parameterized_hashdecls;
+//! Returns the number of types registered by generic caches (qore_generic_cache_insert()), for debug checks
+DLLLOCAL size_t qore_generic_cache_registered_type_count();
+
+//! Unregisters a generic cache that is about to be destroyed
+/** Waits for an eviction that is running on the cache: no eviction calls the cache after this returns. */
+DLLLOCAL void qore_generic_cache_unregister(QoreGenericTypeCache* cache);
+
+//! Returns the never-reused identity of a type that is freed with its class, hashdecl or enum, or 0 for any other type
+/** The type of a class, hashdecl or enum (and its or-nothing type) is freed with its owner, and a later owner's type
+    can be allocated at the same address, while classes, hashdecls and enums of different Programs can have the same
+    path.  A cache keyed by a type that can outlive the type, or that is shared by Programs, therefore also keys it by
+    this value: with the type's address, it identifies the type for the lifetime of the process.
+
+    A type that can be freed has exactly one owner, whose instance serial number (never 0 and never reused; see
+    qore_get_next_class_instance_serial()) the type stores when the owner makes it.  Every other type returns 0: the
+    builtin types, and the derived types (complex types, parameterized class types and unions, the only types that
+    can name more than one class, hashdecl or enum), which are never freed while the library is initialized (see
+    qore_purge_derived_types()), so their addresses are never reused.
+
+    @param ti a live type; may be nullptr
+
+    @return the instance serial number of the class, hashdecl or enum that owns the type, or 0 if the type is never
+    freed while the library is initialized
+*/
+DLLLOCAL inline uint64_t qore_get_type_identity_serial(const QoreTypeInfo* ti) {
+    return ti ? ti->getIdentitySerial() : 0;
+}
+
 //! Returns the unbounded generic wildcard type argument
 DLLLOCAL const QoreTypeInfo* qore_get_wildcard_type();
 
@@ -4186,6 +4799,17 @@ DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTyp
 //! Substitutes symbolic type parameters in the given type only if the type can contain symbolic parameters
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params_if_needed(const QoreTypeInfo* ti,
     const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst = nullptr);
+
+//! Returns the hashdecl that a hashdecl with type parameters stands for in the running instantiation of generic code
+/** The type parameters (HD<U>) are substituted with the types of the current receiver and of the type parameter
+    instantiation of the current call (HD<int>), with qore_substitute_type_params_if_needed(), as
+    VarRefNewObjectNode does for the construction of a hashdecl (qore#5720)
+
+    @param hd the hashdecl, which must not be nullptr
+
+    @return the hashdecl of the instantiation, or \a hd itself if nothing is substituted
+*/
+DLLLOCAL const TypedHashDecl* qore_substitute_hashdecl_type_params(const TypedHashDecl* hd);
 
 //! Checks whether a target generic type argument accepts a source type argument
 DLLLOCAL qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,
@@ -4212,6 +4836,19 @@ DLLLOCAL const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject
 
 //! Returns the current generic receiver type for type-parameter substitution
 DLLLOCAL const QoreTypeInfo* qore_get_current_receiver_type_info();
+
+//! qore_substitute_type_params_if_needed(), always inlined
+/** For the call paths where the compiler inlined qore_substitute_type_params_if_needed() (the coercion of a value to
+    the type of a parameter, a local variable or a return value): whether it does so otherwise depends on the size of
+    the whole single compilation unit, which the code of the calls that give the references of their temporary
+    arguments to the callee changed (issue #5882)
+*/
+static QORE_INTERN_ALWAYS_INLINE const QoreTypeInfo* qore_substitute_type_params_if_needed_inline(
+        const QoreTypeInfo* ti) {
+    return qore_type_contains_type_parameter(ti)
+        ? qore_substitute_type_params(ti, qore_get_current_receiver_type_info())
+        : ti;
+}
 
 //! Type info for typed callable types: code<ReturnType(ParamTypes...)>
 /** This class represents a callable type with specified return type and parameter types.
@@ -4337,7 +4974,7 @@ public:
     //! Creates the helper for a type-acceptance call reporting into \a xs
     /** @param xs the caller's sink; may be nullptr, in which case no failure can be reported at all (as before)
     */
-    DLLLOCAL ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ScopedTypeCheckSink(ExceptionSink* xs) : xsink(xs) {
         // only allocate on the slow path: with a clean sink, any exception raised below is unambiguously ours
         if (xs && *xs) {
             tmp.reset(new ExceptionSink);
@@ -4375,6 +5012,44 @@ private:
     //! only allocated when the caller's sink already held an exception on entry
     std::unique_ptr<ExceptionSink> tmp;
 };
+
+QORE_INTERN_ALWAYS_INLINE void QoreTypeInfo::stripTypeInfo(QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper) {
+    // strips complex typeinfo for an assignment to an untyped lvalue
+    switch (n.getType()) {
+        case NT_HASH: {
+            if (lvhelper) {
+                map_get_plain_hash_lvalue(n, xsink, lvhelper);
+            } else {
+                map_get_plain_hash(n, xsink);
+            }
+            break;
+        }
+        case NT_LIST: {
+            if (lvhelper) {
+                map_get_plain_list_lvalue(n, xsink, lvhelper);
+            } else {
+                map_get_plain_list(n, xsink);
+            }
+            break;
+        }
+    }
+}
+
+// Keep the common scalar/no-coercion checks in the caller; container copies stay out of line.
+QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink) {
+    if (q_type_strips_complex_type(ti)) {
+        if (val.getType() == NT_HASH) {
+            map_get_plain_hash(val, xsink);
+        } else if (val.getType() == NT_LIST) {
+            map_get_plain_list(val, xsink);
+        }
+    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+        q_apply_no_narrow_hash_type(val, xsink);
+    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
+        q_apply_no_narrow_list_type(val, xsink);
+    }
+}
 
 #include "qore/intern/QoreParseTypeInfo.h"
 

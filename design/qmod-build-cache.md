@@ -44,7 +44,7 @@ and its **result key** (the base key, the dependency records and the optional mo
 |Build context|The probe of optional external modules (`qore-aot-probe.stamp`) and the AOT link configuration (`aot-link.conf`)|`context`
 |Build context|The link driver qcc runs (`cxx` of `aot-link.conf`) and its version, the linker and its version, the macOS SDK version, the operating system (`ID`, `VERSION_ID`, macOS version), the C library (glibc or musl and its version), the system and machine|`context`
 |Build context|The versions of bison and flex, which generate libqore's parser and scanner; the content of the LLVM library and of every shared library libqore and qcc are linked with (their patch versions are not in `/etc/os-release`); `/etc/localtime` (the time zone of parse-time dates when `TZ` is not set)|`context`
-|Build context|The content of `tools/qore-qmod-cache.py` and the cache schema|`context`
+|Build context|The content of `tools/qore-qmod-cache.py`, of `tools/qore_qami.py` (the metadata record parser it shares with `tools/check-debian-artifacts.py`) and the cache schema|`context`
 |Base key|The qcc command line (absolute paths of the source and output, optimization level, prefix maps), its working directory|`exec`
 |Base key|Every environment variable named `QORE_*` or `QCC_*` except those in `ENV_EXCLUDED_NAMES`/`ENV_EXCLUDED_PREFIXES`, and `CC`, `CXX`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ`, `MACOSX_DEPLOYMENT_TARGET`, `SDKROOT`, `LD_LIBRARY_PATH`, `LD_PRELOAD`, `DYLD_*`|`exec`
 |Base key|The module's own sources: every file of a module directory (but the qmods linked into it), or the `.qm` file, and the sources the build lists for it|`exec`
@@ -106,11 +106,15 @@ dependencies (the module descriptor's hard dependencies, which the loader loads 
 re-exported module that requires the module back would make a cycle), and a module sees the declarations of what it
 re-exports, so a module that appears for a re-exported module must make it a miss as well.  Version 2 of the
 metadata record names the closure: every module the module was compiled against, directly or not, re-exported ones
-too, as qcc loaded them.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
+too, as qcc loaded them; version 3 adds the restrictions that the module's directives gave its dependencies (AOT
+format version 44), and version 4 the functional domains that it declares in its header, the dependencies it requires
+only after its header and the domains its own code restricts (AOT format version 45), which the cache reads but does
+not use.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
 file that a module includes may be named `<x>.qm` for a module `x`), and a file the module includes is never taken for
 the source of a module from outside the tree, whatever its name.  A module whose record has another version (version
-1, written before the closure was recorded; the metadata section is in no release, and the loader refuses version 1
-too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
+1, written before the closure was recorded, version 2, before the version 3 fields, or version 3, before the version 4
+fields; the metadata section is in no
+release, and the loader refuses them too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
 record.  The guard checks the same list.
 
 ### Why absolute paths
@@ -166,9 +170,10 @@ Before a cached module is used:
 4. each stored file must have the SHA-256 digest the entry records (a damaged entry is removed);
 5. the stored module must contain the AOT runtime identity of the build;
 6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names);
-7. the stored module must have a version 2 metadata record.
+7. the stored module must have a metadata record of the version that qcc writes (version 4; `tools/qore_qami.py`).
 
-The depfile, the fingerprints and then the module are each renamed into place, and the module and depfile are
+The depfile, the fingerprints, the paths of the optional modules (`<qmod>.d.optional`, see
+`aot-linked-module-sources.md`) and then the module are each renamed into place, and the module and depfile are
 compared with the entry's digests after the copy.  Anything unexpected makes the module a miss.
 
 Reading the cache never fails a build: any exception while an entry is read or checked (malformed JSON, JSON nested
@@ -178,11 +183,11 @@ a failure while trimming the entries of a base key after a store is only logged.
 
 ### When storing
 
-A module is stored only when qcc wrote the module, the depfile and the fingerprints, the module contains the
+A module is stored only when qcc wrote the module, the depfile, the fingerprints and the optional module paths, the module contains the
 build's identity, the depfile names the module, every source still has the size and modification time qcc recorded
 in its fingerprint and every dependency has one (a source written during the compile, or one qcc could not hash, is
 no stable input), every dependency can be covered (see
-above), and the metadata record can be read and has version 2.
+above), and the metadata record can be read and has the version that qcc writes.
 
 ### The CI guard: `verify`
 
@@ -226,8 +231,9 @@ way no hit can be trusted, so the build fails.  CI audits a small sample in ever
 
 ## The cache directory
 
-`<dir>/qore-qmod-cache-1/entries/<base key>/<result key>.json` and `<dir>/qore-qmod-cache-1/objects/<result key>/`
-(`qmod`, `qmod.d`, `qmod.d.fingerprints`).  An object is written to a temporary directory and renamed into place,
+`<dir>/qore-qmod-cache-2/entries/<base key>/<result key>.json` and `<dir>/qore-qmod-cache-2/objects/<result key>/`
+(`qmod`, `qmod.d`, `qmod.d.fingerprints`, `qmod.d.optional`).  An object is written to a temporary directory and
+renamed into place,
 an entry with a temporary file renamed over it, so concurrent builds (`make -j`, several jobs sharing a host
 directory) never see a partial entry; the first object stored for a key wins.  At most 8 entries are kept under one
 base key.
@@ -307,7 +313,10 @@ Several jobs can share the directory.  Each object has a lock file, `objects/<re
   when the cache can be written (a hit from a cache that cannot be written, or with `QORE_QMOD_CACHE_READONLY=1`,
   still succeeds and records nothing);
 - one job prunes at a time (`prune.lock`, taken without waiting: a job that finds another one pruning skips its own
-  prune and says so).
+  prune and says so);
+- a lock file is created with `O_CREAT | O_EXCL`, and a job that gets `EEXIST` opens the file that exists (created
+  again if it was removed meanwhile): macOS's `openat()` with `O_CREAT` and without `O_EXCL` fails with `ENOENT` in a
+  process that loses the race to create a file, so jobs started at once failed (qore#6234).
 
 The hits of the jobs that only read the cache (the jobs of other refs) are not recorded, so an entry that only they
 use ages out after `--max-age-days` without a hit by a job of a protected ref.  Recording them was considered and

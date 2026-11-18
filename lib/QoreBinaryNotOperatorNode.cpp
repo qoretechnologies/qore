@@ -32,6 +32,7 @@
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreBinaryNotOperatorNode::BinaryNot_str("binary not (~) operator expression");
 
@@ -60,7 +61,7 @@ int QoreBinaryNotOperatorNode::getAsString(QoreString& str, int foff, ExceptionS
 }
 
 QoreValue QoreBinaryNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+    QoreOperandEvalHolder v(exp, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -101,6 +102,7 @@ int QoreBinaryNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             err = -1;
         } else if (!plugin_rc) {
             parse_context.typeInfo = plugin_op.signature.return_type;
+            setPluginTypeInfo(parse_context.typeInfo);
             set_unary_analysis_bitwise(parse_context, operand_analysis, &plugin_op);
             return err;
         }

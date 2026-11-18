@@ -42,6 +42,8 @@
 #include "qore/intern/QoreModuleSourceFingerprints.h"
 
 #include <algorithm>
+#include <functional>
+#include <string_view>
 #include <cctype>
 #include <cstdio>
 #include <cstdint>
@@ -362,8 +364,8 @@ static bool has_qo_extension(const char* path) {
 
 //! Initializes the Qore library for qcc itself
 /** qcc installs no signal handlers and runs no code that does, so it does not start the signal handling thread:
-    SIGINT and SIGTERM keep their default actions, and the thread cannot kill qcc with SIGSYS at shutdown when it is
-    run under valgrind.
+    SIGINT and SIGTERM keep their default actions, and under valgrind no wake-up of the thread is sent at shutdown
+    (on platforms where it is SIGSYS, valgrind can kill the process with it).
 
     This does not change the code qcc compiles: Qore::Option::HAVE_SIGNAL_HANDLING is read in the process the
     compiled code runs in, and marking this process as the compiler makes the \c HAVE_SIGNAL_HANDLING parse define
@@ -559,6 +561,38 @@ static bool write_depfile(const char* path, const std::string& output,
         }
     }
     return true;
+}
+
+//! Sets the sink of the paths where optional modules could be installed for its scope (qore#6145)
+class QccOptionalCandidateSinkHelper {
+public:
+    explicit QccOptionalCandidateSinkHelper(std::vector<std::string>* sink) {
+        qore_aot_set_optional_module_candidate_sink(sink);
+    }
+
+    ~QccOptionalCandidateSinkHelper() {
+        qore_aot_set_optional_module_candidate_sink(nullptr);
+    }
+
+    QccOptionalCandidateSinkHelper(const QccOptionalCandidateSinkHelper&) = delete;
+    QccOptionalCandidateSinkHelper& operator=(const QccOptionalCandidateSinkHelper&) = delete;
+};
+
+//! Writes the paths where the modules of the failed %try-module directives of an AOT module compile could be
+//! installed, one per line, to <depfile>.optional (qore#6145)
+/** The build checks them before it builds the module (cmake/QoreOptionalModuleStamp.cmake) and rebuilds the module
+    when one of them exists: the module was compiled without the optional module, which the module loader refuses
+    then (AOT-MODULE-STALE).  The file is written for every AOT module compile, empty if there are no such paths.
+*/
+static bool write_optional_module_candidates(const char* depfile, std::vector<std::string> paths) {
+    std::sort(paths.begin(), paths.end());
+    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+    std::string content;
+    for (const std::string& path : paths) {
+        content += path;
+        content += '\n';
+    }
+    return write_depfile_atomic((std::string(depfile) + ".optional").c_str(), content);
 }
 
 // Write a Make-style depfile from an explicit, already-canonicalized
@@ -1818,126 +1852,22 @@ static uint16_t read_u16_le(const uint8_t* p) {
         | (static_cast<uint16_t>(p[1]) << 8);
 }
 
-static uint32_t read_u32_le(const uint8_t* p) {
-    return static_cast<uint32_t>(p[0])
-        | (static_cast<uint32_t>(p[1]) << 8)
-        | (static_cast<uint32_t>(p[2]) << 16)
-        | (static_cast<uint32_t>(p[3]) << 24);
-}
-
+//! Returns the length of the encoded AOT metadata at \a data, with its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
 static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& len) {
-    len = 0;
-    if (avail < QORE_AOT_HEADER_SIZE) {
+    // the length of the encoded metadata, without its checksum (libqore, which the reader uses as well)
+    if (!qore_aot_encoded_metadata_length(data, avail, len)) {
         return false;
     }
-    if (read_u32_le(data) != QORE_AOT_BINARY_MAGIC) {
-        return false;
+    if (read_u16_le(data + 4) >= QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        // the checksum follows the metadata (qore#6451)
+        if (len + QORE_AOT_METADATA_CHECKSUM_SIZE > avail) {
+            return false;
+        }
+        len += QORE_AOT_METADATA_CHECKSUM_SIZE;
     }
-    uint16_t version = read_u16_le(data + 4);
-    if (version == 0 || version > QORE_AOT_BINARY_VERSION) {
-        return false;
-    }
-
-    uint8_t compression = data[34];
-    if (compression == QORE_AOT_COMPRESSION_NONE
-            || compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
-        uint32_t section_count = read_u32_le(data + 16);
-        if (section_count > 100000) {
-            return false;
-        }
-        constexpr size_t section_header_size = 12;
-        size_t section_dir_size = static_cast<size_t>(section_count) * section_header_size;
-        size_t string_pool_size_pos = QORE_AOT_HEADER_SIZE + section_dir_size;
-        if (string_pool_size_pos + 4 > avail) {
-            return false;
-        }
-        uint32_t string_pool_size = read_u32_le(data + string_pool_size_pos);
-        size_t data_area_offset = string_pool_size_pos + 4 + string_pool_size;
-        if (data_area_offset > avail) {
-            return false;
-        }
-
-        uint64_t data_area_size = 0;
-        const uint8_t* sec = data + QORE_AOT_HEADER_SIZE;
-        for (uint32_t i = 0; i < section_count; ++i, sec += section_header_size) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT metadata-length scan")) {
-                return false;
-            }
-            uint32_t offset = read_u32_le(sec + 4);
-            uint32_t size = read_u32_le(sec + 8);
-            uint64_t end = static_cast<uint64_t>(offset) + size;
-            if (end > data_area_size) {
-                data_area_size = end;
-            }
-        }
-        uint64_t total = static_cast<uint64_t>(data_area_offset) + data_area_size;
-        if (total > avail) {
-            return false;
-        }
-        len = static_cast<size_t>(total);
-        return true;
-    }
-
-    if (compression == QORE_AOT_COMPRESSION_ZLIB) {
-        if (avail < QORE_AOT_HEADER_SIZE + 4) {
-            return false;
-        }
-        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
-        if (uncompressed_size > 100 * 1024 * 1024) {
-            return false;
-        }
-        if (uncompressed_size == 0) {
-            len = QORE_AOT_HEADER_SIZE + 4;
-            return true;
-        }
-
-        std::vector<uint8_t> out(uncompressed_size);
-        z_stream strm{};
-        int rc = inflateInit(&strm);
-        if (rc != Z_OK) {
-            return false;
-        }
-        strm.next_in = const_cast<Bytef*>(data + QORE_AOT_HEADER_SIZE + 4);
-        strm.avail_in = static_cast<uInt>(std::min<size_t>(
-            avail - QORE_AOT_HEADER_SIZE - 4, std::numeric_limits<uInt>::max()));
-        strm.next_out = out.data();
-        strm.avail_out = static_cast<uInt>(std::min<uint32_t>(
-            uncompressed_size, std::numeric_limits<uInt>::max()));
-        rc = inflate(&strm, Z_FINISH);
-        bool ok = rc == Z_STREAM_END && strm.total_out == uncompressed_size;
-        size_t consumed = static_cast<size_t>(strm.total_in);
-        inflateEnd(&strm);
-        if (!ok) {
-            return false;
-        }
-        len = QORE_AOT_HEADER_SIZE + 4 + consumed;
-        return len <= avail;
-    }
-
-    if (compression == QORE_AOT_COMPRESSION_ZSTD) {
-        if (avail < QORE_AOT_HEADER_SIZE + 4) {
-            return false;
-        }
-        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
-        if (uncompressed_size > 100 * 1024 * 1024) {
-            return false;
-        }
-        if (!uncompressed_size) {
-            len = QORE_AOT_HEADER_SIZE + 4;
-            return true;
-        }
-        const uint8_t* frame = data + QORE_AOT_HEADER_SIZE + 4;
-        size_t frame_size = ZSTD_findFrameCompressedSize(frame,
-            avail - QORE_AOT_HEADER_SIZE - 4);
-        if (ZSTD_isError(frame_size)) {
-            return false;
-        }
-        len = QORE_AOT_HEADER_SIZE + 4 + frame_size;
-        return len <= avail;
-    }
-
-    return false;
+    return true;
 }
+
 
 static const char* aot_section_type_name(uint16_t type) {
     switch (static_cast<QoreAOTSectionType>(type)) {
@@ -1973,6 +1903,8 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::SOURCE_STAT_FINGERPRINT: return "SOURCE_STAT_FINGERPRINT";
         case QoreAOTSectionType::UNRUN_TOP_LEVEL_CODE: return "UNRUN_TOP_LEVEL_CODE";
         case QoreAOTSectionType::FUNCTIONAL_DOMAIN: return "FUNCTIONAL_DOMAIN";
+        case QoreAOTSectionType::MODULE_DOMAINS: return "MODULE_DOMAINS";
+        case QoreAOTSectionType::TIME_ZONE: return "TIME_ZONE";
     }
     return "UNKNOWN";
 }
@@ -1993,10 +1925,19 @@ static bool add_aot_metadata_blob(std::vector<AOTDumpMetadataBlob>& blobs,
     }
     QoreAOTBinaryReader reader;
     std::string error;
+    std::string key;
     if (!reader.open(bytes.data(), static_cast<uint32_t>(bytes.size()), error)) {
-        return false;
+        // bytes that only look like a header are skipped; metadata that does not match its checksum was changed
+        // after it was written: it is kept, so that its reader reports it (qore#6451)
+        if (!reader.checksumMismatch()) {
+            return false;
+        }
+        std::string_view view(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        key = "checksum mismatch " + std::to_string(bytes.size()) + " "
+            + std::to_string(std::hash<std::string_view>()(view));
+    } else {
+        key = aot_metadata_key(reader, bytes.size());
     }
-    std::string key = aot_metadata_key(reader, bytes.size());
     if (!seen.insert(key).second) {
         return true;
     }
@@ -2415,6 +2356,10 @@ static const char* dump_aot_expr_kind_name(uint8_t kind) {
         case AOTExprKind::REGEX_MATCH: return "REGEX_MATCH";
         case AOTExprKind::REGEX_NMATCH: return "REGEX_NMATCH";
         case AOTExprKind::REGEX_EXTRACT: return "REGEX_EXTRACT";
+        case AOTExprKind::SPLICE: return "SPLICE";
+        case AOTExprKind::EXTRACT: return "EXTRACT";
+        case AOTExprKind::REGEX_SUBST: return "REGEX_SUBST";
+        case AOTExprKind::TRANSLIT: return "TRANSLIT";
         case AOTExprKind::PRE_INC: return "PRE_INC";
         case AOTExprKind::PRE_DEC: return "PRE_DEC";
         case AOTExprKind::POST_INC: return "POST_INC";
@@ -2513,6 +2458,30 @@ static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
 static bool dump_skip_serialized_value_no_summary(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end);
 
+//! skips the compile-time value that AOT format v15 and later write after the value of a pending constant
+/** the writer (writePendingConstantParseValue()) writes a presence byte and, when it is set, a serialized value;
+    the loader reads it for every pending constant of a v15 or later image, so the scanners must too, or they
+    read the next entry from the middle of it
+*/
+static bool dump_skip_pending_constant_parse_value(const QoreAOTBinaryReader& reader, const uint8_t*& p,
+        const uint8_t* end, bool pending) {
+    if (!pending || reader.getHeader().version < QORE_AOT_CONST_PARSE_VALUE_VERSION) {
+        return true;
+    }
+    uint8_t present = 0;
+    if (!dump_read_u8(p, end, present)) {
+        return false;
+    }
+    return !present || dump_skip_serialized_value_no_summary(reader, p, end);
+}
+
+//! skips a source location written by qore_aot_write_source_location() (format version 26)
+static bool dump_skip_source_location(const QoreAOTBinaryReader& reader, const uint8_t*& p, const uint8_t* end) {
+    return dump_skip_bytes(p, end, 2 * qore_aot_line_size(reader) + 8)
+        && dump_skip_string_ref(reader, p, end)
+        && dump_skip_string_ref(reader, p, end);
+}
+
 static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, uint8_t kind, bool slot_form,
         AOTSlotMapDumpSummary& summary, const std::string& func_name,
@@ -2525,6 +2494,10 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
     };
 
     switch (static_cast<AOTExprKind>(kind)) {
+        case AOTExprKind::SOURCE_LOCATION:
+            return dump_skip_source_location(reader, p, end)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, ctx);
+
         case AOTExprKind::FUNC_CALL:
             if (!dump_skip_string_ref(reader, p, end)) {
                 return false;
@@ -2593,6 +2566,29 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && skip_n_args(nargs);
         }
 
+        case AOTExprKind::CALLREF_CALL_NAMED: {
+            // the CALLREF_CALL layout, then a count and a string ref for each argument name
+            uint8_t nargs = 0;
+            uint8_t nnames = 0;
+            if (!dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                    || !dump_read_u8(p, end, nargs) || !skip_n_args(nargs) || !dump_read_u8(p, end, nnames)) {
+                return false;
+            }
+            for (unsigned i = 0; i < nnames; ++i) {
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case AOTExprKind::FIND:
+            // the find mode, then the expression, the find expression and the where expression
+            return dump_skip_bytes(p, end, 1)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::RUNTIME_CONST_REF:
         case AOTExprKind::SELF_VARREF:
         case AOTExprKind::LOCAL_VARREF:
@@ -2600,6 +2596,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::CONST_NUMBER:
         case AOTExprKind::CONST_BINARY:
         case AOTExprKind::CONST_STRING:
+        case AOTExprKind::BACKQUOTE:
         case AOTExprKind::FUNC_CALL_REF:
         case AOTExprKind::SELF_METHOD_REF:
             return dump_skip_string_ref(reader, p, end);
@@ -2691,6 +2688,27 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && dump_skip_bytes(p, end, 8)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
+        // pattern, replacement, options, global flag, lvalue
+        case AOTExprKind::REGEX_SUBST:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end)
+                && dump_skip_bytes(p, end, 9)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        // source, target, lvalue
+        case AOTExprKind::TRANSLIT:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        // lvalue, offset, length, new value
+        case AOTExprKind::SPLICE:
+        case AOTExprKind::EXTRACT:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::CONTEXT_REF:
             return dump_skip_string_ref(reader, p, end);
 
@@ -2718,6 +2736,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::LOG_GE:
         case AOTExprKind::PUSH:
         case AOTExprKind::UNSHIFT:
+        case AOTExprKind::LOG_CMP:
+        case AOTExprKind::LIST_ASSIGN:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -2731,6 +2751,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::REMOVE:
         case AOTExprKind::BACKGROUND:
         case AOTExprKind::UNARY_MINUS:
+        case AOTExprKind::UNARY_PLUS:
+        case AOTExprKind::BIT_NOT:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::QUESTION:
@@ -2886,13 +2908,24 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return dump_skip_string_ref(reader, p, end)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
-        case AOTExprKind::DOT_EVAL_EXPR:
+        case AOTExprKind::AST_EXPR:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {
+            // flags, class type, native body key (QORE_AOT_FEAT_NATIVE_CLOSURE_BODY), location (v26), return type
             if (!dump_skip_string_ref(reader, p, end)
-                    || !dump_skip_string_ref(reader, p, end)
                     || !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NATIVE_CLOSURE_BODY) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                return false;
+            }
+            if (!dump_skip_string_ref(reader, p, end)) {
                 return false;
             }
             uint16_t nparams = 0;
@@ -3010,7 +3043,8 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         uint16_t num_locals = 0, num_globals = 0, num_exprs = 0, num_stmts = 0;
         uint16_t num_regex = 0, num_body_locals = 0;
-        uint8_t has_unsupported = 0, num_lv_paths = 0;
+        uint8_t has_unsupported = 0, num_lv_paths8 = 0;
+        uint32_t num_lv_paths = 0;
         if (!dump_read_u16(p, entry_end, num_locals)
                 || !dump_read_u16(p, entry_end, num_globals)
                 || !dump_read_u16(p, entry_end, num_exprs)
@@ -3018,10 +3052,16 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
                 || !dump_read_u16(p, entry_end, num_regex)
                 || !dump_read_u16(p, entry_end, num_body_locals)
                 || !dump_read_u8(p, entry_end, has_unsupported)
-                || !dump_read_u8(p, entry_end, num_lv_paths)) {
+                || !dump_read_u8(p, entry_end, num_lv_paths8)
+                || (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION
+                    && !dump_read_u32(p, entry_end, num_lv_paths))) {
             ++summary.malformed_entries;
             p = entry_start + 4 + entry_size;
             continue;
+        }
+        if (reader.getHeader().version < QORE_AOT_SHARED_HANDLER_VERSION) {
+            // the low byte of the count only (#6127)
+            num_lv_paths = num_lv_paths8;
         }
 
         summary.local_slots += num_locals;
@@ -3172,6 +3212,7 @@ static const char* dump_aot_value_tag_name(uint8_t tag) {
         case QoreAOTValueTag::VT_INT64: return "INT64";
         case QoreAOTValueTag::VT_FLOAT64: return "FLOAT64";
         case QoreAOTValueTag::VT_STRING: return "STRING";
+        case QoreAOTValueTag::VT_STRING_ENC: return "STRING_ENC";
         case QoreAOTValueTag::VT_ABS_DATE: return "ABS_DATE";
         case QoreAOTValueTag::VT_REL_DATE: return "REL_DATE";
         case QoreAOTValueTag::VT_LIST: return "LIST";
@@ -3280,6 +3321,10 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_CONST_REF:
             return dump_skip_len_string_ref(reader, p, end)
                 || fail("truncated string reference value");
+
+        case QoreAOTValueTag::VT_STRING_ENC:
+            return (dump_skip_len_string_ref(reader, p, end) && dump_skip_bytes(p, end, 4))
+                || fail("truncated encoded string value");
 
         case QoreAOTValueTag::VT_ABS_DATE:
             return dump_skip_bytes(p, end, 16) || fail("truncated absolute date value");
@@ -3546,6 +3591,11 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                     error, true, "instance member", owner, dump_owner_name(mname, nullptr))) {
                 return false;
             }
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                error = "truncated class member location";
+                return false;
+            }
         }
 
         uint32_t num_static = 0;
@@ -3566,6 +3616,11 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                     error, true, "static member", owner, dump_owner_name(mname, nullptr))) {
                 return false;
             }
+            if (reader.getHeader().version >= QORE_AOT_SOURCE_LOCATIONS_VERSION
+                    && !dump_skip_source_location(reader, p, end)) {
+                error = "truncated static member location";
+                return false;
+            }
         }
 
         uint32_t num_consts = 0;
@@ -3581,8 +3636,13 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
                 error = "truncated class constant entry";
                 return false;
             }
+            const bool pending = has_const_pending_flag && *(p - 1);
             if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
                     "class constant", owner, dump_owner_name(cname, nullptr))) {
+                return false;
+            }
+            if (!dump_skip_pending_constant_parse_value(reader, p, end, pending)) {
+                error = "truncated class constant compile-time value";
                 return false;
             }
         }
@@ -3715,8 +3775,13 @@ static bool dump_scan_constant_defaults(const QoreAOTBinaryReader& reader,
             error = "truncated constant entry";
             return false;
         }
+        const bool pending = *(p - 1) != 0;
         if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
                 "constant", "", dump_owner_name(name, nullptr))) {
+            return false;
+        }
+        if (!dump_skip_pending_constant_parse_value(reader, p, end, pending)) {
+            error = "truncated constant compile-time value";
             return false;
         }
     }
@@ -3983,8 +4048,9 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     printf("    kind:%s%s\n",
         (hdr.flags & QORE_AOT_FLAG_IS_MODULE) ? " module" : "",
         (hdr.flags & QORE_AOT_FLAG_HAS_TOPLEVEL) ? " toplevel" : "");
-    printf("    format: %u (current %u)%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
-        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH");
+    printf("    format: %u (current %u)%s%s\n", hdr.version, QORE_AOT_BINARY_VERSION,
+        hdr.version == QORE_AOT_BINARY_VERSION ? "" : " MISMATCH",
+        (hdr.flags & QORE_AOT_FLAG_METADATA_CHECKSUM) ? ", checksum verified" : "");
     printf("    compiled qore: %u.%u.%u (runtime %s)\n",
         hdr.qore_version_major, hdr.qore_version_minor, hdr.qore_version_patch,
         qore_version_string);
@@ -9532,7 +9598,9 @@ static bool collect_blob_top_level_local_uses(const QoreAOTBinaryReader& reader,
         // the unsupported-expression flag and the LValuePath count
         if (!dump_skip_string_ref(reader, p, entry_end, &fname)
                 || !dump_read_u16(p, entry_end, num_locals)
-                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t))) {
+                || !dump_skip_bytes(p, entry_end, 5 * sizeof(uint16_t) + 2 * sizeof(uint8_t)
+                    // the u32 count of LValuePath instructions (#6127)
+                    + (reader.getHeader().version >= QORE_AOT_SHARED_HANDLER_VERSION ? sizeof(uint32_t) : 0))) {
             error = "malformed SLOT_MAPS entry " + std::to_string(f) + " in '" + object + "'";
             return false;
         }
@@ -9681,6 +9749,13 @@ static int link_script_objects_to_executable(const std::string& output,
                 po_error.c_str());
             return 1;
         }
+        // objects compiled before issue #5682 can store %modern with a compatibility option that it does not allow;
+        // the executable could not create its Program
+        if (!qore_check_modern_parse_options(link_po, po_error)) {
+            fprintf(stderr, "error: %s link failed for output '%s': %s; rebuild the objects with this version of "
+                "Qore\n", mode_label, output.c_str(), po_error.c_str());
+            return 1;
+        }
     }
 
     FILE* glue = fopen(glue_path.c_str(), "w");
@@ -9717,7 +9792,8 @@ static int link_script_objects_to_executable(const std::string& output,
         "    QoreProgram* pgm = qore_create_program_ext(\n"
         "        (int64_t)0x%016llxULL, (int64_t)0x%016llxULL);\n"
         "    if (!pgm) {\n"
-        "        fprintf(stderr, \"qore_create_program failed\\n\");\n"
+        "        const char* err = qore_last_error(nullptr);\n"
+        "        fprintf(stderr, \"qore_create_program failed: %%s\\n\", err ? err : \"unknown error\");\n"
         "        qore_cleanup();\n"
         "        qore_fork_child_quick_exit(1);\n"
         "        return 1;\n"
@@ -11379,6 +11455,12 @@ int main(int argc, char** argv) {
         qore_cleanup();
         return 1;
     }
+    // %modern cannot be given with a compatibility option that it does not allow (issue #5682)
+    if (!qore_check_modern_parse_options(compile_po, error)) {
+        fprintf(stderr, "error: %s\n", error.c_str());
+        qore_cleanup();
+        return 1;
+    }
 
     if (script_mode) {
         // Compile a single script-style source with
@@ -11524,6 +11606,8 @@ int main(int argc, char** argv) {
         // Compile split module directory; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
         qcc_set_module_dep_sink(&dep_module_files, output);
+        std::vector<std::string> optional_candidates;
+        QccOptionalCandidateSinkHelper optional_candidate_sink(&optional_candidates);
         bool ok = QoreAOT::compileSeparatedModule(
                 source_file,
                 output,
@@ -11550,9 +11634,11 @@ int main(int argc, char** argv) {
             std::vector<std::string> module_deps =
                 qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
             if (depfile_path
-                    && !write_depfile(depfile_path, qcc_depfile_target(output),
-                                      std::string(), source_file,
-                                      &module_deps, qcc_output_is_qmod(output))) {
+                    && (!write_depfile(depfile_path, qcc_depfile_target(output),
+                                       std::string(), source_file,
+                                       &module_deps, qcc_output_is_qmod(output))
+                        || (qcc_output_is_qmod(output)
+                            && !write_optional_module_candidates(depfile_path, std::move(optional_candidates))))) {
                 rc = 1;
             }
         }
@@ -11560,6 +11646,8 @@ int main(int argc, char** argv) {
         // Compile single-file module; the depfile of a .qmod lists everything the module depends on
         std::vector<std::string> dep_module_files;
         qcc_set_module_dep_sink(&dep_module_files, output);
+        std::vector<std::string> optional_candidates;
+        QccOptionalCandidateSinkHelper optional_candidate_sink(&optional_candidates);
         bool ok = QoreAOT::compileModule(
                 source_text.c_str(), (int)source_text.size(),
                 source_file,
@@ -11583,9 +11671,11 @@ int main(int argc, char** argv) {
             // deps = the .qm file plus dependency modules in the selected form.
             std::vector<std::string> module_deps =
                 qcc_module_depfile_inputs(dep_module_files, qcc_output_is_qmod(output));
-            if (depfile_path && !write_depfile(depfile_path, qcc_depfile_target(output),
-                                               source_file, nullptr,
-                                               &module_deps, qcc_output_is_qmod(output))) {
+            if (depfile_path && (!write_depfile(depfile_path, qcc_depfile_target(output),
+                                                source_file, nullptr,
+                                                &module_deps, qcc_output_is_qmod(output))
+                    || (qcc_output_is_qmod(output)
+                        && !write_optional_module_candidates(depfile_path, std::move(optional_candidates))))) {
                 rc = 1;
             }
         }
@@ -11607,7 +11697,8 @@ int main(int argc, char** argv) {
             rc = 1;
         } else {
             // Compile to executable
-            QoreParseOptions po = qpgm->getParseOptions() | compile_po;
+            // the compatibility options that the code's %modern reset are not added back (issue #6382)
+            QoreParseOptions po = qore_aot_merge_parse_options(qpgm->getParseOptions(), compile_po);
             if (!QoreAOT::compile(
                     qpgm,
                     source_text.c_str(), (int)source_text.size(),

@@ -168,6 +168,16 @@ DLLEXPORT void qore_call_program_cleanup_callback(QoreProgram* pgm);
     objects now reference the dependency counter, so when the object's counter reaches zero and
     the global variable list is deleted, then the variables will in turn dereference the program
     so it can be deleted.
+
+    @par Sandboxed Programs
+    A Program created while a sandbox governs the calling thread, or while the code of a sandboxed Program is on its
+    call stack, is sandboxed: its code does not count as trusted (the destructors of its classes do not get the
+    cancellation deferral of trusted destructors, for example), although it has no sandbox manager of its own.  This
+    holds for every constructor, so a module that creates a Program for its caller needs to do nothing for it.  A
+    Program that sandboxed code parses code in becomes sandboxed then, with the classes that it already has.  A
+    Program created with no sandbox governing the thread is trusted, and so is a Program that a library module's own
+    initialization code creates; a library whose initialization parses code that sandboxed code supplied must parse
+    it in a sandboxed Program itself.  Use setSandboxManager() to restrict what the code of a Program may do.
 */
 class QoreProgram : public AbstractPrivateData {
     friend class qore_program_private_base;
@@ -181,7 +191,10 @@ public:
 
     //! creates the object and sets the parse options
     /**
-        @param parse_options the parse options mask for the QoreProgram object
+        @param parse_options the parse options mask for the QoreProgram object; it must not have %modern
+        (\c PO_MODERN) with a compatibility option that %modern does not allow (ex: \c PO_BROKEN_RANGE): this
+        constructor has no exception sink to refuse them; QoreProgramHelper refuses them with an \c OPTION-ERROR
+        exception (since %Qore 3.0)
     */
     DLLEXPORT QoreProgram(const QoreParseOptions& parse_options);
 
@@ -190,7 +203,8 @@ public:
         Kept exported for binary module compatibility with modules built before
         QoreParseOptions replaced raw int64 parse-option bitfields.
 
-        @param parse_options the legacy int64 parse options mask for the QoreProgram object
+        @param parse_options the legacy int64 parse options mask for the QoreProgram object; see
+        QoreProgram(const QoreParseOptions&) for the options it must not have together
     */
     DLLEXPORT QoreProgram(int64 parse_options);
 
@@ -463,15 +477,22 @@ public:
     //! returns true if the given function exists as a user function, false if not
     DLLEXPORT bool existsFunction(const char* name);
 
-    //! dereferences the object and deletes it if the reference count reaches zero, without clearing it first
-    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero
+    //! dereferences the object without clearing it; its last reference releases the Program's own dependency reference
+    /** the Program leaves the registry of Programs (see resolveProgramId()) as its reference count reaches zero, and
+        it is destroyed once nothing depends on it any more (see depRef()).  Clearing a Program
+        (waitForTerminationAndDeref(), deref(ExceptionSink*)) deletes its code, so that only what outlives it keeps it
+        allocated (closures, call references, imported functions and objects held elsewhere, for example); the code of
+        a Program that was never cleared keeps it allocated
 
-        @since %Qore 3.0 the Program leaves the registry with its last reference
+        @since %Qore 3.0 the Program leaves the registry with its last reference, and is destroyed with its last
+        dependency
     */
     DLLEXPORT virtual void deref();
 
-    //! dereferences the object and deletes it if the reference count reaches zero
-    /** do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
+    //! dereferences the object; its last reference clears it (deletes its code) and releases its dependency reference
+    /** the Program is destroyed once nothing depends on it any more (see deref())
+
+        do not use this function if the program may be running, use QoreProgram::waitForTerminationAndDeref() instead
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @see QoreProgram::waitForTerminationAndDeref()
     */
@@ -500,7 +521,7 @@ public:
     //! this call blocks until the program's last thread terminates
     DLLEXPORT void waitForTermination();
 
-    //! this call blocks until the program's last thread terminates, and then calls QoreProgram::deref()
+    //! this call blocks until the program's last thread terminates, and then calls QoreProgram::deref(ExceptionSink*)
     /**
         @param xsink if an error occurs, the Qore-language exception information will be added here
     */
@@ -809,6 +830,12 @@ public:
     */
     DLLEXPORT func_vec_t findAllFunctionsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const;
 
+    //! returns a list of all functions that match the pattern, each with the namespace it was found in
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT func_ns_vec_t findAllFunctionsRegexNs(const QoreString& pattern, int re_opts, ExceptionSink* xsink)
+            const;
+
     //! returns a list of all namespaces that match the pattern
     /** @since %Qore 0.9
     */
@@ -828,6 +855,14 @@ public:
     /** @since %Qore 0.9
     */
     DLLEXPORT const QoreExternalFunction* findFunction(const char* path) const;
+
+    //! search for the given function in the program and return the namespace it was found in
+    /** @param path a simple function name or a namespace-prefixed path (ex: "NamespaceName::function_name")
+        @param pns set to the namespace that holds the function, or nullptr if it is not found
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreExternalFunction* findFunction(const char* path, const QoreNamespace*& pns) const;
 
     //! search for the given typed hash (hashdecl) in the program; can be a simple function name or a namespace-prefixed path (ex: "NamespaceName::TypedHashName")
     /** @since %Qore 0.9
@@ -967,7 +1002,10 @@ public:
     */
     DLLEXPORT int issueModuleCmd(const char* module, const char* cmd, ExceptionSink* xsink);
 
-    DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr);
+    //! Creates a child Program; \a parent_po are the parent's options as the caller read them for its checks, which the
+    //! child inherits (issue #6176); if nullptr, the constructor reads them
+    DLLLOCAL QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec = false, const char* ecn = nullptr,
+            const QoreParseOptions* parent_po = nullptr);
 
     DLLLOCAL LocalVar *createLocalVar(const char* name, const QoreTypeInfo *typeInfo);
 
@@ -1204,7 +1242,14 @@ private:
 };
 
 //! allows for external modules to set the current Program context explicitly
-/** @since %Qore 0.8.13
+/** @note this helper only replaces the current Program; it does not record the Program that it replaces for sandbox
+    resolution.  While it is active, the code that called the module is hidden from the sandbox: objects and call
+    references created under it do not get that code's sandbox as their provenance, and sandbox checks made under it
+    do not see that code.  Code that creates values for a caller that can be sandboxed in another Program must keep
+    that caller visible, for example by creating the values in a call made into the other Program (as with
+    QoreProgram::callFunction()) rather than under this helper (issue #6149).
+
+    @since %Qore 0.8.13
  */
 class QoreProgramContextHelper {
 public:
@@ -1429,6 +1474,40 @@ public:
 private:
     class ProgramThreadCountContextHelper* priv;
 };
+
+//! the Qore library provides qore_program_thread_entry_pending()
+#define _QORE_HAS_PROGRAM_THREAD_ENTRY_PENDING 1
+
+//! returns true if a call into the given Program must enter it although it is the thread's current Program
+/** A module that calls code of a Program from C++ enters the Program with QoreExternalProgramContextHelper.  When the
+    Program is the thread's current one, the entry can be skipped, but only if the thread has also entered the
+    Program: the current Program is also set without an entry while a Program is parsed, or while its metadata is
+    looked up, and by a module's own QoreProgramContextHelper, and a call made then must enter it, so that the
+    Program's thread entry handler runs (see Qore::Program::setThreadEntryHandler()) and the thread's local data in
+    the Program is set up.  A thread that is not a Qore thread must be registered before it calls into a Program
+    (getProgram(), used in the example, requires it); without Qore thread data it has entered no Program.
+
+    @param pgm the Program to call into
+
+    @return true if \a pgm has thread entry handlers and is not the Program that the thread has entered; false if
+    \a pgm is null
+
+    @par Example
+    @code{.cpp}
+// skip the entry only for a call within the Program that the thread has entered
+QoreProgram* pgm = obj->getProgram();
+std::unique_ptr<QoreExternalProgramContextHelper> pch;
+if (pgm != getProgram() || qore_program_thread_entry_pending(pgm)) {
+    pch.reset(new QoreExternalProgramContextHelper(xsink, pgm));
+    if (*xsink) {
+        return QoreValue();
+    }
+}
+    @endcode
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_program_thread_entry_pending(const QoreProgram* pgm);
 
 //! allows the program call context to be set by external modules
 /** @since %Qore 0.9.4

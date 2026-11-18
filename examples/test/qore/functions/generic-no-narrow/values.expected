@@ -1,0 +1,40 @@
+list_init: [1, "s"]
+concrete_list_init: [1, "s"]
+list_plain: [1, "s"]
+concrete_list_plain: [1, "s"]
+list_deferred: [1, "s"]
+concrete_list_deferred: [1, "s"]
+list_reassign: ["s", 2]
+concrete_list_reassign: ["s", 2]
+list_copy: ["list<int>", [1], [1, "s"]]
+concrete_list_copy: ["list<int>", [1], [1, "s"]]
+hash_init: {i: 1, s: "s"}
+concrete_hash_init: {i: 1, s: "s"}
+hash_plain: {i: 1, s: "s"}
+concrete_hash_plain: {i: 1, s: "s"}
+hash_deferred: {i: 1, s: "s"}
+concrete_hash_deferred: {i: 1, s: "s"}
+hash_reassign: {s: "s", i: 2}
+concrete_hash_reassign: {s: "s", i: 2}
+hash_copy: ["hash<string, int>", {i: 1}, {i: 1, s: "s"}]
+concrete_hash_copy: ["hash<string, int>", {i: 1}, {i: 1, s: "s"}]
+list_nested: [[1], ["s"]]
+concrete_list_nested: [[1], ["s"]]
+hash_nested: {first: {i: 1}, second: {s: "s"}}
+concrete_hash_nested: {first: {i: 1}, second: {s: "s"}}
+list_nested_element: RUNTIME-TYPE-ERROR
+concrete_list_nested_element: RUNTIME-TYPE-ERROR
+hash_nested_element: RUNTIME-TYPE-ERROR
+concrete_hash_nested_element: RUNTIME-TYPE-ERROR
+nullable_list: null
+nullable_hash: null
+already_nullable_list: [1, "s"]
+already_nullable_hash: {i: 1, s: "s"}
+nested_call: [1, "s"]
+box_list: [1, "s"]
+box_hash: {i: 1, s: "s"}
+derived_list: [1, "s"]
+derived_hash: {i: 1, s: "s"}
+method_type: [1, "s"]
+narrow_list_control: RUNTIME-TYPE-ERROR
+narrow_hash_control: RUNTIME-TYPE-ERROR

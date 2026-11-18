@@ -24,7 +24,7 @@ public class KatanaWatchNewMaterialsDataProvider inherits KatanaWatchDataProvide
     string getName() { return ProviderInfo.name; }
     string getEndpoint() { return "materials"; }
     string getEventName() { return EVENT_NEW_MATERIALS; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaMaterialDataType();

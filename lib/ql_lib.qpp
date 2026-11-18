@@ -502,6 +502,14 @@ hashdecl ExceptionInfo {
     //! call stack backtrace information
     list<hash<CallStackInfo>> callstack;
 
+    //! the ID of the exception, only in the exception that a debugger's @ref Qore::DebugProgram::onException() "DebugProgram::onException()" gets
+    /** The ID is the same in each exception event of the exception, also after a @ref rethrow "rethrow" of it, and a
+        new exception has a new one, so that a debugger can tell an exception that it already stopped at
+
+        @since %Qore 3.0
+    */
+    *int debug_id;
+
     //! this key is populated with the value of the first expression of the @ref throw "throw statement". For system exceptions, this is a string giving the exception code.
     auto err;
 
@@ -541,7 +549,20 @@ hashdecl ExceptionInfo {
  */
 ///@{
 //! Exits the program with the return code passed (this function does not return)
-/** @param status the return code for the process (0 = no error; success)
+/** The process ends where exit() is called: the code that called it is not left normally, so its
+    @ref on_exit "on_exit" blocks and the destructors of its local objects are not run, and the state of the
+    %Qore runtime (programs, modules, and the system namespace and its constants) is not released; the operating
+    system reclaims the process's memory.  If other threads are running, the process ends at once; otherwise the
+    standard I/O streams are flushed first.
+
+    @anchor exit_leak_checks
+    @note A memory checker such as \c valgrind reports the memory that the runtime still uses when exit() is called
+    as leaked, much of it as "definitely lost" (a %Qore value refers to its data with a pointer that such a checker
+    does not recognize); this memory is not leaked while the process runs.  A script whose leak report should mean
+    something must end normally instead of calling exit(), for example by returning from its top-level code (see
+    also the valgrind note in @ref signal_handling).
+
+    @param status the return code for the process (0 = no error; success)
 
     @par Example:
     @code{.py}
@@ -685,6 +706,8 @@ nothing exec(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS,PROCESS] {
     @throw THREAD-CANCELLED the thread was cancelled while waiting for the process; the process is killed
     @throw PROGRAM-INTERRUPTED the Program was interrupted by its @ref Qore::SandboxManager "SandboxManager" while
     waiting for the process; the process group is killed
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the call does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     @par Process group behavior:
     - With a @ref Qore::SandboxManager "SandboxManager" attached, the child process is started in a new process group so
@@ -734,7 +757,6 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
 
 #ifdef QORE_SYSTEM_POSIX_SPAWN
     pid_t spawn_pid = -1;
-    bool spawn_pgroup_ok = false;
     int spawn_rc = 0;
     posix_spawnattr_t attr;
     spawn_rc = posix_spawnattr_init(&attr);
@@ -774,12 +796,10 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         xsink->raiseErrnoException("SYSTEM-ERROR", spawn_rc, "cannot start '/bin/sh' to execute the command");
         return -1;
     }
-    if (use_pgroup) {
-        if (setpgid(spawn_pid, spawn_pid) == 0 || errno == EACCES) {
-            spawn_pgroup_ok = true;
-        }
-    }
-    return wait_for_process(spawn_pid, spawn_pgroup_ok);
+    // posix_spawn() succeeded, so POSIX_SPAWN_SETPGROUP made the child the leader of a new process group before the
+    // command was executed (calling setpgid() here instead fails once the child has ended, ESRCH on macOS, and would
+    // kill only the child)
+    return wait_for_process(spawn_pid, use_pgroup);
 #elif defined(HAVE_FORK) && defined(HAVE_SIGNAL_HANDLING)
     // fallback for platforms without posix_spawn(): fork(), enable all signals, then execl(); in a multithreaded
     // process, the child of fork() may only call async-signal-safe functions before the command is executed
@@ -810,7 +830,10 @@ int system(string command) [flags=NAMED_ARGS;dom=EXTERNAL_PROCESS] {
         xsink->raiseErrnoException("SYSTEM-ERROR", errno, "cannot start '/bin/sh' to execute the command");
         return -1;
     }
-    if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES)) {
+    // the child makes itself the leader of a new process group as well, so that the group exists whichever of the
+    // two calls is made first: EACCES means the child has executed the command, and ESRCH (macOS) that it has ended,
+    // after its own call
+    if (use_pgroup && (setpgid(pid, pid) == 0 || errno == EACCES || errno == ESRCH)) {
         pgroup_ok = true;
     }
 
@@ -2139,9 +2162,17 @@ string get_global_http2_mode() {
 /** @param name the name of the module
     @param message the message that will be included in any exception when the module is attempted to be loaded
 
-    @return 0 = module added, -1 = module already loaded, cannot be blacklisted, -2 = module already in blacklist
+    @return 0 = module added, -1 = module already loaded or its load is in progress (in any thread), cannot be
+    blacklisted, -2 = module already in blacklist
 
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
+
+    A blacklisted module is refused in every form and however it is loaded: as a binary module, an AOT module, a
+    source module or a @ref separated_modules "separated module" (by name, by the path of its file or directory, with
+    @ref requires "%requires", through another module that requires it, or with load_module()); the load raises a
+    \c LOAD-MODULE-ERROR exception with \a message.  An AOT module that is refused is not replaced by its source.  A
+    blacklisted @ref user_module_children "child module" is not attached, and is reported as skipped.  A module that
+    is already loaded, or whose load is in progress (in any thread), cannot be blacklisted.
 
     @since %Qore 2.1
 */
@@ -2161,10 +2192,13 @@ int qore_add_module_to_blacklist(string name, string message = "by an API call")
 /** @param name the name of the module
     @param message the message that will be included in any exception when the module is attempted to be loaded
 
-    @throw BLACKLIST-ERROR could not add module to blacklist
+    @throw BLACKLIST-ERROR the module is already loaded or its load is in progress (in any thread), so it cannot be
+    blacklisted
     @throw BLACKLIST-ERROR the module name contains a NUL character; see @ref path_nul_characters
 
     If the given module is already in the blacklist, then no error is raised
+
+    See qore_add_module_to_blacklist() for what the blacklist refuses
 
     @since %Qore 2.1
 */
@@ -2179,8 +2213,8 @@ int qore_add_module_to_blacklist_ex(string name, string message = "by an API cal
     }
     int rc_local = QMM.addModuleToBlacklist(n->c_str(), m->c_str());
     if (rc_local == -1) {
-        xsink->raiseException("BLACKLIST-ERROR", "Cannot blacklist module \"%s\", as it is already loaded",
-            n->c_str());
+        xsink->raiseException("BLACKLIST-ERROR", "Cannot blacklist module \"%s\", as it is already loaded or its "
+            "load is in progress", n->c_str());
     }
 }
 ///@}

@@ -248,7 +248,7 @@ public class AssemblyAiDataProviderTest inherits QUnit::Test {
                     }
                     AbstractDataProviderType restored = Serializable::deserialize(type.serialize());
                     assertEq(type.getBaseTypeName(), restored.getBaseTypeName(), name);
-                    assertEq(sort(keys type.getFields()), sort(keys restored.getFields()), name);
+                    assertEq(sort((keys type.getFields()) ?? ()), sort((keys restored.getFields()) ?? ()), name);
                 }
             }
         }

@@ -1460,7 +1460,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                                     hash<auto> data.cmd = 'program//list';
                                     *hash<auto> pgm_info = dcl.doCommand(data, False).result;
                                     if (pgm_info) {
-                                        hash<auto> tl;
+                                        hash<auto> tl = {};
                                         foreach softint pgmId in (keys pgm_info) {
                                             foreach int tid in (pgm_info{pgmId}.threads) {
                                                 tl{tid}.programs{pgmId} = pgm_info{pgmId};
@@ -2229,7 +2229,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
         }
 
         public showBreakpoints(*list<auto> bkpts) {
-            foreach hash<auto> b in (sort(bkpts, int sub (hash l, hash r) { return l.id <=> r.id; })) {
+            foreach hash<auto> b in (sort(bkpts ?? (), int sub (hash l, hash r) { return l.id <=> r.id; })) {
                 printfImpl(formatBreakpoint(b));
                 if (b.statements) {
                     foreach hash<auto> stmt in (b.statements) {
@@ -3000,7 +3000,7 @@ Commands can be shortened while they stay unique, such as \"br cr 10\" for \"bre
                     v = keys cmd.variants;
                 }
                 list<auto> res = ();
-                map (push res, line+escapeArg($1)), sort(v);
+                map (push res, line+escapeArg($1)), sort(v ?? ());
                 return res;
             } else {
                 return ();

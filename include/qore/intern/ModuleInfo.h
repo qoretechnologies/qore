@@ -41,6 +41,9 @@ extern "C" {
 }
 #endif
 
+#include <cstdio>
+#include <exception>
+#include <atomic>
 #include <string>
 #include <map>
 #include <set>
@@ -48,6 +51,8 @@ extern "C" {
 #include <memory>
 #include <mutex>
 #include <vector>
+
+#include "qore/intern/SyncParseOptions.h"
 
 // parse options set while parsing the module's header (init & del)
 #define MOD_HEADER_PO (PO_LOCKDOWN & ~(PO_NO_MODULES | PO_NO_REFLECTION))
@@ -135,7 +140,8 @@ enum ChildModuleStatus : unsigned char {
     CMS_PENDING = 0,    //!< the attach has not been attempted yet
     CMS_ATTACHED,       //!< the child was loaded, or its load was already in progress in this thread
     CMS_ABSENT,         //!< no module with this name could be found in the module path
-    CMS_SKIPPED,        //!< not attempted; module loading is not allowed in the parent module's Program
+    CMS_SKIPPED,        //!< not attempted; the child is blacklisted, or module loading is not allowed in the parent
+                        //!< module's Program
     CMS_FAILED,         //!< the child is present but could not be loaded; the parent is loaded without it
 };
 
@@ -273,6 +279,11 @@ public:
         return trusted;
     }
 
+    //! returns the sequence number of the module's registration (see QoreModuleManager::getModuleRegistrationSeq())
+    DLLLOCAL uint64_t getRegistrationSeq() const {
+        return reg_seq;
+    }
+
     //! returns true if code that is not trusted loaded the module from outside the directories of library code
     /** Such a module is given only to code that is not trusted and has the same sandbox (see tenantOwner()); see
         QoreModuleManager::checkShadowingLoad()
@@ -359,6 +370,11 @@ public:
         return next;
     }
 
+    //! Returns the module that replaced this one (when it was reinjected), which deletes it, or nullptr
+    DLLLOCAL QoreAbstractModule* getPrev() const {
+        return prev;
+    }
+
     DLLLOCAL virtual bool isBuiltin() const = 0;
     DLLLOCAL virtual bool isUser() const = 0;
     DLLLOCAL virtual QoreHashNode* getHash(bool with_filename = true) const = 0;
@@ -375,6 +391,11 @@ public:
     DLLLOCAL void addParseOptionMask(const QoreModuleParseOptionMask& mask) {
         std::lock_guard<std::mutex> lck(po_mask_lock);
         po_mask |= mask;
+    }
+
+    //! initializes the lock of the parse option mask again in the child of fork(), where its holder may not exist
+    DLLLOCAL void reinitParseOptionMaskLockAfterFork() {
+        new (&po_mask_lock) std::mutex();
     }
 
     //! returns the Program of a user module (source or AOT), or nullptr for a binary module
@@ -410,6 +431,9 @@ protected:
 
     // true if the module is library code; see isTrusted()
     bool trusted = false;
+    // the sequence number of the module's registration (QoreModuleManager::addModule()): a module registered
+    // before the header of a module closed was not loaded by the code after the header (qore#6351)
+    uint64_t reg_seq = 0;
     // true once the module's load has been recorded on it (see QoreModuleManager::addModule())
     bool load_recorded = false;
     // true if code that is not trusted chose the module; see isTenantChosen()
@@ -504,6 +528,10 @@ public:
     DLLLOCAL ~QoreModuleContextHelper();
 };
 
+//! Returns true if the innermost module load in progress in this thread is library code (see
+//! QoreModuleManager::isTrustedModulePath())
+DLLLOCAL bool qore_module_load_is_trusted();
+
 class QoreModuleDefContextHelper : public QoreModuleDefContext {
 protected:
     QoreModuleDefContext* old;
@@ -522,6 +550,24 @@ class QoreUserModule;
 
 typedef std::set<std::string> strset_t;
 typedef std::map<std::string, strset_t> md_map_t;
+
+//! the dependency registration of a user module name at one point in time
+/** A module being loaded under a name that is already registered (reload_module() keeps the previous module
+    registered until the new one has loaded) must not drop the registration of the previous module when the load
+    fails (#5706)
+*/
+struct QoreUserModuleRegistration {
+    //! the name of the module; held here so that the rollback does not allocate memory for it
+    std::string name;
+    //! True if the name had registered requirements (rmd_map)
+    bool had_deps = false;
+    //! the registered requirements
+    strset_t deps;
+    //! True if the name had registered dependents (md_map)
+    bool had_dependents = false;
+    //! the binary modules registered as required by the name (binary_user_dep_map)
+    strset_t binary_deps;
+};
 
 class ModMap {
 private:
@@ -604,6 +650,9 @@ public:
 #endif
 };
 
+//! marks the namespace that a binary module registered with QoreModuleInfo::ns; see QoreNamespace::purge()
+DLLLOCAL void qore_ns_set_module_owned(QoreNamespace& ns);
+
 struct DLHelper {
     void* ptr;
 
@@ -647,7 +696,16 @@ public:
 
     DLLLOCAL void issueParseCmd(const QoreProgramLocation* loc, const char* mname, const QoreString& cmd);
 
-    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
+    //! issues a module command at run time
+    /** @param origin how the command was issued: MC_RUNTIME, or MC_REPLAY for a command that a compiled program
+        records and replays when it is loaded
+        @param declared_po for a replayed command, the parse options that the compiled program is declared with:
+        the code that loads the program cannot loosen what the source it was compiled from had (see
+        QoreModuleCommandContext)
+    */
+    DLLLOCAL int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink,
+        QoreModuleCommandContext::Origin origin = QoreModuleCommandContext::MC_RUNTIME,
+        const QoreParseOptions* declared_po = nullptr);
 
     //! Registers a module under its current name
     /** The first time a module is registered, what was decided when it was loaded (see
@@ -655,9 +713,26 @@ public:
     */
     DLLLOCAL void addModule(QoreAbstractModule* m);
 
+    //! returns the sequence number of the last module registration (see QoreAbstractModule::reg_seq; qore#6351)
+    DLLLOCAL uint64_t getModuleRegistrationSeq() const {
+        return module_reg_seq.load(std::memory_order_acquire);
+    }
+
     DLLLOCAL QoreAbstractModule* findModule(const char* name) {
         AutoLocker al(mutex);
         return findModuleUnlocked(name);
+    }
+
+    //! Marks a registered module whose initialization failed (an AOT module, registered before it is initialized)
+    /** The module stays registered, but a later load reports the failure, and code that requires it fails
+        (qore#6217)
+    */
+    DLLLOCAL void setModuleInitFailed(const char* name) {
+        AutoLocker al(mutex);
+        QoreAbstractModule* mi = findModuleUnlocked(name);
+        if (mi) {
+            mi->setInitFailed();
+        }
     }
 
     //! Sets the parse option mask applied to every user module loaded from now on; see QoreModuleParseOptionMask
@@ -699,27 +774,6 @@ public:
         return i == map.end() ? nullptr : i->second;
     }
 
-    //! Import a module's namespace into a program without acquiring the lock
-    /** This is for use by AOT runtime code that is called from within a locked context
-        (e.g., qore_aot_module_init called from loadBinaryModuleFromDesc).
-        @param name the module name to import
-        @param pgm the target QoreProgram
-        @param xsink exception sink
-        @return 0 on success, -1 on error
-    */
-    DLLLOCAL int importModuleNSUnlocked(const char* name, QoreProgram* pgm, ExceptionSink& xsink);
-
-    //! Import a module's namespace into a program (locked version)
-    /** @param name the module feature name
-        @param pgm the target QoreProgram
-        @param xsink exception sink
-        @return 0 on success, -1 on error
-    */
-    DLLLOCAL int importModuleNS(const char* name, QoreProgram* pgm, ExceptionSink& xsink) {
-        AutoLocker al(mutex);
-        return importModuleNSUnlocked(name, pgm, xsink);
-    }
-
     //! Loads a module for a parse directive (\c %%requires or \c %%try-module) of \a pgm
     /** The warnings of the module loader for the module and the modules loaded with it are warnings of the parse
         action of \a pgm (see qore_report_module_load_warning() in ModuleManager.cpp).
@@ -729,7 +783,12 @@ public:
         @param name the module name with an optional version specification
         @param pgm the Program being parsed
         @param reexport if the module is reexported
-        @param loc the location of the directive, if known, for the warnings of the module loader
+        @param loc the location of the directive, if known, for the warnings of the module loader; when it is given,
+        a parse of this or another module that ran short of the stack of this thread (QORE_PARSE_STACK_ERR) is a parse
+        error of \a pgm, and not an error of the load in \a xsink, so that a parse directive that handles the errors of
+        its load (\c %%try-module) does not handle it as a module that is not available
+
+        @return 0 if the module was loaded, -1 if not
     */
     DLLLOCAL int parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             bool reexport = false, const QoreProgramLocation* loc = nullptr);
@@ -765,14 +824,52 @@ public:
     */
     DLLLOCAL void getModuleCandidateFiles(const char* name, QoreProgram* pgm, std::vector<std::string>& files);
 
-    //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
-    /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
-        or nullptr; with it, the module's name is checked, an optional module that it was compiled without and that is
-        available now is reported (\c BINARY-MODULE-STALE, as the module has no source to fall back to), and its
-        dependencies are found with its own module path directives (QoreModulePathScope), as for a \c .qmod
+    //! Appends the paths in the module path where a module with the given name could be found, but is not
+    /** As getModuleCandidateFiles(), but the paths that are not regular files are given, so that a build can
+        notice when the module is installed (qore#6145)
+    */
+    DLLLOCAL void getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
+            std::vector<std::string>& files);
+
+private:
+    //! Appends the candidate paths of a module: the existing files, or the paths that are not files
+    DLLLOCAL void getModuleCandidatePaths(const char* name, QoreProgram* pgm, std::vector<std::string>& files,
+            bool missing);
+
+public:
+
+    //! Registers a statically linked AOT module into a Program, without dlopen() or a search of the module path
+    /** Called by the register function that qcc emits for each linked module (qore_<name>_register(), through
+        qore_aot_register_into_program_v2()), always with the module's metadata record: every statically linked
+        module is registered with the restrictions that its code gives its dependencies (qore#6406)
+
+        A statically registered module is never library code, whatever \a path is given: a path in a directory of
+        the process-wide module path does not make it trusted, as its code is linked into the program, not loaded
+        from that directory.  It is checked as a load of the same module by path from outside the module path, for
+        the code that calls the registration:
+        - that is the %Qore code running in the calling thread, also when it registers the module into another
+          Program (for example through a native function that it calls); a native host that calls this function
+          with no %Qore code running is trusted, unless \a tpgm has a sandbox manager (see
+          QoreProgram::setSandboxManager()), whose code is then the caller; parse options that restrict a functional
+          domain in \a tpgm do not make such a call untrusted, as for a load by path;
+        - when that code is not trusted (code that a sandbox governs, or whose parse options restrict a functional
+          domain), the module cannot have the name of a module in the process-wide module path
+          (\c LOAD-MODULE-ERROR), and with a name of its own it is recorded as chosen by that code: it is used only
+          by code with the same sandbox (or, with no sandbox, by the code of the same Program), and a later
+          registration or load of that name by other code is refused;
+        - when a module of that name is already loaded, it is attached to \a tpgm instead, as for a load of a feature
+          that is already loaded: a library module that is already loaded is attached also for code that is not
+          trusted, and a module that such code chose is refused to other code;
+        - registered while a library module that such code loaded is initialized, the module is governed by the
+          sandbox of that code, as a module loaded then by path.
+
+        @param aot_info the metadata record that qcc linked with the module: the module's name is checked, an optional
+        module that it was compiled without and that is available now is reported (\c BINARY-MODULE-STALE, as the
+        module has no source to fall back to), its dependencies are found with its own module path directives
+        (QoreModulePathScope), as for a \c .qmod, and loaded with the restrictions that its code gives them
     */
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
-            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo* aot_info = nullptr);
+            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo& aot_info);
 
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
@@ -798,6 +895,25 @@ public:
         Reads only data that is set once by init(), so it needs no lock.
     */
     DLLLOCAL bool isTrustedModulePath(const char* path, std::string* load_path = nullptr) const;
+
+    //! Gives the Program of an AOT module being initialized the sandbox that the Program of its source module gets
+    /** As for a source module (see loadSeparatedModule()), a module that is not library code (see
+        isTrustedModulePath()) is governed by the sandbox of the Program loading it, or of the sandboxed code that
+        chose it; it must be called before any of the module's code runs and before its recorded module commands are
+        replayed in its Program (issue #5913)
+
+        Whether the module is library code is the decision recorded when its load started (QoreModuleLoadFrameHelper,
+        pushed by every load by the module manager, including registerAOTStaticModuleIntern()), so that it agrees
+        with the trusted flag that addModule() records on the module; \a path is used only for a module whose
+        initialization runs outside such a load (an init function called directly)
+
+        @param module_pgm the AOT module's new Program
+        @param loader_pgm the Program loading the module, if any
+        @param feature the module's feature name
+        @param path the path of the module's file, if known
+    */
+    DLLLOCAL void inheritAOTModuleSandbox(QoreProgram& module_pgm, QoreProgram* loader_pgm, const char* feature,
+            const char* path) const;
 
     //! Returns the path of a module with the name given in a directory of library code, or an empty string
     /** Looks in each directory of library code (see isTrustedModulePath()) for every form that the module search
@@ -861,27 +977,88 @@ public:
     /** User modules are deleted in dependency order at shutdown (see delUser()), so a module is deleted only after
         every user module that loaded it.
 
+        The mutex must be held.
+
         @param mi the module loaded
     */
     DLLLOCAL void trySetUserModuleDependency(const QoreAbstractModule* mi);
+
+    //! Calls trySetUserModuleDependency() with the mutex locked; the mutex must not be held
+    /** For QoreAbstractModule::addToProgramImpl(), which runs without the mutex: a module is applied to a Program with
+        the mutex released, as its namespace initialization can run code that loads modules (see
+        qore_check_load_module_intern())
+    */
+    DLLLOCAL void trySetUserModuleDependencyLocked(const QoreAbstractModule* mi) {
+        AutoLocker al(mutex);
+        trySetUserModuleDependency(mi);
+    }
 
     //! Returns true if the module named \a name in the current module context is a user module
     /** Binary modules (including AOT modules) are not deleted by delUser(), so a dependency on one of them would
         never be released.  A user module is not in the module map while its source is parsed, which is when it
         loads the modules it requires; it is then the module of the user module definition context of the thread.
 
+        The mutex must be held.
+
         @param name the name of the module in the current module context
+        @param binary_context true if the context of a binary module (QMRL_BINARY) counts: for the binary modules
+        that it requires, which are recorded for a binary module as for a user module
     */
-    DLLLOCAL bool isUserModuleContext(const char* name);
+    DLLLOCAL bool isUserModuleContext(const char* name, bool binary_context = false);
 
     //! Records that the user module in the current module context requires the given binary module
     /** A binary module (an AOT user module or a native binary module) is deleted in cleanup(); a user module that
         requires it can hold objects of its classes, so a user module whose deletion is deferred to cleanup() is
         deleted before the binary modules it requires (see delUser() and cleanup())
 
+        The mutex must be held.
+
         @param name the name of the binary module imported
     */
     DLLLOCAL void trySetUserBinaryModuleDependency(const char* name);
+
+    //! Calls trySetUserBinaryModuleDependency() with the mutex locked; the mutex must not be held
+    /** For QoreBuiltinModule::addToProgramImpl(), which runs without the mutex (see
+        trySetUserModuleDependencyLocked())
+    */
+    DLLLOCAL void trySetUserBinaryModuleDependencyLocked(const char* name) {
+        AutoLocker al(mutex);
+        trySetUserBinaryModuleDependency(name);
+    }
+
+    //! Records that the module whose own Program is \a pgm requires the binary module \a name, which was applied to it
+    /** A module that loads another module at run time (ex: Util's get_file_from_sftp() loads the ssh2 module, which
+        the module's Program imports the declarations of) is not in the load context of its module any more, so the
+        dependency is not recorded by trySetUserBinaryModuleDependency(); the module is deleted before the module that
+        it loaded, as the module Program names the declarations of the loaded module (qore#5790).  Does nothing if
+        \a pgm is not the Program of a module.
+        @param pgm the Program that the module was applied to
+        @param name the name of the module that was applied to it
+    */
+    DLLLOCAL void trySetModuleProgramBinaryDependencyLocked(const QoreProgram* pgm, const char* name) {
+        AutoLocker al(mutex);
+        for (module_map_t::const_iterator i = map.begin(), e = map.end(); i != e; ++i) {
+            if (i->second->getModuleProgram() == pgm) {
+                if (strcmp(i->first, name)) {
+                    binary_user_dep_map.addDep(name, i->first);
+                }
+                return;
+            }
+        }
+    }
+
+    //! Records that the module whose own Program is \a pgm requires the user module \a name, which was applied to it
+    /** The user module counterpart of trySetModuleProgramBinaryDependencyLocked(): a module that loads a user module
+        at run time (ex: ProviderIndexUtil's load_module() calls) imports its declarations into the module's Program,
+        whose teardown reads the types that they name, also those of the modules that the loaded module requires; the
+        loaded module is deleted after it, and so are the native modules that it requires (issue #6501).  A user module
+        requiring it is recorded as for a %requires, unless the user module already requires it (directly or
+        indirectly), which would make a cycle; an AOT module requiring it is recorded in \c aot_user_dep_map.  Does
+        nothing if \a pgm is not the Program of a module.
+        @param pgm the Program that the module was applied to
+        @param name the name of the user module that was applied to it
+    */
+    DLLLOCAL void trySetModuleProgramUserDependencyLocked(const QoreProgram* pgm, const char* name);
 
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
@@ -916,6 +1093,56 @@ public:
         }
     }
 
+    //! Records the dependency registration of \a name, to restore it with rollbackUserModuleDependency()
+    DLLLOCAL void getUserModuleRegistration(const char* name, QoreUserModuleRegistration& reg) {
+        // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
+        assert(mutex.trylock());
+        reg.name = name;
+        reg.deps.clear();
+        md_map_t::iterator i = rmd_map.find(name);
+        reg.had_deps = i != rmd_map.end();
+        if (reg.had_deps) {
+            reg.deps = i->second;
+        }
+        reg.had_dependents = md_map.find(name) != md_map.end();
+        reg.binary_deps.clear();
+        for (const auto& bi : binary_user_dep_map) {
+            if (bi.second.find(name) != bi.second.end()) {
+                reg.binary_deps.insert(bi.first);
+            }
+        }
+    }
+
+    //! Records the dependency registration of \a name with the mutex locked; the mutex must not be held
+    DLLLOCAL void getUserModuleRegistrationLocked(const char* name, QoreUserModuleRegistration& reg) {
+        AutoLocker al(mutex);
+        getUserModuleRegistration(name, reg);
+    }
+
+    //! Removes the dependency records that a load of the module made since \a saved was recorded
+    /** The registration that \a saved records belongs to a module that is still loaded under the name (a module being
+        reloaded, or a module of the same name that is loaded while another is compiled) and is kept; when it records
+        none, this removes every registration of the name, as removeUserModuleDependency() does.
+
+        The mutex must be held.  This never throws, as it is called when a module definition context closes: a
+        record that cannot be released for lack of memory is kept, in both maps, so they stay consistent (#5953)
+    */
+    DLLLOCAL void rollbackUserModuleDependency(const QoreUserModuleRegistration& saved) noexcept {
+        // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
+        assert(mutex.trylock());
+        try {
+            rollbackUserModuleDependencyIntern(saved);
+        } catch (...) {
+            // only std::bad_alloc can be raised; the records not yet released are kept, consistently
+        }
+    }
+
+    //! Calls rollbackUserModuleDependency() with the mutex locked; the mutex must not be held
+    DLLLOCAL void rollbackUserModuleDependencyLocked(const QoreUserModuleRegistration& saved) noexcept {
+        AutoLocker al(mutex);
+        rollbackUserModuleDependency(saved);
+    }
+
     DLLLOCAL void removeUserModuleDependency(const char* name, const char* orig_name = 0) {
         //printd(5, "QoreModuleManager::removeUserModuleDependency() name: '%s' orig: '%s'\n", name,
         //    orig_name ? orig_name : "n/a");
@@ -926,7 +1153,13 @@ public:
             // remove dependents
             for (strset_t::iterator si = i->second.begin(), se = i->second.end(); si != se; ++si) {
                 md_map_t::iterator di = md_map.find(*si);
-                assert(di != md_map.end());
+                // a module in a dependency cycle (modules that load each other at run time, see
+                // trySetModuleProgramBinaryDependencyLocked()) can be deleted before a module that requires it, as
+                // QoreModuleManager::cleanup() breaks the cycle at one of them: its record of the modules that
+                // require it was removed with it, and there is nothing left to release (qore#6129)
+                if (di == md_map.end()) {
+                    continue;
+                }
 
                 strset_t::iterator dsi = di->second.find(i->first);
                 assert(dsi != di->second.end());
@@ -953,6 +1186,15 @@ public:
         }
     }
 
+    //! Copies the dependency records under the mutex: requirements (rmd_map), dependents (md_map) and the users of
+    //! binary modules (binary_user_dep_map); for tests
+    DLLLOCAL void getDependencyRecords(md_map_t& reqs, md_map_t& dependents, md_map_t& binary_users) {
+        AutoLocker al(mutex);
+        reqs.insert(rmd_map.begin(), rmd_map.end());
+        dependents.insert(md_map.begin(), md_map.end());
+        binary_users.insert(binary_user_dep_map.begin(), binary_user_dep_map.end());
+    }
+
     DLLLOCAL int addModuleToBlacklist(const char* name, const char* msg);
 
     //! Adds the names of the modules that the loaded module \a name requires directly to \a deps
@@ -976,15 +1218,18 @@ public:
         design/qore-module-structure.md "Child Modules" for the contract implemented here.
 
         A child declaration is optional, so no child status fails the parent; a child that is present but
-        cannot be loaded is reported and skipped.
+        cannot be loaded is reported and skipped.  A child that cannot be parsed within the stack of this thread
+        (QORE_PARSE_STACK_ERR) is not one that cannot be loaded: it stays pending, and the attach fails with the
+        error.
 
         @param mi the parent module
-        @param xsink exception sink; used only for interruptions of the attach itself
+        @param xsink exception sink; used only for interruptions of the attach itself and the parse stack error of a
+        child
         @param wsink warning sink for children that could not be attached
         @param warning_mask the warning mask in effect for the load
 
         @return 0 for OK (including for absent, skipped, and failed children), -1 if the attach was
-        interrupted
+        interrupted or a child could not be parsed within the stack of this thread
     */
     DLLLOCAL int attachChildModules(QoreAbstractModule& mi, ExceptionSink& xsink, ExceptionSink& wsink,
             int warning_mask);
@@ -1011,6 +1256,57 @@ private:
     DLLLOCAL QoreModuleManager(const QoreModuleManager&) = delete;
     // not implemented
     DLLLOCAL QoreModuleManager& operator=(const QoreModuleManager&) = delete;
+
+    //! Implements rollbackUserModuleDependency(); can raise std::bad_alloc only where noted
+    DLLLOCAL void rollbackUserModuleDependencyIntern(const QoreUserModuleRegistration& saved) {
+        const std::string& name = saved.name;
+        // the steps that do not allocate memory come first
+        if (!saved.had_dependents) {
+            md_map_t::iterator mi = md_map.find(name);
+            if (mi != md_map.end()) {
+                md_map.erase(mi);
+            }
+        }
+        // the binary modules that the load registered as required by the name
+        for (md_map_t::iterator bi = binary_user_dep_map.begin(); bi != binary_user_dep_map.end();) {
+            if (saved.binary_deps.find(bi->first) == saved.binary_deps.end()) {
+                bi->second.erase(name);
+                if (bi->second.empty()) {
+                    binary_user_dep_map.erase(bi++);
+                    continue;
+                }
+            }
+            ++bi;
+        }
+        // the user modules that the load registered as required by the name, each released from both maps at once
+        md_map_t::iterator i = rmd_map.find(name);
+        if (i == rmd_map.end()) {
+            return;
+        }
+        strset_t& reqs = i->second;
+        for (strset_t::iterator ri = reqs.begin(); ri != reqs.end();) {
+            if (saved.had_deps && saved.deps.find(*ri) != saved.deps.end()) {
+                ++ri;
+                continue;
+            }
+            md_map_t::iterator di = md_map.find(*ri);
+            if (di != md_map.end()) {
+                strset_t::iterator dsi = di->second.find(name);
+                if (dsi != di->second.end()) {
+                    if (di->second.size() == 1) {
+                        // the required module has no dependent left; this can raise std::bad_alloc, before the
+                        // record is changed
+                        umset.insert(*ri);
+                    }
+                    di->second.erase(dsi);
+                }
+            }
+            ri = reqs.erase(ri);
+        }
+        if (reqs.empty() && !saved.had_deps) {
+            rmd_map.erase(i);
+        }
+    }
 
     // per-feature load/init state; absence from module_load_map encodes NOT_LOADED
     enum ModuleLoadState : unsigned char {
@@ -1058,6 +1354,8 @@ protected:
     ModMap rmd_map;
     // binary module dependency map: binary module (AOT or native) -> the user modules that require it
     ModMap binary_user_dep_map;
+    // user module -> the AOT modules whose Programs it was applied to at run time, which require it (issue #6501)
+    ModMap aot_user_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -1069,6 +1367,9 @@ protected:
     // module hash
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
+
+    //! the sequence number of the last module registration (qore#6351)
+    std::atomic<uint64_t> module_reg_seq{0};
 
     //! Returns the user modules that delUser() cannot delete yet, with the user modules that they require
     /** These are the user modules that AOT user modules require, which are left to cleanup(), and the given user
@@ -1156,19 +1457,26 @@ protected:
     /** Each module is loaded if possible, as a %try-module directive in the source module would; the module
         manager lock must be held.
 
+        @param xsink receives an error that depends on the stack of the thread (qore_has_thread_stack_error()),
+        raised while a module was loaded: the module may be available, so the check cannot be made in this thread,
+        and the caller fails the load (issue #6047); any other error means that the module is not available
         @param specs module requests as written in %try-module directives (a name and an optional version
         constraint)
         @param path_pgm supplies module search paths for the load
         @param available receives the first request that can be loaded
-        @return true if a module can be loaded now
+        @return true if a module can be loaded now; false if none can, or if an error was raised in \a xsink
     */
-    DLLLOCAL bool findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
-            std::string& available);
+    DLLLOCAL bool findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+            QoreProgram* path_pgm, std::string& available);
 
+    /** @param dep_restrictions the restrictions that the code of an AOT module gives its dependencies, if known
+        (see loadAOTBinaryModuleDependencies())
+    */
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
-            ModuleLoadMapHelper* load_guard = nullptr);
+            ModuleLoadMapHelper* load_guard = nullptr,
+            const std::vector<QoreModuleDependencyRestriction>* dep_restrictions = nullptr);
 
     //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
     /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
@@ -1197,8 +1505,24 @@ protected:
     DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm);
 
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
+    /** @param restrictions the options that the module's directives gave its dependencies, in directive order, if
+        known (from its module metadata, QoreAOTModuleFileInfo::dependency_restrictions): those modules are loaded
+        first, in that order, each with its options (qore#6406)
+        @param relief_dom the domains that the dependencies do not inherit as restrictions from \a path_pgm: those
+        that a module loaded as library code declares in its header (qore#6351)
+        @param post_header_dependencies the dependencies that the module requires only after its header, which
+        inherit the restrictions without \a relief_dom; the others inherit them with it, also one that \a restrictions
+        lists with QMDR_BEFORE_HEADER
+        @param restricted_dom the domains that the module restricts itself, which a relief in effect from a module
+        loading it does not cover for its dependencies
+
+        If an entry of \a restrictions has QMDR_INEXACT, no dependency is relieved: \a relief_dom is ignored, and
+        no relief in effect from a module loading this one applies to its dependencies (qore#6386)
+    */
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
-            const std::vector<std::string>& dependencies, QoreProgram* path_pgm);
+            const std::vector<std::string>& dependencies, QoreProgram* path_pgm,
+            const std::vector<QoreModuleDependencyRestriction>* restrictions = nullptr, int64 relief_dom = 0,
+            const std::vector<std::string>* post_header_dependencies = nullptr, int64 restricted_dom = 0);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,
@@ -1242,8 +1566,12 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
+              cmd_caller_aware(mod_info.cmd_caller_aware),
               info(module_info.release(), &info_xsink), dlptr(dlptr), feature(mod_info.name),
-              dependencies(mod_info.dependencies), aot(mod_info.is_aot) {
+              dependencies(mod_info.dependencies), aot(mod_info.is_aot), module_ns(mod_info.ns) {
+        if (module_ns) {
+            qore_ns_set_module_owned(*module_ns);
+        }
     }
 
     //! returns the Program of an AOT user module, or nullptr for a binary module
@@ -1257,7 +1585,24 @@ public:
         // module is replaced by a reinjection (see QoreModuleManager::reinjectModule()), while the module's own
         // code (e.g. qore_aot_module_delete()) identifies its state by the feature name
         const char* old_ctx_name = set_module_context_name(feature.c_str());
-        module_delete();
+        if (module_delete) {
+            module_delete();
+        }
+        // the module's namespace with static storage duration is released now, during qore_cleanup() and before the
+        // types are freed, and not by its C++ static destructor; exceptions raised by destructors are reported here
+        if (module_ns) {
+            ExceptionSink xsink;
+            try {
+                module_ns->purge(&xsink);
+            } catch (const std::exception& e) {
+                // a destructor cannot throw (for example std::bad_alloc while purging); whatever was not released is
+                // released by the C++ static destructor of the namespace
+                fprintf(stderr, "module '%s': the module's namespace could not be released: %s\n", name.c_str(),
+                    e.what());
+            } catch (...) {
+                fprintf(stderr, "module '%s': the module's namespace could not be released\n", name.c_str());
+            }
+        }
         set_module_context_name(old_ctx_name);
         // we do not close binary modules because we may have thread local data that needs to be
         // destroyed when exit() is called
@@ -1307,6 +1652,9 @@ protected:
     qore_module_ns_init_t module_ns_init;
     qore_module_delete_t module_delete;
     qore_module_parse_cmd_t module_parse_cmd;
+    //! true if the parse command handler honors the restrictions of the code that issues a command (see
+    //! QoreModuleInfo::cmd_caller_aware)
+    bool cmd_caller_aware;
     //! The sink outlives its metadata holder, including constructor failure cleanup.
     ExceptionSink info_xsink;
     ReferenceHolder<QoreHashNode> info;
@@ -1317,6 +1665,8 @@ protected:
     const std::vector<std::string> dependencies;
     //! true for an AOT module
     const bool aot;
+    //! the module's namespace with static storage duration (QoreModuleInfo::ns), purged when the module is deleted
+    QoreNamespace* const module_ns;
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };
@@ -1354,6 +1704,13 @@ public:
         return init_c.refSelf();
     }
 
+    //! returns a reference to the del closure (a closure or a call reference), if the module has one
+    /** For the AOT compilation of the local modules that a script embeds; the module still owns its reference
+    */
+    DLLLOCAL QoreValue refDelClosure() const {
+        return del ? QoreValue(del->refSelf()) : QoreValue();
+    }
+
     DLLLOCAL virtual bool isBuiltin() const override {
         return false;
     }
@@ -1369,8 +1726,8 @@ public:
     DLLLOCAL virtual void issueModuleCmd(const QoreProgramLocation* loc, const QoreString& cmd,
             ExceptionSink* xsink) override {
         if (xsink) {
-            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", "module '%s' loaded from '%s' is a user module; only "
-                "builtin modules can support parse commands", name.c_str(), filename.c_str());
+            xsink->raiseException(*loc, "PARSE-COMMAND-ERROR", QoreValue(), "module '%s' loaded from '%s' is a user "
+                "module; only builtin modules can support parse commands", name.c_str(), filename.c_str());
         }
     }
 
@@ -1404,17 +1761,59 @@ protected:
     const char* old_name;
 };
 
+//! How a user module definition context records and rolls back the dependency records of its module (#5953)
+enum QoreModuleRecordLock : unsigned char {
+    //! the module manager's mutex is held when the context is opened and when it is closed
+    QMRL_HELD,
+    //! the mutex is not held: the context locks it to record the registration and to roll it back; used by the AOT
+    //! compile functions, whose module is parsed but never registered.  The name is not reserved while it is parsed:
+    //! a compilation concurrent with a load of a module of the same name in another thread is not supported (qcc
+    //! and qore --compile-module compile in one thread, before any other code runs)
+    QMRL_LOCK,
+    //! the context of a binary module: the source of an AOT module initialized with the legacy entry point
+    //! qore_aot_module_init(), which runs without the mutex, locked as with QMRL_LOCK.  No user module dependency is
+    //! recorded under the name of a binary module (see QoreModuleManager::isUserModuleContext()), only the binary
+    //! modules that it requires; those are released if the initialization fails.  Its success is recorded with
+    //! setRegistered() before the module is registered: a failure of the registration then leaves records under a
+    //! name that is not registered, which delUser() and cleanup() ignore
+    QMRL_BINARY,
+};
+
 class QoreUserModuleDefContextHelper : public QoreModuleDefContextHelper {
 public:
-    DLLLOCAL QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p, ExceptionSink& xs);
+    //! Opens the module definition context of the user module \a name
+    /** @param rlock how the dependency records are reached; see QoreModuleRecordLock
+    */
+    DLLLOCAL QoreUserModuleDefContextHelper(const char* name, const char* path, QoreProgram* p, ExceptionSink& xs,
+            QoreModuleRecordLock rlock);
 
+    //! Closes the module definition context
+    /** Unless the module was registered (see setRegistered()), the dependency registrations that its load made are
+        rolled back.  This does not depend on an exception being pending when the context closes: a caller can handle
+        the exception of a failed load first, and a module parsed only to be compiled is never registered (#5953).
+    */
     DLLLOCAL ~QoreUserModuleDefContextHelper() {
-        const char* name = set_module_context_name(old_name);
+        set_module_context_name(old_name);
         set_module_context_path(old_path);
 
-        if (xsink && !dup) {
-            QMM.removeUserModuleDependency(name);
+        if (!registered && !dup) {
+            if (rlock == QMRL_HELD) {
+                QMM.rollbackUserModuleDependency(saved_reg);
+            } else {
+                QMM.rollbackUserModuleDependencyLocked(saved_reg);
+            }
         }
+    }
+
+    //! Returns true if this is the context of a binary module (QMRL_BINARY), whose user module dependencies are not
+    //! recorded
+    DLLLOCAL bool isBinaryModuleContext() const {
+        return rlock == QMRL_BINARY;
+    }
+
+    //! Marks the module as registered: the dependency registrations that its load made are kept
+    DLLLOCAL void setRegistered() {
+        registered = true;
     }
 
     DLLLOCAL void setDuplicate() {
@@ -1429,6 +1828,11 @@ public:
 
     DLLLOCAL void setNameInit(const char* name);
 
+    //! applies the declared domains to the module's Program and lifts them from the header's own restrictions
+    DLLLOCAL virtual int64 applyDomains(int64 dom) override;
+
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const override;
+
     DLLLOCAL void close();
 
 protected:
@@ -1438,10 +1842,19 @@ protected:
     const char* old_path;
 
     qore_program_private* pgm;
-    QoreParseOptions po;
+    //! the restrictions that the header adds for its own code, which the code before it does not have
+    QoreParseOptions header_po;
+    //! the scoped options of the header's code, which end with the header (see close())
+    ParseOptionsOverlayFrame header_frame{ParseOptionsOverlayFrame::MODULE_HEADER};
 
     ExceptionSink& xsink;
     bool dup;
+    //! how the dependency records are reached
+    QoreModuleRecordLock rlock;
+    //! true if the module was registered and keeps the dependency registrations of its load
+    bool registered = false;
+    //! the registration of the module name when its load began: a module being reloaded is still registered
+    QoreUserModuleRegistration saved_reg;
 };
 
 //! marks a module as having its child modules attached in the current thread

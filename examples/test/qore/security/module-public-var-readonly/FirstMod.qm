@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# a trusted module that a Program with PO_NO_PROCESS_CONTROL loads first, so that the module's Program inherits the
+# option (qore#5664)
+
+%modern
+
+module FirstMod {
+    version = "1.0";
+    desc = "test module loaded first by a restricted Program";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+}
+
+public namespace FirstMod {
+    public class Obj {
+        public {
+            static int sx = 1;
+        }
+
+        static Obj make() {
+            return new Obj();
+        }
+    }
+
+    public our int i;
+
+    public string sub state() {
+        return sprintf("%d:%d", i ?? 0, Obj::sx);
+    }
+}

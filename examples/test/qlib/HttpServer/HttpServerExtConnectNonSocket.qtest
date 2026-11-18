@@ -1,0 +1,267 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 (QUIC) extended CONNECT handling over TLS listeners
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class HttpServerExtConnectNonSocketTest
+
+#! a handler that is not a socket handler and answers every request with an ordinary 200 response with a body, as a
+#! catch-all handler serving a web UI page does
+class PlainPageHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": "<html><body>index</body></html>",
+            # representation headers, which a refusal of the request must not carry
+            "hdr": {"Content-Type": MimeTypeHtml, "ETag": "\"v1\"", "Set-Cookie": "session=1"},
+        };
+    }
+}
+
+#! a server that sends a handler's ordinary 2xx response to an extended CONNECT as it is, as before issue #5667
+class NoRefusalHttpServer inherits HttpServer {
+    constructor(hash<HttpServerOptionInfo> opts) : HttpServer(opts) {
+    }
+
+    private bool refuseNonTunnelExtendedConnectResponse(hash<auto> cx, hash<auto> hdr, hash<auto> rv) {
+        return False;
+    }
+}
+
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send(msg);
+    }
+}
+
+class EchoWsHandler inherits WebSocketHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+}
+
+#! issue #5667: an extended CONNECT that a handler which is not a socket handler answers with an ordinary 2xx response
+#! is refused with 501
+/** Any 2xx response to an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441, RFC 9220) establishes the tunnel.  The server
+    sent the 200 response of a plain handler (with its body and the end of the stream) as it was, so a WebSocket
+    client took it as an accepted connection; the server now answers 501, as it already did for a streaming response
+    from a handler that is not a socket handler.  A real WebSocket handler is not affected.
+*/
+class HttpServerExtConnectNonSocketTest inherits Test {
+    private {
+        *Logger logger;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    constructor() : Test("HttpServerExtConnectNonSocketTest", "1.0") {
+        addTestCase("HTTP/2 extended CONNECT to a plain handler is refused", sub () { testPlain("2.0"); });
+        addTestCase("HTTP/3 extended CONNECT to a plain handler is refused", sub () { testPlain("3.0"); });
+        addTestCase("a WebSocket client reports the refusal over HTTP/2", \testPlainWebSocketClient());
+        addTestCase("HTTP/2 extended CONNECT to a WebSocket handler is accepted", sub () { testWebSocket("2.0"); });
+        addTestCase("a subclass can send the handler's response unchanged", sub () { testPlain("2.0", True); });
+        addTestCase("HTTP/3 extended CONNECT to a WebSocket handler is accepted", sub () { testWebSocket("3.0"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ext-connect-non-socket-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    #! creates a TLS server with HTTP/3 enabled: a WebSocket handler at /ws and a plain handler for every other path
+    private hash<auto> setupServer(*bool no_refusal) {
+        hash<HttpServerOptionInfo> opts({
+            "logger": logger,
+            "debug": True,
+        });
+        HttpServer server = no_refusal ? new NoRefusalHttpServer(opts) : new HttpServer(opts);
+        server.setHandler("ws", "^ws", NOTHING, new EchoWsHandler());
+        server.setHandler("plain", "", NOTHING, new PlainPageHandler());
+        server.setDefaultHandler("plain", new PlainPageHandler());
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        return {"server": server, "port": info.port};
+    }
+
+    private WebSocketClient getClient(int port, string path, string http_version, code cb) {
+        return new WebSocketClient(cb, {
+            "url": sprintf("wss://127.0.0.1:%d/%s", port, path),
+            "logger": logger,
+            "http_version": http_version,
+            "ssl_verify_cert": False,
+            "timeout": 10s,
+            "connect_timeout": 10s,
+        });
+    }
+
+    #! an extended CONNECT to a path that the plain handler serves gets 501, not 200
+    /** The request is made on a stream of HttpClientIo directly, and the status is read from the response that the
+        stream received, so that the server's answer is checked whatever a WebSocket client does with it.
+    */
+    private testPlain(string http_version, *bool no_refusal) {
+        hash<auto> setup = setupServer(no_refusal);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+        }
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": http_version == "3.0" ? "h3" : "h2",
+            "logger": logger,
+            "request_timeout": 10s,
+            "connect_timeout": 10s,
+            "accept_all_certs": True,
+            "max_connections_per_host": 1,
+        });
+        on_exit {
+            mgr.closeAll();
+        }
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(sprintf("https://127.0.0.1:%d/ui/page",
+            setup.port));
+        assertEq(http_version == "3.0" ? "Http3ClientStreamHandle" : "Http2ClientStreamHandle", stream.className(),
+            http_version + ": the stream has the requested protocol");
+        stream.startStreaming("CONNECT", "/ui/page", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        on_exit {
+            stream.cancel();
+        }
+        # the first event carries the response headers, possibly with the body and the end of the stream
+        stream.readData(10s);
+        *hash<auto> resp = stream.getResponse();
+        if (no_refusal) {
+            assertEq(200, resp.status_code, http_version + ": the handler's response is sent unchanged");
+            return;
+        }
+        assertEq(501, resp.status_code, http_version + ": the CONNECT is refused");
+        hash<auto> rhdr = resp.headers ?? {};
+        assertFalse(exists rhdr.etag, http_version + ": no ETag of the handler's representation");
+        assertFalse(exists rhdr."set-cookie", http_version + ": no Set-Cookie of the handler's response");
+    }
+
+    #! with an explicitly requested HTTP/2, a WebSocket client reports the refusal
+    private testPlainWebSocketClient() {
+        hash<auto> setup = setupServer();
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+        }
+        WebSocketClient wsc = getClient(setup.port, "ui/page", "2.0", sub (*data msg) {});
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        string err;
+        try {
+            wsc.connect();
+            err = "connected";
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertRegex("^WEBSOCKET-ERROR: HTTP/2 .* returned status code '501'", err, "the client reports the refusal");
+    }
+
+    #! an extended CONNECT to the WebSocket handler is accepted, and a message makes the round trip
+    private testWebSocket(string http_version) {
+        hash<auto> setup = setupServer();
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+        }
+        Queue q();
+        WebSocketClient wsc = getClient(setup.port, "ws", http_version, sub (*data msg) {
+            if (exists msg) {
+                q.push(msg);
+            }
+        });
+        on_exit {
+            try {
+                wsc.disconnect();
+            } catch () {
+            }
+        }
+        wsc.connect();
+        wsc.send("hello");
+        assertEq("hello", q.get(10s), http_version + ": echo over the tunnel");
+    }
+}

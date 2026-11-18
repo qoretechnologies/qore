@@ -218,7 +218,9 @@ public class GoogleApiParentDataProvider inherits GoogleDataProviderBase {
 
         @see getChildProviderEx()
     */
-    private *GoogleDataProvider::GoogleDataProviderBase getChildProviderImpl(string name) {
+    # returns *AbstractDataProvider: a subclass can return other data providers as its children (GmailDataProvider,
+    # GoogleCalendarDataProvider), and this class's own children are GoogleDataProviderBase objects (issue #5838)
+    private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         if (!rest) {
             throw "GOOGLE-API-ERROR", sprintf("Google API %y resource %y has no REST client set", api,
                 resource_path.join("/"));

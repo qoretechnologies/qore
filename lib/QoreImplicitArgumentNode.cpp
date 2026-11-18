@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -44,7 +44,8 @@ QoreImplicitArgumentNode::~QoreImplicitArgumentNode() {
 }
 
 int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-    parse_context.typeInfo = parse_get_implicit_arg_type_info();
+    parse_note_implicit_arg_use();
+    parse_context.typeInfo = getTypeInfo();
     parse_context.analysis.clear();
     parse_context.markExpressionNeverThrows();
     if (parse_context.typeInfo) {
@@ -58,7 +59,17 @@ int QoreImplicitArgumentNode::parseInitImpl(QoreValue& val, QoreParseContext& pa
 }
 
 const QoreTypeInfo* QoreImplicitArgumentNode::getTypeInfo() const {
-    return parse_get_implicit_arg_type_info();
+    // $1 has the type of the element that an operator gives its code, and $2 that of the next element that foldl and
+    // foldr give their code (ParseImplicitArgTypeHelper); the following arguments and the $argv list have no
+    // parse-time type
+    switch (offset) {
+        case 0:
+            return parse_get_implicit_arg_type_info();
+        case 1:
+            return parse_get_implicit_arg2_type_info();
+        default:
+            return nullptr;
+    }
 }
 
 const QoreValue QoreImplicitArgumentNode::get() const {

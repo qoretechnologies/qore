@@ -1,0 +1,30 @@
+builtin-cleanup: ARGUMENT
+builtin-cleanup: [1, 1, 1]
+external-cleanup: ARGUMENT
+external-cleanup: [2, 2, 2]
+builtin-failure: NATIVE-BODY
+builtin-failure: [3, 2, 3]
+external-failure: NATIVE-BODY
+external-failure: [4, 2, 4]
+builtin-success: [5, 3, 5]
+external-success: [6, 4, 6]
+builtin-cleanup: ARGUMENT
+builtin-cleanup: [7, 5, 7]
+external-cleanup: ARGUMENT
+external-cleanup: [8, 6, 8]
+builtin-failure: NATIVE-BODY
+builtin-failure: [9, 6, 9]
+external-failure: NATIVE-BODY
+external-failure: [10, 6, 10]
+builtin-success: [11, 7, 11]
+external-success: [12, 8, 12]
+builtin-cleanup: ARGUMENT
+builtin-cleanup: [13, 9, 13]
+external-cleanup: ARGUMENT
+external-cleanup: [14, 10, 14]
+builtin-failure: NATIVE-BODY
+builtin-failure: [15, 10, 15]
+external-failure: NATIVE-BODY
+external-failure: [16, 10, 16]
+builtin-success: [17, 11, 17]
+external-success: [18, 12, 18]

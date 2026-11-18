@@ -38,6 +38,8 @@
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 #include "qore/intern/RSet.h"
+#include "qore/intern/QoreConsumeHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <atomic>
 #include <string>
@@ -207,6 +209,10 @@ public:
     DLLLOCAL void sendStreamData(int64_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Records on the stream's frame state that the application sends its close frame itself; see
+    //! ChannelAction::markFrameStateCloseSent()
+    DLLLOCAL int markFrameStateCloseSent(int32_t stream_id, ExceptionSink* xsink);
+
     //! Installs a WebSocket frame-state decoder on a CONNECT stream's action
     /** Attaches a WebSocketStreamFrameState to the ChannelAction already
         registered for @a stream_id.  After this call, body bytes from H2
@@ -306,7 +312,7 @@ public:
 
     DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
         if (sock_obj) {
-            sock_obj->setMaxResponseBodySize(max_size);
+            qore_socket_object_private(sock_obj).setMaxResponseBodySize(max_size);
         }
     }
 
@@ -315,7 +321,7 @@ public:
     */
     DLLLOCAL void releaseStream(int32_t stream_id) {
         if (sock_obj) {
-            sock_obj->releaseHttp2Stream(stream_id);
+            qore_socket_object_private(sock_obj).releaseHttp2Stream(stream_id);
         }
     }
 
@@ -323,7 +329,7 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int64_t getDataIdleUs() const {
-        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+        return sock_obj ? qore_socket_object_private(sock_obj).getDataIdleUs() : -1;
     }
 
     //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
@@ -334,7 +340,7 @@ public:
     */
     DLLLOCAL void setAssumedEncoding(const QoreEncoding* enc) {
         if (sock_obj) {
-            sock_obj->setHttpAssumedEncoding(enc);
+            qore_socket_object_private(sock_obj).setHttpAssumedEncoding(enc);
         }
     }
 
@@ -346,7 +352,7 @@ public:
     */
     DLLLOCAL void setDecodeBody(bool decode) {
         if (sock_obj) {
-            sock_obj->setHttpDecodeBody(decode);
+            qore_socket_object_private(sock_obj).setHttpDecodeBody(decode);
         }
     }
 
@@ -433,6 +439,13 @@ public:
             raw data is not read for the queue; the registration only notifies the stream's listener
         */
         bool frame_state = false;
+        //! Data taken from the stream that the queue, which is bounded and was full, has not taken yet (owned)
+        /** Pushed first when the queue has room (issue #5859); the rest of the stream's data stays in the stream until
+            then, without stream credit (this chunk was credited when it was taken)
+        */
+        BinaryNode* pending = nullptr;
+        //! Told when the queue has room again; added to the queue when it is first found full (issue #5859)
+        std::shared_ptr<QoreQueueRoomListener> room;
     };
 
     //! Registers a Queue (and optional EventNotifier) for a CONNECT stream
@@ -489,6 +502,26 @@ public:
 
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
 
     //! Custom cycle scanner for stream_queues / pending_stream_registrations
     //! QoreObject refs that live in C++ containers invisible to the normal
@@ -563,6 +596,10 @@ private:
     //! Serializes multiplex reads against submitRequest's stream-id registration window
     mutable QoreThreadLock submission_lock;
 
+    //! Set by a read pass that found submission_lock held: submitRequest() wakes the operation once it has released
+    //! the lock, so that the pass runs again (issue #5839)
+    std::atomic<bool> read_pass_skipped{false};
+
     //! Stream completion actions: stream_id string -> ref'd action
     /** Actions are pure C++ (no Qore interpreter) — execute/executeError
         are called directly on the I/O thread without execValue().
@@ -609,6 +646,24 @@ private:
 
     //! Registered stream queues (under stream_queues_lock)
     std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
+
+    //! Set when a stream queue that was full has room again, cleared when the queues are drained (issue #5859)
+    /** A wake-up of the I/O thread that finds the submission lock taken does not drain the queues; the thread that
+        took it wakes the I/O thread again after it if this is still set (see submitRequest())
+    */
+    std::shared_ptr<std::atomic<bool>> stream_queue_room = std::make_shared<std::atomic<bool>>(false);
+
+    //! Returns the room listener of a stream queue, which wakes the I/O thread (issue #5859)
+    DLLLOCAL std::shared_ptr<QoreQueueRoomListener> makeStreamQueueRoomListener();
+
+    //! Pushes data taken from a stream to its queue without waiting (issue #5859)
+    /** @param data the data, whose reference is taken in every case: kept in @p info as pending data if the queue
+        is full
+
+        @return 0 if pushed, 1 if the queue is full (the data is pending), -1 if the queue refused it (deleted, or in
+        an error state; the data is released)
+    */
+    DLLLOCAL int pushStreamQueueData(int32_t stream_id, StreamQueueInfo& info, BinaryNode* data);
 
     // --- I/O-thread-only data (no lock needed) ---
 
@@ -733,6 +788,14 @@ private:
         @return \a poll_info, for use as a return-value wrapper
     */
     DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! Counts a read pass that left responses without an immediate re-poll; see dbg_http_client_stranded_passes()
+    DLLLOCAL void dbgCheckReadPass(const QoreHashNode* poll_info);
+
+    //! True if the last read pass was skipped on the submission lock or held by the test hook; I/O thread only
+    bool dbg_read_pass_exempt = false;
+#endif
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxySslUpgrade(ExceptionSink* xsink);

@@ -36,13 +36,15 @@ public namespace HttpServerAsyncIo {
     delegates HTTP/2 DATA enqueue to the async I/O controller and wakes the
     owning poll operation to flush nghttp2 pending data.
 
-    Backpressure from @ref Qore::Socket::sendHttp2StreamData() is handled
-    by waking the controller and blocking on
-    @ref Qore::Socket::waitForHttp2StreamDrain().
+    Queueing never waits for the client: the data buffered for the stream beyond the client's flow-control window
+    is bounded (see @ref setMaxBufferSize(), applied with @ref Qore::Socket::setHttp2StreamSendLimit()), and an
+    event that would exceed the bound drops the client: the stream is reset with \c RST_STREAM(CANCEL), its end is
+    reported, and the call that queued the event raises \c SSE-CLIENT-OVERFLOW (see
+    @ref httpserverasyncio_sse_buffer).
 */
 public class Http2SseStream inherits AbstractSseConnection {
     public {
-        #! Default timeout for waitForHttp2StreamDrain on backpressure
+        #! Formerly the timeout of the wait for the stream to drain; no longer used, as queueing never waits
         const DefaultDrainTimeout = 5s;
     }
 
@@ -85,8 +87,8 @@ public class Http2SseStream inherits AbstractSseConnection {
         #! Generation value used to ignore canceled or superseded timer callbacks
         int heartbeat_generation = 0;
 
-        #! Epoch microseconds of the last successful SSE DATA write
-        int last_send_us = clock_getmicros();
+        #! Monotonic-clock microseconds of the last successful SSE DATA write
+        int last_send_us = clock_get_monotonic_us();
     }
 
     #! Creates an SSE stream over HTTP/2 using an existing poll operation
@@ -149,23 +151,30 @@ public class Http2SseStream inherits AbstractSseConnection {
 
     #! Pushes a pre-formatted SSE text frame onto the HTTP/2 stream
     /** Writes the frame as one or more HTTP/2 DATA frames.  Safe to call from
-        any thread.  Blocks briefly under HTTP/2 flow-control backpressure
-        (up to @ref DefaultDrainTimeout per iteration) and wakes the I/O
-        controller after every submission.
+        any thread; never waits for the client, and wakes the I/O controller
+        after every submission.
 
         @param data the pre-formatted SSE frame text
+
+        @throw SSE-CLOSED the stream is closed
+        @throw SSE-CLIENT-OVERFLOW the frame would take the data buffered for the client over its bound (see
+        @ref setMaxBufferSize()); the frame is not queued, and the client has been dropped
     */
     queueRawString(string data) {
         if (!isStreamOpen()) {
             throw "SSE-CLOSED", "SSE stream is closed";
         }
+        bool queued;
         try {
-            sendRawStringIntern(data);
-            noteSseDataSent();
+            queued = sendRawStringIntern(data);
         } catch (hash<ExceptionInfo> ex) {
             markStreamClosed();
             rethrow;
         }
+        if (!queued) {
+            dropOverflowingClient(data.size());
+        }
+        noteSseDataSent();
     }
 
     #! Configures the SSE heartbeat for this stream
@@ -181,29 +190,32 @@ public class Http2SseStream inherits AbstractSseConnection {
         AutoLock al(heartbeat_mutex);
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
-        last_send_us = clock_getmicros();
+        last_send_us = clock_get_monotonic_us();
         rescheduleHeartbeatTimerLocked();
     }
 
-    private sendRawStringIntern(string data) {
-        binary bin = binary(data);
-        while (True) {
-            try {
-                sock.sendHttp2StreamData(stream_id, bin, False);
-                break;
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                    if (wake_callback) {
-                        wake_callback();
-                    }
-                    sock.waitForHttp2StreamDrain(stream_id, DefaultDrainTimeout);
-                    continue;
-                }
-                rethrow;
+    #! Hands data to the stream; returns @ref False if it would take the buffered data over the stream's bound
+    private bool sendRawStringIntern(string data) {
+        try {
+            sock.sendHttp2StreamData(stream_id, binary(data), False);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP2-FLOW-CONTROL") {
+                return False;
             }
+            rethrow;
         }
         if (wake_callback) {
             wake_callback();
+        }
+        return True;
+    }
+
+    #! Sets the bound of the data buffered for the stream in the HTTP/2 session
+    private applyMaxBufferSize(int size) {
+        try {
+            sock.setHttp2StreamSendLimit(stream_id, size);
+        } catch (hash<ExceptionInfo> ex) {
+            # the stream has already ended: its next send reports it
         }
     }
 
@@ -223,6 +235,9 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     close() {
+        # the end of the stream is reported however it ends (see setEndCallback()), and first: the teardown below
+        # can release the last reference to this object
+        notifyEnded();
         if (!markStreamClosed()) {
             return;
         }
@@ -241,6 +256,7 @@ public class Http2SseStream inherits AbstractSseConnection {
     }
 
     abort() {
+        notifyEnded();
         markStreamClosed();
         # abort() is a teardown path: same rationale as close().
         try {
@@ -314,7 +330,7 @@ public class Http2SseStream inherits AbstractSseConnection {
 
     private noteSseDataSent() {
         AutoLock al(heartbeat_mutex);
-        last_send_us = clock_getmicros();
+        last_send_us = clock_get_monotonic_us();
         rescheduleHeartbeatTimerLocked();
     }
 
@@ -328,7 +344,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         if (heartbeat_ms <= 0 || !stream_open || !headers_sent) {
             return;
         }
-        int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+        int elapsed_ms = (clock_get_monotonic_us() - last_send_us) / 1000;
         int delay_ms = heartbeat_ms - elapsed_ms;
         if (delay_ms < 1) {
             delay_ms = 1;
@@ -336,7 +352,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         int generation = heartbeat_generation;
         AsyncSocketIo::AsyncSocketIoController controller =
             AsyncSocketIo::getGlobalAsyncIoController();
-        heartbeat_timer_id = controller.addTimer(now_us() + milliseconds(delay_ms),
+        heartbeat_timer_id = controller.addTimerDelay(milliseconds(delay_ms),
             sub () { self.handleHeartbeatTimer(generation); });
     }
 
@@ -362,7 +378,7 @@ public class Http2SseStream inherits AbstractSseConnection {
                 return;
             }
             remove heartbeat_timer_id;
-            int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
+            int elapsed_ms = (clock_get_monotonic_us() - last_send_us) / 1000;
             if (elapsed_ms < heartbeat_ms) {
                 rescheduleHeartbeatTimerLocked();
                 return;
@@ -371,7 +387,14 @@ public class Http2SseStream inherits AbstractSseConnection {
         }
 
         try {
-            sendRawStringIntern(msg);
+            if (!sendRawStringIntern(msg)) {
+                # a client that does not take even the heartbeat is dropped; no caller gets the error
+                try {
+                    dropOverflowingClient(msg.size());
+                } catch (hash<ExceptionInfo> ex) {
+                }
+                return;
+            }
             noteSseDataSent();
         } catch (hash<ExceptionInfo> ex) {
             markStreamClosed();

@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# Program::replaceParseOptions() may only be called by a Program with PO_NO_CHILD_PO_RESTRICTIONS; the Programs
+# whose options are replaced are locked: created with explicit options without it, children of such a Program, or
+# locked with Program::lockOptions()
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class LockedOptionsReplaceTest
+
+#! Tests that Program::replaceParseOptions() cannot remove the restrictions locked in a Program
+/** The replacement is checked as Program::disableParseOptions() checks the options it removes
+    (design/locked-parse-options.md): a replacement that drops a locked restriction is refused with
+    \c OPTIONS-LOCKED, one that only adds restrictions is made
+*/
+class LockedOptionsReplaceTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LockedOptionsReplaceTest", "1.0", \ARGV) {
+        addTestCase("a locked child keeps the restrictions it was created with", \createdLocked());
+        addTestCase("a child keeps the restrictions it inherited", \inherited());
+        addTestCase("a Program locked with lockOptions() keeps the restrictions it had then", \lockOptions());
+        addTestCase("an extended restriction is not dropped by an int replacement", \extendedRestriction());
+        addTestCase("an unlocked Program may still drop a restriction", \unlocked());
+        set_return_value(main());
+    }
+
+    createdLocked() {
+        Program pgm(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        checkLocked(pgm, "created locked");
+        # disableParseOptions() is refused as well
+        assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), PO_NO_FILESYSTEM);
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "created locked: the restriction is kept");
+    }
+
+    inherited() {
+        # a locked Program without child restrictions, whose children inherit its options
+        Program parent(PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        parent.parse("Program sub make() { return new Program(); }", "make");
+        Program pgm = parent.callFunction("make");
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK | PO_NO_FILESYSTEM),
+            "the child inherits the restrictions");
+        checkLocked(pgm, "inherited");
+    }
+
+    lockOptions() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_NETWORK | PO_NO_FILESYSTEM);
+        pgm.lockOptions();
+        checkLocked(pgm, "lockOptions()");
+        assertThrows("OPTIONS-LOCKED", \pgm.disableParseOptions(), PO_NO_FILESYSTEM);
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_FILESYSTEM), "lockOptions(): the restriction is kept");
+
+        # a restriction added after the lock may be dropped by a replacement
+        int opts = pgm.getParseOptions();
+        pgm.setParseOptions(PO_NO_EXTERNAL_PROCESS);
+        pgm.replaceParseOptions(opts);
+        assertFalse(pgm.getFullParseOptions().hasAll(PO_NO_EXTERNAL_PROCESS),
+            "lockOptions(): a restriction added after the lock is dropped");
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK | PO_NO_FILESYSTEM),
+            "lockOptions(): the locked ones are kept");
+    }
+
+    extendedRestriction() {
+        Program pgm(new ParseOptions("no-new"));
+        assertTrue(pgm.getFullParseOptions().hasAll("no-new"), "the Program has the extended restriction");
+        # the int mask cannot hold the extended option, so this replacement would drop it
+        assertThrows("OPTIONS-LOCKED", \pgm.replaceParseOptions(), pgm.getParseOptions());
+        assertTrue(pgm.getFullParseOptions().hasAll("no-new"), "the extended restriction is kept");
+        assertThrows("PARSE-EXCEPTION", "NO_NEW", \pgm.parse(), ("auto sub f() { return new Mutex(); }", "use"));
+        # the control: the code parses in a Program without the restriction
+        Program plain(PO_NO_CHILD_PO_RESTRICTIONS);
+        plain.parse("auto sub f() { return new Mutex(); }", "use");
+        assertTrue(plain.existsFunction("f"), "code that needs it parses without the restriction");
+    }
+
+    #! the control: a Program created with PO_NO_CHILD_PO_RESTRICTIONS is not locked
+    unlocked() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_NETWORK);
+        pgm.replaceParseOptions(pgm.getParseOptions() & ~PO_NO_NETWORK);
+        assertFalse(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK), "the restriction is dropped");
+        pgm.parse("auto sub f() { return new Socket(); }", "use");
+        assertTrue(pgm.existsFunction("f"), "code that needs it parses");
+    }
+
+    #! checks that \a pgm, with PO_NO_NETWORK | PO_NO_FILESYSTEM locked in, keeps them in a replacement
+    private checkLocked(Program pgm, string label) {
+        int opts = pgm.getParseOptions();
+        assertTrue((opts & (PO_NO_NETWORK | PO_NO_FILESYSTEM)) == (PO_NO_NETWORK | PO_NO_FILESYSTEM),
+            label + ": the Program has the restrictions");
+
+        assertThrows("OPTIONS-LOCKED", \pgm.replaceParseOptions(), opts & ~PO_NO_NETWORK);
+        assertEq(opts, pgm.getParseOptions(), label + ": the options are unchanged");
+        assertTrue(pgm.getFullParseOptions().hasAll(PO_NO_NETWORK), label + ": the restriction is kept");
+        assertThrows("ILLEGAL-CLASS-INSTANTIATION", \pgm.parse(), ("auto sub f() { return new Socket(); }", "use"));
+
+        # a replacement that drops a locked restriction while adding another is refused as a whole
+        assertThrows("OPTIONS-LOCKED", \pgm.replaceParseOptions(),
+            (opts & ~PO_NO_FILESYSTEM) | PO_NO_EXTERNAL_PROCESS);
+        assertEq(opts, pgm.getParseOptions(), label + ": the options are unchanged after the mixed replacement");
+
+        # a replacement that only adds a restriction is made
+        pgm.replaceParseOptions(opts | PO_NO_PROCESS_CONTROL);
+        assertEq(opts | PO_NO_PROCESS_CONTROL, pgm.getParseOptions(), label + ": a restriction is added");
+    }
+}

@@ -42,6 +42,9 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/WeakHashReferenceNode.h"
 
 #include <shared_mutex>
 #include <unordered_map>
@@ -206,7 +209,9 @@ QoreValue CallReferenceCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+template <bool LexicalInvocation>
+QORE_INTERN_ALWAYS_INLINE QoreValue CallReferenceCallNode::evalImplInternal(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
     assert(needs_deref);
     assert(!parse_args || args
         || !"CallReferenceCallNode::evalImpl(): parse_args set but args is null; "
@@ -227,13 +232,58 @@ QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, 
     // receiver does
     QoreStatementTempScope::holdReceiver(exp, lv, xsink);
 
-    ResolvedCallReferenceNode* r = dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
-    if (!r) {
-        xsink->raiseException(*loc, "REFERENCE-CALL-ERROR", QoreValue(), "expression does not evaluate to a call " \
-            "reference (evaluated to type '%s')", lv->getTypeName());
+    qore_type_t type = lv->getType();
+    if (type != NT_FUNCREF && type != NT_RUNTIME_CLOSURE) {
+        qore_raise_not_call_reference(xsink, loc, *lv);
         return QoreValue();
     }
-    return r->invoke(args, xsink);
+    // An evaluated call reference is resolved, as in qore_check_call_target(); parse nodes are never values.
+    assert(dynamic_cast<ResolvedCallReferenceNode*>(lv->getInternalNode()));
+    auto* r = static_cast<ResolvedCallReferenceNode*>(lv->getInternalNode());
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    if (runtime_arg_names) {
+        LexicalSemanticPolicy policy;
+        if constexpr (LexicalInvocation) {
+            policy = getSemanticPolicy();
+        }
+        return qore_call_ref_invoke_named(r, args, *runtime_arg_names, policy, xsink);
+    }
+    if constexpr (LexicalInvocation) {
+        return r->invokeLexical(args, xsink, getSemanticPolicy());
+    } else {
+        return r->invoke(args, xsink);
+    }
+}
+
+QoreValue CallReferenceCallNode::evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    assert(runtime_arg_names);
+    ReferenceHolder<QoreListNode> args_holder(args, xsink);
+    ValueHolder callee(args ? args->shift() : QoreValue(), xsink);
+    qore_type_t type = callee->getType();
+    if (type != NT_FUNCREF && type != NT_RUNTIME_CLOSURE) {
+        qore_raise_not_call_reference(xsink, loc, *callee);
+        return QoreValue();
+    }
+    // An evaluated call reference is resolved, as in qore_check_call_target(); parse nodes are never values.
+    assert(dynamic_cast<const ResolvedCallReferenceNode*>(callee->getInternalNode()));
+    auto* r = static_cast<const ResolvedCallReferenceNode*>(callee->getInternalNode());
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return qore_call_ref_invoke_named(r, *args_holder, *runtime_arg_names, {}, xsink);
+}
+
+QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(rc, needs_deref, xsink);
+}
+
+QoreValue CallReferenceCallNode::evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(rc, needs_deref, xsink);
+}
+
+QoreValue CallReferenceCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(rc_get_current_ref(), needs_deref, xsink);
 }
 
 int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -258,14 +308,11 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     }
 
     if (parse_args) {
+        // a named call binds its arguments by parameter name when it is made: the code that the expression gives is
+        // only known then (M4 phase 3)
         if (parse_args->hasNamedArgs()) {
-            qore_program_private::makeParseException(getProgram(), *loc, "NAMED-CALL-NOT-SUPPORTED",
-                new QoreStringNode(
-                    "named arguments are not supported for call-reference or closure calls without a "
-                    "parse-time-resolved signature; use positional arguments instead"));
-            if (!err) {
-                err = -1;
-            }
+            const QoreParseListNode::arg_name_vec_t& names = parse_args->getArgNamesVector();
+            runtime_arg_names = qore_intern_call_arg_names(name_vec_t(names.begin(), names.end()));
         }
         type_vec_t argTypeInfo;
         {
@@ -292,6 +339,21 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     return err;
 }
 
+void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
+    creator_po = runtime_get_effective_program_parse_options();
+    // a reference that module code creates while it runs with the restrictions of a sandboxed caller runs with the
+    // permissions of that code, which uses the domains that its module declares (see
+    // qore_relieve_module_declared_domains()); only module code runs with the module's override, so a reference that
+    // the caller's code creates to the module's code is not relieved (the caller's code clears the module's
+    // override); the Program running the code is tested, not the Program of the reference, which is the object's for
+    // a method reference
+    const QoreProgram* pgm = ::getProgram();
+    if (pgm && runtime_get_module_call_program() == pgm) {
+        creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
+    }
+    has_creator_po = true;
+}
+
 AbstractCallReferenceNode::AbstractCallReferenceNode(bool n_needs_eval,
         qore_type_t n_type) : AbstractQoreNode(n_type, false, n_needs_eval) {
 }
@@ -301,6 +363,10 @@ AbstractCallReferenceNode::AbstractCallReferenceNode(bool n_needs_eval, bool n_t
 }
 
 AbstractCallReferenceNode::~AbstractCallReferenceNode() {
+}
+
+const ResolvedCallReferenceNode* AbstractCallReferenceNode::getSandboxBoundCallback() const {
+    return nullptr;
 }
 
 // parse types should never be copied
@@ -353,7 +419,7 @@ const char* AbstractCallReferenceNode::getTypeName() const {
 
 bool AbstractCallReferenceNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+    if (qore_get_native_semantic_policy().strictBoolean())
         return false;
     return true;
 }
@@ -396,51 +462,102 @@ QoreValue ParseObjectMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
 QoreValue ParseObjectMethodReferenceNode::makeReference(QoreValue val, ExceptionSink* xsink) const {
     QoreObject* o = val.getType() == NT_OBJECT ? val.get<QoreObject>() : nullptr;
     if (!o) {
-        xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
-                              "expression does not evaluate to an object; got type '%s' instead", val.getTypeName());
-        return QoreValue();
+        // issue #995: a reference to a pseudo-method of the value, as a call of the method is a call of it
+        return qore_make_pseudo_method_reference(loc, val, method.c_str(), xsink);
     }
 
     const QoreClass* oc = o->getClass();
 
-    // find the method at runtime if necessary
-    if (!m) {
-        // serialize method resolution at runtime
-        AutoLocker al(lck);
-        // check m again inside the lock (this way we avoid the lock in the common case where the method has already been resolved)
-        if (!m) {
-            ClassAccess access = Public;
-            m = oc->findMethod(method.c_str(), access);
-            if (!m) {
-                m = oc->findStaticMethod(method.c_str(), access);
-                if (!m) {
-                    xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
-                        "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
-                    return QoreValue();
-                }
-            }
-
-            if (access > Public && !qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
-                if (m->isPrivate())
-                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
-                        "cannot create a call reference to %s %s::%s() from outside the class",
-                        privpub(access), o->getClassName(), method.c_str());
-                else
-                    xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
-                        "cannot create a call reference to %s::%s() because the parent class that implements the method "
-                        "(%s::%s()) is privately inherited", o->getClassName(), method.c_str(),
-                        m->getClass()->getName(), method.c_str());
-
-                return QoreValue();
-            }
-        }
-    }
-
-    if (o->getClass() == m->getClass()) {
+    // the method of the declared class, resolved when parsing, for an object of that class; a static method of it is
+    // bound to that class, as a call through the object is (qore#5990)
+    if (m && (oc == m->getClass() || m->isStatic())) {
         return new RunTimeResolvedMethodReferenceNode(loc, o, m);
     }
 
+    // otherwise the method is resolved for the class of each object, also an object of a subclass of the declared
+    // class, which can override the method with one that is not accessible here (qore#6062)
+    uint64_t class_id = qore_class_private::getAllocationId(*oc);
+    if (rt_class_id.load(std::memory_order_acquire) == class_id) {
+        if (rt_resolved) {
+            return new RunTimeResolvedMethodReferenceNode(loc, o, rt_m);
+        }
+        return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
+    }
+
+    return makeReferenceForClass(o, oc, class_id, xsink);
+}
+
+QoreValue ParseObjectMethodReferenceNode::makeReferenceForClass(QoreObject* o, const QoreClass* oc,
+        uint64_t class_id, ExceptionSink* xsink) const {
+    ClassAccess access = Public;
+    const QoreMethod* om = oc->findMethod(method.c_str(), access);
+    if (!om) {
+        om = oc->findStaticMethod(method.c_str(), access);
+        if (!om) {
+            // issue #995: a pseudo-method of objects, such as className(), or a member with code: the call looks the
+            // method up by name as a direct call does (a code member, then a pseudo-method)
+            if (qore_object_has_pseudo_or_member_method(qore_class_private::get(*oc), method.c_str(),
+                    runtime_get_class())) {
+                return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str(), true);
+            }
+            xsink->raiseException(*loc, "OBJECT-METHOD-REFERENCE-ERROR", QoreValue(),
+                "cannot resolve reference to %s::%s(): unknown method", o->getClassName(), method.c_str());
+            return QoreValue();
+        }
+    }
+
+    if (access > Public) {
+        // the access check depends on the class context of the caller, so the result is not cached
+        if (!qore_class_private::runtimeCheckPrivateClassAccess(*oc)) {
+            if (om->isPrivate()) {
+                xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
+                    "cannot create a call reference to %s %s::%s() from outside the class",
+                    privpub(access), o->getClassName(), method.c_str());
+            } else {
+                xsink->raiseException(*loc, "ILLEGAL-CALL-REFERENCE", QoreValue(),
+                    "cannot create a call reference to %s::%s() because the parent class that implements the method "
+                    "(%s::%s()) is privately inherited", o->getClassName(), method.c_str(),
+                    om->getClass()->getName(), method.c_str());
+            }
+            return QoreValue();
+        }
+    }
+
+    bool resolved = oc == om->getClass();
+    if (access == Public && !rt_class_id.load(std::memory_order_acquire)) {
+        AutoLocker al(lck);
+        if (!rt_class_id.load(std::memory_order_relaxed)) {
+            rt_m = om;
+            rt_resolved = resolved;
+            rt_class_id.store(class_id, std::memory_order_release);
+        }
+    }
+
+    if (resolved) {
+        return new RunTimeResolvedMethodReferenceNode(loc, o, om);
+    }
     return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
+}
+
+//! checks the functional domains of a method that a call reference is taken to against the parsing Program
+/** as for a call, the domains of all variants are checked if every variant has them; otherwise the variant that a
+    call through the reference resolves is checked when it is called, against the context that created the reference
+*/
+static int check_call_reference_domain(const QoreProgramLocation* loc, QoreParseContext& parse_context,
+        const QoreMethod* m) {
+    const QoreFunction* f = qore_method_private::get(*m)->getFunction();
+    int64 dom = f->parseGetUniqueFunctionality();
+    if (!dom) {
+        return 0;
+    }
+    QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dom,
+        f->parseGetUniqueDeclaredDomain());
+    if (!denied) {
+        return 0;
+    }
+    parse_error(*loc, "parse options do not allow a call reference to method '%s::%s()'; functional domain: %s",
+        m->getClass()->getName(), m->getName(), qore_describe_source_domains(denied.getLo()).c_str());
+    return -1;
 }
 
 int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -450,11 +567,18 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
 
     if (QoreTypeInfo::hasType(argTypeInfo)) {
         if (objectTypeInfo && argTypeInfo && !QoreTypeInfo::parseAccepts(objectTypeInfo, argTypeInfo)) {
-            if (!err) {
-                // raise parse exception
-                QoreStringNode* desc = new QoreStringNode("invalid call; object expression gives ");
+            // issue #995: a value that is not an object gives a reference to a pseudo-method of its type, as a call
+            // of the method calls it; the type must have the pseudo-method, as for a call
+            QoreClass* pqc;
+            bool possible_match = false;
+            // a hash can hold code with the name, which a direct call calls, as at parse time for a direct call
+            if (!pseudo_classes_find_method(argTypeInfo, method.c_str(), pqc, possible_match) && !possible_match
+                    && !QoreTypeInfo::parseAccepts(hashTypeInfo, argTypeInfo) && !err) {
+                QoreStringNode* desc = new QoreStringNode("cannot take a call reference to pseudo-method '");
+                desc->concat(method);
+                desc->concat("()'; the expression gives ");
                 QoreTypeInfo::getThisType(argTypeInfo, *desc);
-                desc->concat(", but should resolve to an object to make a call with this syntax");
+                desc->concat(", which has no such method");
                 qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
                 err = -1;
             }
@@ -480,12 +604,27 @@ int ParseObjectMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseConte
                             err = -1;
                         }
                     }
+                    // check the functional domains of the method: a reference allows the call that naming the
+                    // method would
+                    if (check_call_reference_domain(loc, parse_context, m) && !err) {
+                        err = -1;
+                    }
                     qc = n_qc;
                 } else {
-                    parseException(*loc, "PARSE-ERROR", "no method %s::%s() is accessible in this context",
-                        n_qc->getName(), method.c_str());
-                    if (!err) {
-                        err = -1;
+                    // issue #995: a pseudo-method of objects, such as className(), or a member, which a direct call
+                    // calls if it holds code; the reference is made for the object's class when the expression is
+                    // evaluated
+                    QoreClass* pqc;
+                    const qore_class_private* mqc = nullptr;
+                    ClassAccess maccess;
+                    if (!pseudo_classes_find_method(NT_OBJECT, method.c_str(), pqc)
+                            && !qore_class_private::get(*const_cast<QoreClass*>(n_qc))->parseFindMember(
+                                method.c_str(), mqc, maccess)) {
+                        parseException(*loc, "PARSE-ERROR", "no method %s::%s() is accessible in this context",
+                            n_qc->getName(), method.c_str());
+                        if (!err) {
+                            err = -1;
+                        }
                     }
                 }
             }
@@ -515,7 +654,9 @@ QoreValue ParseSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
     // meth may be null when this node is deserialized in an AOT binary (parse context not available);
     // in that case fall back to runtime method lookup by name
     if (!meth) {
-        return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str());
+        // a method that the class does not have is a pseudo-method or a member (issue #995)
+        return new RunTimeObjectMethodReferenceNode(loc, o, method.c_str(),
+            !o->getClass()->findMethod(method.c_str()));
     }
 
     // return class with method already found at parse time if known
@@ -524,7 +665,8 @@ QoreValue ParseSelfMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
             rc.getClass() ? rc.getClass() : runtime_get_class());
     }
 
-    return new RunTimeObjectMethodReferenceNode(loc, o, meth->getName());
+    // a method that the class does not have is a pseudo-method (issue #995)
+    return new RunTimeObjectMethodReferenceNode(loc, o, meth->getName(), !o->getClass()->findMethod(meth->getName()));
 }
 
 int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -539,7 +681,10 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
         *const_cast<QoreClass*>(QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
     );
     meth = class_ctx->parseResolveSelfMethod(loc, method.c_str(), class_ctx);
-    return meth ? 0 : -1;
+    if (!meth) {
+        return -1;
+    }
+    return check_call_reference_domain(loc, parse_context, meth);
 }
 
 ParseScopedSelfMethodReferenceNode::ParseScopedSelfMethodReferenceNode(const QoreProgramLocation* loc,
@@ -576,34 +721,158 @@ int ParseScopedSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseC
     method = class_ctx->parseResolveSelfMethod(loc, nscope);
     delete nscope;
     nscope = nullptr;
-    return method ? 0 : -1;
+    if (!method) {
+        return -1;
+    }
+    return check_call_reference_domain(loc, parse_context, method);
+}
+
+// the Program of a method call reference is a tagged pointer, whose low bit is a flag
+static_assert(alignof(QoreProgram) > 1, "a QoreProgram pointer must have its low bit free");
+
+RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc,
+        QoreObject* n_obj, const QoreMethod* n_method)
+        : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method) {
+    QoreProgram* creator;
+    // the Program and the class context of the creating code with one thread-local lookup
+    runtime_get_program_and_class(creator, qc);
+    init(creator);
 }
 
 RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode(const QoreProgramLocation* loc,
         QoreObject* n_obj, const QoreMethod* n_method, const qore_class_private* ctx)
         : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method), qc(ctx) {
+    init(::getProgram());
+}
+
+void RunTimeResolvedMethodReferenceNode::init(QoreProgram* creator) {
+    // the restrictions that a call of the reference is checked against: those of the creating context (#5803)
+    captureCreatorParseOptions();
     printd(5, "RunTimeResolvedMethodReferenceNode::RunTimeResolvedMethodReferenceNode() this: %p obj: %p\n", this, obj);
     obj->tRef();
+    QoreProgram* opgm = qore_object_private::get(*obj)->pgm;
+    // created in the object's own Program, the usual case, or a user method: the reference runs there, as before,
+    // and needs no reference of its own to the Program (the object holds one)
+    if (creator == opgm || qore_method_private::get(*method)->isUniquelyUser()) {
+        pgm_ref = reinterpret_cast<uintptr_t>(opgm);
+        return;
+    }
+    // a builtin method of a reference created with no Program runs with none
+    if (!creator) {
+        pgm_ref = 0;
+        return;
+    }
+    // a builtin method runs in the Program of the code that creates the reference, not in the object's: a builtin
+    // object belongs to the Program it was created for, which need not be the Program of the code that uses it (a
+    // reflection handle belongs to the Program it describes), and a call of the reference must not run in that
+    // Program with its parse options and so as code of that Program; a weak reference, as a strong one could cause
+    // a recursive reference
+    creator->depRef();
+    pgm_ref = reinterpret_cast<uintptr_t>(creator) | PGM_CREATOR;
 }
 
 RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() {
     printd(5, "RunTimeResolvedMethodReferenceNode::~RunTimeResolvedMethodReferenceNode() this: %p obj: %p\n", this, obj);
+    // released here and not in derefImpl(), which keeps the dereference of the usual reference, which holds no
+    // Program, free of an extra call; the weak reference only keeps the Program's memory
+    if (pgm_ref & PGM_CREATOR) {
+        reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR)->depDeref();
+    }
     obj->tDeref();
 }
 
-QoreValue RunTimeResolvedMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue RunTimeResolvedMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     //printd(5, "RunTimeResolvedMethodReferenceNode::execValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
     // issue #2145: do not set the call reference class context before arguments are evaluted
-    // run the reference in the Program where it was originally created
     // NOTE: check this for race conditions
-    if (obj && !obj->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
-            "deleted");
+    if (checkObject(xsink)) {
         return QoreValue();
     }
+    // a user method runs in the Program that defines its class; the object's Program is used only when that
+    // Program has released the class (it raises PROGRAM-ERROR once the object's Program has been deleted).  A
+    // builtin method runs as a direct call in the Program that created the reference: called there, it is not given
+    // a Program, so it runs as a direct call there does, with the runtime parse options in effect; called from
+    // another Program, it runs in the creating Program with its parse options, as a static method call reference
+    // does (StaticMethodCallReferenceNode)
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm_ctx);
+}
+
+QoreValue RunTimeResolvedMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_method_private::eval(*method, xsink, rc, obj, args, qc, pgm);
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, obj, args, qc, pgm_ctx);
+}
+
+QoreValue RunTimeResolvedMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    // the Program of the call as for a call with positional arguments (see dispatchValue())
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::evalNamed(*method, xsink, rc, obj, args, false, qc, nullptr, nullptr, arg_names,
+        policy, pgm_ctx);
+}
+
+QoreValue RunTimeResolvedMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    //printd(5, "RunTimeResolvedMethodReferenceNode::dispatchValue() cpgm: %p opgm: %p\n", getProgram(), obj->getProgram());
+    // issue #2145: do not set the call reference class context before arguments are evaluted
+    // NOTE: check this for race conditions
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    // a user method runs in the Program that defines its class; the object's Program is used only when that
+    // Program has released the class (it raises PROGRAM-ERROR once the object's Program has been deleted).  A
+    // builtin method runs as a direct call in the Program that created the reference: called there, it is not given
+    // a Program, so it runs as a direct call there does, with the runtime parse options in effect; called from
+    // another Program, it runs in the creating Program with its parse options, as a static method call reference
+    // does (StaticMethodCallReferenceNode)
+    QoreProgram* pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref);
+    if (pgm_ref & PGM_CREATOR) {
+        pgm_ctx = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_CREATOR);
+        if (pgm_ctx == rc_get_current_program(rc)) {
+            pgm_ctx = nullptr;
+        }
+    }
+    return qore_method_private::eval(policy, *method, xsink, rc, obj, args, qc, pgm_ctx);
 }
 
 QoreProgram* RunTimeResolvedMethodReferenceNode::getProgram() const {
@@ -619,30 +888,315 @@ QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
     return method ? qore_method_private::get(*method)->getFunction() : 0;
 }
 
+bool qore_object_has_pseudo_or_member_method(const qore_class_private* cls, const char* method,
+        const qore_class_private* class_ctx) {
+    QoreClass* pqc;
+    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetCallableMemberInfo(method, class_ctx);
+}
+
+// out of line: needs_scan() calls it only for call references, and inlined there it makes needs_scan() too large to be
+// inlined in needs_scan(const QoreValue&), which the storing of every value calls (issue #995)
+__attribute__((noinline)) const AbstractQoreNode* qore_get_call_reference_scan_node(const AbstractQoreNode* n) {
+    if (const ResolvedCallReferenceNode* callback = qore_get_sandbox_bound_callback(n)) {
+        return callback;
+    }
+    if (const RunTimePseudoMethodReferenceNode* pr = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(n)) {
+        const QoreValue& v = pr->getValue();
+        return v.isOpaque() ? nullptr : v.getInternalNode();
+    }
+    return nullptr;
+}
+
+QoreValue qore_make_pseudo_method_reference(const QoreProgramLocation* loc, QoreValue val, const char* method,
+        ExceptionSink* xsink) {
+    assert(val.getType() != NT_OBJECT);
+    // the exception of a call of a pseudo-method that the value's type does not have is raised when the reference is
+    // made, as for a method that an object's class does not have; a hash can hold code with the name, which a direct
+    // call calls
+    bool hash_member = false;
+    if (val.getType() == NT_HASH) {
+        hash_member = check_call_ref(val.getInternalNode(), method) != nullptr;
+    } else if (val.getType() == NT_WEAKREF_HASH) {
+        hash_member = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method) != nullptr;
+    }
+    if (!hash_member && pseudo_classes_check_method(val, method, xsink)) {
+        return QoreValue();
+    }
+    return new RunTimePseudoMethodReferenceNode(loc, val, method);
+}
+
+RunTimePseudoMethodReferenceNode::RunTimePseudoMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_val,
+        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), val(n_val.refSelf()), method(n_method),
+        cctx(runtime_get_class()) {
+    assert(val.getType() != NT_OBJECT);
+    // the restrictions that a call of the reference is checked against: those of the creating context
+    captureCreatorParseOptions();
+}
+
+RunTimePseudoMethodReferenceNode::~RunTimePseudoMethodReferenceNode() {
+    // released in derefImpl()
+    assert(val.isNothing());
+}
+
+bool RunTimePseudoMethodReferenceNode::derefImpl(ExceptionSink* xsink) {
+    val.discard(xsink);
+    val.clear();
+    return ResolvedCallReferenceNodeIntern::derefImpl(xsink);
+}
+
+const ResolvedCallReferenceNode* RunTimePseudoMethodReferenceNode::getHashMember() const {
+    const AbstractQoreNode* ref = nullptr;
+    if (val.getType() == NT_HASH) {
+        ref = check_call_ref(val.getInternalNode(), method.c_str());
+    } else if (val.getType() == NT_WEAKREF_HASH) {
+        ref = check_call_ref(val.get<WeakHashReferenceNode>()->get(), method.c_str());
+    }
+    return reinterpret_cast<const ResolvedCallReferenceNode*>(ref);
+}
+
+QoreValue RunTimePseudoMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    // a code member of a hash with the name of the method, as a direct call calls (QoreDotEvalOperatorNode)
+    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+        return ref->execValue(args, xsink);
+    }
+    return pseudo_classes_eval(val, method.c_str(), args, xsink);
+}
+
+QoreValue RunTimePseudoMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+        // the code member runs with its own declaration policy
+        return ref->execValue(args, xsink);
+    }
+    return pseudo_classes_eval(policy, val, method.c_str(), args, xsink);
+}
+
+QoreValue RunTimePseudoMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (const ResolvedCallReferenceNode* ref = getHashMember()) {
+        // the code member binds the names, as a named call through it does
+        if (const ResolvedCallReferenceNodeIntern* iref = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
+            return iref->dispatchNamed(args, arg_names, policy, xsink);
+        }
+        return ResolvedCallReferenceNodeIntern::dispatchNamed(args, arg_names, policy, xsink);
+    }
+    // the pseudo-method with its variants bound to the arguments by name, as a direct named call does
+    // (MethodCallNode::execPseudoNamed())
+    const qore_class_private* pseudo_cls = qore_class_private::get(*qore_pseudo_get_class(val.getType()));
+    const QoreMethod* w = pseudo_cls->runtimeFindPseudoMethod(val, method.c_str(), xsink);
+    if (!w) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, val, args, false, cctx,
+        arg_names, policy);
+}
+
+bool RunTimePseudoMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
+    const RunTimePseudoMethodReferenceNode* vc = dynamic_cast<const RunTimePseudoMethodReferenceNode*>(v);
+    return vc && vc->method == method && vc->val.isEqualHard(val, xsink);
+}
+
+QoreFunction* RunTimePseudoMethodReferenceNode::getFunction() const {
+    QoreClass* qc;
+    const QoreMethod* m = pseudo_classes_find_method(val.getType(), method.c_str(), qc);
+    return m ? qore_method_private::get(*m)->getFunction() : nullptr;
+}
+
+//! returns true if the object has a member of the name, accessible in the class context, that holds code, which a call
+//! of the name calls when the class has no method of the name (see qore_class_private::checkMethodForEval())
+static bool qore_object_member_holds_code(const qore_class_private* cls, QoreObject* obj, const char* name,
+        const qore_class_private* class_ctx) {
+    const QoreMemberInfo* mi = cls->runtimeGetCallableMemberInfo(name, class_ctx);
+    if (!mi) {
+        return false;
+    }
+    const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
+    qore_object_private* obj_priv = qore_object_private::get(*obj);
+    QoreAutoVarRWReadLocker al(obj_priv->rml);
+    if (obj_priv->status == OS_DELETED) {
+        return false;
+    }
+    const QoreHashNode* odata = member_class_ctx ? obj_priv->getInternalData(member_class_ctx) : obj_priv->data;
+    if (!odata) {
+        return false;
+    }
+    bool exists = false;
+    QoreValue mv = qore_hash_private::get(*odata)->getKeyValueExistenceIntern(name, exists);
+    return exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE);
+}
+
+template <typename F>
+QoreValue RunTimeObjectMethodReferenceNode::evalInContext(F f) const {
+    // a direct call of a pseudo-method runs in the class context of its code: a call through the reference runs in
+    // that of the code that made the reference, which can differ from the context it is called in
+    if (missing && qc != runtime_get_class()) {
+        ClassOnlySubstitutionHelper csh(qc);
+        return f();
+    }
+    return f();
+}
+
 RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreObject* n_obj,
-        const char* n_method) : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method),
-        qc(runtime_get_class()) {
+        const char* n_method, bool n_missing) : ResolvedCallReferenceNodeIntern(loc), obj(n_obj), method(n_method),
+        missing(n_missing) {
+    QoreProgram* creator;
+    runtime_get_program_and_class(creator, qc);
+    // the restrictions that a call of the reference is checked against: those of the creating context (#5803)
+    captureCreatorParseOptions();
     printd(5, "RunTimeObjectMethodReferenceNode::RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
         "qc: %p)\n", this, obj, n_method, qc);
+    // the method is called as a direct call in the Program that creates the reference would be; the object holds a
+    // weak reference to its own Program, which is where a reference is usually created; any other Program is held
+    // with a weak reference of the reference's own, as a strong one could cause a recursive reference
+    pgm_ref = reinterpret_cast<uintptr_t>(creator);
+    if (creator != qore_object_private::get(*n_obj)->pgm && creator) {
+        creator->depRef();
+        pgm_ref |= PGM_WEAK_REF;
+    }
     obj->tRef();
 }
 
 RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
     printd(5, "RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() this: %p obj: %p (method: %s " \
         "qc: %p)\n", this, obj, method.c_str(), qc);
+    // released here and not in derefImpl(), which keeps the dereference of the usual reference, which holds no
+    // Program, free of an extra call; the weak reference only keeps the Program's memory
+    if (pgm_ref & PGM_WEAK_REF) {
+        reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF)->depDeref();
+    }
     obj->tDeref();
 }
 
-QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue RunTimeObjectMethodReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    if (obj && !obj->isValid()) {
-        qore_raise_deleted_object(xsink, "cannot call a method on an object that has already been "
-            "deleted");
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
         return QoreValue();
     }
     // issue #2145: set class context after evaluating arguments
+    // the method runs as a direct call in the Program that created the reference does: called there, it is not
+    // given a Program; called from another Program, it runs in the creating Program with its parse options, as a
+    // reference to a builtin method of the object's own class does (RunTimeResolvedMethodReferenceNode), and not
+    // with the privileges or restrictions of the Program that calls it.  A user method runs in the Program that
+    // defines its class in any case; rc_get_current_ref() has set the current Program
+    // (a reference created with no Program has none to run in: nullptr differs from the current Program)
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    return evalInContext([&] () {
+        return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(obj, method.c_str(),
+            args, qc, rc, xsink, nullptr, pgm_ctx);
+    });
+}
+
+QoreValue RunTimeObjectMethodReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, rc, xsink);
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    return evalInContext([&] () {
+        return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethodGivenArgs(obj,
+            method.c_str(), args, qc, rc, xsink, pgm_ctx);
+    });
+}
+
+QoreValue RunTimeObjectMethodReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    // the Program of the call as for a call with positional arguments (see dispatchValue())
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    // the method of the class of the object (which inherits or overrides the method that the reference was created
+    // with), whose variants the names are bound to; a methodGate() method takes
+    // its arguments by position
+    const qore_class_private* cls = qore_class_private::get(*qore_object_private::get(*obj)->theclass);
+    const QoreMethod* m = cls->getMethodForEval(method.c_str(), obj->getProgram(), qc, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!m) {
+        // a member of the name holding code is called before a pseudo-method by a positional call
+        // (qore_eval_missing_method()); a named call of it is refused, as a direct named call of a member declared
+        // with a code type is (a direct named call of an auto member binds the names to the pseudo-method and calls
+        // the code by position: qore#6361); a member holding no code leaves the call to the pseudo-method (issue
+        // #995)
+        if (qore_object_member_holds_code(cls, obj, method.c_str(), qc)) {
+            xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: it is a "
+                "member of the class, whose code takes the arguments of the call by position", obj->getClassName(),
+                method.c_str());
+            return QoreValue();
+        }
+        // a pseudo-method of objects with its variants bound to the arguments by name, as a direct named call binds
+        // them (issue #995)
+        QoreClass* pqc;
+        if (const QoreMethod* w = pseudo_classes_find_method(NT_OBJECT, method.c_str(), pqc)) {
+            return evalInContext([&] () {
+                return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, QoreValue(obj),
+                    args, false, qc, arg_names, policy);
+            });
+        }
+        // as for a named call of the method (AbstractMethodCallNode::execNamed()): a method of the name is handled by
+        // the class's methodGate() method, which takes its arguments by position, so a named call of it is refused,
+        // as at parse time for a direct call
+        if (cls->methodGate) {
+            xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: the class "
+                "has no method of the name, and its methodGate() method takes the arguments of the call by position",
+                obj->getClassName(), method.c_str());
+            return QoreValue();
+        }
+        xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined", obj->getClassName(),
+            method.c_str());
+        return QoreValue();
+    }
+    return qore_method_private::evalNamed(*m, xsink, rc, obj, args, false, qc, nullptr, nullptr, arg_names, policy,
+        pgm_ctx);
+}
+
+QoreValue RunTimeObjectMethodReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    if (checkObject(xsink)) {
+        return QoreValue();
+    }
+    // issue #2145: set class context after evaluating arguments
+    // the method runs as a direct call in the Program that created the reference does: called there, it is not
+    // given a Program; called from another Program, it runs in the creating Program with its parse options, as a
+    // reference to a builtin method of the object's own class does (RunTimeResolvedMethodReferenceNode), and not
+    // with the privileges or restrictions of the Program that calls it.  A user method runs in the Program that
+    // defines its class in any case; rc_get_current_ref() has set the current Program
+    // (a reference created with no Program has none to run in: nullptr differs from the current Program)
+    QoreProgram* pgm = reinterpret_cast<QoreProgram*>(pgm_ref & ~PGM_WEAK_REF);
+    QoreProgram* pgm_ctx = pgm != rc_get_current_program(rc) ? pgm : nullptr;
+    return evalInContext([&] () {
+        return qore_class_private::get(*qore_object_private::get(*obj)->theclass)->evalMethod(policy, obj,
+            method.c_str(), args, qc, rc, xsink, nullptr, pgm_ctx);
+    });
 }
 
 QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
@@ -651,6 +1205,59 @@ QoreProgram* RunTimeObjectMethodReferenceNode::getProgram() const {
 
 const QoreMethod* RunTimeObjectMethodReferenceNode::findMethod() const {
     return obj ? obj->getClass()->findMethod(method.c_str()) : nullptr;
+}
+
+int RunTimeResolvedMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        // the method of the reference, as the call names it (qore_object_private::startCall())
+        qore_object_private::get(*obj)->raiseDeletedCall(qore_class_private::get(*method->getClass()),
+            method->getName(), xsink);
+        return -1;
+    }
+    return 0;
+}
+
+int RunTimeObjectMethodReferenceNode::checkObject(ExceptionSink* xsink) const {
+    // the status is read inline, without the exported call of QoreObject::isValid() (#5692)
+    if (obj && qore_object_private::get(*obj)->status == OS_DELETED) {
+        // the method that the call finds by name, as the call names it (qore_object_private::startCall()): looked up
+        // in the class context of the reference, as the call looks it up (evalMethod()), not in that of the caller;
+        // the object's class if there is none
+        const qore_class_private* class_ctx = qc;
+        if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
+            class_ctx = nullptr;
+        }
+        ExceptionSink lookup_xsink;
+        const QoreMethod* m = qore_class_private::get(*obj->getClass())->getMethodForEval(method.c_str(),
+            obj->getProgram(), class_ctx, &lookup_xsink);
+        // an error of the lookup is the call's own, which is not made
+        lookup_xsink.clear();
+        qore_object_private::get(*obj)->raiseDeletedCall(m ? qore_class_private::get(*m->getClass()) : nullptr,
+            method.c_str(), xsink);
+        return -1;
+    }
+    return 0;
+}
+
+void qore_raise_not_call_reference(ExceptionSink* xsink, const QoreProgramLocation* loc, const QoreValue& v) {
+    if (loc) {
+        xsink->raiseException(*loc, "REFERENCE-CALL-ERROR", QoreValue(), "expression does not evaluate to a call "
+            "reference (evaluated to type '%s')", v.getTypeName());
+    } else {
+        xsink->raiseException("REFERENCE-CALL-ERROR", "expression does not evaluate to a call reference (evaluated "
+            "to type '%s')", v.getTypeName());
+    }
+}
+
+int qore_call_reference_check_target(const ResolvedCallReferenceNode* rcr, ExceptionSink* xsink) {
+    if (const RunTimeResolvedMethodReferenceNode* r = dynamic_cast<const RunTimeResolvedMethodReferenceNode*>(rcr)) {
+        return r->checkObject(xsink);
+    }
+    if (const RunTimeObjectMethodReferenceNode* r = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(rcr)) {
+        return r->checkObject(xsink);
+    }
+    return 0;
 }
 
 const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceNode* rcr) {
@@ -698,9 +1305,69 @@ const QoreProgram* qore_call_reference_code_program(const ResolvedCallReferenceN
     return pgm ? pgm : cls->getProgram();
 }
 
+//! returns the user variant of a call reference to a user function (not a closure or a method), or nullptr
+static const UserVariantBase* qore_call_reference_function_variant(const ResolvedCallReferenceNode* rcr) {
+    if (rcr->getType() == NT_RUNTIME_CLOSURE) {
+        return nullptr;
+    }
+    const QoreFunction* f = rcr->getFunction();
+    if (!f || f->getClass() || !f->hasUser()) {
+        return nullptr;
+    }
+    QoreFunctionIterator i(*f);
+    while (i.next()) {
+        if (const UserVariantBase* uvb = i.getVariant()->getUserVariantBase()) {
+            return uvb;
+        }
+    }
+    return nullptr;
+}
+
+int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
+        ExceptionSink* xsink) {
+    // the code of a user function runs in the Program that defines it (see qore_get_function_pgm_context()), which
+    // can have been deleted: it is taken with a reference while its options are read
+    if (const UserVariantBase* uvb = qore_call_reference_function_variant(rcr)) {
+        QoreSourceProgramHolder holder(xsink);
+        holder.setVariant(uvb);
+        if (QoreProgram* pgm = holder.get()) {
+            // a Program that another thread has deleted, or is deleting, stays registered while any thread holds a
+            // reference to it (such as the thread that runs a call of the function scheduled earlier, while the call
+            // leaves the Program), but its code cannot run anymore: it is deleted whatever other threads hold
+            if (qore_program_private::get(*pgm)->deletedByOtherThread()) {
+                return -1;
+            }
+            po = pgm->getParseOptions();
+            return 1;
+        }
+        if (holder.sourceDeleted()) {
+            return -1;
+        }
+    }
+    const QoreProgram* pgm = qore_call_reference_code_program(rcr);
+    if (!pgm) {
+        return 0;
+    }
+    po = pgm->getParseOptions();
+    return 1;
+}
+
 bool RunTimeObjectMethodReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const RunTimeObjectMethodReferenceNode* vc = dynamic_cast<const RunTimeObjectMethodReferenceNode*>(v);
     return vc && obj == vc->obj && method == vc->method;
+}
+
+int qore_resolve_call_reference_type_args(std::vector<QoreParseTypeInfo*>& parse_type_args,
+        const QoreProgramLocation* loc, std::vector<const QoreTypeInfo*>& type_args) {
+    int err = 0;
+    type_args.clear();
+    type_args.reserve(parse_type_args.size());
+    for (QoreParseTypeInfo* pti : parse_type_args) {
+        type_args.push_back(QoreParseTypeInfo::resolveAny(pti, loc, err));
+        delete pti;
+    }
+    parse_type_args.clear();
+    return err ? -1 : 0;
 }
 
 UnresolvedProgramCallReferenceNode::UnresolvedProgramCallReferenceNode(const QoreProgramLocation* loc, char* n_str)
@@ -709,6 +1376,9 @@ UnresolvedProgramCallReferenceNode::UnresolvedProgramCallReferenceNode(const Qor
 
 UnresolvedProgramCallReferenceNode::~UnresolvedProgramCallReferenceNode() {
     free(str);
+    for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+        delete pti;
+    }
 }
 
 int UnresolvedProgramCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
@@ -733,9 +1403,16 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         if (QoreClass* qc = parse_get_class()) {
             const QoreMethod* m = qore_class_private::parseFindSelfMethod(qc, str);
             if (m) {
+                if (!explicit_parse_type_args.empty()) {
+                    parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a "
+                        "method; call the method, or reference a function", str);
+                    return -1;
+                }
+                // a reference allows the call that naming the method would
+                int err = check_call_reference_domain(loc, parse_context, m);
                 val = new ParseSelfMethodReferenceNode(loc, m);
                 delete this;
-                return 0;
+                return err;
             }
         }
     } else if (parse_context.class_ctx) {
@@ -743,17 +1420,111 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         const QoreMethod* m = priv->parseFindStaticMethod(str, priv);
         if (m) {
             assert(m->isStatic());
+            if (!explicit_parse_type_args.empty()) {
+                parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a "
+                    "method; call the method, or reference a function", str);
+                return -1;
+            }
             // resolve to the same node as the qualified form (\Class::method()) so that both spellings
             // evaluate and lower identically
+            // a reference allows the call that naming the method would
+            int err = check_call_reference_domain(loc, parse_context, m);
             val = new LocalStaticMethodCallReferenceNode(loc, m);
             delete this;
-            return 0;
+            return err;
         }
     }
 
     // the following function returns the argument if there's an error
     val = qore_root_ns_private::parseResolveCallReference(this);
     return val.getInternalNode() == this ? -1 : 0;
+}
+
+LocalStaticMethodCallReferenceNode::LocalStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
+        const QoreMethod* n_method, const QoreClass* n_scope_cls) : ResolvedCallReferenceNodeIntern(loc, true),
+        method(n_method),
+        scope_cls(n_scope_cls && n_method && n_scope_cls != n_method->getClass() ? n_scope_cls : nullptr) {
+    if (scope_cls) {
+        receiver_type_info = qore_class_private::get(*scope_cls)->getStaticCallReceiverTypeInfo(*method);
+    }
+}
+
+const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(const QoreMethod& m,
+        const QoreClass* scope_cls, const qore_class_private* code_class) {
+    const QoreClass* mcls = m.getClass();
+    if (!mcls) {
+        return nullptr;
+    }
+    // the method of a class without type parameters that has variants of a generic class binds the type parameters
+    // of the generic class wherever it is called from (qore#6448)
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
+    }
+    if (scope_cls) {
+        if (const QoreTypeInfo* rv = qore_class_private::get(*scope_cls)->getStaticCallReceiverTypeInfo(m)) {
+            return rv;
+        }
+    }
+    // in the code of a class that is or inherits the method's class, the receiver of the running instantiation of
+    // the code: the specialization of the method's class that it is or inherits (as a call in the class's code is
+    // bound at parse time; see qore_class_private::parseGetStaticCallReceiverTypeInfo())
+    ClassAccess access;
+    if (!code_class || !code_class->getClass(*qore_class_private::get(*mcls), access)) {
+        return nullptr;
+    }
+    // the code of a class without type parameters binds them to the specialization that it inherits, also when it
+    // declares a method of the same name, which the reference does not name then
+    if (!code_class->hasTypeParams()) {
+        return code_class->getStaticCallReceiverTypeInfo(m);
+    }
+    const QoreTypeInfo* current = runtime_get_receiver_type_info();
+    if (!current) {
+        return nullptr;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(current)) {
+        return qore_class_private::get(*pti->getBaseClass())->getParameterizedBaseTypeInfo(pti, mcls);
+    }
+    const QoreClass* current_cls = QoreTypeInfo::getUniqueReturnClass(current);
+    return current_cls ? qore_class_private::get(*current_cls)->getStaticCallReceiverTypeInfo(m) : nullptr;
+}
+
+const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(const QoreMethod& m,
+        const QoreTypeInfo* receiver_type_info, const QoreListNode* args) {
+    if (receiver_type_info) {
+        return receiver_type_info;
+    }
+    const QoreClass* mcls = m.getClass();
+    if (!mcls) {
+        return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
+    }
+    return qore_method_private::get(m)->getFunction()->runtimeInferClassReceiverTypeInfo(args);
+}
+
+const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(const QoreMethod& m,
+        const QoreTypeInfo* receiver_type_info, const QoreListNode*& args,
+        QoreListNodeEvalOptionalRefHolder& eval_args, ExceptionSink* xsink) {
+    if (receiver_type_info) {
+        return receiver_type_info;
+    }
+    const QoreClass* mcls = m.getClass();
+    if (!mcls) {
+        return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
+    }
+    // the type arguments are inferred from the values of the arguments
+    if (args && args->needs_eval()) {
+        eval_args.assignEval(args);
+        if (*xsink) {
+            return nullptr;
+        }
+        args = *eval_args;
+    }
+    return qore_method_private::get(m)->getFunction()->runtimeInferClassReceiverTypeInfo(args);
 }
 
 // evalImpl(): return value requires a deref(xsink) if not 0
@@ -766,20 +1537,66 @@ QoreValue LocalStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& 
     assert(needs_deref);
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
-    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+    return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls,
+        receiver_type_info ? receiver_type_info : getRuntimeReceiverTypeInfo(*method, nullptr, cls));
 }
 
-QoreValue LocalStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue LocalStaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_method_private::eval(*method, xsink, rc, nullptr, args);
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(*method, xsink, rc, nullptr, args, nullptr, nullptr, rti);
+}
+
+QoreValue LocalStaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalStaticGivenArgs(*method, xsink, rc, args, nullptr, nullptr,
+        getCallReceiverTypeInfo(*method, receiver_type_info, args));
+}
+
+QoreValue LocalStaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, nullptr, rti, nullptr,
+        arg_names, policy);
+}
+
+QoreValue LocalStaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(policy, *method, xsink, rc, nullptr, args, nullptr, nullptr, rti);
 }
 
 bool LocalStaticMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
     const LocalStaticMethodCallReferenceNode* vc = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(v);
     //printd(5, "LocalStaticMethodCallReferenceNode::is_equal_hard() %p == %p (%p %s)\n", uf, vc ? vc->uf : 0, v,
     //  v ? v->getTypeName() : "n/a");
-    return vc && method == vc->method;
+    return vc && method == vc->method && receiver_type_info == vc->receiver_type_info;
 }
 
 QoreFunction* LocalStaticMethodCallReferenceNode::getFunction() const {
@@ -799,10 +1616,39 @@ QoreValue LocalMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_
         rc.getClass() ? rc.getClass() : runtime_get_class());
 }
 
-QoreValue LocalMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue LocalMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, runtime_get_stack_object(), args, nullptr);
+}
+
+QoreValue LocalMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, runtime_get_stack_object(), args);
+}
+
+QoreValue LocalMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalNamed(*method, xsink, rc, runtime_get_stack_object(), args, false, nullptr,
+        nullptr, nullptr, arg_names, policy);
+}
+
+QoreValue LocalMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::eval(policy, *method, xsink, rc, runtime_get_stack_object(), args, nullptr);
 }
 
 bool LocalMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -813,8 +1659,11 @@ bool LocalMethodCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Exce
 }
 
 StaticMethodCallReferenceNode::StaticMethodCallReferenceNode(const QoreProgramLocation* loc,
-        const QoreMethod* n_method, QoreProgram* n_pgm, const qore_class_private* n_class_ctx)
+        const QoreMethod* n_method, QoreProgram* n_pgm, const qore_class_private* n_class_ctx,
+        const QoreTypeInfo* n_receiver_type_info)
         : LocalStaticMethodCallReferenceNode(loc, n_method, false), pgm(n_pgm), class_ctx(n_class_ctx) {
+    receiver_type_info = n_receiver_type_info;
+    captureCreatorParseOptions();
     assert(pgm);
     //printd(5, "StaticMethodCallReferenceNode::StaticMethodCallReferenceNode() this: %p %s::%s()\n", this,
     //  n_method->getClass()->getName(), n_method->getName());
@@ -835,12 +1684,59 @@ bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue StaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue StaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     // issue #4964: do not set object or class context until arguments are evaluated
     // do not set pgm context here before evaluating args
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm, rti);
+}
+
+QoreValue StaticMethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return qore_method_private::eval(*method, xsink, rc, nullptr, args, class_ctx, pgm);
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalStaticGivenArgs(*method, xsink, rc, args, class_ctx, pgm,
+        getCallReceiverTypeInfo(*method, receiver_type_info, args));
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, class_ctx, rti, nullptr,
+        arg_names, policy, pgm);
+}
+
+QoreValue StaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    // issue #4964: do not set object or class context until arguments are evaluated
+    // do not set pgm context here before evaluating args
+    QoreListNodeEvalOptionalRefHolder eval_args(xsink);
+    const QoreTypeInfo* rti = getCallReceiverTypeInfo(*method, receiver_type_info, args, eval_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qore_method_private::eval(policy, *method, xsink, rc, nullptr, args, class_ctx, pgm, rti);
 }
 
 DeferredStaticMethodCallReferenceNode::DeferredStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
@@ -899,7 +1795,8 @@ ResolvedCallReferenceNode* DeferredStaticMethodCallReferenceNode::resolve(Runtim
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : pgm;
     const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
     if (method->isStatic()) {
-        return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls);
+        return new StaticMethodCallReferenceNode(loc, method, call_pgm, cls,
+            LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*method, qc, cls));
     }
 
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
@@ -923,9 +1820,11 @@ QoreValue DeferredStaticMethodCallReferenceNode::evalImpl(RuntimeConfig& rc, boo
     return resolve(rc, xsink);
 }
 
-QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue DeferredStaticMethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     ResolvedCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
@@ -935,8 +1834,39 @@ QoreValue DeferredStaticMethodCallReferenceNode::execValue(const QoreListNode* a
     return rv;
 }
 
+QoreValue DeferredStaticMethodCallReferenceNode::dispatchNamed(const QoreListNode* args,
+        const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    ResolvedCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = qore_call_ref_invoke_named(ref, args, arg_names, policy, xsink);
+    ref->deref(xsink);
+    return rv;
+}
+
+QoreValue DeferredStaticMethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    ResolvedCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->invokeLexical(args, xsink, policy);
+    ref->deref(xsink);
+    return rv;
+}
+
 MethodCallReferenceNode::MethodCallReferenceNode(const QoreProgramLocation* loc, const QoreMethod* n_method,
         QoreProgram* n_pgm) : LocalMethodCallReferenceNode(loc, n_method, false), obj(runtime_get_stack_object()) {
+    captureCreatorParseOptions();
     assert(obj);
     //printd(5, "MethodCallReferenceNode::MethodCallReferenceNode() this: %p %s::%s()\n", this,
     //  n_method->getClass()->getName(), n_method->getName());
@@ -953,10 +1883,39 @@ bool MethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue MethodCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue MethodCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     return qore_method_private::eval(*method, xsink, rc, obj, args);
+}
+
+QoreValue MethodCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalGivenArgs(*method, xsink, rc, obj, args);
+}
+
+QoreValue MethodCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::evalNamed(*method, xsink, rc, obj, args, false, nullptr, nullptr, nullptr, arg_names,
+        policy);
+}
+
+QoreValue MethodCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return qore_method_private::eval(policy, *method, xsink, rc, obj, args);
 }
 
 UnresolvedStaticMethodCallReferenceNode::UnresolvedStaticMethodCallReferenceNode(const QoreProgramLocation* loc,
@@ -969,6 +1928,9 @@ UnresolvedStaticMethodCallReferenceNode::~UnresolvedStaticMethodCallReferenceNod
     //printd(5, "UnresolvedStaticMethodCallReferenceNode::~UnresolvedStaticMethodCallReferenceNode() this: %p\n",
     //  this);
     delete scope;
+    for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+        delete pti;
+    }
 }
 
 int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
@@ -1033,11 +1995,27 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     }
 
     QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+    if (qc && !explicit_parse_type_args.empty()) {
+        // a call reference to a method does not take explicit type arguments (they would be ignored silently)
+        parse_error(*loc, "explicit type arguments are not supported in the call reference '\\%s()' to a method; "
+            "call the method, or reference a function", scope->ostr);
+        return -1;
+    }
     if (!qc) {
         // see if this is a function call to a function defined in a namespace
-        const QoreFunction* f = qore_root_ns_private::parseResolveFunction(*scope);
-        if (f) {
-            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, f);
+        const FunctionEntry* fe = qore_root_ns_private::parseResolveFunctionEntry(*scope);
+        if (fe) {
+            LocalFunctionCallReferenceNode* fr = new LocalFunctionCallReferenceNode(loc, fe->getFunction());
+            fr->setFunctionEntry(fe);
+            // the explicit type arguments of \NS::f<T>() instantiate the function when the reference is called
+            if (!explicit_parse_type_args.empty()) {
+                std::vector<const QoreTypeInfo*> type_args;
+                if (qore_resolve_call_reference_type_args(explicit_parse_type_args, loc, type_args)) {
+                    fr->deref(nullptr);
+                    return -1;
+                }
+                fr->setExplicitTypeArgs(std::move(type_args));
+            }
             deref();
             val = fr;
             return parse_init_same_level(fr, val, parse_context);
@@ -1112,17 +2090,41 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
     }
 
     // check class capabilities against parse options
-    if (qore_program_private::parseAddDomain(getProgram(), qc->getDomain())) {
+    if (qore_program_private::parseAddDomain(parse_context.pgm, qc->getDomain())) {
         parse_error(*loc, "class '%s' implements capabilities that are not allowed by current parse options",
             qc->getName());
         return -1;
     }
 
+    // check the functional domains of the method: a reference allows the call that naming the method would
+    if (int err = check_call_reference_domain(loc, parse_context, qm)) {
+        return err;
+    }
+
     //printd(5, "UnresolvedStaticMethodCallReferenceNode::parseInit() got %s::%s() static: %d\n",
     //  qm->getClass()->getName(), qm->getName(), qm->isStatic());
-    val = qm->isStatic()
-        ? new LocalStaticMethodCallReferenceNode(loc, qm)
-        : new LocalMethodCallReferenceNode(loc, qm);
+    if (qm->isStatic()) {
+        // a reference to a static method of a generic class through a class that inherits a specialization of it
+        // calls it with the type arguments of the specialization, also through the generic class in the code of a
+        // class that inherits it, whose class the reference then names (qore#6285)
+        // (only if the name resolves to the same method in it, as the class is all that compiled code records of
+        // the reference)
+        const qore_class_private* code_class = parse_get_class_priv();
+        bool current_receiver;
+        const QoreClass* ref_cls = qc;
+        // (only in the code of a class, and for a method of a generic class: a method of a class that is not generic
+        // has a receiver for the variants that it adds to a generic base class's method also in top-level code)
+        if (code_class && qm->getClass()->hasTypeParameters()
+                && qore_class_private::parseGetStaticCallReceiverTypeInfo(*qm, qc, code_class, current_receiver)
+                && qore_class_private::get(*qc)->hasTypeParams()
+                && const_cast<qore_class_private*>(code_class)->parseFindStaticMethod(scope->getIdentifier(),
+                    code_class) == qm) {
+            ref_cls = code_class->cls;
+        }
+        val = new LocalStaticMethodCallReferenceNode(loc, qm, ref_cls);
+    } else {
+        val = new LocalMethodCallReferenceNode(loc, qm);
+    }
     deref();
     return 0;
 }
@@ -1135,6 +2137,15 @@ LocalFunctionCallReferenceNode::LocalFunctionCallReferenceNode(const QoreProgram
         const QoreFunction* n_uf) : ResolvedCallReferenceNodeIntern(loc, true), uf(n_uf) {
 }
 
+void LocalFunctionCallReferenceNode::setExplicitTypeArgs(std::vector<const QoreTypeInfo*>&& type_args) {
+    if (type_args.empty()) {
+        explicit_inst.reset();
+        return;
+    }
+    explicit_inst = std::make_shared<QoreTypeParamInstantiation>();
+    explicit_inst->type_args = std::move(type_args);
+}
+
 QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -1143,13 +2154,65 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(bool& needs_deref, ExceptionS
 QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
     QoreProgram* call_pgm = rc.getProgram() ? rc.getProgram() : ::getProgram();
-    return new FunctionCallReferenceNode(loc, uf, call_pgm);
+    FunctionCallReferenceNode* rv = new FunctionCallReferenceNode(loc, uf, call_pgm);
+    // a reference without explicit type arguments (the common case) pays nothing for them
+    if (explicit_inst) {
+        rv->explicit_inst = explicit_inst;
+        // an explicit type argument can be a type parameter of the generic code that creates the reference (\mk0<U>()
+        // in a generic function or a method of a generic class): it is bound here, to the instantiation that is
+        // running, as the reference can outlive that code and be called when no such instantiation exists (the same
+        // as bindExplicitTypeArgs(), written out: a call of it here measured +44 instructions)
+        QoreTypeParamInstantiation resolved;
+        if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
+            rv->explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
+        }
+        // the reference can outlive the Program of a type argument (issue #6489)
+        rv->holdExplicitTypeArgDecls();
+    }
+    return rv;
 }
 
-QoreValue LocalFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+void LocalFunctionCallReferenceNode::bindExplicitTypeArgs() {
+    if (explicit_inst) {
+        QoreTypeParamInstantiation resolved;
+        if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
+            explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
+        }
+    }
+}
+
+QoreValue LocalFunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return uf->evalFunction(0, args, nullptr, rc, xsink);
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunction(0, args, nullptr, rc, xsink, explicit_inst.get());
+}
+
+QoreValue LocalFunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunctionTmpArgs(nullptr, args, nullptr, rc, xsink, explicit_inst.get());
+}
+
+QoreValue LocalFunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunctionNamed(args, nullptr, rc, xsink, explicit_inst.get(), 0, arg_names, policy);
+}
+
+QoreValue LocalFunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunction(0, args, nullptr, rc, xsink, explicit_inst.get(), false, policy);
 }
 
 bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const {
@@ -1162,14 +2225,44 @@ bool LocalFunctionCallReferenceNode::is_equal_hard(const AbstractQoreNode* v, Ex
 bool FunctionCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     //printd(5, "FunctionCallReferenceNode::deref() this: %p pgm: %p refs: %d -> %d\n", this, pgm, reference_count(),
     //  reference_count() - 1);
+    // the function can outlive the Program that defined it (see the constructor)
+    const_cast<QoreFunction*>(uf)->deref();
     pgm->depDeref();
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue FunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue FunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
-    return uf->evalFunction(0, args, pgm, rc, xsink);
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get());
+}
+
+QoreValue FunctionCallReferenceNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // as dispatchValue(): the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunctionTmpArgs(nullptr, args, pgm, rc, xsink, explicit_inst.get());
+}
+
+QoreValue FunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunctionNamed(args, pgm, rc, xsink, explicit_inst.get(), 0, arg_names, policy);
+}
+
+QoreValue FunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    return uf->evalFunction(0, args, pgm, rc, xsink, explicit_inst.get(), false, policy);
 }
 
 DeferredFunctionCallReferenceNode::DeferredFunctionCallReferenceNode(const QoreProgramLocation* loc,
@@ -1220,14 +2313,46 @@ QoreValue DeferredFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& n
     return resolve(rc, xsink);
 }
 
-QoreValue DeferredFunctionCallReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue DeferredFunctionCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
     FunctionCallReferenceNode* ref = resolve(rc, xsink);
     if (!ref) {
         return QoreValue();
     }
     QoreValue rv = ref->invoke(args, xsink);
+    ref->deref(xsink);
+    return rv;
+}
+
+QoreValue DeferredFunctionCallReferenceNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the call runs with the permissions of the context that created the reference
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    FunctionCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->dispatchNamed(args, arg_names, policy, xsink);
+    ref->deref(xsink);
+    return rv;
+}
+
+QoreValue DeferredFunctionCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Compatibility semantics do not change the permissions of the reference's creator.
+    QoreCallReferenceCallHelper call_ref_call(rc, args, getCreatorParseOptions());
+    FunctionCallReferenceNode* ref = resolve(rc, xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    QoreValue rv = ref->invokeLexical(args, xsink, policy);
     ref->deref(xsink);
     return rv;
 }
@@ -1249,13 +2374,84 @@ ResolvedCallReferenceNode::~ResolvedCallReferenceNode() {
 
 QoreValue ResolvedCallReferenceNode::invoke(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
-    return execValue(args, xsink);
+    return dispatchValue(args, xsink);
+}
+
+QoreValue ResolvedCallReferenceNode::invokeLexical(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    return dispatchLexicalValue(args, xsink, policy);
 }
 
 namespace {
-//! A fixed callback, bound at registration time; the public callback subclass ABI remains unchanged.
+//! Only external/native callbacks use this scope; Qore entries clear policy in their existing CEH flags store.
+class NativeCallbackPolicyScope {
+public:
+    explicit NativeCallbackPolicyScope(LexicalSemanticPolicy policy)
+            : rc(rc_get_tls_ref()), saved(QoreRuntimeFlags::get(rc)) {
+        QoreRuntimeFlags::set(rc, (saved & ~LexicalSemanticPolicy::NativeMask) | policy.nativeFlags());
+    }
+
+    ~NativeCallbackPolicyScope() {
+        QoreRuntimeFlags::set(rc, saved);
+    }
+
+private:
+    RuntimeConfig& rc;
+    q_rt_flags_t saved;
+};
+}
+
+QoreValue ResolvedCallReferenceNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    NativeCallbackPolicyScope policy({});
+    return execValue(args, xsink);
+}
+
+QoreValue ResolvedCallReferenceNode::dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+        const LexicalSemanticPolicy& policy) const {
+    NativeCallbackPolicyScope invocation(policy);
+    return execValue(args, xsink);
+}
+
+QoreValue ResolvedCallReferenceNodeIntern::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        LexicalSemanticPolicy policy, ExceptionSink* xsink) const {
+    xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "a call through a %s cannot take named arguments; use "
+        "positional arguments", getTypeName());
+    return QoreValue();
+}
+
+namespace {
+//! A fixed callback, bound at registration time; native subclasses still implement execValue().
+
 class SandboxBoundCallReference : public ResolvedCallReferenceNode {
 public:
+    //! calls the callback with named arguments as dispatchValue() calls it with positional arguments
+    QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names, LexicalSemanticPolicy policy,
+            ExceptionSink* xsink) const {
+        QoreSandboxProvenanceHelper provenance(this);
+        if (check_stack(xsink)) {
+            return QoreValue();
+        }
+        if (trusted) {
+            // the arguments are evaluated in the caller's context (see dispatchValue())
+            QoreListNodeEvalOptionalRefHolder evaluated(args, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreSandboxTrustedPolicyHelper privilege;
+            return qore_call_ref_invoke_named(callback, *evaluated, arg_names, policy, xsink);
+        }
+        return qore_call_ref_invoke_named(callback, args, arg_names, policy, xsink);
+    }
+
+    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        return dispatchValue(args, xsink);
+    }
+
     SandboxBoundCallReference(const ResolvedCallReferenceNode* callback, bool trusted)
             : callback(const_cast<ResolvedCallReferenceNode*>(callback)), trusted(trusted),
                 trusted_program(trusted ? ::getProgram() : nullptr) {
@@ -1265,7 +2461,7 @@ public:
         }
     }
 
-    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+    QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override {
         QoreSandboxProvenanceHelper provenance(this);
         if (check_stack(xsink)) {
             return QoreValue();
@@ -1288,9 +2484,34 @@ public:
         return callback->invoke(args, xsink);
     }
 
+    QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const override {
+        QoreSandboxProvenanceHelper provenance(this);
+        if (check_stack(xsink)) {
+            return QoreValue();
+        }
+        if (trusted) {
+            // the arguments are expressions of the caller: they are evaluated in the caller's context, before the
+            // Program that registered the capability is entered, as the arguments of any call into another Program
+            // are; evaluated there, the caller's local variables are not found
+            QoreListNodeEvalOptionalRefHolder evaluated(args, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            ProgramThreadCountContextHelper registration_context(xsink, trusted_program, true);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreSandboxTrustedPolicyHelper privilege;
+            return callback->invokeLexical(*evaluated, xsink, policy);
+        }
+        return callback->invokeLexical(args, xsink, policy);
+    }
+
     QoreFunction* getFunction() const override { return callback->getFunction(); }
     QoreProgram* getProgram() const override { return callback->getProgram(); }
     const ResolvedCallReferenceNode* getCallback() const { return callback; }
+    const ResolvedCallReferenceNode* getSandboxBoundCallback() const override { return callback; }
     bool isTrusted() const { return trusted; }
 
 protected:
@@ -1311,8 +2532,10 @@ private:
 }
 
 const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback) {
-    const auto* bound = dynamic_cast<const SandboxBoundCallReference*>(callback);
-    return bound ? bound->getCallback() : nullptr;
+    if (!callback || callback->getType() != NT_FUNCREF) {
+        return nullptr;
+    }
+    return static_cast<const AbstractCallReferenceNode*>(callback)->getSandboxBoundCallback();
 }
 
 ResolvedCallReferenceNode* qore_bind_sandbox_call(const ResolvedCallReferenceNode* callback, bool trusted,
@@ -1361,12 +2584,16 @@ namespace {
 */
 class SystemThreadCallReference : public ResolvedCallReferenceNode {
 public:
+    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        return dispatchValue(args, xsink);
+    }
+
     SystemThreadCallReference(const ResolvedCallReferenceNode* callback, QoreProgram* pgm)
             : callback(callback->refRefSelf()), pgm(pgm) {
         pgm->depRef();
     }
 
-    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+    QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override {
         // the capability starts only the fixed callback: nothing of the caller reaches the thread
         if (args && !args->empty()) {
             xsink->raiseException("SANDBOX-CAPABILITY-ERROR", "a system thread capability takes no arguments");
@@ -1459,4 +2686,21 @@ QoreValue ResolvedCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_der
 
 AbstractQoreNode* ResolvedCallReferenceNode::realCopy() const {
     return refRefSelf();
+}
+
+QoreValue qore_call_ref_invoke_named(const ResolvedCallReferenceNode* r, const QoreListNode* args,
+        const name_vec_t& arg_names, LexicalSemanticPolicy policy, ExceptionSink* xsink) {
+    if (const ResolvedCallReferenceNodeIntern* ri = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(r)) {
+        return ri->dispatchNamed(args, arg_names, policy, xsink);
+    }
+    if (const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(r)) {
+        return cb->dispatchNamed(args, arg_names, xsink);
+    }
+    if (const SandboxBoundCallReference* sb = dynamic_cast<const SandboxBoundCallReference*>(r)) {
+        return sb->dispatchNamed(args, arg_names, policy, xsink);
+    }
+    // a call reference implemented outside of the library takes its arguments by position
+    xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "a call through a %s cannot take named arguments; use "
+        "positional arguments", r->getTypeName());
+    return QoreValue();
 }

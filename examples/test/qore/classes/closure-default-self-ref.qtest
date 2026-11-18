@@ -1,0 +1,121 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - closure default values using self in JIT and AOT code
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class ClosureDefaultSelfRefTest
+
+#! The default values of a closure created in a method have the closure's self variable (qore#6417, qore#5949)
+/** The default values are evaluated before the closure's code binds its self variable; a read of self fell back to the
+    current object, but a reference to self or to a member through self (\c \\self, \c \\self.a) ended the process
+    (a failed assertion in a debug build, SIGSEGV otherwise), and an assignment through self (\c self.a = 20,
+    \c self.a += 5) raised \c LVALUE-ERROR, in every mode.  The variable is now bound for the evaluation of the default
+    values as the closure's code binds it, to a value of its own, so a write to self itself through a reference leaves
+    the closure's object unchanged.  The probes (closure-default-self-ref/probes.q) take references, read, assign and
+    create closures through self in default values, with closures called from another object's method and an object
+    whose only strong reference a default value drops (it stays valid until the default values have been evaluated
+    and is destroyed then, with the exception sink of the call, which its destructor's exception reaches), in each
+    execution mode in a child process, with tiered execution at the IR tier and promoted to native code, and as
+    qcc-compiled executables (-O0, -O3).  self in a closure of a static method is a parse error in a default value,
+    as in the closure's code.
+*/
+class ClosureDefaultSelfRefTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        const Lines = (
+            "ref member: 3 3",
+            "ref param: 7 7",
+            "ref self: 1 1",
+            "ref self param: 6",
+            "read: \"8 B\"",
+            "assign: 40 20",
+            "compound: \"6 20 6 20\" 6 20",
+            "nested: 7 4 3",
+            "captured: 3 3",
+            "static: 5",
+            "released: D-DESTRUCTOR n=3;~D",
+        );
+
+        #! self in a closure of a static method: the same parse error in a default value as in the closure's code
+        const StaticCases = (
+            "class S { public { int a = 1; } static code s() { return auto sub (auto x = self.a) { return x; }; } }",
+            "sub f(reference r) {} class S { public { int a = 1; } static code s() { "
+                "return auto sub (auto x = f(\\self.a)) { return x; }; } }",
+            "class S { public { int a = 1; } static code s() { return auto sub () { return self.a; }; } }",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("ClosureDefaultSelfRef", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        for (int i = 0; i < 2; ++i) {
+            expected += sprintf("%d:\n%s\n", i, Lines.join("\n"));
+        }
+
+        addTestCase("self in closure default values in every mode", \testModes());
+        addTestCase("self in a closure of a static method", \testStatic());
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-closure-default-self-ref-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "closure-default-self-ref" + DirSep
+            + "probes.q") + "\nfor (int i = 0; i < 2; ++i) {\n    printf(\"%d:\\n%s\\n\", i, probes());\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            # with the closures compiled to native code
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+
+    testStatic() {
+        TmpDir tmp("qore-closure-default-self-ref-");
+        foreach string code in (StaticCases) {
+            string file = tmp.path + DirSep + sprintf("s%d.q", $#);
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%modern\n" + code + "\nprintf(\"%y\\n\", S::s()());\n");
+            f.close();
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir,
+                libqore_dir, qore_bin, file));
+            assertRegex("PARSE-EXCEPTION: cannot resolve bareword 'self' to any reachable object", out, code);
+        }
+    }
+}

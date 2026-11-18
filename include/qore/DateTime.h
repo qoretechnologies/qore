@@ -37,6 +37,22 @@
 
 class AbstractQoreZoneInfo;
 
+//! marks a date/time function that cannot report a result out of range, which Qore code must not call
+/** These functions are kept for the binary interface of modules; they saturate a result out of range.  Code compiled
+    with \c _QORE_LIB_INTERN (the library and the programs built with it) gets a deprecation warning when it calls
+    them, as it must call the overloads with an ExceptionSink argument, which raise \c INVALID-DATE for a result out
+    of range (issue #6103); other code sees no change.  An overload with an ExceptionSink argument that is given a
+    null sink saturates a result out of range without an exception, as the deprecated overload does.
+
+    @since %Qore 3.0
+*/
+#ifdef _QORE_LIB_INTERN
+#define QORE_DATE_UNCHECKED_DEPRECATED [[deprecated("the result can be out of range; use the overload with an " \
+    "ExceptionSink argument (qore#6103)")]]
+#else
+#define QORE_DATE_UNCHECKED_DEPRECATED
+#endif
+
 //! for returning broken-down time information
 struct qore_tm {
    int year, month, day, hour, minute, second, us, utc_secs_east;
@@ -109,11 +125,23 @@ protected:
    DLLLOCAL DateTime(qore_date_private *n_priv);
 
 public:
+   //! constructor for an empty absolute date/time value
+   /** Not explicit, so that copy-list-initialization from an empty brace list (<tt>DateTime dt = {};</tt>,
+       <tt>return {};</tt>, an argument <tt>{}</tt>) gives an empty absolute date.
+
+       @since %Qore 3.0 as a separate constructor; before, DateTime(bool) with the default argument \c false
+   */
+   DLLLOCAL DateTime() : DateTime(false) {
+   }
+
    //! constructor for an empty object
    /**
       @param r sets the "relative" flag for the object
+
+      @note explicit since %Qore 3.0: before, any pointer converted implicitly to an empty DateTime through this
+      constructor; the default constructor is DateTime()
    */
-   DLLEXPORT DateTime(bool r = false);
+   DLLEXPORT explicit DateTime(bool r);
 
    //! constructor for setting all parameters
    /** note that for absolute date/time values, the local time zone will be assumed
@@ -131,8 +159,13 @@ public:
    //! constructor for setting an absolute date based on the number of seconds from January 1, 1970
    /** note that the local time zone will be assumed
        @param seconds the number of seconds from January 1, 1970
+
+       @note explicit since %Qore 3.0: before, an integer, a floating-point value or a \c bool converted
+       implicitly to an absolute date through this constructor (\c true to 1970-01-01 00:00:01); construct it
+       explicitly from an \c int64 (<tt>DateTime((int64)secs)</tt>: an argument of another integer type is
+       ambiguous with DateTime(bool))
    */
-   DLLEXPORT DateTime(int64 seconds);
+   DLLEXPORT explicit DateTime(int64 seconds);
 
    //! constructor for setting an absolute date based on the number of seconds from January 1, 1970 (plus milliseconds)
    /** note that the local time zone will be assumed
@@ -158,8 +191,11 @@ public:
 
    //! constructor for setting the date from a string
    /** @param date the string to use to set the date in the format YYYYMMDDHHmmSS[.xxx]
+
+       @note explicit since %Qore 3.0: before, any \c char pointer converted implicitly to a DateTime through this
+       constructor
    */
-   DLLEXPORT DateTime(const char* date);
+   DLLEXPORT explicit DateTime(const char* date);
 
    //! constructor for setting the date from a string with a flexible format, throws a Qore-language exception if the date string is invalid
    /** @param date the string to use to set the date
@@ -178,11 +214,24 @@ public:
    //! constructor for setting an absolute date based on a "struct tm"
    /**
       @param tms a structure giving the absolute date to set
+
+      @note explicit since %Qore 3.0: before, a \c struct \c tm pointer converted implicitly to a DateTime through
+      this constructor
    */
-   DLLEXPORT DateTime(const struct tm *tms);
+   DLLEXPORT explicit DateTime(const struct tm *tms);
 
    //! copy constructor
    DLLEXPORT DateTime(const DateTime &dt);
+
+   //! not available: a pointer to a DateTime would otherwise be converted to \c bool and give an empty date
+   /** Copy the value that the pointer refers to instead (<tt>DateTime dt(*ptr);</tt>).  As this constructor is
+       deleted and is a better conversion than DateTime(bool), a pointer to a DateTime (or to a class derived from
+       it, such as DateTimeNode) can no longer be converted implicitly to a DateTime either, so such a pointer passed
+       where a <tt>const DateTime&</tt> is expected is an error instead of an empty date.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime(const DateTime* dt) = delete;
 
    //! destroys the object and frees all memory
    DLLEXPORT ~DateTime();
@@ -262,6 +311,13 @@ public:
    //! sets the date from a DateTime reference
    DLLEXPORT void setDate(const DateTime &date);
 
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** Pass the value that the pointer refers to (<tt>dt.setDate(*ptr);</tt>).
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL void setDate(const DateTime* date) = delete;
+
    //! sets the time from hours, minutes, seconds, and milliseconds
    /**
       @param h the hours value
@@ -275,8 +331,31 @@ public:
    /** @param s elapsed seconds
        @param us additional microseconds, normalized with the seconds
        @note The normalized hour component must fit an int. Hours remain elapsed hours, even across DST changes.
+
+       @deprecated hours that do not fit an int are saturated (they wrapped before %Qore 3.0); use
+       setRelativeDateSeconds(int64, int, ExceptionSink*), which raises \c INVALID-DATE
    */
-   DLLEXPORT void setRelativeDateSeconds(int64 s, int us = 0);
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT void setRelativeDateSeconds(int64 s, int us = 0);
+
+   //! set the object to a relative date/time value as given in seconds and microseconds
+   /** @param s elapsed seconds
+       @param us additional microseconds, normalized with the seconds
+       @param xsink for an \c INVALID-DATE exception if the hours of the value do not fit a signed 32-bit integer
+       (hours remain elapsed hours, even across DST changes)
+
+       @return 0 for success, -1 if an exception was raised, in which case the value is saturated
+
+       @par Example
+       @code{.cpp}
+       DateTime dt(true);
+       if (dt.setRelativeDateSeconds(uptime_secs, 0, xsink)) {
+           return QoreValue();
+       }
+       @endcode
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT int setRelativeDateSeconds(int64 s, int us, ExceptionSink* xsink);
 
    DLLEXPORT bool checkValidity() const;
    DLLEXPORT bool isEqual(const DateTime* dt) const;
@@ -286,8 +365,11 @@ public:
        @return the sum, owned by the caller; equivalent to add(*dt)
        @throw std::bad_alloc if allocating the result fails
        @see add(const DateTime&) const
+
+       @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+       add(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
    */
-   DLLEXPORT DateTime* add(const DateTime* dt) const;
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTime* add(const DateTime* dt) const;
    //! returns a newly allocated sum without modifying either operand
    /** @param dt the absolute or relative date/time value to add
        @return the sum, owned by the caller; absolute if either operand is absolute
@@ -300,10 +382,84 @@ public:
        std::unique_ptr<DateTime> payment_period(DateTime::makeRelative(0, 1, 0));
        std::unique_ptr<DateTime> due_date(invoice_time.add(*payment_period));
        @endcode
+
+       @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+       add(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
    */
-   DLLEXPORT DateTime* add(const DateTime& dt) const;
-   DLLEXPORT DateTime* subtractBy(const DateTime* dt) const;
-   DLLEXPORT DateTime* subtractBy(const DateTime& dt) const;
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTime* add(const DateTime& dt) const;
+
+   //! returns a newly allocated sum without modifying either operand
+   /** @param dt the absolute or relative date/time value to add
+       @param xsink for an \c INVALID-DATE exception if the result is out of range: a component of a relative date
+       that does not fit a signed 32-bit integer, or an absolute date whose year is not from -2147483647 to
+       2147483646
+
+       @return the sum, owned by the caller; absolute if either operand is absolute; nullptr if an exception was
+       raised
+
+       @note Relative calendar components use the absolute operand's time zone. Two absolute
+       values add their UTC epoch offsets and express the result in the current default time zone.
+
+       @par Example
+       @code{.cpp}
+       std::unique_ptr<DateTime> due_date(invoice_time.add(*payment_period, xsink));
+       if (!due_date) {
+           return QoreValue();
+       }
+       @endcode
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT DateTime* add(const DateTime& dt, ExceptionSink* xsink) const;
+
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+       (<tt>a.add(*ptr, xsink)</tt>), which add(const DateTime&, ExceptionSink*) const takes.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime* add(const DateTime* dt, ExceptionSink* xsink) const = delete;
+
+   //! returns a newly allocated difference without modifying either operand
+   /** @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+       subtractBy(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
+   */
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTime* subtractBy(const DateTime* dt) const;
+
+   //! returns a newly allocated difference without modifying either operand
+   /** @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+       subtractBy(const DateTime&, ExceptionSink*) const, which raises \c INVALID-DATE
+   */
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTime* subtractBy(const DateTime& dt) const;
+
+   //! returns a newly allocated difference without modifying either operand
+   /** @param dt the date/time value to subtract; the difference of two absolute dates is a relative date in hours,
+       minutes, seconds and microseconds
+       @param xsink for an \c INVALID-DATE exception if the result is out of range: a component of a relative date
+       that does not fit a signed 32-bit integer, or an absolute date whose year is not from -2147483647 to
+       2147483646
+
+       @return the difference, owned by the caller; nullptr if an exception was raised
+
+       @par Example
+       @code{.cpp}
+       std::unique_ptr<DateTime> elapsed(end_time.subtractBy(start_time, xsink));
+       if (!elapsed) {
+           return QoreValue();
+       }
+       @endcode
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT DateTime* subtractBy(const DateTime& dt, ExceptionSink* xsink) const;
+
+   //! not available: a pointer would otherwise be converted to an empty date through DateTime(bool)
+   /** There is no checked overload taking a pointer; pass the value that the pointer refers to
+       (<tt>a.subtractBy(*ptr, xsink)</tt>), which subtractBy(const DateTime&, ExceptionSink*) const takes.
+
+       @since %Qore 3.0
+   */
+   DLLLOCAL DateTime* subtractBy(const DateTime* dt, ExceptionSink* xsink) const = delete;
 
    //! adds the given number of seconds (and microseconds) to the date/time value
    /** this is a very fast operation and particularly useful for date arithmentic on absolute date/time values
@@ -312,8 +468,31 @@ public:
        @param us the number of microseconds to add (a negative argument results in subtraction)
 
        @since %Qore 0.8.12
+
+       @deprecated a result out of range is saturated (it wrapped before %Qore 3.0); use
+       addSecondsTo(int64, int, ExceptionSink*), which raises \c INVALID-DATE
     */
-   DLLEXPORT void addSecondsTo(int64 secs, int us = 0);
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT void addSecondsTo(int64 secs, int us = 0);
+
+   //! adds the given number of seconds and microseconds to the date/time value
+   /** @param secs the number of seconds to add (a negative argument results in subtraction)
+       @param us the number of microseconds to add (a negative argument results in subtraction)
+       @param xsink for an \c INVALID-DATE exception if the result is out of range: a component of a relative date
+       that does not fit a signed 32-bit integer, or an absolute date whose year is not from -2147483647 to
+       2147483646
+
+       @return 0 for success, -1 if an exception was raised, in which case the value is saturated
+
+       @par Example
+       @code{.cpp}
+       if (deadline.addSecondsTo(timeout_secs, 0, xsink)) {
+           return QoreValue();
+       }
+       @endcode
+
+       @since %Qore 3.0
+    */
+   DLLEXPORT int addSecondsTo(int64 secs, int us, ExceptionSink* xsink);
 
    //! gets the number of seconds since January 1, 1970 for the current date offset in local time
    /**
@@ -332,6 +511,29 @@ public:
       @return the number of microseconds since January 1, 1970Z
    */
    DLLEXPORT int64 getEpochMicrosecondsUTC() const;
+
+   //! gets the number of microseconds since January 1, 1970Z for the current date, if it fits in an int64
+   /** For a relative date, the microseconds are those of getRelativeMicroseconds(): the whole duration.
+
+       @param micros the number of microseconds; set only if the function returns true
+       @return true if the number of microseconds fits in an int64, false if getEpochMicrosecondsUTC() would wrap
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT bool getEpochMicrosecondsUTCChecked(int64& micros) const;
+
+   //! gets the microseconds of getEpochMicrosecondsUTCChecked() and whether the date is absolute or relative
+   /** For a caller that stores the microseconds of many dates and must tell absolute dates from relative dates
+       (durations), with one call per date and no second output: the caller compares the result with the kind of
+       the dates before.
+
+       @param micros the number of microseconds; set only if the function does not return 0
+       @return 0 if the number of microseconds does not fit in an int64 (getEpochMicrosecondsUTC() would wrap), 1 if
+       it fits and the date is absolute, 2 if it fits and the date is relative
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT int getEpochMicrosecondsUTCCheckedKind(int64& micros) const;
 
    //! gets the number of milliseconds since January 1, 1970Z for the current date
    /**
@@ -498,10 +700,48 @@ public:
    DLLEXPORT bool hasValue() const;
 
    //! returns the negative time from the current time
-   DLLEXPORT DateTime* unaryMinus() const;
+   /** @deprecated a relative date with a component that is the smallest int gives a saturated result (it wrapped
+       before %Qore 3.0); use unaryMinus(ExceptionSink*) const, which raises \c INVALID-DATE
+   */
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT DateTime* unaryMinus() const;
+
+   //! returns the negative of the value
+   /** @param xsink for an \c INVALID-DATE exception if a component of a relative date is the smallest signed 32-bit
+       integer, whose negative does not fit
+
+       @return the negative of the value, owned by the caller; nullptr if an exception was raised
+
+       @par Example
+       @code{.cpp}
+       std::unique_ptr<DateTime> back(offset.unaryMinus(xsink));
+       @endcode
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT DateTime* unaryMinus(ExceptionSink* xsink) const;
 
    //! converts the current value to the negative of itself
-   DLLEXPORT void unaryMinusInPlace();
+   /** @deprecated a relative date with a component that is the smallest int gives a saturated result (it wrapped
+       before %Qore 3.0); use unaryMinusInPlace(ExceptionSink*), which raises \c INVALID-DATE
+   */
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT void unaryMinusInPlace();
+
+   //! converts the current value to the negative of itself
+   /** @param xsink for an \c INVALID-DATE exception if a component of a relative date is the smallest signed 32-bit
+       integer, whose negative does not fit
+
+       @return 0 for success, -1 if an exception was raised, in which case the value is saturated
+
+       @par Example
+       @code{.cpp}
+       if (offset.unaryMinusInPlace(xsink)) {
+           return QoreValue();
+       }
+       @endcode
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT int unaryMinusInPlace(ExceptionSink* xsink);
 
    //! returns the broken-down time in the given time zone (n_zone = 0 means UTC)
    DLLEXPORT void getInfo(const AbstractQoreZoneInfo* n_zone, qore_tm &info) const;
@@ -566,8 +806,28 @@ public:
        @note The normalized hour component must fit an int. Hours are never converted to calendar days.
        @par Example
        Track accumulated service uptime with makeRelativeFromSeconds(3600000000LL), yielding 1000000 hours.
+
+       @deprecated hours that do not fit an int are saturated (they wrapped before %Qore 3.0); use
+       makeRelativeFromSeconds(int64, int, ExceptionSink*), which raises \c INVALID-DATE
    */
-   DLLEXPORT static DateTime* makeRelativeFromSeconds(int64 n_second, int n_us = 0);
+   QORE_DATE_UNCHECKED_DEPRECATED DLLEXPORT static DateTime* makeRelativeFromSeconds(int64 n_second, int n_us = 0);
+
+   //! static "constructor" to create a relative time from seconds and microseconds
+   /** @param n_second elapsed seconds
+       @param n_us additional microseconds, normalized with the seconds
+       @param xsink for an \c INVALID-DATE exception if the hours of the value do not fit a signed 32-bit integer
+       (hours are never converted to calendar days)
+
+       @return a newly allocated relative date owned by the caller; nullptr if an exception was raised
+
+       @par Example
+       @code{.cpp}
+       std::unique_ptr<DateTime> uptime(DateTime::makeRelativeFromSeconds(uptime_secs, 0, xsink));
+       @endcode
+
+       @since %Qore 3.0
+   */
+   DLLEXPORT static DateTime* makeRelativeFromSeconds(int64 n_second, int n_us, ExceptionSink* xsink);
 };
 
 

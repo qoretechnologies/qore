@@ -15,7 +15,7 @@ the same:
   processor, LLVM version), the identity that qcc reports, the content of every libqore and qcc source and of the
   generated headers and compile flags of libqore and qcc (qcc's output depends on the whole parser and runtime, not
   only on the identity's sources), the probe of optional external modules, the AOT link configuration, the link
-  driver and linker versions, the operating system and its C library, and this script;
+  driver and linker versions, the operating system and its C library, this script and tools/qore_qami.py;
 - the qcc command line, its working directory and the environment variables that qcc or libqore read;
 - the content of the module's own sources (every file of a module directory);
 - every file that the module's dependency file lists (the sources of the modules it requires and the binary modules
@@ -54,7 +54,7 @@ Environment (read by "exec"; never part of a key):
   build, with the private key, whose file path it reads from stdin (only the jobs of protected refs have it, and the
   build never does: QORE_QMOD_CACHE_SIGNING_KEY in the environment of "exec" disables the cache)
 - QORE_QMOD_CACHE_OPENSSL=<path>: the OpenSSL 3 command for the signatures
-- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1|.d|.d.fingerprints: for the tests only, a restored file (the module, its
+- QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE=1|.d|.d.fingerprints|.d.optional: for the tests only, a restored file (the module, its
   depfile or its fingerprints) is damaged after the copy
 """
 
@@ -74,9 +74,26 @@ import subprocess
 import sys
 import tempfile
 import time
+import importlib.util
+
+
+def _load_qami():
+    """Loads tools/qore_qami.py, the parser of the AOT module metadata record that this tool shares with
+    tools/check-debian-artifacts.py (qore#6526), from the directory of this script, which is not in sys.path with
+    python3 -I"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "qore_qami.py")
+    spec = importlib.util.spec_from_file_location("qore_qami", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+qore_qami = _load_qami()
 
 #: the cache layout and key format; a new value makes every earlier entry unreachable
-SCHEMA = "qore-qmod-cache-1"
+# 2: the entries also store <qmod>.d.optional, the paths where the modules of failed %try-module directives could be
+# installed, which the build checks to rebuild the module when one of them is (qore#6145)
+SCHEMA = "qore-qmod-cache-2"
 
 #: environment variables that qcc and libqore read (QORE_*, QCC_*) are part of the key, except these, which neither
 #: reads (test/qmod-cache tests check that no libqore or qcc source names them) and whose values may differ between
@@ -113,18 +130,18 @@ ENV_INCLUDED_NAMES = frozenset((
 ))
 
 #: the files beside a qmod that qcc writes and the cache stores
-STORED_SUFFIXES = ("", ".d", ".d.fingerprints")
+STORED_SUFFIXES = ("", ".d", ".d.fingerprints", ".d.optional")
 #: the sidecar the cache writes beside each qmod it compiled or supplied
 SIDECAR_SUFFIX = ".qmod-cache.json"
 #: the most entries kept under one base key
 MAX_ENTRIES_PER_BASE = 8
 
-#: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo)
-QAMI_MAGIC = b"QAMI"
-#: the only record version read: 2 (name, dependencies, unavailable optional modules, the names of the compile-time
-#: closure, the module's own module path directives); a module with a record of another version is never cached
-QAMI_VERSION = 2
-QAMI_MAX_PAYLOAD = 16 * 1024 * 1024
+#: AOT module metadata record (include/qore/intern/QoreAOTBinary.h, QoreAOTModuleFileInfo), parsed by tools/qore_qami.py
+QAMI_MAGIC = qore_qami.MAGIC
+#: the only record version read: the version that qcc writes (see tools/qore_qami.py); a module with a record of
+#: another version is never cached
+QAMI_VERSION = qore_qami.CURRENT_VERSION
+QAMI_MAX_PAYLOAD = qore_qami.MAX_PAYLOAD
 
 FINGERPRINT_HEADER = "# qore AOT module source fingerprints 1"
 
@@ -302,81 +319,15 @@ def read_fingerprints(path):
     return rv
 
 
-class ModuleInfo:
-    """The metadata record of an AOT module
-
-    - dependencies: the hard dependencies of the module descriptor (not the modules required with %requires(reexport))
-    - optional: the %try-module requests that failed when the module was compiled
-    - compiled_with: the names of every module of the compile-time closure, direct and transitive, re-exported
-      ones too, but not the module itself
-    - prepend_paths, append_paths: the module's own %prepend-module-path and %append-module-path directories as
-      compiled in
-    """
-
-    def __init__(self, name, dependencies, optional, compiled_with, prepend_paths=(), append_paths=()):
-        self.name = name
-        self.dependencies = dependencies
-        self.optional = optional
-        self.compiled_with = compiled_with
-        self.prepend_paths = list(prepend_paths)
-        self.append_paths = list(append_paths)
-
-
 def parse_qami_record(data, offset):
-    """Parses a version 2 AOT module metadata record at @p offset; returns a ModuleInfo or None"""
-    if offset + 12 > len(data):
-        return None
-    magic, version, payload_size = struct.unpack_from("<4sII", data, offset)
-    if magic != QAMI_MAGIC or version != QAMI_VERSION or payload_size > QAMI_MAX_PAYLOAD:
-        return None
-    pos = offset + 12
-    end = pos + payload_size
-    if end > len(data):
-        return None
-
-    def read_str(p):
-        if p + 4 > end:
-            raise ValueError
-        (length,) = struct.unpack_from("<I", data, p)
-        p += 4
-        if not length or p + length > end:
-            raise ValueError
-        s = data[p:p + length]
-        if b"\0" in s:
-            raise ValueError
-        return s.decode("utf-8"), p + length
-
-    def read_list(p):
-        if p + 4 > end:
-            raise ValueError
-        (count,) = struct.unpack_from("<I", data, p)
-        p += 4
-        if count > 65536:
-            raise ValueError
-        items = []
-        for _ in range(count):
-            s, p = read_str(p)
-            items.append(s)
-        return items, p
-
-    try:
-        name, pos = read_str(pos)
-        deps, pos = read_list(pos)
-        optional, pos = read_list(pos)
-        compiled_with, pos = read_list(pos)
-        prepend, pos = read_list(pos)
-        append, pos = read_list(pos)
-        info = ModuleInfo(name, deps, optional, compiled_with, prepend, append)
-    except (ValueError, UnicodeDecodeError):
-        return None
-    if pos != end:
-        return None
-    return info
+    """Parses an AOT module metadata record of the current version at @p offset; returns a qore_qami.ModuleInfo (with
+    name, dependencies, optional, compiled_with, prepend_paths and append_paths) or None"""
+    return qore_qami.parse(data, offset, versions=(QAMI_VERSION,))
 
 
 def record_version_of(data, name):
-    """The version of a metadata record for module @p name in @p data that is not version 2, or None: the header and
-    the module name, which every version starts its payload with, are all that is read of it"""
+    """The version of a metadata record for module @p name in @p data that is not the current one, or None: the header
+    and the module name, which every version starts its payload with, are all that is read of it"""
     pos = data.find(QAMI_MAGIC)
     encoded = name.encode("utf-8")
     while pos >= 0:
@@ -390,7 +341,7 @@ def record_version_of(data, name):
 
 
 def read_module_info(path, name):
-    """Returns the ModuleInfo of the version 2 metadata record of the AOT module @p name
+    """Returns the qore_qami.ModuleInfo of the current version metadata record of the AOT module @p name
 
     The record is found by its magic and must parse completely and name the module; exactly one such record must be
     in the file (an ELF note or a Mach-O section holds it), or CacheError is raised.
@@ -675,6 +626,8 @@ def compute_context(source_dir, build_dir, qcc, inputs, env=None):
     items = {
         "schema": SCHEMA,
         "tool": sha256_file(os.path.abspath(__file__)),
+        # the parser of the module metadata record, which decides what the cache reads of a module
+        "tool-qami": sha256_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), "qore_qami.py")),
         "qcc": qcc_lines,
         "inputs": [[os.path.basename(p), file_record(p)] for p in inputs],
         "compiler-sources": compiler,
@@ -1174,7 +1127,7 @@ def entry_problem(entry, key):
         return "the entry has an invalid resolution list"
     files = entry.get("files")
     if not isinstance(files, dict) or not all(isinstance(files.get(k), str) and HEX64.match(files[k])
-                                              for k in ("qmod", ".d", ".d.fingerprints")):
+                                              for k in ("qmod", ".d", ".d.fingerprints", ".d.optional")):
         return "the entry has invalid file digests"
     if not isinstance(entry.get("mode"), int) or isinstance(entry.get("mode"), bool):
         return "the entry has no file mode"
@@ -1202,6 +1155,36 @@ def open_regular(name, dir_fd=None):
         os.close(fd)
         raise
     return fd
+
+
+def open_or_create(name, dir_fd, flags, mode=0o666):
+    """Opens the file @p name of the directory @p dir_fd, which is created if it does not exist: O_CREAT without
+    O_EXCL, for the lock files that several jobs open at once
+
+    macOS's openat() with O_CREAT and without O_EXCL fails with ENOENT in a process that loses the race to create a
+    file that does not exist yet, while the directory and, by then, the file exist (qore#6234; open() with a path and
+    Linux's openat() do not): two prunes started at once on a cache without prune.lock, or two jobs storing or reading
+    the same entry, fail.  O_CREAT | O_EXCL is reliable there: one job creates the file, every other one gets EEXIST and
+    opens the file that exists.  That two-step open is what the kernel does for O_CREAT: when the file is removed
+    between them (an entry's lock file is removed with the entry), it is created again; each further pass of the loop
+    means that another job created and removed the file meanwhile, so it never waits for time to pass.
+
+    @param flags the flags of the open without O_CREAT and O_EXCL; O_NOFOLLOW is always added, so a link in the
+    place of the file raises OSError
+    """
+    # O_EXCL never follows a link, so a dangling one gives EEXIST; the open after it must not follow it either, or it
+    # gives ENOENT and the loop never ends (and a link is never what a lock file of the cache may be, see Cache)
+    flags |= os.O_NOFOLLOW
+    while True:
+        try:
+            return os.open(name, flags | os.O_CREAT | os.O_EXCL, mode, dir_fd=dir_fd)
+        except FileExistsError:
+            pass
+        try:
+            return os.open(name, flags, dir_fd=dir_fd)
+        except FileNotFoundError:
+            # removed after it was found: created again
+            continue
 
 
 def read_fd(fd, limit=None):
@@ -1501,7 +1484,7 @@ class Cache:
                 self.make_dirs("objects")
                 dfd = self.open_dir("objects")
                 try:
-                    return os.open(key + ".lock", os.O_RDWR | os.O_CREAT | flags, 0o666, dir_fd=dfd)
+                    return open_or_create(key + ".lock", dfd, os.O_RDWR | flags)
                 finally:
                     os.close(dfd)
             except (OSError, CacheError):
@@ -1707,7 +1690,8 @@ class Module:
         self.base = base_key(self.context["digest"], self.argv, self.cwd, env, self.source_root, self.extra)
 
     def files(self):
-        return {"": self.out, ".d": self.out + ".d", ".d.fingerprints": self.out + ".d.fingerprints"}
+        return {"": self.out, ".d": self.out + ".d", ".d.fingerprints": self.out + ".d.fingerprints",
+                ".d.optional": self.out + ".d.optional"}
 
     def sidecar(self, origin, key, entry=None, stored=False):
         rec = {"schema": SCHEMA, "name": self.name, "origin": origin, "base_key": self.base, "key": key,
@@ -1764,8 +1748,9 @@ class Module:
                 except Exception as e:
                     reason = damaged = str(e) or e.__class__.__name__
                     continue
-                # the dependency file and fingerprints first, the module last, each renamed into place
-                for suffix in (".d", ".d.fingerprints", ""):
+                # the dependency file, fingerprints and optional module paths first, the module last, each renamed into
+                # place
+                for suffix in (".d", ".d.fingerprints", ".d.optional", ""):
                     try:
                         os.replace(restored[suffix], self.out + suffix)
                     except BaseException:
@@ -1830,7 +1815,7 @@ class Module:
             os.chmod(tmps[""], int(entry["mode"]) & 0o777)
             if not contains_identity(tmps[""], self.identity):
                 raise CacheError("stored module lacks the AOT runtime identity %s" % self.identity)
-            # only modules with a version 2 metadata record are cached (see read_module_info())
+            # only modules with a metadata record of the current version are cached (see read_module_info())
             try:
                 read_module_info(tmps[""], self.name)
             except CacheError as e:
@@ -1904,6 +1889,7 @@ class Module:
                 "qmod": sha256_file(self.out),
                 ".d": sha256_file(self.out + ".d"),
                 ".d.fingerprints": sha256_file(self.out + ".d.fingerprints"),
+                ".d.optional": sha256_file(self.out + ".d.optional"),
             },
             "created": time.time(),
         }
@@ -2119,7 +2105,7 @@ def cmd_verify(args):
             if sha256_file(qmod) != entry["files"]["qmod"]:
                 raise CacheError("it is not the module the cache supplied")
             # the loader decides from the depfile and the fingerprints whether the module is current
-            for suffix in (".d", ".d.fingerprints"):
+            for suffix in (".d", ".d.fingerprints", ".d.optional"):
                 if sha256_file(qmod + suffix) != entry["files"][suffix]:
                     raise CacheError("its %s is not the one the cache supplied" % suffix)
             target, deps = read_depfile(qmod + ".d")
@@ -2341,7 +2327,7 @@ def cmd_prune(args):
     cache.make_dirs()
     dfd = cache.open_dir()
     try:
-        lock_fd = os.open("prune.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | O_CLOEXEC, 0o666, dir_fd=dfd)
+        lock_fd = open_or_create("prune.lock", dfd, os.O_RDWR | os.O_NOFOLLOW | O_CLOEXEC)
     finally:
         os.close(dfd)
     try:

@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class LValueNothingBaseTest
+
+#! NOTHING is not the base of an lvalue (issue #6480): an element, member or slice of NOTHING as an lvalue is a parse
+#! error in every execution mode; NOTHING by itself is still an lvalue
+class LValueNothingBaseTest inherits QUnit::Test {
+    public {
+        const Message = "the value NOTHING cannot be the base of an lvalue (an element, member, slice or cast of it)";
+    }
+
+    constructor() : QUnit::Test("lvalue NOTHING base", "1.0") {
+        addTestCase("paths from NOTHING", \paths());
+        addTestCase("NOTHING itself", \nothingItself());
+        set_return_value(main());
+    }
+
+    private paths() {
+        list<string> cases = (
+            "remove NOTHING.a",
+            "delete NOTHING[g()]",
+            "remove NOTHING{\"a\", \"b\"}",
+            "trim NOTHING.a",
+            "trim NOTHING[g()]",
+            "NOTHING[g()] =~ s/a/b/",
+            "NOTHING.a =~ s/a/b/",
+            "remove NOTHING[1]",
+            "delete NOTHING.a.b",
+            "trim cast<string>(NOTHING)",
+            "\\NOTHING.a",
+        );
+        foreach string expr in (cases) {
+            *string err = parseError("auto x = " + expr + ";");
+            assertNeq(NOTHING, err, expr);
+            assertEq(Message, err, expr);
+        }
+        # forms that a type check refuses before, as without this check
+        assertRegex("range square brackets operator .* is type 'nothing'", parseError("auto x = remove NOTHING[1..2];"));
+        assertRegex("cannot convert lvalue defined as type 'nothing' to a hash", parseError("auto x = chomp NOTHING.a.b;"));
+        assertRegex("cannot convert lvalue defined as type 'nothing' to a hash",
+            parseError("auto x = NOTHING.a =~ tr/a/b/;"));
+        # a constant that is NOTHING
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("const C = NOTHING; nothing sub get() { auto x = remove C.a; }\n", "constant", 0);
+            assertTrue(False, "a member of a constant that is NOTHING is refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(Message, ex.desc);
+        }
+        # a path from a variable is still an lvalue
+        assertNothing(parseError("hash<auto> h; auto x = remove h.a;"));
+        assertNothing(parseError("*string s; auto x = trim cast<*string>(s);"));
+    }
+
+    private nothingItself() {
+        # a cast of NOTHING is NOTHING
+        foreach string expr in ("trim NOTHING", "remove NOTHING", "push NOTHING, 1", "NOTHING = g()",
+                "trim cast<*string>(NOTHING)") {
+            assertNothing(parseError("auto x = " + expr + ";"), expr);
+        }
+        assertNothing(parseError("auto a; auto b; (a, NOTHING, b) = g();"));
+        # a NOTHING element accepts a value of any type
+        assertNothing(parseError("string a; string b; (a, NOTHING, b) = (\"x\", 2, \"z\");"));
+    }
+
+    #! returns the description of the parse error of the code as the body of a function, or NOTHING
+    private *string parseError(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("auto sub g() { return 1; } nothing sub get() { " + body + " }\n", "base", 0);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}

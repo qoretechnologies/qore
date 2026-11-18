@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/intern/qore_program_private.h"
@@ -132,14 +133,22 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
 #ifdef DEBUG
     else assert(!parseTypeInfo);
 #endif
+    refreshInitializationFilter();
 
     if (!exp) {
         return err;
     }
 
+    // the initializer is code of the hashdecl, whatever code makes the hashdecl parse it (qore#6268)
+    DeclarationParseScopeHelper declaration_scope;
     QoreParseContext parse_context;
-    if (parse_init_value(exp, parse_context) && !err) {
-        err = -1;
+    {
+        // the expression can be parsed on demand while an initialization expression is parsed; it runs when the hash
+        // is created (qore#526)
+        QoreParseInitializerTargetBarrier init_barrier;
+        if (parse_init_value(exp, parse_context) && !err) {
+            err = -1;
+        }
     }
     const QoreTypeInfo* argTypeInfo = parse_context.typeInfo;
     if (parse_context.lvids) {
@@ -172,7 +181,39 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
 HashDeclMemberInfo* HashDeclMemberInfo::instantiate(const QoreTypeInfo* receiver_type_info) const {
     HashDeclMemberInfo* rv = new HashDeclMemberInfo(*this);
     rv->typeInfo = qore_substitute_type_params_if_needed(typeInfo, receiver_type_info);
+    rv->refreshInitializationFilter();
+    // the default value is evaluated with the type of the instantiation as the receiver, which substitutes the type
+    // parameters of the hashdecl in its types (qore#6240)
+    if (exp) {
+        rv->default_receiver_type_info = receiver_type_info;
+    }
     return rv;
+}
+
+namespace {
+//! Sets the receiver for the evaluation of the default value of a hashdecl member
+/** The default value of a member of an instantiation of a generic hashdecl is evaluated with the type of the
+    instantiation as the receiver, so that the type parameters of the hashdecl in its types are its type arguments
+    (qore#6240); for any other member, nothing is changed
+*/
+class HashDeclDefaultReceiverHelper {
+public:
+    HashDeclDefaultReceiverHelper(const HashDeclMemberInfo& mi) : set(mi.getDefaultReceiverTypeInfo()) {
+        if (set) {
+            old = runtime_set_receiver_type_info(mi.getDefaultReceiverTypeInfo());
+        }
+    }
+
+    ~HashDeclDefaultReceiverHelper() {
+        if (set) {
+            runtime_set_receiver_type_info(old);
+        }
+    }
+
+private:
+    const QoreTypeInfo* old = nullptr;
+    bool set;
+};
 }
 
 int typed_hash_decl_private::resolveParseParent() {
@@ -225,8 +266,14 @@ int typed_hash_decl_private::parseInit() {
         if (resolveParseParent()) {
             err = -1;
         }
+        // the parent is initialized first, which recurses to the most distant parent that is not yet initialized: a
+        // long chain of inheritance stops while enough stack remains, and the hashdecl is initialized without its
+        // parent, as for a parent that cannot be resolved (issue #6047)
+        if (parentHashDecl && parse_check_stack(loc)) {
+            releaseParentHashDecl();
+            err = -1;
+        }
         if (parentHashDecl) {
-            // Initialize parent first
             const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->parseInit();
 
             // Check for circular inheritance
@@ -234,7 +281,7 @@ int typed_hash_decl_private::parseInit() {
             while (current) {
                 if (current == this || current->orig == orig) {
                     parse_error(*loc, "circular hashdecl inheritance detected in hashdecl '%s'", name.c_str());
-                    parentHashDecl = nullptr;
+                    releaseParentHashDecl();
                     err = -1;
                     break;
                 }
@@ -258,6 +305,10 @@ int typed_hash_decl_private::parseInit() {
 
     {
         HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
+        // the members are parsed in the namespace of the hashdecl and in no class context, as the members of a
+        // namespace are, also when the hashdecl is first used in a class's code (a closure in a member initializer
+        // keeps the class that it is parsed in; issue #5961)
+        QoreParseClassHelper qpch(nullptr, ns ? ns : qore_ns_private::get(*getRootNS()));
 
         // Initialize own members
         for (auto& i : members.member_list) {
@@ -308,6 +359,8 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         return nullptr;
     }
 
+    // the type arguments are live, so their identities can be read; they are compared with the cached keys as they
+    // are, without making a key; see parameterized_hashdecl_key_t and parameterized_hashdecl_key_less_t
     {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
         auto i = parameterized_hashdecl_cache.lower_bound(args);
@@ -323,12 +376,20 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     priv->name = make_parameterized_hashdecl_name(name, args, false);
     priv->path = make_parameterized_hashdecl_name(path, args, true);
     priv->from_module = from_module;
+    // the instantiated members share the base's initializers, which are the code of the base's Program
+    priv->src_pgm = src_pgm;
+    priv->src_pgm_id = src_pgm_id;
+    priv->src_pgm_module_lifetime.store(src_pgm_module_lifetime.load(std::memory_order_acquire),
+        std::memory_order_relaxed);
+    priv->copied = copied;
     priv->orig = priv;
     priv->pub = pub;
     priv->sys = sys;
     priv->reexport = reexport;
     priv->parse_init_done = true;
     priv->parameterized_base = thd;
+    // counted while it lives, for the debug checks of the cache eviction (issue #5765)
+    qore_live_parameterized_hashdecls.fetch_add(1, std::memory_order_relaxed);
     priv->type_args = args;
     priv->ns = ns;
 
@@ -339,18 +400,65 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
         priv->members.addNoCheck(strdup(mi.first), mi.second ? mi.second->instantiate(receiver_type_info) : nullptr);
     }
 
+    TypedHashDecl* existing = nullptr;
+    ParameterizedHashDeclCache* registration;
     {
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        if (!parameterized_hashdecl_registration) {
+            parameterized_hashdecl_registration.reset(new ParameterizedHashDeclCache(*this));
+        }
+        registration = parameterized_hashdecl_registration.get();
+    }
+    // issue #5765: the declaration is added with the registry locked, so it is removed from the cache when one of its
+    // type arguments is destroyed
+    qore_generic_cache_insert(registration, args, [&] () {
         std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
         auto i = parameterized_hashdecl_cache.lower_bound(args);
         if (i != parameterized_hashdecl_cache.end()
                 && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
-            typed_hash_decl_private::get(*priv->thd)->deref();
-            return i->second;
+            existing = i->second;
+        } else {
+            // only a new declaration makes the key that the cache owns
+            parameterized_hashdecl_key_t key;
+            key.reserve(args.size());
+            for (const QoreTypeInfo* arg : args) {
+                key.emplace_back(arg, qore_get_type_identity_serial(arg));
+            }
+            parameterized_hashdecl_cache.insert(i, decltype(parameterized_hashdecl_cache)::value_type(std::move(key),
+                priv->thd));
         }
-        parameterized_hashdecl_cache.insert(i,
-            std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*>::value_type(args, priv->thd));
+    });
+    if (existing) {
+        // another thread made the declaration first; the unpublished one is released outside the lock, as its
+        // destruction purges the derived types of its own type
+        typed_hash_decl_private::get(*priv->thd)->deref();
+        return existing;
     }
     return priv->thd;
+}
+
+void typed_hash_decl_private::ParameterizedHashDeclCache::evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+        qore_generic_cache_release_list_t& release) {
+    std::lock_guard<std::mutex> lock(hd.parameterized_hashdecl_cache_lock);
+    for (auto i = hd.parameterized_hashdecl_cache.begin(), e = hd.parameterized_hashdecl_cache.end(); i != e;) {
+        bool is_dead = false;
+        for (auto ti = i->first.begin(), te = i->first.end(); !is_dead && ti != te; ++ti) {
+            is_dead = dead.count(ti->first);
+        }
+        if (is_dead) {
+            // the cache's reference is released after the locks are released: hash values of the declaration hold
+            // their own references, and the last release destroys it, which purges its types
+            if (!release.add(i->second, [] (void* p) {
+                    typed_hash_decl_private::get(*static_cast<TypedHashDecl*>(p))->deref();
+                })) {
+                ++i;
+                continue;
+            }
+            i = hd.parameterized_hashdecl_cache.erase(i);
+        } else {
+            ++i;
+        }
+    }
 }
 
 // NOTE: the new namespace will be set manually after this call
@@ -360,9 +468,17 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         path(old.path),
         thd(thd),
         from_module(old.from_module),
+        // the member initializers are copied with the members: they are still the code of the original's Program
+        src_pgm(old.src_pgm),
+        src_pgm_id(old.src_pgm_id),
+        // a Program's own hashdecl is copied while the Program exists, so whether it has module lifetime can be
+        // read from it
+        src_pgm_module_lifetime(old.src_pgm_module_lifetime.load(std::memory_order_acquire)
+            || (!old.copied && old.src_pgm && qore_program_has_module_lifetime(old.src_pgm))),
+        copied(true),
         orig(old.orig),
-        typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str())),
-        orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str())),
+        typeInfo(new QoreHashDeclTypeInfo(thd, name.c_str(), path.c_str(), instance_serial)),
+        orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, name.c_str(), path.c_str(), instance_serial)),
         parentHashDecl(old.parentHashDecl),
         // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
         // Use getPath() to get the full namespace path for cross-namespace inheritance
@@ -377,10 +493,21 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         // chains: A → B (via reexport) → C will reach C.
         reexport(old.reexport),
         parse_init_done(old.parse_init_done) {
+    // the copy uses the types of the source's members (issue #5790)
+    old.ref();
+    copy_source = const_cast<typed_hash_decl_private*>(&old);
     type_params = old.type_params;
     parameterized_base = old.parameterized_base;
+    // a copy of a concrete declaration is counted as the destructor uncounts it (issue #5765)
+    if (parameterized_base) {
+        qore_live_parameterized_hashdecls.fetch_add(1, std::memory_order_relaxed);
+    }
     type_args = old.type_args;
     parse_parent = old.parse_parent ? old.parse_parent->copy() : nullptr;
+    // the copy keeps the parent too (see releaseParentHashDecl())
+    if (parentHashDecl) {
+        get(*parentHashDecl)->ref();
+    }
     // copy member list
     for (auto& i : old.members.member_list) {
         HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;
@@ -669,6 +796,26 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bo
     return newHash(init, runtime_check, xsink);
 }
 
+QoreHashNode* typed_hash_decl_private::newHash(const QoreParseListNode* args, bool runtime_check,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+    assert(!args || args->empty() || args->size() == 1);
+    ValueEvalOptimizedRefHolder a(args && !args->empty() ? args->get(0) : QoreValue(), xsink);
+    if (*xsink)
+        return nullptr;
+
+    const QoreHashNode* init = nullptr;
+    if (a->getType() != NT_NOTHING) {
+        if (runtime_check && a->getType() != NT_HASH) {
+            xsink->raiseException("HASHDECL-INIT-ERROR", "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead", name.c_str(), a->getTypeName());
+            return nullptr;
+        }
+
+        init = a->get<const QoreHashNode>();
+    }
+
+    return newHash(init, runtime_check, xsink, policy);
+}
+
 QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
         QoreHashNode* rv) const {
     if (runtime_check) {
@@ -695,6 +842,17 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool ru
 
 QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const QoreHashNode* overrides,
         bool runtime_check, ExceptionSink* xsink) const {
+    return newHashWithOverridesImpl<false>(init, overrides, runtime_check, xsink, {});
+}
+
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const QoreHashNode* overrides,
+        bool runtime_check, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+    return newHashWithOverridesImpl<true>(init, overrides, runtime_check, xsink, policy);
+}
+
+template <bool Lexical>
+QoreHashNode* typed_hash_decl_private::newHashWithOverridesImpl(const QoreHashNode* init,
+        const QoreHashNode* overrides, bool runtime_check, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
     if (runtime_check) {
         for (const QoreHashNode* source : {init, overrides}) {
             ConstHashIterator i(source);
@@ -714,7 +872,21 @@ QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, const Q
     }
 
     ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
-    initHash(*h, init, overrides, xsink);
+    if constexpr (Lexical) {
+        QoreDeclaringProgramHelper src_pgm_helper;
+        if (needsInitEntry() && enterSourcePrograms(src_pgm_helper, init, overrides, xsink)) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+            return nullptr;
+        }
+        if (initHashIntern(*h, init, overrides, xsink, policy)) {
+            if (*xsink) {
+                xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+            }
+            return nullptr;
+        }
+    } else {
+        initHash(*h, init, overrides, xsink);
+    }
     return *xsink ? nullptr : h.release();
 }
 
@@ -790,7 +962,95 @@ int typed_hash_decl_private::getDirectMemberOffset(const char* key) const {
     return -1;
 }
 
-int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
+QoreHashNode* typed_hash_decl_private::newHashFromType(const QoreHashNode* init, ExceptionSink* xsink) const {
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (enterSourceProgramsForApi(src_pgm_helper, init, nullptr, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return nullptr;
+    }
+    return newHash(init, true, xsink);
+}
+
+QoreHashNode* typed_hash_decl_private::newHashFromType(const QoreHashNode* init, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
+    // Like the canonical API entry, keep every declaring Program before evaluating any default initializer.
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (enterSourceProgramsForApi(src_pgm_helper, init, nullptr, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return nullptr;
+    }
+    return newHash(init, true, xsink, policy);
+}
+
+QoreHashNode* typed_hash_decl_private::newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
+        LexicalSemanticPolicy policy) const {
+    ConstHashIterator i(init);
+    size_t count = 0;
+    while (runtime_check && i.next()) {
+        if (++count % 100 == 0 && qore_check_cancel(xsink, "typed hash initializer key validation")) {
+            return nullptr;
+        }
+        if (!findMember(i.getKey())) {
+            if (xsink) {
+                xsink->raiseException("HASHDECL-INIT-ERROR",
+                    "hashdecl '%s' hash initializer value contains unknown key '%s'", name.c_str(), i.getKey());
+            }
+            return nullptr;
+        }
+    }
+    ReferenceHolder<QoreHashNode> h(qore_hash_private::newHashDecl(thd), xsink);
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (needsInitEntry() && enterSourcePrograms(src_pgm_helper, init, nullptr, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return nullptr;
+    }
+    int rc = initHashIntern(*h, init, nullptr, xsink, policy);
+    if (rc && xsink && *xsink) {
+        xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+    }
+    return rc || (xsink && *xsink) ? nullptr : h.release();
+}
+
+int typed_hash_decl_private::enterSourcePrograms(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink) const {
+    // the code of the current Program can run: its hashdecls need nothing
+    QoreProgram* current_pgm = ::getProgram();
+    // the members of a parent hashdecl are initialized with the code of the parent's Program
+    for (const typed_hash_decl_private* hd = this; hd;
+            hd = hd->parentHashDecl ? get(*hd->parentHashDecl) : nullptr) {
+        if (!hd->src_pgm || !hd->hasCodeInit()
+                || (hd->src_pgm == current_pgm && current_pgm->getProgramId() == hd->src_pgm_id)) {
+            continue;
+        }
+        if (hd->enterSourceProgramForInitSlow(h, init, overrides, xsink)) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int typed_hash_decl_private::initHashChecked(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, bool in_place, bool values_prechecked, ExceptionSink* xsink) const {
+    // keeps the Programs that declared the hashdecl and its parents while the member initializers are evaluated
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (needsInitEntry() && enterSourcePrograms(src_pgm_helper, in_place ? h : init, overrides, xsink)) {
+        if (xsink && *xsink) {
+            xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return -1;
+    }
+    return in_place
+        ? initHashInPlaceDirect(h, xsink, values_prechecked)
+        : initHashDirect(h, init, overrides, xsink);
+}
+
+int typed_hash_decl_private::initHashDirect(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
     int rc = initHashIntern(h, init, xsink);
     // xsink may be nullptr when being executed in a try block
     // only annotate if initHashIntern actually failed; xsink may have pre-existing exceptions
@@ -800,8 +1060,8 @@ int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init,
     return rc;
 }
 
-int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
-        ExceptionSink* xsink) const {
+int typed_hash_decl_private::initHashDirect(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink) const {
     int rc = initHashIntern(h, init, overrides, xsink);
     if (rc && xsink && *xsink) {
         xsink->appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
@@ -809,7 +1069,7 @@ int typed_hash_decl_private::initHash(QoreHashNode* h, const QoreHashNode* init,
     return rc;
 }
 
-int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
+int typed_hash_decl_private::initHashInPlaceDirect(QoreHashNode* h, ExceptionSink* xsink,
         bool values_prechecked) const {
     int rc = initHashInternInPlace(h, xsink, values_prechecked);
     if (rc && xsink && *xsink) {
@@ -818,12 +1078,60 @@ int typed_hash_decl_private::initHashInPlace(QoreHashNode* h, ExceptionSink* xsi
     return rc;
 }
 
+int typed_hash_decl_private::enterSourceProgramForInitSlow(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink) const {
+    assert(src_pgm);
+    // a member whose initializer is code and that the hashes given do not set is initialized with that code
+    bool needed = false;
+    size_t member_count = 0;
+    for (auto& i : members.member_list) {
+        if (++member_count % 100 == 0 && qore_check_cancel(xsink, "typed hash initialization")) {
+            return -1;
+        }
+        if (!i.second || !i.second->initIsCode()) {
+            continue;
+        }
+        if ((overrides && qore_hash_private::get(*overrides)->existsKey(i.first))
+                || (init && qore_hash_private::get(*init)->existsKey(i.first))) {
+            continue;
+        }
+        needed = true;
+        break;
+    }
+    if (!needed) {
+        return 0;
+    }
+    if (enterSourceProgram(h, xsink)) {
+        // the caller describes an exception raised in its sink (see initHash())
+        if (!xsink) {
+            // the hash is created with no sink when Qore fills it itself (see initHashIntern()): the exception is
+            // reported as unhandled when the local sink is destroyed
+            ExceptionSink local_xsink;
+            QoreDeclaringProgramHelper::raiseDeleted(&local_xsink);
+            local_xsink.appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
+        }
+        return -1;
+    }
+    return 0;
+}
+
 int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
     return initHashIntern(h, init, nullptr, xsink);
 }
 
 int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init,
         const QoreHashNode* overrides, ExceptionSink* xsink) const {
+    return initHashInternImpl<false>(h, init, overrides, xsink, {});
+}
+
+int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+    return initHashInternImpl<true>(h, init, overrides, xsink, policy);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE int typed_hash_decl_private::initHashInternImpl(QoreHashNode* h, const QoreHashNode* init,
+        const QoreHashNode* overrides, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
 #ifdef QORE_MANAGE_STACK
     if (xsink && check_stack(xsink)) {
         return -1;
@@ -832,7 +1140,13 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
 
     // Initialize parent members first
     if (parentHashDecl) {
-        if (get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink)) {
+        int rc;
+        if constexpr (Lexical) {
+            rc = get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink, policy);
+        } else {
+            rc = get(*parentHashDecl)->initHashIntern(h, init, overrides, xsink);
+        }
+        if (rc) {
             return -1;
         }
     }
@@ -856,7 +1170,11 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                 // the outcome must reflect only this type check; see ScopedTypeCheckSink.  Without this a caller
                 // reusing a long-lived sink gets an unpopulated hashdecl with no failure of its own
                 ScopedTypeCheckSink ts(xsink);
-                QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts);
+                if constexpr (Lexical) {
+                    QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts, policy);
+                } else {
+                    QoreTypeInfo::acceptInputKey(i.second->getTypeInfo(), i.first, *val, *ts);
+                }
                 if (ts.raised()) {
                     return -1;
                 }
@@ -899,7 +1217,11 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
                     local_xsink.appendLastDescription(" (while initializing hashdecl '%s')", name.c_str());
                 }
             };
-            ValueEvalOptimizedRefHolder val(i.second->exp, sink);
+            // the initializer is evaluated as a statement of its own: a value that it reads or creates is not a
+            // temporary of the statement that creates the hash (see design/temporary-lifetime.md); in an
+            // instantiation of a generic hashdecl, with its type as the receiver (qore#6240)
+            HashDeclDefaultReceiverHelper receiver_helper(*i.second);
+            QoreScopedEvalHolder val(i.second->exp, true, sink);
             if (*sink) {
                 describe_local();
                 return -1;
@@ -914,7 +1236,7 @@ int typed_hash_decl_private::initHashIntern(QoreHashNode* h, const QoreHashNode*
             // see the acceptInputKey() call above
             {
                 ScopedTypeCheckSink ts(sink);
-                QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *val, *ts);
+                QoreTypeInfo::acceptInputMember(i.second->getInitializerTypeInfo(), i.first, *val, *ts);
                 if (ts.raised()) {
                     describe_local();
                     return -1;
@@ -973,7 +1295,7 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             if (*xsink) {
                 return -1;
             }
-            QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
+            [[maybe_unused]] QoreValue old = hp->swapKeyValue(i.first, val.release(), nullptr);
             assert(old.isNothing());
             move_member_to_back(i.first);
             continue;
@@ -983,17 +1305,20 @@ int typed_hash_decl_private::initHashInternInPlace(QoreHashNode* h, ExceptionSin
             continue;
         }
 
-        ValueEvalOptimizedRefHolder default_val(i.second->exp, xsink);
+        // the initializer is evaluated as a statement of its own (see design/temporary-lifetime.md); in an
+        // instantiation of a generic hashdecl, with its type as the receiver (qore#6240)
+        HashDeclDefaultReceiverHelper receiver_helper(*i.second);
+        QoreScopedEvalHolder default_val(i.second->exp, true, xsink);
         if (*xsink) {
             return -1;
         }
         default_val.ensureReferencedValue();
-        QoreTypeInfo::acceptInputMember(i.second->getTypeInfo(), i.first, *default_val, xsink);
+        QoreTypeInfo::acceptInputMember(i.second->getInitializerTypeInfo(), i.first, *default_val, xsink);
         if (*xsink) {
             return -1;
         }
 
-        QoreValue old = hp->swapKeyValue(i.first,
+        [[maybe_unused]] QoreValue old = hp->swapKeyValue(i.first,
             default_val.takeReferencedValue(), nullptr);
         assert(old.isNothing());
         move_member_to_back(i.first);
@@ -1012,13 +1337,23 @@ TypedHashDecl::TypedHashDecl(typed_hash_decl_private* p) : priv(p) {
     assert(!priv->typeInfo);
     assert(!priv->orNothingTypeInfo);
 
-    priv->typeInfo = new QoreHashDeclTypeInfo(this, priv->getName(), priv->getPath());
-    priv->orNothingTypeInfo = new QoreHashDeclOrNothingTypeInfo(this, priv->getName(), priv->getPath());
+    priv->typeInfo = new QoreHashDeclTypeInfo(this, priv->getName(), priv->getPath(), priv->instance_serial);
+    priv->orNothingTypeInfo = new QoreHashDeclOrNothingTypeInfo(this, priv->getName(), priv->getPath(),
+        priv->instance_serial);
 }
 
 TypedHashDecl::TypedHashDecl(const TypedHashDecl& old) : priv(new typed_hash_decl_private(*old.priv, this)) {
     assert(priv->typeInfo);
     assert(priv->orNothingTypeInfo);
+}
+
+__attribute__((noinline)) void typed_hash_decl_private::derefLast() {
+    assert(thd->priv == this);
+    // a hashdecl whose types are still named is retired, not freed (issue #5790)
+    if (qore_type_owner_released(&type_owner)) {
+        return;
+    }
+    delete thd;
 }
 
 TypedHashDecl::~TypedHashDecl() {
@@ -1027,6 +1362,14 @@ TypedHashDecl::~TypedHashDecl() {
 
 void TypedHashDecl::addMember(const char* name, const QoreTypeInfo* memberTypeInfo, QoreValue init_val) {
     priv->addMember(name, memberTypeInfo, init_val);
+}
+
+void TypedHashDecl::ref() const {
+    priv->ref();
+}
+
+void TypedHashDecl::deref() const {
+    const_cast<typed_hash_decl_private*>(priv)->deref();
 }
 
 const QoreTypeInfo* TypedHashDecl::getTypeInfo(bool or_nothing) const {
@@ -1093,12 +1436,20 @@ const QoreNamespace* TypedHashDecl::getNamespace() const {
 }
 
 QoreHashNode* TypedHashDecl::doRuntimeCast(const QoreHashNode* h, ExceptionSink* xsink) const {
-    return priv->newHash(h, true, xsink);
+    auto policy = qore_get_native_semantic_policy();
+    return policy.needsFilter() ? priv->newHashFromType(h, xsink, policy) : priv->newHashFromType(h, xsink);
 }
 
 QoreHashNode* TypedHashDecl::doRuntimeCastWithOverrides(const QoreHashNode* h, const QoreHashNode* overrides,
         ExceptionSink* xsink) const {
-    return priv->newHash(h, overrides, true, xsink);
+    // see doRuntimeCast()
+    QoreDeclaringProgramHelper src_pgm_helper;
+    if (priv->enterSourceProgramsForApi(src_pgm_helper, h, overrides, xsink)) {
+        return nullptr;
+    }
+    auto policy = qore_get_native_semantic_policy();
+    return policy.needsFilter() ? priv->newHash(h, overrides, true, xsink, policy)
+        : priv->newHash(h, overrides, true, xsink);
 }
 
 const TypedHashDecl* TypedHashDecl::getParentHashDecl() const {

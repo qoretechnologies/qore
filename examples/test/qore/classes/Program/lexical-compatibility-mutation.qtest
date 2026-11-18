@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalCompatibilityMutationTest
+
+#! Compatibility semantics belong to parsed code, including when the saved policy is zero.
+class LexicalCompatibilityMutationTest inherits QUnit::Test {
+    public {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+    }
+
+    constructor() : QUnit::Test("LexicalCompatibilityMutationTest", "1.0", \ARGV) {
+        addTestCase("range builtin: set option", \case0(), (False,));
+        addTestCase("range builtin: clear option", \case0(), (True,));
+        addTestCase("range reference: set option", \case1(), (False,));
+        addTestCase("range reference: clear option", \case1(), (True,));
+        addTestCase("range dynamic: set option", \case2(), (False,));
+        addTestCase("range dynamic: clear option", \case2(), (True,));
+        addTestCase("range iterator: set option", \case3(), (False,));
+        addTestCase("range iterator: clear option", \case3(), (True,));
+        addTestCase("range operator: set option", \case4(), (False,));
+        addTestCase("range operator: clear option", \case4(), (True,));
+        addTestCase("list range: set option", \case5(), (False,));
+        addTestCase("list range: clear option", \case5(), (True,));
+        addTestCase("remove range: set option", \case6(), (False,));
+        addTestCase("remove range: clear option", \case6(), (True,));
+        addTestCase("sprintf: set option", \case7(), (False,));
+        addTestCase("sprintf: clear option", \case7(), (True,));
+        addTestCase("bool operation: set option", \case8(), (False,));
+        addTestCase("bool operation: clear option", \case8(), (True,));
+        addTestCase("bool parameter: set option", \case9(), (False,));
+        addTestCase("bool parameter: clear option", \case9(), (True,));
+        addTestCase("soft parameter: set option", \case10(), (False,));
+        addTestCase("soft parameter: clear option", \case10(), (True,));
+        addTestCase("soft dynamic parameter: set option", \case11(), (False,));
+        addTestCase("soft dynamic parameter: clear option", \case11(), (True,));
+        addTestCase("soft assignment: set option", \case12(), (False,));
+        addTestCase("soft assignment: clear option", \case12(), (True,));
+        addTestCase("namespace lookup: set option", \case13(), (False,));
+        addTestCase("namespace lookup: clear option", \case13(), (True,));
+        addTestCase("switch continue: set option", \case14(), (False,));
+        addTestCase("switch continue: clear option", \case14(), (True,));
+        set_return_value(main());
+    }
+
+    private auto result(Program p) {
+        try {
+            return p.callFunction("sample");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    private check(string name, string option, string source, auto correct_result, auto legacy_result,
+            bool legacy) {
+        ParseOptions compat(option);
+        Program p(Base);
+        assertFalse(p.getFullParseOptions().hasAll(PO_MODERN));
+        assertFalse(p.getFullParseOptions().hasAny(compat));
+        if (legacy) p.setParseOptions(compat);
+        p.parse(source, name);
+        auto expected = legacy ? legacy_result : correct_result;
+        assertEq(expected, result(p), "original lexical semantics");
+        if (legacy) {
+            p.disableParseOptions(compat);
+        } else {
+            p.setParseOptions(compat);
+        }
+        assertEq(expected, result(p), "Program option mutation leaves parsed code unchanged");
+    }
+
+    case0(bool legacy) {
+        check("range builtin", "broken-range", "auto sub sample() { return range(1, 2); }", (1,), (1, 2), legacy);
+    }
+
+    case1(bool legacy) {
+        check("range reference", "broken-range", "auto sub sample() { code c = \\range(); return c(1, 2); }", (1,), (1, 2), legacy);
+    }
+
+    case2(bool legacy) {
+        check("range dynamic", "broken-range", "auto sub sample() { return call_function(\"range\", 1, 2); }", (1,), (1, 2), legacy);
+    }
+
+    case3(bool legacy) {
+        check("range iterator", "broken-range", "auto sub sample() { return map $1, xrange(1, 2); }", (1,), (1, 2), legacy);
+    }
+
+    case4(bool legacy) {
+        check("range operator", "broken-range", "auto sub sample() { int a = 1; int b = 2; return map $1, (a..b); }", (1, 2), (1, 2), legacy);
+    }
+
+    case5(bool legacy) {
+        check("list range", "broken-list-range", "auto sub sample() { list<*int> v = (1, 2); return v[0..3]; }", (1, 2), (1, 2, NOTHING, NOTHING), legacy);
+    }
+
+    case6(bool legacy) {
+        check("remove range", "broken-list-range", "auto sub sample() { list<*int> v = (1, 2); return remove v[0..3]; }", (1, 2), (1, 2, NOTHING, NOTHING), legacy);
+    }
+
+    case7(bool legacy) {
+        check("sprintf", "broken-sprintf", "auto sub sample() { return sprintf(\"%d\"); }", "0", "%d", legacy);
+    }
+
+    case8(bool legacy) {
+        check("bool operation", "strict-bool-eval", "auto sub sample() { auto v = (1, 2); return !!v; }", True, False, legacy);
+    }
+
+    case9(bool legacy) {
+        check("bool parameter", "strict-bool-eval", "bool sub f(softbool x) { return x; } auto sub sample() { auto v = \"text\"; return f(v); }", True, False, legacy);
+    }
+
+    case10(bool legacy) {
+        check("soft parameter", "broken-soft-types", "auto sub opaque(auto x) { return x; } int sub f(softint x) { return x; } auto sub sample() { return f(opaque(NULL)); }", "RUNTIME-OVERLOAD-ERROR", 0, legacy);
+    }
+
+    case11(bool legacy) {
+        check("soft dynamic parameter", "broken-soft-types", "auto sub opaque(auto x) { return x; } int sub f(softint x) { return x; } auto sub sample() { return call_function(\"f\", NULL); }", "RUNTIME-OVERLOAD-ERROR", 0, legacy);
+    }
+
+    case12(bool legacy) {
+        check("soft assignment", "broken-soft-types", "auto sub opaque(auto x) { return x; } auto sub sample() { auto v = opaque(NULL); softint x = v; return x; }", "RUNTIME-TYPE-ERROR", 0, legacy);
+    }
+
+    case13(bool legacy) {
+        check("namespace lookup", "broken-namespace-resolution", "int sub abs(int x) { return 999; } auto sub sample() { return call_function(\"abs\", -2); }", 2, 999, legacy);
+    }
+
+    case14(bool legacy) {
+        check("switch continue", "broken-loop-statement", "auto sub sample() { int s; for (int i = 0; i < 3; ++i) { switch (i) { case 1: continue; } ++s; } return s; }", 2, 3, legacy);
+    }
+}

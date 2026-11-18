@@ -93,7 +93,7 @@ int sub start_nested(Queue result, Queue outer_gate, Queue inner_gate) {
     return SandboxThreadFixture::Runner::startNested(sub () { inner_gate.get(60s); }, result, outer_gate);
 }
 
-# starts n threads with a module function, which runs in this Program
+# starts n threads with a module function, which runs in the module's Program
 list<auto> sub start_with_function(int n, Queue gate) {
     list<auto> rv = ();
     for (int i = 0; i < n; ++i) {
@@ -313,8 +313,8 @@ list<auto> sub start_with_function(int n, Queue gate) {
     }
 
     testModuleFunction() {
-        # a module function runs in the Program of its caller, here the restricted Program, which cannot start a
-        # thread with its own code
+        # a module function runs in the module's Program, as a method does, and starts the threads for its sandboxed
+        # caller, whose thread limit refuses the third
         Program p = getRestricted(2);
         Queue gate();
         list<auto> l = p.callFunction("start_with_function", 3, gate);

@@ -34,6 +34,36 @@
 
 #include <qore/intern/QoreIR.h>
 
+//! true if an instruction with the opcode builds a container (see QoreIRRegionRecord)
+DLLLOCAL bool qore_ir_takes_region_exception_target(QoreIROpcode opcode);
+
+//! the instructions appended in the body of a functional loop (a map, select or fold expression)
+/** The body keeps the values of an element until the next element replaces them: the instruction whose result
+    replaces one releases it, and a destructor can raise an exception there.  When the body is lowered, the lowering
+    gives the container instructions whose elements can hold an object the handler that was innermost when they were
+    appended, and a release check (QoreIRReleaseCheck) after them, and the loop's back-edge a release check when a value of
+    the body can hold an object; the IR interpreter checks the sink there, and native code checks it after the release
+    with the handler (qore#6072).  The instructions of values that cannot hold an object get nothing, so such loops
+    are as before.
+*/
+struct QoreIRRegionRecord {
+    //! the lowering's stack of handlers
+    const std::vector<QoreIRBasicBlock*>* exception_stack = nullptr;
+    //! a container instruction with the handler that was innermost when it was appended
+    struct Container {
+        QoreIRInstruction* inst;
+        //! the block that the instruction is in
+        QoreIRBasicBlock* block;
+        QoreIRBasicBlock* handler;
+    };
+    std::vector<Container> containers;
+    //! a Phi with the handler that was innermost when it was appended: the IR interpreter releases the Phi's previous
+    //! value when it gives the Phi its new one, at the start of the block
+    std::vector<Container> phis;
+    //! the other instructions with a result
+    std::vector<QoreIRInstruction*> values;
+};
+
 class QoreIRBuilder {
 public:
     explicit QoreIRBuilder(QoreIRFunction* func = nullptr);
@@ -51,7 +81,26 @@ public:
     T* append(Args&&... args) {
         T* inst = block->template appendInstruction<T>(std::forward<Args>(args)...);
         inst->temp_scope_id = exception_temp_scope_id;
+        if (region_record) {
+            recordRegionInstruction(inst);
+        }
         return inst;
+    }
+
+    //! sets the record of the body of a functional loop that the instructions appended from now on go to
+    /** @param record the record, or nullptr to end the region (see QoreIRRegionRecord)
+
+        @return the previous record, to restore when the body is lowered
+    */
+    QoreIRRegionRecord* setRegionRecord(QoreIRRegionRecord* record) {
+        QoreIRRegionRecord* old = region_record;
+        region_record = record;
+        return old;
+    }
+
+    //! returns the record of the body of the functional loop that is being lowered, if any
+    QoreIRRegionRecord* getRegionRecord() const {
+        return region_record;
     }
 
     QoreIRFunction* getFunction() const;
@@ -101,6 +150,25 @@ public:
     //! value type; see QoreIROpcode::ListAppendElement
     QoreIRInstruction* createListAppendElement(QoreIRValue list, QoreIRValue value, QoreIRValue state,
         const QoreProgramLocation* loc = nullptr);
+    //! Checks for cancellation when \a count is a positive multiple of 100; see QoreIROpcode::CheckCancelEvery
+    /** @param limit the limit of a drop operator, or an invalid value for none
+    */
+    QoreIRInstruction* createCheckCancelEvery(QoreIRValue count, QoreIRCancelPoint point,
+        const QoreProgramLocation* loc = nullptr, QoreIRValue limit = QoreIRValue());
+    //! Raises RANGE-ERROR if the bound \a which of a range is NOTHING; see QoreIROpcode::CheckRangeBound
+    QoreIRInstruction* createCheckRangeBound(QoreIRValue bound, QoreIRRangeBound which,
+        const QoreProgramLocation* loc = nullptr);
+    //! Applies selectors of a list of selectors with ranges; see QoreIROpcode::ListSelectorStep
+    /** @param result the result of the Begin step; ignored with QoreIRListSelectorFlag::Begin
+        @param seq the sequence
+        @param flags the QoreIRListSelectorFlag flags
+        @param selectors the indexes and the starts and ends of ranges; can be empty only with
+        QoreIRListSelectorFlag::Begin
+
+        @return the instruction, which has a result only with QoreIRListSelectorFlag::Begin
+    */
+    QoreIRInstruction* createListSelectorStep(QoreIRValue result, QoreIRValue seq, int64_t flags,
+        const std::vector<QoreIRValue>& selectors, const QoreProgramLocation* loc = nullptr);
     //! Sets the type of a select result list from its values; see QoreIROpcode::ListSetScannedType
     /** @param list the result list
         @param element_type the element type of the list created by the AST interpreter; ignored when \a source is
@@ -239,6 +307,16 @@ public:
         QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc = nullptr);
     QoreIRExprInstruction* createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
+    //! Checks the target of the call @a call before its arguments are evaluated (QoreIROpcode::CheckCallTarget)
+    /** An invalid @a target checks the current object, for a call through self (issue #5823): the code then does not
+        load self, which a fast entry of a method of the object does not have.
+    */
+    /** @param check_class the class of the method resolved at parse time, if any (QoreIRExprInstruction::check_class)
+        @param check_method the method resolved at parse time, if any
+    */
+    QoreIRExprInstruction* createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc,
+            const QoreClass* check_class = nullptr, const QoreMethod* check_method = nullptr);
     QoreIRBackgroundInstruction* createBackground(QoreIRBackgroundKind kind, const std::string& name,
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc = nullptr);
@@ -297,7 +375,10 @@ public:
         const QoreProgramLocation* loc = nullptr);
     QoreIRThrowInstruction* createRethrow(QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc = nullptr);
-    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr);
+    //! Emit a thread_exit statement; \a exception_target is the handler of a try statement that it leaves, whose
+    //! landing pad runs the handlers of the scopes left (qore#5912)
+    QoreIRInstruction* createThreadExit(const QoreProgramLocation* loc = nullptr,
+        QoreIRBasicBlock* exception_target = nullptr);
     QoreIRLandingPadInstruction* createLandingPad(size_t scope_depth, uint32_t try_scope_id = 0,
         const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCatchException(const QoreProgramLocation* loc = nullptr);
@@ -324,6 +405,18 @@ public:
     //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
     //! with a later DiscardTemps that drains back to this mark.
     QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
+    //! Emit the PushTempMark of a temp scope nested in the innermost open one, fused with that scope's mark if it is
+    //! the last instruction of the current block
+    /** When the current block ends with the PushTempMark of the innermost open scope, which the instructions
+        appended next would record, nothing comes between the two marks: that mark becomes a PushTempMarkPair that
+        opens the new scope too, and the IR interpreter dispatches one instruction for both (qore#6444).  Otherwise
+        a PushTempMark is emitted, as by createPushTempMark().  The scope is closed as one opened by
+        createPushTempMark() is.
+
+        @param loc optional source location for diagnostics (of a new PushTempMark only)
+        @return the PushTempMarkPair or the PushTempMark that opens the scope
+    */
+    QoreIRInstruction* createNestedPushTempMark(const QoreProgramLocation* loc = nullptr);
     //! Emit DiscardTempsKeep to close the innermost temp scope while keeping one value.
     /** Every temp registered since the matching PushTempMark is released, except \a value, whose result is an
         independent reference owned by the enclosing temp scope.  Lvalue mutations use this to release the
@@ -353,6 +446,13 @@ public:
     void setExceptionTempScopeId(uint32_t id);
     //! Return the statement temp scope currently assigned to invoke instructions.
     uint32_t getExceptionTempScopeId() const;
+    //! Return a new temp scope id that no PushTempMark opens
+    /** An instruction that records it releases no temporaries when it raises an exception and branches to a handler
+        in the frame (the interpreter's and native code's drain finds no mark), and the call arguments that code in
+        the scope creates are still the call's own (they are defined in the call's temp scope); see
+        QoreIRLowering::lowerWithImplicitContext()
+    */
+    uint32_t allocateUnmarkedTempScopeId();
     //! Drop the current temp scope after lowering emits a terminating instruction.
     void abandonTempScope();
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
@@ -365,8 +465,16 @@ public:
             const AbstractStatement* block = nullptr);
     //! Emit the debugger's step event for a statement (QoreIROpcode::DebugStatement)
     QoreIRInstruction* createDebugStatement(const AbstractStatement* statement);
+    //! Emit the end of a statement at the given depth for the debugger (QORE_IR_DEBUG_NEST_END), where a frame
+    //! continues when a debugger dismisses an exception of the statement
+    QoreIRInstruction* createDebugStatementEnd(uint16_t depth, const QoreProgramLocation* loc);
+    //! Emit the start of the exception path of a block whose statements are at the given depth (QORE_IR_DEBUG_NEST_UNWIND)
+    QoreIRInstruction* createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc);
     //! Emit a pending-exception check after cleanup code that can run destructors.
     QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
+    //! creates a check of a release in a functional loop's body (a pending CheckException, see QoreIRReleaseCheck)
+    //! with the given handler (qore#6072)
+    QoreIRInstruction* createCheckReleaseException(QoreIRBasicBlock* handler, const QoreProgramLocation* loc = nullptr);
     //! Emit the check of the value of a return statement against the declared return type (CheckReturnValue)
     /** @param value the value returned
         @param return_type the declared return type
@@ -377,6 +485,19 @@ public:
     QoreIRInstruction* createIteratorRelease(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
     //! Releases a temporary that the function owns on the path of a return (QoreIROpcode::ReleaseOwnedTemp)
     QoreIRInstruction* createReleaseOwnedTemp(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! Hands the value of a return statement in a handler run out of line to its function (QoreIROpcode::HandlerReturn,
+    //! #6074); an invalid \a value is a return without a value
+    QoreIRInstruction* createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc = nullptr);
+
+    //! Sets the parse options that the top-level code runs with from here on (QoreIROpcode::SetCodeParseOptions)
+    QoreIRInstruction* createSetCodeParseOptions(const QoreParseOptions& po, const QoreProgramLocation* loc = nullptr);
+
+    //! Releases \a input, the input of a fused pipeline's map stage, once the stage has given \a kept, unless it is
+    //! \a kept itself at run time (a value that an optimization or the expression made the input): a ReleaseOwnedTemp
+    //! with \a kept as a second operand
+    QoreIRInstruction* createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
+            const QoreProgramLocation* loc = nullptr);
     QoreIRInstruction* createCheckReturnValue(QoreIRValue value, const QoreTypeInfo* return_type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc);
 
@@ -399,6 +520,41 @@ public:
         FunctionalOperator* iterator_func = nullptr, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorCreateInstruction* createIteratorCreateIterate(QoreIRValue iterable,
         const QoreProgramLocation* loc = nullptr);
+    //! Creates the iterator of a foreach statement over keys, a slice or a list of indices; see
+    //! QoreIROpcode::IteratorCreateSource
+    /** @param operand the evaluated operand: the operand of keys, or the sequence
+        @param kind the operator
+        @param flags the QoreIRListSelectorFlag flags of a list of indices (StringIndexChar, NegativeOffsets)
+        @param first the start of a slice, or the list of indices; invalid for keys
+        @param second the end of a slice; invalid otherwise
+    */
+    QoreIRIteratorCreateInstruction* createIteratorCreateSource(QoreIRValue operand, QoreIRIteratorSourceKind kind,
+        int64_t flags, QoreIRValue first, QoreIRValue second, const QoreProgramLocation* loc = nullptr);
+    //! Creates the iterator of a list of selectors with ranges; see QoreIROpcode::IteratorCreateSelectors
+    /** @param seq the sequence
+        @param flags the QoreIRListSelectorFlag flags (StringIndexChar)
+    */
+    QoreIRIteratorCreateInstruction* createIteratorCreateSelectors(QoreIRValue seq, int64_t flags, int64_t count,
+        const QoreProgramLocation* loc = nullptr);
+    //! Returns the selector that the iterator of a list of selectors needs next; see
+    //! QoreIROpcode::SelectorIteratorPending
+    QoreIRInstruction* createSelectorIteratorPending(QoreIRValue iterator, const QoreProgramLocation* loc = nullptr);
+    //! Gives the next value of the iterator of a list of selectors, or branches to \a none_target; see
+    //! QoreIROpcode::IteratorNextSelectors
+    QoreIRIteratorNextInstruction* createIteratorNextSelectors(QoreIRValue iterator, QoreIRBasicBlock* none_target,
+        QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
+    //! Gives the iterator of a list of selectors the value of its next selector; see
+    //! QoreIROpcode::SelectorIteratorFeed
+    /** @param iterator the iterator handle
+        @param flags the QoreIRListSelectorFlag flags (Range)
+        @param selector the index or the start and the end of a range
+    */
+    QoreIRInstruction* createSelectorIteratorFeed(QoreIRValue iterator, int64_t flags,
+        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc = nullptr);
+    //! Sets the exceptions raised aside; see QoreIROpcode::ExceptionSuspend
+    QoreIRInstruction* createExceptionSuspend(const QoreProgramLocation* loc = nullptr);
+    //! Raises again the exceptions set aside by ExceptionSuspend; see QoreIROpcode::ExceptionResume
+    QoreIRInstruction* createExceptionResume(QoreIRValue handle, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc = nullptr);
     QoreIRIteratorNextInstruction* createTypedForeachNext(QoreIRValue list, QoreIRValue index,
@@ -462,8 +618,14 @@ private:
     // QoreIRInstruction::temp_scope_id.
     uint32_t next_temp_scope_id = 1;
     std::vector<uint32_t> temp_scope_id_stack;
+    //! the record of the body of a functional loop that is being lowered, if any (see setRegionRecord())
+    QoreIRRegionRecord* region_record = nullptr;
+
+    //! records an instruction appended in the body of a functional loop (see QoreIRRegionRecord)
+    void recordRegionInstruction(QoreIRInstruction* inst);
     uint32_t exception_temp_scope_id = 0;
     std::vector<uint32_t> exception_temp_scope_id_stack;
 };
+
 
 #endif

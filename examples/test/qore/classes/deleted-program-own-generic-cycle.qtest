@@ -1,0 +1,89 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT code creating and deleting Programs with generic values, and Program deletion
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class DeletedProgramOwnGenericCycleTest
+
+#! A Program whose global variables hold generic values of its own declarations is freed when it is deleted
+/** The worker (deleted-program-types/own-generic-cycle.q) creates and deletes a Program in each generation whose
+    global variables hold an object of its own generic class with its own class as the type argument, a typed hash of
+    its own generic hashdecl, a list of such objects and an object of a generic class of the parent Program.  The
+    values' destructors must run, and nothing of the Programs may be left after the library cleanup (debug builds count
+    the declarations of Programs left after qore_cleanup() with QORE_TEARDOWN_REPORT).  The declarations of a deleted
+    Program that derived types name are kept until the library cleanup (issue #6419); their number must be the same in
+    every generation (debug builds).  The worker runs in each execution mode, at the IR tier and promoted to native code
+    with tiered execution, and as qcc-compiled executables (-O0, -O3).
+*/
+class DeletedProgramOwnGenericCycleTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("DeletedProgramOwnGenericCycleTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "deleted-program-types" + DirSep + "own-generic-cycle.q";
+        expected = "destroyed: {Box: 20, Foo: 40, ParentBox: 10}\n"
+            + sprintf("kept per generation: %s\n", Option::HAVE_LIBRARY_DEBUGGING ? "constant" : "n/a");
+
+        foreach string mode in (ExecModes) {
+            addTestCase("generic values of a deleted Program's own declarations: " + mode, \testMode(), (mode,));
+        }
+        addTestCase("generic values of a deleted Program's own declarations: tiered, IR tier", \testTiered(),
+            ("--exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1000000",));
+        addTestCase("generic values of a deleted Program's own declarations: tiered, promoted", \testTiered(),
+            ("--exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1",));
+        foreach string opt in (("-O0", "-O3")) {
+            addTestCase("generic values of a deleted Program's own declarations: qcc " + opt, \testQcc(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    testMode(string mode) {
+        check(sprintf("%s --exec-mode=%s %s", qore_bin, mode, worker), mode);
+    }
+
+    testTiered(string opts) {
+        check(sprintf("%s %s %s", qore_bin, opts, worker), opts);
+    }
+
+    testQcc(string opt) {
+        TmpDir tmp("qore-own-generic-cycle-");
+        string exe = tmp.path + DirSep + "own-generic-cycle" + opt;
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe, worker));
+        assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+        check(exe, "qcc " + opt);
+    }
+
+    #! runs the command and checks its output, and with a debug build that nothing of the Programs is left at the end
+    private check(string cmd, string label) {
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, cmd), \status);
+        assertEq(0, status, sprintf("%s: %s", label, out));
+        # the teardown report of a debug build follows the output
+        list<string> lines = (map $1, out.split("\n"), $1 !~ /^\[TEARDOWN\]/ && $1.val());
+        assertEq(expected, (foldl $1 + $2, map $1 + "\n", lines), label);
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out, label);
+        }
+    }
+}

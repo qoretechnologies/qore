@@ -1,6 +1,6 @@
 /* Copyright (C) 2026 Qore Technologies, s.r.o.
  * SPDX-License-Identifier: LGPL-2.1-or-later
- * Deny only the internal thread-directed SIGSYS wakeup in this test process.
+ * Deny only the internal thread-directed wakeup (QORE_STATUS_SIGNAL: SIGRTMIN+1 on Linux) in this test process.
  * glibc uses tgkill; musl uses tkill, whose signal argument has a different index.
  */
 #include <errno.h>
@@ -17,15 +17,17 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         return 2;
     }
+    /* the signal that wakes Qore's signal thread on Linux (include/qore/intern/QoreSignal.h) */
+    const unsigned status_sig = SIGRTMIN + 1;
     struct sock_filter code[] = {
         BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_tgkill, 0, 3),
         BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, args[2])),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SIGSYS, 0, 5),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, status_sig, 0, 5),
         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | EPERM),
         BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_tkill, 0, 3),
         BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, args[1])),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SIGSYS, 0, 1),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, status_sig, 0, 1),
         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | EPERM),
         BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
     };

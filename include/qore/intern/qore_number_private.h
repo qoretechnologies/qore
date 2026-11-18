@@ -233,6 +233,45 @@ struct qore_number_private : public qore_number_private_intern {
         return (bool)mpfr_nan_p(num);
     }
 
+    //! appends a binary key of the exact value of the number (see QoreNumberNode::appendExactKey())
+    /** The significand of an MPFR number is normalized (its most significant bit is set) and aligned to the most
+        significant bit of its most significant limb, so two numbers of the same value at different precisions have
+        the same limbs but for zero limbs at the end of the one of the higher precision, which are left out.
+    */
+    DLLLOCAL void appendExactKey(std::string& key) const {
+        if (mpfr_nan_p(num)) {
+            key += 'N';
+            return;
+        }
+        if (mpfr_zero_p(num)) {
+            // +0 == -0
+            key += '0';
+            return;
+        }
+        bool neg = mpfr_signbit(num);
+        if (mpfr_inf_p(num)) {
+            key += neg ? '-' : '+';
+            key += 'I';
+            return;
+        }
+        key += neg ? '-' : '+';
+        int64 exp = (int64)mpfr_get_exp(num);
+        key.append(reinterpret_cast<const char*>(&exp), sizeof(exp));
+        // the limbs from the least significant one: the zero limbs at the low end are left out; this relies on two
+        // properties of MPFR: mpfr_custom_get_significand() gives the significand of any mpfr_t (it reads its
+        // limb pointer), and the bits of the least significant limb below the precision are always zero (an MPFR
+        // invariant, checked by mpfr_check()), so two equal values have equal limbs in a partly used last limb too
+        const mp_limb_t* limbs = static_cast<const mp_limb_t*>(mpfr_custom_get_significand(num));
+        size_t n = (mpfr_get_prec(num) + GMP_NUMB_BITS - 1) / GMP_NUMB_BITS;
+        size_t low = 0;
+        while (low < n && !limbs[low]) {
+            ++low;
+        }
+        for (size_t i = n; i > low; --i) {
+            key.append(reinterpret_cast<const char*>(&limbs[i - 1]), sizeof(mp_limb_t));
+        }
+    }
+
     DLLLOCAL bool inf() const {
         return (bool)mpfr_inf_p(num);
     }
@@ -433,7 +472,14 @@ struct qore_number_private : public qore_number_private_intern {
     DLLLOCAL qore_number_private* doBinary(q_mpfr_binary_func_t func, const qore_number_private& r, ExceptionSink* xsink = 0) const {
         mpfr_prec_t prec;
         if (func == mpfr_pow) {
-            prec = mpfr_get_prec(num) * QORE_MIN(QORE_MAX_PREC, r.getAsBigInt());
+            // the precision grows with the magnitude of the integer part of the exponent; it is at least the base's,
+            // as for an exponent between -1 and 1, NaN or a negative exponent, which gave a precision that MPFR
+            // rejects by aborting the process
+            int64 e = r.getAsBigInt();
+            mpfr_prec_t m = e < -QORE_MAX_PREC || e > QORE_MAX_PREC
+                ? QORE_MAX_PREC
+                : (e < 0 ? static_cast<mpfr_prec_t>(-e) : static_cast<mpfr_prec_t>(e));
+            prec = mpfr_get_prec(num) * QORE_MAX(static_cast<mpfr_prec_t>(1), m);
         } else if (func == mpfr_mul || func == mpfr_div) {
             prec = mpfr_get_prec(num) + mpfr_get_prec(r.num);
         } else {
@@ -459,14 +505,16 @@ struct qore_number_private : public qore_number_private_intern {
         return doBinary(mpfr_mul, r);
     }
 
+    //! a division by zero (also of zero, infinity or NaN, and by -0) raises DIVISION-BY-ZERO (qore#1034)
+    /** The divisor is checked before the division, which then cannot set the MPFR divide-by-zero flag; the MPFR
+        flags, which are global to the thread and which other operations may have left set, are not read
+    */
     DLLLOCAL qore_number_private* doDivideBy(const qore_number_private& r, ExceptionSink* xsink) const {
-#ifndef HAVE_MPFR_DIVBY0
         if (r.zero()) {
             do_divide_by_zero(xsink);
-            return 0;
+            return nullptr;
         }
-#endif
-        return doBinary(mpfr_div, r, xsink);
+        return doBinary(mpfr_div, r);
     }
 
     DLLLOCAL qore_number_private* doUnary(q_mpfr_unary_func_t func, ExceptionSink* xsink = 0) const {
@@ -500,37 +548,34 @@ struct qore_number_private : public qore_number_private_intern {
     }
 
     // for round functions: round(), ceil(), floor()
-    DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = NULL) const {
-        std::unique_ptr<qore_number_private> p0(new qore_number_private(*this));
+    //! rounds to a multiple of 10^-prec, exactly; see roundDecimal()
+    DLLLOCAL qore_number_private* doRoundNR(q_mpfr_unary_nr_func_t func, int64 prec = 0, ExceptionSink* xsink = NULL)
+            const {
+        std::unique_ptr<qore_number_private> p0(new qore_number_private(mpfr_get_prec(num)));
 
-        if (prec == 0) {
-            func(p0 -> num, num);
-
-            if (xsink)
-                checkFlags(xsink);
-
-            return p0.release();
-        }
-
-        qore_number_private* p2;
-
-        if (prec > 0) {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, prec)));
-            std::unique_ptr<qore_number_private> p1(p0 -> doMultiply(*c));
-            func(p1 -> num, p1 -> num);
-            p2 = p1 -> doDivideBy(*c, xsink);
+        // zero, infinity and NaN are their own result at any precision
+        if (prec == 0 || !mpfr_regular_p(num)) {
+            func(p0->num, num);
         } else {
-            std::unique_ptr<qore_number_private> c(new qore_number_private(pow(10, -prec)));
-            std::unique_ptr<qore_number_private> p1(p0 -> doDivideBy(*c, xsink));
-            func(p1 -> num, p1 -> num);
-            p2 = p1 -> doMultiply(*c);
+            roundDecimal(p0->num, num, func, prec);
         }
 
         if (xsink)
             checkFlags(xsink);
 
-        return p2;
+        return p0.release();
     }
+
+    //! sets @a rv to the multiple of 10^-prec given by @a func (mpfr_round(), mpfr_ceil() or mpfr_floor()) for @a x
+    /** The multiple is found exactly, in integer arithmetic, and @a rv is it correctly rounded to its own precision;
+        no floating-point power of 10 is used, so that any precision is exact (qore#6278)
+
+        @param rv the result; its precision is that of the result
+        @param x a regular (finite, nonzero) value
+        @param func mpfr_round() (halfway values are rounded away from zero), mpfr_ceil() or mpfr_floor()
+        @param prec the number of decimal digits after the decimal point; a negative number rounds to a power of 10
+    */
+    DLLLOCAL static void roundDecimal(mpfr_t rv, const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec);
 
     DLLLOCAL mpfr_prec_t getPrec() const {
         return mpfr_get_prec(num);
@@ -668,7 +713,8 @@ public:
         return p ? new QoreNumberNode(p) : 0;
     }
 
-    DLLLOCAL static QoreNumberNode* doRoundNR(const QoreNumberNode& n, q_mpfr_unary_nr_func_t func, int prec = 0, ExceptionSink* xsink = 0) {
+    DLLLOCAL static QoreNumberNode* doRoundNR(const QoreNumberNode& n, q_mpfr_unary_nr_func_t func, int64 prec = 0,
+            ExceptionSink* xsink = 0) {
         qore_number_private* p = n.priv->doRoundNR(func, prec, xsink);
         return p ? new QoreNumberNode(p) : 0;
     }

@@ -35,6 +35,14 @@ variant `F` that is not `private:internal` (such variants are not inherited and 
 own variants are checked by `checkFinalVariant()`, which refuses an identical signature as before and now also an
 overlapping one, so that the error names the variant's location.
 
+The check does not use the inheritance list that the method was given when it was added (`ilist`): that list is built
+from the parent classes as they were at that time, and misses the methods of a parent's parents if a parent class had
+not resolved its own parent classes yet. That happens when a compile (qcc, with the source symbols of a build group
+deferred) declares a class before the hierarchy of its parent is complete, and the same class passed in the compile of
+the whole group (qore#5994). `parseCheckFinalHierarchy()` therefore computes the order in which a call selects a
+variant from the hierarchy as it is when the check runs (`collect_hierarchy_functions()`, the walk of
+`BCList::parseAddAncestors()`), so that the result does not depend on the order in which the classes were declared.
+
 "Accepts arguments that `F` accepts" (`final_variant_may_be_bypassed()`) is decided statically and conservatively:
 the two signatures accept the same number of arguments for some call (a parameter that has a default value, is
 untyped or accepts `NOTHING` can be omitted; varargs accept any number), and at each position before that number the

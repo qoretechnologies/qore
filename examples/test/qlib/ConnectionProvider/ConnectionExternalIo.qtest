@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+
+%exec-class ConnectionExternalIoTest
+
+#! Tests that a sandboxed caller is refused the I/O of a connection of a module with uncontrolled external I/O
+/** A connection of a module that registers an app with \c external_io and without \c sandbox_aware does that I/O
+    for its callers, so AbstractConnection refuses it to a sandboxed caller in every method that does I/O, also when
+    trusted code created the connection, and its subclasses defined elsewhere are refused alike
+*/
+public class ConnectionExternalIoTest inherits QUnit::Test {
+    public {
+        #! The app of the fixture's connection
+        const AppName = "QoreTestExternalIoConnectionApp";
+    }
+
+    private {
+        #! registers the app and defines the connection
+        string fixture_module = normalize_dir(get_script_dir()) + "/ExternalIoConnectionFixture.qm";
+
+        #! the fixture's connection class
+        Class conn_class;
+    }
+
+    constructor() : Test("ConnectionProvider external I/O sandbox", "1.0") {
+        addTestCase("a sandboxed caller is refused the I/O of a trusted connection", \sandboxedIoTest());
+        addTestCase("a refused ping does not change the connection's status", \pingStatusTest());
+        addTestCase("a caller serving a sandboxed user is refused when it says so", \explicitTest());
+        addTestCase("a subclass defined outside the module is refused", \subclassTest());
+        addTestCase("a connection of a module without such an app is not refused", \controlledTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        load_module(fixture_module);
+        conn_class = Class::forName("ExternalIoFixtureConnection");
+    }
+
+    #! Returns a Program with a sandbox that calls the code it is given
+    private static Program getSandboxed() {
+        SandboxManager sm();
+        sm.blockPrivateNetworks();
+        sm.setNetworkDefaultPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("auto sub through(code c) { return c(); }", "connection-external-io-sandbox");
+        return p;
+    }
+
+    #! Returns the I/O count of the fixture's connection
+    private static int ioCount() {
+        return call_static_method("ExternalIoFixtureConnection", "getIoCount");
+    }
+
+    #! Asserts that the code, called by sandboxed code, is refused, makes no I/O, and that the error names the app
+    private assertRefused(Program p, code c, string label) {
+        int count = ioCount();
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", AppName, sub () { p.callFunction("through", c); }, NOTHING, label);
+        assertEq(count, ioCount(), label + ": no I/O");
+    }
+
+    sandboxedIoTest() {
+        AbstractConnection conn = conn_class.newObject();
+        Program p = getSandboxed();
+        assertRefused(p, sub () { conn.get(); }, "get()");
+        assertRefused(p, sub () { conn.get(False); }, "get(False)");
+        assertRefused(p, sub () { conn.getAsync(); }, "getAsync()");
+        assertRefused(p, sub () { conn.ping(); }, "ping()");
+        assertRefused(p, sub () { conn.ping(True); }, "ping(True)");
+        assertRefused(p, sub () { conn.ping(PF_THROW_EXCEPTION); }, "ping(PF_THROW_EXCEPTION)");
+        assertRefused(p, sub () { conn.getFileLocationHandler(); }, "getFileLocationHandler()");
+        assertRefused(p, sub () { conn.getFileLocationRedirect("x", False); }, "getFileLocationRedirect()");
+        assertRefused(p, sub () { conn.checkSandboxAccess(); }, "checkSandboxAccess()");
+
+        # its info is not I/O
+        assertEq(AppName, p.callFunction("through", auto sub () { return conn.getAppName(); }), "getAppName()");
+
+        # trusted code makes the I/O
+        int count = ioCount();
+        assertEq("ExternalIoFixtureClient", conn.get().className(), "trusted get()");
+        assertEq("ExternalIoFixtureClient", conn.getAsync().className(), "trusted getAsync()");
+        assertTrue(conn.ping().ok, "trusted ping()");
+        assertEq(count + 3, ioCount(), "trusted I/O");
+    }
+
+    pingStatusTest() {
+        AbstractConnection conn = conn_class.newObject("external-io-fixture-status");
+        assertTrue(conn.ping().ok, "trusted ping()");
+        *string status = conn.status;
+        *date last_check = conn.last_check;
+        Program p = getSandboxed();
+        assertRefused(p, sub () { conn.ping(); }, "ping()");
+        assertEq(status, conn.status, "the status is unchanged");
+        assertEq(last_check, conn.last_check, "the last check is unchanged");
+    }
+
+    explicitTest() {
+        AbstractConnection conn = conn_class.newObject();
+        int count = ioCount();
+        # a server thread serving a sandboxed user: no sandbox governs the thread
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", AppName, \conn.checkSandboxAccess(), (True,));
+        assertEq(count, ioCount(), "no I/O");
+        # the same thread serving a trusted user
+        conn.checkSandboxAccess(False);
+        conn.checkSandboxAccess();
+        assertEq(count, ioCount(), "no I/O by the check");
+    }
+
+    subclassTest() {
+        Program sub_pgm(PO_NEW_STYLE);
+        sub_pgm.loadModule("ConnectionProvider");
+        sub_pgm.loadModule(fixture_module);
+        sub_pgm.parse("class RenamedConnection inherits ExternalIoFixtureConnection {\n"
+            "    constructor() : ExternalIoFixtureConnection(\"renamed\") {}\n"
+            "    *string getAppName() { return \"QoreTestSomeOtherApp\"; }\n"
+            "}\n"
+            "AbstractConnection sub make() { return new RenamedConnection(); }\n", "connection-subclass");
+        AbstractConnection conn = sub_pgm.callFunction("make");
+        assertEq("QoreTestSomeOtherApp", conn.getAppName());
+        Program p = getSandboxed();
+        assertRefused(p, sub () { conn.get(); }, "subclass get()");
+        assertRefused(p, sub () { conn.ping(); }, "subclass ping()");
+    }
+
+    controlledTest() {
+        # a connection of the ConnectionProvider module, which registers no app with uncontrolled I/O
+        Program sub_pgm(PO_NEW_STYLE);
+        sub_pgm.loadModule("ConnectionProvider");
+        sub_pgm.parse("class ControlledClient {}\n"
+            "class ControlledConnection inherits AbstractConnection {\n"
+            "    constructor() : AbstractConnection({\"name\": \"controlled\", \"desc\": \"controlled\", "
+            "\"url\": \"controlled://localhost\"}) {}\n"
+            "    string getType() { return \"controlled\"; }\n"
+            "    private ControlledClient getImpl(bool connect = True, *hash<auto> rtopts) {\n"
+            "        return new ControlledClient();\n"
+            "    }\n"
+            "}\n"
+            "AbstractConnection sub make() { return new ControlledConnection(); }\n", "connection-controlled");
+        AbstractConnection conn = sub_pgm.callFunction("make");
+        Program p = getSandboxed();
+        assertEq("ControlledClient", p.callFunction("through", auto sub () { return conn.get().className(); }),
+            "sandboxed get()");
+        assertTrue(p.callFunction("through", auto sub () { return conn.ping().ok; }), "sandboxed ping()");
+        p.callFunction("through", sub () { conn.checkSandboxAccess(); });
+        conn.checkSandboxAccess(True);
+    }
+}

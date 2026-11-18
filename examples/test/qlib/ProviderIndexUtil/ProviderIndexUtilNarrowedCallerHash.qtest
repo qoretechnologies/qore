@@ -42,6 +42,15 @@ class ProviderIndexUtilNarrowedCallerHashTest inherits QUnit::Test {
 
         hash<ProviderIndexInfo> info = ProviderIndexUtil::writeDataProviderIndexByApp({"factorymap": {"dp": "DpMod"}},
             NOTHING, *hash<auto> sub (string app) {}, 0s, {});
+        if (!ProviderIndexUtil::hasMessagePack()) {
+            # the routing index and the metadata cache are written with MessagePack: without it (no msgpack module),
+            # the canonical index file is the only index
+            assertEq(tmp.path + DirSep + "qore-data-index.yaml", info.path);
+            *hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
+            assertEq({"dp": "DpMod"}, index.factorymap);
+            assertEq(0, index.appinfomap.size());
+            return;
+        }
         assertEq(tmp.path + DirSep + "qore-routing-index.yaml", info.path);
 
         *hash<SerializedDataProviderIndexInfo> idx = ProviderIndexUtil::readSerializedDataProviderIndex(tmp.path);

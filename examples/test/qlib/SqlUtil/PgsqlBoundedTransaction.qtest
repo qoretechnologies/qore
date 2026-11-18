@@ -167,35 +167,43 @@ class BoundedTransactionTest inherits QUnit::Test {
             f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
         });
         f.ds.setAutoCommit(False);
+        # Each session limit is stricter than the requested one, and the statement limit is not shorter than the
+        # transaction limit: PostgreSQL then ignores the statement limit (see transaction_timeout), so the session
+        # transaction deadline is the only deadline that can end a statement here.  A statement timeout raises an
+        # ERROR and a transaction timeout a FATAL that ends the session; with both armed, a server that is not
+        # scheduled for longer than the statement margin reports the statement timeout instead.
         f.ds.execRaw("set lock_timeout = '50ms'");
-        f.ds.execRaw("set statement_timeout = '150ms'");
-        f.ds.execRaw("set transaction_timeout = '500ms'");
+        f.ds.execRaw("set statement_timeout = '30000ms'");
+        f.ds.execRaw("set transaction_timeout = '2000ms'");
         f.ds.commit();
         hash<string, int> original = readSettings(f.ds);
         f.ds.commit();
-        hash<string, int> limits = f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
+        hash<string, int> limits = f.table.beginBoundedOfflineMaintenanceTransaction(100, 60000, 900000);
         assertEq(50, limits.lock_timeout_ms);
-        assertEq(150, limits.statement_timeout_ms);
-        assertTrue(limits.transaction_timeout_ms > 0 && limits.transaction_timeout_ms <= 500);
+        assertEq(30000, limits.statement_timeout_ms);
+        assertTrue(limits.transaction_timeout_ms > 0 && limits.transaction_timeout_ms <= 2000);
+        assertEq(limits, readSettings(f.ds));
         assertEq("read committed", readModes(f.ds).isolation);
         assertEq("off", readModes(f.ds).row_security);
         f.table.update({"value": 17}, {"id": 1});
         f.ds.rollback();
         assertEq(original, readSettings(f.ds));
         f.ds.commit();
-        f.table.beginBoundedOfflineMaintenanceTransaction(100, 1000, 900000);
-        f.table.update({"value": 18}, {"id": 1});
+        f.table.beginBoundedOfflineMaintenanceTransaction(100, 60000, 900000);
         *hash<ExceptionInfo> failure;
-        int completed;
+        bool completed = False;
         try {
-            for (int i = 0; i < 20; ++i) {
-                f.ds.execRaw("select 1 from pg_sleep(0.05)");
-                ++completed;
-            }
+            f.table.update({"value": 18}, {"id": 1});
+            # The statement lasts longer than the session transaction deadline, however the server is scheduled;
+            # it completes only if the requested 900000 ms budget replaced the stricter session deadline.
+            f.ds.execRaw("select 1 from pg_sleep(3)");
+            completed = True;
             f.ds.commit();
         } catch (hash<ExceptionInfo> ex) { failure = ex; }
-        assertTrue(completed > 0 && completed < 20);
+        assertFalse(completed, "the stricter session transaction deadline ends the offline transaction");
+        # The native pgsql driver reports a terminated session as connection loss, without the server FATAL text.
         assertEq("DBI:PGSQL:CONNECTION-ERROR", failure.err);
+        assertTrue(failure.desc.find("lost while in a transaction") >= 0);
         f.ds.rollback();
         Datasource observer = connection();
         AbstractTable observed = AbstractTable::getTable(observer, f.name);
@@ -626,20 +634,25 @@ class BoundedTransactionTest inherits QUnit::Test {
         # An existing positive timer must actually be tightened, not just display the new setting.
         f.ds.execRaw("set transaction_timeout = '5000ms'");
         f.ds.commit();
-        f.table.beginBoundedTransaction(20, 150, 300);
-        f.table.update({"value": 3}, {"id": 1});
+        # The statement limit is not shorter than the transaction limit, so PostgreSQL ignores it (see
+        # transaction_timeout) and only the transaction deadline can end a statement.  With a shorter statement limit
+        # armed as well, a server that is not scheduled for longer than the statement margin while a short statement
+        # runs reports a statement timeout (an ERROR) instead of the transaction timeout (a FATAL).
+        f.table.beginBoundedTransaction(20, 2000, 2000);
         *hash<ExceptionInfo> failure;
-        int completed;
+        int completed = 0;
         try {
-            # Each individual statement fits its budget; the transaction as a whole must not.
-            for (int i = 0; i < 12; ++i) {
+            f.table.update({"value": 3}, {"id": 1});
+            # The short statements last at least 3 s in total, longer than the 2 s budget and shorter than the 5 s
+            # timer that was already running: they all complete only if the running timer was not tightened.
+            for (int i = 0; i < 60; ++i) {
                 f.ds.execRaw("select 1 from pg_sleep(0.05)");
                 ++completed;
             }
             f.ds.commit();
         } catch (hash<ExceptionInfo> ex) { failure = ex; }
         assertTrue(exists failure, "the whole-transaction deadline is enforced");
-        assertTrue(completed > 0 && completed < 12, "short statements ran before the total budget expired");
+        assertTrue(completed < 60, "the transaction deadline ends the short statements before the last one");
         # The native pgsql driver reports a terminated session as connection loss, without the server FATAL text.
         assertEq("DBI:PGSQL:CONNECTION-ERROR", failure.err);
         assertTrue(failure.desc.find("lost while in a transaction") >= 0);

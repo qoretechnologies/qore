@@ -12,6 +12,15 @@
 %requires MssqlSqlUtilBase
 %requires FreetdsSqlUtil
 
+# the datasources that do not connect use the freetds and jdbc drivers
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class MssqlServerVersionTest
 
 #! A datasource that does not connect: it reports the given server version, and its catalog queries return no rows
@@ -72,7 +81,21 @@ class MssqlServerVersionTest inherits QUnit::Test {
             "jdbc sybase": ("jdbc:u/p@x{url=sybase:Tds:h:5000}", {"name": "Adaptive Server Enterprise",
                 "version": "16.0", "major_version": 16, "minor_version": 0}, False, True),
         };
+        # the drivers whose module cannot be loaded, whose cases are not run
+        hash<string, string> unavailable = {};
+%ifdef NoFreetds
+        unavailable.freetds = "freetds";
+%endif
+%ifdef NoJni
+        unavailable.jdbc = "jni";
+%endif
+        if (unavailable.size() == 2) {
+            testSkip("no freetds or jni module");
+        }
         foreach hash<auto> i in (cases.pairIterator()) {
+            if (unavailable{(i.value[0] =~ x/^([^:]+):/)[0]}) {
+                continue;
+            }
             VersionDatasource ds(i.value[0], i.value[1]);
             assertEq(i.value[3], MssqlDatabase::isSybase(ds), i.key + ": Sybase");
             MssqlDatabase db(ds);

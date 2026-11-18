@@ -1078,6 +1078,8 @@ extern "C" DLLEXPORT void dbitest_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = dbitest_module_init;
     mod_info.ns_init = dbitest_module_ns_init;
     mod_info.del = dbitest_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &DbiTestNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

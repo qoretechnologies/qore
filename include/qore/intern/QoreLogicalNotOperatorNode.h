@@ -35,6 +35,8 @@
 
 class QoreLogicalNotOperatorNode : public QoreSingleExpressionOperatorNode<QoreOperatorNode> {
 public:
+    DLLLOCAL static QoreLogicalNotOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue exp);
     DLLLOCAL QoreLogicalNotOperatorNode(const QoreProgramLocation* loc, QoreValue exp)
             : QoreSingleExpressionOperatorNode<QoreOperatorNode>(loc, exp) {
     }
@@ -53,6 +55,9 @@ public:
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL static QoreString LogicalNot_str;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

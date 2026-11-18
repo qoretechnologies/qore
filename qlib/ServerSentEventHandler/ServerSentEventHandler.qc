@@ -62,7 +62,15 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             "asyncapi_channel",
             "validator",
             "max_queue_size",
+            "sse_max_buffer_size",
         );
+
+        #! The errors in a message itself, which a send to all connections raises (see sendAll())
+        const MessageErrors = {
+            "SSE-EVENT-ERROR": True,
+            "ASYNCAPI-VALIDATION-ERROR": True,
+            "SCHEMA-VALIDATION-ERROR": True,
+        };
 
         #! Response header to SSE requests
         const SseResponseHeader = {
@@ -93,6 +101,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         #! maximum per-connection outbound event queue size before the connection is dropped (0 = unlimited)
         int max_queue_size = 0;
+
+        #! the bound in bytes of the data held for the client of each stream, if set (see setSseMaxBufferSize())
+        *int sse_max_buffer_size;
 
         #! heartbeat interval in seconds
         int heartbeat = DefaultHeartbeatInterval;
@@ -125,6 +136,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
           validation on all new connections; this takes precedence over \c asyncapi
         - \c asyncapi_channel: the AsyncAPI channel name to use with \c asyncapi or \c validator; required when
           either validation option is configured
+        - \c max_queue_size: the maximum number of events queued for a connection by this handler before the client
+          is dropped; \c 0 (the default) means no limit (see @ref setMaxQueueSize())
+        - \c sse_max_buffer_size: the bound in bytes of the data held for the client of each stream of this handler;
+          overrides the \c sse_max_buffer_size option of the listener (see @ref setSseMaxBufferSize())
 
         @throw SERVERSENTEVENTHANDLER-OPTION-ERROR unknown or invalid option
     */
@@ -190,6 +205,36 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     */
     int getMaxQueueSize() {
         return max_queue_size;
+    }
+
+    #! sets the bound in bytes of the data held for the client of each new stream of this handler
+    /** The bound overrides the \c sse_max_buffer_size option of the listener for the streams set up after the call.
+        Queueing an event that would take the data held for a client over the bound drops the client; a send to that
+        connection alone (@ref sendOne(), @ref ServerSentEventConnection::send()) then raises
+        \c SSE-CLIENT-OVERFLOW, and @ref sendAll() continues with the other connections; see
+        @ref httpserverasyncio_sse_buffer.
+
+        @param size the bound in bytes; must be > 0
+
+        @throw SERVERSENTEVENTHANDLER-OPTION-ERROR the value is not positive
+
+        @since %ServerSentEventHandler 1.2
+    */
+    setSseMaxBufferSize(softint size) {
+        if (size <= 0) {
+            throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("sse_max_buffer_size value %y is not a positive "
+                "integer", size);
+        }
+        sse_max_buffer_size = size;
+    }
+
+    #! returns the bound in bytes of the data held for the client of each stream set with this handler, if any
+    /** @return the bound, or @ref nothing if the handler sets none (the listener's \c sse_max_buffer_size applies)
+
+        @since %ServerSentEventHandler 1.2
+    */
+    *int getSseMaxBufferSize() {
+        return sse_max_buffer_size;
     }
 
     #! called by the HTTP server to handle incoming HTTP requests
@@ -282,7 +327,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         and calls the registered/connectionRegisteredImpl hooks.
 
         @param sock the socket for the SSE connection
-        @param cx call context hash
+        @param cx call context hash; the HTTP server sets \c sse_max_buffer_size in it to the bound of the listener,
+        which applies to the stream unless the handler sets its own (see @ref setSseMaxBufferSize())
         @param hdr incoming request headers
         @param cid connection ID (typically cx.id)
 
@@ -297,6 +343,12 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         # Create the poll operation for the async I/O controller
         HttpServerAsyncIo::HttpSseStreamPollOperation poll_op(sock);
         poll_op.setHeartbeat(heartbeat * 1000, heartbeat_msg);
+        # the bound is applied before the connection is registered, so that it applies to every event
+        *int bound = sse_max_buffer_size ?? cx.sse_max_buffer_size;
+        if (bound) {
+            poll_op.setMaxBufferSize(bound);
+        }
+        poll_op.setWarningCallback(getSseWarningCallback(cid));
 
         # Create and register the connection
         ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
@@ -318,7 +370,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         headers don't get submitted twice).
 
         @param sock the socket the HTTP/2 session is running on
-        @param cx call context hash
+        @param cx call context hash; the HTTP server sets \c sse_max_buffer_size in it to the bound of the listener,
+        which applies to the stream unless the handler sets its own (see @ref setSseMaxBufferSize())
         @param hdr incoming request headers
         @param cid connection ID (typically cx.id + stream ID)
         @param stream_id the HTTP/2 stream ID reserved for this SSE response
@@ -336,6 +389,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         HttpServerAsyncIo::Http2SseStream sse_stream(sock, stream_id, wake_callback, True);
         sse_stream.setHeartbeat(heartbeat * 1000, heartbeat_msg);
+        configureSseStream(sse_stream, cx, cid);
 
         ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
         conn.setAsyncSseConnection(sse_stream);
@@ -355,7 +409,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         invoking this method.
 
         @param sock the socket the QUIC session is running on
-        @param cx call context hash
+        @param cx call context hash; the HTTP server sets \c sse_max_buffer_size in it to the bound of the listener,
+        which applies to the stream unless the handler sets its own (see @ref setSseMaxBufferSize())
         @param hdr incoming request headers
         @param cid connection ID (typically cx.id + stream ID)
         @param session_id the QUIC session ID
@@ -375,6 +430,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         HttpServerAsyncIo::Http3SseStream sse_stream(sock, session_id, stream_id, wake_callback, True);
         sse_stream.setHeartbeat(heartbeat * 1000, heartbeat_msg);
+        configureSseStream(sse_stream, cx, cid);
 
         ServerSentEventConnection conn = createConnectionIntern(sock, cx, hdr, cid);
         conn.setAsyncSseConnection(sse_stream);
@@ -382,6 +438,23 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         registerAndInvokeHooks(conn, cid, hdr);
 
         return sse_stream;
+    }
+
+    #! Applies the handler's buffer bound and warning log to a multiplexed SSE stream
+    private configureSseStream(HttpServerAsyncIo::AbstractSseConnection sse_stream, hash<auto> cx, string cid) {
+        # the bound is applied before the connection is registered, so that it applies to every event
+        *int bound = sse_max_buffer_size ?? cx.sse_max_buffer_size;
+        if (bound) {
+            sse_stream.setMaxBufferSize(bound);
+        }
+        sse_stream.setWarningCallback(getSseWarningCallback(cid));
+    }
+
+    #! Returns the callback that logs the warning of a stream whose client is dropped
+    private code<nothing(string)> getSseWarningCallback(string cid) {
+        return sub (string msg) {
+            logWarn("SSE connection %y: %s", cid, msg);
+        };
     }
 
     #! Registers a new connection and invokes replay/registered/registeredImpl hooks
@@ -506,6 +579,13 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     /** @param msg the data to send
 
         Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
+
+        No exception is raised for the state of one connection: a client whose data would exceed its bound is
+        dropped (see @ref setSseMaxBufferSize()), a connection whose stream has ended is deregistered, and the message
+        is sent to the other connections.  An error in the message itself (\c SSE-EVENT-ERROR or an AsyncAPI
+        validation error) is still raised.  The close hooks of a connection dropped here
+        (@ref ServerSentEventConnection::connectionClosed() "connectionClosed()", @ref deregisterConnectionImpl())
+        run on the calling thread.
     */
     sendAll(hash<SseMessageInfo> msg) {
         bool debug = isEnabledFor(LoggerLevel::DEBUG);
@@ -522,15 +602,48 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             }
         }
 
-        # push the data on all connection channels, dropping any client whose outbound queue is over the limit
+        # push the data on all connection channels, dropping any client whose outbound queue is over the limit; the
+        # state of one connection never stops the send to the others
         foreach ServerSentEventConnection conn in (conns) {
-            if (dropIfOverflowing(conn)) {
-                continue;
+            try {
+                if (dropIfOverflowing(conn)) {
+                    continue;
+                }
+                conn.send(msg);
+            } catch (hash<ExceptionInfo> ex) {
+                # an error in the message itself is raised for every connection; anything else that leaves the stream
+                # closed is the state of this connection's stream
+                if (MessageErrors{ex.err} || (ex.err != HttpServerAsyncIo::SseClientOverflowErr
+                        && ex.err != "SSE-STREAM-LOCK-TIMEOUT" && isStreamOpenSafe(conn))) {
+                    rethrow;
+                }
+                logDebug("SSE connection %y dropped from a send to all connections: %s: %s", conn.cid, ex.err,
+                    ex.desc);
+                # a stream that nothing has ended yet (its state could not be read) is stopped, so that its client
+                # does not keep an open stream that gets no more events
+                if (ex.err != HttpServerAsyncIo::SseClientOverflowErr && ex.err != "SSE-CLOSED") {
+                    try {
+                        conn.stop();
+                    } catch (hash<ExceptionInfo> ex1) {
+                        logError("error stopping SSE connection %y: %s", conn.cid, get_exception_string(ex1));
+                    }
+                }
+                # deregistered by the end of its stream when the server reports it; a connection whose stream has no
+                # such report is deregistered here (a connection already deregistered is ignored)
+                deregisterConnection(conn.cid);
             }
-            conn.send(msg);
         }
         if (debug) {
             logDebug("SSE sent to connections: %y", ids);
+        }
+    }
+
+    #! Returns @ref True if the stream of the connection is open; @ref False if it is closed or its state cannot be read
+    private static bool isStreamOpenSafe(ServerSentEventConnection conn) {
+        try {
+            return conn.isStreamOpen();
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
         }
     }
 
@@ -566,6 +679,11 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         in the \c "cx.id" argument when the connection is first established.
 
         Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
+
+        @throw SERVERSENTEVENT-CONNECTION-ERROR the connection does not exist
+        @throw SSE-CLIENT-OVERFLOW the message would take the data held for the client over its bound (see
+        @ref setSseMaxBufferSize()); the message is not sent, and the client has been dropped and deregistered (its
+        close hooks run on the calling thread)
     */
     sendOne(softstring id, hash<SseMessageInfo> msg) {
         ServerSentEventConnection conn;
@@ -701,6 +819,15 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
                             "(0 = unlimited)", h.key, h.value);
                     }
                     max_queue_size = h.value.toInt();
+                    break;
+                }
+                case "sse_max_buffer_size": {
+                    if (!h.value.intp() || h.value.toInt() <= 0) {
+                        throw "SERVERSENTEVENTHANDLER-OPTION-ERROR", sprintf("option %y value %y is not a positive "
+                            "integer giving the bound in bytes of the data held for the client of each stream",
+                            h.key, h.value);
+                    }
+                    sse_max_buffer_size = h.value.toInt();
                     break;
                 }
                 default:

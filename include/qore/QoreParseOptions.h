@@ -329,6 +329,19 @@ public:
     */
     DLLEXPORT static const QoreParseOptions ALLOW_OPAQUE_REFERENCES;
 
+    //! extended option: errors that the parser can prove are raised as parse errors (bit 89)
+    /** See @ref strict-parse-errors "%strict-parse-errors" for the cases it covers.  Set with \c PO_MODERN unless
+        \c NO_STRICT_PARSE_ERRORS is set.
+        @since %Qore 3.0
+    */
+    DLLEXPORT static const QoreParseOptions STRICT_PARSE_ERRORS;
+
+    //! extended option: \c STRICT_PARSE_ERRORS is not set, also with \c PO_MODERN (bit 90)
+    /** When both options are set, this one wins: \c STRICT_PARSE_ERRORS is cleared.
+        @since %Qore 3.0
+    */
+    DLLEXPORT static const QoreParseOptions NO_STRICT_PARSE_ERRORS;
+
     //! mask of all options allowing for more freedom (instead of less), including extended options
     /** A Program whose parse options are locked may only inherit these options from its parent; it cannot set them
         itself.  The legacy integer mask \c PO_POSITIVE_OPTIONS cannot hold extended options, so code enforcing the
@@ -340,8 +353,8 @@ public:
     //! mask of all options that have no effect on code access or code safety, including extended options
     /** The legacy integer mask \c PO_FREE_OPTIONS cannot hold extended options; this mask adds the extended options
         that only select language behavior: \c BROKEN_SOFT_TYPES, \c BROKEN_AUTO_CAST, \c FP_FAST_MATH, the
-        streaming-operator options, \c STREAMING_ANY, \c NO_STREAM_FUSION, \c NO_CHAR_TYPE, \c NO_STRING_INDEX_CHAR
-        and \c NEGATIVE_OFFSETS.  The other extended options are restrictions (\c NO_CLASS_DEFS,
+        streaming-operator options, \c STREAMING_ANY, \c NO_STREAM_FUSION, \c NO_CHAR_TYPE, \c NO_STRING_INDEX_CHAR,
+        \c NEGATIVE_OFFSETS, \c STRICT_PARSE_ERRORS and \c NO_STRICT_PARSE_ERRORS.  The other extended options are restrictions (\c NO_CLASS_DEFS,
         \c NO_CONSTANT_DEFS, \c NO_NAMESPACE_DEFS, \c NO_NEW, \c NO_MODULE_PATH_DIRECTIVES, and the style
         restriction \c NO_SUMMARIZE), except \c ALLOW_OPAQUE_REFERENCES, which is in \c POSITIVE_OPTIONS.
         @since %Qore 3.0

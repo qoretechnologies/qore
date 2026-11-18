@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,13 +29,19 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreModuloOperatorNode::op_str("% (modula) operator expression");
 
+// documented in QoreLibIntern.h
+void qore_raise_modulo_by_zero(ExceptionSink* xsink) {
+    xsink->raiseException("DIVISION-BY-ZERO", "modula operand cannot be zero");
+}
+
 QoreValue QoreModuloOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
     int64 l = lh->getAsBigInt();
     int64 r = rh->getAsBigInt();

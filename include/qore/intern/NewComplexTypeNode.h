@@ -97,6 +97,16 @@ enum class QoreComplexBufferInitKind : uint8_t {
 
 class NewHashDeclNode : public ParseNode {
 protected:
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! Resolves the hashdecl of a node without a concrete hashdecl when it is evaluated
+    /** @return the hashdecl, or nullptr if an exception has been raised
+    */
+    DLLLOCAL const TypedHashDecl* resolveRuntimeHashDecl(ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -113,10 +123,17 @@ public:
     const QoreTypeInfo* typeInfo = nullptr;
     std::string dynamic_hashdecl_name;
     bool runtime_check;
+    //! the hashdecl if it has no type parameters, else nullptr
+    /** A hashdecl with type parameters (new hash<HD<U>>() in generic code) is resolved when the node is evaluated,
+        with the type parameters substituted by the types of the running instantiation, as is a hashdecl deferred at
+        parse time (qore#5720); a non-generic node finds its hashdecl here with the one test it made before
+    */
+    const TypedHashDecl* concrete_hd = nullptr;
 
     DLLLOCAL NewHashDeclNode(const QoreProgramLocation* loc, const TypedHashDecl* hd, QoreParseListNode* a,
             bool runtime_check) : ParseNode(loc, NT_SCOPE_REF), hd(hd), args(a),
-            typeInfo(hd ? hd->getTypeInfo() : nullptr), runtime_check(runtime_check) {
+            typeInfo(hd ? hd->getTypeInfo() : nullptr), runtime_check(runtime_check),
+            concrete_hd(hd && !qore_type_contains_type_parameter(hd->getTypeInfo()) ? hd : nullptr) {
     }
 
     //! Creates a construction of an AOT build-group hashdecl deferred at parse time
@@ -129,9 +146,28 @@ public:
             dynamic_hashdecl_name(dynamic_hashdecl_name ? dynamic_hashdecl_name : ""), runtime_check(true) {
     }
 
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewHashDeclNode(const NewHashDeclNode& old, QoreParseListNode* a) : ParseNode(old), hd(old.hd),
+            args(a), typeInfo(old.typeInfo), dynamic_hashdecl_name(old.dynamic_hashdecl_name),
+            runtime_check(old.runtime_check), concrete_hd(old.concrete_hd) {
+    }
+
     DLLLOCAL virtual ~NewHashDeclNode() {
         if (args)
             args->deref(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink
+    /** A background copy holds runtime values, whose release can run destructors; see QoreParseListNode::derefImpl()
+    */
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        if (args) {
+            args->deref(xsink);
+            args = nullptr;
+        }
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -163,6 +199,8 @@ public:
 
 class NewComplexHashNode : public ParseNode {
 protected:
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -176,15 +214,36 @@ protected:
 public:
     const QoreTypeInfo* typeInfo;
     QoreParseListNode* args;
+    //! true if the type has type parameters (generic code), which are substituted when the node is evaluated
+    /** decided once: a non-generic `new hash<string, int>()` pays nothing for the substitution
+    */
+    bool needs_substitution;
 
     DLLLOCAL NewComplexHashNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreParseListNode* a)
-            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
+            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a),
+            needs_substitution(qore_type_contains_type_parameter(typeInfo)) {
         assert(QoreTypeInfo::getUniqueReturnComplexHash(typeInfo));
+    }
+
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewComplexHashNode(const NewComplexHashNode& old, QoreParseListNode* a) : ParseNode(old),
+            typeInfo(old.typeInfo), args(a), needs_substitution(old.needs_substitution) {
     }
 
     DLLLOCAL virtual ~NewComplexHashNode() {
         if (args)
             args->deref(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink; see NewHashDeclNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        if (args) {
+            args->deref(xsink);
+            args = nullptr;
+        }
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -207,6 +266,8 @@ public:
 
 class NewComplexListNode : public ParseNode {
 protected:
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -220,14 +281,31 @@ protected:
 public:
     const QoreTypeInfo* typeInfo;
     QoreValue args{};
+    //! true if the type has type parameters (generic code); see NewComplexHashNode::needs_substitution
+    bool needs_substitution;
 
     DLLLOCAL NewComplexListNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue a)
-            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a) {
+            : ParseNode(loc, NT_SCOPE_REF), typeInfo(typeInfo), args(a),
+            needs_substitution(qore_type_contains_type_parameter(typeInfo)) {
         assert(QoreTypeInfo::getUniqueReturnComplexList(typeInfo));
+    }
+
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewComplexListNode(const NewComplexListNode& old, QoreValue a) : ParseNode(old),
+            typeInfo(old.typeInfo), args(a), needs_substitution(old.needs_substitution) {
     }
 
     DLLLOCAL virtual ~NewComplexListNode() {
         args.discard(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink; see NewHashDeclNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        args.discard(xsink);
+        args = QoreValue();
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -271,8 +349,22 @@ public:
         assert(QoreTypeInfo::getUniqueReturnComplexBuffer(typeInfo));
     }
 
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL NewComplexBufferNode(const NewComplexBufferNode& old, QoreValue a) : ParseNode(old),
+            typeInfo(old.typeInfo), args(a), initKind(old.initKind) {
+    }
+
     DLLLOCAL virtual ~NewComplexBufferNode() {
         args.discard(nullptr);
+    }
+
+    //! Releases the arguments with the caller's exception sink; see NewHashDeclNode::derefImpl()
+    DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink) {
+        args.discard(xsink);
+        args = QoreValue();
+        return ParseNode::derefImpl(xsink);
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
@@ -298,5 +390,24 @@ public:
 
 DLLLOCAL QoreBufferNode* qore_new_complex_buffer_from_value(const QoreTypeInfo* typeInfo, QoreValue val,
     ExceptionSink* xsink, QoreComplexBufferInitKind initKind = QoreComplexBufferInitKind::Constructor);
+
+//! Source and background-copy factories select a legacy entry before execution.
+template <typename Base>
+class LexicalNewComplexNode : public Base {
+public:
+    using Base::Base;
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return this->evalLexical(needs_deref, xsink);
+    }
+};
+
+template <typename Base, typename... Args>
+Base* qore_make_new_complex(LexicalSemanticPolicy policy, Args&&... args) {
+    return policy.needsFilter()
+        ? new LexicalNewComplexNode<Base>(std::forward<Args>(args)...)
+        : new Base(std::forward<Args>(args)...);
+}
 
 #endif

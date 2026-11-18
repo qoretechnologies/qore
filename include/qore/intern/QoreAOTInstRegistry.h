@@ -86,12 +86,19 @@ struct AOTInstReadCtx {
         return (it != slot_to_local->end()) ? it->second : nullptr;
     }
 
+    //! set when an instruction holds a block index beyond the blocks of its function (see resolveBlock())
+    mutable bool bad_block_index = false;
+
     //! Resolve block index to block pointer (0xFFFF = nullptr)
+    /** An index beyond the blocks of the function sets bad_block_index, which makes the reader refuse the
+        instruction; it is not read as no block (qore#6468)
+    */
     QoreIRBasicBlock* resolveBlock(uint16_t idx) const {
         if (idx == 0xFFFF) {
             return nullptr;
         }
         if (idx >= blocks.size()) {
+            bad_block_index = true;
             return nullptr;
         }
         return blocks[idx].get();
@@ -148,7 +155,23 @@ inline const QoreIRInstGroupInfo* getAOTInstGroupInfo(uint8_t raw_group) {
     return &info;
 }
 
+//! Validate the serialized opcode/subclass pairing before calling a group reader.
+//! No instruction is constructed on a mismatch; unknown/reserved opcodes fail closed.
+bool qore_aot_validate_ir_layout(uint16_t opcode, uint8_t group, std::string& error);
+
+//! Validate the common SSA operand vector against the opcode's arity contract.
+bool qore_aot_validate_ir_operands(uint16_t opcode, size_t count, bool has_result, std::string& error);
+
+//! Validate an Invoke's nested operation and its operands before constructing the instruction.
+bool qore_aot_validate_ir_invoke(uint16_t opcode, size_t count, std::string& error);
+
+//! Validate the constant payload discriminator against its opcode.
+bool qore_aot_validate_ir_constant(uint16_t opcode, uint8_t kind, std::string& error);
+
 //! Validate instruction group registry invariants
 bool qore_aot_validate_inst_group_registry(std::string& error);
+
+//! Reject opcodes that cannot appear in serialized IR, independently of a payload's claimed instruction group.
+DLLLOCAL bool validateAOTIROpcode(uint16_t opcode, std::string& error);
 
 #endif // _QORE_INTERN_QOREAOTINSTREGISTRY_H

@@ -931,6 +931,9 @@ module Schema {
 
 
     @section schema_v1_9_0 Schema Module v1.9.0
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the output of
+      alignments and migrations is left out when the module's code has no terminal I/O
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
       for alignment with caller-controlled commit or rollback; DataSchema
       rejects migration actions that commit independently in this mode
@@ -943,6 +946,11 @@ module Schema {
       for the database it is connected to; a migration's \c sql step and a column's populate \c sql take the SQL under
       the driver's own name, else under the key of the database's native driver (ex: \c "oracle" on a \c jdbc
       connection to Oracle), else the default
+    - a table of a data schema can have a \c comment, the comment of the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/1483">issue 1483</a>)
+    - added @ref Schema::AbstractSchema::getViews() "AbstractSchema::getViews()": the views that a schema's
+      getViewsImpl() gives, such as one that SchemaReverse generates, are aligned with the schema (see
+      @ref schema_views) (<a href="https://github.com/qoretechnologies/qore/issues/1427">issue 1427</a>)
 
     @section schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a
@@ -1058,6 +1066,14 @@ module Schema {
 
 #! this namespace contains all public definitions in the %Schema module
 public namespace Schema {
+    # writes the module's terminal output; nothing when its code has no terminal I/O, so that code without it can load
+    # the module, as the stdout constant needs terminal I/O only when it is written (qore#6438); not buffered
+    sub schema_terminal_printf(string fmt, ...) {
+        if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            stdout.vprintf(fmt, argv);
+        }
+    }
+
     #! Helper constant for column hash functions with "NULL" constraint for better readability
     public const C_NULL = False;
     #! Helper constant for column hash functions with "NOT NULL" constraint for better readability

@@ -87,6 +87,7 @@ void QoreSignalManager::getWaitMask(sigset_t& wait_mask) {
 void QoreSignalHandler::init() {
     funcref = 0;
     status = SH_OK;
+    release_tid = -1;
 }
 
 // called outside the signal lock
@@ -138,7 +139,7 @@ void QoreSignalManager::setMask(sigset_t& mask) {
     }
     if (!is_enabled) {
         // here we set signal that cannot be managed by Qore code
-        fmap[QORE_STATUS_SIGNAL] = "QORE (SIGSYS for internal use)";
+        fmap[QORE_STATUS_SIGNAL] = QORE_STATUS_SIGNAL_DESC;
         fmap[SIGALRM] = "QORE (SIGALRM for sleep()/usleep())";
         fmap[SIGCHLD] = "QORE (SIGCHLD for system())";
         fmap[SIGSEGV] = "OS (SIGSEGV cannot be handled by Qore code)";
@@ -275,8 +276,28 @@ void QoreSignalManager::reload() {
 // Must be called with mutex held. A security policy can deny even a signal sent to another thread of this
 // process. The command is already recorded under the lock; a timed wait lets the receiver observe it without
 // relying on that signal. On platforms without timed signal waits, report the fatal failure instead of hanging.
+#if defined(__linux__) && defined(SIGRTMIN)
+int qore_get_status_signal() {
+    // determined once: SIGRTMIN can rise after the start of the process if the C library hands out real-time
+    // signals, and the signal thread must keep waiting for the signal that is sent
+    static const int status_signal = SIGRTMIN + 1;
+    return status_signal;
+}
+#endif
+
 void QoreSignalManager::wake_signal_thread_unlocked() {
     int rc = pthread_kill(ptid, QORE_STATUS_SIGNAL);
+#if defined(__linux__) && defined(SIGRTMIN) && defined(HAVE_SIGTIMEDWAIT)
+    // the wake-up is a real-time signal, which is queued: EAGAIN means that the process's queue of pending real-time
+    // signals is full (RLIMIT_SIGPENDING); the command is recorded under the lock, and the timed signal wait of the
+    // signal thread (below) sees it without the signal, so it is not reported
+    if (rc == EAGAIN) {
+        // every change of signal handling waits for the signal thread's timed wait then; noted in debug builds
+        printd(1, "QoreSignalManager::wake_signal_thread_unlocked(): the real-time signal queue is full (EAGAIN); "
+            "the signal thread sees the command at its next timed wait\n");
+        return;
+    }
+#endif
     if (rc) {
 #ifdef HAVE_SIGTIMEDWAIT
         fprintf(stderr, "Qore signal manager: internal wakeup failed: %s; using timed signal wait\n", strerror(rc));
@@ -429,8 +450,9 @@ void QoreSignalManager::forkParent() {
 }
 
 void QoreSignalManager::forkChild(int fork_tid) {
-    // the threads that waited for the lock or the block do not exist in the child
+    // the threads that waited for the lock, the block or the signal thread do not exist in the child
     waiting = 0;
+    idle_waiting = 0;
     if (block && block_tid != fork_tid) {
         // another thread's fork() set the block; its postFork() does not run in the child
         block = false;
@@ -453,6 +475,8 @@ void QoreSignalManager::forkChild(int fork_tid) {
                 // the handler was running in the signal thread
                 handlers[i].status = QoreSignalHandler::SH_OK;
             }
+            // no thread of the child waits to release a handler
+            handlers[i].release_tid = -1;
         }
     }
     tcount.reinitAfterFork(signal_threads);
@@ -588,7 +612,7 @@ void QoreSignalManager::signal_handler_thread() {
                         sl.unlock();
                         (*sa_int.sa_handler)(SIGINT);
                         sl.lock();
-                        handler_running = false;
+                        setHandlerIdleUnlocked();
                     }
                 } else if (sig == SIGTERM || sig == SIGHUP) {
                     // ends the process, with or without a handler that was removed, unless the process was started
@@ -603,7 +627,7 @@ void QoreSignalManager::signal_handler_thread() {
                     sl.unlock();
                     raise(sig);
                     sl.lock();
-                    handler_running = false;
+                    setHandlerIdleUnlocked();
                 }
                 continue;
             }
@@ -619,6 +643,8 @@ void QoreSignalManager::signal_handler_thread() {
                 // which releases the references the handler holds
                 ReferenceHolder<QoreProgram> pgm(handlers[sig].refProgram(), &xsink);
                 ReferenceHolder<ResolvedCallReferenceNode> callback(handlers[sig].refCallback(), &xsink);
+                // the options of the code that set the handler, copied in the lock as the handler can be replaced
+                QoreThreadRuntimeParseOptions handler_po = handlers[sig].po;
 
                 // unlock to run handler code
                 sl.unlock();
@@ -626,6 +652,9 @@ void QoreSignalManager::signal_handler_thread() {
                 {
                     // the handler's thread-local data in the Program's family is created when the handler first
                     // saves data
+                    // the handler runs with the options of the code that set it (qore#6208), installed before the
+                    // Program is entered, whose thread entry handler and initialization run then
+                    QoreThreadRuntimeParseOptionsHelper po_helper(&handler_po);
                     ProgramThreadCountContextHelper tch(&xsink, *pgm, true);
                     if (!xsink) {
                         QoreSignalHandler::runHandler(**callback, sig, &xsink);
@@ -633,6 +662,27 @@ void QoreSignalManager::signal_handler_thread() {
                     // a callback whose handler was replaced while it ran is destroyed here, in its Program's context
                     callback = nullptr;
                 }
+#ifdef DEBUG
+                // test hook: the callback has left its Program, which can be deleted now, while the handler is still
+                // in progress (see dbgHoldAfterCallback())
+                {
+                    AutoLocker al(&mutex);
+                    if (dbg_hold_armed) {
+                        dbg_hold_armed = false;
+                        dbg_held = true;
+                        cond.broadcast();
+                        int64 deadline = q_get_monotonic_us() / 1000 + 30000;
+                        while (!idle_waiting) {
+                            int64 left = deadline - q_get_monotonic_us() / 1000;
+                            if (left <= 0) {
+                                break;
+                            }
+                            cond.wait(&mutex, static_cast<int>(left));
+                        }
+                        dbg_held = false;
+                    }
+                }
+#endif
 
                 // delete thread-local storage
                 end_signal_thread(&xsink);
@@ -656,22 +706,32 @@ void QoreSignalManager::signal_handler_thread() {
             // SH_Delete: removeHandler() (and no replacement) — proceed to cleanup
             if (handlers[sig].status != QoreSignalHandler::SH_Delete) {
                 handlers[sig].status = QoreSignalHandler::SH_OK;
-                handler_running = false;
+                setHandlerIdleUnlocked();
                 continue;
             }
 
             assert(handlers[sig].status == QoreSignalHandler::SH_Delete);
+            int release_tid = handlers[sig].release_tid;
+            handlers[sig].release_tid = -1;
             CodePgm old = handlers[sig].take();
             qore_program_private::delSignal(*old.pgm, sig);
             --num_handlers;
             assert(num_handlers >= 0);
+            if (release_tid != -1) {
+                // a thread that removes the handlers of the Program waits for this callback, and releases the handler
+                // itself: it is deleting the Program, which this thread cannot enter any more, so the destructors that
+                // the release runs would fail here with PROGRAM-ERROR (issue #5766)
+                released_handlers.emplace_back(release_tid, old);
+                setHandlerIdleUnlocked();
+                continue;
+            }
             sl.unlock();
             old.del(&xsink);
             // an exception raised by a destructor while the handler is released is reported here; left in the
             // exception sink, it would prevent the next callback from running
             xsink.handleExceptions();
             sl.lock();
-            handler_running = false;
+            setHandlerIdleUnlocked();
         }
 
         thread_running = false;
@@ -728,7 +788,14 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
 }
 
 int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::setHandler(sig: %d fr: %p) pgm: %p\n", sig, fr, getProgram());
+    // the code of a Program whose data is being destroyed (a destructor, for example) sets no handler: it could never
+    // run, and the values that its closure captures would be released only after the Program's data (issue #5766)
+    QoreProgram* cpgm = getProgram();
+    if (cpgm && qore_program_private::get(*cpgm)->dataDestructionStarted()) {
+        return 0;
+    }
     CodePgm old;
 
     {
@@ -771,6 +838,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             // Reset status in case a prior take() left a stale SH_Delete state
             // (signal fired while removing → SH_InProgress → take() → funcref=0 but status=SH_Delete)
             handlers[sig].status = QoreSignalHandler::SH_OK;
+            handlers[sig].release_tid = -1;
             handlers[sig].set(fr, pgm);
             ++num_handlers;
         } else {
@@ -788,6 +856,12 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
             if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
                 handlers[sig].status = QoreSignalHandler::SH_OK;
                 already_set = false;  // force mask update below
+                // the thread that removed the replaced handler waits to release it (see removeProgramHandlers())
+                if (handlers[sig].release_tid != -1) {
+                    released_handlers.emplace_back(handlers[sig].release_tid, old);
+                    old = CodePgm();
+                    handlers[sig].release_tid = -1;
+                }
             }
         }
 
@@ -807,6 +881,7 @@ int QoreSignalManager::setHandler(int sig, const ResolvedCallReferenceNode *fr, 
 }
 
 int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
+    assert(sig > 0 && sig < QORE_SIGNAL_MAX);
     //printd(5, "QoreSignalManager::removeHandler(sig: %d)\n", sig);
     CodePgm old;
 
@@ -818,41 +893,7 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
         // wait for any blocks to be lifted
         waitForBlockUnlocked();
 
-        if (!handlers[sig].isSet())
-            return 0;
-
-        // a handler removed while its callback runs is released by the signal thread when the callback returns
-        if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
-            return 0;
-        }
-
-        // the state of the signal is as if it never had a handler: the signal thread keeps waiting for a signal that it
-        // waits for without a handler, or the signal would no longer be processed as it was before, and it is removed
-        // from the signal mask for sigwait otherwise
-        if (sigismember(&default_wait_mask, sig) != 1) {
-            sigdelset(&mask, sig);
-            reload();
-        }
-        if (sigismember(&ignored_with_handler, sig) == 1) {
-            struct sigaction sa_ign;
-            sa_ign.sa_handler = SIG_IGN;
-            sigemptyset(&sa_ign.sa_mask);
-            sa_ign.sa_flags = SA_RESTART;
-            sigaction(sig, &sa_ign, nullptr);
-            sigdelset(&ignored_with_handler, sig);
-        }
-
-        //printd(5, "removing handler for signal %d\n", sig);
-
-        // ensure handler is not in progress, if so mark for deletion
-        if (handlers[sig].status == QoreSignalHandler::SH_InProgress) {
-            handlers[sig].status = QoreSignalHandler::SH_Delete;
-        } else {
-            // must be called in the signal lock
-            old = handlers[sig].take();
-            qore_program_private::delSignal(*old.pgm, sig);
-            --num_handlers;
-        }
+        removeHandlerUnlocked(sig, old);
     }
 
     // dereference outside the lock
@@ -861,8 +902,164 @@ int QoreSignalManager::removeHandler(int sig, ExceptionSink *xsink) {
     return 0;
 }
 
+bool QoreSignalManager::removeHandlerUnlocked(int sig, CodePgm& old) {
+    if (!handlers[sig].isSet()) {
+        return false;
+    }
+
+    // a handler removed while its callback runs is released by the signal thread when the callback returns
+    if (handlers[sig].status == QoreSignalHandler::SH_Delete) {
+        return true;
+    }
+
+    // the state of the signal is as if it never had a handler: the signal thread keeps waiting for a signal that it
+    // waits for without a handler, or the signal would no longer be processed as it was before, and it is removed
+    // from the signal mask for sigwait otherwise
+    if (sigismember(&default_wait_mask, sig) != 1) {
+        sigdelset(&mask, sig);
+        reload();
+    }
+    if (sigismember(&ignored_with_handler, sig) == 1) {
+        struct sigaction sa_ign;
+        sa_ign.sa_handler = SIG_IGN;
+        sigemptyset(&sa_ign.sa_mask);
+        sa_ign.sa_flags = SA_RESTART;
+        sigaction(sig, &sa_ign, nullptr);
+        sigdelset(&ignored_with_handler, sig);
+    }
+
+    //printd(5, "removing handler for signal %d\n", sig);
+
+    // ensure handler is not in progress, if so mark for deletion
+    if (handlers[sig].status == QoreSignalHandler::SH_InProgress) {
+        handlers[sig].status = QoreSignalHandler::SH_Delete;
+        return true;
+    }
+    // must be called in the signal lock
+    old = handlers[sig].take();
+    qore_program_private::delSignal(*old.pgm, sig);
+    --num_handlers;
+    return false;
+}
+
+bool QoreSignalManager::hasHandler(int sig) {
+    if (sig < 0 || sig >= QORE_SIGNAL_MAX) {
+        return false;
+    }
+    AutoLocker al(&mutex);
+    return handlers[sig].isSet() && handlers[sig].status != QoreSignalHandler::SH_Delete;
+}
+
+#ifdef DEBUG
+void QoreSignalManager::dbgHoldAfterCallback() {
+    AutoLocker al(&mutex);
+    dbg_hold_armed = true;
+}
+
+bool QoreSignalManager::dbgWaitHeldAfterCallback(int timeout_ms) {
+    AutoLocker al(&mutex);
+    int64 deadline = q_get_monotonic_us() / 1000 + timeout_ms;
+    while (!dbg_held) {
+        int64 left = deadline - q_get_monotonic_us() / 1000;
+        if (left <= 0) {
+            return false;
+        }
+        cond.wait(&mutex, static_cast<int>(left));
+    }
+    return true;
+}
+#endif
+
+void QoreSignalManager::removeProgramHandlers(const std::vector<QoreProgram*>& pgms, ExceptionSink* xsink) {
+    std::vector<CodePgm> olds;
+    int my_tid = ::q_gettid();
+    {
+        AutoLocker al(&mutex);
+        if (!enabled()) {
+            return;
+        }
+
+        // wait for any blocks to be lifted
+        waitForBlockUnlocked();
+
+        bool running = false;
+        for (QoreProgram* pgm : pgms) {
+            // the signals of the Program's handlers are changed only under this lock
+            int_set_t sigs = qore_program_private::getSignals(*pgm);
+            for (int sig : sigs) {
+                CodePgm old;
+                if (removeHandlerUnlocked(sig, old)) {
+                    running = true;
+                    // the signal thread hands the handler over to this thread when its callback has returned (see
+                    // below)
+                    if (tid != my_tid) {
+                        handlers[sig].release_tid = my_tid;
+                    }
+                }
+                if (old.funcref) {
+                    olds.push_back(old);
+                }
+            }
+        }
+
+        // the callback of one of the handlers runs in the signal thread: it ends, and so does the release of the
+        // signal thread's local data after it, which can run the code of the Programs as well, before this returns;
+        // not if the signal thread itself removes the handlers (as with exit() in a handler)
+        if (running && tid != my_tid) {
+            ++idle_waiting;
+#ifdef DEBUG
+            // a signal thread held by dbgHoldAfterCallback() continues now
+            if (dbg_held) {
+                cond.broadcast();
+            }
+#endif
+            while (handler_running && thread_running) {
+                cond.wait(&mutex);
+            }
+            --idle_waiting;
+        }
+
+        // the handlers whose callbacks were running are released here as well, in this thread (the thread that
+        // deletes their Program, which can still run their destructors), not in the signal thread (issue #5766)
+        for (auto i = released_handlers.begin(); i != released_handlers.end();) {
+            if (i->first == my_tid) {
+                olds.push_back(i->second);
+                i = released_handlers.erase(i);
+            } else {
+                ++i;
+            }
+        }
+    }
+
+    // dereference outside the lock
+    for (CodePgm& old : olds) {
+        old.del(xsink);
+    }
+}
+
+// the number of signals of the platform: its signals are 1 .. QORE_PLATFORM_NSIG - 1
+#if defined(NSIG)
+#define QORE_PLATFORM_NSIG NSIG
+#elif defined(_NSIG)
+#define QORE_PLATFORM_NSIG _NSIG
+#elif defined(__DARWIN_NSIG)
+#define QORE_PLATFORM_NSIG __DARWIN_NSIG
+#else
+#define QORE_PLATFORM_NSIG QORE_SIGNAL_MAX
+#endif
+
+bool QoreSignalManager::isValidSignal(int sig) {
+    // the handlers are indexed by the signal (issue #5829), and a signal that the platform does not have (NSIG and
+    // above) can never be delivered; the range is checked against NSIG itself: sigaddset() is no check of it, as
+    // macOS accepts NSIG
+    return sig > 0 && sig < QORE_SIGNAL_MAX && sig < QORE_PLATFORM_NSIG;
+}
+
 QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, bool reuse_sys) {
-    assert(sig > 0);
+    if (!isValidSignal(sig)) {
+        return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+            name);
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;
@@ -905,6 +1102,12 @@ QoreStringNode* QoreSignalManager::reassignSignal(int sig, const char* name, boo
 }
 
 QoreStringNode* QoreSignalManager::reassignSignals(const sig_vec_t& sig_vec, const char* name, bool reuse_sys) {
+    for (int sig : sig_vec) {
+        if (!isValidSignal(sig)) {
+            return new QoreStringNodeMaker("cannot reassign signal %d to module '%s': it is not a valid signal", sig,
+                name);
+        }
+    }
     AutoLocker al(&mutex);
     if (!enabled()) {
         return nullptr;

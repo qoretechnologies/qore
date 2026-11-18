@@ -1,25 +1,85 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 connections over TLS (ALPN) between HTTPClient and HttpServer
+
+/*  Http2Integration.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    End-to-end HTTP/2 tests of HTTPClient against a local HttpServer (TLS with ALPN): the requests, their bodies and
+    headers, error statuses and the reuse of one connection do not depend on an external server, whose rate limit
+    (429) failed the tests when they ran in several modes at once.  One smoke case still reaches an external server
+    (httpbin.org), for the negotiation with a server that is not Qore's; when it is unavailable or rate limited, the
+    case is skipped with the reason.
+*/
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
 %requires QUnit
+%requires Logger
 %requires json
+%requires HttpServerUtil
+%requires HttpServer
 %requires ../../TestCertificates.qm
 
 %exec-class Http2IntegrationTest
 
+#! Answers as the paths of httpbin.org that the tests use, and records the client port of each request
+class EchoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the client ports of the requests, in order: requests on one connection have the same port
+        Queue ports();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        ports.push(cx."peer-info".port);
+        string path = hdr.path ?? "";
+        path =~ s/^\/+//;
+        if (path =~ /^status\/[0-9]+$/) {
+            return makeResponse((path =~ x/([0-9]+)$/)[0].toInt(), "");
+        }
+        if (path =~ /^bytes\/[0-9]+$/) {
+            return makeResponse(200, binary(strmul("b", (path =~ x/([0-9]+)$/)[0].toInt())),
+                {"Content-Type": "application/octet-stream"});
+        }
+        hash<auto> rv = {
+            "method": hdr.method,
+            "headers": hdr - ("method", "path", "http_version", "_qore_orig_content_type"),
+        };
+        if (exists body) {
+            rv.data = body.typeCode() == NT_BINARY ? body.toString() : body;
+            if (hdr."content-type" =~ /^application\/json/) {
+                rv.json = parse_json(rv.data);
+            }
+        }
+        return makeResponse(200, make_json(rv), {"Content-Type": "application/json"});
+    }
+}
+
 #! HTTP/2 Integration Tests - End-to-End client-server tests
 public class Http2IntegrationTest inherits QUnit::Test {
-    public {
-        # Test SSL certificate (self-signed for testing)
-        const CertPem = TestCertificates::CertPem;
-
-        const KeyPem = TestCertificates::KeyPem;
-
-        # Port for test server (0 = auto-assign)
-        int server_port = 0;
+    private {
+        HttpServer server;
+        EchoHandler handler();
+        int port;
     }
 
     constructor() : Test("Http2IntegrationTest", "1.0") {
@@ -29,48 +89,41 @@ public class Http2IntegrationTest inherits QUnit::Test {
         addTestCase("HTTP/2 large body transfer", \testLargeBody());
         addTestCase("HTTP/2 headers preservation", \testHeadersPreservation());
         addTestCase("HTTP/2 error status codes", \testErrorStatusCodes());
-        addTestCase("HTTP/2 connection persistence external", \testConnectionPersistenceExternal());
+        addTestCase("HTTP/2 connection persistence", \testConnectionPersistence());
+        addTestCase("HTTP/2 with an external server", \testExternal());
 
         set_return_value(main());
     }
 
-    #! Makes a request to the external test server; a failure of the server skips the test case
-    /** The external server is a dependency of these tests, so its failures are not failures of the client;
-        assertions are always made outside of this method, so a failed assertion is never reported as a skip
-
-        @param client the client
-        @param body the request body, if any
-        @param method the request method
-        @param path the request path
-        @param hdr the request headers, if any
-        @param error_status the error status the request asks the server to return, if any
-
-        @note A server error is only the status the request asked for; any other 5xx is the external server
-        failing rather than answering, which is not a failure of the client.  Checking only a boolean "an error
-        was requested" cannot tell those apart, so a request for \c /status/500 answered with \c 502 by an
-        overloaded httpbin.org used to be reported as the client returning the wrong status.
-    */
-    private hash<auto> sendExternal(HTTPClient client, *data body, string method, string path, *hash<auto> hdr,
-            *int error_status) {
-        hash<auto> resp;
-        try {
-            resp = client.send(body, method, path, hdr, True);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s: %s", ex.err, ex.desc));
-        }
-        if (resp.status_code >= 500 && resp.status_code != error_status) {
-            testSkip(sprintf("External server unavailable: %s %s returned status %d", method, path,
-                resp.status_code));
-        }
-        return resp;
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        server.setDefaultHandler("echo", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            # no Alt-Svc for HTTP/3: an "auto" client would move its next requests to HTTP/3 (RFC 7838)
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
     }
 
-    #! Returns a client for the external test server
-    private HTTPClient getExternalClient(*hash<auto> opts) {
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! Returns a client for the local server
+    private HTTPClient getClient(*hash<auto> opts) {
+        # the requests of an earlier case are not this case's
+        handler.ports.clear();
         HTTPClient client({
-            "url": "https://httpbin.org",
+            "url": sprintf("https://localhost:%d", port),
             "http_version": "auto",
-            "timeout": 30s,
+            "timeout": 60s,
         } + opts);
         client.acceptAllCertificates(True);
         return client;
@@ -78,87 +131,122 @@ public class Http2IntegrationTest inherits QUnit::Test {
 
     #! Test basic GET request over HTTP/2
     testBasicGet() {
-        HTTPClient client = getExternalClient();
-        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/get");
+        HTTPClient client = getClient();
+        hash<auto> resp = client.send(NOTHING, "GET", "/get", NOTHING, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(200, resp.status_code, "Status should be 200");
         assertEq(Type::String, resp.body.type(), "Body should be string");
+        assertEq("GET", parse_json(resp.body).method);
     }
 
     #! Test POST request with JSON body
     testPostWithBody() {
-        HTTPClient client = getExternalClient();
+        HTTPClient client = getClient();
         string json_body = '{"test": "data", "number": 42}';
-        hash<auto> resp = sendExternal(client, json_body, "POST", "/post", {"Content-Type": "application/json"});
+        hash<auto> resp = client.send(json_body, "POST", "/post", {"Content-Type": "application/json"}, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(200, resp.status_code, "Status should be 200");
-        assertEq(Type::String, resp.body.type(), "Body should be string");
-        # httpbin echoes the request body
+        # the server echoes the request body
         assertEq({"test": "data", "number": 42}, parse_json(resp.body).json);
     }
 
     #! Test multiple sequential requests on same connection
     testSequentialRequests() {
-        HTTPClient client = getExternalClient();
-        hash<auto> resp1 = sendExternal(client, NOTHING, "GET", "/get");
-        assertTrue(client.isHttp2Active(), "HTTP/2 should be active after first request");
-        # the next requests reuse the connection
-        hash<auto> resp2 = sendExternal(client, NOTHING, "GET", "/headers");
-        assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
-        hash<auto> resp3 = sendExternal(client, NOTHING, "GET", "/ip");
-        assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
-        assertEq(200, resp1.status_code);
-        assertEq(200, resp2.status_code);
-        assertEq(200, resp3.status_code);
+        HTTPClient client = getClient();
+        foreach string path in (("/get", "/headers", "/ip")) {
+            hash<auto> resp = client.send(NOTHING, "GET", path, NOTHING, True);
+            assertTrue(client.isHttp2Active(), "HTTP/2 should be active for " + path);
+            assertEq(200, resp.status_code, path);
+        }
+        assertEq(1, getPorts(3).size(), "the requests use one connection");
     }
 
     #! Test large body transfer
     testLargeBody() {
-        HTTPClient client = getExternalClient({"timeout": 60s});
-        # 10KB of random bytes; HTTPClient::send() returns the body as a string, whose size is its byte count
-        # (random bytes are not valid text, so the character count is meaningless)
-        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/bytes/10240");
+        HTTPClient client = getClient();
+        # HTTPClient::send() returns the body as a string, whose size is its byte count
+        hash<auto> resp = client.send(NOTHING, "GET", "/bytes/1048576", NOTHING, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(200, resp.status_code, "Status should be 200");
-        assertEq(10240, resp.body.size(), "Body should be 10KB");
+        assertEq(1048576, resp.body.size(), "Body should be 1 MiB");
     }
 
     #! Test custom headers are preserved through HTTP/2
     testHeadersPreservation() {
-        HTTPClient client = getExternalClient();
-        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/headers", {
+        HTTPClient client = getClient();
+        hash<auto> resp = client.send(NOTHING, "GET", "/headers", {
             "X-Custom-Header": "test-value-123",
             "X-Another-Header": "another-value",
-        });
+        }, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(200, resp.status_code, "Status should be 200");
-        # httpbin echoes the request headers
+        # the server echoes the request headers (HTTP/2 header names are lower case)
         hash<auto> echoed = parse_json(resp.body).headers;
-        assertEq("test-value-123", echoed."X-Custom-Header");
-        assertEq("another-value", echoed."X-Another-Header");
+        assertEq("test-value-123", echoed."x-custom-header");
+        assertEq("another-value", echoed."x-another-header");
     }
 
     #! Test error status codes are properly returned
     testErrorStatusCodes() {
-        HTTPClient client = getExternalClient({"error_passthru": True});
-        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/status/404");
+        HTTPClient client = getClient({"error_passthru": True});
+        hash<auto> resp = client.send(NOTHING, "GET", "/status/404", NOTHING, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(404, resp.status_code, "Status should be 404");
-        resp = sendExternal(client, NOTHING, "GET", "/status/500", NOTHING, 500);
+        resp = client.send(NOTHING, "GET", "/status/500", NOTHING, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
         assertEq(500, resp.status_code, "Status should be 500");
     }
 
     #! Test HTTP/2 connection persistence with multiple request types
-    testConnectionPersistenceExternal() {
-        HTTPClient client = getExternalClient({"error_passthru": True});
+    testConnectionPersistence() {
+        HTTPClient client = getClient({"error_passthru": True});
         foreach list<string> req in (("GET", "/get"), ("POST", "/post"), ("PUT", "/put"), ("DELETE", "/delete")) {
-            hash<auto> resp = sendExternal(client, req[0] == "POST" ? "test data" : NOTHING, req[0], req[1]);
+            hash<auto> resp = client.send(req[0] == "POST" ? "test data" : NOTHING, req[0], req[1], NOTHING, True);
             assertTrue(client.isHttp2Active(), "HTTP/2 active after " + req[0]);
             assertEq(200, resp.status_code, req[0]);
+            assertEq(req[0], parse_json(resp.body).method, req[0]);
         }
-        # the connection still uses HTTP/2
-        sendExternal(client, NOTHING, "GET", "/get");
+        client.send(NOTHING, "GET", "/get", NOTHING, True);
         assertTrue(client.isHttp2Active(), "HTTP/2 still active at end");
+        # every request used the one connection
+        assertEq(1, getPorts(5).size(), "the requests use one connection");
+    }
+
+    #! A GET from an external HTTP/2 server (httpbin.org): the negotiation with a server that is not Qore's
+    /** The external server is a dependency of this case only: when it cannot be reached, fails (5xx) or limits the
+        rate of requests (429, as when the tests run in several modes at once), the case is skipped, and the skip
+        reports the reason; its answer is checked otherwise
+    */
+    testExternal() {
+        HTTPClient client({
+            "url": "https://httpbin.org",
+            "http_version": "auto",
+            "timeout": 30s,
+            "error_passthru": True,
+        });
+        client.acceptAllCertificates(True);
+        hash<auto> resp;
+        try {
+            resp = client.send(NOTHING, "GET", "/get", NOTHING, True);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("the external server is unavailable: %s: %s", ex.err, ex.desc));
+        }
+        if (resp.status_code == 429) {
+            testSkip("the external server limited the rate of requests (429)");
+        }
+        if (resp.status_code >= 500) {
+            testSkip(sprintf("the external server failed: status %d", resp.status_code));
+        }
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+        assertEq(200, resp.status_code, "Status should be 200");
+    }
+
+    #! Returns the distinct client ports of the given number of requests that the server received
+    private hash<string, bool> getPorts(int count) {
+        hash<string, bool> ports;
+        for (int i = 0; i < count; ++i) {
+            ports{handler.ports.get(60s)} = True;
+        }
+        return ports;
     }
 }

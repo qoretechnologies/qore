@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -205,6 +206,7 @@ printf(\"again: %s\\n\", mask_str(get_module_parse_option_mask(\"MaskTlMod\")));
 ",
             "negative": "printf(\"positive: %s\\n\", err(sub () { set_module_parse_option_mask(PO_ALLOW_INJECTION); }));
 printf(\"free: %s\\n\", err(sub () { set_module_parse_option_mask(PO_BROKEN_LOGIC_PRECEDENCE); }));
+printf(\"free cast: %s\\n\", err(sub () { set_module_parse_option_mask(PO_BROKEN_CAST); }));
 printf(\"style: %s\\n\", err(sub () { set_module_parse_option_mask(0, PO_REQUIRE_TYPES); }));
 printf(\"both: %s\\n\", err(sub () { set_module_parse_option_mask(PO_NO_THREAD_CONTROL, PO_NO_THREAD_CONTROL); }));
 printf(\"unchanged: %s\\n\", mask_str(get_module_parse_option_mask()));
@@ -290,6 +292,7 @@ again: strip= add=no-external-info
 ",
             "negative": "positive: MODULE-PARSE-OPTION-MASK-ERROR
 free: MODULE-PARSE-OPTION-MASK-ERROR
+free cast: MODULE-PARSE-OPTION-MASK-ERROR
 style: MODULE-PARSE-OPTION-MASK-ERROR
 both: MODULE-PARSE-OPTION-MASK-ERROR
 unchanged: strip= add=
@@ -313,7 +316,7 @@ module: strip=no-class-defs add=
     }
 
     constructor() : QUnit::Test("ModuleParseOptionMaskTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qlib_dir = realpath(get_script_dir() + "/../../../qlib");
         src_dir = tmp.path + "/src";

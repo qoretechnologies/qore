@@ -202,6 +202,15 @@ class CsvHelper {
                                     h.timezone = new TimeZone(fh.value);
                                     break;
                                 }
+                                case "quote": {
+                                    # how the field is quoted when it is written (see csvwriter_quoting)
+                                    if (!(self instanceof AbstractCsvWriter)) {
+                                        found = False;
+                                        break;
+                                    }
+                                    h.quote = parse_boolean(fh.value);
+                                    break;
+                                }
                                 case "code": {
                                     if (!fh.value.callp())
                                         throw errname, sprintf("%s: field %y \"%s\" attributes expects a callable value to process the field value; got %y instead", fld_errs, hi.key, fh.key, fh.value.type());

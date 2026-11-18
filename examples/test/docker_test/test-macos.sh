@@ -217,19 +217,13 @@ QORE_QPP_EXECUTABLE="${BUILD_DIR}/qpp" QORE_QCC_EXECUTABLE="${BUILD_DIR}/qcc" QO
 # `qore --module-dir`; macOS cannot use that here because the job configures
 # with an empty CMAKE_INSTALL_PREFIX, so the built binary reports no usable
 # module directory of its own — hence the same prefix probing as at build time.
+# Only the modules built for a module API that this qore loads are exposed (see
+# ci-native-modules.sh); a module in both prefixes is linked from the first.
 # The link farm is a directory of this run's own, so no other content has to be removed from it
+. "${QORE_SRC_DIR}/test/docker_test/ci-native-modules.sh"
 CI_NATIVE_MODULE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/qore-ci-native-modules.XXXXXX")
-for p in "${PM_PREFIX}" /usr/local; do
-    # "|| continue" and not "&& continue": under "set -e" a trailing test that
-    # fails would end the script rather than the iteration
-    [ -n "$p" ] || continue
-    for qmod in "$p"/lib/qore-modules/*-api-*.qmod; do
-        [ -e "${qmod}" ] || continue
-        # first prefix wins, matching the search order the full paths had
-        [ -e "${CI_NATIVE_MODULE_DIR}/$(basename "${qmod}")" ] || \
-            ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"
-    done
-done
+qore_ci_native_module_farm "${BUILD_DIR}/qore" "${CI_NATIVE_MODULE_DIR}" \
+    "${PM_PREFIX:+${PM_PREFIX}/lib/qore-modules}" /usr/local/lib/qore-modules
 
 # run the tests against job-built modules, source qlib, and compatible native
 # modules only. run_tests.sh prepends the build qmod and binary-module paths.
@@ -284,6 +278,9 @@ qore_ci_resource_report "before the tests"
 TEST_RC=0
 ./run_tests.sh || TEST_RC=$?
 qore_ci_resource_report "after the tests"
+# the notice of QORE_CI_NATIVE_MODULE_API_TRANSITION (the native modules whose tests were skipped, or that it is not
+# needed), at the end of the job's log
+qore_ci_native_module_notice
 if [ "${TEST_RC}" != "0" ]; then
     exit ${TEST_RC}
 fi

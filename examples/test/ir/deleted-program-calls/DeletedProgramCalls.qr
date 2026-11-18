@@ -1,0 +1,181 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Code of another Program that calls the code of a deleted Program is refused with PROGRAM-ERROR before that code
+# runs, in every execution mode, as by the AST interpreter (issue #5822); see DeletedProgramCalls.qtest.  The
+# background compile case needs a debug libqore (dbg_hold_bg_compile()).
+
+# counts the calls that ran the code of the deleted Program
+our int ran = 0;
+sub mark() { ++ran; }
+
+const DefSrc = "
+class K {
+    public { int n = 2; }
+    int m(int x) { mark(); return x + 1; }
+    static int s(int x) { mark(); return x + 4; }
+    # a closure created in a method, which captures the object
+    code mkc() { return int sub (int x) { mark(); return x + n; }; }
+}
+int sub f(int x) { mark(); return x * 2; }
+# a body that a fast path can evaluate without entering the Program (a native leaf)
+int sub add(int a, int b) { return a + b; }
+code sub mk_closure() { return int sub (int x) { mark(); return x + 3; }; }
+code sub mk_ref() { return \\f(); }
+K sub mk_obj() { return new K(); }
+# the object that the closure created in a method captures, which this Program keeps
+our K closure_obj;
+code sub mk_mclosure() { closure_obj = new K(); return closure_obj.mkc(); }
+# a closure whose parameter has the type of a class of this Program
+code sub mk_typed() { return int sub (K k) { return 1; }; }
+# code of the calling Program that the teardown of this Program runs: the thread that deletes it can still run its
+# code, so the call of f from the hook is made, as with the AST interpreter
+class D {
+    private { code hook; }
+    constructor(code h) { hook = h; }
+    destructor() {
+        printf(\"teardown hook: %d\\n\", hook(2));
+    }
+}
+our D dobj;
+sub arm(code h) { dobj = new D(h); }
+# a closure whose body a fast path can evaluate without entering the Program (a native leaf)
+code sub mk_leaf() { return int sub (int x) { return x + 3; }; }
+sub export_to(Program t) {
+    t.importFunction(\"f\", \"f_a\");
+    t.importFunction(\"add\", \"add_a\");
+    t.importClass(\"K\");
+}
+";
+
+const CallerSrc = "
+our code stored_closure;
+our code stored_ref;
+our code stored_leaf;
+our object stored_obj;
+our code stored_mclosure;
+our code stored_typed;
+int sub call_f(int x) { return f_a(x) + 1; }
+int sub call_add(int x) { return add_a(x, 2); }
+int sub call_method(int x) { K k(); return k.m(x); }
+int sub call_closure(int x) { return stored_closure(x); }
+int sub call_ref(int x) { return stored_ref(x); }
+int sub call_leaf(int x) { return stored_leaf(x); }
+int sub call_obj_method(int x) { return stored_obj.m(x); }
+int sub call_static(int x) { return K::s(x); }
+int sub call_mclosure(int x) { return stored_mclosure(x); }
+int sub call_typed(int x) { return stored_typed(stored_obj); }
+int sub bg_target(int x) { return f_a(x) + add_a(x, 1); }
+code sub mk_hook() { return int sub (int x) { return f_a(x) + 100; }; }
+";
+
+#! the functions of the calling Program that call into the defining Program
+const Calls = ("call_f", "call_add", "call_method", "call_closure", "call_ref", "call_leaf", "call_obj_method",
+    "call_static", "call_mclosure", "call_typed");
+
+ExecMode mode = EM_TIERED;
+foreach string a in (QORE_ARGV) {
+    switch (a) {
+        case "--exec-mode=ast": mode = EM_AST; break;
+        case "--exec-mode=ir": mode = EM_IR; break;
+        case "--exec-mode=jit": mode = EM_JIT; break;
+    }
+}
+# with tiered execution, the code runs in the IR tier while it is compiled in the background (with JIT execution, a
+# call waits for the compile of its function), unless the compiles are synchronous
+bool bg_compiles = mode == EM_TIERED && !ENV.QORE_JIT_SYNC_COMPILE;
+
+#! creates the defining Program and the calling Program, and runs every call so that the code is compiled
+list sub make_pair() {
+    Program a(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    a.setExecMode(mode);
+    a.importFunction("mark");
+    a.parse(DefSrc, "def");
+    Program b(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    b.setExecMode(mode);
+    a.callFunction("export_to", b);
+    b.parse(CallerSrc, "caller");
+    b.setGlobalVarValue("stored_closure", a.callFunction("mk_closure"));
+    b.setGlobalVarValue("stored_ref", a.callFunction("mk_ref"));
+    b.setGlobalVarValue("stored_leaf", a.callFunction("mk_leaf"));
+    b.setGlobalVarValue("stored_obj", a.callFunction("mk_obj"));
+    b.setGlobalVarValue("stored_mclosure", a.callFunction("mk_mclosure"));
+    b.setGlobalVarValue("stored_typed", a.callFunction("mk_typed"));
+    for (int i = 0; i < 3; ++i) {
+        foreach string fn in (Calls) {
+            b.callFunction(fn, i);
+        }
+    }
+    return (a, b);
+}
+
+#! calls \a fn in \a b after the defining Program was deleted and prints the outcome
+sub probe(Program b, string fn) {
+    int before = ran;
+    string outcome;
+    try {
+        auto rv = b.callFunction(fn, 5);
+        outcome = sprintf("returned %y", rv);
+    } catch (hash<ExceptionInfo> ex) {
+        outcome = ex.err;
+    }
+    printf("%s: %s%s\n", fn, outcome, ran > before ? " (the deleted Program's code ran)" : "");
+}
+
+{
+    list pair = make_pair();
+    Program b = pair[1];
+    {
+        Program a = pair[0];
+        pair = ();
+        delete a;
+    }
+    foreach string fn in (Calls) {
+        probe(b, fn);
+    }
+}
+
+# the teardown of the defining Program runs code of the calling Program that calls the defining Program's code
+{
+    list pair = make_pair();
+    Program b = pair[1];
+    {
+        Program a = pair[0];
+        pair = ();
+        code hook = b.callFunction("mk_hook");
+        # the hook and f run while the defining Program lives, so that the teardown runs their lowered code (IR or
+        # native, depending on the execution mode)
+        for (int i = 0; i < 3; ++i) {
+            hook(2);
+        }
+        a.callFunction("arm", hook);
+        int before = ran;
+        delete a;
+        printf("teardown ran the defining Program's code: %d\n", ran - before);
+    }
+}
+
+# the defining Program is deleted while the code of the calling Program is being compiled in the background
+{
+    list pair = make_pair();
+    Program b = pair[1];
+    if (bg_compiles) {
+        dbg_hold_bg_compile("llvm", "bg_target");
+    }
+    for (int i = 0; i < 3; ++i) {
+        b.callFunction("bg_target", i);
+    }
+    bool held = bg_compiles && dbg_wait_bg_compile_held("llvm", 60000);
+    {
+        Program a = pair[0];
+        pair = ();
+        delete a;
+    }
+    if (held) {
+        dbg_continue_bg_compile(60000);
+    }
+    if (bg_compiles) {
+        dbg_wait_bg_compile_idle();
+    }
+    probe(b, "bg_target");
+}

@@ -1,0 +1,261 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class SandboxUncontrolledApiPolicyTest
+
+#! Tests the uncontrolled-API policy of a sandbox: the trust setting of code that a sandbox governs
+/** SandboxManager::setUncontrolledApiPolicy() (default: refuse) decides whether code that a sandbox governs counts as
+    restricted; SandboxManager::isRestricted() sees the sandbox through a policy barrier and a system-policy capability,
+    as isSandboxed() does, and SandboxManager::isUncontrolledApiAllowed() honours them, as a policy check does
+*/
+public class SandboxUncontrolledApiPolicyTest inherits QUnit::Test {
+    public {
+        #! The code of the Programs of the test: queries run through the Program, and a class whose objects carry the
+        #! sandbox of the Program that creates them
+        const Source = "
+hash<string, bool> sub query() {
+    return {
+        \"sandboxed\": SandboxManager::isSandboxed(),
+        \"restricted\": SandboxManager::isRestricted(),
+        \"allowed\": SandboxManager::isUncontrolledApiAllowed(),
+    };
+}
+
+auto sub through(code c) {
+    return c();
+}
+
+# a thread that the code starts: it inherits the sandbox of the code that starts it
+hash<string, bool> sub query_background() {
+    Queue q();
+    background q.push(query());
+    return q.get();
+}
+
+# a child Program that this code creates with a sandbox of its own that allows uncontrolled APIs
+hash<string, bool> sub query_child(string src) {
+    SandboxManager own();
+    own.setFilesystemDefaultPolicy(True);
+    own.setNetworkDefaultPolicy(True);
+    own.setUncontrolledApiPolicy(True);
+    Program child(PO_NEW_STYLE);
+    child.setSandboxManager(own);
+    child.parse(src, \"child\");
+    return child.callFunction(\"query\");
+}
+
+public class Probe {
+    hash<string, bool> query() {
+        return ::query();
+    }
+}
+
+object sub make_probe() {
+    return new Probe();
+}
+";
+    }
+
+    constructor() : Test("Sandbox uncontrolled API policy", "1.0") {
+        addTestCase("the policy defaults to refuse and is part of the configuration", \defaultTest());
+        addTestCase("code that no sandbox governs is not restricted", \trustedTest());
+        addTestCase("code that the default sandbox governs is restricted", \restrictedTest());
+        addTestCase("code that a sandbox allowing uncontrolled APIs governs is not restricted", \allowTest());
+        addTestCase("nested Programs: the Program that runs the code decides", \nestedTest());
+        addTestCase("a composition is restricted if any member refuses uncontrolled APIs", \compositionTest());
+        addTestCase("a policy barrier and a capability", \barrierTest());
+        addTestCase("an object created under a sandbox carries its policy", \provenanceTest());
+        addTestCase("sandboxed code cannot allow uncontrolled APIs for the sandbox that governs it", \changeTest());
+        addTestCase("a child Program that sandboxed code allows is still restricted", \childTest());
+        addTestCase("copy() keeps the policy", \copyTest());
+        addTestCase("a thread that the code starts inherits the policy", \threadTest());
+        set_return_value(main());
+    }
+
+    #! Returns a Program with the test code and a sandbox with the given policy, or with no sandbox
+    private static Program getProgram(*bool allow) {
+        Program p(PO_NEW_STYLE);
+        if (exists allow) {
+            SandboxManager sm();
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+            if (allow) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            p.setSandboxManager(sm);
+        }
+        p.parse(Source, "sandbox-uncontrolled-api-policy");
+        return p;
+    }
+
+    defaultTest() {
+        SandboxManager sm();
+        assertFalse(sm.getUncontrolledApiPolicy(), "the default refuses");
+        assertFalse(sm.getConfiguration().uncontrolled_api_policy, "in the configuration");
+        sm.setUncontrolledApiPolicy(True);
+        assertTrue(sm.getUncontrolledApiPolicy());
+        assertTrue(sm.getConfiguration().uncontrolled_api_policy, "in the configuration");
+        sm.setUncontrolledApiPolicy(False);
+        assertFalse(sm.getUncontrolledApiPolicy(), "denying again");
+        # the presets refuse them
+        assertFalse(SandboxManager::createLockdown().getUncontrolledApiPolicy(), "lockdown");
+        assertFalse(SandboxManager::createWebSafe().getUncontrolledApiPolicy(), "web-safe");
+    }
+
+    trustedTest() {
+        assertEq({"sandboxed": False, "restricted": False, "allowed": True}, getProgram().callFunction("query"));
+        assertFalse(SandboxManager::isRestricted(), "the test itself");
+        assertTrue(SandboxManager::isUncontrolledApiAllowed(), "the test itself");
+    }
+
+    restrictedTest() {
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False}, getProgram(False).callFunction("query"));
+    }
+
+    allowTest() {
+        # an allow-everything sandbox that a host attaches for interrupts and limits: its code is trusted
+        assertEq({"sandboxed": True, "restricted": False, "allowed": True}, getProgram(True).callFunction("query"));
+    }
+
+    nestedTest() {
+        # as for the filesystem and network policy, the innermost Program with a sandbox governs a call that trusted
+        # code hands to another Program: trusted code decides which Program its callback enters
+        Program deny = getProgram(False);
+        Program allow = getProgram(True);
+        code q_deny = auto sub () { return deny.callFunction("query"); };
+        code q_allow = auto sub () { return allow.callFunction("query"); };
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False}, allow.callFunction("through", q_deny),
+            "a trusting sandbox calls code that a refusing one governs");
+        assertEq({"sandboxed": True, "restricted": False, "allowed": True}, deny.callFunction("through", q_allow),
+            "a refusing sandbox calls code that a trusting one governs");
+    }
+
+    compositionTest() {
+        # an object of a trusted class created under one sandbox carries it; run under another, both govern it, and
+        # the composition allows uncontrolled APIs only if both do
+        Program deny = getProgram(False);
+        Program allow = getProgram(True);
+        Program allow2 = getProgram(True);
+        code make = auto sub () { return new TrustedProbe(); };
+        object deny_probe = deny.callFunction("through", make);
+        object allow_probe = allow2.callFunction("through", make);
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False},
+            allow.callFunction("through", auto sub () { return deny_probe.query(); }),
+            "created under the refusing sandbox, run under a trusting one");
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False},
+            deny.callFunction("through", auto sub () { return allow_probe.query(); }),
+            "created under a trusting sandbox, run under the refusing one");
+        assertEq({"sandboxed": True, "restricted": False, "allowed": True},
+            allow.callFunction("through", auto sub () { return allow_probe.query(); }),
+            "created under a trusting sandbox, run under another trusting one");
+    }
+
+    barrierTest() {
+        Program deny = getProgram(False);
+        # a policy barrier of trusted code called by the restricted code: the barrier is judged by the Program of the
+        # trusted code that establishes it, so it is established; isRestricted() sees the sandbox through it, and
+        # isUncontrolledApiAllowed() honours it (qore#5741); the call is created before the restricted code runs (a
+        # closure created while serving it carries its sandbox)
+        code system_call = auto sub () {
+            return {"restricted": SandboxManager::isRestricted(),
+                "allowed": SandboxManager::isUncontrolledApiAllowed()};
+        };
+        code barrier = auto sub () {
+            return SandboxManager::callWithSystemPolicy(system_call);
+        };
+        hash<auto> h = deny.callFunction("through", barrier);
+        assertTrue(h.restricted, "a barrier of trusted code for the restricted code: still restricted");
+        assertTrue(h.allowed, "a barrier of trusted code for the restricted code: not governed by the caller's policy");
+        # under a sandbox that allows uncontrolled APIs, the code is not restricted
+        Program allow = getProgram(True);
+        h = allow.callFunction("through", barrier);
+        assertFalse(h.restricted, "a barrier of trusted code: not restricted");
+        assertTrue(h.allowed, "a barrier of trusted code: uncontrolled APIs allowed");
+        # a system-policy capability of trusted code: as a barrier
+        code cap = SandboxManager::createSystemPolicyCall(auto sub () {
+            return {"restricted": SandboxManager::isRestricted(),
+                "allowed": SandboxManager::isUncontrolledApiAllowed()};
+        });
+        h = deny.callFunction("through", cap);
+        assertTrue(h.restricted, "a capability: still restricted");
+        assertTrue(h.allowed, "a capability: not governed by the caller's policy");
+    }
+
+    provenanceTest() {
+        # an object created under the refusing sandbox carries it, also when trusted code calls it later
+        # the Programs that own the classes live as long as their objects are used
+        Program deny = getProgram(False);
+        Program allow = getProgram(True);
+        object deny_probe = deny.callFunction("make_probe");
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False}, deny_probe.query(),
+            "an object of the refusing sandbox");
+        object allow_probe = allow.callFunction("make_probe");
+        assertEq({"sandboxed": True, "restricted": False, "allowed": True}, allow_probe.query(),
+            "an object of the trusting sandbox");
+    }
+
+    childTest() {
+        # the child's code runs on the restricted code's thread: the restricting sandbox still governs it
+        string query_src = "hash<string, bool> sub query() { return {\"sandboxed\": SandboxManager::isSandboxed(), "
+            "\"restricted\": SandboxManager::isRestricted(), \"allowed\": "
+            "SandboxManager::isUncontrolledApiAllowed()}; }";
+        Program deny = getProgram(False);
+        hash<string, bool> h = deny.callFunction("query_child", query_src);
+        assertTrue(h.restricted, "the child of restricted code");
+        assertFalse(h.allowed, "the child of restricted code");
+        # the child of trusted code that allows them is not restricted
+        Program allow = getProgram(True);
+        h = allow.callFunction("query_child", query_src);
+        assertFalse(h.restricted, "the child of trusted code");
+    }
+
+    copyTest() {
+        SandboxManager sm();
+        assertFalse(sm.copy().getUncontrolledApiPolicy(), "the default is copied");
+        sm.setUncontrolledApiPolicy(True);
+        assertTrue(sm.copy().getUncontrolledApiPolicy(), "allow is copied");
+    }
+
+    threadTest() {
+        assertEq({"sandboxed": True, "restricted": True, "allowed": False},
+            getProgram(False).callFunction("query_background"), "a thread of restricted code");
+        assertEq({"sandboxed": True, "restricted": False, "allowed": True},
+            getProgram(True).callFunction("query_background"), "a thread of trusted code");
+    }
+
+    changeTest() {
+        # sandboxed code cannot allow uncontrolled APIs for the sandbox that governs it
+        SandboxManager sm();
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(sm);
+        p.parse("sub allow(SandboxManager sm) { sm.setUncontrolledApiPolicy(True); }\n"
+            "sub deny(SandboxManager sm) { sm.setUncontrolledApiPolicy(False); }\n"
+            "SandboxManager sub make() { SandboxManager own(); own.setUncontrolledApiPolicy(True); return own; }\n",
+            "sandbox-uncontrolled-api-policy-change");
+        assertThrows("SANDBOX-ACCESS-ERROR", "setUncontrolledApiPolicy", \p.callFunction(), ("allow", sm));
+        assertFalse(sm.getUncontrolledApiPolicy(), "unchanged");
+        # denying only adds a restriction
+        p.callFunction("deny", sm);
+        # a manager that the sandboxed Program created itself can be changed by it
+        assertTrue(p.callFunction("make").getUncontrolledApiPolicy(), "its own manager");
+    }
+}
+
+#! A class of trusted code: its objects carry the sandbox that governs the code that creates them
+class TrustedProbe {
+    hash<string, bool> query() {
+        return {
+            "sandboxed": SandboxManager::isSandboxed(),
+            "restricted": SandboxManager::isRestricted(),
+            "allowed": SandboxManager::isUncontrolledApiAllowed(),
+        };
+    }
+}

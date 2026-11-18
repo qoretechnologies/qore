@@ -359,12 +359,27 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("RUNTIME-OVERLOAD-ERROR", positional_err, "positional runtime type error");
         assertThrows(positional_err, "no variant matching", sub () { na_required(b: 2, a: bad); });
 
-        # an overloaded target whose variant depends on runtime argument types is still rejected
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "overloaded target is ambiguous", sub () {
+        # an overloaded target whose variant depends on runtime argument types is resolved at runtime among the
+        # variants with the same parameter names at the positions of the arguments
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("sub o(int a, int c = 3) {} sub o(string a, int c = 3) {} auto x = 1; o(x, c: 9);",
-                "overloaded-runtime-typed");
-        });
+            p.parse("string sub o(int a, int c = 3) { return sprintf(\"o(int) %y %y\", a, c); } "
+                "string sub o(string a, int c = 3) { return sprintf(\"o(string) %y %y\", a, c); } "
+                "string sub t(auto x) { return o(x, c: 9); }", "overloaded-runtime-typed");
+            assertEq("o(int) 1 9", p.callFunction("t", 1), "overloaded named call resolved at runtime: int");
+            assertEq("o(string) \"s\" 9", p.callFunction("t", "s"),
+                "overloaded named call resolved at runtime: string");
+        }
+        # ... and among the variants that the names can be bound to when the variants name their parameters
+        # differently: the arguments are bound by name to each variant at run time
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("string sub o(int a, int c = 3) { return sprintf(\"o(int a) %y %y\", a, c); } "
+                "string sub o(string b, int c = 3) { return sprintf(\"o(string b) %y %y\", b, c); } "
+                "string sub t(auto x) { return o(x, c: 9); }", "overloaded-runtime-typed-other-names");
+            assertEq("o(int a) 1 9", p.callFunction("t", 1));
+            assertEq("o(string b) \"s\" 9", p.callFunction("t", "s"));
+        }
 
         # untyped parameters (only allowed without %require-types) are skipped the same way
         {
@@ -1353,6 +1368,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "s.submitHttp2ConnectResponse(stream_id: 1, status_code: 200, headers: headers); "
             "s.startPollSendHttp2ConnectResponse(stream_id: 1, status_code: 200, headers: headers); "
             "s.waitForHttp2StreamDrain(stream_id: 1, timeout_ms: 0); "
+            "s.waitForHttp2StreamFlushed(stream_id: 1, timeout_ms: 0); "
             "s.submitHttp2StreamingResponseHeaders(stream_id: 1, status_code: 200, headers: headers); "
             "s.sendHttp2StreamData(stream_id: 1, data: data, end_stream: False); "
             "s.sendHttp2Trailers(stream_id: 1, trailers: {\"grpc-status\": \"0\"}); "
@@ -1376,6 +1392,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "s.submitQuicRequestStreaming(method: \"POST\", path: \"/stream\", headers: headers); "
             "s.sendQuicClientStreamData(stream_id: 0, body: data, end_stream: False); "
             "s.waitForQuicClientStreamDrain(stream_id: 0, timeout_ms: 0); "
+            "s.waitForQuicClientStreamFlushed(stream_id: 0, timeout_ms: 0); "
             "s.cancelQuicStream(session_id: 1, stream_id: 0); "
             "s.submitQuicResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers, body: data); "
             "s.submitQuicShutdownNotice(session_id: 1); s.submitQuicShutdown(session_id: 1); "
@@ -1597,6 +1614,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "pipe.addSelectContextValue(result_key: \"result\", condition_key: \"ok\", "
             "true_source_key: \"a\", false_source_key: \"b\"); "
             "pipe.addContextOr(result_key: \"either\", key_a: \"a\", key_b: \"b\"); "
+            "pipe.addRequireContextKey(context_key: \"ok\", error_code: \"ERR\", desc: \"not ok\"); "
+            "pipe.addCheckRegex(source_key: \"text\", pattern: \"^ok$\", result_key: \"is_ok\"); "
             "pipe.addGoto(target_step: 1); "
             "pipe.addPushQueue(queue_id: 1); "
             "pipe.addDrainQueueSend(queue_id: 1); "
@@ -2182,10 +2201,50 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub f(int a, int b) {} f(1, a: 2);", "overwrite-positional");
         });
 
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "call-reference or closure calls without a parse-time-resolved signature", sub() {
+        # a named call through a call reference binds its arguments by name when it is made (M4 phase 3)
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("sub f(int a) {} code c = \\f(); c(a: 1);", "call-reference");
+            p.parse("int sub f(int a, int b = 2) { return a * 10 + b; } int sub t() { code c = \\f(); return c(b: 5, a: 1); }",
+                "call-reference");
+            assertEq(15, p.callFunction("t"));
+        }
+        assertThrows("RUNTIME-OVERLOAD-ERROR", "closure>\\(z: integer\\)", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t() { code c = sub (int a) {}; c(z: 1); }", "call-reference-unknown");
+            p.callFunction("t");
         });
+        # a reference node resolves the method for the class of each object when the reference is created
+        # (qore#6062): for an object of a subclass that inherits the method, it refers to the method by name; a class
+        # without the method cannot be referred to, whether or not it has a methodGate() method
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class HasFoo { string foo(int count, string label) { return sprintf('%d %s', count, label); } }
+class HasChild inherits HasFoo {}
+class GateFoo { string methodGate(string m, auto a, auto b) { return sprintf('gate %s %y %y', m, a, b); } }
+class NoFoo {}
+class GateChild inherits GateFoo {}
+code sub foo_ref(object o) { return \\o.foo(); }
+HasFoo has_foo();
+HasChild has_child();
+code hf = foo_ref(has_foo);
+code cf = foo_ref(has_child);
+string sub has_named() { return hf(label: 'h', count: 1); }
+string sub inherited_named() { return cf(label: 'c', count: 2); }
+string sub inherited_positional() { return cf(3, 'c'); }
+code sub gate_ref() { return foo_ref(new GateFoo()); }
+code sub missing_ref() { return foo_ref(new NoFoo()); }
+code sub inherited_gate_ref() { return foo_ref(new GateChild()); }", "method-gate-reference");
+            p.run();
+            assertEq("1 h", p.callFunction("has_named"));
+            assertEq("2 c", p.callFunction("inherited_named"));
+            assertEq("3 c", p.callFunction("inherited_positional"));
+            assertThrows("OBJECT-METHOD-REFERENCE-ERROR", "GateFoo::foo\\(\\): unknown method", \p.callFunction(),
+                "gate_ref");
+            assertThrows("OBJECT-METHOD-REFERENCE-ERROR", "NoFoo::foo\\(\\): unknown method", \p.callFunction(),
+                "missing_ref");
+            assertThrows("OBJECT-METHOD-REFERENCE-ERROR", "GateChild::foo\\(\\): unknown method", \p.callFunction(),
+                "inherited_gate_ref");
+        }
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
             Program p(PO_NEW_STYLE);
@@ -2202,10 +2261,12 @@ public class NamedArgumentsTest inherits QUnit::Test {
             p.parse("sub f(...) {} f(a: 1);", "varargs-only");
         });
 
-        assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous or depends on runtime argument types", sub() {
+        # an int argument matches abs(int value) better than the other variants, so it selects it (qore#5990)
+        {
             Program p(PO_NEW_STYLE);
-            p.parse("abs(value: 1);", "ambiguous-builtin-named");
-        });
+            p.parse("auto sub t() { return abs(value: -1); }", "builtin-named-best-match");
+            assertEq(1, p.callFunction("t"));
+        }
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "Datasource::constructor\\(description: string\\)", sub() {
             Program p(PO_NEW_STYLE);

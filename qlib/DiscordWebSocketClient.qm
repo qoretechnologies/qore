@@ -55,6 +55,8 @@ module DiscordWebSocketClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("discordwss", DiscordWebSocketConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage DiscordWebSocketClient Module
@@ -364,8 +366,9 @@ public class DiscordHeartbeat {
     # The state is changed in synchronized methods and waited for with a Queue and a Counter: the changes are made
     # also by cleanup on a cancelled thread (the end of a cancelled heartbeat thread), and neither a synchronized
     # method nor a Queue push nor a Counter decrement is a cancellation point, while a Mutex lock is (see
-    # design/cooperative-cancellation.md "Cleanup Critical Sections"); a destructor running on a cancelled thread is
-    # not covered: it takes Mutex locks before it stops the heartbeat
+    # design/cooperative-cancellation.md "Cleanup Critical Sections"); a destructor running on a cancelled thread
+    # takes Mutex locks before it stops the heartbeat, which it can because the destructor of a trusted class runs
+    # with cancellation deferred (see "Destructors" there)
 
     #! Returns @ref True if the thread must stop
     synchronized bool isStopped() {
@@ -421,6 +424,22 @@ public class DiscordHeartbeat {
         while (!isStopped()) {
             # in whole milliseconds: a wait of 0 ms would not end before a wakeup
             int remaining = (target - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                return;
+            }
+            sleep(remaining);
+        }
+    }
+
+    #! Waits for the given number of milliseconds, measured on the monotonic clock, or until the thread is told to stop
+    /** As waitUntil(), but a step of the system clock does not change the wait: a step back of an hour made the
+        heartbeat wait an hour, and the gateway closed the session.
+    */
+    waitFor(int ms) {
+        int deadline_us = clock_get_monotonic_us() + ms * 1000;
+        while (!isStopped()) {
+            # in whole milliseconds, rounded up: a wait of 0 ms would not end before a wakeup
+            int remaining = (deadline_us - clock_get_monotonic_us() + 999) / 1000;
             if (remaining <= 0) {
                 return;
             }
@@ -996,6 +1015,10 @@ hash<auto> h = ws.getInfo();
 
     #! Cancels the watchdog of a connection that a failed connect published and released
     private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
+        # the destructor waits until this call returned if it waits for the action, so that the cleanup below finds
+        # the client (issue #5983)
+        WscActionCall action_call(action_wait_count, action_call_key);
+        on_exit remove action_call;
         on_error cancelStaleHelloWatchdog();
         return WebSocketClient::connectIntern(opts, \info, reconnect);
     }
@@ -1046,7 +1069,7 @@ hash<auto> h = ws.getInfo();
         }
         # the timer's callback carries its generation (closures do not keep the client alive)
         int gen = ++hello_watchdog_gen;
-        hello_watchdog_timer = controller.addTimer(now_us() + milliseconds(HelloWatchdogTimeoutMs),
+        hello_watchdog_timer = controller.addTimerDelay(milliseconds(HelloWatchdogTimeoutMs),
             wrapAsyncCallback(sub () { helloWatchdogFired(gen); }), watchdog_owner);
     }
 
@@ -1146,7 +1169,7 @@ hash<auto> h = ws.getInfo();
         }
         # the timer's callback carries its generation (closures do not keep the client alive)
         int gen = ++resume_watchdog_gen;
-        resume_watchdog_timer = controller.addTimer(now_us() + milliseconds(ResumeWatchdogTimeoutMs),
+        resume_watchdog_timer = controller.addTimerDelay(milliseconds(ResumeWatchdogTimeoutMs),
             wrapAsyncCallback(sub () { resumeWatchdogFired(gen); }), watchdog_owner);
     }
 
@@ -1443,8 +1466,8 @@ hash<auto> h = ws.getInfo();
         @param detach mark the record detached (its thread is not waited for)
     */
     private static stopHeartbeatRecord(DiscordHeartbeat h, *bool detach) {
-        # not a cancellation point; note that a destructor running on a cancelled thread does not get here: it takes the
-        # heartbeat lock (a Mutex, a cancellation point) first
+        # not a cancellation point; a destructor running on a cancelled thread gets here after it took the heartbeat
+        # lock (a Mutex, a cancellation point), because the destructor of a trusted class runs with cancellation deferred
         h.requestStop(detach);
     }
 
@@ -1531,7 +1554,7 @@ hash<auto> h = ws.getInfo();
                 sleep = (float("0." + rand()) * sleep).toInt();
                 running = True;
             }
-            h.waitUntil(now_us() + milliseconds(sleep));
+            h.waitFor(sleep);
             if (h.isStopped()) {
                 break;
             }

@@ -49,6 +49,16 @@ module DebugProgramControl {
     The %DebugProgramControl module provides common functionality for implementing debugger server utilities
 
     @subsection dc_v0_1_3 v0.1.3
+    - the end of the code of a program run is sent to the clients as an \c "exit" event
+      (@ref DebugUtil::DebugEventCmd "DebugEventCmd::Exit") with the value that @ref Qore::Program::run() "Program::run()"
+      returns in \c result, the \c pgmid, \c tid and \c threadname of the thread that ran it, and \c stamp; the thread
+      does not stop there, and stops at its \c detach interrupt as before (see
+      @ref Qore::DebugProgram::onRunExit() "DebugProgram::onRunExit()";
+      <a href="https://github.com/qoretechnologies/qore/issues/3401">issue 3401</a>)
+    - the callbacks of the debugger run with the cancellation of the thread deferred, so that the code of the
+      debugger always completes and the debugged code is cancelled where it would be without the debugger: a thread
+      that is cancelled while it is stopped stays stopped until a client resumes it, or the debugger ends the program
+      or releases its threads (<a href="https://github.com/qoretechnologies/qore/issues/5794">issue 5794</a>)
     - a stopped thread answers every command of a client, a command without a result with an empty hash, and a
       command queued for a thread that resumed is answered with an error, so that a client can wait for the answer
       without a timeout
@@ -66,6 +76,16 @@ module DebugProgramControl {
       writes before an interrupt is sent before the interrupt
     - interrupt events of exceptions give \c uncaught: @ref True if no try statement of debuggable code in the call
       stack catches the exception
+    - a step to the block of the top-level code, whose statement ID is 0 in
+      @ref Qore::DebugProgram::onStep() "DebugProgram::onStep()" as it has none, stops at the first statement of the
+      block, as a step to a block does, and not at the block
+    - a thread stops once for an exception, at its first event that a client's exception filter matches: the
+      exception events of the statements that contain it, which the exception leaves after the thread continued, do
+      not stop the thread again, and neither does a rethrow of the exception, unless the rethrow makes uncaught an
+      exception that the thread stopped at while it was caught and a client has the \c "uncaught" exception filter
+      (see the \c debug_id key of @ref Qore::ExceptionInfo "ExceptionInfo"); so a step after an exception stop
+      continues to the handler of the exception (its catch block, or the caller that catches it) instead of stopping at
+      the exception again in each statement that the exception leaves
     - breakpoints have conditions, hit conditions and log messages, which all clients share and the thread that hits
       a breakpoint checks before it stops: the \c condition, \c hitcondition and \c log commands of
       \c program//breakpoint/&lt;id&gt; set and get them, \c breakpoint//create takes them in its value (\c condition,
@@ -86,12 +106,12 @@ module DebugProgramControl {
     - the \c program/&lt;id&gt;/statement/stepintargets command gives the calls of a statement that can be stepped into
       (see @ref Qore::ProgramControl::getStepInTargets() "ProgramControl::getStepInTargets()"), and
       \c thread/go/stepinto with the index of a call in them as \c target in its value steps into the call: the
-      thread matches the functions that its statement calls with the call, also a method of a subclass and the code
-      of a call reference, and runs the others to their return
+      thread matches the code that its statement calls with the call by the location of the call, also a method of a
+      subclass and the code of a call reference, and runs the others to their return
     - a statement can be given by its line and its 0-based byte \c column, for a breakpoint on a statement of a line
       with more than one statement; the \c program/&lt;id&gt;/statement/list command gives the statements of a line with
-      their columns, and interrupt events and the frames of call stacks give the columns of their statements in
-      \c column and \c endcolumn where they are known
+      their columns, and interrupt events and the frames of call stacks give the columns of their statements, or the
+      columns of their calls for frames of called code, in \c column and \c endcolumn where they are known
     - interrupt events give the name of the thread in \c threadname, and program lists give the current names of the
       threads of programs in \c threadNames
     - the interrupt event of a thread that attaches gives \c programstart: @ref True for the first thread of a
@@ -100,7 +120,9 @@ module DebugProgramControl {
     - added the \c program/&lt;id&gt;/terminate command,
       @ref DebugProgramControl::DebugProgramControl::terminateProgram() "terminateProgram()" and
       @ref DebugProgramControl::DebugProgramControl::isTerminating() "isTerminating()": a debugged program ends, and its
-      threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O
+      threads end with a \c THREAD-CANCELLED exception, also those that wait, as for a lock or for I/O; a thread
+      that stops at the end of its code (\c exit) or when it leaves the program (\c detach) is resumed by the client,
+      as for any thread that ends, also when it stopped there before the program was ended
     - the condition and the expressions of the log message of a breakpoint are parsed with the variables of its
       statements when they are set, and refused with \c BREAKPOINT-CONDITION-ERROR if they cannot be parsed; expressions
       are evaluated also with the top-level local variables of the program, which have global scope
@@ -117,6 +139,9 @@ module DebugProgramControl {
       \c pause as @ref True, so that clients can tell the pause from the end of a step
     - the \c thread/local/&lt;name&gt;/get and \c thread/variable/get commands give the declared type of a local
       variable in \c declaredType, and \c unassigned is @ref True for a variable that was declared but not assigned;
+      a local variable whose value is not available, as AOT-compiled code keeps it in native code (\c unavailable,
+      see @ref Qore::get_local_vars() "get_local_vars()"), is given without a value and with \c unavailable, and an
+      expression or a variable path that uses it raises an error instead of giving it a value;
       exception events give the hint of an exception that matches a common pitfall of %Qore in its \c arg (see
       @ref DebugUtil::AbstractDebugControl::formatRuntimeDiagnostic() "AbstractDebugControl::formatRuntimeDiagnostic()")
     - a program created with the \c program//create command is removed from debugging also when it ends with an
@@ -210,6 +235,16 @@ public namespace DebugProgramControl {
             #! serializes the access to pauseRequests and pauseSkippedBlocks
             Mutex pauseLock();
 
+            #! the exceptions that a thread stopped at, by TID, the last one last: their IDs (see the \c debug_id key of
+            #! @ref Qore::ExceptionInfo "ExceptionInfo") with whether they were uncaught at the stop; the thread does
+            #! not stop at the other events of such an exception, which it makes for each statement that the exception
+            #! leaves, unless a rethrow made a caught one uncaught (#5906); an exception that the thread stops at while
+            #! another one propagates, as in an on_error handler, does not remove the other one, and at most
+            #! ExceptionStopMax exceptions are kept
+            hash<string, list<hash<auto>>> exceptionStops = {};
+            #! serializes the access to exceptionStops
+            Mutex exceptionStopLock();
+
             #! the function that returned, and its value, of a thread that ran until its function returned, by TID,
             #! which the next stop of the thread gives; see onFunctionExit()
             hash<string, hash<auto>> returnedValues = {};
@@ -234,6 +269,8 @@ public namespace DebugProgramControl {
             const BreakpointOptions = ("condition", "hitCondition", "logMessage");
             #! the exception filters of the exception/filter/set command; a client without filters has all of them
             const ExceptionFilters = ("user", "system", "uncaught");
+            #! the number of exceptions that are kept for a thread in exceptionStops
+            const ExceptionStopMax = 8;
 
             #! the options of breakpoints by the names of their commands
             const BreakpointCommandOptions = {
@@ -401,9 +438,7 @@ public namespace DebugProgramControl {
 
         #! Returns True if a client is connected
         private bool hasConnection() {
-            rwlConnection.readLock();
-            on_exit rwlConnection.readUnlock();
-            return boolean(ctxConnection);
+            return DebugProgramControl::withReadLock(rwlConnection, bool sub () { return boolean(ctxConnection); });
         }
 
         #! unregister all connections; the stopped threads continue
@@ -549,7 +584,13 @@ public namespace DebugProgramControl {
         /** The threads of the program end with a \c THREAD-CANCELLED exception: a thread that is stopped continues
             and ends, a thread that runs ends at its next statement, and a thread that waits, as for a lock or for I/O,
             is cancelled.  The thread that runs the program ends the run with the exception, which the code that
-            started the program can recognize with isTerminateException().
+            started the program can recognize with isTerminateException().  A thread that is stopped at the end of its
+            code (\c exit) or where it leaves the program (\c detach) stays stopped: its end is reported to the clients,
+            which resume it as any thread that ends.
+
+            A thread that ends runs no more statements of the program: the cleanup code of its frames, such as an
+            \c on_exit block, is ended at its first statement, so that a resource that such code releases, such as a
+            lock, is released only with the resources of the thread.
 
             @param pgm the program to end
 
@@ -557,7 +598,6 @@ public namespace DebugProgramControl {
         */
         public terminateProgram(ProgramControl pgm) {
             int pgm_id = pgm.getProgramId();
-            list<int> stopped = ();
             {
                 AutoLock al(startedLock);
                 terminatingPrograms{pgm_id} = True;
@@ -565,39 +605,63 @@ public namespace DebugProgramControl {
             # the threads that end with the cancellation end without an error; this is set before any thread is resumed
             # or cancelled, as a thread that ended first would report its exception as unhandled
             setProgramTerminating(pgm);
-            {
-                # no thread is registered as stopped while the program is marked, so each thread that is stopped is
-                # resumed here and no other one stops (see handleInterrupt())
-                rwlThread.writeLock();
-                on_exit rwlThread.writeUnlock();
-                foreach hash<auto> i in (ctxThread.pairIterator()) {
-                    if (i.value.pgmId == pgm_id) {
-                        push stopped, int(i.key);
-                        # it runs, so that it leaves the program as a thread that is debugged (the detach is
-                        # reported), also from the stop at the start of the program, where it was not yet debugged
-                        # the command itself tells the thread to end: the mark of the program is gone if debugging
-                        # ends before the thread continues, and the thread is not cancelled (see handleInterrupt())
-                        i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
-                    }
-                }
-            }
-            # a thread that is stopped, or that stops while the program ends, is not cancelled, as it waits for the
-            # debugger; it ends when it continues (see handleInterrupt()); the lock makes checking and cancelling a
-            # thread atomic against a thread that ends its code (see threadEnds())
+            # the threads are cancelled before any stopped thread is resumed: a thread that was resumed first could run
+            # to the end of the code of the program before its cancellation, which is then not made, as the thread has
+            # ended its code, so the program would end without the cancellation (qore#5960).  A thread that the
+            # cancellation ends and that stops at its end before the threads are resumed is not resumed below.  A
+            # thread that is stopped is cancelled too, so that its end is sticky: the debugger's callbacks run with the
+            # cancellation deferred (qore#5794), so its stop is not ended by the cancellation but by the command below,
+            # with THREAD-CANCELLED, and a try statement of the program that catches that exception, or the exception
+            # that the thread was stopped at, does not keep the thread running: the next cancellation point raises the
+            # cancellation again (qore#5797); the lock makes checking and cancelling a thread atomic against a thread
+            # that ends its code (see threadEnds())
+            # a thread stopped at an exception cannot raise its THREAD-CANCELLED with the exception that it was stopped
+            # at: it steps and raises it at its next statement, and a client can resume it before it is cancelled here
+            # (see the end of handleInterrupt(); qore#5987)
             {
                 AutoLock al(startedLock);
                 foreach int tid in (pgm.getThreadList()) {
-                    if (tid == gettid() || inlist(tid, stopped) || endedThreads{pgm_id}{tid}) {
+                    if (tid == gettid() || endedThreads{pgm_id}{tid}) {
                         continue;
                     }
+                    # the request is scoped to the program: a thread that called into it, such as a host thread,
+                    # does not raise it in its own code after the call returns, also when debugging ends before the
+                    # thread detaches and nothing in the debugger clears it (qore#5854)
                     try {
-                        cancel_thread(tid, TerminateReason);
+                        pgm.cancelThread(tid, TerminateReason);
                     } catch (hash<ExceptionInfo> ex) {
-                        # a thread that has ended
+                        # not expected: the current thread is skipped and the IDs are valid; a thread that has left the
+                        # program is not cancelled (False)
                     }
                 }
             }
+            resumeStoppedThreads(pgm_id);
             breakProgram(pgm);
+        }
+
+        #! Resumes the threads of a program that the debugger ends that are stopped, except a thread stopped at its end
+        /** Called by terminateProgram() with the program marked, after it has cancelled the threads; see there
+
+            @param pgm_id the ID of the program
+        */
+        private resumeStoppedThreads(int pgm_id) {
+            # no thread is registered as stopped while the program is marked, so each thread that is stopped is
+            # resumed here and no other one stops (see handleInterrupt()); a thread that stops at its end (exit or
+            # detach) is not resumed here: it stops there also while the program is marked, as its end is reported
+            # to the clients, which resume it as any thread that ends; since the program is marked before this
+            # loop, such a thread can have registered after the mark, so that a client that got its interrupt event
+            # and resumed it would find it no longer stopped if it were resumed here
+            rwlThread.writeLock();
+            on_exit rwlThread.writeUnlock();
+            foreach hash<auto> i in (ctxThread.pairIterator()) {
+                if (i.value.pgmId == pgm_id && !i.value.ends) {
+                    # it runs, so that it leaves the program as a thread that is debugged (the detach is
+                    # reported), also from the stop at the start of the program, where it was not yet debugged
+                    # the command itself tells the thread to end: the mark of the program is gone if debugging
+                    # ends before the thread continues (see handleInterrupt())
+                    i.value.queue.push({"data": {"cmd": "thread/go/run"}, "cx": {}, "terminate": True});
+                }
+            }
         }
 
         #! Returns True for the exception that ends the threads of a program that the debugger ends
@@ -615,8 +679,37 @@ public namespace DebugProgramControl {
         /** @since DebugProgramControl 0.1.3
         */
         public bool isTerminating(int pgm_id) {
-            AutoLock al(startedLock);
-            return boolean(terminatingPrograms{pgm_id});
+            return DebugProgramControl::withLock(startedLock, bool sub () {
+                return boolean(terminatingPrograms{pgm_id});
+            });
+        }
+
+        #! Runs code with a lock of the debugger's state held
+        /** The threads that the debugger debugs take the locks of its state in its callbacks, also while they handle
+            a cancellation, as the one with which terminateProgram() ends them; the callbacks run with the cancellation
+            of the thread deferred (qore#5794), so on those threads a lock wait does not raise a pending cancellation in
+            the code of the debugger, which always completes; on the threads of the clients, a lock wait is an ordinary
+            cancellation point
+
+            @return the value that the code returns
+        */
+        private:internal static auto withLock(Mutex m, code c) {
+            AutoLock al(m);
+            return c();
+        }
+
+        #! Runs code with the read lock of a lock of the debugger's state held; see withLock()
+        private:internal static auto withReadLock(RWLock l, code c) {
+            l.readLock();
+            on_exit l.readUnlock();
+            return c();
+        }
+
+        #! Runs code with the write lock of a lock of the debugger's state held; see withLock()
+        private:internal static auto withWriteLock(RWLock l, code c) {
+            l.writeLock();
+            on_exit l.writeUnlock();
+            return c();
         }
 
         #! process message in debugging thread, if message is related to debugged thread then put it in particular queue
@@ -1418,14 +1511,38 @@ public namespace DebugProgramControl {
             # the call is the nth call of the statement with its key
             int ordinal = (select targetKeys[0..target], $1 == key).size();
             int depth = (select get_thread_call_stack(), $1.type == "user").size();
-            AutoLock al(stepIntoLock);
-            stepIntos{tid} = {
-                "key": key,
-                "ordinal": ordinal,
-                "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
-                "depth": depth,
-                "counts": {},
-            };
+            DebugProgramControl::withLock(stepIntoLock, sub () {
+                stepIntos{tid} = {
+                    "key": key,
+                    "ordinal": ordinal,
+                    "keys": (map {$1: True}, (select targetKeys, $1)) ?? {},
+                    "depth": depth,
+                    "counts": {},
+                    # the location of the call, which the frame of the called code has
+                    "loc": targets[target]{"start_line", "end_line", "start_column", "end_column"},
+                };
+            });
+        }
+
+        #! Returns True if the frame of called code is the frame of the call that a thread steps into
+        /** The frame of called code is located at its call: with the columns of the call, it is matched by its
+            location, so that a call of a function that a statement makes more than once is found also when an
+            earlier call of it is not made, such as in an operand of <tt>?:</tt>, <tt>&&</tt> or <tt>||</tt> that is
+            not evaluated; without them, as in AOT-compiled code, it is matched as the nth call of the statement
+            with the key of the call
+
+            @param si the step into the call (see startStepInto())
+            @param frame the frame of the called code
+            @param key the key of the called code of the frame (see getStepIntoFrameKey())
+            @param n the number of calls with the key that the statement has made, with this one
+        */
+        private static bool isStepIntoCall(hash<auto> si, hash<auto> frame, string key, int n) {
+            if (exists si.loc.start_column && si.loc.start_column >= 0 && exists frame.start_column
+                && frame.start_column >= 0) {
+                return frame.line == si.loc.start_line && frame.start_column == si.loc.start_column
+                    && frame.endline == si.loc.end_line && frame.end_column == si.loc.end_column;
+            }
+            return key == si.key && n == si.ordinal;
         }
 
         #! Checks an interrupt of a thread that steps into a call of its statement; runs in the thread
@@ -1441,10 +1558,7 @@ public namespace DebugProgramControl {
         */
         private bool checkStepInto(int tid, string func, reference runState) {
             *hash<auto> si;
-            {
-                AutoLock al(stepIntoLock);
-                si = stepIntos{tid};
-            }
+            si = DebugProgramControl::withLock(stepIntoLock, *hash<auto> sub () { return stepIntos{tid}; });
             if (!si) {
                 return False;
             }
@@ -1452,21 +1566,16 @@ public namespace DebugProgramControl {
             if ((select stack, $1.type == "user").size() == si.depth + 1) {
                 if (func == "funcEnter") {
                     # the frame of the called code, after this method, handleInterrupt() and the debugger's callback
-                    string key = DebugProgramControl::getStepIntoFrameKey(stack[2 + frameOffset].function, si.keys);
+                    hash<auto> frame = stack[2 + frameOffset];
+                    string key = DebugProgramControl::getStepIntoFrameKey(frame.function, si.keys);
                     int n;
-                    {
-                        AutoLock al(stepIntoLock);
-                        n = ++stepIntos{tid}.counts{key};
-                    }
-                    if (key != si.key || n != si.ordinal) {
+                    n = DebugProgramControl::withLock(stepIntoLock, int sub () { return ++stepIntos{tid}.counts{key}; });
+                    if (!DebugProgramControl::isStepIntoCall(si, frame, key, n)) {
                         runState = DebugUntilReturn;
                         return True;
                     }
                     # the call: the thread stops at its first statement, as a step into a function does
-                    {
-                        AutoLock al(stepIntoLock);
-                        remove stepIntos{tid};
-                    }
+                    DebugProgramControl::withLock(stepIntoLock, sub () { remove stepIntos{tid}; });
                     runState = DebugStep;
                     return True;
                 } else if (func == "funcExit") {
@@ -1475,8 +1584,7 @@ public namespace DebugProgramControl {
                     return True;
                 }
             }
-            AutoLock al(stepIntoLock);
-            remove stepIntos{tid};
+            DebugProgramControl::withLock(stepIntoLock, sub () { remove stepIntos{tid}; });
             return False;
         }
 
@@ -1512,59 +1620,64 @@ public namespace DebugProgramControl {
 
             @param ex the exception
             @param uncaught @ref True if no try statement of debuggable code in the call stack catches it
+            @param uncaught_only @ref True if only the \c "uncaught" filter stops the thread, as for an exception that
+            it stopped at while it was caught and that a rethrow made uncaught
         */
-        private bool stopsAtException(hash<auto> ex, bool uncaught) {
-            rwlConnection.readLock();
-            on_exit rwlConnection.readUnlock();
-            if (!ctxConnection) {
-                return True;
-            }
-            *string type = ex.type.lwr();
-            foreach hash<auto> c in (ctxConnection.iterator()) {
-                if (!exists c.exceptionFilters
-                    || inlist(type, c.exceptionFilters)
-                    || (uncaught && inlist("uncaught", c.exceptionFilters))
-                    || inlist(ex.err, c.exceptionFilters)) {
+        private bool stopsAtException(hash<auto> ex, bool uncaught, bool uncaught_only = False) {
+            return DebugProgramControl::withReadLock(rwlConnection, bool sub () {
+                if (!ctxConnection) {
                     return True;
                 }
-            }
-            return False;
+                *string type = ex.type.lwr();
+                foreach hash<auto> c in (ctxConnection.iterator()) {
+                    if (uncaught_only) {
+                        if (!exists c.exceptionFilters || inlist("uncaught", c.exceptionFilters)) {
+                            return True;
+                        }
+                        continue;
+                    }
+                    if (!exists c.exceptionFilters
+                        || inlist(type, c.exceptionFilters)
+                        || (uncaught && inlist("uncaught", c.exceptionFilters))
+                        || inlist(ex.err, c.exceptionFilters)) {
+                        return True;
+                    }
+                }
+                return False;
+            });
         }
 
         #! Returns True if the thread steps into a call of its statement; see checkStepInto()
         private bool hasStepInto(int tid) {
-            AutoLock al(stepIntoLock);
-            return exists stepIntos{tid};
+            return DebugProgramControl::withLock(stepIntoLock, bool sub () { return exists stepIntos{tid}; });
         }
 
         #! Notes that a client requested threads to stop (pause); see onStep()
         private notePauseRequests(*softlist<softint> tids) {
-            AutoLock al(pauseLock);
-            map pauseRequests{$1} = True, tids;
+            DebugProgramControl::withLock(pauseLock, sub () { map pauseRequests{$1} = True, tids; });
         }
 
         #! Returns True if a thread to pause stops at a block, as it reached the block again without a statement
         /** The first time, the block is noted, and the thread stops at its first statement; see onStep()
         */
         private bool stopsAtBlockForPause(int tid, int block_id) {
-            AutoLock al(pauseLock);
-            if (pauseSkippedBlocks{tid} === block_id) {
-                return True;
-            }
-            pauseSkippedBlocks{tid} = block_id;
-            return False;
+            return DebugProgramControl::withLock(pauseLock, bool sub () {
+                if (pauseSkippedBlocks{tid} === block_id) {
+                    return True;
+                }
+                pauseSkippedBlocks{tid} = block_id;
+                return False;
+            });
         }
 
         #! Returns True if a client requested the thread to stop (pause) and it has not stopped since
         private bool isPauseRequested(int tid) {
-            AutoLock al(pauseLock);
-            return exists pauseRequests{tid};
+            return DebugProgramControl::withLock(pauseLock, bool sub () { return exists pauseRequests{tid}; });
         }
 
         #! Returns True if any breakpoint has a condition, hit condition or log message
         private bool hasBreakpointOptions() {
-            AutoLock al(bkptLock);
-            return boolean(bkptOptions);
+            return DebugProgramControl::withLock(bkptLock, bool sub () { return boolean(bkptOptions); });
         }
 
         #! Returns the IDs of the breakpoints of a statement that apply to the current thread, in their order
@@ -1590,8 +1703,7 @@ public namespace DebugProgramControl {
 
         #! Returns the condition, hit condition, log message and number of hits of a breakpoint, if any is set
         private *hash<auto> getBreakpointOptions(int id) {
-            AutoLock al(bkptLock);
-            return bkptOptions{id};
+            return DebugProgramControl::withLock(bkptLock, *hash<auto> sub () { return bkptOptions{id}; });
         }
 
         #! Sets or removes the condition, hit condition or log message of a breakpoint
@@ -1752,13 +1864,12 @@ public namespace DebugProgramControl {
                     return {"stop": False};
                 }
                 int count;
-                {
-                    AutoLock al(bkptLock);
+                DebugProgramControl::withLock(bkptLock, sub () {
                     # the options may have been removed meanwhile
                     if (bkptOptions{id}) {
                         count = ++bkptOptions{id}.hits;
                     }
-                }
+                });
                 if (opts.hitCondition && !DebugProgramControl::checkHitCondition(opts.hitCondition, count)) {
                     return {"stop": False};
                 }
@@ -1951,16 +2062,43 @@ public namespace DebugProgramControl {
             return rv;
         }
 
+        #! serializes a local variable as given by get_local_vars()
+        /** a variable whose value is not available (\c unavailable, see @ref Qore::get_local_vars() "get_local_vars()")
+            is passed on without a value
+        */
         private *hash<auto> serializeLocal(string name, hash<auto> val) {
-            val.value = AbstractDebugControl::serialize(val.value);
+            if (!val.unavailable) {
+                val.value = AbstractDebugControl::serialize(val.value);
+            }
             return ('name': name) + val;
         }
 
+        #! serializes the local variables of a frame as given by get_local_vars(); see serializeLocal()
         private *hash<auto> serializeLocals(*hash<auto> vals) {
             foreach string k in (keys vals) {
-                vals{k}.value = AbstractDebugControl::serialize(vals{k}.value);
+                if (!vals{k}.unavailable) {
+                    vals{k}.value = AbstractDebugControl::serialize(vals{k}.value);
+                }
             }
             return vals;
+        }
+
+        #! raises an exception if an expression refers to a local variable whose value is not available
+        /** the value of a local variable that @ref exec_mode_aot "AOT-compiled" code keeps in native code cannot be
+            read (\c unavailable, see @ref Qore::get_local_vars() "get_local_vars()"); the expression is checked for
+            the name of such a variable outside of string literals and not after a \c "."
+
+            @throw DEBUG-EVALUATE-ERROR the expression refers to a local variable whose value is not available
+        */
+        private static checkUnavailableLocals(string expr, list<string> unavailable) {
+            expr =~ s/"(\\.|[^"\\])*"//g;
+            expr =~ s/'(\\.|[^'\\])*'//g;
+            foreach string name in (unavailable) {
+                if (regex(expr, "(^|[^.\\w$])" + name + "\\b")) {
+                    throw "DEBUG-EVALUATE-ERROR", sprintf("the value of local variable %y is not available: the "
+                        "AOT-compiled code of the frame keeps it in native code", name);
+                }
+            }
         }
 
         #! returns the call stack as untyped frame hashes with the debugged statement's frame adjusted
@@ -1995,23 +2133,50 @@ public namespace DebugProgramControl {
                     stack[0].statementid = ctx.intrInfo.statementid;
                 }
             }
-            # the columns of the statement of each frame, where they are known
+            # the columns of each frame, where they are known: a frame of called code is located at its call, whose
+            # columns it gives (CallStackInfo), if the call is in the statement of the frame; otherwise, and for the
+            # frame of the debugged statement, which is located at the statement, the columns of the statement where
+            # the frame has its lines
             foreach hash<auto> frame in (\stack) {
-                if (!frame.statementid || !frame.programid) {
-                    continue;
+                bool debugged = !$# && ctx && ctx.intrInfo.statementid;
+                if (debugged) {
+                    # the location of the frame is the debugged statement's
+                    remove frame.start_column;
+                    remove frame.end_column;
                 }
-                try {
-                    hash<StatementInfo> info = ProgramControl::resolveProgramId(frame.programid)
-                        .getStatementIdInfo(frame.statementid);
-                    if (info.start_column >= 0) {
-                        frame.column = info.start_column;
-                        frame.endcolumn = info.end_column;
+                *hash<StatementInfo> info;
+                if (frame.statementid && frame.programid) {
+                    try {
+                        info = ProgramControl::resolveProgramId(frame.programid).getStatementIdInfo(frame.statementid);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the Program of the frame cannot be debugged or no longer exists: no columns
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                    # the Program of the frame cannot be debugged or no longer exists: no columns
+                }
+                if (exists frame.start_column && frame.start_column >= 0
+                    && (!info || DebugProgramControl::isInStatement(frame, info))) {
+                    frame.column = frame.start_column;
+                    frame.endcolumn = frame.end_column;
+                } else if (info && info.start_column >= 0
+                    && (debugged || (frame.line == info.start_line && frame.endline == info.end_line))) {
+                    frame.column = info.start_column;
+                    frame.endcolumn = info.end_column;
                 }
             }
             return stack;
+        }
+
+        #! Returns True if the location of a frame, with its columns, is in the location of its statement
+        /** A frame of code called without a call expression, such as a destructor, is located where the code that
+            runs it is, which is not always in its statement in every execution mode
+        */
+        private static bool isInStatement(hash<auto> frame, hash<StatementInfo> info) {
+            if (info.start_column < 0) {
+                return frame.line >= info.start_line && frame.endline <= info.end_line;
+            }
+            return (frame.line > info.start_line || (frame.line == info.start_line
+                    && frame.start_column >= info.start_column))
+                && (frame.endline < info.end_line || (frame.endline == info.end_line
+                    && frame.end_column <= info.end_column));
         }
 
         #! Returns the value of the root of a variable path of a stopped thread
@@ -2030,6 +2195,10 @@ public namespace DebugProgramControl {
             if (exists root.local) {
                 if (!lv.hasKey(root.local)) {
                     throw "DEBUG-ERROR", sprintf("the frame has no local variable %y", root.local);
+                }
+                if (lv{root.local}.unavailable) {
+                    throw "DEBUG-ERROR", sprintf("the value of local variable %y is not available: the AOT-compiled "
+                        "code of the frame keeps it in native code", root.local);
                 }
                 return lv{root.local}.value;
             }
@@ -2114,10 +2283,20 @@ public namespace DebugProgramControl {
                     vars{i.key} = i.value.value;
                 }
             }
+            # a local variable whose value is not available cannot be used in the expression
+            list<string> unavailable = ();
             foreach hash<auto> i in (lv.pairIterator()) {
                 if (i.key =~ /^[A-Za-z_][A-Za-z0-9_]*$/) {
-                    vars{i.key} = i.value.value;
+                    if (i.value.unavailable) {
+                        remove vars{i.key};
+                        unavailable += i.key;
+                    } else {
+                        vars{i.key} = i.value.value;
+                    }
                 }
+            }
+            if (unavailable) {
+                DebugProgramControl::checkUnavailableLocals(expr, unavailable);
             }
             hash<auto> f = prepareEvalFunction(pgm, expr, sort(keys vars), True);
             Counter calls = f.calls;
@@ -2155,9 +2334,7 @@ public namespace DebugProgramControl {
             Program epgm;
             string fname;
             Counter calls;
-            {
-                evalLock.lock();
-                on_exit evalLock.unlock();
+            DebugProgramControl::withLock(evalLock, sub () {
                 string id = string(pgm.getProgramId());
                 *string f = evalPrograms{id}.functions{key};
                 # a Program is parsed only when no evaluation runs in it; another thread can evaluate an expression,
@@ -2200,7 +2377,7 @@ public namespace DebugProgramControl {
                 if (call) {
                     calls.inc();
                 }
-            }
+            });
             return {"program": epgm, "function": fname, "calls": calls};
         }
 
@@ -2232,16 +2409,15 @@ public namespace DebugProgramControl {
         */
         nothing removeProgram(ProgramControl program) {
             DebugProgram::removeProgram(program);
-            {
-                AutoLock al(startedLock);
+            # the thread that ran a program removes it when the run ends, also when it is cancelled (see runAndDetach())
+            DebugProgramControl::withLock(startedLock, sub () {
                 remove startedPrograms{program.getProgramId()};
                 remove terminatingPrograms{program.getProgramId()};
                 remove endedThreads{program.getProgramId()};
-            }
+            });
             # the lock of the debugged Programs is released before evalLock is taken, which evaluateExpression() holds
             # while it takes that lock
-            AutoLock al(evalLock);
-            remove evalPrograms{program.getProgramId()};
+            DebugProgramControl::withLock(evalLock, sub () { remove evalPrograms{program.getProgramId()}; });
         }
 
         #! Removes the Programs of expressions whose debugged Programs are no longer debugged; evalLock must be held
@@ -2275,18 +2451,16 @@ public namespace DebugProgramControl {
                     if (func == "exception") {
                         return;
                     }
+                    # the thread steps, so that it raises the exception again at its next statement (see the end of this method)
+                    runState = DebugStep;
                     throw "THREAD-CANCELLED", TerminateReason;
                 }
             }
-            # a thread that leaves the program has no more stops to give a returned value or to pause at a block; the
-            # locks are cancellation points, so they are taken when the thread is no longer cancelled
+            # a thread that leaves the program has no more stops to give a returned value or to pause at a block
             if (func == "detach") {
-                {
-                    AutoLock al(returnLock);
-                    remove returnedValues{tid};
-                }
-                AutoLock al(pauseLock);
-                remove pauseSkippedBlocks{tid};
+                DebugProgramControl::withLock(returnLock, sub () { remove returnedValues{tid}; });
+                DebugProgramControl::withLock(pauseLock, sub () { remove pauseSkippedBlocks{tid}; });
+                DebugProgramControl::withLock(exceptionStopLock, sub () { remove exceptionStops{tid}; });
             }
             # the attach of the first thread of a program is its start; other threads attach when they start
             bool program_start = func == "attach" && isProgramStart(pgm.getProgramId());
@@ -2298,6 +2472,9 @@ public namespace DebugProgramControl {
             hash<auto> ctx = {
                 "queue": new Queue(),
                 "pgmId": pgm.getProgramId(),
+                # a thread that stops at its end is resumed by a client, also when the debugger ends its program (see
+                # terminateProgram())
+                "ends": ends,
                 "stackSize": get_thread_call_stack().size(),
                 "intrInfo": {
                     'type': DebugResponseType::Event,
@@ -2406,28 +2583,51 @@ public namespace DebugProgramControl {
                 ctx.intrInfo.debugvar = refName;
                 ctx.intrInfo{refName} = refValue;
             }
-            # an exception that no client stops at: the thread continues as it ran before; decided before the thread is
+            # an exception that no client stops at, or that the thread already stopped at, as it leaves a statement that
+            # contains the one that it stopped at: the thread continues as it ran before; decided before the thread is
             # registered as stopped
-            if (exists except && !stopsAtException(except, isUncaught(adjustStack(get_thread_call_stack(), ctx)))) {
-                runToStatementId = runToStatementIdBefore;
-                return;
+            # an exception that the thread stopped at stops it again only if it was caught then and is uncaught now, as
+            # after a rethrow
+            *int debug_id;
+            bool except_uncaught;
+            if (exists except) {
+                debug_id = except.debug_id;
+                # True: the thread stopped at the exception as uncaught, False: as caught
+                *bool stopped_uncaught;
+                if (exists debug_id) {
+                    stopped_uncaught = DebugProgramControl::withLock(exceptionStopLock, *bool sub () {
+                        foreach hash<auto> stop in (exceptionStops{tid}) {
+                            if (stop.id == debug_id) {
+                                return stop.uncaught;
+                            }
+                        }
+                    });
+                }
+                if (stopped_uncaught) {
+                    runToStatementId = runToStatementIdBefore;
+                    return;
+                }
+                except_uncaught = isUncaught(adjustStack(get_thread_call_stack(), ctx));
+                if ((exists stopped_uncaught && !except_uncaught)
+                        || !stopsAtException(except, except_uncaught, exists stopped_uncaught)) {
+                    runToStatementId = runToStatementIdBefore;
+                    return;
+                }
             }
             # the thread stops: a pause that a client requested is done; a stop of a step that is not at a breakpoint is
             # given as the pause, so that the clients can tell it from the end of a step
-            {
-                AutoLock al(pauseLock);
+            DebugProgramControl::withLock(pauseLock, sub () {
                 if ((remove pauseRequests{tid}) && func == "step" && !exists breakpointId) {
                     ctx.intrInfo.pause = True;
                 }
                 remove pauseSkippedBlocks{tid};
-            }
+            });
             # the stop after a function returned to a thread that ran until it returned gives the returned value
-            {
-                AutoLock al(returnLock);
+            DebugProgramControl::withLock(returnLock, sub () {
                 if (*hash<auto> ret = remove returnedValues{tid}) {
                     ctx.intrInfo.returned = ret;
                 }
-            }
+            });
             # minor race issue when list of all thread stack might return internal frames till ctx is not registered in ctxThread
             # a thread is not registered as stopped once the debugger ends its program, as terminateProgram()
             # resumes only the threads that are registered when it starts; a thread that ends stops as usual
@@ -2442,9 +2642,7 @@ public namespace DebugProgramControl {
             # when shutdown() resumes the threads, or does not stop; the end of a thread is still reported, as a client
             # resumes it
             bool unattended;
-            {
-                rwlThread.writeLock();
-                on_exit rwlThread.writeUnlock();
+            DebugProgramControl::withWriteLock(rwlThread, sub () {
                 @assert(!exists ctxThread{tid});
                 terminating = !ends && isTerminating(ctx.pgmId);
                 unattended = !terminating && ((!program_start && !hasConnection())
@@ -2452,14 +2650,48 @@ public namespace DebugProgramControl {
                 if (!terminating && !unattended) {
                     ctxThread{tid} = ctx;
                 }
-            }
+            });
             if (terminating) {
+                # the thread steps, so that it raises the exception again at its next statement (see below)
+                runState = DebugStep;
                 throw "THREAD-CANCELLED", TerminateReason;
             }
             if (unattended) {
                 # the thread continues as it ran before, as without a client at the start of this method
                 runToStatementId = runToStatementIdBefore;
                 return;
+            }
+            # the exception that the thread stops at is recorded once it is registered as stopped, so that a client that
+            # connects while an exception that stopped no thread propagates gets it
+            if (exists debug_id) {
+                DebugProgramControl::withLock(exceptionStopLock, sub () {
+                    list<hash<auto>> stops = (map $1, exceptionStops{tid}, $1.id != debug_id) ?? ();
+                    stops += {"id": debug_id, "uncaught": except_uncaught};
+                    if (stops.size() > ExceptionStopMax) {
+                        splice stops, 0, stops.size() - ExceptionStopMax;
+                    }
+                    exceptionStops{tid} = stops;
+                });
+            }
+            # a thread that leaves its stop with an exception, as when a command raises one, is no longer stopped: its
+            # registration is removed, and the clients are told that it runs again, as when it continues; the callbacks
+            # run with the cancellation deferred (qore#5794), so a cancellation does not end the stop or this cleanup
+            bool registered = True;
+            on_error if (registered) {
+                DebugProgramControl::withWriteLock(rwlThread, sub () { remove ctxThread{tid}; });
+                try {
+                    broadcastDataImpl({
+                        'type': DebugResponseType::Event,
+                        'cmd': DebugEventCmd::Run,
+                        'pgmid': ctx.pgmId,
+                        'tid': tid,
+                        'stamp': now_us(),
+                        'runstate': encodeValue('runState', runState, runStateStrings),
+                        'runtostatementid': runToStatementId,
+                    });
+                } catch (hash<ExceptionInfo> ex) {
+                    # suppress exceptions
+                }
             }
 
             # debugger client cannot ask for stack when procession message as it dead lock thread handler so we add it to original message
@@ -2786,11 +3018,8 @@ public namespace DebugProgramControl {
             if (exists except) {
                 remove ctx.intrInfo.exception;
             }
-            {
-                rwlThread.writeLock();
-                on_exit rwlThread.writeUnlock();
-                remove ctxThread{tid};
-            }
+            DebugProgramControl::withWriteLock(rwlThread, sub () { remove ctxThread{tid}; });
+            registered = False;
             # commands that were queued after the command that resumed the thread are not processed; no command is
             # queued any more, as the thread is no longer registered as stopped
             while (ctx.queue.size()) {
@@ -2831,10 +3060,16 @@ public namespace DebugProgramControl {
             } catch (hash<ExceptionInfo> ex) {
                 # suppress exceptions
             }
-            # a thread of a program that the debugger ends ends, unless it ends anyway; a thread that was stopped then
-            # has not been cancelled, so it must end here also if its program is no longer debugged, or nothing would
-            # end it
+            # a thread of a program that the debugger ends ends, unless it ends anyway, also if its program is no longer
+            # debugged; terminateProgram() has cancelled it as well, so that a try statement of the program that catches
+            # the exception does not keep it running (qore#5797)
+            # the thread also steps: a thread that raises another exception, the one that it was stopped at, cannot
+            # raise THREAD-CANCELLED with it, and a try statement can catch that exception; its next statement then
+            # raises THREAD-CANCELLED (see the start of this method), also when no cancellation point follows and the
+            # thread would otherwise reach the end of its code before it is cancelled (qore#5987)
             if (!ends && (terminated || isTerminating(ctx.pgmId))) {
+                # the thread steps, so that it raises the exception again at its next statement (see below)
+                runState = DebugStep;
                 throw "THREAD-CANCELLED", TerminateReason;
             }
         }
@@ -2847,11 +3082,11 @@ public namespace DebugProgramControl {
             debugger, or it is never cancelled.  The programs are marked before any thread is cancelled, so the flag is
             set here if a cancellation of the debugger is pending.
 
-            The lock is taken with the cancellation deferred, as it is a cancellation point.
+            The lock wait does not raise a pending cancellation, as the callbacks run with the cancellation deferred
+            (qore#5794).
         */
         private:internal threadEnds(int pgm_id, int tid) {
-            defer_thread_cancel(sub () {
-                AutoLock al(startedLock);
+            DebugProgramControl::withLock(startedLock, sub () {
                 endedThreads{pgm_id}{tid} = True;
                 if (terminatingPrograms{pgm_id}) {
                     clear_thread_cancel();
@@ -2861,8 +3096,7 @@ public namespace DebugProgramControl {
 
         #! Registers a thread that runs the code of a program; see threadEnds()
         private:internal threadStarts(int pgm_id, int tid) {
-            AutoLock al(startedLock);
-            remove endedThreads{pgm_id}{tid};
+            DebugProgramControl::withLock(startedLock, sub () { remove endedThreads{pgm_id}{tid}; });
         }
 
         #! Returns True if the program is debugged, which it no longer is once it has been removed
@@ -2877,12 +3111,13 @@ public namespace DebugProgramControl {
 
         #! Returns True for the first thread of a program that attaches, which starts the program
         private:internal bool isProgramStart(int pgm_id) {
-            AutoLock al(startedLock);
-            if (startedPrograms{pgm_id}) {
-                return False;
-            }
-            startedPrograms{pgm_id} = True;
-            return True;
+            return DebugProgramControl::withLock(startedLock, bool sub () {
+                if (startedPrograms{pgm_id}) {
+                    return False;
+                }
+                startedPrograms{pgm_id} = True;
+                return True;
+            });
         }
 
         onAttach(ProgramControl pgm, reference rs, reference runToStatementId) {
@@ -2906,6 +3141,8 @@ public namespace DebugProgramControl {
                     return;
                 }
             }
+            # the block of the top-level code has no statement ID: blockStatementId is 0 then, and the thread stops at
+            # the first statement of the block instead
             statementId = statementId ?? blockStatementId;
             /*
                 when a statement is parsed in non-pgm context then it is not registered in pgm and no statementId can be resolved
@@ -2956,13 +3193,12 @@ public namespace DebugProgramControl {
                         break;
                     }
                 }
-                {
-                    AutoLock al(returnLock);
+                DebugProgramControl::withLock(returnLock, sub () {
                     returnedValues{gettid()} = {
                         "function": name ?? "<unknown>",
                         "value": AbstractDebugControl::serialize(result),
                     };
-                }
+                });
                 rs = DebugStepOver;
                 return;
             }
@@ -2977,6 +3213,34 @@ public namespace DebugProgramControl {
 
         onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference runToStatementId) {
             handleInterrupt('exit', pgm, \rs, \runToStatementId, statementId, "result", \result);
+        }
+
+        #! the code of a program run has ended: the clients get an exit event with its result; the thread does not stop
+        /** the thread stops when it leaves the program, at its detach event, as before (#3401)
+        */
+        onRunExit(ProgramControl pgm, int statementId, reference result, reference rs, reference runToStatementId) {
+            if (!hasConnection()) {
+                return;
+            }
+            hash<auto> sd = {
+                'type': DebugResponseType::Event,
+                'cmd': DebugEventCmd::Exit,
+                'pgmid': pgm.getProgramId(),
+                'tid': gettid(),
+                # the name of the thread, which only the thread itself can get
+                'threadname': get_thread_name(),
+                'stamp': now_us(),
+                'result': result,
+            };
+            # the output that the program wrote before its end reaches the clients before the event
+            if (outputCapture) {
+                outputCapture.flushAndWait();
+            }
+            try {
+                broadcastDataImpl(sd);
+            } catch (hash<ExceptionInfo> ex) {
+                # suppress exceptions
+            }
         }
     }
 }

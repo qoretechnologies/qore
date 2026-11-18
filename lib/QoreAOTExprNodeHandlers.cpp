@@ -91,7 +91,7 @@ inline double readF64(const uint8_t*& ptr, const uint8_t* end) {
 
 inline std::string readStr(const uint8_t*& ptr, const uint8_t* end) {
     uint16_t len = readU16(ptr, end);
-    if (len == 0 || ptr + len > end) {
+    if (len == 0 || end < ptr || len > static_cast<size_t>(end - ptr)) {
         if (len > 0) ptr = end;  // mark exhausted
         return {};
     }
@@ -111,7 +111,7 @@ static const QoreClass* en_resolveClass(QoreProgram* pgm, const std::string& nam
     if (path[0] == ':' && path[1] == ':') {
         path += 2;
     }
-    return qore_root_ns_private::runtimeFindClass(*pp->RootNS, path, found_ns);
+    return qore_root_ns_private::runtimeFindClass(*pp->RootNS, path, found_ns, LexicalSemanticPolicy{});
 }
 
 static const QoreMethod* en_resolveSelfMethod(const QoreClass* qc, const char* method_name,
@@ -200,7 +200,7 @@ static QoreValue read_node_EN_NUMBER(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_BINARY(AOTExprNodeReadCtx& ctx) {
     uint32_t len = readU32(ctx.ptr, ctx.end);
     SimpleRefHolder<BinaryNode> bin(new BinaryNode);
-    if (len > 0 && ctx.ptr + len <= ctx.end) {
+    if (len > 0 && ctx.end >= ctx.ptr && len <= static_cast<size_t>(ctx.end - ctx.ptr)) {
         bin->append(ctx.ptr, len);
         ctx.ptr += len;
     }
@@ -239,7 +239,7 @@ static QoreValue read_node_EN_ENUM(AOTExprNodeReadCtx& ctx) {
     std::string member_name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
     const QoreNamespace* pns = nullptr;
-    const QoreEnumDecl* ed = ctx.pgm->findEnum(enum_path.c_str(), pns);
+    const QoreEnumDecl* ed = qore_program_private::get(*ctx.pgm)->findEnumCanonical(enum_path.c_str(), pns);
     if (!ed) {
         printd(0, "AOT expr tree: cannot resolve enum '%s'\n", enum_path.c_str());
         return QoreValue();
@@ -276,7 +276,7 @@ static QoreValue read_node_EN_GLOBAL_VAR(AOTExprNodeReadCtx& ctx) {
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
         const qore_ns_private* found_ns = nullptr;
         Var* v = qore_root_ns_private::runtimeFindGlobalVar(
-            *pp->RootNS, name.c_str(), found_ns);
+            *pp->RootNS, name.c_str(), found_ns, LexicalSemanticPolicy{});
         if (!v) {
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             v = root_ns->var_list.runtimeFindVar(name.c_str());
@@ -344,6 +344,11 @@ static QoreValue read_node_EN_COMPLEX_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
     std::string member = readStr(ctx.ptr, ctx.end);
     uint32_t stack_offset = readU32(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
+    if (!qore_aot_valid_context_stack_offset(stack_offset)) {
+        printd(0, "AOT EXPR_TREE: invalid context stack offset %u\n", stack_offset);
+        ctx.failed = true;
+        return QoreValue();
+    }
 
     std::string spec = name + ":" + member;
     auto* node = new ComplexContextrefNode(&loc_builtin, strdup(spec.c_str()));
@@ -357,6 +362,13 @@ static QoreValue read_node_EN_COMPLEX_CONTEXT_REF(AOTExprNodeReadCtx& ctx) {
 
 static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
+    // the binding of the arguments of a named call precedes the name
+    QoreAOTNamedCallArgs named;
+    if (qore_aot_parse_named_call_arg_prefix(name, named)) {
+        printd(0, "AOT EXPR_TREE: invalid named call arguments for function '%s'\n", name.c_str());
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     SimpleRefHolder<QoreParseListNode> pln;
     if (num_children > 0) {
@@ -370,6 +382,12 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
     if (!fe) {
+        // a deferred call is resolved and evaluated with its arguments by position
+        if (named.has_map || named.has_names) {
+            printd(0, "AOT EXPR_TREE: cannot resolve function '%s' of a named call\n", name.c_str());
+            ctx.failed = true;
+            return QoreValue();
+        }
         QoreValue fallback = qore_aot_make_deferred_function_call(ctx.pgm, name.c_str(), pln.release());
         if (!fallback.isNothing()) {
             return fallback;
@@ -380,12 +398,33 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
     }
     FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln.release());
     fcn->resolveParseArgs();
+    // the binding has one entry for each argument
+    size_t nargs = fcn->getArgs() ? fcn->getArgs()->size() : 0;
+    if ((named.has_names && named.names.size() != nargs)
+            || (named.has_map && named.source_to_param.size() != nargs)) {
+        fcn->deref(nullptr);
+        printd(0, "AOT EXPR_TREE: named call arguments that do not match the arguments of '%s'\n", name.c_str());
+        ctx.failed = true;
+        return QoreValue();
+    }
+    if (named.has_names) {
+        fcn->setRuntimeArgNames(std::move(named.names));
+        return QoreValue(FunctionCallNode::makeRuntimeNamed(fcn));
+    }
+    if (named.has_map) {
+        fcn->setCallArgEvalMap(std::move(named.source_to_param), named.result_size);
+    }
     return QoreValue(fcn);
 }
 
-static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
+static QoreValue read_node_EN_SELF_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTNamedCallArgs& named) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
     std::string method_ref_str = readStr(ctx.ptr, ctx.end);
+    if (qore_aot_parse_named_call_arg_prefix(method_ref_str, named)) {
+        printd(0, "AOT EXPR_TREE: invalid named call arguments\n");
+        ctx.failed = true;
+        return QoreValue();
+    }
     QoreAOTStaticMethodRef method_ref(method_ref_str.c_str());
     const char* method_full_name = method_ref.method_name;
     const char* method_name = method_full_name;
@@ -413,6 +452,32 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
             ql->deref(nullptr);
         }
         return QoreValue();
+    }
+    // the call is made with the arguments as a temporary list, which is passed as it is; the arguments of a named call
+    // bound at parse time are therefore put at the positions of their parameters here (no value for a parameter that
+    // no argument is bound to)
+    if (named.has_map) {
+        size_t nargs = ql ? ql->size() : 0;
+        if (named.source_to_param.size() != nargs) {
+            printd(0, "AOT EXPR_TREE: named call arguments that do not match the arguments of a self call\n");
+            if (ql) {
+                ql->deref(nullptr);
+            }
+            ctx.failed = true;
+            return QoreValue();
+        }
+        QoreListNode* positional = qore_list_private::newList(true);
+        for (size_t i = 0; i < named.result_size; ++i) {
+            positional->push(QoreValue(), nullptr);
+        }
+        for (size_t i = 0; i < nargs; ++i) {
+            QoreValue v = ql->retrieveEntry(i);
+            positional->setEntry(named.source_to_param[i], v.refSelf(), nullptr);
+        }
+        ql->deref(nullptr);
+        ql = positional;
+        named.has_map = false;
+        named.source_to_param.clear();
     }
     const QoreClass* qc = en_resolveClass(ctx.pgm, class_name);
     if (!qc) {
@@ -475,7 +540,12 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         qc, qcp);
     SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base, ql);
     base->deref(nullptr);
-    if (resolved_variant) {
+    if (method_ref.abstract_self_call) {
+        // as SelfFunctionCallNode::parseInitCall() marked it: a call to an abstract method is resolved at run time on
+        // the object's class, with no variant (issue #5824)
+        sfcn->setAbstractCall();
+    } else if (resolved_variant && !static_cast<const MethodVariantBase*>(resolved_variant)->isAbstract()) {
+        // an abstract variant is never bound to a call: parsing binds none
         sfcn->setVariant(resolved_variant);
         if (!type_param_instantiation.type_args.empty()) {
             sfcn->setTypeParamInstantiation(std::move(type_param_instantiation));
@@ -484,9 +554,33 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
     return QoreValue(sfcn);
 }
 
-static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
+
+// the binding of the arguments of a named call precedes the name of the method (see
+// qore_aot_named_call_arg_prefix())
+static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
+    QoreAOTNamedCallArgs named;
+    QoreValue rv = read_node_EN_SELF_CALL_body(ctx, named);
+    if (ctx.failed || rv.isNothing()) {
+        return rv;
+    }
+    std::string error;
+    if (qore_aot_apply_named_call_args(rv, named, error)) {
+        printd(0, "AOT EXPR_TREE: %s\n", error.c_str());
+        rv.discard(nullptr);
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return rv;
+}
+
+static QoreValue read_node_EN_STATIC_CALL_body(AOTExprNodeReadCtx& ctx, QoreAOTNamedCallArgs& named) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
     std::string method_name = readStr(ctx.ptr, ctx.end);
+    if (qore_aot_parse_named_call_arg_prefix(method_name, named)) {
+        printd(0, "AOT EXPR_TREE: invalid named call arguments\n");
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     SimpleRefHolder<QoreParseListNode> pln;
     if (num_children > 0) {
@@ -534,8 +628,32 @@ static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
     return QoreValue(smcn);
 }
 
-static QoreValue read_node_EN_DOT_EVAL(AOTExprNodeReadCtx& ctx) {
+
+// the binding of the arguments of a named call precedes the name of the method (see
+// qore_aot_named_call_arg_prefix())
+static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
+    QoreAOTNamedCallArgs named;
+    QoreValue rv = read_node_EN_STATIC_CALL_body(ctx, named);
+    if (ctx.failed || rv.isNothing()) {
+        return rv;
+    }
+    std::string error;
+    if (qore_aot_apply_named_call_args(rv, named, error)) {
+        printd(0, "AOT EXPR_TREE: %s\n", error.c_str());
+        rv.discard(nullptr);
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return rv;
+}
+
+static QoreValue read_node_EN_DOT_EVAL_body(AOTExprNodeReadCtx& ctx, QoreAOTNamedCallArgs& named) {
     std::string method_name = readStr(ctx.ptr, ctx.end);
+    if (qore_aot_parse_named_call_arg_prefix(method_name, named)) {
+        printd(0, "AOT EXPR_TREE: invalid named call arguments\n");
+        ctx.failed = true;
+        return QoreValue();
+    }
     std::string class_path = readStr(ctx.ptr, ctx.end);
     uint8_t is_pseudo = readU8(ctx.ptr, ctx.end);
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
@@ -574,8 +692,54 @@ static QoreValue read_node_EN_DOT_EVAL(AOTExprNodeReadCtx& ctx) {
     return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
 }
 
+//! splits the class reference of an EN_NEW / EN_SCOPED_NEW node into the class and the object type of a generic class
+/** @return false if the object type cannot be resolved
+*/
+static bool en_splitObjectClassRef(AOTExprNodeReadCtx& ctx, std::string& class_name,
+        const QoreTypeInfo*& object_type_info) {
+    static constexpr const char* type_marker = "\ntype:";
+    size_t pos = class_name.find(type_marker);
+    object_type_info = nullptr;
+    if (pos == std::string::npos) {
+        return true;
+    }
+    std::string path = class_name.substr(pos + strlen(type_marker));
+    class_name.erase(pos);
+    QoreAOTTypeResolver resolver(ctx.pgm);
+    std::string error;
+    object_type_info = resolver.resolve(path.c_str(), error);
+    if (!object_type_info || !error.empty()) {
+        printd(0, "AOT EXPR_TREE: cannot resolve object type '%s' for new: %s\n", path.c_str(), error.c_str());
+        return false;
+    }
+    return true;
+}
+
+// the binding of the arguments of a named call precedes the name of the method (see
+// qore_aot_named_call_arg_prefix())
+static QoreValue read_node_EN_DOT_EVAL(AOTExprNodeReadCtx& ctx) {
+    QoreAOTNamedCallArgs named;
+    QoreValue rv = read_node_EN_DOT_EVAL_body(ctx, named);
+    if (ctx.failed || rv.isNothing()) {
+        return rv;
+    }
+    std::string error;
+    if (qore_aot_apply_named_call_args(rv, named, error)) {
+        printd(0, "AOT EXPR_TREE: %s\n", error.c_str());
+        rv.discard(nullptr);
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return rv;
+}
+
 static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
+    const QoreTypeInfo* object_type_info = nullptr;
+    if (!en_splitObjectClassRef(ctx, class_name, object_type_info)) {
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     ReferenceHolder<QoreListNode> args_list(nullptr, nullptr);
     if (num_children > 0) {
@@ -604,17 +768,22 @@ static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
         printd(5, "AOT EXPR_TREE EN_NEW: class='%s' id=%d nargs=%d constructor=%p\n",
             qc->getName(), qc->getID(), static_cast<int>(num_children), static_cast<const void*>(cons));
         if (cons) {
-            const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-            printd(5, "  constructor vlist=%d\n", static_cast<int>(cf->numVariants()));
+            printd(5, "  constructor vlist=%d\n",
+                static_cast<int>(qore_method_private::get(*cons)->getFunction()->numVariants()));
         }
     }
-    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release());
+    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list.release(), object_type_info);
     printd(5, "  nocn variant=%p\n", (void*)nocn->getVariant());
     return QoreValue(nocn);
 }
 
 static QoreValue read_node_EN_SCOPED_NEW(AOTExprNodeReadCtx& ctx) {
     std::string class_name = readStr(ctx.ptr, ctx.end);
+    const QoreTypeInfo* object_type_info = nullptr;
+    if (!en_splitObjectClassRef(ctx, class_name, object_type_info)) {
+        ctx.failed = true;
+        return QoreValue();
+    }
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     SimpleRefHolder<QoreParseListNode> pln;
     if (num_children > 0) {
@@ -633,12 +802,12 @@ static QoreValue read_node_EN_SCOPED_NEW(AOTExprNodeReadCtx& ctx) {
         ctx.failed = true;
         return QoreValue();
     }
-    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln.release());
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln.release(), object_type_info);
     socn->resolveParseArgs();
     return QoreValue(socn);
 }
 
-static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
+static QoreValue read_node_EN_CALLREF_CALL_intern(AOTExprNodeReadCtx& ctx, const name_vec_t* arg_names) {
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     QoreValue callref_expr;
     SimpleRefHolder<QoreParseListNode> pln;
@@ -657,7 +826,34 @@ static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
     }
     CallReferenceCallNode* crcn = new CallReferenceCallNode(&loc_builtin, callref_expr, pln.release());
     crcn->resolveParseArgs();
+    crcn->setRuntimeArgNames(arg_names);
     return QoreValue(crcn);
+}
+
+static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
+    return read_node_EN_CALLREF_CALL_intern(ctx, nullptr);
+}
+
+//! a named call reference call: the names of the arguments come before the children (M4 phase 3)
+static QoreValue read_node_EN_CALLREF_CALL_NAMED(AOTExprNodeReadCtx& ctx) {
+    uint16_t num_names = readU16(ctx.ptr, ctx.end);
+    // each name takes at least its two-byte length
+    if (static_cast<size_t>(ctx.end - ctx.ptr) < static_cast<size_t>(num_names) * 2) {
+        ctx.failed = true;
+        return QoreValue();
+    }
+    name_vec_t names;
+    names.reserve(num_names);
+    for (uint16_t i = 0; i < num_names; ++i) {
+        uint16_t len = readU16(ctx.ptr, ctx.end);
+        if (static_cast<size_t>(ctx.end - ctx.ptr) < len) {
+            ctx.failed = true;
+            return QoreValue();
+        }
+        names.emplace_back(reinterpret_cast<const char*>(ctx.ptr), len);
+        ctx.ptr += len;
+    }
+    return read_node_EN_CALLREF_CALL_intern(ctx, qore_intern_call_arg_names(std::move(names)));
 }
 
 // ============================================================================
@@ -685,7 +881,10 @@ static QoreValue read_node_EN_SQUARE_BRKT(AOTExprNodeReadCtx& ctx) {
     if (num_children >= 2) {
         right = ctx.recurse(ctx);
     }
-    return QoreValue(new QoreSquareBracketsOperatorNode(&loc_builtin, left, right));
+    // compiled code is %modern: its operator has negative offsets (qore#6294)
+    QoreSquareBracketsOperatorNode* node = new QoreSquareBracketsOperatorNode(&loc_builtin, left, right);
+    node->setCompiledCodeOptions();
+    return QoreValue(node);
 }
 
 // ============================================================================
@@ -1680,13 +1879,9 @@ static QoreValue read_node_EN_SELF_METH_REF(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_FUNC_REF(AOTExprNodeReadCtx& ctx) {
     std::string name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
-    const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(ctx.pgm, name.c_str());
-    if (fe) {
-        // Create a call reference (\func()), not a function call (func())
-        QoreFunction* f = fe->getFunction();
-        if (f) {
-            return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
-        }
+    // a call reference (\func()), not a function call (func())
+    if (LocalFunctionCallReferenceNode* fcr = qore_aot_make_function_ref(ctx.pgm, name.c_str())) {
+        return QoreValue(fcr);
     }
     printd(0, "AOT EXPR_TREE: cannot resolve function ref '%s'\n", name.c_str());
     ctx.failed = true;
@@ -1698,7 +1893,7 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
     std::string method_name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
     ExceptionSink xsink;
-    const QoreClass* qc = ctx.pgm->findClass(class_path.c_str(), &xsink);
+    const QoreClass* qc = qore_program_private::get(*ctx.pgm)->findClassCanonical(class_path.c_str(), &xsink);
     if (xsink.isException()) {
         xsink.clear();
     }
@@ -1712,7 +1907,7 @@ static QoreValue read_node_EN_STATIC_METH_REF(AOTExprNodeReadCtx& ctx) {
             m = qore_aot_find_loading_method(qc, method_name.c_str(), true);
         }
         if (m) {
-            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m));
+            return QoreValue(new LocalStaticMethodCallReferenceNode(&loc_builtin, m, qc));
         }
     }
     printd(0, "AOT EXPR_TREE: cannot resolve static method ref '%s::%s'\n",
@@ -1726,7 +1921,7 @@ static QoreValue read_node_EN_BOUND_METH_REF(AOTExprNodeReadCtx& ctx) {
     std::string method_name = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);  // 0 children
     ExceptionSink xsink;
-    const QoreClass* qc = ctx.pgm->findClass(class_path.c_str(), &xsink);
+    const QoreClass* qc = qore_program_private::get(*ctx.pgm)->findClassCanonical(class_path.c_str(), &xsink);
     if (xsink.isException()) {
         xsink.clear();
     }
@@ -1797,7 +1992,12 @@ static QoreValue read_node_EN_IMPLICIT_ARG(AOTExprNodeReadCtx& ctx) {
     uint16_t raw = readU16(ctx.ptr, ctx.end);
     memcpy(&offset, &raw, sizeof(offset));
     readU16(ctx.ptr, ctx.end);  // 0 children
-    int ctor_offset = (offset >= 0) ? (offset + 1) : offset;
+    int ctor_offset;
+    if (!qore_aot_implicit_arg_ctor_offset(offset, ctor_offset)) {
+        printd(0, "AOT EXPR_TREE: invalid implicit argument offset %d\n", offset);
+        ctx.failed = true;
+        return QoreValue();
+    }
     return QoreValue(new QoreImplicitArgumentNode(&loc_builtin, ctor_offset));
 }
 
@@ -1964,6 +2164,32 @@ static QoreValue read_node_EN_ITERATE(AOTExprNodeReadCtx& ctx) {
         source = ctx.recurse(ctx);
     }
     return QoreValue(new QoreIterateOperatorNode(&loc_builtin, source));
+}
+
+static QoreValue read_node_EN_FIND(AOTExprNodeReadCtx& ctx) {
+    uint8_t mode_byte = readU8(ctx.ptr, ctx.end);
+    uint16_t num_children = readU16(ctx.ptr, ctx.end);
+    QoreValue operands[3];
+    // the children are read (also when the node is invalid) so that the stream stays aligned for the error
+    for (unsigned i = 0; i < num_children; ++i) {
+        QoreValue child = ctx.recurse(ctx);
+        if (i < 3) {
+            operands[i] = child;
+        } else {
+            child.discard(nullptr);
+        }
+    }
+    if (num_children != 3 || mode_byte > static_cast<uint8_t>(FindNode::One) || ctx.failed) {
+        printd(0, "AOT EXPR_TREE: invalid find expression (mode %d, %d children)\n", (int)mode_byte,
+            (int)num_children);
+        for (auto& v : operands) {
+            v.discard(nullptr);
+        }
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return QoreValue(new FindNode(&loc_builtin, operands[0], operands[1], operands[2],
+        static_cast<FindNode::Mode>(mode_byte)));
 }
 
 static QoreValue read_node_EN_STREAMING(AOTExprNodeReadCtx& ctx) {

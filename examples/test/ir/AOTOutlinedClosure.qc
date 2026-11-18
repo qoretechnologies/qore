@@ -1,0 +1,675 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The cases of the AOTOutlinedClosure-<n>.qtest tests: each runs one part of them (see addPartCase()), so that each
+# takes a short time with a debug libqore, and together they run every case
+
+
+#! A closure created in an outlined region or a handler is called through a dispatch function that is defined
+#! (qore#6310, qore#6339)
+/** qcc outlines regions of a large function (over \c QORE_AOT_OUTLINE_FN_MIN_INSTS IR instructions, 3000 by default,
+    or \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS blocks) into helpers that use the slot map of the function (the coordinator).
+    A closure that a helper creates and calls is called through a dispatch function that is defined with the closure
+    bodies of the coordinator, under the coordinator's symbol; the helper named the dispatch function after itself, so
+    the executable or module failed to link with an undefined
+    \c <coordinator>_outline_<n>_closure_native_dispatch_<slot> symbol.  The definition must also return the result
+    in the form that the helper declares: a helper is lowered without the closure's effect summary and declares a
+    boxed result where the definition's closure body returns a native int, float or bool.
+
+    This test checks that executables and modules made by qcc at -O0 and -O3 link, and that their results match the
+    AST (and the ir, jit and tiered modes): for the function of the issue at the default thresholds, with the closure
+    in the first and in the second region, also in a module, and for small functions with forced thresholds whose
+    outlined regions create closures without captures that return native values, closures that capture locals of the
+    region, several closures stored in locals, closures returned to the caller that share a captured local, and nested
+    closures; for float and bool closures of a helper whose sibling fails to lower, after which the function is
+    lowered un-outlined, also with the closures in a handler of the helper; and for closures called in \c on_exit,
+    \c on_success and \c on_error handlers, with and without outlining (qore#6339).  It checks with the IR dump of qcc
+    and the symbols of the executables that the closures and handlers are in the helpers.
+*/
+class AOTOutlinedClosureBase inherits QUnit::Test {
+    public {
+        #! the filler statements of the function at the default thresholds (the issue's function had 120)
+        const Filler = 120;
+
+        #! the environment that outlines the small functions
+        const ForceEnv = "QORE_AOT_OUTLINE_FN_MIN_INSTS=20 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=20";
+
+        #! the functions of the script with forced thresholds
+        const FormFunctions = ("imm", "typed", "captures", "multi", "mk", "nested");
+
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
+    }
+
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
+        # never the test's own executable when it runs compiled with qcc (TestInterpreter)
+        qore_bin = TestInterpreter::qore_interpreter();
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        # the library of the interpreter, in its directory: a bare name is resolved through the PATH first
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(resolveCommand(qore_bin));
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addPartCase(1, "the function of the issue at the default thresholds", \testDefaultThresholds());
+        addPartCase(1, "a module's function over the default threshold", \testModule());
+        addPartCase(2, "the minimal function of the issue with forced thresholds", \testMinimal());
+        addPartCase(2, "captures, several, returned and nested closures in outlined regions", \testForms());
+        addPartCase(3, "float and bool closures of a helper that fails to lower", \testHelperFailure());
+        addPartCase(3, "closures in on_exit, on_success and on_error handlers", \testHandlers());
+        addPartCase(3, "handler closures of a helper whose sibling fails to lower", \testHelperFailureHandlers());
+        set_return_value(main());
+    }
+
+    #! adds a case if it is in the part that this test runs: each case is in one part, and each part is a test
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
+    }
+
+    #! Returns the path of \a cmd: \a cmd itself if it has a directory, else the file that the PATH names
+    private static string resolveCommand(string cmd) {
+        if (cmd =~ /\//) {
+            return cmd;
+        }
+        *string found = trim(backquote(sprintf("command -v '%s' 2>/dev/null", replace(cmd, "'", "'\\''"))));
+        return found ? found : cmd;
+    }
+
+    #! Returns the code of the namespace with the function of the issue, with the closure after \a pos filler statements
+    /** @param pos the filler statements before the statement with the closure
+        @param pub the prefix of the declarations that a module exports
+    */
+    private static string getIssueCode(int pos, string pub) {
+        string code = sprintf("%snamespace OutlineClosure {
+%slist sub f() {
+    list out;
+", pub, pub);
+        for (int i = 0; i <= Filler; ++i) {
+            if (i == pos) {
+                code += "    out += map (auto sub () { return 1; })(), (1, 2);\n";
+            }
+            if (i < Filler) {
+                code += sprintf("    out += map $1 + %d, (1, 2);\n", i);
+            }
+        }
+        code += sprintf("    foreach auto v in (out) {
+    }
+    return out;
+}
+
+%sstring sub run() {
+    list l = f();
+    int sum = foldl $1 + $2, l;
+    return sprintf(\"rv:%%d %%d %%y\\n\", l.size(), sum, l[0..3]);
+}
+}
+", pub);
+        return code;
+    }
+
+    #! Returns the script with the function of the issue, with the closure after \a pos filler statements
+    private static string getIssueScript(int pos) {
+        return "%modern\n\n" + getIssueCode(pos, "") + "\nprint(OutlineClosure::run());\n";
+    }
+
+    #! Returns the script of the issue's minimal function
+    private static string getMinimalScript() {
+        return "%modern
+
+list sub f() {
+    list out;
+    out += map (auto sub () { return 1; })(), (1, 2);
+    foreach auto v in (out) {
+    }
+    return out;
+}
+
+printf(\"rv:%y\\n\", f());
+";
+    }
+
+    #! Returns a script whose small functions create closures in the regions that forced thresholds outline
+    /** The captured locals are declared in blocks, which the regions contain: a region is not made when a local that
+        a closure uses crosses its boundary (see design/aot-function-outlining.md).
+    */
+    private static string getFormsScript() {
+        return "%modern
+
+string log;
+
+# the function of the issue: an immediately called closure in an operator expression
+list sub imm() {
+    list out;
+    out += map (auto sub () { return 1; })(), (1, 2);
+    foreach auto v in (out) {
+        log += \"v\" + v;
+    }
+    return out;
+}
+
+# immediately called closures without captures that return native int, float and bool values
+list sub typed(int n) {
+    list out;
+    out += (int sub (int x) { return x + 1; })(n);
+    out += (float sub (float x) { return x * 1.5; })(n);
+    out += (bool sub (int x) { return x > 1; })(n);
+    out += (int sub () { return 42; })();
+    foreach auto v in (out) {
+        log += \"t\";
+    }
+    return out;
+}
+
+# immediately called closures that capture locals of the region, one of them raising an exception
+list sub captures(int n) {
+    list out;
+    log += \"a\";
+    {
+        int k = n * 10;
+        string s = \"s\" + n;
+        out += (int sub (int x) { return x + k; })(3);
+        out += (string sub () { return s + k; })();
+        k += 1;
+        out += (int sub () { return k; })();
+        try {
+            out += (int sub () { if (k > 15) { throw \"BIG\", sprintf(\"k=%d\", k); } return -k; })();
+        } catch (hash<ExceptionInfo> ex) {
+            out += ex.err + \":\" + ex.desc;
+        }
+    }
+    log += \"b\";
+    foreach auto v in (out) {
+        log += \"c\";
+    }
+    return out;
+}
+
+# several closures stored in locals and called in the region; one is passed to another, one captures nothing
+list sub multi(int n) {
+    list out;
+    log += \"a\";
+    {
+        int b = n + 2;
+        code add = int sub (int x) { return x + b; };
+        code mul = int sub (int x) { return x * b; };
+        out += add(1);
+        out += mul(3);
+        out += (int sub (code f, int x) { return f(x) + 1; })(add, 5);
+        b = 100;
+        out += add(1);
+        # without captures: a guarded stored closure call
+        code dbl = int sub (int x) { return x * 2; };
+        out += dbl(b + 1);
+    }
+    log += \"b\";
+    foreach auto v in (out) {
+        log += \"c\";
+    }
+    return out;
+}
+
+# closures created in the region and returned to the caller; they share a captured local
+list<code> sub mk(int n) {
+    list<code> l;
+    log += \"a\";
+    {
+        int b = n;
+        l += int sub () { return b * 2; };
+        l += int sub (int x) { b += x; return b; };
+    }
+    log += \"b\";
+    foreach code f in (l) {
+        log += f ? \"c\" : \"-\";
+    }
+    return l;
+}
+
+# nested closures
+list sub nested(int n) {
+    list out;
+    log += \"a\";
+    {
+        int a = n + 1;
+        out += (int sub (int x) { return (int sub (int y) { return y * a; })(x) + a; })(4);
+        code outer = code sub (int x) { code inner = int sub () { return x + a; }; return inner; };
+        out += outer(7)();
+    }
+    log += \"b\";
+    foreach auto v in (out) {
+        log += \"c\";
+    }
+    return out;
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    list<code> l = mk(c);
+    printf(\"rv%d:%y %y %y %y %y %y %y %y %y %s\\n\", c, imm(), typed(c), captures(c), multi(c), nested(c), l[0](),
+        l[1](5), l[1](5), l[0](), log);
+}
+";
+    }
+
+    #! Writes \a code to \a path
+    private static writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Returns the reference output of the script \a path (the AST's), checking that it matches \a re
+    private string getExpected(string path, string re) {
+        string expected = runMode(path, "ast");
+        assertRegex(re, expected, "the AST prints the result lines");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(path, mode), sprintf("%s: %s", path, mode));
+        }
+        return expected;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts in the environment \a env
+    /** @return the output of qcc
+    */
+    private string compile(string src, string out, string opts, string env) {
+        int rc;
+        string output = backquote(sprintf("%s QORE_AOT_DEBUG=1 %s %s %s -o %s %s 2>&1", lib_env, env, qcc_bin, opts,
+            out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+        return output;
+    }
+
+    #! Returns True if the qcc output \a out says that the function \a name was outlined
+    private static bool outlined(string out, string name) {
+        return out.regex(sprintf("AOT-OUTLINE-FN: '%s' outlined [1-9][0-9]* regions", name));
+    }
+
+    #! Returns the names of the outlined helpers whose IR in the qcc dump \a out creates a closure
+    /** The helpers are named <tt><coordinator symbol>_outline_<n></tt>
+    */
+    private static hash<string, bool> getClosureHelpers(string out) {
+        hash<string, bool> rv = {};
+        *string helper;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = line.regexExtract("^=== IR for (.*) ===$");
+            if (m) {
+                helper = m[0] =~ /_outline_[0-9]+$/ ? m[0] : NOTHING;
+                continue;
+            }
+            if (helper && line =~ /create\.closure/) {
+                rv{helper} = True;
+            }
+        }
+        return rv;
+    }
+
+    #! Returns True if a helper of the function \a name in \a helpers creates a closure
+    /** The symbol of a function in a namespace has \c "__" in place of each \c "::", and the symbol of a function of
+        a module starts with \c "_qaot_<module>_"; the names are made of word characters
+    */
+    private static bool helperCreatesClosure(hash<string, bool> helpers, string name) {
+        string pattern = "^(_qaot_[A-Za-z0-9_]+_)?" + replace(name, "::", "__") + "_";
+        foreach string helper in (keys helpers) {
+            if (helper.regex(pattern)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the symbols of the executable \a exe listed by nm, or NOTHING if there is no nm or it lists none
+    /** The symbol checks are skipped then, with a message: a stripped executable lists no symbols
+    */
+    private *string getSymbols(string exe) {
+        *string nm = trim(`command -v nm 2>/dev/null`);
+        if (!nm) {
+            printf("%s: no nm in the PATH; the symbol checks are skipped\n", exe);
+            return NOTHING;
+        }
+        int rc;
+        string out = backquote(sprintf("'%s' '%s' 2>&1", replace(nm, "'", "'\\''"), replace(exe, "'", "'\\''")),
+            \rc);
+        assertEq(0, rc, sprintf("nm %s: exit status (output: %y)", exe, out));
+        if (!rc && out !~ /\S/) {
+            printf("%s: nm lists no symbols; the symbol checks are skipped\n", exe);
+            return NOTHING;
+        }
+        return out;
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    #! Checks that the executables made from \a src at each optimization level print \a expected
+    /** @param names the functions that must be outlined (with \a outline) or not
+        @param outline True if the functions \a names must be outlined, False if they must not be
+        @param closure_in_helper True if a helper of each function in \a names must create a closure, False if no
+        helper may create one (only with \a outline; the default is \a outline)
+    */
+    private checkExecutables(string src, string expected, softlist<string> names, bool outline, string env,
+            string what, *bool closure_in_helper) {
+        bool in_helper = closure_in_helper ?? outline;
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, (outline ? "QORE_AOT_DUMP_IR=1 " : "") + env);
+            hash<string, bool> helpers = getClosureHelpers(out);
+            foreach string name in (names) {
+                assertEq(outline, outlined(out, name), sprintf("%s %s: %s outlined", what, opt, name));
+                if (outline) {
+                    assertEq(in_helper, helperCreatesClosure(helpers, name), sprintf("%s %s: a helper of %s "
+                        "creates a closure (helpers: %y)", what, opt, name, keys helpers));
+                }
+            }
+            assertEq(expected, runExe(exe), sprintf("%s: qcc %s", what, opt));
+        }
+    }
+
+    testDefaultThresholds() {
+        TmpDir dir("qore-aot-outline-closure-");
+        # the closure in the first region and in the second; after 110 filler statements, the function is outlined,
+        # but the closure stays in the coordinator
+        foreach int pos in ((0, 60, 110)) {
+            string src = join_paths(dir.path, sprintf("issue%d.qr", pos));
+            writeFile(src, getIssueScript(pos));
+            string expected = getExpected(src, "^rv:242 [0-9]+ \\[[0-9, ]+\\]\n$");
+            checkExecutables(src, expected, "OutlineClosure::f", True, "", sprintf("closure after %d statements", pos),
+                pos != 110);
+        }
+        # without outlining
+        string src = join_paths(dir.path, "issue0.qr");
+        checkExecutables(src, getExpected(src, "^rv:242 "), "OutlineClosure::f", False, "QORE_AOT_OUTLINE_FN=0",
+            "not outlined");
+    }
+
+    testModule() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string script = join_paths(dir.path, "issue.qr");
+        writeFile(script, getIssueScript(0));
+        string expected = getExpected(script, "^rv:242 ");
+        string src = join_paths(dir.path, "OutlineClosure.qm");
+        writeFile(src, "%modern
+
+module OutlineClosure {
+    version = \"1.0\";
+    desc = \"closures in outlined function-body helpers\";
+    author = \"Qore Technologies, s.r.o.\";
+    license = \"MIT\";
+}
+
+" + getIssueCode(0, "public "));
+        string prog = join_paths(dir.path, "probe.qr");
+        writeFile(prog, sprintf("%%modern\n%%append-module-path %s/mods\n%%requires OutlineClosure\n"
+            "print(OutlineClosure::run());\n", dir.path));
+        mkdir(join_paths(dir.path, "mods"));
+        string qmod = join_paths(dir.path, "mods", "OutlineClosure.qmod");
+        foreach string opt in (OptLevels) {
+            string out = compile(src, qmod, opt + " --module", "QORE_AOT_DUMP_IR=1");
+            assertTrue(outlined(out, "OutlineClosure::f"), sprintf("module %s: f outlined", opt));
+            assertTrue(helperCreatesClosure(getClosureHelpers(out), "OutlineClosure::f"),
+                sprintf("module %s: a helper of f creates the closure", opt));
+            assertEq(expected, runMode(prog, "ast"), "module qcc " + opt);
+            unlink(qmod);
+        }
+    }
+
+    testMinimal() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "minimal.qr");
+        writeFile(src, getMinimalScript());
+        string expected = getExpected(src, "^rv:\\[1, 1\\]\n$");
+        checkExecutables(src, expected, "f", True, ForceEnv, "minimal");
+        checkExecutables(src, expected, "f", True, ForceEnv + " QORE_AOT_OUTLINE_FN_TARGET_INSTS=30",
+            "minimal, target 30");
+    }
+
+    testForms() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "forms.qr");
+        writeFile(src, getFormsScript());
+        string expected = getExpected(src, "^(rv[0-2]:[^\n]+\n){3}$");
+        # the exception is raised by the closure in the third call only
+        assertEq(1, expected.split("BIG:k=21").size() - 1, "the closure raises the exception once");
+        # the returned closures share their captured local
+        assertRegex("\nrv1:.* 2 6 11 22 ", expected, "the returned closures share the captured local");
+        checkExecutables(src, expected, FormFunctions, True, ForceEnv, "forms");
+        checkExecutables(src, expected, FormFunctions, False, "QORE_AOT_OUTLINE_FN=0", "forms, not outlined");
+    }
+
+    #! Returns a script whose function has float and bool closures without captures in its first outlined region
+    /** The forced thresholds outline \c f into helpers; the closures are in the first one, the second one ends with a
+        closure too
+    */
+    private static string getHelperFailureScript() {
+        return "%modern
+
+list sub f(int n) {
+    list out;
+    out += (float sub () { return 1.5; })();
+    out += (bool sub () { return True; })();
+    out += (int sub () { return 42; })();
+    foreach auto v in (out) {
+    }
+    out += n + 1;
+    out += n + 2;
+    foreach auto v in (out) {
+        out += 0;
+        break;
+    }
+    return out;
+}
+
+printf(\"rv:%y\\n\", f(2));
+";
+    }
+
+    #! The dispatch functions declared by a helper whose sibling fails to lower are declared again for the retry
+    /** When a helper fails to lower, the helpers are erased and the function is lowered un-outlined with the closures'
+        effect summaries: the float and bool closures then have native \c double and \c i1 results, and the
+        declarations that the first helper left with a boxed \c i64 result must not be reused (the module failed
+        verification: "Function return type does not match operand type of return inst")
+    */
+    testHelperFailure() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "failure.qr");
+        writeFile(src, getHelperFailureScript());
+        string expected = getExpected(src, "^rv:\\[1\\.5, True, 42, 3, 4, 0\\]\n$");
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, ForceEnv
+                + " QORE_AOT_DUMP_IR=1 QORE_AOT_TEST_FAIL_LOWERING=_outline_1");
+            assertTrue(outlined(out, "f"), opt + ": f outlined");
+            assertTrue(helperCreatesClosure(getClosureHelpers(out), "f"), opt + ": a helper of f creates a closure");
+            assertRegex("AOT-OUTLINE-FN: helper 'f_[^']*_outline_1' lowering failed", out,
+                opt + ": the second helper fails to lower");
+            assertEq(expected, runExe(exe), "helper failure: qcc " + opt);
+        }
+    }
+
+    #! Returns a script whose functions call closures in their on_exit, on_success and on_error handlers
+    /** \c f has the handlers in its function block and in a nested block, \c g in the block of a try statement, which
+        forced thresholds outline into a helper.  The handler bodies are lowered as functions of their own
+        (\c handler_<n>\@<function>) that share the slot tables of the function, whose closure bodies define the
+        dispatch functions (qore#6339)
+    */
+    private static string getHandlersScript() {
+        return "%modern
+
+string log;
+
+int sub f(int n) {
+    int r = 0;
+    on_exit {
+        log += sprintf(\"x%d\", (int sub () { return 1; })());
+    }
+    on_success {
+        log += sprintf(\"s%d\", (int sub (int x) { return x * 2; })(n));
+    }
+    on_error {
+        log += sprintf(\"e%s\", (string sub () { return \"rr\"; })());
+    }
+    {
+        int k = n + 1;
+        on_exit {
+            log += sprintf(\"k%d\", (int sub () { return k; })());
+        }
+        r += k;
+    }
+    log += \"a\";
+    if (n > 1) {
+        throw \"X\";
+    }
+    log += \"b\";
+    return r + n;
+}
+
+# the handlers in a block of a try statement, which an outlined region can contain
+int sub g(int n) {
+    int r = n;
+    log += \"g\";
+    try {
+        on_exit {
+            log += sprintf(\"X%d\", (int sub () { return 2; })());
+        }
+        on_success {
+            log += sprintf(\"S%d\", (int sub (int x) { return x + 10; })(n));
+        }
+        on_error {
+            log += sprintf(\"E%s\", (string sub () { return \"RR\"; })());
+        }
+        r += 5;
+        if (n > 1) {
+            throw \"Y\";
+        }
+        r += 1;
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"c\";
+    }
+    log += \"h\";
+    return r;
+}
+
+for (int c = 0; c < 3; ++c) {
+    log = \"\";
+    int v = -1;
+    try {
+        v = g(c) + f(c);
+    } catch (hash<ExceptionInfo> ex) {
+        log += \"<\" + ex.err + \">\";
+    }
+    printf(\"rv%d:%d %s\\n\", c, v, log);
+}
+";
+    }
+
+    #! Closures called in handlers link and run, with and without outlining (qore#6339)
+    /** The handler functions named the dispatch functions of their closures after themselves
+        (<tt>handler_<n>\@<function>_closure_native_dispatch_<slot></tt>), which were never defined: qcc failed to link
+        the program even without outlining
+    */
+    testHandlers() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "handlers.qr");
+        writeFile(src, getHandlersScript());
+        string expected = getExpected(src, "^(rv[0-2]:[^\n]+\n){3}$");
+        # every handler runs: on_success in the first two calls, on_error in the third
+        assertRegex("\nrv1:10 gS11X2hk2abs2x1\n", expected, "the on_exit and on_success handlers call their closures");
+        assertRegex("\nrv2:-1 gERRX2chk3aerrx1<X>\n", expected, "the on_error handlers call their closures");
+        foreach string opt in (OptLevels) {
+            foreach hash<auto> i in ({"what": "not outlined", "env": "QORE_AOT_OUTLINE_FN=0"},
+                    {"what": "forced outlining", "env": ForceEnv}) {
+                string exe = src + opt + (i.env == ForceEnv ? "-outlined" : "");
+                string out = compile(src, exe, opt, i.env);
+                # the handlers of f leave every region of f by an exception edge; g's try statement is outlined
+                bool outline = i.env == ForceEnv;
+                assertEq(outline, outlined(out, "g"), sprintf("handlers, %s %s: g outlined", i.what, opt));
+                # the handler functions of g's try block are nested in the helper: <helper>_obe_<n>
+                *string syms = getSymbols(exe);
+                if (syms) {
+                    assertEq(outline, syms =~ /[ _]g_int__h[0-9a-f]+_outline_[0-9]+_obe_[0-9]/,
+                        sprintf("handlers, %s %s: a handler function of g is nested in a helper", i.what, opt));
+                }
+                assertEq(expected, runExe(exe), sprintf("handlers, %s: qcc %s", i.what, opt));
+            }
+        }
+    }
+
+    #! Returns a script whose function has float, bool and int closures in a handler in its first outlined region
+    private static string getHelperFailureHandlersScript() {
+        return "%modern
+
+list sub f(int n) {
+    list out;
+    {
+        on_exit {
+            out += (float sub () { return 1.5; })();
+            out += (bool sub () { return True; })();
+            out += (int sub () { return 42; })();
+        }
+        out += n;
+    }
+    foreach auto v in (out) {
+    }
+    out += n + 1;
+    out += n + 2;
+    foreach auto v in (out) {
+        out += 0;
+        break;
+    }
+    return out;
+}
+
+printf(\"rv:%y\\n\", f(2));
+";
+    }
+
+    #! The nested handler functions of a helper are erased with it when a sibling helper fails to lower
+    /** The handler function of the first helper (<tt>\<helper\>_obe_0</tt>) called the closures' dispatch functions
+        declared with the helper's boxed result; it was kept when the helpers were erased, so its calls kept the
+        declarations, and the un-outlined retry, which declares a native float, bool and int result, failed: "closure
+        dispatch function ... is already declared with another ABI"
+    */
+    testHelperFailureHandlers() {
+        TmpDir dir("qore-aot-outline-closure-");
+        string src = join_paths(dir.path, "failure-handlers.qr");
+        writeFile(src, getHelperFailureHandlersScript());
+        string expected = getExpected(src, "^rv:\\[2, 1\\.5, True, 42, 3, 4, 0\\]\n$");
+        foreach string opt in (OptLevels) {
+            string exe = src + opt;
+            string out = compile(src, exe, opt, ForceEnv + " QORE_AOT_TEST_FAIL_LOWERING=_outline_1");
+            assertTrue(outlined(out, "f"), opt + ": f outlined");
+            assertRegex("AOT-OUTLINE-FN: helper 'f_[^']*_outline_1' lowering failed", out,
+                opt + ": the second helper fails to lower");
+            *string syms = getSymbols(exe);
+            if (syms) {
+                assertFalse(syms =~ /_outline_[0-9]+/, opt + ": no helper or nested helper function is left");
+            }
+            assertEq(expected, runExe(exe), "helper failure with handlers: qcc " + opt);
+        }
+    }
+}

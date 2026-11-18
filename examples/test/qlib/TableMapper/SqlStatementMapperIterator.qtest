@@ -57,7 +57,7 @@ class FakeSQLStatement inherits Qore::SQL::AbstractSQLStatement {
 
     prepare(string s, ...) {}
     execArgs(list<auto> l) {}
-    hash<auto> getOutput() {}
+    hash<auto> getOutput() { throw "NOT-IMPLEMENTED"; }
     getSQL() {}
 
     hash<auto> fetchColumns(softint rows = -1) { throw "X"; }
@@ -112,7 +112,7 @@ class FakeDatasource inherits Qore::SQL::AbstractDatasource {
     nothing rollback() {}
     auto selectRow(string sql, ...) {}
     auto selectRowsTyped(string sql, ...) {}
-    hash<auto> getConfigHash() {}
+    hash<auto> getConfigHash() { throw "NOT-IMPLEMENTED"; }
     nothing commit() {}
     auto vselectRow(string sql, *softlist<auto> vargs) {}
     auto vexec(string sql, *softlist<auto> vargs) {}
@@ -123,46 +123,54 @@ class FakeDatasource inherits Qore::SQL::AbstractDatasource {
 # Actually we don't need real table. Just a FakeSQLStatement returned from getRowIterator()
 class FakeAbstractTable inherits SqlUtil::AbstractTable {
     constructor() : SqlUtil::AbstractTable(new FakeDatasource(), "foo_table") {}
-    AbstractIterator getRowIterator(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
-    AbstractIterator getRowIteratorNoExec(hash<auto> h) { return new FakeSQLStatement(); }
-    AbstractIterator getStatement(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
-    AbstractIterator getStatementNoExec(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getRowIterator(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getRowIteratorNoExec(hash<auto> h) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getStatement(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
+    Qore::SQL::AbstractSQLStatement getStatementNoExec(hash<auto> h, *reference<string> sql) { return new FakeSQLStatement(); }
 
-    string getRenameSqlImpl(string new_name) {}
-    AbstractPrimaryKey getPrimaryKeyImpl(auto a) {}
+    string getRenameSqlImpl(string new_name) { throw "NOT-IMPLEMENTED"; }
+    AbstractPrimaryKey getPrimaryKeyImpl(auto a) { throw "NOT-IMPLEMENTED"; }
     Constraints getConstraintsImpl(auto a)  { return new Constraints(); }
-    AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash<auto> opt) {}
+    AbstractCheckConstraint addCheckConstraintImpl(string cname, string src, *hash<auto> opt) {
+        throw "NOT-IMPLEMENTED";
+    }
     nothing setupTableImpl(hash<auto> desc, *hash<auto> opt) {}
-    bool uniqueIndexCreatesConstraintImpl(auto a) {}
-    ForeignConstraints getForeignConstraintsImpl(*hash<auto> opt) {}
-    bool checkExistenceImpl(auto a) {}
-    AbstractPrimaryKey addPrimaryKeyImpl(string cname, hash<auto> ch, *hash<auto> opt) {}
-    AbstractColumn addColumnImpl(string cname, hash<auto> opt, bool nullable = True) {}
-    Indexes getIndexesImpl(auto a) {}
-    AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table, hash<auto> tch, *hash<auto> opt) {}
+    bool uniqueIndexCreatesConstraintImpl(auto a) { throw "NOT-IMPLEMENTED"; }
+    ForeignConstraints getForeignConstraintsImpl(*hash<auto> opt) { throw "NOT-IMPLEMENTED"; }
+    bool checkExistenceImpl(auto a) { throw "NOT-IMPLEMENTED"; }
+    AbstractPrimaryKey addPrimaryKeyImpl(string cname, hash<auto> ch, *hash<auto> opt) { throw "NOT-IMPLEMENTED"; }
+    AbstractColumn addColumnImpl(string cname, hash<auto> opt, bool nullable = True) { throw "NOT-IMPLEMENTED"; }
+    Indexes getIndexesImpl(auto a) { throw "NOT-IMPLEMENTED"; }
+    AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table, hash<auto> tch, *hash<auto> opt) {
+        throw "NOT-IMPLEMENTED";
+    }
     Columns describeImpl() { return new Columns(("a": NOTHING, "b": NOTHING)); }
-    AbstractTrigger addTriggerImpl(string tname, string src, *hash<auto> opt) {}
-    AbstractIndex addIndexImpl(string iname, bool enabled, hash<auto> ch, *hash<auto> opt) {}
+    AbstractTrigger addTriggerImpl(string tname, string src, *hash<auto> opt) { throw "NOT-IMPLEMENTED"; }
+    AbstractIndex addIndexImpl(string iname, bool enabled, hash<auto> ch, *hash<auto> opt) { throw "NOT-IMPLEMENTED"; }
     *list<auto> getAlignSqlImpl(AbstractTable t, *hash<auto> opt) {}
-    Triggers getTriggersImpl(auto a) {}
-    string getCreateTableSqlImpl(*hash<auto> opt) {}
-    bool tryInsertImpl(string sql, hash<auto> row) {}
-    bool supportsTablespacesImpl(auto a) {}
+    Triggers getTriggersImpl(auto a) { throw "NOT-IMPLEMENTED"; }
+    string getCreateTableSqlImpl(*hash<auto> opt) { throw "NOT-IMPLEMENTED"; }
+    bool tryInsertImpl(string sql, hash<auto> row) { throw "NOT-IMPLEMENTED"; }
+    bool supportsTablespacesImpl(auto a) { throw "NOT-IMPLEMENTED"; }
     *string getSqlValueImpl(auto v) {}
-    AbstractUniqueConstraint addUniqueConstraintImpl(string cname, hash<auto> ch, *hash<auto> opt) {}
-    hash<auto> getQoreTypeMapImpl(auto a) {}
+    AbstractUniqueConstraint addUniqueConstraintImpl(string cname, hash<auto> ch, *hash<auto> opt) {
+        throw "NOT-IMPLEMENTED";
+    }
+    hash<auto> getQoreTypeMapImpl(auto a) { throw "NOT-IMPLEMENTED"; }
     *hash<auto> doReturningImpl(hash<auto> opt, reference<string> sql, list<auto> args) {}
-    hash<auto> getTypeMapImpl(auto a) {}
-    bool constraintsLinkedToIndexesImpl(auto a) {}
-    bool emptyImpl(auto a) {}
+    hash<auto> getTypeMapImpl(auto a) { throw "NOT-IMPLEMENTED"; }
+    bool constraintsLinkedToIndexesImpl(auto a) { throw "NOT-IMPLEMENTED"; }
+    bool emptyImpl(auto a) { throw "NOT-IMPLEMENTED"; }
     *list<auto> getCreateMiscSqlImpl(*hash<auto> opt, bool cache) {}
-    string getCreateSqlImpl(list<auto> l) {}
-    bool hasArrayBind(auto a) {}
+    string getCreateSqlImpl(list<auto> l) { throw "NOT-IMPLEMENTED"; }
+    bool hasArrayBind(auto a) { throw "NOT-IMPLEMENTED"; }
     nothing copyImpl(AbstractTable old) {}
     nothing doSelectOrderByWithOffsetSqlInternImpl(reference<hash<::SqlUtil::QueryInfo>> info, reference<string> sql, list<auto> coll) {}
     nothing doSelectLimitOnlyInternImpl(reference<hash<::SqlUtil::QueryInfo>> info, reference<string> sql) {}
-    AbstractDataProviderType getNumericTypeImpl(string type_name, bool nullable, *hash<auto> options) {}
-    AbstractSavepointHelper getSavepointHelperImpl(*string savepoint) {}
+    AbstractDataProviderType getNumericTypeImpl(string type_name, bool nullable, *hash<auto> options) {
+        throw "NOT-IMPLEMENTED";
+    }
+    AbstractSavepointHelper getSavepointHelperImpl(*string savepoint) { throw "NOT-IMPLEMENTED"; }
     bool isDuplicateRowErrorImpl(hash<::Qore::ExceptionInfo> ex) { return False; }
 }
 

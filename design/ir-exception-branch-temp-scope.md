@@ -4,8 +4,9 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
 
 ## Status
 
-Implemented.  Every IR opcode that can raise an exception and branch to a landing
-pad in the same function drains only the raising statement's temp scope.
+Implemented.  Every IR opcode that can raise an exception and branch to a handler
+in the same function drains the temp scopes that the exception leaves: the raising
+statement's, and every scope nested in the statement that encloses the raising code.
 
 Relevant code:
 
@@ -34,22 +35,76 @@ a `PushTempMark` / `DiscardTemps` pair, so at any point during lowering
 ## The rule
 
 An instruction that branches to an in-frame `exception_target` must use the
-scoped drain, with the `temp_scope_id` it recorded at build time:
+scoped drain, with the scope that the exception leaves (`exceptionBranchTempScope()`):
 
     if (!inst->exception_target) {
         return returnAfterUnhandledException();   // leaves the frame: full drain
     }
-    cleanupToTempScope(inst->temp_scope_id, true);
+    cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
 
-A landing pad is *inside* the frame.  Everything the handler may read, and
-everything the code after the handler may read, is still live there; only the
-raising statement's own temps are dead.
+The scope is the `temp_scope_id` that the instruction recorded at build time,
+unless the handler's scope (`QoreIRBasicBlock::getHandlerTempScopeId()`: the scope
+that the handler block's first instruction recorded, other than one that opens or
+closes a temp scope) is further out: then it is the first scope opened after the
+handler's.  An expression can open a temp scope inside its statement's - each
+element of a void map has one, as does an expression whose temporaries are released
+before the rest of its statement runs (`lowerExpressionInTempScope()`,
+`lowerWithImplicitContext()`) - and an exception raised in it leaves that scope and
+the statement's.  The AST interpreter releases the temporaries of every expression
+and statement that the exception unwinds before the handler runs, so both are
+drained: a void map's source list is released before the `catch` block runs, before
+an enclosing `foreach` statement's cleanup releases its list, and before the block's
+`on_error` handlers run.
 
-Nothing leaks.  What the scoped drain leaves behind — intermediate marks and
-temps between the raising statement and the `try` — is released by the
-`DiscardTemps` of the enclosing statement that the handler falls through to
-(`try.merge`), or, if the exception leaves the frame after all, by the full drain
-in `returnAfterUnhandledException()`.
+A handler is *inside* the frame.  Everything the handler may read, and everything
+the code after the handler may read, is still live there: the handler's own scope
+and the scopes that enclose it are not drained.  A handler inside the statement
+(the exception cleanup block of a functional operator, which releases the
+operator's element, list and source itself) records the statement's scope, so only
+the scopes nested in the statement are drained before it, as before.
+
+Nothing leaks.  What the scoped drain leaves behind - the marks kept, and the
+scopes of the statements that the handler falls through to - is released by the
+`DiscardTemps` of the enclosing statement (`try.merge`), or, if the exception
+leaves the frame after all, by the full drain in `returnAfterUnhandledException()`.
+
+Native code follows the same rule: `QoreIRToLLVM::getExceptionEdgeTarget()`
+releases on the exception edge the cleanup allocas registered since the mark of the
+first scope opened after the handler's, or of the instruction's own scope, in the
+order of the AST interpreter's unwind (`orderExceptionTemps()`).  Before qore#5689
+both drained only the instruction's own scope: a void map whose body raised
+released its source after the `catch` block in native code, and in the IR
+interpreter after an enclosing `foreach` statement's cleanup and after the block's
+`on_error` handlers (`examples/test/ir/exception-edge-temp-drain/`).
+
+## Leaving the frame: temps before handlers, scope by scope
+
+When an exception (or a `thread_exit`) leaves the frame without a handler in it, every exit path goes through
+`unwindForException()` (directly, or through `returnAfterUnhandledException()`).  It leaves the open scopes of
+blocks with `on_exit` / `on_error` / `on_success` handlers from the innermost, as the AST interpreter unwinds the
+blocks (`StatementBlock::execIntern()`): for each scope it releases the temps of the statements of the block, then
+runs the block's handlers; the temps of the statements that enclose every scope, and the rest of the frame's values,
+are released last (`cleanupValues()`).
+
+`ScopeEnter` records, with the number of handlers registered before the scope (`IRScopeEntry::handler_start`), the
+number of temp scopes open then (`IRScopeEntry::temp_mark_count`): those are the marks of the statements that
+enclose the block, such as the list of the `foreach` whose body the block is.  The marks pushed after it belong to
+the statements of the block, and `releaseScopeTemps()` drains back to the first of them, with its sentinel
+(`cleanupToTempMark()`).  A `LandingPad` drains the same way before it runs the handlers of each scope that the
+exception left inside the `try` body.
+
+Before (issue #5639), the paths that leave the frame did one of two things, neither of them the AST order:
+
+- `returnAfterUnhandledException()`, the exit of the calls, ran all the handlers first and released the values
+  after them, so the temporaries of the statement that raised the exception outlived the `on_exit` handler of its
+  block (`on_exit` then `~temp`, where the AST gives `~temp` then `on_exit`);
+- most other opcodes released all the values first and left the handlers to the scope exit guard, which released the
+  list of a `foreach` statement before the handlers of its body ran, where the AST runs them first.
+
+Native code leaves the frame in the AST order; a function that runs on the IR tier until it is compiled showed the
+IR order in its first calls.  `examples/test/qore/statements/on-exit-temporary-order/on-exit-temporary-order.qtest`
+records the order for exceptions, returns and breaks in every execution mode, on the IR tier of tiered execution and
+as a qcc-compiled executable.
 
 ## Every in-frame branch follows the rule
 
@@ -90,7 +145,8 @@ list, in each execution mode and from a compiled module.
 took the frame-exit path: the interpreter returned from the frame and the exception escaped an enclosing `try` in
 the same function, which AST mode caught. `lowerExpression()` sets their target from `getCurrentExceptionTarget()`.
 
-The interpreter's `branchToExceptionTarget()` applies the rule; an instruction that has no target leaves the frame.
+The interpreter's `branchToExceptionTarget()` applies the rule, as do the opcode handlers listed above (through
+`exceptionBranchTempScope()`); an instruction that has no target leaves the frame.
 `BackgroundInt` (a thread that cannot be started), `SwitchRegexMatch` and `SwitchCaseMatch` had targets that the
 interpreter ignored, as did the binary operations, such as `DivAssignInt`, that
 `qore_ir_scalar_replace_fixed_aggregates()` puts in place of an `LValuePathCompound` and that keep its target; native

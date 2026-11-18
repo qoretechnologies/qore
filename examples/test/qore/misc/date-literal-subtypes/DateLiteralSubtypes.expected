@@ -1,0 +1,18 @@
+take_abs: 2026-01-01 00:00:00.000000 +00:00
+take_rel: <time: 1 second>
+take_rel: <time: 1 day 2 hours>
+take_date: <time: 1 second>
+take_date: 2026-01-01 00:00:00.000000 +00:00
+take_abs_or_nothing: 2026-01-01 00:00:00.000000 +00:00
+take_rel_or_nothing: <time: 3 minutes>
+ret: 2026-01-02 03:04:05.000000 +00:00 <time: 2 days>
+C::sm: <time: 5 seconds>
+C::m: 2026-02-01 00:00:00.000000 +00:00
+take_rel: <time: 1 hour>
+take_abs: 2026-03-04 00:00:00.000000 +00:00
+typed: <time: 1 second> 2026-01-01 00:00:00.000000 +00:00 <time: 2 seconds> 2026-01-02 00:00:00.000000 +00:00
+containers: {a: <time: 1 second>, b: 2026-01-01 00:00:00.000000 +00:00} [<time: 1 second>, <time: 2 seconds>, 2026-01-01 00:00:00.000000 +00:00] [<time: 1 second>, 2026-01-01 00:00:00.000000 +00:00] {a: <time: 1 second>, b: 2026-01-01 00:00:00.000000 +00:00} {a: 2026-01-01 00:00:00.000000 +00:00, b: <time: 1 second>, c: <time: 4 seconds>} [<time: 1 second>, <time: 1 second>, 2026-01-01 00:00:00.000000 +00:00] {a: <time: 1 second>, b: <time: 1 second>, c: 2026-01-01 00:00:00.000000 +00:00} [<time: 1 second>, 2026-01-01 00:00:00.000000 +00:00, <time: 1 second>, 2026-01-01 00:00:00.000000 +00:00]
+take_abs: 2026-05-06 00:00:00.000000 +00:00
+take_abs: 2026-01-01 00:00:00.000000 +00:00
+take_abs: 2026-01-02 00:00:00.000000 +00:00
+take_abs: 2026-01-01 00:00:00.000000 +00:00

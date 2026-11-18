@@ -12,6 +12,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires Util
 %requires json
@@ -112,7 +113,7 @@ public class QdbgScriptTest inherits QUnit::Test {
     #! returns the qore executable to run qdbg with; a relative path is made absolute, as qdbg runs in a temporary
     #! directory
     static string getQoreExecutable() {
-        string exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string exe = TestInterpreter::qore_interpreter();
         if (exe =~ /\// && !absolute_path(exe)) {
             exe = normalize_dir(getcwd() + DirSep + exe);
         }
@@ -393,7 +394,7 @@ public class QdbgScriptTest inherits QUnit::Test {
             "display a * 10",
             "display",
             "go run",
-            # the call stack with the columns of the statements
+            # the call stack with the columns of the statement and of the call
             "bt",
             "go run",
             "undisplay 1",
@@ -414,7 +415,8 @@ public class QdbgScriptTest inherits QUnit::Test {
         assertInOrder(res.out, (
             # the expressions are shown at each stop
             "Paused at breakpoint 1 at ", "1: a = 0", "2: a * 10 = 0",
-            "* 0  f() at ", "target.q:3:20", "  1  <top level> at ", "target.q:5:31",
+            # the frame of the caller is located at its call of f(), in "total += f(i);"
+            "* 0  f() at ", "target.q:3:20", "  1  <top level> at ", "target.q:5:40",
             "Paused at breakpoint 1 at ", "1: a = 1", "2: a * 10 = 10",
             "Paused at breakpoint 1 at ", "1: a * 10 = 20",
             "there is no display expression 5",
@@ -1038,7 +1040,10 @@ public class QdbgScriptTest inherits QUnit::Test {
     # an exception that matches a common pitfall is shown with a hint, and a variable that was declared but not
     # assigned is shown as such
     trapHintTest() {
-        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n    printf(\"%d\\n\", count);\n}\nf();\n", (
+        # the unassigned value is deliberate: its run-time handling is tested; "sub f() { *int src;" is on one line
+        # so that the read stays on line 4
+        hash<auto> res = runQdbg("%modern\n%no-strict-parse-errors\nsub f() { *int src;\n    int count = src;\n"
+            "    printf(\"%d\\n\", count);\n}\nf();\n", (
             "exception filter uncaught",
             "go run",
             "thread local count",
@@ -1116,7 +1121,9 @@ public class QdbgScriptTest inherits QUnit::Test {
 
     # the stop at an exception gives the hint of a common pitfall
     jsonExceptionTest() {
-        hash<auto> res = runQdbg("%modern\nsub f() {\n    *int src;\n    int count = src;\n}\nf();\n", (
+        # the unassigned value is deliberate: its run-time handling is tested
+        hash<auto> res = runQdbg("%modern\n%no-strict-parse-errors\nsub f() {\n    *int src;\n    int count = src;\n}\n"
+            "f();\n", (
             "exception filter uncaught",
             "go",
             "go",

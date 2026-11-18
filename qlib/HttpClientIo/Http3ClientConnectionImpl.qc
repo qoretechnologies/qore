@@ -107,6 +107,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return poll_op.getSocket();
     }
 
+    #! Returns @ref True once the QUIC handshake of the connection has completed, also after it has closed
+    /** Does not block
+    */
+    bool isHandshakeComplete() {
+        return poll_op.isHandshakeComplete();
+    }
+
     #! Returns the QUIC session ID (0 if not yet connected)
     int getSessionId() {
         return poll_op.getSessionId();
@@ -123,12 +130,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = poll_op.getActiveStreamCount() + pending_stream_count;
+        int total = poll_op.getActiveStreamCount() + getPendingStreamCount();
         if (max_concurrent_streams && total >= max_concurrent_streams) {
             return False;
         }
         if (cs == HttpClientConnectionState::Connecting) {
-            return pending_stream_count < DefaultMaxPendingPerConnection;
+            return getPendingStreamCount() < DefaultMaxPendingPerConnection;
         }
         # Check if the underlying QUIC session is still alive after the
         # handshake has completed. During CONNECTING the session may not yet
@@ -154,14 +161,14 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        int total = poll_op.getActiveStreamCount() + pending_stream_count;
-        if (max_concurrent_streams && total >= max_concurrent_streams) {
-            return False;
-        }
+        # the stream limit: the active streams and the reservations are counted against it under the reservation lock
+        # of the C++ connection, where a request that is being submitted, whose reservation is released after its
+        # active stream is counted, is in one of the two counts
+        int limit = max_concurrent_streams;
         if (cs == HttpClientConnectionState::Connecting) {
             # Cap pending reservations on Connecting connections to limit
             # blast radius of a handshake failure.
-            if (pending_stream_count >= DefaultMaxPendingPerConnection) {
+            if (getPendingStreamCount() >= DefaultMaxPendingPerConnection) {
                 return False;
             }
         } else {
@@ -169,12 +176,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 return False;
             }
             int quic_limit = poll_op.getQuicStreamLimit();
-            if (quic_limit && total >= quic_limit) {
-                return False;
+            if (quic_limit && (!limit || quic_limit < limit)) {
+                limit = quic_limit;
             }
         }
-        ++pending_stream_count;
-        return True;
+        # counted in the C++ connection, as by the base class (#6184)
+        return tryReservePendingStream(poll_op, limit);
     }
 
     #! Wakes the async I/O controller to flush pending QUIC writes
@@ -239,6 +246,19 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     registerStreamNotifyAndListener(int stream_id, object listener) {
         poll_op.registerStreamNotifyAndListener(stream_id, listener);
+    }
+
+    #! Records on the stream's frame state that the application sends its WebSocket close frame itself
+    /** See
+        @ref Qore::Http3ClientPollOperationBase::markFrameStateCloseSent() "Http3ClientPollOperationBase::markFrameStateCloseSent()"
+
+        @return 0 if the stream has no frame state, 1 if the close is recorded (the caller sends its close frame), 2
+        if the frame state sent a close frame before (the caller sends none)
+
+        @since HttpClientIo 1.0
+    */
+    int markFrameStateCloseSent(int stream_id) {
+        return poll_op.markFrameStateCloseSent(stream_id);
     }
 
     #! Installs a WebSocket frame-state decoder on an existing CONNECT stream
@@ -314,18 +334,23 @@ public class Http3ClientConnection inherits HttpClientConnection {
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)
         @param end_stream if True, signals end of stream
+        @param drain_timeout the time to wait for the stream's send buffer to drain when it is full (the peer has not
+        granted enough flow-control credit for the data staged): the data is sent once there is room; with a timeout
+        of zero or less, a full buffer raises \c HTTP3-FLOW-CONTROL at once.  A send that raises took none of the
+        data, so it can be made again
 
         @return 0 on success, -1 on error
 
         @throw HTTP3-STATE-ERROR if the connection is neither ready nor draining (a draining connection completes the
         streams in progress)
-        @throw HTTP3-FLOW-CONTROL if the stream buffer does not drain
+        @throw HTTP3-FLOW-CONTROL if the stream's send buffer did not drain within \a drain_timeout; nothing was
+        sent
         @throw QUIC-STREAM-CLOSED if the server stopped reading the stream or closed it without an error and
         \a data is not empty or \a end_stream is not set; an empty send with \a end_stream set on such a stream is
         a no-op
         @throw QUIC-STREAM-RESET if the server reset the stream with an error
     */
-    int sendStreamData(int stream_id, *data data, bool end_stream = False) {
+    int sendStreamData(int stream_id, *data data, bool end_stream = False, timeout drain_timeout = 0) {
         # a draining connection completes the streams in progress
         if (!self.canSendOnStreams()) {
             throw "HTTP3-STATE-ERROR",
@@ -346,7 +371,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
-        int retries = 0;
+        # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, at most
+        # drain_timeout, as on HTTP/2; the wait is woken when the stream's staged data is handed to the transport and
+        # when the stream closes, so a reset ends it at once (a fixed retry bound was a hidden timeout)
+        # on the monotonic clock, in microseconds
+        *int deadline;
         while (True) {
             int rv = poll_op.sendStreamData(stream_id, data, end_stream);
             if (ctl) {
@@ -355,14 +384,34 @@ public class Http3ClientConnection inherits HttpClientConnection {
             if (rv != 1) {
                 return rv;
             }
-            if (++retries > 200) {
-                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer not "
-                    "draining after %d retries", stream_id, retries);
+            if (drain_timeout <= 0) {
+                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer is full; the data was not sent",
+                    stream_id);
             }
-            int drain_rv = sock.waitForQuicClientStreamDrain(stream_id, 50ms);
-            if (drain_rv == -1) {
-                throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
-                    "removed while waiting for drain", stream_id);
+            if (!deadline) {
+                deadline = clock_get_monotonic_us() + drain_timeout * 1000;
+            }
+            int remaining = (deadline - clock_get_monotonic_us() + 999) / 1000;
+            if (remaining <= 0) {
+                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
+                    "data was not sent", stream_id, drain_timeout);
+            }
+            # 0: drained, 1: timed out, -1: the stream has no data staged any more (sent or closed); the send is
+            # made again in each case, and reports a closed or reset stream
+            try {
+                sock.waitForQuicClientStreamDrain(stream_id, remaining);
+            } catch (hash<ExceptionInfo> wait_ex) {
+                # the wait failed (for example, the session is gone, or the wait was made on the I/O thread): the
+                # send is made once more, so that it reports the stream's state, or the data is sent
+                rv = poll_op.sendStreamData(stream_id, data, end_stream);
+                if (ctl) {
+                    ctl.wakeSocket(sock: sock);
+                }
+                if (rv != 1) {
+                    return rv;
+                }
+                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer is full and cannot be waited for "
+                    "(%s: %s); the data was not sent", stream_id, wait_ex.err, wait_ex.desc);
             }
         }
     }

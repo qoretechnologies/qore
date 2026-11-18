@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections, the async I/O controller's handler pool and socket closes
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Regression test for qore#5752: open WebSocket connections must not take the threads of the server's handler
+    pool.  Each open HTTP/1.1 WebSocket connection held a thread of the pool (WebSocketHandler::startImpl() waited
+    for it to end), and its messages and its close frame are processed by a drainer on a thread of the same pool,
+    so once the open connections had taken every thread (max_handler_threads), no message, no close and no other
+    request was processed again: the server deadlocked.  No thread now waits for a connection; its end runs on a
+    thread of the pool when it has ended.
+
+    The server has a pool of PoolThreads threads and Connections open WebSocket connections, more than twice as
+    many: every connection still gets its echo, ordinary requests are still served, a close by the client and a close
+    by the server end every connection on the server, and a stop of the server with open connections finishes; over
+    HTTP/1.1, HTTP/2 and HTTP/3 (an HTTP/2 or HTTP/3 stream held a thread of the pool in the same way, which starved
+    ordinary requests while the streams were open).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AsyncSocketIo
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketHandlerPoolTest
+
+#! Decremented once per connection ended on the server side (WebSocketConnection::connectionClosed())
+our *Counter ws_closed;
+
+#! Decremented once per connection whose cleanup in the handler is complete
+our *Counter ws_ended;
+
+#! Echoes each message; "close" makes the server close the connection
+class EchoConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        if (msg == "close") {
+            stop();
+            return;
+        }
+        send(msg);
+    }
+
+    connectionClosed() {
+        if (ws_closed) {
+            ws_closed.dec();
+        }
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid, *hash<auto> conn) {
+        return new EchoConnection(self);
+    }
+
+    #! reports the end of the handler's cleanup of a connection, after which the connection is no longer registered
+    private finishConnection(WebSocketConnection wsc, *HttpWebSocketPollOperationBase ws_poll_op, string cid) {
+        on_exit if (ws_ended) {
+            ws_ended.dec();
+        }
+        WebSocketHandler::finishConnection(wsc, ws_poll_op, cid);
+    }
+}
+
+#! Answers the request that shows that the server still serves ordinary requests
+class ProbeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": "ok",
+        };
+    }
+}
+
+#! A client connection and the messages that it received
+class Client {
+    public {
+        WebSocketClient wsc;
+        Queue received();
+    }
+
+    constructor(hash<auto> opts) {
+        Queue q = received;
+        wsc = new WebSocketClient(sub (*data msg) {
+            q.push(msg);
+        }, opts + {"timeout": 30000});
+        wsc.connect();
+    }
+}
+
+class WebSocketHandlerPoolTest inherits QUnit::Test {
+    private {
+        Logger mLogger;
+
+        #! The threads of the server's handler pool
+        const PoolThreads = 2;
+
+        #! The open connections: more than twice the threads of the pool
+        const Connections = PoolThreads * 3;
+
+        #! Upper bound for any wait that a regression turns into a hang
+        const HangTimeout = 30s;
+
+        #! The protocols of the WebSocket connections
+        const Protocols = ("h1", "h2", "h3");
+    }
+
+    constructor() : Test("WebSocketHandlerPoolTest", "1.0") {
+        foreach string proto in (Protocols) {
+            addTestCase(sprintf("%s: more open WebSocket connections than handler threads get their messages, and "
+                "requests are served", proto), \testMoreConnectionsThanThreads(), proto);
+            addTestCase(sprintf("%s: a close by the clients ends every connection", proto), \testClientClose(),
+                proto);
+            addTestCase(sprintf("%s: a close by the server ends every connection", proto), \testServerClose(),
+                proto);
+            addTestCase(sprintf("%s: a stop of the listener with open connections finishes", proto),
+                \testListenerStop(), proto);
+            addTestCase(sprintf("%s: a stop of the server with open connections finishes", proto),
+                \testServerStop(), proto);
+        }
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        mLogger = new Logger("ws-handler-pool-test", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelWarn());
+        mLogger.addAppender(new StdoutAppender());
+    }
+
+    #! Starts a server with a handler pool of PoolThreads threads
+    /** The WebSocket connections use a listener of their own (an HTTP/1.1 listener for h1, a TLS listener for h2 and
+        h3), and ordinary requests the HTTP/1.1 listener; the case is skipped if no TLS listener can be created
+    */
+    private ServerCtx startServer(string proto) {
+        ServerCtx ctx();
+        ctx.server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "max_handler_threads": PoolThreads,
+        });
+        ctx.handler = new EchoHandler({"logger": mLogger});
+        ctx.server.setHandler("ws-handler", "/ws", NOTHING, ctx.handler);
+        ctx.server.setHandler("probe", "/probe", NOTHING, new ProbeHandler());
+        ctx.probe_port = ctx.server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+        }).port;
+        hash<auto> ws_info;
+        if (proto == "h1") {
+            ws_info = ctx.server.addListener(<HttpListenerOptionInfo>{
+                "node": "localhost",
+                "service": 0,
+            });
+        } else {
+            try {
+                ws_info = ctx.server.addListener(<HttpListenerOptionInfo>{
+                    "node": "localhost",
+                    "service": 0,
+                    "cert": new SSLCertificate(TestCertificates::CertPem),
+                    "key": new SSLPrivateKey(TestCertificates::KeyPem),
+                    "http_version": "auto",
+                    "enable_h3": proto == "h3",
+                });
+            } catch (hash<ExceptionInfo> ex) {
+                delete ctx.server;
+                testSkip(sprintf("no %s listener: %s: %s", proto, ex.err, ex.desc));
+            }
+        }
+        ctx.ws_port = ws_info.port;
+        ctx.ws_lid = ws_info.id;
+        ctx.server.waitForAsyncIo();
+        return ctx;
+    }
+
+    #! Returns the options of a client of the protocol
+    private hash<auto> clientOptions(ServerCtx ctx, string proto) {
+        if (proto == "h1") {
+            return {
+                "url": sprintf("ws://localhost:%d/ws", ctx.ws_port),
+                "logger": mLogger,
+                "http_version": "1.1",
+            };
+        }
+        return {
+            "url": sprintf("wss://localhost:%d/ws", ctx.ws_port),
+            "logger": mLogger,
+            "http_version": proto == "h2" ? "2.0" : "3.0",
+            "ssl_verify_cert": False,
+        };
+    }
+
+    #! Prepares the counters of a round of Connections connections
+    private startRound() {
+        ws_closed = new Counter(Connections);
+        ws_ended = new Counter(Connections);
+    }
+
+    #! Checks that every connection of the round has ended on the server and is no longer registered
+    private checkEnded(ServerCtx ctx, string msg) {
+        assertEq(0, ws_closed.waitForZero(HangTimeout), msg + ": every connection was closed on the server");
+        assertEq(0, ws_ended.waitForZero(HangTimeout), msg + ": every connection's cleanup in the handler is complete");
+        assertEq((), ctx.handler.getConnectionIds() ?? (), msg + ": no connection is registered with the handler");
+    }
+
+    #! Opens Connections connections and checks that each one gets the echo of a message
+    /** The case is skipped if the protocol is not negotiated
+    */
+    private list<Client> openConnections(ServerCtx ctx, string proto) {
+        list<Client> clients = ();
+        on_error map $1.wsc.disconnect(), clients;
+        for (int i = 0; i < Connections; ++i) {
+            Client c(clientOptions(ctx, proto));
+            clients += c;
+            if ((proto == "h2" && !c.wsc.isHttp2()) || (proto == "h3" && !c.wsc.isHttp3())) {
+                testSkip(sprintf("%s was not negotiated", proto));
+            }
+            string msg = sprintf("msg-%d", i);
+            c.wsc.send(msg);
+            # each echo needs a thread of the handler pool, which the open connections must not hold
+            assertEq(msg, c.received.get(HangTimeout), sprintf("connection %d got the echo of its message", i));
+        }
+        # and again, on every connection, once all are open
+        foreach Client c in (clients) {
+            string msg = sprintf("again-%d", $#);
+            c.wsc.send(msg);
+            assertEq(msg, c.received.get(HangTimeout), sprintf("connection %d got the echo of its second message",
+                $#));
+        }
+        return clients;
+    }
+
+    #! Sends an ordinary request
+    private probe(ServerCtx ctx, string msg) {
+        HTTPClient hc({
+            "url": sprintf("http://localhost:%d", ctx.probe_port),
+            "timeout": HangTimeout,
+            "connect_timeout": HangTimeout,
+        });
+        hash<auto> resp;
+        try {
+            resp = hc.send(NOTHING, "GET", "/probe");
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("%s: %s: %s", msg, ex.err, ex.desc));
+        }
+        assertEq(200, resp.status_code, msg);
+        assertEq("ok", resp.body, msg);
+    }
+
+    testMoreConnectionsThanThreads(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        startRound();
+        list<Client> clients = openConnections(ctx, proto);
+        probe(ctx, "an ordinary request with every handler thread's worth of WebSocket connections open");
+        map $1.wsc.disconnect(), clients;
+        checkEnded(ctx, "after the clients closed");
+        probe(ctx, "an ordinary request after the WebSocket connections closed");
+    }
+
+    testClientClose(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        # twice: the threads of the pool that ended the first connections serve the second ones
+        for (int round = 0; round < 2; ++round) {
+            startRound();
+            list<Client> clients = openConnections(ctx, proto);
+            map $1.wsc.disconnect(), clients;
+            checkEnded(ctx, sprintf("round %d", round));
+        }
+        probe(ctx, "an ordinary request after the clients closed their connections");
+    }
+
+    testServerClose(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        startRound();
+        list<Client> clients = openConnections(ctx, proto);
+        on_exit map $1.wsc.disconnect(), clients;
+        map $1.wsc.send("close"), clients;
+        checkEnded(ctx, "after the server closed the connections");
+        probe(ctx, "an ordinary request after the server closed the WebSocket connections");
+    }
+
+    testListenerStop(string proto) {
+        ServerCtx ctx = startServer(proto);
+        on_exit delete ctx.server;
+        startRound();
+        list<Client> clients = openConnections(ctx, proto);
+        on_exit map $1.wsc.disconnect(), clients;
+        # the stop waits until every connection of the listener has ended; it runs in a thread of its own, so that a
+        # stop that does not finish fails the assertion below (the thread then keeps the process from ending until
+        # the time limit of the run)
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            ctx.server.stopListenerID(ctx.ws_lid);
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the listener with open WebSocket connections "
+            "finished");
+        checkEnded(ctx, "after the stop of the listener");
+        probe(ctx, "an ordinary request on another listener after the stop of the WebSocket listener");
+    }
+
+    testServerStop(string proto) {
+        ServerCtx ctx = startServer(proto);
+        startRound();
+        list<Client> clients = openConnections(ctx, proto);
+        on_exit map $1.wsc.disconnect(), clients;
+        # as for the stop of the listener: a stop that does not finish fails the assertion below
+        Counter stopped(1);
+        background sub () {
+            on_exit stopped.dec();
+            delete ctx.server;
+        }();
+        assertEq(0, stopped.waitForZero(HangTimeout), "the stop of the server with open WebSocket connections "
+            "finished");
+        checkEnded(ctx, "after the stop of the server");
+    }
+}
+
+#! A test server and its handler
+class ServerCtx {
+    public {
+        *HttpServer server;
+        EchoHandler handler;
+        int probe_port;
+        int ws_port;
+        int ws_lid;
+    }
+}

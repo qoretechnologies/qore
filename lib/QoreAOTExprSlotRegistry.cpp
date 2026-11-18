@@ -32,6 +32,7 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/BackquoteNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
@@ -94,6 +95,10 @@
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
 #include "qore/intern/QoreUnaryMinusOperatorNode.h"
+#include "qore/intern/QoreUnaryPlusOperatorNode.h"
+#include "qore/intern/QoreBinaryNotOperatorNode.h"
+#include "qore/intern/QoreLogicalComparisonOperatorNode.h"
+#include "qore/intern/QoreListAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -441,8 +446,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 102: SQUARE_BRACKET_RANGE
     {"SQUARE_BRACKET_RANGE", 102, true, write_slot_SQUARE_BRACKET_RANGE, "Range subscript operator"},
 
-    // 103: DOT_EVAL_EXPR
-    {"DOT_EVAL_EXPR", 103, true, write_slot_DOT_EVAL_EXPR, "Full dot-eval expression slot payload"},
+    // 103: AST_EXPR
+    {"AST_EXPR", 103, true, write_slot_AST_EXPR, "Full inline expression evaluated as an AST"},
     // 104: UNARY_MINUS
     {"UNARY_MINUS", 104, true, write_slot_UNARY_MINUS, "Unary minus operator"},
     // 105: LOG_AEQ
@@ -467,18 +472,22 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"XOR_EQ", 119, true, write_slot_XOR_EQ, "Bitwise-xor-equals operator"},
     {"SHL_EQ", 120, true, write_slot_SHL_EQ, "Shift-left-equals operator"},
     {"SHR_EQ", 121, true, write_slot_SHR_EQ, "Shift-right-equals operator"},
-    {nullptr, 122, false, nullptr, nullptr},
-    {nullptr, 123, false, nullptr, nullptr},
-    {nullptr, 124, false, nullptr, nullptr},
-    {nullptr, 125, false, nullptr, nullptr},
-    {nullptr, 126, false, nullptr, nullptr},
-    {nullptr, 127, false, nullptr, nullptr},
-    {nullptr, 128, false, nullptr, nullptr},
-    {nullptr, 129, false, nullptr, nullptr},
-    {nullptr, 130, false, nullptr, nullptr},
-    {nullptr, 131, false, nullptr, nullptr},
-    {nullptr, 132, false, nullptr, nullptr},
-    {nullptr, 133, false, nullptr, nullptr},
+    {"SOURCE_LOCATION", 122, true, write_slot_SOURCE_LOCATION, "Source location of the call expression that follows"},
+    {"SPLICE", 123, true, write_slot_SPLICE, "Splice operator"},
+    {"EXTRACT", 124, true, write_slot_EXTRACT, "Extract operator"},
+    {"REGEX_SUBST", 125, true, write_slot_REGEX_SUBST, "Regex substitution operator"},
+    {"TRANSLIT", 126, true, write_slot_TRANSLIT, "Transliteration operator"},
+    {"FIND", 127, true, write_slot_FIND, "Find expression"},
+    // 128: CALLREF_CALL_NAMED
+    {"CALLREF_CALL_NAMED", 128, true, write_slot_CALLREF_CALL, "Named call reference call"},
+    // 129: UNARY_PLUS
+    {"UNARY_PLUS", 129, true, write_slot_UNARY_PLUS, "Unary plus operator"},
+    // 130-132: BIT_NOT, LOG_CMP, LIST_ASSIGN
+    {"BIT_NOT", 130, true, write_slot_BIT_NOT, "Binary not operator"},
+    {"LOG_CMP", 131, true, write_slot_LOG_CMP, "Comparison (<=>) operator"},
+    {"LIST_ASSIGN", 132, true, write_slot_LIST_ASSIGN, "List assignment operator"},
+    // 133: BACKQUOTE
+    {"BACKQUOTE", 133, true, write_slot_BACKQUOTE, "Backquote expression"},
     {nullptr, 134, false, nullptr, nullptr},
     {nullptr, 135, false, nullptr, nullptr},
     {nullptr, 136, false, nullptr, nullptr},

@@ -45,6 +45,11 @@
 #include "qore/intern/qore_list_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
+#include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include <qore/QoreBufferNode.h>
+
+#include <bit>
 
 // Type name constants
 const char* qoreBoolTypeName = "bool";
@@ -413,12 +418,15 @@ void QoreValue::getShortString(char* buf) const {
 // Type conversions
 // ============================================================================
 
+// note: qore_plus_equals_int_operand_steps() in lib/QoreLib.cpp is a copy of these steps for the += operator (with a
+// char converted as its one-character string); keep it in step when a value tag is added or a step changes
 int64 QoreValue::getAsBigInt() const {
     if (isInt()) {
         return getInt();
     }
     if (isFloat()) {
-        return static_cast<int64>(getDouble());
+        // saturated; NaN gives 0, as for a number (issue #6181)
+        return q_float_to_int64(getDouble());
     }
     if (isBool()) {
         return getBool() ? 1 : 0;
@@ -442,6 +450,8 @@ int64 QoreValue::getAsBigInt() const {
     return 0;
 }
 
+// note: qore_plus_equals_nonfloat_float_operand() in lib/QoreLib.cpp is a copy of these steps for the += operator
+// (with a char converted as its one-character string); keep it in step when a value tag is added or a step changes
 double QoreValue::getAsFloat() const {
     if (isFloat()) {
         return getDouble();
@@ -500,6 +510,73 @@ bool QoreValue::getAsBool() const {
         return false;
     }
     return false;
+}
+
+template <bool Strict>
+static bool qore_get_as_bool_lexical(const QoreValue& value) {
+    // Keep inline scalar conversions independent of native invocation context too.
+    if (value.isBool()) {
+        return value.getBool();
+    }
+    if (value.isInt()) {
+        return value.getInt() != 0;
+    }
+    if (value.isFloat()) {
+        return value.getDouble() != 0.0;
+    }
+    if (value.isEnum()) {
+        return qore_get_as_bool_lexical<Strict>(value.getEnumMember()->getValue());
+    }
+    switch (value.getType()) {
+        case NT_STRING: {
+            auto convert = [](const char* text, size_t size) -> bool {
+                return Strict ? q_strtod(text) != 0.0
+                    : size && (size != 1 || text[0] != '0');
+            };
+            if (value.isShortString()) {
+                char text[8];
+                value.getShortString(text);
+                return convert(text, value.shortStringLen());
+            }
+            return QoreAsciiCompatStringHelper::withText(*value.get<const QoreStringNode>(), convert);
+        }
+        case NT_LIST:
+            return !Strict && !value.get<const QoreListNode>()->empty();
+        case NT_HASH:
+            return !Strict && !value.get<const QoreHashNode>()->empty();
+        case NT_BINARY:
+            return !Strict && !value.get<const BinaryNode>()->empty();
+        case NT_BUFFER:
+            return !Strict && !value.get<const QoreBufferNode>()->empty();
+        case NT_OBJECT:
+            return !Strict && value.get<const QoreObject>()->getAsBoolDefault();
+        case NT_WEAKREF: {
+            const QoreObject* target = value.get<const WeakReferenceNode>()->get();
+            return !Strict && target->isValid() && target->getAsBoolDefault();
+        }
+        case NT_WEAKREF_LIST:
+            return !Strict && !value.get<const WeakListReferenceNode>()->get()->empty();
+        case NT_WEAKREF_HASH:
+            return !Strict && !value.get<const WeakHashReferenceNode>()->get()->empty();
+        case NT_FUNCREF:
+        case NT_RUNTIME_CLOSURE:
+            return !Strict;
+        default:
+            // The remaining value types have no compatibility-dependent boolean conversion.
+            return value.getAsBool();
+    }
+}
+
+bool LexicalSemanticPolicy::getAsBoolDefault(const QoreValue& value) {
+    return qore_get_as_bool_lexical<false>(value);
+}
+
+bool LexicalSemanticPolicy::getAsBoolStrict(const QoreValue& value) {
+    return qore_get_as_bool_lexical<true>(value);
+}
+
+bool LexicalSemanticPolicy::getAsBool(const QoreValue& value) const {
+    return strictBoolean() ? qore_get_as_bool_lexical<true>(value) : qore_get_as_bool_lexical<false>(value);
 }
 
 // ============================================================================
@@ -647,7 +724,10 @@ bool QoreValue::derefCanThrowException() const {
         return false;
     }
     qore_type_t t = n->getType();
-    return t == NT_OBJECT || t == NT_HASH || t == NT_LIST || t == NT_CLOSURE || t == NT_RUNTIME_CLOSURE;
+    // References can own a closure variable, and call-reference wrappers can own a closure. Releasing their last
+    // reference can therefore run an object's destructor just as releasing a container can.
+    return t == NT_OBJECT || t == NT_HASH || t == NT_LIST || t == NT_CLOSURE || t == NT_RUNTIME_CLOSURE
+        || t == NT_REFERENCE || t == NT_FUNCREF;
 }
 
 // ============================================================================
@@ -752,7 +832,7 @@ bool QoreValue::isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) 
 }
 
 bool QoreValue::isEqualSoft(const QoreValue& other, ExceptionSink* xsink) const {
-    return QoreLogicalEqualsOperatorNode::softEqual(*this, other, xsink);
+    return QoreLogicalEqualsOperatorNode::softEqualNative(*this, other, xsink);
 }
 
 bool QoreValue::isEqualValue(const QoreValue& other) const {
@@ -777,9 +857,8 @@ void QoreValue::set(AbstractQoreNode* n) {
 }
 
 void QoreValue::set(double f) {
-    // Copy double bits
-    uint64_t double_bits;
-    memcpy(&double_bits, &f, sizeof(f));
+    // the bits of the double (a bit cast, not memcpy(), which a fortified C library checks; see QoreJITIncludes.h)
+    uint64_t double_bits = std::bit_cast<uint64_t>(f);
 
     // Doubles whose encoding (raw bits + DOUBLE_ENCODE_OFFSET) would land in a value tag must be
     // stored as a QoreBigFloatNode: bits >= 0xFFF8000000000000 (negative NaNs) would reach TAG_INT48

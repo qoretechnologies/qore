@@ -236,6 +236,11 @@ DLLEXPORT void qore_init(qore_license_t license = QL_GPL, const char* default_en
 //! frees all memory allocated by the library
 /** @note The openssl library is cleaned up as well
     @note This function can only be called once and should be called when a program using the Qore library terminates
+    @note The data of a Program that still exists once the modules have been deleted (ex: a Program that a module
+    keeps in an object with static storage duration) is cleared here, so its objects are destroyed and their
+    destructors run while the library can still run Qore code (but cannot start threads: \c THREAD-CREATION-FAILURE
+    is raised then); the Program itself is freed when its owner releases it, and no Qore code can be run after this
+    function returns
 
     @see qore_init()
 */

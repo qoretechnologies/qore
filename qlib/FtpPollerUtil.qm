@@ -29,6 +29,8 @@
 %requires DataProvider
 
 module FtpPollerUtil {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module providing definitions for the FtpPoller module";
     author = "Alzhan Turlybekov <alzhan.turlybekov@qoretechnologies.com>";
@@ -89,9 +91,10 @@ public class FtpPollerFileEventInfoDataType inherits HashDataType {
             },
             "filepath":  {
                 "display_name": "File Path",
-                "short_desc": "The remote filepath relative to the remote root directory",
-                "desc": "The remote filepath relative to the remote root directory",
-                "example_value": "./example-file.txt",
+                "short_desc": "The remote file path",
+                "desc": "The remote file path: the file name for the login directory (`.`), otherwise the absolute "
+                    "path of the file",
+                "example_value": "/incoming/example-file.txt",
             },
             "transfer_time":  {
                 "display_name": "Transfer Time",
@@ -179,7 +182,7 @@ public hashdecl FtpPollerFileEventInfo {
     */
     data data;
 
-    #! The remote filepath relative to the FTP root directory
+    #! The remote file path: the file name for the login directory (\c "."), otherwise the absolute path of the file
     string filepath;
 
     #! The relative date/time value giving the time taken to transfer the file

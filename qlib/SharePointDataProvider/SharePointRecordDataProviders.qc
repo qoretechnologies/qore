@@ -126,7 +126,7 @@ public class SharePointRecordTableDataProvider inherits SharePointDataProviderBa
     }
 
     #! Returns an iterator over the records matching the given condition
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # a lookup by key is a direct read rather than a filtered list
         if (where_cond.size() == 1 && exists where_cond{RecordKeyField} && !where_cond.exp) {

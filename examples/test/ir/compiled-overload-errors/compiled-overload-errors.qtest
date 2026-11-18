@@ -1,0 +1,305 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - the scripts run in child processes that set their own --exec-mode, or as AOT executables, and the named binding checks parse and call Programs in its own process
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class CompiledOverloadErrorsTest
+
+#! the compiled modes raise the overload errors of the AST interpreter (issues #5660 and #5686)
+/** - #5660: string(), int() and float() with one argument were inlined as conversions that accept every value; for a
+      value that the builtin does not accept (an object, a hash, a list, a binary, a closure, NULL for string() and
+      float()), the AST interpreter raises RUNTIME-OVERLOAD-ERROR and the compiled modes returned an empty value
+    - #5686: a call whose variant was resolved at parse time binds its arguments in the fast call paths, which raised
+      the parameter type error (RUNTIME-TYPE-ERROR) for an argument that does not match, such as a reference to an int
+      parameter; the AST interpreter resolves the variant again and raises RUNTIME-OVERLOAD-ERROR when none matches
+      (functions, methods, static methods, recursive calls)
+
+    - #5709, #5717: a private or internal variant resolved at run time was called from outside its access scope in
+      IR, JIT and tiered mode (static methods), and AOT raised RUNTIME-TYPE-ERROR for it; a failed cast to an
+      or-nothing scalar type named the type without the \c * in AOT executables
+
+    - a variant resolved again at run time and found to be another one (a base class's, another overload) is called
+      with the arguments as the caller gave them; the AST interpreter called it without arguments, and with the
+      arguments converted for the variant that did not match
+    - M4: a named call whose variant is resolved at run time binds its arguments by name to each candidate variant
+      (functions; methods of objects, self calls and static methods: named-runtime-methods)
+    - #5838: a call typed against a parent class trusts its return type, so a child class variant that it can select
+      must return a compatible type, which the parser enforces: the output is the same in every mode
+    - qore#5990: a named call binds the names to the variants of the receiver's static type and is dispatched by
+      position to the class of the object like the same positional call (named-virtual-dispatch)
+    - qore#5774: a value of a bounded type parameter has its bound (assignable to it, the methods of a class bound);
+      a value of an unbounded one is a may-match checked at run time (generic-bounds)
+    - M4 phase 3: a named call through a call reference or closure binds its arguments by name when it is made, to
+      the variants of the referenced function or method, or to the closure's variant (named-callrefs)
+
+    The scripts next to the test run in every execution mode, on the IR tier and as AOT executables at -O0 and -O3;
+    their output must be that of the AST interpreter, which the test runs first.  The output of the AST interpreter
+    for a script with a <script>.expected file must be that of the file.
+*/
+class CompiledOverloadErrorsTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("conversions", "call-kinds", "reresolve", "unassigned", "private-static", "builtins",
+            "assigned", "named", "named-runtime", "named-runtime-methods", "named-virtual-dispatch", "access-control",
+            "or-nothing-casts", "override-returns", "named-background", "named-aot-text", "generic-method-overrides",
+            "named-callrefs",
+            "generic-bounds");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("compiled overload errors", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        foreach string script in (Scripts) {
+            # a local of the loop's block is a new variable in each iteration; the loop variable itself is one
+            # variable, which all closures would see with its last value
+            string name = script;
+            addTestCase(name + ": execution modes", sub () { modesTest(name); });
+            addTestCase(name + ": AOT executable -O0", sub () { aotTest(name, "-O0"); });
+            addTestCase(name + ": AOT executable -O3", sub () { aotTest(name, "-O3"); });
+        }
+        addTestCase("named call binding conflict", \namedBindingConflictTest());
+        addTestCase("named method call binding", \namedMethodBindingTest());
+        addTestCase("named call virtual dispatch", \namedVirtualDispatchTest());
+        set_return_value(main());
+    }
+
+    #! a named call whose variant can be resolved at run time to a variant with other parameter names at the
+    #! positions of its arguments binds its arguments by name to each candidate variant at run time (M4): only a
+    #! variant with the names of the arguments can be selected; the same call with positional arguments selects by
+    #! position
+    namedBindingConflictTest() {
+        string decl = "%modern\n"
+            "class C { public { int mi; } }\n"
+            "string sub nf5(int a, string b) { return \"nf5(int a, string b)\"; }\n"
+            "string sub nf5(*int x, string y) { return \"nf5(*int x, string y)\"; }\n";
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t(bool set) { C c(); if (set) { c.mi = 1; } return nf5(a: c.mi, b: \"s\"); }\n",
+                "named-conflict");
+            assertEq("nf5(int a, string b)", p.callFunction("t", True));
+            # no value for "a": nf5(*int x, string y) would take it by position, but has no parameters "a" and "b"
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "nf5\\(a: nothing, b: string\\)", \p.callFunction(), ("t", False));
+        }
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { C c(); return nf5(c.mi, \"s\"); }\n", "positional");
+            assertEq("nf5(*int x, string y)", p.callFunction("t"));
+        }
+        {
+            # a variant with variable arguments would take the argument at a position after its parameters by
+            # position; it has no parameter "b", so the named call cannot select it
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+                "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
+                "string sub t(auto x) { return vb(a: 1, b: x); }", "named-varargs");
+            assertEq("vb(int a, string b)", p.callFunction("t", "s"));
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "vb\\(a: integer, b: integer\\)", \p.callFunction(), ("t", 2));
+        }
+        {
+            # the same call with an argument that has a value of the type of the parameter is bound to it
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse("string sub vb(int a, string b) { return \"vb(int a, string b)\"; } "
+                "string sub vb(int a, ...) { return \"vb(int a, ...)\"; } "
+                "string sub t(string x) { return vb(a: 1, b: x); }", "named-varargs-valid");
+            assertEq("vb(int a, string b)", p.callFunction("t", "s"));
+        }
+        {
+            # the variants that the names can be bound to give the return type of a call resolved at run time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-TYPE-ERROR", "string", \p.parse(), (decl + "int sub t(auto x) { int i = "
+                "nf5(a: x, b: \"s\"); return i; }\n", "named-runtime-return-type"));
+        }
+        {
+            # arguments with values of known types that two variants match equally well are ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(),
+                ("string sub tie(int a, string b) { return \"1\"; } string sub tie(string b, int a) { return \"2\"; } "
+                "string sub t() { return tie(a: 1, b: \"s\"); }", "named-tie"));
+        }
+        {
+            # an argument that always has a value is bound at parse time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { return nf5(a: 1, b: \"s\"); }\n", "named-literal");
+            assertEq("nf5(int a, string b)", p.callFunction("t"));
+        }
+    }
+
+    #! named calls of methods and static methods whose variant is resolved at run time by parameter name (M4 phase 2)
+    namedMethodBindingTest() {
+        string decl = "class C {\n"
+            "    string m(int count, string label) { return \"m1\"; }\n"
+            "    string m(string label, float count) { return \"m2\"; }\n"
+            "    static string s(int count, string label) { return \"s1\"; }\n"
+            "    static string s(string label, float count) { return \"s2\"; }\n"
+            "    string pv(int a) { return \"pv1\"; }\n"
+            "    private string pv(string b) { return \"pv2\"; }\n"
+            "    string tie(int a, string b) { return \"t1\"; }\n"
+            "    string tie(string b, int a) { return \"t2\"; }\n"
+            "}\n";
+        {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t(auto c, auto l) { C o(); return o.m(label: l, count: c) + "
+                "C::s(label: l, count: c); }\n", "named-method-runtime");
+            assertEq("m1s1", p.callFunction("t", 1, "x"));
+            assertEq("m2s2", p.callFunction("t", 1.5, "x"));
+            # no variant takes a string for "count"
+            assertThrows("RUNTIME-OVERLOAD-ERROR", "count: string", \p.callFunction(), ("t", "y", "x"));
+        }
+        {
+            # a private variant is not a candidate outside the class
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-ARG-UNKNOWN", "'b'", \p.parse(), (decl + "string sub t(auto v) { C o(); "
+                "return o.pv(b: v); }\n", "named-method-private"));
+        }
+        {
+            # arguments with values of known types that two variants match equally well are ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(), (decl + "string sub t() { C o(); "
+                "return o.tie(a: 1, b: \"s\"); }\n", "named-method-tie"));
+        }
+        {
+            # the variants that the names can be bound to give the return type of a call resolved at run time
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-TYPE-ERROR", "string", \p.parse(), (decl + "int sub t(auto c, auto l) { C o(); "
+                "int i = o.m(label: l, count: c); return i; }\n", "named-method-return-type"));
+            Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-TYPE-ERROR", "string", \p2.parse(), (decl + "int sub t(auto c, auto l) { "
+                "int i = C::s(label: l, count: c); return i; }\n", "named-static-return-type"));
+        }
+    }
+
+    #! qore#5990: the names of a named call are bound to the variants of the receiver's static type; the call is
+    #! dispatched by position to the class of the object, as the same call with positional arguments is
+    namedVirtualDispatchTest() {
+        string decl = "class B {\n"
+            "    string sw(int count, string label) { return \"B1\"; }\n"
+            "    string sw(string label, float count) { return \"B2\"; }\n"
+            "}\n"
+            "class C inherits B {\n"
+            "    string sw(int n, string l) { return \"C1\"; }\n"
+            "}\n";
+        {
+            # a named call is resolved as the positional call that it spells out, on the class of the object: the
+            # names rule out C::sw(int n, string l), so the variant of the parent class that has them is called; the
+            # arguments, whose types are known, select the variant that matches them best (they were refused as
+            # ambiguous)
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t() { B b = new C(); return b.sw(count: 1, label: \"x\"); }\n"
+                "string sub u() { B b(); return b.sw(count: 1, label: \"x\"); }\n"
+                "string sub v() { B b = new C(); return b.sw(1, \"x\"); }\n", "named-virtual-literal");
+            assertEq("B1", p.callFunction("t"));
+            assertEq("B1", p.callFunction("u"));
+            assertEq("C1", p.callFunction("v"), "the positional call");
+        }
+        {
+            # a receiver declared with the child class: the names of the variants of the parent class are accepted,
+            # also of a variant that the class overrides with other names
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(count: i, label: s); }\n",
+                "named-virtual-overridden-names");
+            assertEq("B1", p.callFunction("t", 1, "x"));
+            assertEq("B2", p.callFunction("t", 1.5, "x"));
+            Program p1(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p1.parse("class B1 { string one(int count, string label) { return \"B\"; } } class C1 inherits B1 { "
+                "string one(int n, string l) { return \"C\"; } } "
+                "string sub t(auto i, auto s) { C1 c(); return c.one(count: i, label: s); }",
+                "named-virtual-overridden-only");
+            assertEq("B", p1.callFunction("t", 1, "x"));
+            Program p2(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p2.parse(decl + "string sub t(auto i, auto s) { C c(); return c.sw(n: i, l: s); }\n",
+                "named-virtual-override-names");
+            assertEq("C1", p2.callFunction("t", 1, "x"));
+            # the override of a generic method with another parameter name
+            Program p3(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p3.parse("class GO { string id<U>(U x) { return \"GO\"; } } class GOC inherits GO { "
+                "string id<U>(U y) { return \"GOC\"; } } string sub t() { GOC g(); return g.id(x: 2); } "
+                "string sub u() { GOC g(); return g.id(y: 2); }", "named-virtual-generic-overridden");
+            assertEq("GO", p3.callFunction("t"));
+            assertEq("GOC", p3.callFunction("u"));
+            # names that no variant of the receiver's type has
+            Program p4(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-ARG-UNKNOWN", "one\\(z: auto\\)", \p4.parse(),
+                ("class B1 { string one(int count) { return \"B\"; } } class C1 inherits B1 { "
+                "string one(int n) { return \"C\"; } } string sub t(auto i) { C1 c(); return c.one(z: i); }",
+                "named-virtual-unknown"));
+        }
+        {
+            # the functional domain of the variant that the names select is checked at parse time, as for positional
+            # arguments
+            string dom = "class DB { string m(int x) [dom=PROCESS_CONTROL] { return \"m1\"; } "
+                "string m(string s) { return \"m2\"; } }\n";
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_PROCESS_CONTROL);
+            assertThrows("PARSE-EXCEPTION", "PROCESS_CONTROL", \p.parse(), (dom + "string sub t() { DB b(); "
+                "return b.m(x: 1); }\n", "named-virtual-domain"));
+        }
+        {
+            # a named call of a deprecated variant raises the warning of the positional call
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            *hash<auto> w = p.parse("class DP { deprecated string m(int x) { return \"m1\"; } "
+                "string m(string s) { return \"m2\"; } }\n"
+                "string sub t() { DP d(); return d.m(x: 1); }\n", "named-virtual-deprecated", WARN_ALL);
+            assertEq("DEPRECATED", w.err, "the named call raises the deprecation warning");
+        }
+        {
+            # arguments that match two variants exactly as well are still ambiguous
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous", \p.parse(),
+                ("class T { string tie(int a, string b) { return \"1\"; } "
+                "string tie(string b, int a) { return \"2\"; } } "
+                "string sub t() { T o(); return o.tie(a: 1, b: \"s\"); }", "named-virtual-tie"));
+        }
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        string expected_file = sprintf("%s/%s.expected", dir, script);
+        if (is_file(expected_file)) {
+            assertEq(ReadOnlyFile::readTextFile(expected_file), exp, script + ": the output of the AST interpreter");
+        } else {
+            assertRegex("RUNTIME-OVERLOAD-ERROR", exp, script + ": the AST interpreter raises the overload error");
+        }
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("compiled-overload-errors-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}

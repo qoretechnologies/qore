@@ -37,6 +37,23 @@ bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRVal
 //! @param visitor callback invoked once per successor
 void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVisitor& visitor);
 
+//! Returns the returns of the try block of the try statement whose catch block an exception at an instruction whose
+//! exception target is \a target reaches first, if any (QoreIRFunction::catch_interrupted_returns, #6074)
+/** Searches the exception path from \a target, breadth first, for the first CatchException; nullptr if there is none
+    (the exception leaves the function), an empty list if its try block has no interrupted returns.
+*/
+DLLLOCAL const std::vector<uint32_t>* qore_ir_exception_catch_returns(const QoreIRFunction& func,
+        const QoreIRBasicBlock* target);
+
+//! Returns true for a release that only runs once a functional operator's loop has ended on an exception
+/** A ReleaseOwnedTemp of the exception cleanup of a functional operator (QoreIRInstruction::exception_cleanup_release):
+    a value that it releases and that a Phi or a container took over is released there through its new owner, so the
+    release is not a use that keeps the value from being taken over (qore#5830)
+*/
+static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& inst) {
+    return inst.exception_cleanup_release && inst.opcode == QoreIROpcode::ReleaseOwnedTemp;
+}
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
@@ -54,7 +71,46 @@ struct QoreIRControlFlowGraph {
     std::vector<std::vector<size_t>> predecessors;
     std::vector<std::vector<uint64_t>> dominators;
     std::vector<uint8_t> reachable;
+    //! 1 for each block that is the exception target of an instruction (or of a throw) of a block that runs: a handler
+    //! entry, which control can enter in the middle of any block that it handles, whatever the graph's edges
+    std::vector<uint8_t> exception_entry;
+    //! 1 for each block that runs only through exception edges: not in \a reachable (always 0 with exception edges)
+    /** A forward dataflow over a graph without exception edges skips the blocks that are not reachable, so it never
+        computes the state at the end of one of these blocks; at a join that one of them flows into (the block after
+        a try statement, which the end of its catch block flows into) it must either compute that state, as the
+        in-place mutation analyses do from the states at the instructions that throw to the handler, or assume
+        nothing from it (issue #6334), while a predecessor that does not run at all can be ignored.
+    */
+    std::vector<uint8_t> exception_only;
     bool cancelled = false;
+};
+
+//! Answers whether a block of a function can reach any of a set of blocks without passing a given block
+/** The control-flow edges are the normal successors and the exception targets of the instructions (a throw's too).
+    The strongly connected components of the graph are computed once (iteratively, in linear time); Tarjan's algorithm
+    finishes a component after every component that it reaches, so a block of a component that finished later than
+    the start's cannot be reached from it, which answers the common case - the uses of an operator's accumulator in its
+    loop, and the operator's final block after the loop - in constant time; only a block of the start's own component
+    (an operator in an enclosing loop) needs a walk, which stays within the component, and a block of a component that
+    finished earlier a walk of the function.
+
+    Built without check points: the IR interpreter caches the results of its analysis for every thread that runs the
+    function, so they must not depend on a cancellation pending in the thread that computes them
+*/
+class QoreIRBlockReachability {
+public:
+    explicit QoreIRBlockReachability(const QoreIRFunction& func);
+
+    //! returns true if \a from reaches a block of \a targets through a path of at least one edge that does not pass
+    //! \a avoid (a path that comes back to \a from counts)
+    bool reachesAnyAvoiding(const QoreIRBasicBlock* from, const QoreIRBasicBlock* avoid,
+            const std::vector<const QoreIRBasicBlock*>& targets) const;
+
+private:
+    std::unordered_map<const QoreIRBasicBlock*, uint32_t> block_ids;
+    std::vector<std::vector<uint32_t>> successors;
+    //! the component of each block: the order in which Tarjan's algorithm finished it
+    std::vector<uint32_t> component;
 };
 
 struct QoreIRNaturalLoop {
@@ -67,6 +123,82 @@ struct QoreIRNaturalLoop {
 //! @param cfg control-flow graph to analyze
 //! @return natural loops ordered from smallest to largest
 std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlowGraph& cfg);
+
+//! Decides the release checks of functional loop bodies (pending CheckExceptions, see QoreIRReleaseCheck; qore#6072)
+/** The lowering emits one after each container, at the start of each call's continuation and after the Phis of each
+    block in the body of a functional loop, with the value whose release it checks as its operand, and one at the
+    loop's back-edge.  A check is removed when its value cannot hold an object (a monotone data-flow analysis over the
+    value facts, local types, resolved variants' return types and opcodes), when a ListAppendElement with the same
+    handler follows it past instructions that cannot observe the exception, or, at a back-edge, when such an append
+    precedes it, or when no value of the back-edge's loop can hold an object.  A kept check of a container's value gives
+    the container its handler and becomes QoreIRReleaseCheck::Kept (native code emits nothing for it); one of a call's
+    or a Phi's value becomes QoreIRReleaseCheck::Native (native code checks the sink there); the operands are cleared.
+    Decided checks are left alone, so running it again changes nothing.  A loop of values that cannot hold an object
+    gets no check, and a map of objects whose elements are appended none per element.
+
+    @return the number of instructions removed
+*/
+size_t qore_ir_prune_release_checks(QoreIRFunction& func);
+
+//! Returns the values that a call takes as an argument and that a later execution of the call uses again.
+/** A call that consumes an argument releases it when the call returns (see design/temporary-lifetime.md); that is
+    only correct if the argument is defined again for each execution of the call.  Neither the static use count nor
+    the temp scope of the defining instruction tells: loop-invariant code motion moves a read of a variable that the
+    loop does not write to the preheader of the loop and keeps the temp scope of the statement in the loop body that
+    it came from, so a value defined once before the loop has one use, in the temp scope of a call that runs on every
+    iteration.  Such an argument is defined in another block than the call, and the call's block can run again
+    without the defining block running in between: the next execution of the call uses the value again, and no
+    execution of the call may release it.
+
+    The control-flow edges are the normal successors and the exception edges (an instruction's or a throw's
+    exception target), so a loop that a catch handler continues is seen as well.  A block can only run again through
+    a cycle of its strongly connected component, so only calls in a cycle are considered; an argument defined outside
+    the call's component is reused, and one defined inside it is reused if a search within the component finds a
+    cycle through the call's block that avoids the defining block.
+
+    The result is a property of the function that its callers cache (QoreIRFunction::interpreter_reused_call_args),
+    so it must not depend on the thread that computes it: the IR interpreter runs the analysis without check points
+    (\a check_count null), as buildValueUseCounts(); native code polls cancellation and fails the compilation if it
+    is requested.
+
+    @param func the IR function
+    @param reused set to a flag for each value id (QoreIRFunction::max_value_id + 1 entries): non-zero for a value
+    that a call takes as an argument (an operand from qore_ir_call_arg_start() on) and that a later execution of the
+    call can use again without the value being defined again; not to be used if the function returns false
+    @param check_count the shared cooperative-cancellation counter, or null to run without check points
+
+    @return true if the analysis completed, false if cancellation was requested (only with \a check_count)
+*/
+bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8_t>& reused, size_t* check_count);
+
+//! Marks each LoadLocal directly followed by the CheckCallTarget of its value (QoreIRInstruction::
+//! fused_call_target_check): the interpreter then makes the check in the load, without the dispatch of the check
+/** Run on the final IR of a function that the interpreter executes; the instructions themselves are unchanged, so
+    native code generation ignores the mark.  Returns the number of loads marked (issue #5784).
+*/
+size_t qore_ir_fuse_call_target_checks(QoreIRFunction& func);
+
+//! Returns @a next if it is the call that makes the check of its target @a check (a CheckCallTarget) when the check is
+//! fused into it (see qore_ir_fuse_call_target_checks()): the method call of the same expression; otherwise nullptr
+/** Native code generation, which does not fuse the checks, takes the arguments of the call for the check after them
+    from it (issue #5824).
+*/
+const QoreIRInstruction* qore_ir_call_of_target_check(const QoreIRInstruction* check, const QoreIRInstruction* next);
+
+//! Moves the debugger's step event of each statement whose first instruction is a fused local int operation into the
+//! operation
+/** Run on the final IR of a function lowered for the IR interpreter and the JIT with the debugger's step events
+    (QoreIRFunction::source_dpgm_addr): a QoreIROpcode::DebugStatement instruction directly followed by an
+    IncrementLocalInt or AddAssignLocalInt instruction of int locals that only the IR uses, which cannot raise an
+    exception, is removed from its block and kept by the operation (qore_ir_folded_debug_step()), which makes the event
+    before the operation, as the instruction did, in both tiers.  The operation is the first instruction of the
+    statement, which can have more: `i += 1;` is then one instruction, as without the debugger's events, and
+    `x = ++i;` or `if (++i > n)` have one instruction less.  The exception path of the event becomes the operation's
+    exception target, which the operation itself does not use, so that the edges of the function's blocks are
+    unchanged.  Not run on the IR of AOT code, whose debug IR is serialized with its DebugStatement instructions.
+    Returns the number of events moved.
+*/
+size_t qore_ir_fold_debug_statements(QoreIRFunction& func);
 
 struct QoreIROptimizationStats {
     size_t loops_analyzed = 0;
@@ -94,6 +226,8 @@ struct QoreIROptimizationStats {
     size_t redundant_phis_eliminated = 0;
     //! the checks of return values (CheckReturnValue) removed because the value facts prove them
     size_t return_checks_elided = 0;
+    //! the rebuilt constant containers loaded by reference because they are only read (qore#5977)
+    size_t constant_containers_loaded = 0;
 };
 
 //! Where the values produced by compile-time folding are consumed.
@@ -148,6 +282,17 @@ DLLLOCAL bool qore_ir_get_readonly_scalar_closure_captures(
 
 //! Return the local directly written or invalidated by one instruction.
 //! Covers ordinary stores, fused scalar writes, and local-rooted lvalue paths.
+//! Marks in \a observable (by value id) the list and hash literals, the results of AddAny and the values taken by
+//! remove, shift and pop that a call takes as its argument and whose release when the call returns can be observed
+/** The AST interpreter releases the argument list of a call when the call returns (see design/temporary-lifetime.md);
+    the IR interpreter and native code release such a temporary then only if its release can destroy a value: if it
+    holds a value that nothing else holds, such as an object created by the expression, or the value of a local that
+    the statement writes later (whose read releasePlainLocalReadsBeforeWrites() releases); a temporary of scalar and
+    constant values and of reads of locals that keep their values to the end of the statement is released at the end
+    of the statement, which costs no release at the call (qore#5712).
+*/
+DLLLOCAL void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vector<uint8_t>& observable);
+
 DLLLOCAL const LocalVar* qore_ir_get_written_local(
     const QoreIRInstruction* inst);
 
@@ -177,6 +322,20 @@ DLLLOCAL const LocalVar* qore_ir_get_written_local(
 DLLLOCAL bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
     std::unordered_set<uint32_t>& result);
 
+//! Returns true for a read of a plain local: not through a reference, not of a closure-bound or a top-level local
+/** In a function that creates no reference, such a local is written only by the instructions that
+    qore_ir_get_written_local() gives, whether its storage is IR-only or AST-visible (a local of a statement in a try
+    block, whose calls carry their expressions, is AST-visible), so a read of it whose statement writes it later can
+    be released after its last use, as the AST interpreter borrows the value (qore#5712).
+*/
+DLLLOCAL bool qore_ir_is_plain_local_read(const QoreIRLocalInstruction& load);
+
+//! Returns false if \a value (of a local declared with type \a declared, if not null) can only be a value whose
+//! release cannot be observed: an int, a float, a bool, a string, a date, a binary or a number, which hold no other
+//! values, so that releasing it early is not worth an instruction
+DLLLOCAL bool qore_ir_value_may_be_observable(const QoreIRFunction& func, QoreIRValue value,
+    const QoreTypeInfo* declared);
+
 //! The release class of a value that is the receiver of an operation (see qore_ir_build_exception_release_groups())
 constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 
@@ -184,14 +343,18 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
 /** When an exception leaves an expression, the AST interpreter unwinds its evaluation: the arguments of each call (and
     the elements of each list or hash) whose evaluation the exception interrupted are released with their argument
     list, first argument first, the innermost call's first, and an operand that an operator holds is released as the
-    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a
-    cast), which the statement holds until it ends (QoreStatementTempScope::holdReceiver()), is released last, last
-    held first.  An engine that releases a statement's temporaries last registered first gives another order
-    (f(new T("a"), new T("b"), thr()) destroys b before a).
+    operator is unwound; a receiver (the object of a method call, the container of [] or {}, the value of a cast) and
+    an operand that the statement holds (of an arithmetic, bitwise, shift, comparison, logical, regex, keys,
+    elements, exists, instanceof or unary operator, the condition of ?:, the index of [] or the key of {} -
+    QoreOperandEvalHolder), which the
+    statement holds until it ends (QoreStatementTempScope::holdReceiver()), are released last, last held first.  An
+    engine that releases a statement's temporaries last registered first gives another order (f(new T("a"),
+    new T("b"), thr()) destroys b before a).
 
     Each value used once gets a class: 1 + the serial (in block and instruction order) of the instruction whose argument
     list (the arguments of a call, the elements of a list or a hash) it is in, QORE_IR_RELEASE_RECEIVER if it is a
-    receiver, or 0 if it is released on its own (an operand of any other instruction, or a value used more than once);
+    receiver or an operand that the statement holds, or 0 if it is released on its own (an operand of any other
+    instruction, or a value used more than once);
     an incoming value of a Phi in an argument list that has no class of its own gets the Phi's, as the Phi's value is
     the incoming value, which an engine can keep in the incoming value's own slot.
 
@@ -199,6 +362,15 @@ constexpr uint32_t QORE_IR_RELEASE_RECEIVER = UINT32_MAX;
     @param groups receives the class of each value, indexed by value id
 */
 DLLLOCAL void qore_ir_build_exception_release_groups(const QoreIRFunction& func, std::vector<uint32_t>& groups);
+
+//! Finds the implicit arguments and elements open at each instruction that leaves the function on an exception
+/** The PushImplicitArg, SetImplicitArgv and PushImplicitElement instructions that the lowering restores on every path
+    in the function (QoreIRInstruction::restore_on_exception_exit) are followed through the control flow, normal and exception edges;
+    an instruction with no exception target that runs while some are set gets them in \a open, outermost first, so
+    that the frame's exit restores them, innermost first, before it releases the frame's values (qore#5670)
+*/
+DLLLOCAL void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
+        std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>& open);
 
 //! Orders the temporaries of a statement for their release when an exception leaves it
 /** The temporaries of each argument list (see qore_ir_build_exception_release_groups()) are released together, first
@@ -476,6 +648,28 @@ size_t qore_ir_fuse_object_int_string_measure_consumers(
 
 //! Fuse exact string case transformations with supported sole consumers.
 size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func);
+
+//! Returns the class context of the code of an IR function: the class of a method, the class of the method in which a
+//! closure was parsed, or nullptr for other code
+/** It is the class context of the function's parse-time checks, and of its runtime type checks: whether a class's
+    private parent classes are accessible to the code, for example.  The lowering, analysis and compilation of the
+    function's IR make their parse-time type checks in it (see QoreIRClassContextHelper), whatever thread they run in.
+    A closure parsed in a static method has no class recorded for it (UserClosureFunction::getClassType()) and gets
+    nullptr, the context of code outside a class, in which no private parent class is accessible: a return of such
+    a class's object then keeps its runtime check, which decides in the closure's runtime class context.
+*/
+DLLLOCAL const qore_class_private* qore_ir_function_class_context(const QoreIRFunction& func);
+
+//! sets QoreIRFunction::static_call_context and QoreIRFunction::static_class_ctx of the function lowered from the
+//! variant @a variant (issue #5824)
+DLLLOCAL void qore_ir_set_static_call_context(QoreIRFunction& func, const AbstractQoreFunctionVariant* variant);
+
+//! Returns true if the declared return type leaves every value returned by the function unchanged
+/** A call-site summary that substitutes the callee's returned value is only valid in this case.  The returns are
+    checked in the function's own class context (qore_ir_function_class_context()), in any thread.  Defined in
+    lib/QoreIRToLLVM.cpp
+*/
+DLLLOCAL bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type);
 
 //! Returns true if a returned value with the given facts must be converted or checked by the declared return type
 /** Defined in lib/QoreIRToLLVM.cpp

@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreTypeInfo.h"
 
 static thread_local const QoreObject* closure_self_context = nullptr;
@@ -44,6 +45,67 @@ QoreClosureSelfContextHelper::~QoreClosureSelfContextHelper() {
 
 bool qore_closure_self_context(const QoreObject* obj) {
     return closure_self_context == obj;
+}
+
+void QoreClosureBase::captureTypeContext() {
+    assert(!type_context);
+    const QoreTypeParamInstantiation* inst = runtime_get_type_param_instantiation();
+    if (inst && inst->empty()) {
+        inst = nullptr;
+    }
+    // the receiver type binds the type parameters of the class (also of a generic base class of a class that is not
+    // generic itself); this is only called for a closure in generic code (see QoreClosureParseNode::needsTypeContext())
+    const QoreTypeInfo* receiver = runtime_get_receiver_type_info();
+    if (!inst && !receiver) {
+        return;
+    }
+    std::unique_ptr<QoreClosureTypeContext> ctx(new QoreClosureTypeContext);
+    if (inst) {
+        ctx->inst = *inst;
+        ctx->decls.add(ctx->inst.type_args);
+    }
+    ctx->receiver_type_info = receiver;
+    ctx->decls.add(receiver);
+    type_context = ctx.release();
+}
+
+void QoreClosureBase::captureObjectReceiver(const QoreObject* obj) {
+    // the receiver type is the object's instantiated type (or its class's type), which binds the type parameters of
+    // its class and of its base classes, as for a call of the method that creates the closure; the run-time receiver
+    // type that is current is not used, as it can be that of other code (it is not reset by a call of a function or
+    // by code that binds the type parameters statically)
+    const QoreTypeInfo* receiver = obj ? qore_get_object_receiver_type_info(obj) : nullptr;
+    if (!receiver) {
+        return;
+    }
+    std::unique_ptr<QoreClosureTypeContext> ctx;
+    if (!type_context) {
+        ctx.reset(new QoreClosureTypeContext);
+    }
+    QoreClosureTypeContext& tc = type_context ? *type_context : *ctx;
+    tc.decls.add(receiver);
+    tc.receiver_type_info = receiver;
+    if (ctx) {
+        type_context = ctx.release();
+    }
+}
+
+void QoreClosureTypeContextHelper::set() {
+    if (!ctx->inst.empty()) {
+        old_inst = runtime_set_type_param_instantiation(&ctx->inst);
+    } else {
+        old_inst = runtime_get_type_param_instantiation();
+    }
+    if (ctx->receiver_type_info) {
+        old_receiver_type_info = runtime_set_receiver_type_info(ctx->receiver_type_info);
+    } else {
+        old_receiver_type_info = runtime_get_receiver_type_info();
+    }
+}
+
+void QoreClosureTypeContextHelper::restore() {
+    runtime_set_type_param_instantiation(old_inst);
+    runtime_set_receiver_type_info(old_receiver_type_info);
 }
 
 const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {
@@ -129,7 +191,7 @@ bool QoreClosureNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     // Closures can be invoked on threads with no program context (e.g., AsyncIoController's
     // ioThread, ThreadPool workers). Ensure a tlpd exists before dispatch; capture CVVs are
@@ -139,10 +201,23 @@ QoreValue QoreClosureNode::execValue(const QoreListNode* args, ExceptionSink* xs
     return closure->exec(*this, pgm, args, 0, class_ctx, xsink);
 }
 
+QoreValue QoreClosureNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->exec(*this, pgm, args, 0, class_ctx, xsink, true);
+}
+
+QoreValue QoreClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // see dispatchValue()
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->execNamed(*this, pgm, args, arg_names, 0, class_ctx, xsink);
+}
+
 bool QoreClosureNode::getAsBoolImpl() const {
     // check if we should do perl-style boolean evaluation
-    QoreProgram* pgm = getProgram();
-    if (pgm && runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL))
+    if (qore_get_native_semantic_policy().strictBoolean())
         return false;
     return true;
 }
@@ -157,7 +232,7 @@ bool QoreObjectClosureNode::derefImpl(ExceptionSink* xsink) {
     return ResolvedCallReferenceNode::derefImpl(xsink);
 }
 
-QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+QoreValue QoreObjectClosureNode::dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
     QoreClosureSelfContextHelper csch(obj);
     // See QoreClosureNode::execValue above — capture CVVs are pushed after program-context
@@ -165,6 +240,24 @@ QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSi
     QoreProgram* pgm = obj->getProgram();
     ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
+}
+
+QoreValue QoreObjectClosureNode::execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    QoreClosureSelfContextHelper csch(obj);
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->exec(*this, pgm, args, obj, class_ctx, xsink, true);
+}
+
+QoreValue QoreObjectClosureNode::dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+        ExceptionSink* xsink) const {
+    QoreSandboxProvenanceHelper provenance(this);
+    // see dispatchValue()
+    QoreClosureSelfContextHelper csch(obj);
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
+    return closure->execNamed(*this, pgm, args, arg_names, obj, class_ctx, xsink);
 }
 
 QoreObject* QoreObjectClosureNode::refSelfForBackground(ExceptionSink* xsink) const {

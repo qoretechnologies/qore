@@ -32,7 +32,10 @@
 #ifndef _QORE_INTERN_QORESTATEMENTTEMPS_H
 #define _QORE_INTERN_QORESTATEMENTTEMPS_H
 
+#include "qore/intern/LexicalSemanticPolicy.h"
+
 #include <unordered_map>
+#include <type_traits>
 #include <memory>
 #include <vector>
 
@@ -69,8 +72,8 @@ public:
     //! hands the temporary value of a holder to the innermost scope of the thread
     /** The holder keeps the value but no longer owns it; nothing is done if the holder does not own its value
         (it was read from a variable, for example), if the value cannot be referred to after the statement - a
-        string, a number, a binary or a date, which hold no other values - or if there is no scope, in which case
-        the holder releases the value as before.
+        string, a number, a binary, a date, or an int or a float outside the inline range, which hold no other
+        values - or if there is no scope, in which case the holder releases the value as before.
 
         @param site the expression that created the value; a value created again by the same expression in the same
         scope replaces the previous one, which is released
@@ -80,9 +83,10 @@ public:
     DLLLOCAL static void hold(const void* site, ValueOptionalRefHolder& holder, ExceptionSink* xsink);
 
     //! hands the value that a holder got by evaluating an expression to the innermost scope of the thread
-    /** As hold(), except that nothing is done for a variable: its value is not a temporary, and a value read from a
-        variable is not kept after the variable is assigned another value in the same statement, as in the other
-        execution modes
+    /** As hold(), except that nothing is done for a variable: a read that gives the code a reference of its own is
+        held by the variable reference itself (VarRefNode::evalImpl(), holdRead()), and a value borrowed from the
+        variable is not a temporary: it is not kept after the variable is assigned another value in the same
+        statement, as in the other execution modes
 
         @param site the expression whose value the holder has (the receiver of a chain); see hold()
     */
@@ -92,6 +96,20 @@ public:
         }
         hold(site.getInternalNode(), holder, xsink);
     }
+
+    //! gives the innermost scope of the thread a reference of its own to a value read from a variable
+    /** A read through a reference, or from a closure-bound, global or thread-local variable, gives the code a
+        reference of its own to the value: the value is a temporary of the statement, which lives until the end of
+        the statement, as the other execution modes keep the result of the load in the temp scope of the statement.
+        The caller keeps its reference; nothing is done if the value cannot be referred to after the statement (see
+        isObservable()) or if there is no scope.
+
+        @param site the variable reference read; a value read again by the same variable reference in the same scope,
+        for a later element of a map, replaces the previous one, which is released
+        @param value the value read, which the caller owns
+        @param xsink for exceptions raised by the destructor of a value replaced
+    */
+    DLLLOCAL static void holdRead(const void* site, const QoreValue& value, ExceptionSink* xsink);
 
     //! hands a value that the caller owns to the innermost scope of the thread
     /** @return true if the scope took the value; false if there is no scope, in which case the caller still owns it
@@ -108,6 +126,11 @@ public:
             case NT_BINARY:
             case NT_NUMBER:
             case NT_DATE:
+            // an int or a float outside the inline range is a node that holds no other value: holding it only
+            // costs, and an operator that returns its operand (unary plus) must not give a value that only the
+            // scope holds as borrowed to a caller that can use it after the scope ends (qore#5712)
+            case NT_INT:
+            case NT_FLOAT:
                 return false;
             default:
                 return true;
@@ -119,21 +142,32 @@ private:
         const void* site;
         QoreValue value;
     };
+    static_assert(std::is_trivially_copyable<Entry>::value, "the entries are copied as raw memory");
 
     //! the number of temporaries above which the sites are looked up in an index instead of by a scan
     static constexpr size_t IndexThreshold = 16;
+    //! the number of temporaries that the scope holds without allocating memory: most statements hold a few
+    static constexpr size_t InlineCapacity = 4;
 
     //! the enclosing scope
     QoreStatementTempScope* prev;
     //! the exception sink for the destructors run by releasing the temporaries
     ExceptionSink* xsink;
-    //! the temporaries, in the order of their creation
-    std::vector<Entry> entries;
+    //! the temporaries, in the order of their creation: in inline_entries, or in heap_entries when there are more
+    Entry* entries;
+    //! the number of temporaries held
+    size_t count = 0;
+    //! the number of entries that entries has room for
+    size_t capacity = InlineCapacity;
+    //! the storage of the first temporaries, which needs no initialization
+    alignas(Entry) unsigned char inline_entries[InlineCapacity * sizeof(Entry)];
+    //! the storage of the temporaries when there are more than InlineCapacity
+    std::unique_ptr<Entry[]> heap_entries;
     //! site -> position in entries, for a statement that holds many temporaries (a large hash literal with a chain
     //! in each value, for example), so that each hold does not scan them all
     std::unique_ptr<std::unordered_map<const void*, size_t>> site_index;
 
-    //! returns the position of the entry of the site, or entries.size() if there is none
+    //! returns the position of the entry of the site, or count if there is none
     DLLLOCAL size_t find(const void* site);
 
     //! puts the value at the end of the entries; returns the value that the site held before, if any
@@ -141,6 +175,43 @@ private:
 
     DLLLOCAL QoreStatementTempScope(const QoreStatementTempScope&) = delete;
     DLLLOCAL QoreStatementTempScope& operator=(const QoreStatementTempScope&) = delete;
+};
+
+//! evaluates an operand of an operator and hands the value to the innermost scope of the thread
+/** A temporary - a value that an expression creates and that nothing else refers to - lives until the end of the
+    statement in every execution mode (design/temporary-lifetime.md, David: "all chains, whole statement"); the
+    operand of an operator is held by the scope as the receiver of a chain is (QoreStatementTempScope::holdReceiver())
+    instead of being released when the operator returns (qore#5712).  Only a value that the holder owns and that is a
+    node can be held, so an int costs no more than a test; a value borrowed from a variable and a value that cannot be
+    observed after the statement (a string, a number, a binary, a date, or an int or a float node) are not held.  The
+    operator still uses the value, which the scope keeps until the end of the statement; a value that it takes from
+    the holder gets a reference of its own.
+*/
+class QoreOperandEvalHolder : public ValueEvalOptimizedRefHolder {
+public:
+    //! evaluates \a exp and hands a temporary value to the innermost scope of the thread at once
+    /** The value is held when it is created, as the other execution modes register a temporary when the instruction
+        that creates it runs: the temporaries of a statement are released in the reverse order of their creation (the
+        right operand of an operator before the left one), and the value that the same operand created for an earlier
+        element of a functional operator is released when the operand is evaluated again.  If the scope cannot take
+        the value (bad_alloc), the holder still owns it and releases it.
+
+        @param exp the operand, which must outlive the holder (the operand of an operator node)
+        @param xs the exception sink of the evaluation; null when an operator is folded at parse time (keys), when
+        nothing is held
+    */
+    DLLLOCAL QoreOperandEvalHolder(const QoreValue& exp, ExceptionSink* xs) : ValueEvalOptimizedRefHolder(xs) {
+        evalOperand(exp);
+    }
+
+    QoreOperandEvalHolder(const QoreOperandEvalHolder&) = delete;
+    QoreOperandEvalHolder& operator=(const QoreOperandEvalHolder&) = delete;
+
+private:
+    //! evaluates the operand as ValueEvalOptimizedRefHolder::eval() does, and hands a temporary node to the
+    //! innermost scope of the thread (QoreStatementTempScope::holdReceiver()); one call, so that an operand that holds
+    //! no reference costs only a test of the value that it has at hand
+    DLLLOCAL void evalOperand(const QoreValue& exp);
 };
 
 //! returns true if the operand of a change to an lvalue is evaluated as a statement of its own
@@ -164,6 +235,16 @@ DLLLOCAL inline bool qore_mutation_operand_has_own_scope(const QoreValue& lvalue
         || QoreTypeInfo::isType(type_info, NT_FLOAT) || QoreTypeInfo::isType(type_info, NT_CHAR)
         || QoreTypeInfo::isType(type_info, NT_NOTHING) || QoreTypeInfo::isType(type_info, NT_NULL));
 }
+
+//! Returns true if evaluating an expression can create a temporary besides its value whose release can be observed
+/** A value made by a call or a construction that the expression uses, and a value that can hold an object read from a
+    variable that other code can change while the expression runs - a global, thread-local or closure-bound variable,
+    a local that a closure uses or that a reference is taken of, a variable that holds a reference, a static class
+    variable or a member of the current object - which the AST interpreter holds as a temporary: a functional
+    operator evaluates such an expression for each element as a statement of its own (qore#6288).  The expression must
+    have been initialized for parsing.
+*/
+DLLLOCAL bool qore_expr_may_create_observable_temp(const QoreValue& expr);
 
 //! evaluates an expression, as a statement of its own if requested: its temporaries are released when it returns
 class QoreScopedEvalHolder : public ValueEvalOptimizedRefHolder {
@@ -196,7 +277,7 @@ public:
 
     @return 0 if the condition was evaluated, -1 if an exception was raised
 */
-template <typename... RcArgs>
+template <bool StrictBoolean, typename... RcArgs>
 DLLLOCAL int qore_eval_condition(const QoreValue& cond, bool& result, ExceptionSink* xsink, RcArgs&... rc) {
     QoreStatementTempScope temps(xsink);
     {
@@ -204,7 +285,11 @@ DLLLOCAL int qore_eval_condition(const QoreValue& cond, bool& result, ExceptionS
         if (*xsink) {
             return -1;
         }
-        result = val->getAsBool();
+        if constexpr (StrictBoolean) {
+            result = LexicalSemanticPolicy::getAsBoolStrict(*val);
+        } else {
+            result = LexicalSemanticPolicy::getAsBoolDefault(*val);
+        }
     }
     temps.release();
     return *xsink ? -1 : 0;

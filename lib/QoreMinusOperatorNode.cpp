@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,9 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreArithmeticParseType.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreMinusOperatorNode::minus_str("- operator expression");
 
@@ -73,11 +75,11 @@ static bool qore_minus_parse_type_is_unknown(const QoreTypeInfo* ti) {
 }
 
 QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) {
         return QoreValue();
     }
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -98,8 +100,12 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         int64 secs = lh->getAsBigInt() / 1000;
         int64 ms = lh->getAsBigInt() - (secs * 1000);
         // the leftover is in milliseconds; makeRelativeFromSeconds() takes microseconds
-        SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000)));
-        return l->subtractBy(rh->get<DateTimeNode>());
+        SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms * 1000),
+            xsink));
+        if (!l) {
+            return QoreValue();
+        }
+        return l->subtractBy(*rh->get<DateTimeNode>(), xsink);
     }
 
     if (check_date_timeout_variant && lt == NT_DATE && rt == NT_INT) {
@@ -107,14 +113,36 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return lh->get<DateTimeNode>()->subtractBy(r);
+        if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return lh->get<DateTimeNode>()->subtractBy(r, xsink);
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeNodeValueHelper l(*lh);
-        DateTimeValueHelper r(*rh);
-        return l->subtractBy(*r);
+        // a result out of range raises INVALID-DATE, as does an operand converted to a date out of range (qore#6103)
+        if (lt == NT_DATE) {
+            if (rt == NT_DATE) {
+                return lh->get<const DateTimeNode>()->subtractBy(*rh->get<const DateTimeNode>(), xsink);
+            }
+            DateTimeValueHelper r(*rh, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            return lh->get<const DateTimeNode>()->subtractBy(**r, xsink);
+        }
+        if (lt != NT_INT && lt != NT_FLOAT) {
+            // other types are converted as before (ex: a hash gives the zero date in the local time zone)
+            DateTimeNodeValueHelper l(*lh);
+            return l->subtractBy(*rh->get<const DateTimeNode>(), xsink);
+        }
+        // a number of seconds
+        DateTimeValueHelper l(*lh, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        SimpleRefHolder<DateTimeNode> ln(new DateTimeNode(**l));
+        return ln->subtractBy(*rh->get<const DateTimeNode>(), xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {
@@ -155,6 +183,18 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     }
 
     return QoreValue();
+}
+
+//! the type of the container that the operator gives for operand values of the given value types and member types,
+//! if it is known more precisely than the base type of the container; see qore_arith_container_rule_t
+static const QoreTypeInfo* qore_minus_container_type(qore_type_t lt, const QoreTypeInfo* lti, qore_type_t rt,
+        const QoreTypeInfo* /* rti */) {
+    // a value minus NOTHING is the value itself, and a hash minus a key or a list of keys is the hash without them, of
+    // the type of the hash (ex: hash<X>)
+    if (rt == NT_NOTHING || (lt == NT_HASH && (rt == NT_LIST || rt == NT_STRING))) {
+        return lti;
+    }
+    return nullptr;
 }
 
 int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -221,10 +261,14 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
             edesc);
     } else {
         // issue #3157: try to handle timeout + date specially
-        if (QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
+        // (a *timeout is a timeout too: its value in milliseconds, or NOTHING, which is no int to subtract as
+        // milliseconds)
+        if ((QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
+                || QoreTypeInfo::equal(leftTypeInfo, timeoutOrNothingTypeInfo))
             && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
             check_timeout_date_variant = true;
-        } else if (QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+        } else if ((QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+                || QoreTypeInfo::equal(rightTypeInfo, timeoutOrNothingTypeInfo))
             && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
             check_date_timeout_variant = true;
         }
@@ -266,6 +310,32 @@ int QoreMinusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
                 // only return type nothing if both types are available and return a single type
                 returnTypeInfo = nothingTypeInfo;
             }
+        }
+    }
+
+    // the result type of every combination of the values that the operand types allow, as the operator gives it at
+    // runtime (qore#5663): the rules above take the type of one operand when it has one value type, whatever values
+    // the other operand can have
+    {
+        const QoreTypeInfo* arith_ti;
+        bool single;
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Minus, leftTypeInfo, rightTypeInfo, arith_ti, single,
+                qore_minus_container_type)) {
+            case QoreArithParseResult::Scalar:
+                returnTypeInfo = arith_ti;
+                break;
+            case QoreArithParseResult::Container:
+                // with one value type on each side, the rules above give a container type more precisely (ex: its
+                // element type), if they give the container that the operator returns
+                if (!single || !qore_arith_container_rule_matches(returnTypeInfo, arith_ti)) {
+                    returnTypeInfo = arith_ti;
+                }
+                break;
+            case QoreArithParseResult::Untyped:
+                if (!bufferResultTypeInfo) {
+                    returnTypeInfo = nullptr;
+                }
+                break;
         }
     }
 

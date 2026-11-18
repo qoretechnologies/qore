@@ -34,6 +34,14 @@ lastorder.numberofitems = lastorder.items.size();
     lvalue represented by the local variable will exist beyond its local scope; as long as the reference to the lvalue
     exists, the local variable's lvalue will exist and remain valid.
 
+    @note Releasing the last reference to a captured local also releases its value; if that destroys an object
+    whose destructor raises an exception, the exception propagates to the code releasing the reference.
+
+    @note A reference can outlive the @ref Qore::Program "Program" whose lvalue it refers to, for example when a
+    function of the Program returns a reference to one of its variables.  Using a reference to a lvalue of a Program
+    that is being deleted, or has been, raises a \c PROGRAM-ERROR exception, as a call into a deleted Program does;
+    while a reference is used, the deletion of its Program waits until the lvalue has been used.
+
     @since %Qore 0.8.5 universal lvalue references are supported; previously references could only be used with
     arguments to a function or method call or the like.  As of %Qore 0.8.5+, references can be used anywhere in %Qore
     in any expression, even with references to local variables in background expressions and in closure argument lists.
@@ -63,6 +71,24 @@ printf("%y\n", h.fullType()); # "hash<string, int>"
 
     When the referenced value already satisfies the restriction, binding the reference leaves the lvalue
     untouched.
+
+    A local whose type names a type parameter keeps the concrete constraint of the invocation that created its
+    storage.  Taking a reference to the local, or capturing it in a closure, preserves that constraint after the
+    invocation returns, including when the reference or closure is used by another thread or another generic
+    invocation.  The runtime reference type names the concrete target type:
+    @code{.py}
+reference<*T> sub make_reference<T>() {
+    *T value;
+    return \value;
+}
+
+reference<*string> text = make_reference<string>();
+text = "value";
+text = NOTHING; # *string still accepts NOTHING
+# text = 42;   # RUNTIME-TYPE-ERROR: the target expects *string
+    @endcode
+
+    Creating the reference does not assign the local or change its coercion or container-narrowing rules.
 
     The @ref reference_or_nothing_type "*reference" has special behavior when used as an argument type
     restriction.  In this case, if no value is assigned to the reference in the call, the local variable

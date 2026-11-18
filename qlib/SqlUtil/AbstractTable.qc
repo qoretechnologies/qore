@@ -140,7 +140,76 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "forupdate": Type::Boolean,
             "forupdate_no_key": Type::Boolean,
             "partition": Type::String,
+            # set operators (since SqlUtil 3.11.0)
+            "union": "hash/list",
+            "union_all": "hash/list",
+            "intersect": "hash/list",
+            "except": "hash/list",
+            # recursive queries (since SqlUtil 3.11.0)
+            "recursive": Type::Hash,
         };
+
+        #! the keys of the @ref select_option_recursive "recursive" select option
+        /** @since %SqlUtil 3.11.0
+        */
+        const hash<string, bool> RecursiveQueryKeys = {
+            "name": True,
+            "columns": True,
+            "anchor": True,
+            "step": True,
+            "union": True,
+            "depth": True,
+            "max_depth": True,
+        };
+
+        #! the select options that cannot be combined with the @ref select_option_recursive "recursive" select option
+        /** @since %SqlUtil 3.11.0
+        */
+        const list<string> RecursiveQueryRefusedOptions = ("superquery", "forupdate", "forupdate_no_key",
+            "partition");
+
+        #! the select options that the anchor and the step of a recursive query cannot have
+        /** @since %SqlUtil 3.11.0
+        */
+        const list<string> RecursiveQueryMemberRefusedOptions = ("recursive", "superquery", "forupdate",
+            "forupdate_no_key", "orderby", "desc", "limit", "offset", "union", "union_all", "intersect", "except");
+
+        #! the default name of the common table expression of a recursive query
+        /** @since %SqlUtil 3.11.0
+        */
+        const string RecursiveQueryDefaultName = "rcte";
+
+        #! the Qore type names that a cast in the anchor of a recursive query can give, and their types
+        /** @since %SqlUtil 3.11.0
+        */
+        const hash<string, string> RecursiveQueryCastTypes = {
+            "integer": Type::Int,
+            "int": Type::Int,
+            "number": Type::Number,
+            "float": Type::Float,
+            "string": Type::String,
+            "date": Type::Date,
+            "binary": Type::Binary,
+            "boolean": Type::Boolean,
+            "bool": Type::Boolean,
+        };
+
+        #! the set operator select options and their SQL keywords in standard SQL
+        /** @see @ref select_option_set_operators
+
+            @since %SqlUtil 3.11.0
+        */
+        const hash<string, string> SetOperatorSql = {
+            "union": "union",
+            "union_all": "union all",
+            "intersect": "intersect",
+            "except": "except",
+        };
+
+        #! the select options that apply to the combined result of a select with set operators
+        /** @since %SqlUtil 3.11.0
+        */
+        const list<string> SetOperationResultOptions = ("orderby", "desc", "limit", "offset", "orderby_no_unique");
 
         #! alignment omission options
         const hash<string, bool> TableOmissionOptions = {
@@ -187,6 +256,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c triggers: a hash of trigger information keyed by trigger name; the values are the trigger source code; since triggers are driver-dependent, a driver-independent table description would include trigger hashes under the \c drivers key and the driver key name under that
             - \c foreign_constraints: (@ref fk_desc_hash "foreign constraint hashes") a hash<auto> describing the foreign constraints on the table
             - \c unique_constraints: (@ref uk_desc_hash "unique constraint hashes") a hash<auto> describing the unique constraints on the table
+            - \c comment: (@ref string_type) the comment of the table, on databases whose driver supports table
+              comments (see @ref SqlUtil::AbstractTable::supportsTableComments() "supportsTableComments()"); it is
+              ignored on others (since SqlUtil 3.11.0)
             - \c partition_strategy: (@ref SqlUtil::PartitionStrategy "partition strategy hash") a hash<auto>
               describing the table's partitioning strategy
             - \c partitions: a hash of @ref SqlUtil::PartitionSpec "partition specification hashes" keyed by
@@ -206,6 +278,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             "partitions": Type::Hash,
             #"check_constraints": Type::Hash,
             "table_cache": "Tables",
+            "comment": Type::String,
         };
 
         #! partition strategy options
@@ -418,8 +491,9 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         */
         #/@{
         #! Upsert option: insert first, if the insert fails, then update
-        /** with this option an insert is attempted, and if it fails due to a duplicate row, then an update is made unconditionally; with
-            this upsert strategy, the following row result codes are possible:
+        /** with this option an insert is attempted, and if it fails due to a duplicate row, then the row with the upsert key is
+            updated; if no row has the upsert key, the duplicate is on another unique key, and the database's exception for it is
+            raised; with this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
         */
@@ -450,7 +524,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         const UpsertAuto = 4;
 
         #! Upsert option: insert if the row does not exist, otherwise ignore
-        /** With this upsert strategy, the following row result codes are possible:
+        /** A row is ignored only if a row with its upsert key exists; a conflict with another unique key raises the database's
+            exception.  With this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Unchanged
         */
@@ -589,6 +664,22 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         bool inDb = False;
         #! manual edits
         bool manual = False;
+
+        #! True if the object stands for the common table expression of a recursive query
+        /** Its SQL name is its name as an identifier, without a schema (see @ref select_option_recursive)
+
+            @since %SqlUtil 3.11.0
+        */
+        bool recursive_cte = False;
+
+        #! the comment of the table, once it is known (see table_comment_known)
+        /** @since %SqlUtil 3.11.0
+        */
+        *string table_comment;
+        #! True if the comment of the table is known: given by a description, or read from the database
+        /** @since %SqlUtil 3.11.0
+        */
+        bool table_comment_known = False;
 
         #! temporary-table scope; @ref nothing "NOTHING" for a normal (non-temporary) table
         /** set to @ref SqlUtil::TT_Transaction or @ref SqlUtil::TT_Session when this object represents a
@@ -1012,13 +1103,20 @@ table.dropCommit();
 
         @throw OPTION-ERROR invalid or unknown callback option
 
-        @note The transaction is committed if successful or rolled back if an exception occurs; use @ref drop() to
-        execute without any transaction management
+        @note Each statement of getDropSql() is committed on its own, and a failed statement is rolled back: a
+        partitioned table whose driver drops each partition in its own statement (as PostgreSQL does) is dropped one
+        partition per transaction, and so within the database's lock limits however many partitions it has.  Use
+        @ref drop() to execute without any transaction management.
     */
     dropCommit(*hash<auto> opt) {
-        on_exit ds.commit();
         on_error ds.rollback();
-        drop(opt);
+        # also when there is nothing to drop, the transaction is ended
+        on_success ds.commit();
+        foreach string sql in (getDropSql(opt)) {
+            ds.execRaw(sql);
+            ds.commit();
+        }
+        inDb = False;
     }
 
     #! drops the table from the database without any transaction management
@@ -1653,18 +1751,22 @@ list<auto> changes = source_table.getAlignSql(target);
             configurations so that a column with the name "driver" can be
             supported
         */
-        if (desc.columns.driver) {
-            *hash<auto> h = remove desc.columns.driver{SqlUtilDrivers + drv};
+        # a caller's column hash may be narrowed (e.g. to hash<string, hash<GenericColumnInfo>> when every column is
+        # a GenericColumnInfo hash, as in a description from getDescriptionHash()), and storing a column description
+        # with its driver options applied would throw, so the columns are processed in a copy that takes any value
+        *hash<auto!> columns = desc.columns;
+        if (columns.driver) {
+            *hash<auto> h = remove columns.driver{SqlUtilDrivers + drv};
             if (h) {
                 # if we have driver-specific info, add it to the columns hash
                 foreach string key in (drv) {
                     if (h{key}) {
-                        desc.columns += h{key};
+                        columns += h{key};
                     }
                 }
                 # if there is no column information, then delete the "driver" key
-                if (!desc.columns.driver)
-                    delete desc.columns.driver;
+                if (!columns.driver)
+                    delete columns.driver;
             }
         }
 
@@ -1700,12 +1802,13 @@ list<auto> changes = source_table.getAlignSql(target);
         }
 
         # process column definitions
-        foreach string cn in (desc.columns.keyIterator()) {
-            if (desc.columns{cn}.typeCode() != NT_HASH)
+        foreach string cn in (columns.keyIterator()) {
+            if (columns{cn}.typeCode() != NT_HASH)
                 throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to column key %y is not a hash, got type %y "
-                    "instead (%y)", getDesc(), cn, desc.columns{cn}.type(), desc.columns{cn});
-            AbstractDatabase::checkDriverOptions(\desc.columns{cn}, drv);
+                    "instead (%y)", getDesc(), cn, columns{cn}.type(), columns{cn});
+            AbstractDatabase::checkDriverOptions(\columns{cn}, drv);
         }
+        desc.columns = columns;
 
         # a caller's literal partition hash may be narrowed (e.g. when every partition has only a "driver" key),
         # and storing a partition with its driver options applied would throw
@@ -1874,6 +1977,10 @@ list<auto> changes = source_table.getAlignSql(target);
             }
             addPartitionToCacheUnlocked(normalizePartitionSpecUnlocked(ps, "DESCRIPTION-ERROR"));
         }
+
+        # issue #1483: the comment of the table
+        table_comment = desc.comment;
+        table_comment_known = True;
 
         setupTableImpl(desc, opt);
     }
@@ -3616,13 +3723,15 @@ string sql = table.getDropTriggerSql("trig_mytable");
     private checkUniqueConstraintName(string err, string cname) {
         getAllConstraintsUnlocked();
         if (foreignConstraints.hasKey(cname))
-            throw err, printf("%y: already has a foreign constraint named %y with columns: %y", name, cname, foreignConstraints{cname}.columns.keys());
+            throw err, sprintf("%y: already has a foreign constraint named %y with columns: %y", name, cname,
+                foreignConstraints{cname}.columns.keys());
 
         if (constraints.hasKey(cname))
-            throw err, printf("%y: already has a constraint named %y", name, cname);
+            throw err, sprintf("%y: already has a constraint named %y", name, cname);
 
         if (!primaryKey.empty() && primaryKey.getName() == cname)
-            throw err, printf("%y: already has a primary key constraint named %y with columns: %y", name, cname, primaryKey.keys());
+            throw err, sprintf("%y: already has a primary key constraint named %y with columns: %y", name, cname,
+                primaryKey.keys());
     }
 
     private checkUniqueConstraintNameValidateOptions(string err, string cname, hash<auto> ropt, reference<hash> opt) {
@@ -4060,6 +4169,21 @@ table.insert(row);
         return {"sql": sql, "args": vh.values ?? ()};
     }
 
+    #! Returns the placeholder of a value written to the given column by an insert, an update or an upsert
+    /** The default implementation returns \c "%v"; a driver whose database needs a cast for the value of a column
+        bound as the type of its Qore value overrides it (ex: PostgreSQL's \c json and \c jsonb columns, given a
+        string)
+
+        @param column the name of the column
+
+        @return the placeholder for the value of the column in SQL
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getColumnValuePlaceholder(string column) {
+        return "%v";
+    }
+
     private hash<auto> getPlaceholdersAndValues(hash<auto> row) {
         hash<auto> im;
         # placeholder list
@@ -4071,7 +4195,7 @@ table.insert(row);
         while (i.next()) {
             string key = i.getKey();
             auto v = i.getValue();
-            string ph = "%v";
+            string ph = getColumnValuePlaceholder(key);
             if (v.typeCode() == NT_LIST)
                 v = v[0];
             if (v."_iop".typeCode() == NT_STRING) {
@@ -4468,7 +4592,7 @@ int rows = table.insertFromIterator(i);
 
         # make insert statement template
         string sql = sprintf("insert into %s (%s) values (%s)", getSqlName(), (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row)),
-                                (foldl $1 + "," + $2, (map "%v", keys row)));
+                                (foldl $1 + "," + $2, (map getColumnValuePlaceholder($1), keys row)));
         AbstractSQLStatement stmt = ds.getSQLStatement();
         stmt.prepare(sql);
 
@@ -5830,6 +5954,11 @@ string sql = table.getSelectSql(sh, \args);
             getColumnsUnlocked();
         }
 
+        # issue #3544: a recursive query selects from its common table expression
+        if (exists qh.recursive) {
+            return getRecursiveSelectSqlIntern(qh, \args, opt);
+        }
+
         # we first get column & table info in case we are referencing a table through a synonym
         # so the getSelectSqlName() will refer to the proper schema owner
         return getSelectSqlStringIntern(qh, getSelectSqlName(qh), \args, NOTHING, opt);
@@ -5853,6 +5982,19 @@ string sql = table.getSelectSql(sh, \args);
             "args": args ?? (),
         };
         on_success args = info.args;
+
+        # issue #3544: a recursive query is a select of its own, which cannot be a superquery
+        if (exists info.query_hash.recursive) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option can only be given in the "
+                "select option hash of a select, not in a superquery", getDesc());
+        }
+
+        # issue #2961: the set operators combine this select with other selects; the ordering and paging options
+        # apply to the combined result, which is selected from as a superquery
+        *list<string> setop_keys = map $1, keys info.query_hash, SetOperatorSql{$1};
+        if (setop_keys) {
+            prepareSetOperationsIntern(\info);
+        }
 
         if (info.query_hash.forupdate_no_key) {
             if (!info.query_hash.forupdate || info.query_hash.superquery) {
@@ -6031,10 +6173,21 @@ string sql = table.getSelectSql(sh, \args);
                 HashIterator i(jh.jcols);
                 while (i.next()) {
                     string key = i.getKey();
-                    string value = i.getValue();
+                    auto value = i.getValue();
                     if (!jt.columns.hasKey(key))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), jt.getSqlName(), key, jt.columns.keys());
+                    # issue #738: a column operator applied to columns of the joined table
+                    if (value.typeCode() == NT_HASH) {
+                        jel += sprintf("%s.%s = %s", jtn, jt.getColumnSqlName(key),
+                            getJoinColumnOperatorIntern(\info, t, an, key, value));
+                        continue;
+                    }
+                    if (value.typeCode() != NT_STRING) {
+                        throw "SELECT-ERROR", sprintf("%s: join clause error; the join column for column %y.%y must "
+                            "be a column name of %y or a column operator hash; got type %y instead", getDesc(),
+                            jt.getSqlName(), key, t.getSqlName(), value.type());
+                    }
                     if (!t.describe().hasKey(value))
                         throw "SELECT-ERROR", sprintf("%s: cannot join on unknown column %y.%y; known columns: %y",
                             getDesc(), t.getSqlName(), value, t.columns.keys());
@@ -6228,6 +6381,10 @@ string sql = table.getSelectSql(sh, \args);
             splice sql, i + 1, 0, comment;
         }
 
+        if (setop_keys) {
+            sql = doSetOperationsIntern(\info, sql, setop_keys, opt);
+        }
+
         if (info.query_hash.superquery) {
             validateOptionsIntern("OPTION-ERROR", getSelectOptions(), \info.query_hash.superquery);
             if (exists info.query_hash.superquery.partition) {
@@ -6239,6 +6396,617 @@ string sql = table.getSelectSql(sh, \args);
         }
 
         return sql;
+    }
+
+    #! Prepares a select with set operators: its ordering and paging options are moved to a superquery
+    /** The ordering and paging options of a select with set operators apply to the combined result, which is selected
+        from as a superquery
+
+        @throw SELECT-ERROR the select has the \c "superquery" or \c "forupdate" option, which cannot be combined with
+        set operators
+
+        @since %SqlUtil 3.11.0
+    */
+    private prepareSetOperationsIntern(reference<hash<QueryInfo>> info) {
+        foreach string opt in ("superquery", "forupdate", "forupdate_no_key") {
+            if (info.query_hash{opt}) {
+                throw "SELECT-ERROR", sprintf("%s: the %y select option cannot be combined with the set operators "
+                    "(%y)", getDesc(), opt, keys info.query_hash{keys SetOperatorSql});
+            }
+        }
+        hash<auto> sq = map {$1.key: $1.value}, info.query_hash{SetOperationResultOptions}.pairIterator(),
+            exists $1.value;
+        info.query_hash -= SetOperationResultOptions;
+        if (sq) {
+            info.query_hash.superquery = sq;
+        }
+    }
+
+    #! Returns the SQL of a select combined with the selects of its set operators
+    /** The operators are applied from left to right in the order that the select hash gives them, each to the
+        result of the operators before it
+
+        @param info the query information of the select
+        @param sql the SQL of the select without its set operators
+        @param setop_keys the set operator keys of the select hash, in their order
+        @param opt the select options
+
+        @return the SQL of the combined select
+
+        @throw SELECT-ERROR an invalid set operator argument
+        @throw DATASOURCE-ERROR a select of another table does not use the same datasource
+        @throw SET-OPERATOR-ERROR the database does not support the set operator
+
+        @since %SqlUtil 3.11.0
+    */
+    private string doSetOperationsIntern(reference<hash<QueryInfo>> info, string sql, list<string> setop_keys,
+            *hash<auto> opt) {
+        int n = 0;
+        foreach string key in (setop_keys) {
+            auto v = info.query_hash{key};
+            list<auto> operands = v.typeCode() == NT_LIST ? v : (v,);
+            if (!operands) {
+                throw "SELECT-ERROR", sprintf("%s: the %y select option has no select", getDesc(), key);
+            }
+            string op_sql = getSetOperatorSql(key);
+            foreach auto operand in (operands) {
+                if (operand.typeCode() != NT_HASH) {
+                    throw "SELECT-ERROR", sprintf("%s: the %y select option expects a select hash or a hash with "
+                        "\"table\" and \"select\" keys; got type %y instead", getDesc(), key, operand.type());
+                }
+                # the table of the select and its select hash
+                AbstractTable t = self;
+                *hash<auto> sh;
+                if (operand.hasKey("table") || operand.hasKey("select")) {
+                    if (*hash<auto> other = operand - ("table", "select")) {
+                        throw "SELECT-ERROR", sprintf("%s: the %y select option has a hash with unknown keys %y; "
+                            "expecting \"table\" and \"select\"", getDesc(), key, keys other);
+                    }
+                    if (exists operand.table) {
+                        t = getSetOperandTableIntern(key, operand.table, opt);
+                        validateSetOperationDatasource(t, key);
+                    }
+                    if (exists operand.select && operand.select.typeCode() != NT_HASH) {
+                        throw "SELECT-ERROR", sprintf("%s: the \"select\" key of the %y select option expects a "
+                            "select hash; got type %y instead", getDesc(), key, operand.select.type());
+                    }
+                    sh = operand.select;
+                } else {
+                    sh = operand;
+                }
+                if (sh) {
+                    t.validateOptionsIntern("OPTION-ERROR", t.getSelectOptions(), \sh);
+                }
+                # issue #3544: the WITH clause of a recursive query is at the start of the statement
+                if (exists sh.recursive) {
+                    throw "RECURSIVE-QUERY-ERROR", sprintf("%s: a select of the %y select option cannot be a "
+                        "recursive query", getDesc(), key);
+                }
+                string osql = t.getSelectSqlStringIntern(sh, \info.args, opt);
+                # a select with ordering or paging, or with set operators of its own, is selected from, as a member
+                # of a set operation cannot have them
+                if (sh{SetOperationResultOptions} || sh{keys SetOperatorSql}) {
+                    osql = sprintf("select * from (%s) qore_setop_r%d", osql, n);
+                }
+                # the operators are applied from left to right
+                if (n) {
+                    sql = sprintf("select * from (%s) qore_setop_l%d", sql, n);
+                }
+                sql += " " + op_sql + " " + osql;
+                ++n;
+            }
+        }
+        return sql;
+    }
+
+    #! Returns the table of a select of a set operator
+    private AbstractTable getSetOperandTableIntern(string key, auto table, *hash<auto> opt) {
+        switch (table.typeCode()) {
+            case NT_STRING:
+                return getSubtableFromString(table, opt);
+            case NT_OBJECT:
+                if (table instanceof AbstractTable) {
+                    return table;
+                }
+                if (table instanceof Table) {
+                    return cast<Table>(table).getTable();
+                }
+                break;
+        }
+        throw "SELECT-ERROR", sprintf("%s: the \"table\" key of the %y select option expects an AbstractTable or Table "
+            "object or a table name; got %y instead", getDesc(), key, table.type());
+    }
+
+    #! Returns @ref True if the database supports recursive queries
+    /** @return @ref True if the database supports the @ref select_option_recursive "recursive" select option;
+        @ref False if a select with it raises \c RECURSIVE-QUERY-ERROR
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    bool supportsRecursiveQueries() {
+        return !exists getRecursiveQueryUnsupportedReasonImpl();
+    }
+
+    #! Returns the record type of a recursive query
+    /** @param recursive the value of the @ref select_option_recursive "recursive" select option
+        @param opt optional call options; the \c "tablecode" option is used to resolve table names
+
+        @return the fields of the rows of the common table expression: a column of the anchor that is a column of a
+        table, or a @ref SqlUtil::cop_as() "cop_as()" of one, has the type of that column, a
+        @ref SqlUtil::cop_cast() "cop_cast()" the type that it gives, a @ref SqlUtil::cop_value() "cop_value()" the
+        type of its value, and the depth column is an \c int; the type of any other column is \c auto
+
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query, or the database does not support recursive queries
+
+        @see @ref select_option_recursive
+
+        @since %SqlUtil 3.11.0
+    */
+    hash<string, AbstractDataField> getRecursiveQueryRecordType(hash<auto> recursive, *hash<auto> opt) {
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+            getColumnsUnlocked();
+        }
+        hash<auto> rq = prepareRecursiveQueryIntern(recursive, opt);
+        AbstractTable cte = rq.cte;
+        hash<string, AbstractDataField> rv();
+        foreach string col in (rq.columns) {
+            string key = col.lwr();
+            if (col == rq.depth) {
+                rv{key} = new QoreDataField(key, "the depth of the row in the recursive query", IntType);
+            } else if (rq.typed{col}) {
+                rv{key} = cte.getColumnDataField(col);
+            } else {
+                rv{key} = new QoreDataField(key, "a column of the recursive query", AutoType);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns @ref nothing if the database supports recursive queries, otherwise why it does not
+    /** The default implementation returns that the driver does not support them; a driver whose database supports
+        them overrides it
+
+        @return @ref nothing if the database supports the @ref select_option_recursive "recursive" select option,
+        otherwise a description of why it does not, for the message of \c RECURSIVE-QUERY-ERROR
+
+        @since %SqlUtil 3.11.0
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
+        return sprintf("the %s driver does not support recursive queries", ds.getDriverName());
+    }
+
+    #! Returns the SQL keyword(s) that start the WITH clause of a recursive query
+    /** @return \c "with recursive" by default; a driver whose database has no \c RECURSIVE keyword overrides it
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveWithSqlImpl() {
+        return "with recursive";
+    }
+
+    #! Returns @ref True if the database supports \c UNION (without \c ALL) between the anchor and the step of a recursive query
+    /** @since %SqlUtil 3.11.0
+    */
+    private bool recursiveQuerySupportsUnionDistinctImpl() {
+        return True;
+    }
+
+    #! Returns the largest \c max_depth of a recursive query that the database can run, or @ref nothing if it has no limit
+    /** @since %SqlUtil 3.11.0
+    */
+    private *int getRecursiveQueryMaxDepthLimitImpl() {
+    }
+
+    #! Returns the SQL of a recursive query from its WITH clause and the select from its common table expression
+    /** The default implementation returns the WITH clause followed by the select; a driver overrides it to add a
+        clause for the recursion limit of the database
+
+        @param with_sql the WITH clause, with the common table expression
+        @param select_sql the select from the common table expression
+        @param rq the prepared recursive query; \c max_depth is the depth limit of the query, if any
+
+        @return the SQL of the recursive query
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveQuerySqlImpl(string with_sql, string select_sql, hash<auto> rq) {
+        return with_sql + " " + select_sql;
+    }
+
+    #! the prefix of the key of the depth limit in the where hash of the step of a recursive query
+    /** a disposable unique prefix, which is removed from the column name (see @ref where_clauses)
+    */
+    const RecursiveDepthWherePrefix = "35440:";
+
+    #! Marks the object as the common table expression of a recursive query
+    private setRecursiveCte() {
+        recursive_cte = True;
+    }
+
+    #! Returns the SQL of a recursive query (issue #3544)
+    private string getRecursiveSelectSqlIntern(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
+        foreach string key in (RecursiveQueryRefusedOptions) {
+            if (exists qh{key}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y select option cannot be combined with the "
+                    "\"recursive\" select option", getDesc(), key);
+            }
+        }
+        hash<auto> rq = prepareRecursiveQueryIntern(qh.recursive, opt);
+        if (!exists args) {
+            args = ();
+        }
+        AbstractTable anchor_table = rq.anchor_table;
+        AbstractTable step_table = rq.step_table;
+        AbstractTable cte = rq.cte;
+        # the values are bound in the order of the SQL: the anchor, the step and the select from the CTE
+        string anchor_sql = anchor_table.getSelectSqlStringIntern(rq.anchor, \args, opt);
+        string step_sql = step_table.getSelectSqlStringIntern(rq.step, \args, opt);
+        string select_sql = cte.getSelectSqlStringIntern(qh - "recursive", cte.getSqlName(), \args, NOTHING, opt);
+        string with_sql = sprintf("%s %s (%s) as (%s %s %s)", getRecursiveWithSqlImpl(), cte.getSqlName(),
+            (foldl $1 + ", " + $2, (map cte.getColumnSqlName($1), rq.columns)), anchor_sql,
+            rq.union_all ? "union all" : "union", step_sql);
+        return getRecursiveQuerySqlImpl(with_sql, select_sql, rq);
+    }
+
+    #! Validates a recursive query and prepares its parts (issue #3544)
+    /** @return a hash with the following keys:
+        - \c cte: the table object that stands for the common table expression
+        - \c name: the name of the common table expression
+        - \c columns: the columns of the common table expression, with the depth column, if any
+        - \c typed: the columns whose type is known
+        - \c anchor_table, \c anchor: the table and the select option hash of the anchor
+        - \c step_table, \c step: the table and the select option hash of the step, joined with the common table
+          expression
+        - \c union_all: @ref True for \c UNION \c ALL
+        - \c depth: the depth column, if any
+        - \c max_depth: the depth limit, if any
+    */
+    private hash<auto> prepareRecursiveQueryIntern(hash<auto> recursive, *hash<auto> opt) {
+        if (*hash<auto> unknown = recursive - keys RecursiveQueryKeys) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option has unknown key(s) %y; "
+                "known keys: %y", getDesc(), keys unknown, keys RecursiveQueryKeys);
+        }
+        if (*string why = getRecursiveQueryUnsupportedReasonImpl()) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: %s", getDesc(), why);
+        }
+
+        # the name of the CTE and its columns
+        auto name = recursive.name ?? RecursiveQueryDefaultName;
+        checkRecursiveQueryName(name, "the name of the common table expression");
+        if (recursive.columns.typeCode() != NT_LIST || !recursive.columns) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"columns\" key of the \"recursive\" select option must "
+                "give the list of the columns of the common table expression; got %y instead", getDesc(),
+                recursive.columns);
+        }
+        list<string> cols = ();
+        hash<string, bool> col_map;
+        foreach auto col in (recursive.columns) {
+            checkRecursiveQueryName(col, "a column of the common table expression");
+            if (col_map{col.lwr()}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the column %y of the common table expression is given "
+                    "more than once", getDesc(), col);
+            }
+            col_map{col.lwr()} = True;
+            cols += col;
+        }
+
+        # the depth column and limit
+        *string depth;
+        if (exists recursive.depth) {
+            checkRecursiveQueryName(recursive.depth, "the depth column");
+            depth = recursive.depth;
+            if (col_map{depth.lwr()}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the depth column %y is also a column of the common table "
+                    "expression", getDesc(), depth);
+            }
+        }
+        *int max_depth;
+        if (exists recursive.max_depth) {
+            if (recursive.max_depth.typeCode() != NT_INT || recursive.max_depth < 0) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"max_depth\" key of the \"recursive\" select option "
+                    "must be an integer that is not negative; got %y instead", getDesc(), recursive.max_depth);
+            }
+            if (!depth) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"max_depth\" key of the \"recursive\" select option "
+                    "needs the \"depth\" key, which gives the depth column", getDesc());
+            }
+            max_depth = recursive.max_depth;
+            *int limit = getRecursiveQueryMaxDepthLimitImpl();
+            if (exists limit && max_depth > limit) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %s driver runs recursive queries to a depth of at "
+                    "most %d; \"max_depth\" is %d", getDesc(), ds.getDriverName(), limit, max_depth);
+            }
+        }
+
+        # UNION ALL or UNION
+        bool union_all;
+        switch (recursive."union") {
+            case NOTHING:
+            case "all":
+                union_all = True;
+                break;
+            case "distinct":
+                if (!recursiveQuerySupportsUnionDistinctImpl()) {
+                    throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %s driver needs UNION ALL in a recursive query; "
+                        "use \"union\": \"all\" with \"depth\" and \"max_depth\"", getDesc(), ds.getDriverName());
+                }
+                union_all = False;
+                break;
+            default:
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"union\" key of the \"recursive\" select option "
+                    "must be \"all\" or \"distinct\"; got %y instead", getDesc(), recursive."union");
+        }
+
+        # the anchor and the step
+        AbstractTable anchor_table;
+        hash<auto> anchor = getRecursiveQueryMemberIntern("anchor", recursive.anchor, cols.size(), opt,
+            \anchor_table);
+        AbstractTable step_table;
+        hash<auto> step = getRecursiveQueryMemberIntern("step", recursive.step, cols.size(), opt, \step_table);
+
+        # the descriptions of the columns of the CTE from the anchor's columns
+        hash<string, hash<auto>> desc_columns;
+        hash<string, bool> typed;
+        foreach string col in (cols) {
+            *hash<auto> cdesc = getRecursiveQueryColumnDescIntern(anchor_table, anchor, anchor.columns[$#], opt);
+            if (cdesc) {
+                typed{col} = True;
+            } else {
+                # an expression of an unknown type; the description is only used to name the column
+                cdesc = {"qore_type": Type::String, "size": 4000};
+            }
+            desc_columns{col} = cdesc;
+        }
+        if (depth) {
+            desc_columns{depth} = {"qore_type": Type::Int, "notnull": True};
+            cols += depth;
+        }
+        AbstractTable cte = new Table(ds, {"columns": desc_columns}, name).getTable();
+        cte.setRecursiveCte();
+
+        # the step references the CTE by a join
+        *string cte_alias;
+        foreach hash<auto> i in (step.join.pairIterator()) {
+            if (i.value.typeCode() != NT_HASH || !i.value.opt.recursive_cte) {
+                continue;
+            }
+            if (cte_alias) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the step of the recursive query joins the common table "
+                    "expression more than once", getDesc());
+            }
+            cte_alias = i.value.alias;
+            step.join{i.key}.table = cte;
+            remove step.join{i.key}.opt;
+        }
+        if (!cte_alias) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the step of the recursive query does not join the common "
+                "table expression; use join_inner_recursive() or join_left_recursive() in its \"join\" option",
+                getDesc());
+        }
+
+        if (depth) {
+            # the anchor's rows have depth 0, and each step adds 1
+            anchor.columns = appendRecursiveQueryColumn(anchor.columns, cop_value(0));
+            step.columns = appendRecursiveQueryColumn(step.columns, cop_plus(cte_alias + "." + depth, cop_value(1)));
+            if (exists max_depth) {
+                hash<auto> cond = {cte_alias + "." + depth: op_lt(max_depth)};
+                switch (step."where".typeCode()) {
+                    case NT_NOTHING:
+                        step."where" = cond;
+                        break;
+                    case NT_LIST:
+                        # a list of conditions is an "or" of them: the limit is added to each
+                        step."where" = map {RecursiveDepthWherePrefix + cte_alias + "." + depth: op_lt(max_depth)}
+                            + $1, step."where";
+                        break;
+                    default:
+                        if (step."where" instanceof hash<DataProviderExpression>) {
+                            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the where clause of the step of a recursive "
+                                "query with \"max_depth\" must be a where hash or a list of where hashes; got a "
+                                "DPQL expression", getDesc());
+                        }
+                        step."where" = {RecursiveDepthWherePrefix + cte_alias + "." + depth: op_lt(max_depth)}
+                            + step."where";
+                        break;
+                }
+            }
+        }
+
+        return {
+            "cte": cte,
+            "name": name,
+            "columns": cols,
+            "typed": typed,
+            "anchor_table": anchor_table,
+            "anchor": anchor,
+            "step_table": step_table,
+            "step": step,
+            "union_all": union_all,
+            "depth": depth,
+            "max_depth": max_depth,
+        };
+    }
+
+    #! Returns the given columns of a select with another column, in a list that can hold any column
+    private static list<auto> appendRecursiveQueryColumn(list<auto> cols, auto col) {
+        list<auto> rv = ();
+        foreach auto c in (cols) {
+            push rv, c;
+        }
+        push rv, col;
+        return rv;
+    }
+
+    #! Checks the name of the common table expression of a recursive query or of one of its columns
+    private checkRecursiveQueryName(auto name, string what) {
+        if (name.typeCode() != NT_STRING) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: %s must be a string; got type %y instead", getDesc(), what,
+                name.type());
+        }
+        AbstractSqlUtilBase::checkIdentifier(name, ds.getDriverName());
+        # a name with a dot is read as an alias and a column in a column reference
+        if (name =~ /\./ || name =~ /^[0-9]+:/) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: %s %y cannot have a \".\" or start with digits and a \":\"",
+                getDesc(), what, name);
+        }
+    }
+
+    #! Returns the select option hash of the anchor or the step of a recursive query, with its table
+    private hash<auto> getRecursiveQueryMemberIntern(string key, auto member, int count, *hash<auto> opt,
+            reference<AbstractTable> t) {
+        if (member.typeCode() != NT_HASH) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y key of the \"recursive\" select option expects a "
+                "select option hash or a hash with \"table\" and \"select\" keys; got type %y instead", getDesc(),
+                key, member.type());
+        }
+        t = self;
+        *hash<auto> sh;
+        if (member.hasKey("table") || member.hasKey("select")) {
+            if (*hash<auto> other = member - ("table", "select")) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y key of the \"recursive\" select option has a hash "
+                    "with unknown keys %y; expecting \"table\" and \"select\"", getDesc(), key, keys other);
+            }
+            if (exists member.table) {
+                t = getSetOperandTableIntern(key, member.table, opt);
+                validateSetOperationDatasource(t, "recursive query " + key);
+            }
+            if (member.select.typeCode() != NT_HASH) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"select\" key of the %y of the recursive query "
+                    "expects a select option hash; got type %y instead", getDesc(), key, member.select.type());
+            }
+            sh = member.select;
+        } else {
+            sh = member;
+        }
+        t.validateOptionsIntern("OPTION-ERROR", t.getSelectOptions(), \sh);
+        foreach string opt_key in (RecursiveQueryMemberRefusedOptions) {
+            if (exists sh{opt_key}) {
+                throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y of a recursive query cannot have the %y select "
+                    "option", getDesc(), key, opt_key);
+            }
+        }
+        if (sh.columns.typeCode() != NT_LIST || sh.columns.size() != count) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y of the recursive query must give a list of %d "
+                "column(s) in its \"columns\" option, one for each column of the common table expression; got %y "
+                "instead", getDesc(), key, count, sh.columns);
+        }
+        return sh;
+    }
+
+    #! Returns the description of the column of a recursive query that the given column of its anchor gives, or @ref nothing if its type is not known
+    private *hash<auto> getRecursiveQueryColumnDescIntern(AbstractTable t, hash<auto> anchor, auto col,
+            *hash<auto> opt) {
+        switch (col.typeCode()) {
+            case NT_STRING: {
+                # a column of the anchor's table or of a table that it joins
+                col =~ s/^[0-9]+://;
+                AbstractTable ct = t;
+                *string prefix = (col =~ x/^(\w+)\..+/)[0];
+                if (prefix) {
+                    splice col, 0, prefix.size() + 1;
+                    if (prefix != anchor.alias) {
+                        *AbstractTable jt = getRecursiveQueryJoinTableIntern(anchor, prefix, opt);
+                        if (!jt) {
+                            return;
+                        }
+                        ct = jt;
+                    }
+                }
+                *AbstractColumn c = ct.describe(){col};
+                if (!c) {
+                    return;
+                }
+                hash<auto> desc = c.getDescriptionHash();
+                # the description gives the type of the column only
+                return desc{"qore_type", "native_type", "size", "scale"};
+            }
+            case NT_HASH: {
+                switch (col.cop) {
+                    case COP_AS:
+                        return getRecursiveQueryColumnDescIntern(t, anchor, col.column, opt);
+                    case COP_CAST: {
+                        string type = col.arg[0];
+                        hash<auto> desc;
+                        if (RecursiveQueryCastTypes{type.lwr()}) {
+                            desc.qore_type = RecursiveQueryCastTypes{type.lwr()};
+                        } else {
+                            desc.native_type = type;
+                        }
+                        if (exists col.arg[1] && col.arg[1] != "*") {
+                            desc.size = col.arg[1];
+                        }
+                        if (exists col.arg[2]) {
+                            desc.scale = col.arg[2];
+                        }
+                        if (desc.qore_type == Type::String && !exists desc.size) {
+                            desc.size = 4000;
+                        }
+                        return desc;
+                    }
+                    case COP_VALUE: {
+                        switch (col.arg.typeCode()) {
+                            case NT_INT: return {"qore_type": Type::Int};
+                            case NT_FLOAT: return {"qore_type": Type::Float};
+                            case NT_NUMBER: return {"qore_type": Type::Number};
+                            case NT_DATE: return {"qore_type": Type::Date};
+                            case NT_STRING: return {"qore_type": Type::String, "size": max(col.arg.length(), 1)};
+                        }
+                        return;
+                    }
+                }
+                return;
+            }
+        }
+    }
+
+    #! Returns the table that the anchor of a recursive query joins with the given alias or name, if any
+    private *AbstractTable getRecursiveQueryJoinTableIntern(hash<auto> anchor, string alias, *hash<auto> opt) {
+        foreach auto js in (anchor.join.iterator()) {
+            if (js.typeCode() != NT_HASH) {
+                continue;
+            }
+            auto table = js.table;
+            *string jname = js.alias;
+            if (!jname) {
+                if (table.typeCode() == NT_STRING) {
+                    jname = table;
+                } else if (table instanceof AbstractTable || table instanceof Table) {
+                    jname = table.getName();
+                }
+            }
+            if (jname != alias) {
+                continue;
+            }
+            if (table.typeCode() == NT_STRING) {
+                return getSubtableFromString(table, opt);
+            }
+            if (table instanceof AbstractTable) {
+                return table;
+            }
+            if (table instanceof Table) {
+                return cast<Table>(table).getTable();
+            }
+        }
+    }
+
+    #! Returns the SQL keyword of a set operator
+    /** The default implementation returns the standard SQL keyword; a driver whose database has another keyword or
+        does not support the operator overrides it
+
+        @param op the set operator: \c "union", \c "union_all", \c "intersect" or \c "except"
+
+        @return the SQL of the operator
+
+        @throw SET-OPERATOR-ERROR the database does not support the set operator
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getSetOperatorSql(string op) {
+        return SetOperatorSql{op};
     }
 
     #! Returns the given table from the argument, resolving a table name to a table object
@@ -6353,6 +7121,12 @@ string sql = table.getSelectSql(sh, \args);
         return getGroupOrderByListIntern(info, "orderby", coll);
     }
 
+    #! returns True if the name is a column alias of a distinct column (ex: <tt>cop_as(cop_distinct("x"), "y")</tt>)
+    private static bool isDistinctAliasIntern(hash<QueryInfo> info, string name) {
+        auto def = info.pseudo_column_map{name};
+        return def.typeCode() == NT_STRING && def =~ /^distinct\s+/i;
+    }
+
     private list<auto> getGroupOrderByListIntern(hash<QueryInfo> info, string key, list<auto> coll) {
         list<auto> ce = ();
 
@@ -6377,10 +7151,15 @@ string sql = table.getSelectSql(sh, \args);
         foreach auto cv in (info.query_hash{key}) {
             switch (cv.typeCode()) {
                 case NT_STRING: {
-                    if (cv.toInt() == cv)
+                    if (cv.toInt() == cv) {
                         do_int(cv.toInt());
-                    else
+                    } else if (key == "orderby" && isDistinctAliasIntern(info, cv)) {
+                        # issue #6331: a select-list alias of a distinct column is ordered by its name, which every
+                        # database accepts in "order by"; its definition is not an expression
+                        ce += getAliasSqlName(cv);
+                    } else {
                         ce += getColumnNameIntern(info, cv);
+                    }
                     break;
                 }
 
@@ -6422,6 +7201,35 @@ string sql = table.getSelectSql(sh, \args);
         l.lock();
         on_exit l.unlock();
         return getPartitionReadSqlNameImpl(qh.partition);
+    }
+
+    #! Returns the SQL of a column operator given as the join column of a column in a join
+    /** The columns of the operator that are given without a table alias are columns of the joined table
+
+        @param info the query information
+        @param t the joined table
+        @param an the alias of the joined table in SQL, or its name if it has no alias
+        @param key the column of the other table that the operator's value is compared with
+        @param cop the column operator description hash
+
+        @return the SQL of the operator
+
+        @throw SELECT-ERROR the operator gives a column alias, which a join condition cannot use
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getJoinColumnOperatorIntern(reference<hash<QueryInfo>> info, AbstractTable t, string an,
+            string key, hash<auto> cop) {
+        hash<QueryInfo> cinfo = info;
+        cinfo.table = t;
+        cinfo.column_prefix = an;
+        string sql = t.doColumnOperatorIntern(\cinfo, cop);
+        if (cinfo.pseudo_column_map != info.pseudo_column_map) {
+            throw "SELECT-ERROR", sprintf("%s: cannot use column operator %y with a column alias in the join column "
+                "for column %y", getDesc(), cop.cop, key);
+        }
+        info.args = cinfo.args;
+        return sql;
     }
 
     private string getColumnExpressionIntern(reference<hash<QueryInfo>> info, auto cvc) {
@@ -6507,7 +7315,13 @@ string sql = table.getSelectSql(sh, \args);
             # an alias is quoted when required, in the case given, as it names the key of the result
             switch (arg.typeCode()) {
                 case NT_STRING: arg = getAliasSqlName(arg); break;
-                case NT_HASH: arg.as = getAliasSqlName(arg.as); break;
+                case NT_HASH: {
+                    # issue #2847: the alias is optional (ex: cop_seq() without one in insertFromSelect())
+                    if (exists arg.as) {
+                        arg.as = getAliasSqlName(arg.as);
+                    }
+                    break;
+                }
             }
             return cmd.code(cve, arg, \info.pseudo_column_map);
         } else if (cmd.withcolumn) {
@@ -6518,7 +7332,13 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
-    private string getColumnNameIntern(hash<QueryInfo> info, string column_name) {
+    #! returns the SQL for a column designator
+    /** @param info the query information
+        @param column_name the column designator
+        @param prefer_column if @ref True "True", a designator that is both a column of the table and a column alias
+        of the query names the column, as in SQL; used for where clauses (issue #1747)
+    */
+    private string getColumnNameIntern(hash<QueryInfo> info, string column_name, bool prefer_column = False) {
         # remove any disposable unique prefix
         column_name =~ s/^[0-9]+://;
         # return the name if it's a "technical name" (starts with "_"), as an identifier, so that it cannot change
@@ -6549,10 +7369,16 @@ string sql = table.getSelectSql(sh, \args);
                     "table %y); known columns: %y", getDesc(), table_prefix, column_name, table_prefix,
                     info.join_map{table_prefix}.getSqlName(),
                     keys info.join_map{table_prefix}.describe());
-        } else if (info.pseudo_column_map{column_name}) {
+        } else if (info.pseudo_column_map{column_name} && !(prefer_column && columns.hasKey(column_name))) {
             if (info.pseudo_column_map{column_name}.typeCode() == NT_STRING) {
                 # substitute aliases with their actual definition
                 column_name = info.pseudo_column_map{column_name};
+                # issue #6332: DISTINCT applies to the select list, so where an alias of a distinct column is used
+                # in an expression (a where clause or group by), it stands for the column, which already has its
+                # table prefix in a join
+                if (column_name =~ /^distinct\s+/i) {
+                    return regex_subst(column_name, "^distinct\\s+", "", RE_Caseless);
+                }
             }
             # issue #4214: use table prefixes in a join for pseudocolumns
             return use_prefix ? sprintf("%s.%s", getSqlName(), column_name) : column_name;
@@ -6562,7 +7388,8 @@ string sql = table.getSelectSql(sh, \args);
                     "%y", getDesc(), column_name, keys info.subquery_column_map);
             }
         } else {
-            table_prefix_sql = getSqlName();
+            # issue #738: the columns of a column operator in a join column are given with the joined table's alias
+            table_prefix_sql = info.column_prefix ?? getSqlName();
             if (column_name == "*") {
                 use_prefix = asteriskRequiresPrefix();
             } else if (!columns.hasKey(column_name) && !info.pseudo_column_map{column_name}) {
@@ -6707,7 +7534,7 @@ string sql = table.getSelectSql(sh, \args);
         return
             map doWhereExpressionIntern(\info, cprefix
                 ? sprintf("%s.%s", cprefix, getColumnSqlName(regex_subst($1.key, "^[0-9]+:", "")))
-                : getColumnNameIntern(info, $1.key), $1.value, $1.key, cprefix),
+                : getColumnNameIntern(info, $1.key, True), $1.value, $1.key, cprefix),
             cond.pairIterator();
     }
 
@@ -6791,6 +7618,18 @@ string sql = table.getSelectSql(sh, \args);
                     "of: %y (operator hash: %y)", getDesc(), cn, we.op, keys info.where_operator_map, we);
             }
 
+            # issue #2363: an operator that applies a column operator to the column, such as op_trunc_date(), whose
+            # result is compared with the operator's value or operator hash; the database's own implementation of
+            # the column operator is used
+            if (cmd.column_cop) {
+                if (we.arg.typeCode() != NT_HASH || !we.arg.hasKey("arg")) {
+                    throw "WHERE-ERROR", sprintf("%s: operator hash for key %y expects a hash with \"cop_arg\" and "
+                        "\"arg\" keys as its argument; got %y instead", getDesc(), cn, we.arg);
+                }
+                string ccn = doColumnOperatorIntern(\info, cmd.column_cop, we.arg.cop_arg, cn, column_name);
+                return doWhereExpressionIntern(\info, ccn, we.arg.arg, NOTHING, cprefix);
+            }
+
             if (cmd.recursive) {
                 cn = doWhereExpressionIntern(\info, cn, we.arg, column_name, cprefix);
                 delete we.arg;
@@ -6867,6 +7706,8 @@ int dcnt = table.delCommit(("name": name));
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see delete(*hash)
@@ -6918,6 +7759,8 @@ int dcnt = table.del(("name": name));
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see delCommit(*hash)
@@ -6956,6 +7799,8 @@ hash<SqlResultInfo> info = table.delWithInfo({"name": name});
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more info
 
         @return a hash where the \c result key is the count of rows deleted
+
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
 
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
@@ -7265,6 +8110,8 @@ int dcnt = table.delDpqlCommit('@status == "inactive"');
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7312,6 +8159,8 @@ int dcnt = table.delDpql('@status == "inactive"');
 
         @return the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7345,6 +8194,8 @@ int dcnt = table.delDpql('@status == "inactive"');
 
         @return a hash where the \c result key is the count of rows deleted
 
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
@@ -7362,7 +8213,27 @@ int dcnt = table.delDpql('@status == "inactive"');
         return del(cond, \sql);
     }
 
+    #! checks the options of an update or a delete, which are @ref SqlDataCallbackOptions
+    /** @param op the operation, for the error message: \c "update" or \c "delete"
+        @param opt the options
+
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
+
+        @since %SqlUtil 3.11.0
+    */
+    private validateDataOptionsIntern(string op, reference<*hash<auto>> opt) {
+        # issue #757: the "returning" option was silently ignored, as were other unknown options
+        if (exists opt.returning) {
+            throw "OPTION-ERROR", sprintf("%s: the \"returning\" option is not supported with %s; it is supported "
+                "only with insert", getDesc(), op);
+        }
+        if (opt) {
+            validateOptionsIntern("OPTION-ERROR", getSqlDataCallbackOptions(), \opt);
+        }
+    }
+
     private int delIntern(*hash<auto> cond, *reference<string> sql, *hash<auto> opt, *reference<softlist<auto>> args) {
+        validateDataOptionsIntern("delete", \opt);
         # make query
         sql = sprintf("delete from %s", getSqlName());
         if (cond) {
@@ -7388,6 +8259,7 @@ int ucnt = table.updateCommit(("id": id), ("name": name));
         @return the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see update()
@@ -7442,6 +8314,7 @@ int ucnt = table.update(("id": id), ("name": name));
         @return the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @see updateCommit()
@@ -7486,6 +8359,7 @@ hash<SqlResultInfo> info = table.updateWithInfo({"id": id}, {"name": name});
         @return an info hash where the \c result key is assigned to the count of rows updated
 
         @throw UPDATE-ERROR the set hash is empty
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments given in the cond hash for the where clause
 
         @since SqlUtil 1.7
@@ -7645,6 +8519,7 @@ int ucnt = table.updateDpqlCommit({"counter": "@counter + 1"}, '@status == "acti
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7701,6 +8576,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7741,6 +8617,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         @throw DPQL-PARSE-ERROR invalid DPQL syntax
         @throw UPDATE-ERROR the set hash is empty or invalid
+        @throw OPTION-ERROR an unknown option, or the \c "returning" option, which only an insert supports
         @throw WHERE-ERROR unknown operator or invalid arguments generated for the where clause
         @throw COLUMN-ERROR invalid column reference
 
@@ -7806,10 +8683,20 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
                 exp += getColumnNameIntern(qinfo, value.field);
             } else if (value instanceof hash<DataProviderExpression>) {
                 exp += getExpressionIntern(\qinfo, ER_Field, value, getColumnDataType(key));
-            } else if (value.uop) {
+            } else if (value.typeCode() == NT_HASH && value.hasKey("cop")) {
+                # issue #2962: a column operator gave INVALID-MEMBER for the missing "uop" key
+                throw "UPDATE-ERROR", sprintf("%s: column %y: column operators (%y given) are not supported in the "
+                    "set clause of an update; use an update operator (see the uop_*() functions, ex: "
+                    "uop_plus(5) for <col> = <col> + 5), a field reference or an expression instead", getDesc(),
+                    key, value.cop);
+            } else if (value instanceof hash<OperatorInfo>) {
+                throw "UPDATE-ERROR", sprintf("%s: column %y: where operators (%y given) are not supported in the set "
+                    "clause of an update; use an update operator (see the uop_*() functions)", getDesc(), key,
+                    value.op);
+            } else if (value.typeCode() == NT_HASH && value.hasKey("uop") && value.uop) {
                 exp += getUpdateExpression(getColumnSqlName(key), cast<hash<UpdateOperatorInfo>>(value));
             } else {
-                exp += "%v";
+                exp += getColumnValuePlaceholder(key);
                 qinfo.args += value;
             }
             sl += exp;
@@ -7839,6 +8726,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
     private int updateIntern(hash<auto> set, *hash<auto> cond, *reference<string> sql, *hash<auto> opt,
             *reference<softlist<auto>> args) {
+        validateDataOptionsIntern("update", \opt);
         hash<SqlCommandInfo> update_hash = getUpdateSql(set, cond);
         sql = update_hash.sql;
         args = update_hash.args;
@@ -7896,31 +8784,49 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         string arg = (uh.nest ? getUpdateExpression(col, cast<hash<UpdateOperatorInfo>>(uh.nest)) : col);
 
-        on_error printf("uh: %y\n", uh);
         return cmd.code(arg, uh.arg);
     }
 
+    #! Returns @ref True "True" if the table has no data rows, @ref False "False" if not
     private bool emptyDataIntern() {
         list<auto> args;
         string sql = getSelectSql({"limit": 1}, \args);
-        return boolean(ds.vselectRow(sql, args));
+        return !ds.vselectRow(sql, args);
     }
 
     private Columns checkUpsertRow(hash<auto> row, reference<int> upsert_strategy) {
         return getAllUpsertColumns(row).firstValue();
     }
 
+    #! Returns a closure that inserts a row and updates the row with its upsert key if the insert is a duplicate
+    /** A duplicate-row error on the insert does not say which unique key the row conflicts with: when it conflicts
+        with a unique key other than the upsert key, no row has the upsert key, and the update matches no row.  The
+        row is then inserted again without catching the error, so that the conflict raises the driver's exception,
+        as with @ref UpsertUpdateFirst; the row is never dropped, and no other row is changed.
+    */
     private code<int(hash<auto>)> getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
+        # a row with only key columns (or with all other columns omitted from the update) has nothing to update
+        *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols);
 
         return int sub (hash<auto> row) {
-            if (tryInsertImpl(insert_sql, row))
+            if (tryInsertImpl(insert_sql, row)) {
                 return UR_Inserted;
+            }
 
-            tryUpdate(update_sql, row, cols, updc);
-            return UR_Verified;
+            if (key_sql) {
+                if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
+                    return UR_Verified;
+                }
+            } else if (tryUpdate(update_sql, row, cols, updc)) {
+                return UR_Verified;
+            }
+
+            # the duplicate was on another unique key: raise it
+            ds.vexec(insert_sql, row.values());
+            return UR_Inserted;
         };
     }
 
@@ -7963,12 +8869,35 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         };
     }
 
+    #! Returns a closure that inserts a row unless a row with its upsert key exists
+    /** A duplicate-row error on the insert does not say which unique key the row conflicts with: when no row has
+        the upsert key, the row conflicts with another unique key, and it is inserted again without catching the
+        error, so that the conflict raises the driver's exception instead of the row being dropped as unchanged.
+    */
     private code<int(hash<auto>)> getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
+        string key_sql = getUpsertKeySelectSql(cols);
 
         return int sub (hash<auto> row) {
-            return tryInsertImpl(insert_sql, row) ? UR_Inserted : UR_Unchanged;
+            if (tryInsertImpl(insert_sql, row)) {
+                return UR_Inserted;
+            }
+            if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
+                return UR_Unchanged;
+            }
+
+            # the duplicate was on another unique key: raise it
+            ds.vexec(insert_sql, row.values());
+            return UR_Inserted;
         };
+    }
+
+    #! Returns SQL that selects the row with the upsert key given by the bind values of the key columns in order
+    private string getUpsertKeySelectSql(Columns cols) {
+        return sprintf("select %s from %s where %s",
+            (foldl $1 + ", " + $2, getColumnSqlNames(cols.keys())),
+            getSqlName(),
+            (foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator())));
     }
 
     private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
@@ -8073,7 +9002,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string sql = sprintf("insert into %s (", getSqlName());
         sql += (foldl $1 + "," + $2, (map getColumnSqlName($1), keys row));
         sql += ") values (";
-        sql += (foldl $1 + "," + $2, (map "%v", keys row));
+        sql += (foldl $1 + "," + $2, (map getColumnValuePlaceholder($1), keys row));
         sql += ")";
         return sql;
     }
@@ -8088,7 +9017,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
 
         # make sql
         string sql = sprintf("update %s set ", getSqlName());
-        sql += foldl $1 + ", " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), updc);
+        sql += foldl $1 + ", " + $2, (map getColumnSqlName($1) + " = " + getColumnValuePlaceholder($1), updc);
         sql += " where ";
         sql += foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator());
 
@@ -9712,6 +10641,12 @@ AbstractTable archived = table.finalizePartitionDetach({"bound_from": 2026-06-01
 
         # get column descriptions
         rv.columns = map {$1.key: $1.value.getDescriptionHash()}, columns.pairIterator();
+
+        # issue #1483: the comment of the table
+        *string table_comment_val = getCommentUnlocked();
+        if (table_comment_val) {
+            rv.comment = table_comment_val;
+        }
 
         # add pk desc if available
         if (!primaryKey.empty()) {
@@ -11747,7 +12682,103 @@ list<auto> l = table.getAlignSql(table2);
             }
         }
 
+        # issue #1483: the comment of the table
+        if (supportsTableComments()) {
+            # read without locking the template, as its other attributes are read here
+            *string comment = t.getCommentUnlocked();
+            if ((comment ?? "") != (getCommentUnlocked() ?? "")) {
+                l += AbstractDatabase::doCallback(opt, getTableCommentSqlImpl(comment), AbstractDatabase::AC_Modify,
+                    "table comment", name, name);
+                table_comment = comment;
+            } else {
+                AbstractDatabase::doOkCallback(opt, AbstractDatabase::AC_Unchanged, "table comment", name, name);
+            }
+        }
+
         return l;
+    }
+
+    #! Returns the comment of the table, or @ref nothing if it has none
+    /** The comment is given by the @ref table_desc_hash "description" of a table made from one, otherwise it is read
+        from the database once; it is always @ref nothing on a database whose driver does not support table comments
+
+        @return the comment of the table, or @ref nothing if it has none
+
+        @see supportsTableComments()
+
+        @since %SqlUtil 3.11.0
+    */
+    *string getComment() {
+        l.lock();
+        on_exit l.unlock();
+        return getCommentUnlocked();
+    }
+
+    #! Returns @ref True if the driver supports table comments
+    /** A table comment is created and aligned with the table, and given by getComment() and in the description of
+        the table, only on a database whose driver supports table comments; on others the \c "comment" key of a
+        @ref table_desc_hash "table description" is ignored
+
+        @return @ref True if the driver supports table comments; the default implementation returns @ref False
+
+        @since %SqlUtil 3.11.0
+    */
+    bool supportsTableComments() {
+        return False;
+    }
+
+    #! Returns the comment of the table; reads it from the database once if it is not known
+    private *string getCommentUnlocked() {
+        if (!table_comment_known) {
+            if (supportsTableComments() && !manual) {
+                *string comment = getCommentImpl();
+                # an empty comment is no comment
+                table_comment = comment.val() ? comment : NOTHING;
+            }
+            table_comment_known = True;
+        }
+        # a driver without table comments has none, also when a description gives one
+        return supportsTableComments() ? table_comment : NOTHING;
+    }
+
+    #! Returns the SQL that sets the comment of the table when it is created, if it has a comment
+    private *list<auto> getCreateTableCommentSqlUnlocked(*hash<auto> opt) {
+        if (!supportsTableComments()) {
+            return;
+        }
+        *string comment = getCommentUnlocked();
+        if (!comment) {
+            return;
+        }
+        return AbstractDatabase::doCallback(opt, getTableCommentSqlImpl(comment), AbstractDatabase::AC_Add,
+            "table comment", name, name);
+    }
+
+    #! Reads the comment of the table from the database
+    /** Drivers that support table comments (see supportsTableComments()) override it; the default implementation
+        returns @ref nothing
+
+        @return the comment of the table, or @ref nothing or an empty string if it has none
+
+        @since %SqlUtil 3.11.0
+    */
+    private *string getCommentImpl() {
+    }
+
+    #! Returns the SQL that sets the comment of the table, or removes it
+    /** Drivers that support table comments (see supportsTableComments()) override it
+
+        @param comment the new comment; @ref nothing removes the comment
+
+        @return the SQL statements that set the comment
+
+        @throw COMMENT-ERROR the driver does not support table comments
+
+        @since %SqlUtil 3.11.0
+    */
+    private softlist<string> getTableCommentSqlImpl(*string comment) {
+        throw "COMMENT-ERROR", sprintf("%s: the %y driver does not support table comments", getDesc(),
+            ds.getDriverName());
     }
 
     #! returns @ref True "True" if the constraint is the unique constraint of an index of the table
@@ -12773,6 +13804,11 @@ on_exit printf("SQL> %s\n", sql);
         validateSetOperationDatasource(source, operation);
 
         source.validateOptionsIntern("OPTION-ERROR", source.getSelectOptions(), \select_hash);
+        # issue #3544: not yet supported; see issue #6495
+        if (exists select_hash.recursive) {
+            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option is not supported by "
+                "%s", getDesc(), operation);
+        }
         args = ();
         return source.getSelectSqlStringIntern(select_hash, \args, opt);
     }
@@ -12905,6 +13941,8 @@ on_exit printf("SQL> %s\n", sql);
         }
         tl = getCreateConstraintsSqlUnlocked(opt, cache); if (tl) l += tl;
         tl = getCreateMiscSqlUnlocked(opt, cache); if (tl) l += tl;
+        # issue #1483: the comment of the table
+        tl = getCreateTableCommentSqlUnlocked(opt); if (tl) l += tl;
         if (!opt.omit.triggers) {
             tl = getCreateTriggersSqlUnlocked(opt, cache);
             if (tl) l += tl;
@@ -12964,12 +14002,36 @@ on_exit printf("SQL> %s\n", sql);
         }
     }
 
-    static AbstractTable getTable(string dsstr, string nname, *hash<auto> opts) {
+    #! Returns an AbstractTable object for a table in the database that the given connection string names
+    /** @param dsstr the datasource connection string
+        @param nname the name of the table
+        @param opts the table options
+
+        @note this variant is in the \c DATABASE @ref functional_domain_constants "functional domain": code that is
+        restricted with @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" cannot call it, also not through other code
+        (since SqlUtil 3.11.0)
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain (since SqlUtil 3.11.0)
+    */
+    static AbstractTable getTable(string dsstr, string nname, *hash<auto> opts) [dom=DATABASE] {
+        check_caller_database();
         Datasource nds(dsstr);
         return AbstractTable::getTable(nds, nname, opts);
     }
 
-    static AbstractTable getTable(hash<auto> dsh, string nname, *hash<auto> opts) {
+    #! Returns an AbstractTable object for a table in the database that the given datasource configuration names
+    /** @param dsh the datasource configuration
+        @param nname the name of the table
+        @param opts the table options
+
+        @note this variant is in the \c DATABASE @ref functional_domain_constants "functional domain": code that is
+        restricted with @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" cannot call it, also not through other code
+        (since SqlUtil 3.11.0)
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE domain (since SqlUtil 3.11.0)
+    */
+    static AbstractTable getTable(hash<auto> dsh, string nname, *hash<auto> opts) [dom=DATABASE] {
+        check_caller_database();
         Datasource nds(dsh);
         return AbstractTable::getTable(nds, nname, opts);
     }

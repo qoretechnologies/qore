@@ -1,0 +1,17 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# Types of a module, for AotTypedContainerTypes.q
+
+%new-style
+%require-types
+%strict-args
+module TypeIdMod {
+    version = "1.0"; desc = "types of a module"; author = "Qore Technologies, s.r.o."; url = "https://qore.org";
+    license = "MIT";
+}
+public class TypeIdModClass {
+}
+public hashdecl TypeIdModHash {
+    int a = 1;
+}
+public typedef TypeIdModInt = int;

@@ -39,8 +39,10 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
 
@@ -181,7 +183,7 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     sock_priv_raw->acceptAllCertificates(accept_all_certs);
     if (!ssl_ca_file.empty() || !ssl_ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
-        sock_priv_raw->setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),
+        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(ssl_ca_file.empty() ? nullptr : ssl_ca_file.c_str(),
             ssl_ca_path.empty() ? nullptr : ssl_ca_path.c_str(), xsink);
         if (*xsink) {
             return -1;
@@ -196,7 +198,7 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         if (ut_ms > 0) {
             // async-poll variant: the adopt-socket path runs on the I/O thread when the ALPN
             // handover happens from continuePoll(), where the public sync API is forbidden
-            sock_priv_raw->setUserTimeoutForAsyncPoll(ut_ms, xsink);
+            qore_socket_object_private(sock_priv_raw).setUserTimeoutForAsyncPoll(ut_ms, xsink);
         }
     }
     if (client_cert) {
@@ -348,7 +350,7 @@ int Http1ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
         if (ut_ms > 0) {
             // async-poll variant: the adopt-socket path runs on the I/O thread when the ALPN
             // handover happens from continuePoll(), where the public sync API is forbidden
-            sock_priv_raw->setUserTimeoutForAsyncPoll(ut_ms, xsink);
+            qore_socket_object_private(sock_priv_raw).setUserTimeoutForAsyncPoll(ut_ms, xsink);
         }
     }
 
@@ -912,8 +914,16 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // another thread's `rc.get()` safe — the other thread either
     // completes its call first (we wait) or gets a clean Qore exception
     // (we've already invalidated).  See HttpClientConnection.h.
+#ifdef DEBUG
+    // tests check that no two closes of the connection run at the same time
+    QoreDbgHttpCloseScope dbg_close_scope(this);
+#endif
     markInvalidated();
     drainInFlight();
+#ifdef DEBUG
+    // tests hold the close here, after new calls are refused and before the connection is closed
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+#endif
     finishStreamingSend();
 
     if (!poll_op_priv) {

@@ -48,6 +48,8 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/intern/ql_debug.h"
 
 #ifdef DEBUG
 std::atomic<void (*)(HttpClientConnectionBase*)> qore_http_manager_new_connection_hook{nullptr};
@@ -229,7 +231,7 @@ struct HttpClientConnectionManagerBase::SandboxScan {
 };
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
-        const std::string& key, bool streaming_send, SandboxScan& scan) {
+        const std::string& key, bool streaming_send, SandboxScan& scan, bool check_age) {
     auto it = pool_.find(key);
     if (it == pool_.end()) {
         return nullptr;
@@ -237,6 +239,15 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
 
     // A connection is checked against the network sandbox of the code that opened it; it is handed to other code
     // only if that code's sandbox allows its destinations, as a new connection to them would be checked
+
+    // a connection that has reached max_age is not reused: the checkout's slow path evicts it (evictDeadLocked()),
+    // which applies the same condition, and then scans without the check; ages are measured on the monotonic clock
+    // (#6150)
+    int64_t max_age_us = check_age && opts_.max_age_ms > 0 ? (int64_t)opts_.max_age_ms * 1000LL : -1;
+    int64_t now_us = max_age_us > 0 ? q_get_monotonic_us() : 0;
+    auto too_old = [max_age_us, now_us](HttpClientConnectionBase* conn) -> bool {
+        return max_age_us > 0 && conn->getActiveStreamCount() == 0 && (now_us - conn->getCreatedUs()) >= max_age_us;
+    };
 
     // For NEGOTIATE managers the pool may hold a mix of H1 and H2
     // connections under the same (host, port) key.  H2 is nearly always
@@ -253,7 +264,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
     if (opts_.protocol == HttpClientProtocol::NEGOTIATE) {
         // Pass 1: prefer H2.
         for (HttpClientConnectionBase* conn : it->second) {
-            if (conn->isClosed() || conn->isDraining()) {
+            if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
                 continue;
             }
             if (conn->getProtocol() != HttpClientProtocol::H2) {
@@ -268,7 +279,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
         }
         // Pass 2: any live H1 (or other) connection.
         for (HttpClientConnectionBase* conn : it->second) {
-            if (conn->isClosed() || conn->isDraining()) {
+            if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
                 continue;
             }
             if (conn->getProtocol() == HttpClientProtocol::H2) {
@@ -293,7 +304,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::findReusableLocked(
 
     // Fixed-protocol manager: single pass, insertion order.
     for (HttpClientConnectionBase* conn : it->second) {
-        if (conn->isClosed() || conn->isDraining()) {
+        if (conn->isClosed() || conn->isDraining() || too_old(conn)) {
             continue;
         }
         if (!scan.allows(conn)) {
@@ -321,8 +332,8 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
         ? (int64_t)opts_.max_age_ms * 1000LL : -1;
     int64_t now_us = 0;
     if (max_age_us > 0) {
-        int us = 0;
-        now_us = q_epoch_us(us) * 1000000LL + us;
+        // the creation times of the connections are on the monotonic clock (#6150)
+        now_us = q_get_monotonic_us();
     }
 
     auto write_it = conns.begin();
@@ -342,7 +353,12 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key,
         // caller can close+deref after pool_lock_ drops (closeConnection
         // is unsafe under pool_lock_, see acquireConnectionImpl shutdown
         // branch ~line 360 for the established pattern).
+        // nor one with a stream reserved by a checkout that has not submitted on it yet (#6165).  The reservations
+        // are read first: a reservation is taken under pool_lock_ (held here for writing), so none appears after
+        // the read, and a submit counts its active stream before it releases its reservation, so a reservation that
+        // was released before the read shows in the active count read after it
         if (max_age_us > 0
+                && conn->getPendingStreamCount() == 0
                 && conn->getActiveStreamCount() == 0
                 && (now_us - conn->getCreatedUs()) >= max_age_us) {
             out_to_close->push_back(conn);
@@ -381,35 +397,47 @@ void HttpClientConnectionManagerBase::detachAndDeref(HttpClientConnectionBase* c
     conn->deref(xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnection", xsink);
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true,
-        /*streaming_send=*/false, xsink);
+    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/false, xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSend(
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionForStreamingSendRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase",
         "acquireConnectionForStreamingSend", xsink);
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true,
-        /*streaming_send=*/true, xsink);
+    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/true, /*streaming_send=*/true, xsink);
 }
 
-HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsyncRef(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnectionAsync", xsink);
     if (*xsink) {
         return nullptr;
     }
-    return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false,
-        /*streaming_send=*/false, xsink);
+    return acquireConnectionChecked(scheme, host, port, /*wait_for_ready=*/false, /*streaming_send=*/false, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionChecked(const char* scheme,
+        const char* host, int port, bool wait_for_ready, bool streaming_send, ExceptionSink* xsink) {
+    HttpClientConnectionBase* conn = acquireConnectionImpl(scheme, host, port, wait_for_ready, streaming_send, xsink);
+    // a connection is returned only without an exception, so that a caller that checks for either does not leak its
+    // reference and the stream slot reserved for it (with the streaming-send slot, for a streaming-send acquire)
+    if (conn && *xsink) {
+        conn->releaseStreamReservation(streaming_send);
+        ExceptionSink rel_xsink;
+        conn->deref(&rel_xsink);
+        rel_xsink.clear();
+        return nullptr;
+    }
+    return conn;
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl(
@@ -433,6 +461,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         SandboxScan scan(*policy);
 
         // 1. Read-lock pool scan for a reusable connection.
+        HttpClientConnectionBase* live;
         {
             std::shared_lock<std::shared_mutex> rl(pool_lock_);
             if (shutdown_) {
@@ -440,10 +469,19 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                     "connection manager is shutting down");
                 return nullptr;
             }
-            HttpClientConnectionBase* live = findReusableLocked(key, streaming_send, scan);
+            live = findReusableLocked(key, streaming_send, scan);
+            // the caller's reference is taken while the pool holds the connection: a close of the client's
+            // connections can release the pool's reference as soon as the lock is released (qore#6303)
             if (live) {
-                return live;
+                live->ref();
             }
+        }
+        if (live) {
+#ifdef DEBUG
+            // tests hold the acquire here, after the pool lock is released, to close the client's connections
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::Acquired);
+#endif
+            return live;
         }
 
         // 2. No live connection — serialize creation per key.  First
@@ -524,7 +562,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
             // for close-after-lock-drop instead of being kept in the pool.
             evictDeadLocked(key, &max_age_evicted, &closed_evicted);
             scan.reset();
-            live_to_return = findReusableLocked(key, streaming_send, scan);
+            // the connections that have reached max_age were evicted just now: one that was kept, as it was busy,
+            // can be reused, as it counts against max_connections_per_host
+            live_to_return = findReusableLocked(key, streaming_send, scan, false);
+            // the caller's reference, taken under the pool lock as above
+            if (live_to_return) {
+                live_to_return->ref();
+            }
 
             // Capacity check
             if (!live_to_return && opts_.max_connections_per_host) {
@@ -574,7 +618,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // in case closeAll raced with us.
         //
         // A connection that is not ready when it is created
-        // (acquireConnectionAsync()) can have closed already: its
+        // (acquireConnectionAsyncRef()) can have closed already: its
         // non-blocking connect runs on the I/O thread and can fail
         // before this point, as a connect to a UNIX socket that does
         // not exist or to a port with no listener does.  The
@@ -603,11 +647,14 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
                 return nullptr;
             }
             reserved = conn_raw->tryReserveStream(streaming_send);
-            if (!reserved && (conn_raw->isClosed() || conn_raw->isDraining())) {
+            // a connection whose close notification has been sent, which can happen after the reservation, gets
+            // no pool key: no notification would remove it from the pool (see setPoolKey())
+            if ((!reserved && (conn_raw->isClosed() || conn_raw->isDraining())) || !conn_raw->setPoolKey(key)) {
                 closed = true;
             } else {
-                conn_raw->setPoolKey(key);
                 pool_[key].push_back(conn_raw);
+                // the pool takes the creator's reference; the caller's is taken under the pool lock as above
+                conn_raw->ref();
                 // Record the observed protocol in the sticky bitmask — see
                 // hasEverObservedProtocol() docs for the race this guards
                 // against (H2 eviction between response arrival and the
@@ -637,6 +684,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         // and we just hit some weird ordering edge.  Validate
         // defensively.
         if (!reserved) {
+            // the caller's reference; the pool keeps its own
+            ExceptionSink rel_xsink;
+            conn_raw->deref(&rel_xsink);
+            rel_xsink.clear();
             xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
                 "freshly-created connection unexpectedly at capacity");
             return nullptr;
@@ -659,6 +710,10 @@ bool HttpClientConnectionManagerBase::isIdempotentMethod(const char* method) {
     return false;
 }
 
+bool HttpClientConnectionManagerBase::isCancelPending() {
+    return qore_check_cancel(nullptr, "HTTP request");
+}
+
 bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsink) {
     QoreValue err = xsink.getExceptionErr();
     if (err.getType() != NT_STRING) {
@@ -667,6 +722,19 @@ bool HttpClientConnectionManagerBase::isConnectionClosedError(ExceptionSink& xsi
     const char* e = err.get<const QoreStringNode>()->c_str();
     return !strcmp(e, "HTTP1-CONNECTION-CLOSED") || !strcmp(e, "HTTP2-CONNECTION-CLOSED")
         || !strcmp(e, "SOCKET-CLOSED");
+}
+
+bool HttpClientConnectionManagerBase::replaceErrorWithPendingCancel(ExceptionSink& xsink) {
+    if (!xsink) {
+        return false;
+    }
+    ExceptionSink cancel_xsink;
+    if (!qore_socket_raise_pending_cancel("HTTP request", &cancel_xsink)) {
+        return false;
+    }
+    xsink.clear();
+    xsink.assimilate(cancel_xsink);
+    return true;
 }
 
 //! Returns the TLS configuration for a new connection from the manager's options
@@ -908,7 +976,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             // reports ready, which morphs it into the concrete H1/H2 connection.
             //
             // Blocking here instead — as this path used to — makes
-            // acquireConnectionAsync() synchronous for the whole connect_timeout:
+            // acquireConnectionAsyncRef() synchronous for the whole connect_timeout:
             // the caller's thread sits in waitForReadyOrError() before any poll
             // operation exists, so there is nothing registered with the I/O
             // controller for cancelByOwner() to cancel.  A PollingConnectionMonitor
@@ -932,8 +1000,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     // was stuck in when the timeout fired.  See
                     // /tmp/httpclient-negotiate-timeout-investigation.md
                     // for the audit that motivated this instrumentation.
-                    int us;
-                    int64_t now_us = q_epoch_us(us) * 1000000LL + us;
+                    // the submit time is on the monotonic clock (#6150)
+                    int64_t now_us = q_get_monotonic_us();
                     int64_t submit_us = neg->getNegSubmitTimeUs();
                     int64_t elapsed_us = submit_us > 0 ? (now_us - submit_us) : -1;
                     const char* neg_state = neg->getNegStateName();
@@ -1060,25 +1128,46 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         return nullptr;
     }
 
+    // the negotiating connection did not keep the per-connection options
+    applyConnectionOptions(*concrete);
+
+    return swapNegotiatedConnection(neg, concrete.release(), reserve_stream, xsink);
+}
+
+HttpClientConnectionBase* HttpClientConnectionManagerBase::swapNegotiatedConnection(HttpClientConnectionBase* neg,
+        HttpClientConnectionBase* concrete_conn, bool reserve_stream, ExceptionSink* xsink) {
+    ReferenceHolder<HttpClientConnectionBase> concrete(concrete_conn, xsink);
+#ifdef DEBUG
+    // tests hold the swap to let a close of the client's connections complete after the hand-over
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::Swap);
+#endif
     HttpClientConnectionBase* concrete_raw = *concrete;
     const std::string key = neg->getPoolKey();
-
-    // the negotiating connection did not keep the per-connection options
-    applyConnectionOptions(concrete_raw);
 
     // Swap the transitional entry for the concrete one under the write lock, so
     // a concurrent acquire never sees both or neither.
     bool swapped = false;
+    // true if the transitional connection was removed from the pool here, as the concrete one has closed already
+    bool neg_evicted = false;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
         auto it = pool_.find(key);
         if (it != pool_.end()) {
             for (auto cit = it->second.begin(); cit != it->second.end(); ++cit) {
                 if (*cit == neg) {
-                    concrete_raw->setPoolKey(key);
-                    *cit = concrete_raw;
-                    concrete.release();  // the pool takes this reference
-                    swapped = true;
+                    if (concrete_raw->setPoolKey(key)) {
+                        *cit = concrete_raw;
+                        concrete.release();  // the pool takes this reference
+                        swapped = true;
+                    } else {
+                        // the concrete connection's close notification has been sent: it cannot be pooled, as no
+                        // notification would remove it, and the transitional entry is defunct
+                        it->second.erase(cit);
+                        if (it->second.empty()) {
+                            pool_.erase(it);
+                        }
+                        neg_evicted = true;
+                    }
                     break;
                 }
             }
@@ -1099,6 +1188,13 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
     // drops itself) and, when it was still pooled, the pool's, dropped below.
     neg->releaseStreamReservation();
 
+    // The transitional connection left the pool here (swapped or neg_evicted): a close notification that it sends
+    // later must not reach the manager, as it would queue its pointer for a connection that is no longer pooled, and
+    // a connection made later at the same address and pooled under the same key would be removed by it
+    if (swapped || neg_evicted) {
+        neg->setManager(nullptr);
+    }
+
     if (swapped) {
         // The pool owns the reference given up by concrete.release() above; the
         // caller gets its own.  Drop the pool's reference to the transitional
@@ -1106,12 +1202,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         concrete_raw->ref();
         neg->deref(xsink);
     } else {
-        // The transitional connection was evicted while ALPN was in flight (a
-        // racing closeAll(), max-age eviction or closeAndEvict(), each of which
-        // already dropped the pool's reference).  The concrete connection is
-        // still usable by this caller; it just never enters the pool, so it is
-        // closed when the caller derefs it.  The holder's reference becomes the
-        // caller's.
+        // Either the transitional connection was evicted while ALPN was in flight (a racing closeAll(), max-age
+        // eviction or closeAndEvict(), each of which already dropped the pool's reference), or it was removed above
+        // because the concrete connection's close notification has been sent (neg_evicted), in which case the
+        // pool's reference is dropped here.  The concrete connection never enters the pool, so it is closed when the
+        // caller derefs it; one whose notification has been sent is closed already, and the caller's request on it
+        // fails with the connection's error.  The holder's reference becomes the caller's.
         if (reserve_stream) {
             // cannot fail: a freshly-adopted connection has no streams yet
             (void)concrete_raw->tryReserveStream(false);
@@ -1119,6 +1215,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         // the caller's connection can outlive this manager, so it must not send its close notification here
         concrete_raw->setManager(nullptr);
         concrete.release();
+        if (neg_evicted) {
+            // the reference of the pool to the transitional connection, removed above
+            neg->deref(xsink);
+        }
     }
     return concrete_raw;
 }
@@ -1425,7 +1525,7 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink, bool* retry) {
-    HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
+    HttpClientConnectionBase* conn = acquireConnectionRef(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;
     }
@@ -1433,13 +1533,16 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
     if (retry && !conn->hasServedRequest()) {
         retry = nullptr;
     }
-    // Hold a strong ref for the duration of request().  The pool holds its
+    // A strong ref for the duration of request(), returned by the acquire.  The pool holds its
     // own ref; the I/O thread may fire onConnectionClosed → deref at any
     // time (even during our blocking Future wait), so without this extra
     // ref the connection can be freed under us.
-    conn->ref();
     // RAII deref — fires on every return path below.
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+#ifdef DEBUG
+    // a test holds the request here, with a stream of the connection reserved and nothing submitted (#6165)
+    QoreHttpClientDrainDebug::get().holdAfterReserve();
+#endif
 
     ReferenceHolder<QoreHashNode> submit_result(
         conn->submitRequest(method, path, headers, body, body_len, xsink, event_sink), xsink);
@@ -1454,12 +1557,15 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // request for any other reason, is still healthy and stays pooled.
         // The protocol poll operation publishes its closed error before its callback updates
         // the pooled connection state. A submit in that window must evict and retry too.
-        if (conn->isClosed() || isConnectionClosedError(*xsink)) {
+        bool closed = conn->isClosed() || isConnectionClosedError(*xsink);
+        // a cancellation of this thread that ended the request is reported as such, and the request is not repeated
+        bool cancelled = replaceErrorWithPendingCancel(*xsink) || isCancelPending();
+        if (closed) {
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed by the peer while it waited in the pool
-            if (retry) {
+            if (retry && !cancelled) {
                 *retry = true;
             }
         }
@@ -1497,12 +1603,21 @@ QoreHashNode* HttpClientConnectionManagerBase::requestOnce(const char* method,
         // pending and before the connection reference goes out of scope.
         abandonRequest(conn, stream_id);
         result.discard(xsink);
-        // a reused connection that was closed by the peer is not used again, and the request is repeated
-        if (retry && isConnectionClosedError(*xsink)) {
-            ExceptionSink evict_xsink;
-            closeAndEvict(conn, &evict_xsink);
-            evict_xsink.clear();
-            *retry = true;
+        bool closed = isConnectionClosedError(*xsink);
+        // a cancellation of this thread that ended the request first (the code that it ends closes the transport,
+        // and the request fails with a closed connection, or with a send or receive error when the peer resets it)
+        // is reported as such, and the request is not repeated (issue #5793)
+        bool cancelled = replaceErrorWithPendingCancel(*xsink);
+        if (closed) {
+            // a reused connection that was closed by the peer is not used again, and the request is repeated
+            if (retry) {
+                ExceptionSink evict_xsink;
+                closeAndEvict(conn, &evict_xsink);
+                evict_xsink.clear();
+                if (!cancelled) {
+                    *retry = true;
+                }
+            }
         }
         return nullptr;
     }
@@ -1612,7 +1727,7 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         const char* host, int port, const char* path, const QoreHashNode* headers, const void* body,
         size_t body_len, QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink,
         bool* reused, bool* retry, HttpClientConnectionBase** conn_out) {
-    HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
+    HttpClientConnectionBase* conn = acquireConnectionRef(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
     }
@@ -1624,9 +1739,8 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
     if (retry && !conn->hasServedRequest()) {
         retry = nullptr;
     }
-    // a strong reference for the duration of the call: evicting the connection below releases the pool's
-    // reference, and the I/O thread can release the connection's own at any time
-    conn->ref();
+    // a strong reference for the duration of the call, returned by the acquire: evicting the connection below
+    // releases the pool's reference, and the I/O thread can release the connection's own at any time
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
@@ -1638,12 +1752,15 @@ int64_t HttpClientConnectionManagerBase::requestStreamingOnce(const char* method
         // connection closed, so a submit in that window fails while the connection still looks reusable; without
         // the eviction, the repeat of the request can be handed the same dead connection, fail the same way and
         // be reported as final.
-        if (conn->isClosed() || (*xsink && isConnectionClosedError(*xsink))) {
+        bool closed = conn->isClosed() || (*xsink && isConnectionClosedError(*xsink));
+        // a cancellation of this thread that ended the request is reported as such, and the request is not repeated
+        bool cancelled = replaceErrorWithPendingCancel(*xsink) || isCancelPending();
+        if (closed) {
             ExceptionSink evict_xsink;
             closeAndEvict(conn, &evict_xsink);
             evict_xsink.clear();
             // a reused connection closed while it waited in the pool, with or without an error of its own
-            if (retry) {
+            if (retry && !cancelled) {
                 *retry = true;
             }
         }

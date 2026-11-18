@@ -163,10 +163,18 @@ public:
 
         @note When a sandbox root is set, all allowed paths must be within
         this root, and the root itself is implicitly allowed with QSEC_ALL.
+
+        @note Replacing a root removes the allowed path rule that setting the previous root added, and adds the rule
+        for the new one; on failure, the old root and the old rules are unchanged
     */
     DLLEXPORT int setSandboxRoot(const char* path, ExceptionSink* xsink);
 
     //! Clears the sandbox root directory
+    /** Removes the sandbox root and only the allowed path rule that setSandboxRoot() added for it, so that the
+        configuration is the one from before the root was set; allowed path rules that were added after the root
+        remain.  If an allowed path rule equal to the root's (the same path with QSEC_ALL) was added separately, one
+        of the two remains.  Does nothing if no root is set
+    */
     DLLEXPORT void clearSandboxRoot();
 
     //! Sets whether paths not explicitly listed are allowed or denied
@@ -181,6 +189,22 @@ public:
     /** @return true if default is allow, false if default is deny
     */
     DLLEXPORT bool getDefaultPolicy() const;
+
+    //! Returns @ref true if the manager restricts filesystem access
+    /** @return @ref true if the default policy denies access, or if there is any allowed or denied path rule;
+        @ref false if the default policy allows access and there are no path rules.  The sandbox root of this class is
+        a path rule, so it counts too
+
+        @note
+        - for the filesystem manager of a composition of sandbox managers, the result is the OR over the members
+        - there is no unreadable state in this predicate; callers that obtain the state another way (for example a
+          configuration hash with a missing or mistyped key) must treat it as restricting (fail closed)
+        - the result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is
+          not synchronized (as for the other readers of the manager)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isRestricting() const;
 
     //! Checks if access is allowed for the given path and mode
     /** This is the main enforcement method called from QoreFile, QoreDir, etc.
@@ -354,6 +378,11 @@ public:
     //! Preset: Allows only HTTPS connections (port 443)
     DLLEXPORT void allowHTTPSOnly();
 
+    //! Returns true if a connection to the port with the protocol is allowed by the port rules
+    /** True also when no port rule is set, which allows every port
+    */
+    DLLLOCAL bool allowsPort(int port, int proto) const;
+
     //! Sets default policy for unlisted destinations
     /** @param allow If true, unlisted destinations are allowed; if false (default), denied
     */
@@ -361,6 +390,23 @@ public:
 
     //! Gets the current default policy
     DLLEXPORT bool getDefaultPolicy() const;
+
+    //! Returns @ref true if the manager restricts network access
+    /** @return @ref true if the default policy denies access, or if there are allowed IP ranges, denied IP ranges
+        (blockPrivateNetworks() and blockLocalhost() add denied ranges), or allowed port rules; @ref false otherwise.
+        Allowed host patterns alone do not count: with the default policy "allow" they restrict nothing, and with
+        "deny" the default policy already counts
+
+        @note
+        - for the network manager of a composition of sandbox managers, the result is the OR over the members
+        - there is no unreadable state in this predicate; callers that obtain the state another way must treat it as
+          restricting (fail closed)
+        - the result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is
+          not synchronized (as for the other readers of the manager)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool isRestricting() const;
 
     //! Checks if a connection is allowed - called AFTER DNS resolution
     /** @param addr The resolved socket address
@@ -638,6 +684,52 @@ public:
     */
     DLLEXPORT int64 getMemoryUsage() const;
 
+    //! Sets whether code that the sandbox governs may use uncontrolled APIs
+    /** @param allow true if the host trusts the code that the sandbox governs to use uncontrolled APIs (functions,
+        methods and classes of the @ref QDOM_UNCONTROLLED_API functional domain); false (the default) if not
+
+        Uncontrolled APIs (for example the Java classes of the \c jni module and the Python objects of the
+        \c python module) do I/O and run code that %Qore does not see, so neither the filesystem and network policy
+        nor the parse options of the sandbox apply to what they do.  A sandbox that refuses them (the default) refuses
+        the code that it governs every call of them at run time, as \c PO_NO_UNCONTROLLED_APIS does
+        (\c INVALID-FUNCTION-ACCESS); a system-policy capability of trusted code is not governed.  The policy is also
+        the trust setting of the code that the sandbox governs: code whose sandbox refuses them counts as restricted for
+        the rules that keep sandboxed code from such I/O (qore_sandbox_allows_uncontrolled_apis(), \c SandboxManager::isRestricted(),
+        \c SandboxManager::isUncontrolledApiAllowed()), such as the \c external_io apps of the data provider
+        catalog.  A host that uses a sandbox only for its resource limits, interrupts or I/O policy, and trusts the
+        code to use uncontrolled APIs, allows them.  When more than one sandbox governs the code, the uncontrolled
+        APIs are allowed only if every one of them allows them.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setUncontrolledApiPolicy(bool allow);
+
+    //! Returns true if code that the sandbox governs may use uncontrolled APIs; see setUncontrolledApiPolicy()
+    /** For a composition of sandboxes, returns true only if every member allows them
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool getUncontrolledApiPolicy() const;
+
+    //! Returns @ref true if the sandbox trusts the code it governs to use uncontrolled APIs
+    /** @return @ref true if the policy allows uncontrolled APIs (setUncontrolledApiPolicy()); for a composition of
+        sandbox managers, @ref true only if every member allows them (the AND over the members; the OR rule of
+        restricts() is the opposite direction, because here one member that does not trust makes the composition not
+        trust).  The default is @ref false
+
+        A binary module that refuses an operation that only an unrestricted caller may use (for example an
+        operation with effects outside the process) should refuse it if and only if
+        <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager resolved with
+        QoreSandboxManagerHelper::Policy: a sandbox that restricts nothing, or that trusts its code, does not make the
+        caller untrusted.
+
+        @note there is no unreadable state in this predicate; callers that obtain the state another way must treat
+        it as not trusting (fail closed)
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool trustsUncontrolledApis() const;
+
     //! Returns the memory account of the sandbox; for internal use
     DLLLOCAL QoreSandboxMemoryAccount* getMemoryAccount() const {
         return mem_account;
@@ -757,6 +849,50 @@ public:
     */
     DLLEXPORT bool checkNetworkBind(const struct sockaddr* addr, socklen_t len,
                                      int proto, ExceptionSink* xsink);
+
+    //! Returns @ref true if the sandbox restricts network access
+    /** @return the result of QoreNetworkSecurityManager::isRestricting(); the OR over the members for a composition
+        of sandbox managers
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool networkRestricts() const;
+
+    //! Returns @ref true if the sandbox restricts filesystem access
+    /** @return the result of QoreFilesystemSecurityManager::isRestricting(); the OR over the members for a
+        composition of sandbox managers
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool filesystemRestricts() const;
+
+    //! Returns @ref true if the sandbox sets a resource limit
+    /** @return @ref true if the maximum number of threads, the wall-clock time limit, the CPU time limit, the maximum
+        stack size or the memory limit is greater than 0 (0 or negative means unlimited); for a composition of
+        sandbox managers, if any member sets one
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool limitsRestrict() const;
+
+    //! Returns @ref true if the sandbox restricts anything
+    /** @return networkRestricts() || filesystemRestricts() || limitsRestrict()
+
+        Only the state of the manager is considered; the parse options and the functional domains of a Program are not
+        part of it.  A binary module should use this method, or the one for the kind of access it provides, to decide
+        whether a sandbox constrains the code it serves, and not whether a manager is attached or what
+        network().getConfiguration() holds: a manager that allows everything restricts nothing, and the
+        configuration of a composition of sandbox managers is empty.  There is no unreadable state in these
+        predicates; when the state is obtained another way and cannot be determined (for example a configuration hash
+        with a missing or mistyped key), treat the sandbox as restricting (fail closed).
+
+        The result is a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+        synchronized (as for the other readers of the manager).  The interrupt state (requestInterrupt()) is not a
+        policy and is not reported.
+
+        @since Qore 3.0
+    */
+    DLLEXPORT bool restricts() const;
 
     //! Creates a copy with the same or stricter restrictions
     /** @return A new QoreSandboxManager with the same configuration
@@ -960,6 +1096,62 @@ private:
     QoreSandboxManagerHelper& operator=(const QoreSandboxManagerHelper&) = delete;
 };
 
+//! Returns true if the code running on the current thread may use uncontrolled APIs
+/** The governing sandboxes are resolved as QoreSandboxManagerHelper resolves them for \a purpose: with
+    QoreSandboxManagerHelper::Policy, a policy barrier and a system-policy capability of trusted code are honoured, as
+    for a filesystem or network policy check; with QoreSandboxManagerHelper::All, the sandbox is seen through them, as
+    for interrupts and as \c SandboxManager::isSandboxed() sees it.
+
+    Uncontrolled APIs are allowed if no sandbox governs the code, or if every governing sandbox allows them
+    (QoreSandboxManager::setUncontrolledApiPolicy(); a composition allows them only if every member does).  A sandbox
+    that a host attaches only for resource limits, interrupts or I/O policy, and that allows uncontrolled APIs, therefore
+    does not make its code count as restricted.
+
+    @param purpose how the governing sandboxes are resolved
+
+    @return true if the code may use uncontrolled APIs, false if a governing sandbox refuses them
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::Purpose purpose);
+
+//! Returns true if the code that calls into library code on the current thread is restricted from a functional domain
+/** A module is a capability: its code runs with its own Program's options, whatever the restrictions of the code that
+    calls it.  Library code that performs an operation of a functional domain on behalf of its caller, such as opening a
+    database connection from a connection string that the caller gives, uses this function to refuse a caller that is
+    restricted from that domain.
+
+    The calling code is the code of the nearest Program on the thread's call stack that is not the Program of a user
+    module: the current Program if it is not a module's, else the Program that entered the module code, through any
+    number of calls between modules; on a thread that module code started, where no such Program is on the stack,
+    the calling code of the module code that started the thread.  The parse options of that Program decide (for example
+    \c PO_NO_DATABASE for \c QDOM_DATABASE), as do the restrictions of a sandboxed caller that the module code runs
+    with, and those of the modules on the way that are not library code (a module loaded by its path, which has the
+    restrictions of the Program that loaded it first); the options of a library module's own Program do not.
+
+    It reveals only whether the calling code is restricted, so it is not restricted itself.
+
+    @param domain the functional domains (\c QDOM_*, as a bitmask) to check; only the domains that a parse option
+    restricts are answered (the domains of the options that allow something, such as \c QDOM_INJECTION, never count as
+    restricted)
+
+    @return true if the calling code is restricted from any of the domains in \a domain
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_caller_restricts_domain(int64 domain);
+
+//! defined if qore_caller_restricts_domain() is available
+#define QORE_HAVE_CALLER_RESTRICTS_DOMAIN 1
+
+//! defined if the uncontrolled-API policy of sandboxes is available
+/** QoreSandboxManager::setUncontrolledApiPolicy(), QoreSandboxManager::getUncontrolledApiPolicy() and
+    qore_sandbox_allows_uncontrolled_apis()
+
+    @since %Qore 3.0
+*/
+#define _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY 1
+
 
 //! RAII barrier that stops a sandboxed CALLER's policy from being inherited
 /** Sandbox policy normally propagates across program boundaries: code in a Qore-language
@@ -1068,6 +1260,9 @@ private:
     QoreSandboxContext* context = nullptr;
     const QoreSandboxProvenanceHelper* previous = nullptr;
     void apply(QoreSandboxContext* captured);
+
+    // applies the sandbox of the caller of a parse or a module load in another Program
+    friend class QoreCallerSandboxHelper;
 };
 
 //! The sandbox that governs the current thread, captured so that it can govern work run on another thread
@@ -1100,6 +1295,17 @@ public:
     //! Captures the sandbox that governs the current thread
     DLLEXPORT QoreSandboxCapture();
 
+    //! Makes a capture of the same sandbox as another capture, without applying it
+    /** The copy captures exactly what @p other captured, independently of the sandbox that governs the current
+        thread, and it stays valid after @p other is destroyed.  A native bridge that derives a capture from one that
+        it holds (for example a policy object captured in a sandbox and used later on any thread) uses this instead of
+        applying @p other with QoreSandboxCaptureHelper and capturing again, which would capture the sandbox of the
+        current thread when that thread has a %Qore context of its own.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreSandboxCapture(const QoreSandboxCapture& other);
+
     //! Releases the captured sandbox
     DLLEXPORT ~QoreSandboxCapture();
 
@@ -1112,13 +1318,53 @@ public:
     */
     DLLEXPORT bool sameSandbox(const QoreSandboxCapture& other) const;
 
+    //! Returns the policy manager of the captured sandbox, referenced, or nullptr if no policy was captured
+    /** The manager is the one that QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy) resolves on a thread
+        with no %Qore context of its own while the capture is applied with QoreSandboxCaptureHelper: the captured
+        policy manager combined with the policy managers of the captured provenance.  It does not depend on the thread
+        that calls it.
+
+        Use it to check an operation against the captured policy explicitly, wherever the check runs, in addition to
+        the policy of the current thread (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)), so that the
+        stricter one wins and the capture never lowers the sandbox of the code that uses it.  Applying the capture with
+        QoreSandboxCaptureHelper is right for running code on behalf of the capturing code, but it governs the thread
+        only as its outermost caller: on a thread that runs a sandboxed Program of its own, that Program's sandbox
+        decides, and inside a system-policy call
+        (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") no sandbox
+        does, so a policy check made there would not apply the captured policy.  If the capture is also applied with
+        QoreSandboxCaptureHelper (for its call budgets and interrupts), resolve the policy of the thread before applying
+        it: the applied capture replaces the context that the thread inherited from the code that started it (an
+        unsandboxed capture clears it), so a thread that only an inherited sandbox governs would otherwise lose that
+        sandbox's policy.
+
+        @return the referenced policy manager (the caller owns the reference), or nullptr if no sandbox governed the
+        thread that captured the object, or if the object was captured in a system-policy call, which has the system
+        policy (isSandboxed() returns true for such a capture)
+
+        @par Example:
+        @code{.cpp}
+// a policy object captured when sandboxed code created it, used later on any thread
+ReferenceHolder<QoreSandboxManager> policy(capture->getPolicyManagerRef(), xsink);
+if (policy && !policy->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+    return;  // denied: the exception is raised in xsink
+}
+// the policy of the code that uses the object applies as well
+QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+if (smh && !smh->checkFilesystemAccess(path, QSEC_READ, xsink)) {
+    return;
+}
+        @endcode
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreSandboxManager* getPolicyManagerRef() const;
+
 private:
     QoreSandboxContext* ctx;
 
     friend class QoreSandboxCaptureHelper;
 
-    // non-copyable
-    QoreSandboxCapture(const QoreSandboxCapture&) = delete;
+    // not assignable
     QoreSandboxCapture& operator=(const QoreSandboxCapture&) = delete;
 };
 

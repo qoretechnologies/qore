@@ -28,6 +28,54 @@ function(qore_write_generated_source _path _content)
     configure_file("${_path}.in" "${_path}" COPYONLY)
 endfunction()
 
+set(_QORE_MACROS_INTERN_DIR "${CMAKE_CURRENT_LIST_DIR}")
+
+# Creates the targets that write the qcc format fingerprint and the AOT runtime identity header derived from it
+#
+# qore_aot_runtime_identity_targets(STAMP <fingerprint> INPUT_LIST <manifest> INPUT_LABELS <labels>
+#                                   HEADER <identity header>)
+#
+# - qcc-format-version writes the fingerprint of the files named in INPUT_LIST (QoreWriteContentDigest.cmake), and
+#   then the header (QoreWriteAOTRuntimeIdentity.cmake); each file is rewritten only when its content changes
+# - qore-aot-runtime-identity depends on it, for the targets that compile the header in
+#
+# Both files are written by the commands of a target that runs in every build, never by a custom command: the
+# Makefile generators give a copy of the rule of a custom command output to each target of the directory that depends
+# on that output, and every qlib AOT module (its rule depends on the fingerprint) and libqore (it compiles the header
+# in) is one.  A qmod target could then write the fingerprint again, after libqore had been compiled for the previous
+# one: a fingerprinted source edited while a build was running made that build's qmods newer than the fingerprint of
+# the new identity, although qcc had compiled them for the previous identity, and the next build relinked libqore with
+# the new identity and compiled no qmod.  Written once per build, before libqore, qcc and every qmod, the fingerprint
+# is newer than a qmod exactly when the qmod was compiled for a previous identity or build configuration, and since it
+# is only rewritten when its content changes, a build in which no fingerprinted source changed rebuilds nothing.
+function(qore_aot_runtime_identity_targets)
+    cmake_parse_arguments(_QARI "" "STAMP;INPUT_LIST;INPUT_LABELS;HEADER" "" ${ARGN})
+    foreach(_qari_arg STAMP INPUT_LIST INPUT_LABELS HEADER)
+        if (NOT _QARI_${_qari_arg})
+            message(FATAL_ERROR "qore_aot_runtime_identity_targets() requires ${_qari_arg}")
+        endif()
+    endforeach()
+    if (_QARI_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "qore_aot_runtime_identity_targets(): unknown arguments: ${_QARI_UNPARSED_ARGUMENTS}")
+    endif()
+    add_custom_target(qcc-format-version
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT_LIST=${_QARI_INPUT_LIST}
+            -DINPUT_LABELS=${_QARI_INPUT_LABELS}
+            -DOUTPUT=${_QARI_STAMP}
+            -P ${_QORE_MACROS_INTERN_DIR}/QoreWriteContentDigest.cmake
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT=${_QARI_STAMP}
+            -DOUTPUT=${_QARI_HEADER}
+            -P ${_QORE_MACROS_INTERN_DIR}/QoreWriteAOTRuntimeIdentity.cmake
+        BYPRODUCTS ${_QARI_STAMP} ${_QARI_HEADER}
+        COMMENT "Checking the qcc format-version fingerprint and the AOT runtime identity"
+        VERBATIM
+    )
+    add_custom_target(qore-aot-runtime-identity)
+    add_dependencies(qore-aot-runtime-identity qcc-format-version)
+endfunction()
+
 macro(qore_check_headers_cxx)
     set(options)
     set(oneValueArgs)
@@ -251,8 +299,8 @@ endmacro()
 
 macro(qore_mpfr_checks)
 
-set(CMAKE_REQUIRED_INCLUDES ${MPFR_INCLUDE_DIRS})
-set(CMAKE_REQUIRED_LIBRARIES ${MPFR_LIBRARIES})
+set(CMAKE_REQUIRED_INCLUDES ${MPFR_INCLUDE_DIRS} ${GMP_INCLUDE_DIRS})
+set(CMAKE_REQUIRED_LIBRARIES ${MPFR_LIBRARIES} ${GMP_LIBRARIES})
 
 check_cxx_symbol_exists(mpfr_divby0_p mpfr.h HAVE_MPFR_DIVBY0)
 check_cxx_symbol_exists(mpfr_regular_p mpfr.h HAVE_MPFR_REGULAR)

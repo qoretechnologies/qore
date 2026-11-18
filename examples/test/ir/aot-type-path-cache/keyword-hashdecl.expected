@@ -1,0 +1,4 @@
+hash<softint>: {a: 2} (hash<softint>)
+hash<any>: {s: "x2"} (hash<any>)
+hash<string, int>: {k: 2} (hash<string, int>)
+hash<auto>: {z: 2} (hash<string, int>)

@@ -67,6 +67,8 @@ void AbstractHttpPollConnectionPriv::onConnectionReady() {
 void AbstractHttpPollConnectionPriv::setClosed() {
     std::vector<std::pair<QoreEventNotifier*, QoreObject*>> to_notify;
     bool fire_hook = false;
+    // true if the reference that keeps the object alive while the hook runs was taken
+    bool keep_alive = false;
     {
         AutoLocker al(lock);
         state.store(CLOSED, std::memory_order_release);
@@ -81,7 +83,12 @@ void AbstractHttpPollConnectionPriv::setClosed() {
             fire_hook = true;
             // Keep the object alive after ready_cond wakes waiters that may
             // release their connection reference before onClosedHook() runs.
-            ref();
+            // A connection whose last reference has been released is being
+            // destroyed: its destructor closes it, and no other thread holds a
+            // reference, so no reference is taken, as releasing it would destroy
+            // the object a second time (a connection that never entered a pool,
+            // closed when its last reference is released: qore#6303)
+            keep_alive = optRef();
         }
     }
     for (auto& [ptr, obj] : to_notify) {
@@ -112,8 +119,10 @@ void AbstractHttpPollConnectionPriv::setClosed() {
         qore_dbg_conn_close_release_hook_t release_hook = qore_dbg_conn_close_release_hook.load();
         bool released = release_hook && release_hook(this);
 #endif
-        ExceptionSink xsink;
-        deref(&xsink);
+        if (keep_alive) {
+            ExceptionSink xsink;
+            deref(&xsink);
+        }
 #ifdef DEBUG
         if (released) {
             qore_dbg_conn_close_released();

@@ -37,6 +37,29 @@
 
 %exec-class HttpClientRequestPollOperationTest
 
+#! Exposes the deadline handling of a request poll operation (#6455)
+class DeadlinePollOperation inherits HttpClientRequestPollOperation {
+    constructor(HttpClientConnectionManager mgr, string url, *hash<HttpClientRequestPollOptions> opts)
+            : HttpClientRequestPollOperation(mgr, url, "GET", NOTHING, NOTHING, opts) {
+    }
+
+    #! Returns the operation's deadline on the monotonic clock
+    *int getMonotonicDeadline() {
+        return getDeadlineUs();
+    }
+
+    #! Sets the deadline as a wall-clock date, as subclasses of earlier versions did
+    setWallClockDeadline(date d) {
+        deadline = d;
+    }
+
+    #! Returns the request deadline of the operation's stream, once it has one
+    *int getStreamDeadline() {
+        *HttpClientStreamHandle s = stream;
+        return s ? s.getRequestDeadline() : NOTHING;
+    }
+}
+
 #! A request received by a route peer
 hashdecl PeerRequest {
     string method;
@@ -89,7 +112,7 @@ class RoutePeer inherits AbstractHttpRequestHandler {
             };
             route = routes{cx.raw_path};
         }
-        if (cx.raw_path == "/block") {
+        if (cx.raw_path =~ /^\/block/) {
             blocked.push(cx.raw_path);
             block.waitForZero();
             return makeResponse({"Content-Type": "text/plain"}, 200, binary("released"));
@@ -125,6 +148,7 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
         addTestCase("response modes", \testModes());
         addTestCase("body decoding and limits", \testBody());
         addTestCase("timeouts and cancellation", \testTimeoutCancel());
+        addTestCase("the deadline is on the monotonic clock", \testMonotonicDeadline());
         addTestCase("errors", \testErrors());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
@@ -354,11 +378,16 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
     testTimeoutCancel() {
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
         on_exit mgr.closeAll();
+        # the requests with a 300 ms timeout below take an idle connection of the manager, made by a request before
+        # each: their timeout is for the response, and making a connection can take longer than that under load
+        # ("timed out waiting for the connection")
+        assertEq("GET /plain", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/plain")).body);
         # poll-driven timeout
         assertThrows("HTTPCLIENT-TIMEOUT", "timed out waiting for the response", \runPoller(),
             new HttpClientRequestPollOperation(mgr, url_a + "/block", "GET", NOTHING, NOTHING,
                 <HttpClientRequestPollOptions>{"timeout": 300}));
         assertEq("/block", peer_a.blocked.get(10s));
+        assertEq("GET /plain", runPoller(new HttpClientRequestPollOperation(mgr, url_a + "/plain")).body);
         # a timeout of an async operation rejects the Future
         HttpCancellableFuture f = new HttpClientRequestPollOperation(mgr, url_a + "/block", "GET", NOTHING, NOTHING,
             <HttpClientRequestPollOptions>{"timeout": 300}).startAsync();
@@ -377,6 +406,54 @@ public class HttpClientRequestPollOperationTest inherits QUnit::Test {
         assertEq("aborted", op.getState());
         assertNothing(op.continuePoll());
         assertFalse(op.goalReached());
+    }
+
+    #! The deadline of a request poll operation is on the monotonic clock (#6455)
+    /** The system clock cannot be changed by a test, so the test checks the values: the operation's deadline is the
+        monotonic clock at its creation plus its timeout (a wall-clock deadline, as before the change, is the epoch
+        time, far from the monotonic clock), its stream gets the same deadline, a deadline set as a wall-clock date by
+        a subclass (as subclasses of earlier versions did) is converted to the monotonic clock, and an operation
+        whose deadline has passed raises \c HTTPCLIENT-TIMEOUT
+    */
+    testMonotonicDeadline() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+
+        int before = clock_get_monotonic_us();
+        DeadlinePollOperation op(mgr, url_a + "/block-6455", <HttpClientRequestPollOptions>{"timeout": 60000});
+        int after = clock_get_monotonic_us();
+        *int d = op.getMonotonicDeadline();
+        assertTrue(d >= before + 60000000 && d <= after + 60000000,
+            sprintf("the deadline is the monotonic clock plus the timeout: %y in [%d, %d]", d, before + 60000000,
+                after + 60000000));
+
+        # the stream of the request gets the operation's deadline
+        HttpCancellableFuture f = op.startAsync();
+        on_exit {
+            f.cancel();
+        }
+        # requests to "/block" of the other cases can still arrive; this case's request is the one with its own path
+        while (peer_a.blocked.get(10s) != "/block-6455") {
+        }
+        assertEq(d, op.getStreamDeadline(), "the stream gets the operation's deadline");
+        assertTrue(f.cancel());
+        assertThrows("HTTPCLIENT-CANCELLED", \f.get(), 30s);
+
+        # a deadline set as a wall-clock date by a subclass is converted to the monotonic clock
+        DeadlinePollOperation old(mgr, url_a + "/plain");
+        old.setWallClockDeadline(now_us() + 30s);
+        before = clock_get_monotonic_us();
+        d = old.getMonotonicDeadline();
+        after = clock_get_monotonic_us();
+        # the conversion takes its own reading of both clocks; the 30 s offset must be applied (1 s is allowed for the
+        # time between the date's creation and the conversion)
+        assertTrue(d >= before + 30000000 - 1000000 && d <= after + 30000000,
+            sprintf("the date is converted with its offset: %y in [%d, %d]", d, before + 29000000, after + 30000000));
+
+        # a deadline that has passed ends the operation with a timeout
+        DeadlinePollOperation passed(mgr, url_a + "/plain");
+        passed.setWallClockDeadline(now_us() - 1s);
+        assertThrows("HTTPCLIENT-TIMEOUT", "timed out waiting for the connection", \runPoller(), passed);
     }
 
     testErrors() {

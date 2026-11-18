@@ -58,6 +58,15 @@ public:
         const QoreListNode* args, ExceptionSink* xsink) override;
     DLLLOCAL virtual bool isEnabledFor(int level) const override;
 
+    //! Returns true if the logger is enabled for @a level; an exception that its isEnabledFor() method raises is
+    //! added to @a xsink, and the logger then counts as not enabled
+    DLLLOCAL bool isEnabledFor(int level, ExceptionSink* xsink) const;
+
+    //! Releases a reference of the logger that the async I/O logging took; an exception that the logger's destructor
+    //! raises (when it was replaced in the meantime and this is its last reference) is reported on stderr if
+    //! @a report, else discarded
+    DLLLOCAL void derefLogged(bool report);
+
     DLLLOCAL virtual void deref(ExceptionSink* xsink) override;
 
     //! Returns the wrapped Qore object (not referenced)

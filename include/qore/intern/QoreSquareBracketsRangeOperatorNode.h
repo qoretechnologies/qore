@@ -38,7 +38,7 @@
 
 class RuntimeConfig;
 
-class QoreSquareBracketsRangeOperatorNode : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
+class QoreSquareBracketsRangeOperatorNode final : public QoreNOperatorNodeBase<3>, public FunctionalOperator {
 public:
     DLLLOCAL QoreSquareBracketsRangeOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1,
             QoreValue p2)
@@ -60,10 +60,10 @@ public:
         ValueHolder n_e0(copy_value_and_resolve_lvar_refs(e[0], xsink), xsink);
         if (*xsink)
             return 0;
-        ValueHolder n_e1(copy_value_and_resolve_lvar_refs(e[1], xsink), xsink);
+        ValueHolder n_e1(copy_value_and_resolve_lvar_refs_not_lvalue(e[1], xsink), xsink);
         if (*xsink)
             return 0;
-        ValueHolder n_e2(copy_value_and_resolve_lvar_refs(e[2], xsink), xsink);
+        ValueHolder n_e2(copy_value_and_resolve_lvar_refs_not_lvalue(e[2], xsink), xsink);
         if (*xsink)
             return 0;
         return new QoreSquareBracketsRangeOperatorNode(loc, n_e0.release(), n_e1.release(), n_e2.release());
@@ -72,6 +72,19 @@ public:
     DLLLOCAL static bool getEffectiveRange(const QoreValue& seq, int64& start, int64& stop, int64& seq_size,
             const QoreValue& start_index, const QoreValue& stop_index, bool broken_list_range,
             bool negative_offsets, ExceptionSink* xsink);
+
+    //! Returns the iterator of the slice of the evaluated sequence \a seq with the evaluated indices
+    /** As the AST interpreter iterates the operator (getFunctionalIteratorImpl()): a list or a binary is iterated
+        lazily by an iterator that keeps the sequence, unless the range is empty; the slice of any other sequence is
+        made first.  The IR tiers create the iterator of a foreach statement with it (QoreIROpcode::IteratorCreateSource).
+
+        @param seq the sequence; an iterator that keeps it takes it from the holder, with its reference if it is a
+        temporary
+        @param po the parse options of the code (PO_BROKEN_LIST_RANGE, PO_NEGATIVE_OFFSETS, PO_BROKEN_RANGE)
+    */
+    DLLLOCAL static FunctionalOperatorInterface* getSliceIterator(ValueEvalRefHolder& seq, const QoreValue start_index,
+            const QoreValue stop_index, QoreParseOptions po, FunctionalValueType& value_type, ExceptionSink* xsink,
+            LexicalSemanticPolicy semantic_policy = {});
 
 protected:
     const QoreTypeInfo* typeInfo = nullptr;
@@ -95,6 +108,10 @@ protected:
 
     //! gives a sequence borrowed from a variable a reference of its own if the indexes need evaluation
     DLLLOCAL void holdBorrowedSequence(ValueEvalRefHolder& seq) const;
+
+    //! Returns the value of the expression from its evaluated operands: the sequence, and the start and the end
+    DLLLOCAL static QoreValue slice(const QoreValue& seq, const QoreValue& start_index, const QoreValue& stop_index,
+        bool broken_list_range, bool negative_offsets, ExceptionSink* xsink);
 };
 
 class QoreFunctionalSquareBracketsRangeOperator : public FunctionalOperatorInterface, public RangeIterator {
@@ -102,12 +119,14 @@ protected:
     ValueOptionalRefHolder seq;
     int64 start;
     int64 stop;
+    //! true if the range of a list reaches outside of it with %broken-list-range, giving NOTHING elements (qore#5757)
+    bool or_nothing;
 
 public:
     DLLLOCAL QoreFunctionalSquareBracketsRangeOperator(ValueEvalRefHolder& old_seq, int64 begin, int64 end,
-            ExceptionSink* xsink)
-            : RangeIterator(begin, end, 1, &Nothing, xsink), seq(*old_seq, old_seq.isTemp(), xsink), start(begin),
-            stop(end) {
+            bool broken_range, ExceptionSink* xsink, bool or_nothing = false)
+            : RangeIterator(begin, end, 1, &Nothing, broken_range, xsink), seq(*old_seq, old_seq.isTemp(), xsink), start(begin),
+            stop(end), or_nothing(or_nothing) {
         old_seq.clearTemp();
     }
 
@@ -117,8 +136,10 @@ public:
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
         switch (seq->getType()) {
-            case NT_LIST:
-                return seq->get<const QoreListNode>()->getValueTypeInfo();
+            case NT_LIST: {
+                const QoreTypeInfo* ti = seq->get<const QoreListNode>()->getValueTypeInfo();
+                return or_nothing ? get_or_nothing_type_check(ti) : ti;
+            }
             case NT_STRING:
                 return stringTypeInfo;
             case NT_BINARY:

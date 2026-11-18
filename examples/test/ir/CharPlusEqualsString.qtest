@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class CharPlusEqualsStringTest
+
+#! The += operator adds a char exactly as the one-character string, for every lvalue type, in every execution mode
+/** A char operand of \c += was added as its code point to an integer, float or number lvalue (<tt>int i = 1;
+    i += c'5'</tt> gave 54), where the one-character string \c "5" gives 6, and was stored or appended as a char
+    where the string is stored or appended as a string.  A char is now added exactly as its one-character string is,
+    whatever the type of the lvalue; code-point arithmetic takes <tt>int(c)</tt>.
+
+    The script applies \c += with a char to lvalues of every kind (int, softint, or-nothing int, float, number,
+    string, list, hash and list elements, timeout, date, binary and untyped lvalues that hold an int, a float, a
+    number, a bool, a string, a date or no value, and object members), with typed, untyped and constant operands,
+    with a char held in a local of no type and in a function whose list result projects its parameters, beside the same operation with the one-character string (the control); each
+    function is called three times, in every execution mode and as qcc executables compiled with \c -O0 and \c -O3
+    (see ExecModeOutputTest).  The expected output is the AST interpreter's, each of whose char results must equal
+    its control's, and the main results are pinned.
+*/
+class CharPlusEqualsStringTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+
+string sub t(auto v) {
+    return sprintf("%y:%s", v, v.fullType());
+}
+
+# every function takes the operand untyped and is called with a char and with its one-character string
+string sub intLvalue(auto r) { int i = 1; i += r; return t(i); }
+string sub softintLvalue(auto r) { softint i = 1; i += r; return t(i); }
+string sub orNothingIntLvalue(auto r) { *int i = 1; i += r; *int j; j += r; return t(i) + " " + t(j); }
+string sub floatLvalue(auto r) { float f = 1.5; f += r; return t(f); }
+string sub numberLvalue(auto r) { number n = 1.5n; n += r; return t(n); }
+string sub stringLvalue(auto r) { string s = "x"; s += r; return t(s); }
+string sub listLvalue(auto r) { list l = (1,); l += r; return t(l); }
+string sub typedListLvalue(auto r) { list<auto!> l = (1,); l += r; return t(l); }
+string sub hashElement(auto r) { hash h = {"i": 1, "s": "x"}; h.i += r; h.s += r; h.n += r; return t(h); }
+string sub listElement(auto r) { list l = (1, 1.5, "x"); l[0] += r; l[1] += r; l[2] += r; l[3] += r; return t(l); }
+string sub timeoutLvalue(auto r) { timeout to = 1000; to += r; return t(to); }
+string sub dateLvalue(auto r) { date d = 2026-01-01T00:00:00Z; d += r; return t(d); }
+string sub binaryLvalue(auto r) { binary b = <01>; b += r; return t(b); }
+string sub autoLvalues(auto r) {
+    auto i = 1; i += r;
+    auto f = 1.5; f += r;
+    auto n = 1.5n; n += r;
+    auto b = True; b += r;
+    auto s = "x"; s += r;
+    auto d = 2026-01-01T00:00:00Z; d += r;
+    auto e; e += r;
+    return sprintf("%s %s %s %s %s %s %s", t(i), t(f), t(n), t(b), t(s), t(d), t(e));
+}
+# the value of the operator itself
+string sub operatorValue(auto r) { int i = 1; auto x = 1; auto e; return sprintf("%s %s %s", t(i += r), t(x += r), t(e += r)); }
+
+# typed operands: the char typed, against the string typed
+string sub typedCharInt(char r) { int i = 1; i += r; float f = 1.5; f += r; number n = 1.5n; n += r; auto a = 1; a += r; return sprintf("%s %s %s %s", t(i), t(f), t(n), t(a)); }
+string sub typedStringInt(string r) { int i = 1; i += r; float f = 1.5; f += r; number n = 1.5n; n += r; auto a = 1; a += r; return sprintf("%s %s %s %s", t(i), t(f), t(n), t(a)); }
+
+# a char held in a local of no type, added to an int local (the fused int addition of two locals)
+string sub localSource(auto r) { auto x = r; int i = 1; i += x; i += x; return t(i); }
+
+# constant operands
+string sub constChar() { int i = 1; i += c"5"; float f = 1.5; f += c"5"; auto a = 1; a += c"a"; auto e; e += c"a"; list l = (); l += c"a"; return sprintf("%s %s %s %s %s", t(i), t(f), t(a), t(e), t(l)); }
+string sub constString() { int i = 1; i += "5"; float f = 1.5; f += "5"; auto a = 1; a += "a"; auto e; e += "a"; list l = (); l += "a"; return sprintf("%s %s %s %s %s", t(i), t(f), t(a), t(e), t(l)); }
+
+# a projection of the parameters of a function that returns a list
+list<int> sub projectChar(int i, char r) { i += r; return (i, i + 1); }
+list<int> sub projectString(int i, string r) { i += r; return (i, i + 1); }
+
+# a member of an object
+class C {
+    public {
+        int i = 1;
+        auto a;
+    }
+    string add(auto r) { i += r; a += r; return t(i) + " " + t(a); }
+}
+
+const Cases = (
+    ("int", \intLvalue()), ("softint", \softintLvalue()), ("*int", \orNothingIntLvalue()), ("float", \floatLvalue()),
+    ("number", \numberLvalue()), ("string", \stringLvalue()), ("list", \listLvalue()),
+    ("list<auto!>", \typedListLvalue()), ("hash-element", \hashElement()), ("list-element", \listElement()),
+    ("timeout", \timeoutLvalue()), ("date", \dateLvalue()), ("binary", \binaryLvalue()), ("auto", \autoLvalues()),
+    ("value", \operatorValue()), ("local-source", \localSource()),
+);
+
+for (int i = 0; i < 3; ++i) {
+    foreach list c in (Cases) {
+        foreach list rs in ((c"5", "5"), (c"a", "a"), (c"\u{e9}", "\u{e9}")) {
+            printf("%d %s(%s) char: %s control: %s\n", i, c[0], rs[1], call_function(c[1], rs[0]), call_function(c[1], rs[1]));
+        }
+    }
+    printf("%d typed(5) char: %s control: %s\n", i, typedCharInt(c"5"), typedStringInt("5"));
+    printf("%d typed(a) char: %s control: %s\n", i, typedCharInt(c"a"), typedStringInt("a"));
+    printf("%d constant char: %s control: %s\n", i, constChar(), constString());
+    printf("%d projection char: %y control: %y\n", i, projectChar(1, c"5"), projectString(1, "5"));
+    printf("%d member char: %s control: %s\n", i, (new C()).add(c"5"), (new C()).add("5"));
+}
+';
+
+        #! results that the AST interpreter's output must hold
+        const Pinned = (
+            "0 int(5) char: 6:integer control: 6:integer",
+            "0 int(a) char: 1:integer control: 1:integer",
+            "0 float(5) char: 6.5:float control: 6.5:float",
+            "0 number(5) char: 6.5:number control: 6.5:number",
+            "0 string(a) char: \"xa\":string control: \"xa\":string",
+            "0 list(a) char: [1, \"a\"]:list control: [1, \"a\"]:list",
+            "0 local-source(5) char: 11:integer control: 11:integer",
+            "0 typed(5) char: 6:integer 6.5:float 6.5:number 6:integer control: 6:integer 6.5:float 6.5:number 6:integer",
+            "0 constant char: 6:integer 6.5:float 1:integer \"a\":string [\"a\"]:list control: 6:integer 6.5:float 1:integer \"a\":string [\"a\"]:list",
+            "0 projection char: [6, 7] control: [6, 7]",
+            "0 member char: 6:integer \"5\":string control: 6:integer \"5\":string",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("CharPlusEqualsString", Script,
+            ExecModeOutputTest::ast_output("CharPlusEqualsString", Script),
+            "adds a char as its one-character string", Pinned, \CharPlusEqualsStringTest::checkRows(),
+            ("-O0", "-O3")) {
+    }
+
+    #! returns the lines of the output whose char results differ from their control's
+    static list<string> checkRows(string output) {
+        list<string> rv = ();
+        foreach string line in (output.split("\n")) {
+            if (!line) {
+                continue;
+            }
+            *list<*string> m = (line =~ x/^[0-9]+ \S+ char: (.*) control: (.*)$/);
+            if (!m || m[0] != m[1]) {
+                rv += line;
+            }
+        }
+        return rv;
+    }
+}

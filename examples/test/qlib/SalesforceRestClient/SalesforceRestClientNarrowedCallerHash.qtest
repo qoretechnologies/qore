@@ -10,6 +10,11 @@
 %requires SalesforceRestClient
 %requires TableauRestClient
 
+# the Bulk API requests use the "rawxml" serialization of RestClient, which needs the xml module
+%try-module xml >= 1.3
+%define NoXml
+%endtry
+
 %exec-class SalesforceRestClientNarrowedCallerHashTest
 
 #! Salesforce client that records requests instead of sending them
@@ -106,6 +111,9 @@ public class SalesforceRestClientNarrowedCallerHashTest inherits QUnit::Test {
     }
 
     salesforceDoBulkRequestTest() {
+%ifdef NoXml
+        testSkip("no xml module: Bulk API requests use \"rawxml\" serialization");
+%endif
         assertEq("hash<string, int>", mk({"X-Count": 1}).fullType());
         TestSalesforceRestClient rest();
         hash<auto> rv = rest.doBulkRequest("GET", "job", NOTHING, NOTHING, True, {"X-Count": 1});

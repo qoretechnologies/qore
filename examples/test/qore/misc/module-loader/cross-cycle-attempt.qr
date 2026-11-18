@@ -7,9 +7,10 @@
 
 # One attempt: two threads concurrently load a mutually-dependent module pair into separate Programs.
 # Prints exactly one outcome token: CYCLE, OK, HANG, or OTHER:<err>.  Used by
-# circular-module-dependency.qtest, which retries fresh subprocesses until a CYCLE is observed (the
-# cross-thread interleaving that forms the cycle is timing-dependent) while asserting HANG/OTHER never
-# occur.
+# circular-module-dependency.qtest, which expects CYCLE: the init of each module of the pair waits until the init of
+# the other one started (CrossCycleGate.qm) before it loads the other module, so both threads hold their module's
+# feature when either asks for the other's, and the cycle forms in every attempt (issue #6517).  OK (both loaded,
+# no cycle) would mean that the loader made one thread load both modules.
 #
 # When the cycle forms, exactly one thread detects it (CIRCULAR-MODULE-DEPENDENCY) and fails its
 # module; the other thread, parked waiting on that now-failed feature, observes the *propagated*
@@ -19,6 +20,10 @@
 # Except after a HANG, the script returns normally instead of calling exit(), so the Programs, modules and exceptions
 # of the attempt are released by the normal teardown: a valgrind run of this script reports what the cycle's failure
 # path leaks.  exit() ends the process without releasing them, which valgrind reports as lost memory.
+# the rendezvous of the inits is loaded before the threads start, so that they do not also wait for each other to
+# load it
+load_module("CrossCycleGate");
+
 int cycles = 0; int ok = 0; string other = "";
 Mutex mtx();
 Counter start(1);

@@ -1,0 +1,42 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# single-threaded Socket loop over connections that are made once: each round trip closes nothing; the closes of the
+# request loop (socket-loop.qr) are measured by comparing it with this loop's connect/accept part (CLOSE_ONLY=1:
+# connect and accept once, then N closes of sockets that are connected and accepted in a warm-up batch)
+int N = ARGV[0] ? ARGV[0].toInt() : 1500;
+bool close_only = ENV.CLOSE_ONLY == "1";
+
+Socket l();
+if (l.bind("127.0.0.1:0", True)) {
+    throw "BIND-ERROR", "bind failed";
+}
+l.listen(N + 10);
+int port = l.getPort();
+
+list<Socket> clients;
+list<Socket> servers;
+date start = now_us();
+for (int i = 0; i < N; ++i) {
+    Socket c();
+    c.connect("127.0.0.1:" + port);
+    push clients, c;
+    push servers, l.accept();
+}
+float connect_us = (now_us() - start).durationMicroseconds();
+start = now_us();
+if (!close_only) {
+    for (int i = 0; i < N; ++i) {
+        clients[i].close();
+        servers[i].close();
+    }
+}
+float close_us = (now_us() - start).durationMicroseconds();
+printf("connect+accept: %.2f us per pair; close+close: %.2f us per pair\n", connect_us / N, close_us / N);
+if (close_only) {
+    for (int i = 0; i < N; ++i) {
+        clients[i].close();
+        servers[i].close();
+    }
+}

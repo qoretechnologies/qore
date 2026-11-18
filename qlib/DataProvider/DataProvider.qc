@@ -494,7 +494,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static setGlobalLogger(*LoggerInterface logger) {
+    static setGlobalLogger(*LoggerInterface logger) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the global logger");
         DataProvider::logger = logger;
@@ -516,7 +516,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static addOptions(int options) {
+    static addOptions(int options) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
@@ -530,7 +530,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static removeOptions(int options) {
+    static removeOptions(int options) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
@@ -553,7 +553,7 @@ public class DataProvider {
 
         @since DataProvider 3.0
     */
-    static setOptions(int options) {
+    static setOptions(int options) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("change the global options");
         DataProvider::checkOptions(options);
@@ -574,11 +574,17 @@ public class DataProvider {
     }
 
     #! Register a new data provider factory
-    /** @param factory the new data provider factory
+    /** Sandboxed code registers no factory: a factory name that it took would be denied to the module that owns it
+
+        @param factory the new data provider factory
 
         @throw PROVIDER-ERROR the given provider has already been registered
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the code registering the factory is sandboxed
+        (Qore::SandboxManager::isSandboxed(); since %DataProvider 3.12)
     */
-    static registerFactory(AbstractDataProviderFactory factory) {
+    static registerFactory(AbstractDataProviderFactory factory) [dom=PROCESS_CONTROL] {
+        # a factory name taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("data provider factory", factory.getName());
         # Resolve object-backed metadata before taking the shared registry Gate. AOT module
         # initialization can register factories concurrently in separate Programs, and these
         # calls can acquire the factory class's Program parse lock. Holding the Gate while
@@ -688,7 +694,8 @@ public class DataProvider {
         AbstractDataProvider provider;
         {
             list<string> path_list = path.split("/");
-            provider = DataProvider::getFactoryEx(shift path_list).createWithTemplate(template_options, options);
+            provider = DataProvider::getFactoryEx(shift path_list).createWithTemplate(template_options,
+                options);
             map provider = provider.getChildProviderEx($1), path_list;
         }
         return provider;
@@ -981,7 +988,9 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         @note types are stored based on the path provided which may differ from their type names (which may be generic
         and therefore not suitable for indexing)
     */
-    static registerType(string path, AbstractDataProviderType type) {
+    static registerType(string path, AbstractDataProviderType type) [dom=PROCESS_CONTROL] {
+        # a type path taken by sandboxed code would be denied to the module that owns it
+        DataProviderSandboxState::checkRegistration("data provider type", path);
         try {
             type_cache.registerType(path, type, NOTHING, True);
         } catch (hash<ExceptionInfo> ex) {
@@ -1039,7 +1048,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
     #! Locks all types
     /** @throw DATA-PROVIDER-CALLBACK-ERROR a sandbox governs the caller
     */
-    static lockAllTypes() {
+    static lockAllTypes() [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("lock all types");
         type_cache.lockAll();
@@ -1055,7 +1064,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
     }
 
     #! Registers all known data provider factories
-    static registerKnownFactories() {
+    static registerKnownFactories() [dom=PROCESS_CONTROL] {
         # load known modules
         map DataProvider::tryLoad($1, True), FactoryModuleList;
     }
@@ -1071,7 +1080,7 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         @since DataProvider 3.8
     */
     static list<hash<DataProviderFactoryModuleLoadFailureInfo>>
-            registerKnownFactoriesWithReport() {
+            registerKnownFactoriesWithReport() [dom=PROCESS_CONTROL] {
         list<hash<DataProviderFactoryModuleLoadFailureInfo>> failures
             = new list<hash<DataProviderFactoryModuleLoadFailureInfo>>();
         foreach string module_name in (sort(FactoryModuleList)) {
@@ -1546,7 +1555,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
             code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
-            *code<auto(string, string, *hash<auto>)> list_values) {
+            *code<auto(string, string, *hash<auto>)> list_values) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("set the template callbacks");
         return AbstractDataProvider::setTemplateCallbacks(expand, resolve_type, list_contexts, list_values);
@@ -1559,7 +1568,7 @@ list<hash<DpqlCompletionItem>> items = DataProvider::getDpqlCompletions('@na', 3
 
         @since DataProvider 3.3
     */
-    static clearTemplateCallbacks() {
+    static clearTemplateCallbacks() [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("clear the template callbacks");
         AbstractDataProvider::clearTemplateCallbacks();
@@ -1694,7 +1703,7 @@ if (errors) {
     }
 
     #! Registers all known data provider types
-    static registerKnownTypes() {
+    static registerKnownTypes() [dom=PROCESS_CONTROL] {
         # register basic qore types
         DataProvider::registerType("qore/hash", new HashDataType());
         DataProvider::registerType("qore/string", new QoreStringDataType());
@@ -1871,7 +1880,7 @@ if (action.data_provider_info) {
 
         @throw DATA-PROVIDER-ERROR cannot call this method after requests for types or factories are made
     */
-    static setAutoConfig() {
+    static setAutoConfig() [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("allow automatic configuration");
         if (env_config_locked) {
@@ -1908,7 +1917,7 @@ if (action.data_provider_info) {
 
         @since DataProvider 3.0
     */
-    static registerStaticInitializer(code init) {
+    static registerStaticInitializer(code init) [dom=PROCESS_CONTROL] {
         if (SandboxManager::isSandboxed()) {
             init();
             return;
@@ -1928,7 +1937,7 @@ if (action.data_provider_info) {
     #! Defers static initialization until restoreStaticInitialization() is called
     /** @since DataProvider 3.0
     */
-    static deferStaticInitialization() {
+    static deferStaticInitialization() [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("defer static initialization");
         push ilist_save, remove ilist;
@@ -1937,7 +1946,7 @@ if (action.data_provider_info) {
     #! Restores static initialization deferred by deferStaticInitialization()
     /** @since DataProvider 3.0
     */
-    static restoreStaticInitialization() {
+    static restoreStaticInitialization() [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("restore static initialization");
         if (*list<code> l = pop ilist_save) {
@@ -1972,7 +1981,9 @@ if (action.data_provider_info) {
             try {
                 i.value();
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
+                if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
+                }
             }
         }
     }
@@ -1983,7 +1994,7 @@ if (action.data_provider_info) {
 
         @since DataProvider 3.0
     */
-    static registerShutdownHandler(string key, code handler) {
+    static registerShutdownHandler(string key, code handler) [dom=PROCESS_CONTROL] {
         # the handler would run later, on the thread that shuts the module down
         DataProvider::checkNotSandboxed("register a shutdown handler");
         if (smap{key}) {
@@ -2000,7 +2011,7 @@ if (action.data_provider_info) {
 
         @since DataProvider 3.0
     */
-    static bool deregisterShutdownHandler(string key) {
+    static bool deregisterShutdownHandler(string key) [dom=PROCESS_CONTROL] {
         # process-wide: it changes what the module does for every caller, of other tenants and of trusted code
         DataProvider::checkNotSandboxed("deregister a shutdown handler");
         return exists (remove smap{key});
@@ -2045,8 +2056,10 @@ if (action.data_provider_info) {
                 try {
                     p.loadModule(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
-                        ex.err, ex.desc);
+                    if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
+                            ex.err, ex.desc);
+                    }
                     continue;
                 }
                 try {
@@ -2057,7 +2070,7 @@ if (action.data_provider_info) {
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore NO-FUNCTION error
-                    if (ex.err != "NO-FUNCTION") {
+                    if (ex.err != "NO-FUNCTION" && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                         stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: %s: "
                             "%s\n", mod, type, ex.err, ex.desc);
                     }
@@ -2084,32 +2097,7 @@ if (action.data_provider_info) {
 
     #! Try to load the given module
     private static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
-        int sp = ImplicitModuleTransaction::savepoint();
-        try {
-            if (logger) {
-                logger.info("DataProvider loading module: %y", module_str);
-            }
-            load_module(module_str);
-            ImplicitModuleTransaction::commit(sp);
-            return True;
-        } catch (hash<ExceptionInfo> ex) {
-            # roll back any partial registrations from the failed module
-            ImplicitModuleTransaction::rollback(sp);
-            if (rethrow_exception) {
-                rethrow;
-            }
-            string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
-            if (logger) {
-                if (init) {
-                    logger.debug("INIT: %s", err);
-                } else {
-                    logger.error("%s", err);
-                }
-            } else if (!init) {
-                stderr.print(err + "\n");
-            }
-        }
-        return False;
+        return DataProviderModuleLoader::tryLoad(module_str, init, rethrow_exception);
     }
 
     #! Loads modules from the QORE_DATA_PROVIDERS environment variable
@@ -2145,7 +2133,7 @@ if (action.data_provider_info) {
                             "description": ex.desc,
                             "argument": ex.arg,
                         });
-                    } else {
+                    } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                         stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod,
                             get_ex_pos(ex), ex.err, ex.desc);
                     }
@@ -2165,7 +2153,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else {
+                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                             stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: "
                                 "%s: %s\n", mod, type, ex.err, ex.desc);
                         }
@@ -2195,7 +2183,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else {
+                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                             stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS provider module %y %s: %s: %s\n",
                                 mod_str, get_ex_pos(ex), ex.err, ex.desc);
                         }
@@ -2348,7 +2336,7 @@ if (action.data_provider_info) {
             str = replace(str, "$symbol", info.symbol);
         }
         if (str =~ /\$args/) {
-            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap, info.arg_info[$1]),
+            str = replace(str, "$args", (foldl $1 + ", " + $2, (map renderExpressionArg($1, emap, info.arg_info[$#]),
                 exp.args)));
         }
         # make direct substitutions for plain argument references
@@ -2397,6 +2385,72 @@ if (action.data_provider_info) {
             }
             return True;
         });
+    }
+}
+
+#! Loads modules for the lookups of the DataProvider module (not public: only the module's own code uses it)
+/** The public APIs that load every known factory module declare the \c PROCESS_CONTROL domain
+    (DataProvider::registerKnownFactories()); a lookup that loads them for its caller, as DataProvider::getFactory()
+    loads the module of a factory, uses this, also for code that is restricted from the domain (qore#6337)
+*/
+class DataProviderModuleLoader {
+    #! Loads every known data provider factory module, as DataProvider::registerKnownFactories() does
+    static loadKnownFactories() {
+        map DataProviderModuleLoader::tryLoad($1, True), DataProvider::FactoryModuleList;
+    }
+
+    #! Loads a module and rolls back the registrations that its initialization made if loading it fails
+    /** The rollback closures added since the load started are run (all of them, even if one raises an exception) and
+        the exception of the load is raised again.  The public ImplicitModuleTransaction API, which acts on the
+        rollback closures of other loads too, declares \c PROCESS_CONTROL; the module's own loads for a lookup use
+        this (qore#6337)
+
+        @throw any exception raised while loading the module
+    */
+    static loadModule(string module_str) {
+        if (!Priv::rb) {
+            Priv::rb = new ImplicitModuleTransaction();
+        }
+        int sp = Priv::rb.savepointImpl();
+        try {
+            load_module(module_str);
+            Priv::rb.commitImpl(sp);
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of the load is the one raised
+            try {
+                Priv::rb.rollbackImpl(sp);
+            } catch (hash<ExceptionInfo> rex) {
+            }
+            rethrow;
+        }
+    }
+
+    #! Try to load the given module; see DataProvider::tryLoad()
+    static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
+        *LoggerInterface logger = DataProvider::getGlobalLogger();
+        try {
+            if (logger) {
+                logger.info("DataProvider loading module: %y", module_str);
+            }
+            # any partial registrations from the failed module are rolled back
+            DataProviderModuleLoader::loadModule(module_str);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (rethrow_exception) {
+                rethrow;
+            }
+            string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
+            if (logger) {
+                if (init) {
+                    logger.debug("INIT: %s", err);
+                } else {
+                    logger.error("%s", err);
+                }
+            } else if (!init && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.print(err + "\n");
+            }
+        }
+        return False;
     }
 }
 

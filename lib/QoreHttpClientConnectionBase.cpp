@@ -36,6 +36,7 @@
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
+#include "qore/intern/ql_debug.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -46,8 +47,8 @@ HttpClientConnectionBase::HttpClientConnectionBase() : opener_policy(qore_socket
 HttpClientConnectionBase::HttpClientConnectionBase(std::string target_host, int target_port, bool ssl_required)
         : target_host(std::move(target_host)), target_port(target_port), ssl_required(ssl_required),
             opener_policy(qore_socket_ref_policy_sandbox_manager()) {
-    int us = 0;
-    created_us_ = q_epoch_us(us) * 1000000LL + us;
+    // on the monotonic clock: max_age is an interval, which a step of the system clock must not end or extend (#6150)
+    created_us_ = q_get_monotonic_us();
 }
 
 HttpClientConnectionBase::~HttpClientConnectionBase() {
@@ -103,7 +104,7 @@ bool HttpClientConnectionBase::tryReserveStream(bool streaming_send) {
     // ends it, so a stream count that shows the released stream is followed by the draining state: checked after
     // the count, a connection that the response ends is not reserved, even if it was found accepting requests
     // before its stream was released
-    if (isDraining() || isClosed()) {
+    if (isDraining() || isClosed() || idle_closing) {
         return false;
     }
     ++pending_stream_count;
@@ -121,6 +122,48 @@ void HttpClientConnectionBase::releaseStreamReservation(bool streaming_send) {
     if (streaming_send && pending_streaming_send_count > 0) {
         --pending_streaming_send_count;
     }
+}
+
+bool HttpClientConnectionBase::tryBeginIdleClose(active_stream_count_t active_streams, const void* op) {
+    AutoLocker al(reserve_lock);
+    // a request submitted since the operation found the connection idle shows in the active streams: a submit counts
+    // its active stream before it releases its reservation, so a request is in one of the two counts here (the lock
+    // order is reserve_lock, then the operation's stream lock, as in tryReserveStream()); the operation counts the
+    // active streams of a connection whose owner counts them (a Qore-level connection)
+    if (idle_close_hold || pending_stream_count || (active_streams ? active_streams(op) : getActiveStreamCount())) {
+        return false;
+    }
+    idle_closing = true;
+    return true;
+}
+
+bool HttpClientConnectionBase::tryReservePendingStream(active_stream_count_t active_streams, const void* op,
+        int max_streams) {
+    assert(active_streams && op);
+#ifdef DEBUG
+    // tests hold the reservation here, before the reservation lock, while another request is submitted on the
+    // connection: the active streams are read under the lock, so the submitted request is seen
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ReservePending);
+#endif
+    AutoLocker al(reserve_lock);
+    // the active streams are read under the lock, which a release of a reservation takes: a submit counts its active
+    // stream before it releases its reservation, so a request that is being submitted is in one of the two counts
+    if (max_streams && (active_streams(op) + pending_stream_count) >= max_streams) {
+        return false;
+    }
+    // A connection stops accepting requests (it is draining) before it releases the stream of the response that
+    // ends it, so a stream count that shows the released stream is followed by the draining state: checked after
+    // the count, as in tryReserveStream(), a connection that the response ends is not reserved
+    if (isDraining() || isClosed() || idle_closing) {
+        return false;
+    }
+    ++pending_stream_count;
+    return true;
+}
+
+void HttpClientConnectionBase::setIdleCloseHold(bool hold) {
+    AutoLocker al(reserve_lock);
+    idle_close_hold = hold;
 }
 
 int HttpClientConnectionBase::getPendingStreamCount() const {
@@ -194,6 +237,8 @@ void HttpClientConnectionBase::onClosedHook() {
     // can use this lock as a lifetime handshake without recreating the old
     // manager-pool/connection lock inversion.
     AutoLocker al(onclose_lock);
+    // a pool key set after this cannot be seen by the notification: it is refused (see setPoolKey())
+    close_notified_ = true;
     if (manager_) {
         manager_->onConnectionClosed(this);
     }
@@ -257,8 +302,13 @@ bool HttpClientConnectionBase::cancelRequest(int64_t stream_id, ExceptionSink* x
     return false;
 }
 
-void HttpClientConnectionBase::setPoolKey(const std::string& key) {
+bool HttpClientConnectionBase::setPoolKey(const std::string& key) {
+    AutoLocker al(onclose_lock);
+    if (close_notified_) {
+        return false;
+    }
     pool_key_ = key;
+    return true;
 }
 
 const std::string& HttpClientConnectionBase::getPoolKey() const {
@@ -486,6 +536,10 @@ void HttpClientConnectionBase::drainInFlight() {
     // close_cv_ under close_mu_; we take the mutex here and reload the
     // state under it so the notify happens-before our observation of
     // zero.
+#ifdef DEBUG
+    // tests learn that the close waits for a call in flight
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::DrainWait);
+#endif
     std::unique_lock<std::mutex> lk(close_mu_);
     close_cv_.wait(lk, [this] {
         return (lifetime_state_.load(std::memory_order_acquire)

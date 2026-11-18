@@ -1,0 +1,8 @@
+null 2 [null]
+0 0.0 -2 2 null
+null 1.5 2
+3 3
+0.0 -0.0 .inf .nan
+[True, False, 0] [True, False, 0]
+null null
+3 4

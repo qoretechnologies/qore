@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -65,6 +65,15 @@ public:
             : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(nullptr), oc(nullptr),
             object_type_info(n_object_type_info), dynamic_class_name(n_dynamic_class_name ? n_dynamic_class_name : ""),
             aot_resolver_pgm(n_aot_resolver_pgm) {
+    }
+
+    //! Creates the copy of a background expression, with the arguments taken when the thread starts
+    /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
+    */
+    DLLLOCAL ScopedObjectCallNode(const ScopedObjectCallNode& old, QoreListNode* n_args)
+            : AbstractFunctionCallNode(old, n_args), name(old.name ? new NamedScope(*old.name) : nullptr),
+            oc(old.oc), object_type_info(old.object_type_info), dynamic_class_name(old.dynamic_class_name),
+            aot_resolver_pgm(old.aot_resolver_pgm), desc(old.desc) {
     }
 
     DLLLOCAL virtual ~ScopedObjectCallNode() {
@@ -131,9 +140,20 @@ public:
     }
 
 protected:
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+        return evalImpl(getSemanticPolicy(), rc, needs_deref, xsink);
+    }
+
     // WARNING: pay attention when subclassing; this method must also be implemented in the subclass
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return oc ? oc->getTypeInfo() : objectTypeInfo;

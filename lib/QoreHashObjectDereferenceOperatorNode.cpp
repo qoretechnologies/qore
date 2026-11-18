@@ -140,6 +140,9 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
         QoreParseContextFlagHelper fh0(parse_context);
         fh0.unsetFlags(PF_FOR_ASSIGNMENT);
         QoreParseContextAnalysisHelper ah(parse_context);
+        // the key or index is read also when the lvalue operand of the reference, delete or remove operator is not
+        // (qore#5937)
+        QoreParseContextFlagScope key_read(parse_context, PF_LVALUE_NOT_READ, QoreParseContextFlagScope::Clear());
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
@@ -148,6 +151,14 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     const QoreTypeInfo* rti = parse_context.typeInfo;
     parse_context.typeInfo = nullptr;
     slice = QoreTypeInfo::isType(rti, NT_LIST);
+
+    // a member used with self.member in its own initialization expression has no value yet (qore#526)
+    if (left.getType() == NT_VARREF && right.getType() == NT_STRING) {
+        const VarRefNode* vrn = left.get<const VarRefNode>();
+        if (vrn->getType() == VT_LOCAL && vrn->ref.id && vrn->ref.id->isSelf()) {
+            QoreParseInitializerTarget::parseUse(parse_get_class(), right.get<const QoreStringNode>()->c_str(), loc);
+        }
+    }
 
     printd(5, "QoreHashObjectDereferenceOperatorNode::parseInitImpl() l: %p %s r: %p %s\n", lti,
         QoreTypeInfo::getName(lti), rti, QoreTypeInfo::getName(rti));
@@ -319,7 +330,8 @@ QoreValue QoreHashObjectDereferenceOperatorNode::evalImpl(bool& needs_deref, Exc
     }
     // a temporary read from lives until the end of the statement, so the rest of the chain can use it
     QoreStatementTempScope::holdReceiver(left, lh, xsink);
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    // the key is a temporary of the statement, which lives until the statement ends (qore#5712)
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 

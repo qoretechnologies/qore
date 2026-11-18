@@ -1,0 +1,79 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class LexicalCallReferenceDomainsTest
+
+#! Lexical compatibility policy must preserve the permissions of the context that created a call reference.
+class LexicalCallReferenceDomainsTest inherits QUnit::Test {
+    private {
+        const Base = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS;
+        const Definition = '
+our int calls = 0;
+int sub tagged(int n = 7) [dom=PROCESS_CONTROL] { ++calls; return n; }
+class Tagged {
+    int m(int n = 7) [dom=PROCESS_CONTROL] { ++calls; return n; }
+    static int s(int n = 7) [dom=PROCESS_CONTROL] { ++calls; return n; }
+    code self_ref() { return \m(); }
+}
+class Derived inherits Tagged {}
+our Tagged obj();
+our Derived derived();
+code sub function_ref() { return \tagged(); }
+code sub named_function_ref() { return get_call_reference("tagged"); }
+code sub static_ref() { return \Tagged::s(); }
+code sub named_static_ref() { return get_call_reference("Tagged::s"); }
+code sub method_ref() { return \obj.m(); }
+code sub self_ref() { return obj.self_ref(); }
+auto sub get_obj() { return derived; }
+code sub dynamic_method_ref() { auto value = get_obj(); return \value.m(); }
+int sub count_calls() { return calls; }
+';
+        const Invocation = '
+int sub argument() { return 11; }
+auto sub run(code ref) { return ref(); }
+auto sub with_arg(code ref) { return ref(argument()); }
+auto sub nested(code ref) { code wrapper = auto sub () { return ref(argument()); }; return wrapper(); }
+bool sub policy_is_lexical() { return !!"text"; }
+';
+    }
+
+    constructor() : QUnit::Test("LexicalCallReferenceDomains", "1.0", \ARGV) {
+        foreach string factory in ("function_ref", "named_function_ref", "static_ref", "named_static_ref",
+                "method_ref", "self_ref", "dynamic_method_ref") {
+            foreach string entry in ("run", "with_arg", "nested") {
+                addTestCase(factory + ": " + entry, \checkCreator(), (factory, entry));
+            }
+        }
+        set_return_value(main());
+    }
+
+    checkCreator(string factory, string entry) {
+        Program creator(Base);
+        creator.parse(Definition, "reference-creator");
+        creator.run();
+        code allowed = creator.callFunction(factory);
+        creator.setParseOptions(PO_NO_PROCESS_CONTROL);
+        code denied = creator.callFunction(factory);
+        # Only the permissions captured in the reference remain restrictive when it is called.
+        creator.disableParseOptions(PO_NO_PROCESS_CONTROL);
+
+        Program caller(Base | PO_STRICT_BOOLEAN_EVAL);
+        caller.parse(Invocation, "lexical-reference-caller");
+        caller.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        assertFalse(caller.callFunction("policy_is_lexical"), "the caller retained its lexical policy");
+        assertEq(entry == "run" ? 7 : 11, caller.callFunction(entry, allowed), "unrestricted creator");
+        int before = creator.callFunction("count_calls");
+        assertThrows("INVALID-FUNCTION-ACCESS", "functional domain: PROCESS_CONTROL", \caller.callFunction(),
+            (entry, denied), "restricted creator remains restricted in a trusted lexical caller");
+        assertEq(before, creator.callFunction("count_calls"), "refused code never executed");
+        assertEq(entry == "run" ? 7 : 11, caller.callFunction(entry, allowed), "restored after refusal");
+        caller.setParseOptions(PO_NO_PROCESS_CONTROL);
+        assertEq(entry == "run" ? 7 : 11, caller.callFunction(entry, allowed),
+            "the reference retains its unrestricted creator's permissions in a restricted caller");
+    }
+}

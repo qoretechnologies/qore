@@ -37,6 +37,8 @@
 %modern
 
 module CsvUtil {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.12";
     desc = "user module for working with CSV files";
     author = "Petr Vanek <petr@yarpen.cz>, David Nichols <david@qore.org>";
@@ -227,6 +229,11 @@ module CsvUtil {
 
 
     @section csvutil_v1_12 Version 1.12
+    - the CSV writers quote fields by type: the \c "quote_types" option gives the types of the fields that are always
+      quoted (ex: strings, but not numbers or dates), the \c "quote" attribute of a field description overrides it
+      for the field, and the \c "quote_null" option writes a field without a value (@ref nothing or \c NULL) as an
+      empty field with or without quotes, so that it can be told apart from an empty string (see
+      @ref csvwriter_quoting) (<a href="https://github.com/qoretechnologies/qore/issues/3113">issue 3113</a>)
     - fixed the CSV writers to accept an option hash whose values all have the same type, such as a literal
       <tt>{"fields": {"a": "string", "b": "int"}}</tt>; setting the default headers from the fields raised
       \c RUNTIME-TYPE-ERROR

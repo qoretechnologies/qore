@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,20 +29,49 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreStatementTemps.h"
+
+namespace {
+class StrictBooleanLogicalOrOperatorNode : public QoreLogicalOrOperatorNode {
+public:
+    using QoreLogicalOrOperatorNode::QoreLogicalOrOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanLogicalOrOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreLogicalOrOperatorNode* QoreLogicalOrOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreLogicalOrOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanLogicalOrOperatorNode(loc, left, right)
+        : new QoreLogicalOrOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreLogicalOrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
 
 QoreString QoreLogicalOrOperatorNode::logical_or_str("logical or (&&) operator expression");
 
-QoreValue QoreLogicalOrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalOrOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return false;
     // if left side is true, then do not evaluate right side (logical short circuiting)
-    if (lh->getAsBool()) {
+    if (LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*lh)) {
         return true;
     }
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return false;
-    return rh->getAsBool();
+    return LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*rh);
 }

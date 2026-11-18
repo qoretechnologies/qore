@@ -834,7 +834,7 @@ public class MigrationExecutor {
             if (log_callback) {
                 log_callback(msg);
             } else {
-                printf("%s\n", msg);
+                schema_terminal_printf("%s\n", msg);
             }
         }
     }

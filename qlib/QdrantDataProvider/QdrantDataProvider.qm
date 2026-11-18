@@ -34,6 +34,8 @@
 %requires(reexport) QoreRagTypes
 
 module QdrantDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Qdrant vector database instances";
     author = "David Nichols <david@qore.org>";

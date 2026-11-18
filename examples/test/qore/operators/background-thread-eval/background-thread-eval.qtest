@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 
 %include background-thread-eval-checks.qi
@@ -50,6 +51,22 @@ class BackgroundThreadEvalTest inherits QUnit::Test {
             "self-path": "6",
             "nested-background": "8",
             "closure-body": "3,6,103",
+            "new-object": "1",
+            "new-object-typed": "Mutex,2",
+            "new-object-closure-bound": "3,50",
+            "new-hashdecl": "4",
+            "new-complex-hash": "5",
+            "new-complex-list": "6",
+            "new-complex-buffer": "8",
+            "object-method-ref": "9",
+            "question-mark-hash": "11",
+            "question-mark-list": "[12]",
+            "question-mark-key": "{a: 33}",
+            "map-select": "[[12, 13]]",
+            "hash-map": "{a: 13}",
+            "hash-map-select": "{a: 14}",
+            "range-subscript": "[[2, 3]]",
+            "map-select-new-object": "[[5, 9]]",
         };
 
         #! a top-level script whose local is used in a loop and in a background call
@@ -80,7 +97,7 @@ code c = sub () { f(x); };
     }
 
     constructor() : QUnit::Test("BackgroundThreadEvalTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 

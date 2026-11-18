@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - socket receives that wait on the async I/O controller's event loop
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketSyncReleaseTest
+
+#! Tests that the caller of a synchronous Socket call that waits releases the async I/O controller's references
+/** design/sync-socket-first-step.md, "As implemented (phase 3)": the references that the I/O thread drops for the
+    operation of a synchronous call go to the waiting caller (AsyncIoSyncRelease) instead of to a callback worker.
+    The debug-only dbg_async_io_sync_release_counts() counts the sets of references that callers took and refused.
+*/
+class SocketSyncReleaseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SocketSyncReleaseTest", "1.0", \ARGV) {
+        addTestCase("the caller of a waiting receive takes the controller's references", \testWaitingRecv());
+        addTestCase("waiting receives in a loop", \testWaitingLoop());
+        addTestCase("a waiting receive with a timeout", \testWaitingTimeout());
+        addTestCase("a waiting receive ended by the cancellation of its thread", \testCancelledWait());
+        set_return_value(main());
+    }
+
+    private hash<auto> counts() {
+        return call_function("dbg_async_io_sync_release_counts");
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_async_io_sync_release_counts() is only registered in a library-debug build");
+        }
+    }
+
+    #! Returns a connected pair: (client, server); the listener is closed
+    private list<Socket> getPair() {
+        Socket l();
+        l.bindINET("127.0.0.1", "0", True);
+        l.listen();
+        on_exit l.close();
+        Socket c();
+        c.connectINET("127.0.0.1", l.getSocketInfo().port, 10s);
+        Socket s = l.accept(10s);
+        return (c, s);
+    }
+
+    #! Receives on \a client while \a server sends \a data only once the receive waits on the controller
+    private string waitingRecv(Socket client, Socket server, string data) {
+        Queue sent();
+        background sub () {
+            try {
+                # the receive is on the controller: it must wait for the data
+                if (!call_function("dbg_socket_wait_controller_op", client, 10s)) {
+                    throw "TEST-ERROR", "the receive did not wait on the controller";
+                }
+                server.send(data);
+                sent.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                sent.push(ex);
+            }
+        }();
+        string rv = client.recv(data.size(), 10s);
+        auto res = sent.get(10s);
+        if (res != True) {
+            throw res.err, res.desc;
+        }
+        return rv;
+    }
+
+    testWaitingRecv() {
+        checkDebug();
+        list<Socket> pair = getPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+        hash<auto> start = counts();
+        assertEq("data", waitingRecv(client, server, "data"), "the waiting receive gets the data");
+        hash<auto> end = counts();
+        # the references of the operation's cleanup and the operation reference of the result's delivery are handed
+        # over before the result is pushed, so the caller always takes them
+        assertGe(2, end.taken - start.taken, "the caller takes the controller's references");
+        # the socket is usable after the call
+        client.send("next");
+        assertEq("next", server.recv(4, 10s));
+    }
+
+    testWaitingLoop() {
+        checkDebug();
+        list<Socket> pair = getPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+        hash<auto> start = counts();
+        for (int i = 0; i < 50; ++i) {
+            string data = sprintf("m%03d", i);
+            assertEq(data, waitingRecv(client, server, data), sprintf("waiting receive %d", i));
+        }
+        hash<auto> end = counts();
+        assertGe(100, end.taken - start.taken, "the caller of each waiting receive takes the controller's references");
+    }
+
+    #! A receive that times out ends through the controller's cancellation; the caller still takes its references
+    testWaitingTimeout() {
+        checkDebug();
+        list<Socket> pair = getPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+        hash<auto> start = counts();
+        assertThrows("SOCKET-TIMEOUT", \client.recv(), (4, 50ms));
+        hash<auto> end = counts();
+        assertGe(1, end.taken - start.taken, "the caller of a receive that timed out takes the controller's references");
+        # the socket is usable after the timeout
+        server.send("late");
+        assertEq("late", client.recv(4, 10s), "a receive after the timeout gets the data");
+    }
+
+    #! The wait of the caller ends before the controller is done with the operation: the references that the
+    #! controller drops after that are not the caller's, and the socket stays usable
+    testCancelledWait() {
+        checkDebug();
+        list<Socket> pair = getPair();
+        Socket client = pair[0];
+        Socket server = pair[1];
+        on_exit {
+            client.close();
+            server.close();
+        }
+        Queue res();
+        int tid = background sub () {
+            try {
+                client.recv(4, 10s);
+                res.push("no error");
+            } catch (hash<ExceptionInfo> ex) {
+                res.push(ex.err);
+            }
+        }();
+        # the receive waits on the controller
+        assertTrue(call_function("dbg_socket_wait_controller_op", client, 10s), "the receive waits on the controller");
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", res.get(10s), "the waiting receive ends with the cancellation");
+        thread_join(tid);
+        # the cancelled receive took no data, and its operation has left the socket
+        server.send("data");
+        assertEq("data", client.recv(4, 10s), "a receive after the cancelled one gets the data");
+    }
+}

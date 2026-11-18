@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreQueue.h>
 #include "qore/intern/QoreQueueIntern.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 
@@ -45,8 +46,12 @@ void Queue::deref(ExceptionSink* xsink) {
 }
 
 void qore_queue_private::destructor(ExceptionSink* xsink) {
+    // tells the room listeners that the queue no longer takes values, after the lock (issue #5859)
+    QoreQueueRoomNotifier rn;
     // declared before the lock, so that the weak reference is released after it
     ScanHolderRelease release;
+    // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
+    QoreConsumeNotifier cn;
     // declared before the lock, so that the values are released after it
     NodeListRelease values(xsink);
     AutoLocker al(&l);
@@ -60,11 +65,52 @@ void qore_queue_private::destructor(ExceptionSink* xsink) {
     }
 
     uncountAllIntern(release);
+    measureAllIntern(cn);
     takeAllIntern(values);
     setLenIntern(Queue_Deleted);
+    roomClosedIntern(rn);
     if (desc) {
         desc->deref();
         desc = nullptr;
+    }
+}
+
+void qore_queue_private::measureAllIntern(QoreConsumeNotifier& cn) {
+    if (!consume_hook) {
+        return;
+    }
+    size_t bytes = 0;
+    for (QoreQueueNode* n = head; n; n = n->next) {
+        bytes += consume_hook->measure(n->node);
+    }
+    cn.set(consume_hook, bytes);
+}
+
+void qore_queue_private::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    AutoLocker al(&l);
+    consume_hook = std::move(hook);
+}
+
+std::shared_ptr<QueueItemConsumeHook> qore_queue_private::getItemConsumeHook() {
+    AutoLocker al(&l);
+    std::shared_ptr<QueueItemConsumeHook> rv = std::dynamic_pointer_cast<QueueItemConsumeHook>(consume_hook);
+    if (!rv) {
+        // a queue whose items no stream reports yet; any other hook would not know the items
+        assert(!consume_hook);
+        rv = std::make_shared<QueueItemConsumeHook>();
+        consume_hook = rv;
+    }
+    return rv;
+}
+
+void qore_queue_private::forgetRefusedItem(const AbstractQoreNode* node) {
+    std::shared_ptr<QueueItemConsumeHook> hook;
+    {
+        AutoLocker al(&l);
+        hook = std::dynamic_pointer_cast<QueueItemConsumeHook>(consume_hook);
+    }
+    if (hook) {
+        hook->forget(node);
     }
 }
 
@@ -138,6 +184,8 @@ void qore_queue_private::releaseScanHolderIntern(ScanHolderRelease& release) {
 }
 
 int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
+    // a wait that ends without data waits again only for the rest of the timeout
+    QoreWaitDeadline deadline(timeout_ms);
     // if there is no data, then wait for condition variable
     while (!head) {
         if (!err.empty()) {
@@ -148,12 +196,16 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
         int rc;
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
-            incWaitingIntern(read_waiting);
-            // Use interruptible wait for sandbox support
             // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
             int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
-            rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
-            decWaitingIntern(read_waiting);
+            if (deadline.active() && !(cond_timeout = deadline.remainingMs())) {
+                rc = QORE_COND_RESULT_TIMEOUT;
+            } else {
+                incWaitingIntern(read_waiting);
+                // Use interruptible wait for sandbox support
+                rc = read_cond.waitWithInterrupt(l, cond_timeout, xsink);
+                decWaitingIntern(read_waiting);
+            }
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 return QW_ERROR;  // Exception already raised
@@ -187,6 +239,8 @@ int qore_queue_private::waitReadIntern(ExceptionSink *xsink, int timeout_ms) {
 }
 
 int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
+    // a wait that ends with the queue still full waits again only for the rest of the timeout
+    QoreWaitDeadline deadline(timeout_ms);
     // if the queue is full, then wait for condition variable
     while (max > 0 && getLenIntern() >= max) {
         if (!err.empty()) {
@@ -197,12 +251,16 @@ int qore_queue_private::waitWriteIntern(ExceptionSink *xsink, int timeout_ms) {
         int rc;
         // issue #4077: do not call QoreCondition::wait() with a negative timeout value
         if (timeout_ms >= 0) {
-            incWaitingIntern(write_waiting);
-            // Use interruptible wait for sandbox support
             // Queue semantics: 0 = infinite wait, but waitWithInterrupt uses -1 for infinite
             int64 cond_timeout = (timeout_ms == 0) ? -1 : timeout_ms;
-            rc = write_cond.waitWithInterrupt(l, cond_timeout, xsink);
-            decWaitingIntern(write_waiting);
+            if (deadline.active() && !(cond_timeout = deadline.remainingMs())) {
+                rc = QORE_COND_RESULT_TIMEOUT;
+            } else {
+                incWaitingIntern(write_waiting);
+                // Use interruptible wait for sandbox support
+                rc = write_cond.waitWithInterrupt(l, cond_timeout, xsink);
+                decWaitingIntern(write_waiting);
+            }
             // Check for interrupt
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 return QW_ERROR;  // Exception already raised
@@ -307,8 +365,56 @@ void qore_queue_private::pushAndTakeRef(QoreValue n) {
 
     // a deleted queue or a queue in an error state does not take the value, so the reference is released here,
     // outside the lock; this API has no exception sink, so any exception is reported by the temporary one
+    if (const AbstractQoreNode* node = n.getInternalNode()) {
+        forgetRefusedItem(node);
+    }
     ExceptionSink xsink;
     n.discard(&xsink);
+}
+
+QoreQueue::TryPushResult qore_queue_private::tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max) {
+    QoreQueue::TryPushResult rv;
+    {
+        AutoLocker al(&l);
+        if (getLenIntern() == Queue_Deleted) {
+            rv = QoreQueue::QTP_DELETED;
+        } else if (!err.empty()) {
+            xsink->raiseException(err.c_str(), desc->stringRefSelf());
+            rv = QoreQueue::QTP_REFUSED;
+        } else if (!ignore_max && max > 0 && getLenIntern() >= max) {
+            // the caller keeps the value; the next value taken tells the room listeners
+            room_wanted = true;
+            return QoreQueue::QTP_FULL;
+        } else {
+            // the queue takes the reference
+            pushIntern(n);
+            return QoreQueue::QTP_PUSHED;
+        }
+    }
+    // a deleted queue or a queue in an error state takes the value and releases it, outside the lock
+    if (const AbstractQoreNode* node = n.getInternalNode()) {
+        forgetRefusedItem(node);
+    }
+    n.discard(xsink);
+    return rv;
+}
+
+void qore_queue_private::addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener) {
+    AutoLocker al(&l);
+    room_listeners.push_back(std::move(listener));
+}
+
+void qore_queue_private::removeRoomListener(const QoreQueueRoomListener* listener) {
+    // the listener removed is released after the lock
+    std::shared_ptr<QoreQueueRoomListener> removed;
+    AutoLocker al(&l);
+    for (auto i = room_listeners.begin(), e = room_listeners.end(); i != e; ++i) {
+        if (i->get() == listener) {
+            removed = std::move(*i);
+            room_listeners.erase(i);
+            break;
+        }
+    }
 }
 
 void qore_queue_private::countValues(QoreObject& self) {
@@ -327,6 +433,8 @@ void qore_queue_private::countValues(QoreObject& self) {
 void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);
+    // released after the lock and before the value
+    RefusedItemGuard refused(*this, n);
 
     {
         AutoLocker al(&l);
@@ -345,6 +453,7 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
         }
 
         pushIntern(holder.release());
+        refused.queued();
         if (self && needs_scan(n)) {
             tail->scan_counted = true;
             countIntern(*self);
@@ -368,6 +477,8 @@ std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook{n
 void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {
     to = false;
     ValueHolder holder(n, xsink);
+    // released after the lock and before the value
+    RefusedItemGuard refused(*this, n);
 
     {
         AutoLocker al(&l);
@@ -386,6 +497,7 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
         }
 
         insertIntern(holder.release());
+        refused.queued();
         if (self && needs_scan(n)) {
             head->scan_counted = true;
             countIntern(*self);
@@ -400,6 +512,10 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
     to = false;
     QoreValue rv{};
     {
+        // tells the room listeners that the queue has room, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
+        // reports the value taken to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
         SafeLocker sl(&l);
@@ -433,6 +549,7 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
         }
 
         addLenIntern(-1);
+        roomIntern(rn);
         if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
@@ -450,6 +567,9 @@ QoreValue qore_queue_private::shift(ExceptionSink* xsink, QoreObject* self, int 
             uncountIntern(release);
         }
 
+        if (consume_hook) {
+            cn.set(consume_hook, consume_hook->measure(n->node));
+        }
         sl.unlock();
         rv = n->takeAndDel();
     }
@@ -461,6 +581,10 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
     to = false;
     QoreValue rv{};
     {
+        // tells the room listeners that the queue has room, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
+        // reports the value taken to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
         SafeLocker sl(&l);
@@ -488,6 +612,7 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
         }
 
         addLenIntern(-1);
+        roomIntern(rn);
         if (getWriteWaitingIntern()) {
             write_cond.signal();
         }
@@ -505,6 +630,9 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
             uncountIntern(release);
         }
 
+        if (consume_hook) {
+            cn.set(consume_hook, consume_hook->measure(n->node));
+        }
         sl.unlock();
         rv = n->takeAndDel();
     }
@@ -514,8 +642,12 @@ QoreValue qore_queue_private::pop(ExceptionSink* xsink, QoreObject* self, int ti
 
 void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
     {
+        // tells the room listeners that the queue has room, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
+        // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the values are released after it
         NodeListRelease values(xsink);
         AutoLocker al(&l);
@@ -538,8 +670,10 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
         markRemovedIntern();
         uncountAllIntern(release);
 
+        measureAllIntern(cn);
         takeAllIntern(values);
         setLenIntern(0);
+        roomIntern(rn);
 
         if (getWriteWaitingIntern()) {
             write_cond.signal();
@@ -549,8 +683,12 @@ void qore_queue_private::clear(ExceptionSink* xsink, QoreObject* self) {
 
 void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_desc, QoreObject* self, ExceptionSink* xsink) {
     {
+        // tells the room listeners that the queue no longer takes values, after the lock (issue #5859)
+        QoreQueueRoomNotifier rn;
         // declared before the lock, so that the weak reference is released after it
         ScanHolderRelease release;
+        // reports the values dropped to the consume hook after the lock is released (see QoreConsumeHook)
+        QoreConsumeNotifier cn;
         // declared before the lock, so that the values are released after it
         NodeListRelease values(xsink);
         AutoLocker al(&l);
@@ -573,8 +711,10 @@ void qore_queue_private::setError(const char* n_err, const QoreStringNode* n_des
         uncountAllIntern(release);
 
         // clear the queue
+        measureAllIntern(cn);
         takeAllIntern(values);
         setLenIntern(0);
+        roomClosedIntern(rn);
 
         if (getReadWaitingIntern()) {
             read_cond.broadcast();
@@ -625,6 +765,26 @@ bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
     }
 
     return false;
+}
+
+void QoreQueue::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    priv->setConsumeHook(std::move(hook));
+}
+
+std::shared_ptr<QueueItemConsumeHook> QoreQueue::getItemConsumeHook() {
+    return priv->getItemConsumeHook();
+}
+
+QoreQueue::TryPushResult QoreQueue::tryPush(ExceptionSink* xsink, QoreValue n, bool ignore_max) {
+    return priv->tryPush(xsink, n, ignore_max);
+}
+
+void QoreQueue::addRoomListener(std::shared_ptr<QoreQueueRoomListener> listener) {
+    priv->addRoomListener(std::move(listener));
+}
+
+void QoreQueue::removeRoomListener(const QoreQueueRoomListener* listener) {
+    priv->removeRoomListener(listener);
 }
 
 QoreQueue::QoreQueue(int n_max) : priv(new qore_queue_private(n_max)) {

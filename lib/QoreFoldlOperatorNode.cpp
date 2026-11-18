@@ -29,6 +29,8 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -82,6 +84,10 @@ int QoreFoldlOperatorNode::getAsString(QoreString &str, int foff, ExceptionSink 
 }
 
 int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
+    // the code may run for no element, and leave before its end; see ParseLoopAssignedStateHelper
+    ParseLoopAssignedStateHelper loop_assigned_state;
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -105,7 +111,12 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         const QoreTypeInfo* implicitArgType =
             QoreTypeInfo::getImplicitArgTypeForIterator(right, iteratorTypeInfo);
 
-        ParseImplicitArgTypeHelper pia(implicitArgType);
+        // $2 is the next element (see evalImpl())
+        ParseImplicitArgTypeHelper pia(implicitArgType, implicitArgType);
+        // a fold does not set $#, so a $# in its expression is a parse error, also in the per-element code of an
+        // enclosing operator or foreach statement (qore#5690, qore#803)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.unsetFlags(PF_IMPLICIT_ELEMENT);
 
         parse_context.typeInfo = nullptr;
         {
@@ -113,6 +124,8 @@ int QoreFoldlOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
             if (parse_init_value(left, parse_context) && !err) {
                 err = -1;
             }
+            // qore#6288: see elementScope()
+            qore_parse_decide_element_scopes(this, decideElementScopes);
             left_analysis = parse_context.analysis;
         }
         expTypeInfo = parse_context.typeInfo;
@@ -233,7 +246,13 @@ QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSi
         args->push(result.release(), xsink);
         args->push(iv.takeReferencedValue(), xsink);
         ArgvContextHelper argv_helper(args, xsink);
-        result = left.eval(xsink);
+        if (elementScope(0)) {
+            // the temporaries of an element are released at its end, before the next element (qore#6288)
+            QoreStatementTempScope element_temps(xsink);
+            result = left.eval(xsink);
+        } else {
+            result = left.eval(xsink);
+        }
         if (*xsink) {
             return QoreValue();
         }
@@ -265,4 +284,13 @@ int QoreFoldrOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink*
 
 QoreValue QoreFoldrOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     return doFold(false, needs_deref, xsink);
+}
+
+void QoreFoldlOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreFoldlOperatorNode* self = static_cast<QoreFoldlOperatorNode*>(op);
+    uint8_t v = 0;
+    if (qore_expr_may_create_observable_temp(self->left)) {
+        v |= 1u << 0;
+    }
+    self->element_scopes.set(v);
 }

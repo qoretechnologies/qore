@@ -32,6 +32,9 @@
 #ifndef _QORE_QOREOPERATORNODE_H
 #define _QORE_QOREOPERATORNODE_H
 
+
+#include <memory>
+#include <vector>
 #include <cstdarg>
 #include <type_traits>
 #include <utility>
@@ -50,6 +53,8 @@ private:
    /** see copy_value_and_resolve_lvar_refs_bound_implicit()
    */
    unsigned bound_implicit_depth = 0;
+   //! true while the copy is copying the access path of an lvalue (see copy_lvalue_and_resolve_lvar_refs())
+   bool lvalue_path = false;
    bool release = false;
 
 public:
@@ -76,6 +81,18 @@ public:
       return bound_implicit_depth != 0;
    }
 
+   //! Returns true while the copy is copying the access path of an lvalue (see copy_lvalue_and_resolve_lvar_refs())
+   DLLLOCAL bool inLValuePath() const {
+      return lvalue_path;
+   }
+
+   //! Sets whether the copy is copying the access path of an lvalue; returns the previous state
+   DLLLOCAL bool setLValuePath(bool path) {
+      bool rv = lvalue_path;
+      lvalue_path = path;
+      return rv;
+   }
+
    DLLLOCAL std::vector<QoreObject*> takeObjects() {
       std::vector<QoreObject*> rv(std::move(objects));
       release = true;
@@ -85,6 +102,15 @@ public:
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);
+//! Copies the lvalue operand of an lvalue operator of a background expression (issue #5723)
+/** As copy_value_and_resolve_lvar_refs(), except that its access path is kept: the nodes of its steps ([], ., casts
+    and slices) are copied, and the variable or member at its root is replaced by a BackgroundLValueRootNode holding the
+    value that the thread takes, with the variable's declared type
+*/
+DLLLOCAL QoreValue copy_lvalue_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
+//! As copy_value_and_resolve_lvar_refs() for an operand that is not the next step of an lvalue's access path
+/** The key, index or other operand of a step of an lvalue's access path is a value */
+DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& n, ExceptionSink* xsink);
 
 //! Copies an operand that an operator evaluates with implicit arguments of its own, for the background operator
 /** The background operator copies its expression with the values of the local variables and of the implicit
@@ -95,14 +121,80 @@ DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const Qor
 */
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, ExceptionSink* xsink);
 
-// type of logical operator function
-typedef bool (*op_log_func_t)(const QoreValue& l, const QoreValue& r, ExceptionSink* xsink);
+//! The element scope flags of a functional operator (qore#6288)
+/** A bit for each operand, by index, that the operator evaluates for each element as a statement of its own (see
+    qore_expr_may_create_observable_temp()), and ValueUsed; decided by qore_parse_decide_element_scopes() when the operator is
+    initialized for parsing, and again when the parse of the Program's code ends (QoreElementScopeParseHelper)
+*/
+class QoreElementScopeFlags {
+public:
+    //! set by a map or map/select operator whose value is used, which keeps the value of each element: the element
+    //! loop tests it with the same load as the element scope (QoreMapOperatorNode::needsReturnValue())
+    static constexpr uint8_t ValueUsed = 0x80;
+
+    //! the flags of an operator that has not been initialized for parsing, such as one that the AOT reader or the IR
+    //! interpreter creates at run time: every operand is a statement of its own, and its value is used until
+    //! QoreOperatorNode::ignoreReturnValue() is called, as for QoreOperatorNode::needsReturnValue()
+    static constexpr uint8_t All = 0xff;
+
+    DLLLOCAL uint8_t get() const {
+        return flags;
+    }
+
+    DLLLOCAL void set(uint8_t v) {
+        flags = v;
+    }
+
+private:
+    uint8_t flags = All;
+};
+
+//! decides the element scope flags of a functional operator; the argument is the operator
+typedef void (*q_element_scope_decider_t)(AbstractQoreNode* op);
+
+//! decides the element scope flags of a functional operator that has been initialized for parsing
+/** Called at the end of the operator's parse initialization: decides the flags with what the parse knows then, and,
+    while a QoreElementScopeParseHelper is active, decides them again when it ends: a reference to a local variable
+    that an operand reads, or a closure that binds it, can be parsed after the operator
+*/
+DLLLOCAL void qore_parse_decide_element_scopes(AbstractQoreNode* op, q_element_scope_decider_t decide);
+
+//! Decides the element scope flags of the functional operators initialized for parsing in its scope when it ends
+/** Active while the parse initializes the code of a Program; a helper created while another one is active does
+    nothing, so the flags are decided when the outermost one ends, after all the code has been initialized
+*/
+class QoreElementScopeParseHelper {
+public:
+    DLLLOCAL QoreElementScopeParseHelper();
+    DLLLOCAL ~QoreElementScopeParseHelper();
+
+    QoreElementScopeParseHelper(const QoreElementScopeParseHelper&) = delete;
+    QoreElementScopeParseHelper& operator=(const QoreElementScopeParseHelper&) = delete;
+
+private:
+    //! the operators to decide, each with a reference of its own; null if another helper is active
+    std::unique_ptr<std::vector<std::pair<AbstractQoreNode*, q_element_scope_decider_t>>> ops;
+};
 
 class QoreOperatorNode : public ParseNode {
 private:
    bool in_parentheses;
+   //! true if this is a QoreCastOperatorNode (see qore_get_cast_operator_node())
+   bool cast_operator = false;
+   //! true if this is a QoreDotEvalOperatorNode (see qore_get_dot_eval_operator_node())
+   bool dot_eval_operator = false;
 protected:
    bool ref_rv;
+
+   //! Marks the node as a QoreCastOperatorNode; called only by its constructor
+   DLLLOCAL void setCastOperator() {
+      cast_operator = true;
+   }
+
+   //! Marks the node as a QoreDotEvalOperatorNode; called only by its constructor
+   DLLLOCAL void setDotEvalOperator() {
+      dot_eval_operator = true;
+   }
 
    DLLLOCAL virtual ~QoreOperatorNode() {}
 
@@ -129,6 +221,16 @@ public:
 
    DLLLOCAL bool getInParentheses() const {
        return in_parentheses;
+   }
+
+   //! Returns true if this is a QoreCastOperatorNode
+   DLLLOCAL bool isCastOperator() const {
+       return cast_operator;
+   }
+
+   //! Returns true if this is a QoreDotEvalOperatorNode
+   DLLLOCAL bool isDotEvalOperator() const {
+       return dot_eval_operator;
    }
 
    //! Returns true if the operator's return value is used
@@ -171,19 +273,41 @@ public:
                 return lvalue_err;
             } else if ((pflag & PF_CONST_METHOD) && check_const_method_lvalue(loc, exp)) {
                 return -2;
-            } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_VARREF
-                && exp.get<const VarRefNode>()->getType() == VT_LOCAL) {
-                parse_error(*loc, "illegal local variable modification with the background operator in %s",
-                    getTypeName());
-                return -1;
-            } else if ((pflag & PF_BACKGROUND) && exp.getType() == NT_SELF_VARREF) {
-                // the expression takes the member's value when the thread starts, as it does for local variables
-                parse_error(*loc, "illegal member modification with the background operator in %s", getTypeName());
-                return -1;
+            } else if (pflag & PF_BACKGROUND_EXPR) {
+                // a local, a member, or a value contained in one, which the thread copies (issue #5723)
+                qore_background_lvalue_e kind = parse_check_background_lvalue(exp);
+                if (kind != qore_background_lvalue_e::SHARED) {
+                    parse_raise_background_lvalue_error(loc, kind, getTypeName());
+                    return -1;
+                }
             }
         }
         return 0;
     }
+};
+
+//! the keys and indices of an lvalue path, the one nearest the root first, cached in the path's last step
+/** Created once for a path whose keys LValueHelper evaluates before it resolves the path, as at least two of them
+    need an evaluation (qore#5753)
+*/
+struct QoreLValuePathKeys {
+    std::vector<QoreValue> keys;
+};
+
+//! the cached keys of an lvalue path (see QoreLValuePathKeys), owned by the last step of the path
+class QoreLValuePathKeyCache {
+public:
+    DLLLOCAL QoreLValuePathKeyCache() = default;
+    DLLLOCAL ~QoreLValuePathKeyCache() {
+        delete keys.load(std::memory_order_relaxed);
+    }
+    QoreLValuePathKeyCache(const QoreLValuePathKeyCache&) = delete;
+    QoreLValuePathKeyCache& operator=(const QoreLValuePathKeyCache&) = delete;
+
+    //! -1 if not known yet, 0 if the keys are not evaluated first, 1 if they are (keys is then set)
+    std::atomic<int8_t> state{-1};
+    //! the keys, set before state is 1
+    std::atomic<const QoreLValuePathKeys*> keys{nullptr};
 };
 
 template <class T = QoreOperatorNode>
@@ -246,7 +370,10 @@ public:
 
     template <class O>
     DLLLOCAL O* copyBackgroundExplicit(ExceptionSink* xsink) const {
-        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        // the operand of an lvalue operator is an lvalue (issue #5723)
+        ValueHolder n_exp(std::is_base_of<LValueOperatorNode, T>::value
+            ? copy_lvalue_and_resolve_lvar_refs(exp, xsink)
+            : copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new O(this->loc, n_exp.release());
@@ -309,7 +436,10 @@ public:
 
     template <class O>
     DLLLOCAL O* copyBackgroundExplicit(ExceptionSink* xsink) const {
-        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        // the operand of an lvalue operator is an lvalue (issue #5723)
+        ValueHolder n_exp(std::is_base_of<LValueOperatorNode, T>::value
+            ? copy_lvalue_and_resolve_lvar_refs(exp, xsink)
+            : copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new O(this->loc, n_exp.release());
@@ -385,10 +515,14 @@ public:
 
     template <class O>
     DLLLOCAL O* copyBackgroundExplicit(ExceptionSink* xsink) const {
-        ValueHolder n_left(copy_value_and_resolve_lvar_refs(left, xsink), xsink);
+        // the left operand of an lvalue operator is an lvalue, and the left operand of a step of an lvalue's access
+        // path is the next step; the right operand is a value (issue #5723)
+        ValueHolder n_left(std::is_base_of<LValueOperatorNode, T>::value
+            ? copy_lvalue_and_resolve_lvar_refs(left, xsink)
+            : copy_value_and_resolve_lvar_refs(left, xsink), xsink);
         if (*xsink)
             return nullptr;
-        ValueHolder n_right(copy_value_and_resolve_lvar_refs(right, xsink), xsink);
+        ValueHolder n_right(copy_value_and_resolve_lvar_refs_not_lvalue(right, xsink), xsink);
         if (*xsink)
             return nullptr;
         return new O(this->loc, n_left.release(), n_right.release());
@@ -435,8 +569,30 @@ public:
             : QoreBinaryOperatorNode<>(loc, left, right) {
     }
 
+    //! Returns the result type: that of the plugin operation that the operator resolved at parse time, if any, or int
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return bigIntTypeInfo;
+        return plugin_operation ? plugin_type_info : bigIntTypeInfo;
+    }
+
+protected:
+    //! true if the operator resolved a plugin operation at parse time, whose result type is plugin_type_info
+    /** The IR lowering selects the operations that use the operator's value, such as the plugin subscript
+        operation of a DataFrame subscript whose key is a RowMask expression, by the operator's type (qore#6141)
+    */
+    bool plugin_operation = false;
+    //! the result type of the plugin operation that the operator resolved at parse time
+    const QoreTypeInfo* plugin_type_info = nullptr;
+
+    //! Sets the result type of the plugin operation that the operator resolved at parse time
+    DLLLOCAL void setPluginTypeInfo(const QoreTypeInfo* type_info) {
+        plugin_operation = true;
+        plugin_type_info = type_info;
+    }
+
+    //! Takes the result type of the plugin operation of the operator that this one is a copy of
+    DLLLOCAL void copyPluginTypeInfo(const QoreIntBinaryOperatorNode& old) {
+        plugin_operation = old.plugin_operation;
+        plugin_type_info = old.plugin_type_info;
     }
 };
 

@@ -48,6 +48,8 @@ module Sap4HanaRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("sap4hanarests", Sap4HanaRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage Sap4HanaRestClient Module

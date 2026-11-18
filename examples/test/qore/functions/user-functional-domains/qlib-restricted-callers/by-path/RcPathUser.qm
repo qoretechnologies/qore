@@ -1,0 +1,55 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcPathUser.qm - test module that a restricted Program loads by its path (not library code) (qore#6337)
+# the test copies it to a directory outside the module path before it is loaded: a file under a directory of the
+# module path is library code, however it is loaded
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires RcHub
+
+module RcPathUser {
+    version = "1.0";
+    desc = "test module loaded by its path, whose listener uses the API object that RcHubLib gives";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! What the listener recorded
+class RcPathUserState {
+    public {
+        static list<string> log = ();
+        static *code kept;
+    }
+}
+
+#! The public definitions of the test module
+public namespace RcPathUser {
+#! Adds the module's listener to RcHub
+public sub arm() {
+    RcHub::hub_add(sub (auto api) {
+        try {
+            RcPathUserState::log += "in-init tagged: " + api.tagged();
+        } catch (hash<ExceptionInfo> ex) {
+            RcPathUserState::log += "in-init tagged: " + ex.err;
+        }
+        RcPathUserState::kept = api.make();
+        try {
+            RcPathUserState::log += "in-init closure called: " + RcPathUserState::kept();
+        } catch (hash<ExceptionInfo> ex) {
+            RcPathUserState::log += "in-init closure called: " + ex.err;
+        }
+    });
+}
+
+#! Returns what the listener recorded
+public list<string> sub getLog() {
+    return RcPathUserState::log;
+}
+
+#! Returns the closure that the listener got
+public *code sub getClosure() {
+    return RcPathUserState::kept;
+}
+}

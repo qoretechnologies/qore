@@ -1,0 +1,70 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A library module for native-program-sandbox.qtest (issue #5659): the test puts this directory in the process-wide
+# module path, so the module is library code also when sandboxed code loads it first.  Its class and the Programs
+# that its initialization creates are trusted code, until sandboxed code parses code in one of them.
+
+%modern
+
+module NpsLibrary {
+    version = "1.0";
+    desc = "library code that sandboxed code loads first";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = \NpsLibrary::init();
+}
+
+public namespace NpsLibrary {
+    #! a Program that the initialization of the module creates; trusted code parses code in it
+    our Program InitProgram;
+    #! another Program that the initialization of the module creates; sandboxed code parses code in it
+    our Program SharedProgram;
+
+    #! creates the Programs; called when the module is initialized
+    sub init() {
+        InitProgram = new Program(PO_NEW_STYLE);
+        SharedProgram = new Program(PO_NEW_STYLE);
+    }
+
+    #! returns a Program that the initialization of the module created
+    public Program sub init_program() {
+        return InitProgram;
+    }
+
+    #! returns the other Program that the initialization of the module created
+    public Program sub shared_program() {
+        return SharedProgram;
+    }
+
+    #! a class whose destructor reaches a cancellation point
+    public class Res {
+        private {
+            Queue ev;
+        }
+
+        constructor(Queue ev) {
+            self.ev = ev;
+        }
+
+        destructor() {
+            Mutex m();
+            m.lock();
+            m.unlock();
+            ev.push("dtor");
+        }
+    }
+
+    #! reaches a cancellation point
+    public sub point() {
+        Mutex m();
+        m.lock();
+        m.unlock();
+    }
+
+    #! returns an object of the class
+    public Res sub make(Queue ev) {
+        return new Res(ev);
+    }
+}

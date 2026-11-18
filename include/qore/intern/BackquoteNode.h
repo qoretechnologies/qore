@@ -77,23 +77,25 @@ DLLLOCAL QoreStringNode *backquoteEval(const char* cmd, int& rc, ExceptionSink* 
 //! the result of qore_wait_child_process()
 enum class QoreChildWaitResult {
     EXITED,         //!< the process ended; its wait status is available
-    WAIT_FAILED,    //!< waitpid() failed with the errno value given; no exception is raised
-    RAISED,         //!< an exception was raised: the wait was cancelled or could not be made; the process is reaped
+    WAIT_FAILED,    //!< waitid() or waitpid() failed with the errno value given; no exception is raised
+    //! an exception was raised: the wait was cancelled or could not be made; the process has been killed, and it has
+    //! been reaped unless waiting for it failed
+    RAISED,
 };
 
 //! waits for a child process to end; the wait can be cancelled
 /** The calling thread blocks until the process ends or the thread is cancelled, or its Program is interrupted by its
-    SandboxManager; there is no polling: a helper thread blocks in waitpid() and wakes the caller, and cancellation
-    wakes the caller through its interruptible condition wait.
+    SandboxManager; there is no polling: a helper thread blocks in waitid() until the process has ended, without
+    reaping it, and wakes the caller, and cancellation wakes the caller through its interruptible condition wait.
 
     When the wait is cancelled, or the helper thread cannot be started, \a kill_target (the process, or its process
-    group as a negative number) is killed with SIGKILL, as with qore_kill_child_process(), the process is reaped, and
-    an exception is raised.
+    group as a negative number) is killed with SIGKILL as with qore_kill_child_process(), the process is reaped unless
+    waiting for it failed, and an exception is raised.
 
     @param pid the child process to wait for
     @param kill_target the argument for kill() to terminate the process: \a pid or the process group as -pgid
     @param status the wait status of the process if QoreChildWaitResult::EXITED is returned
-    @param wait_errno the errno value of waitpid() if QoreChildWaitResult::WAIT_FAILED is returned
+    @param wait_errno the errno value of waitid() or waitpid() if QoreChildWaitResult::WAIT_FAILED is returned
     @param err the exception code raised if the helper thread cannot be started
     @param xsink for the exception raised
 
@@ -103,9 +105,12 @@ DLLLOCAL QoreChildWaitResult qore_wait_child_process(pid_t pid, pid_t kill_targe
         const char* err, ExceptionSink* xsink);
 
 //! kills a child process, or the process group that it leads, with SIGKILL and reaps the child process
-/** When \a kill_target is the process group, SIGKILL is sent to the group again after the child process has ended and
-    before it is reaped: a signal sent to a process group does not reach a process that a member of the group is
-    creating at that moment on macOS, for example, and the leader can create no more processes once it has ended.
+/** When \a kill_target is the process group, every process in the group is killed: on Linux, the signal reaches every
+    process in the group, including one being created at that moment; on macOS, where a process being created does
+    not receive it, the group is killed again after the child process has ended, before it is reaped, each time
+    other processes in the group end, until no process but the child is left in the group or none has ended for two
+    seconds (see qore_kill_child_process_group() in BackquoteNode.cpp); elsewhere, the group is killed once more after
+    the child process has ended.
 
     @param pid the child process
     @param kill_target the argument for kill() to terminate the process: \a pid or the process group that it leads as

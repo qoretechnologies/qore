@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 %modern
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit

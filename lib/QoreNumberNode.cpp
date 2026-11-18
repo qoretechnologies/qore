@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/qore_date_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 
 #include <algorithm>
@@ -462,6 +463,274 @@ int qore_number_private::formatNumberString(QoreString& num, int prec, const Qor
     return formatNumberStringIntern(num, prec, **dsep, **tsep, xsink);
 }
 
+namespace {
+//! an integer for the duration of a scope
+struct QoreMpz {
+    mpz_t z;
+
+    QoreMpz() {
+        mpz_init(z);
+    }
+
+    ~QoreMpz() {
+        mpz_clear(z);
+    }
+
+    QoreMpz(const QoreMpz&) = delete;
+    QoreMpz& operator=(const QoreMpz&) = delete;
+};
+
+//! a value with the given precision for the duration of a scope
+struct QoreMpfrValue {
+    mpfr_t v;
+
+    explicit QoreMpfrValue(mpfr_prec_t prec) {
+        mpfr_init2(v, prec < MPFR_PREC_MIN ? MPFR_PREC_MIN : prec);
+    }
+
+    ~QoreMpfrValue() {
+        mpfr_clear(v);
+    }
+
+    QoreMpfrValue(const QoreMpfrValue&) = delete;
+    QoreMpfrValue& operator=(const QoreMpfrValue&) = delete;
+};
+
+//! how a value is rounded to an integer
+enum class QoreDecimalRounding {
+    HalfAway,
+    Ceil,
+    Floor,
+};
+
+//! sets @a q to @a num / @a den (@a den > 0) rounded to an integer as given by @a mode
+void qore_mpz_div_round(mpz_t q, const mpz_t num, const mpz_t den, QoreDecimalRounding mode) {
+    switch (mode) {
+        case QoreDecimalRounding::Ceil:
+            mpz_cdiv_q(q, num, den);
+            return;
+        case QoreDecimalRounding::Floor:
+            mpz_fdiv_q(q, num, den);
+            return;
+        case QoreDecimalRounding::HalfAway: {
+            // floor((2 * |num| + den) / (2 * den)), with the sign of num
+            QoreMpz n2, d2;
+            mpz_abs(n2.z, num);
+            mpz_mul_2exp(n2.z, n2.z, 1);
+            mpz_add(n2.z, n2.z, den);
+            mpz_mul_2exp(d2.z, den, 1);
+            mpz_fdiv_q(q, n2.z, d2.z);
+            if (mpz_sgn(num) < 0) {
+                mpz_neg(q, q);
+            }
+            return;
+        }
+    }
+}
+
+//! the bounds of log2(10) in units of 10^-8: LOG2_10_LOW < log2(10) * 10^8 < LOG2_10_HIGH
+constexpr __int128 LOG2_10_LOW = 332192809;
+constexpr __int128 LOG2_10_HIGH = 332192810;
+constexpr __int128 LOG2_10_UNIT = 100000000;
+}
+
+void qore_number_private::roundDecimal(mpfr_t rv, const mpfr_t x, q_mpfr_unary_nr_func_t func, int64 prec) {
+    assert(mpfr_regular_p(x));
+    assert(prec);
+    QoreDecimalRounding mode = func == mpfr_ceil
+        ? QoreDecimalRounding::Ceil
+        : (func == mpfr_floor ? QoreDecimalRounding::Floor : QoreDecimalRounding::HalfAway);
+    assert(mode != QoreDecimalRounding::HalfAway || func == mpfr_round);
+
+    const bool neg = mpfr_signbit(x);
+    // 2^(e - 1) <= |x| < 2^e
+    const __int128 e = mpfr_get_exp(x);
+    // the precision of the result
+    const __int128 p = mpfr_get_prec(rv);
+    const __int128 k = prec;
+
+    // x * 10^k is an integer if k is at least the number of binary digits of x after the binary point: then x is its
+    // own multiple of 10^-k
+    if (k > 0 && k >= static_cast<__int128>(mpfr_min_prec(x)) - e) {
+        mpfr_set(rv, x, QORE_MPFR_RND);
+        return;
+    }
+
+    // |x * 10^k| < 1/2: the result is zero, or 10^-k with the sign of x when it is rounded away from zero
+    // (|x * 10^k| < 2^(e + k * log2(10)), with an upper bound of k * log2(10))
+    if (e * LOG2_10_UNIT + k * (k > 0 ? LOG2_10_HIGH : LOG2_10_LOW) <= -LOG2_10_UNIT) {
+        if ((mode == QoreDecimalRounding::Ceil && !neg) || (mode == QoreDecimalRounding::Floor && neg)) {
+            // 10^-k, correctly rounded to the precision of the result
+            QoreMpfrValue t(64);
+            mpfr_set_sj(t.v, prec, MPFR_RNDN);
+            mpfr_neg(t.v, t.v, MPFR_RNDN);
+            mpfr_exp10(rv, t.v, QORE_MPFR_RND);
+            if (neg) {
+                mpfr_neg(rv, rv, QORE_MPFR_RND);
+            }
+        } else {
+            mpfr_set_zero(rv, neg ? -1 : 1);
+        }
+        return;
+    }
+
+    // 10^-k <= 2^(e - p - 3), an eighth of the unit in the last place of x at the precision of the result: the
+    // multiple of 10^-k, which is at most 10^-k from x, is x correctly rounded (with a lower bound of k * log2(10))
+    if (k * (k > 0 ? LOG2_10_LOW : LOG2_10_HIGH) >= (p + 3 - e) * LOG2_10_UNIT) {
+        mpfr_set(rv, x, QORE_MPFR_RND);
+        return;
+    }
+
+    // otherwise |x * 10^k| is about 1/4 or more and below 2^(p + 8) (the bounds of log2(10) leave a few bits of
+    // slack), so the multiple of 10^-k is an integer of at most about p + 8 bits times 10^-k; 10^-k = 5^-k * 2^-k,
+    // whose binary part only scales the exponent, exactly
+    const unsigned long ak = static_cast<unsigned long>(k > 0 ? k : -k);
+    QoreMpz n;
+    // a small 5^|k| (log2(5) < 2.322): the integer and the result are computed exactly, in integer arithmetic
+    if (static_cast<__int128>(ak) * 2322 <= (4 * p + 256) * 1000) {
+        // x = z * 2^ze exactly
+        QoreMpz z;
+        mpfr_exp_t ze = mpfr_get_z_2exp(z.z, x);
+        QoreMpz p5;
+        mpz_ui_pow_ui(p5.z, 5, ak);
+        QoreMpz num, den;
+        if (k > 0) {
+            // x * 10^k = z * 5^k * 2^(ze + k)
+            mpz_mul(num.z, z.z, p5.z);
+            __int128 shift = static_cast<__int128>(ze) + k;
+            if (shift >= 0) {
+                mpz_mul_2exp(n.z, num.z, static_cast<mp_bitcnt_t>(shift));
+            } else {
+                mpz_set_ui(den.z, 1);
+                mpz_mul_2exp(den.z, den.z, static_cast<mp_bitcnt_t>(-shift));
+                qore_mpz_div_round(n.z, num.z, den.z, mode);
+            }
+            if (!mpz_sgn(n.z)) {
+                mpfr_set_zero(rv, neg ? -1 : 1);
+                return;
+            }
+            // n / 10^k = (n / 5^k) / 2^k: the division of the exact operands rounds once, and the scaling is exact
+            QoreMpfrValue nf(static_cast<mpfr_prec_t>(mpz_sizeinbase(n.z, 2)));
+            mpfr_set_z(nf.v, n.z, MPFR_RNDN);
+            QoreMpfrValue tf(static_cast<mpfr_prec_t>(mpz_sizeinbase(p5.z, 2)));
+            mpfr_set_z(tf.v, p5.z, MPFR_RNDN);
+            mpfr_div(rv, nf.v, tf.v, QORE_MPFR_RND);
+            mpfr_div_2ui(rv, rv, ak, QORE_MPFR_RND);
+            return;
+        }
+        // x * 10^k = z * 2^(ze - |k|) / 5^|k|
+        mpz_set(den.z, p5.z);
+        __int128 shift = static_cast<__int128>(ze) - ak;
+        if (shift >= 0) {
+            mpz_mul_2exp(num.z, z.z, static_cast<mp_bitcnt_t>(shift));
+        } else {
+            mpz_set(num.z, z.z);
+            mpz_mul_2exp(den.z, den.z, static_cast<mp_bitcnt_t>(-shift));
+        }
+        qore_mpz_div_round(n.z, num.z, den.z, mode);
+        if (!mpz_sgn(n.z)) {
+            mpfr_set_zero(rv, neg ? -1 : 1);
+            return;
+        }
+        // n * 10^|k| = (n * 5^|k|) * 2^|k|: rounded once, and the scaling is exact
+        mpz_mul(n.z, n.z, p5.z);
+        mpfr_set_z(rv, n.z, QORE_MPFR_RND);
+        mpfr_mul_2ui(rv, rv, ak, QORE_MPFR_RND);
+        return;
+    }
+
+    // a large 5^|k| (more than 4p + 255 bits): |x * 10^k| is never an integer or halfway between two (that would
+    // need 5^|k| to divide the integer of x, or |k| to be the number of binary digits of x after the binary point
+    // less one, with |x * 10^k| < 2^(p + 8)), and the multiple n * 10^-k of 10^-k is not a binary number (5^|k|
+    // does not divide n), so both are found with intervals and approximations of increasing precision, which end;
+    // the exponent of the values in the computation stays near that of x, so that a value near the limit of the
+    // exponent range does not overflow (10^k itself can be out of the range)
+
+    // the integer is found for |x|: the floor of a negative value is the ceiling of its magnitude, and vice versa
+    QoreDecimalRounding amode = mode;
+    if (neg && mode == QoreDecimalRounding::Ceil) {
+        amode = QoreDecimalRounding::Floor;
+    } else if (neg && mode == QoreDecimalRounding::Floor) {
+        amode = QoreDecimalRounding::Ceil;
+    }
+    // |x| * 2^k, exactly
+    QoreMpfrValue ax(mpfr_get_prec(x));
+    mpfr_abs(ax.v, x, MPFR_RNDN);
+    if (k > 0) {
+        mpfr_mul_2ui(ax.v, ax.v, ak, MPFR_RNDN);
+    } else {
+        mpfr_div_2ui(ax.v, ax.v, ak, MPFR_RNDN);
+    }
+    // the integer of a value in the interval of |x * 10^k| as given by amode
+    auto to_integer = [amode](mpz_t r, const mpfr_t y, mpfr_prec_t q) {
+        switch (amode) {
+            case QoreDecimalRounding::Ceil:
+                mpfr_get_z(r, y, MPFR_RNDU);
+                return;
+            case QoreDecimalRounding::Floor:
+                mpfr_get_z(r, y, MPFR_RNDD);
+                return;
+            case QoreDecimalRounding::HalfAway: {
+                // floor(y + 1/2), with y + 1/2 exact when y >= 1/4 (y < 2^(p + 8) and q >= p + 64); for a smaller
+                // y, the rounded sum stays below 1, so its floor (0) is right too
+                QoreMpfrValue h(q + 2);
+                mpfr_add_d(h.v, y, 0.5, MPFR_RNDN);
+                mpfr_get_z(r, h.v, MPFR_RNDD);
+                return;
+            }
+        }
+    };
+    for (mpfr_prec_t q = static_cast<mpfr_prec_t>(p) + 64;; q *= 2) {
+        // 5^|k| below and above, and |x * 10^k| below and above
+        QoreMpfrValue s_lo(q), s_hi(q), y_lo(q), y_hi(q);
+        mpfr_ui_pow_ui(s_lo.v, 5, ak, MPFR_RNDD);
+        mpfr_ui_pow_ui(s_hi.v, 5, ak, MPFR_RNDU);
+        if (k > 0) {
+            mpfr_mul(y_lo.v, ax.v, s_lo.v, MPFR_RNDD);
+            mpfr_mul(y_hi.v, ax.v, s_hi.v, MPFR_RNDU);
+        } else {
+            mpfr_div(y_lo.v, ax.v, s_hi.v, MPFR_RNDD);
+            mpfr_div(y_hi.v, ax.v, s_lo.v, MPFR_RNDU);
+        }
+        QoreMpz n_lo, n_hi;
+        to_integer(n_lo.z, y_lo.v, q);
+        to_integer(n_hi.z, y_hi.v, q);
+        if (!mpz_cmp(n_lo.z, n_hi.z)) {
+            mpz_set(n.z, n_lo.z);
+            break;
+        }
+    }
+    if (!mpz_sgn(n.z)) {
+        mpfr_set_zero(rv, neg ? -1 : 1);
+        return;
+    }
+    // n * 10^-k = (n / 5^k) / 2^k or (n * 5^|k|) * 2^|k|, correctly rounded when the approximation's error allows it
+    for (mpfr_prec_t q = static_cast<mpfr_prec_t>(p) + 64;; q *= 2) {
+        QoreMpfrValue s(q), r(q);
+        mpfr_ui_pow_ui(s.v, 5, ak, MPFR_RNDN);
+        // exact: n has fewer than q bits
+        mpfr_set_z(r.v, n.z, MPFR_RNDN);
+        if (k > 0) {
+            mpfr_div(r.v, r.v, s.v, MPFR_RNDN);
+        } else {
+            mpfr_mul(r.v, r.v, s.v, MPFR_RNDN);
+        }
+        // two roundings to nearest: the relative error is below 2^(2 - q)
+        if (mpfr_can_round(r.v, q - 3, MPFR_RNDN, MPFR_RNDZ, static_cast<mpfr_prec_t>(p) + 1)) {
+            mpfr_set(rv, r.v, QORE_MPFR_RND);
+            break;
+        }
+    }
+    if (neg) {
+        mpfr_neg(rv, rv, QORE_MPFR_RND);
+    }
+    if (k > 0) {
+        mpfr_div_2ui(rv, rv, ak, QORE_MPFR_RND);
+    } else {
+        mpfr_mul_2ui(rv, rv, ak, QORE_MPFR_RND);
+    }
+}
+
 int qore_number_private::doRound(QoreString& num, qore_offset_t& dp, int prec) {
     // must round before the decimal point - get the position of the number to round
     int dt = dp + prec;
@@ -605,7 +874,8 @@ QoreNumberNode::QoreNumberNode(const QoreValue n) : SimpleValueQoreNode(NT_NUMBE
         return;
     }
 
-    if (t == NT_INT) {
+    // a char converts to its code point (qore#6020)
+    if (t == NT_INT || t == NT_CHAR) {
         priv = new qore_number_private(n.getAsBigInt());
         return;
     }
@@ -661,16 +931,23 @@ void QoreNumberNode::getStringRepresentation(QoreString& str) const {
 }
 
 // if del is true, then the returned DateTime * should be deleted, if false, then it should not
+// the seconds and microseconds are split as for an absolute date from a float with no exception sink: the fraction was
+// taken from a float of the int of the value, which lost precision above 2^24 seconds and was undefined above 2^31, and
+// a value out of range, infinity and NaN were undefined (qore#6212)
 DateTime *QoreNumberNode::getDateTimeRepresentation(bool& del) const {
     del = true;
-    double f = priv->getAsFloat();
-    return DateTime::makeAbsoluteLocal(currentTZ(), (int64)f, (int)((f - (float)((int)f)) * 1000000));
+    int64 secs;
+    int us;
+    qore_split_float_seconds_saturated(priv->getAsFloat(), secs, us);
+    return DateTime::makeAbsoluteLocal(currentTZ(), secs, us);
 }
 
 // assign date representation to a DateTime (no action for complex types = default implementation)
 void QoreNumberNode::getDateTimeRepresentation(DateTime& dt) const {
-    double f = priv->getAsFloat();
-    dt.setLocalDate(currentTZ(), (int64)f, (int)((f - (float)((int)f)) * 1000000));
+    int64 secs;
+    int us;
+    qore_split_float_seconds_saturated(priv->getAsFloat(), secs, us);
+    dt.setLocalDate(currentTZ(), secs, us);
 }
 
 bool QoreNumberNode::getAsBoolImpl() const {
@@ -748,6 +1025,31 @@ int QoreNumberNode::parseInit(QoreValue& val, QoreParseContext& parse_context) {
 
 bool QoreNumberNode::zero() const {
     return priv->zero();
+}
+
+// documented in QoreLibIntern.h
+bool qore_number_divisor_is_zero(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_NUMBER:
+            return v.get<const QoreNumberNode>()->zero();
+        // their conversion to a number is zero exactly when their float is
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_BOOLEAN:
+        case NT_NOTHING:
+        case NT_NULL:
+            return v.getAsFloat() == 0.0;
+        default: {
+            // the number that the division converts the value to (ex: a string)
+            SimpleRefHolder<QoreNumberNode> n(new QoreNumberNode(v));
+            return n->zero();
+        }
+    }
+}
+
+// documented in QoreLibIntern.h
+bool qore_constant_divisor_is_zero(const QoreValue& v) {
+    return v.getAsFloat() == 0.0 && qore_number_divisor_is_zero(v);
 }
 
 int QoreNumberNode::sign() const {
@@ -885,8 +1187,10 @@ QoreNumberNode* QoreNumberNode::toNumber(const QoreValue n) {
         return new QoreNumberNode(text.c_str());
     }
 
-    if (t == NT_INT)
+    // a char converts to its code point (qore#6020)
+    if (t == NT_INT || t == NT_CHAR) {
         return new QoreNumberNode(n.getAsBigInt());
+    }
 
     return new QoreNumberNode(n.getAsFloat());
 }
@@ -898,6 +1202,10 @@ QoreNumberNode* QoreNumberNode::toNumber(const AbstractQoreNode* n) {
 
 bool QoreNumberNode::nan() const {
     return priv->nan();
+}
+
+void QoreNumberNode::appendExactKey(std::string& key) const {
+    priv->appendExactKey(key);
 }
 
 bool QoreNumberNode::inf() const {

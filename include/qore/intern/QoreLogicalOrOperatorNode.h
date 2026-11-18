@@ -36,6 +36,8 @@
 #include "qore/intern/qore_string_private.h"
 class QoreLogicalOrOperatorNode : public QoreLogicalAndOperatorNode {
 public:
+    DLLLOCAL static QoreLogicalOrOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue left, QoreValue right);
     DLLLOCAL QoreLogicalOrOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreLogicalAndOperatorNode(loc, left, right) {
     }
@@ -61,6 +63,9 @@ public:
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+
     DLLLOCAL static QoreString logical_or_str;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;

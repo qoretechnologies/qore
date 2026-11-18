@@ -31,7 +31,9 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires Util
+%requires FsUtil
 
 %try-module jni
 %define NoJni
@@ -40,15 +42,24 @@
 %exec-class ProgramCleanupAtExitTest
 
 class ProgramCleanupAtExitTest inherits QUnit::Test {
+    public {
+        #! the line the destructor of the global object of the module "staticpgmcode" prints at its end
+        const TeardownMarker = "staticpgmcode: teardown complete";
+    }
+
     private {
         #! the interpreter running this test, used to launch the children
         string qore_exe;
         #! environment the children need to pick up the same build as the parent
         string env_prefix = "";
+        #! 1 if the test module "staticpgm" can be loaded, 0 if not, -1 if it was not checked yet
+        int staticpgm_available = -1;
+        #! ends a child that hangs (see killAfter())
+        string kill_after = killAfter(120);
     }
 
     constructor() : Test("ProgramCleanupAtExitTest", "1.0") {
-        qore_exe = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0];
+        qore_exe = TestInterpreter::qore_interpreter();
         if (ENV.LD_LIBRARY_PATH) {
             env_prefix += sprintf("LD_LIBRARY_PATH=%s ", ENV.LD_LIBRARY_PATH);
         }
@@ -62,6 +73,30 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         addTestCase("a Program owned at static scope survives exit()", \staticProgramExitTest());
         addTestCase("a Program owned at static scope preserves the exit status",
             \staticProgramExitStatusTest());
+        addTestCase("a Program owned at static scope survives the end of a script that does not call exit()",
+            \staticProgramNormalEndTest());
+        addTestCase("Qore code run by a static Program's objects at exit() uses live thread-local data",
+            \staticProgramCodeExitTest());
+        addTestCase("Qore code run by a static Program's objects at the end of a script that does not call exit() "
+            "runs before the library is cleaned up", \staticProgramCodeNormalEndTest());
+        addTestCase("an exception raised by a static Program's destructor at the end of a script is reported",
+            \staticProgramDestructorExceptionTest());
+        addTestCase("the objects of a child Program that a static Program holds are destroyed while the child has "
+            "its data", \staticProgramChildProgramTest());
+        addTestCase("a static Program's destructor cannot start a thread when the library is cleaned up",
+            \staticProgramThreadStartTest());
+        addTestCase("a sandbox time limit cannot be enforced for a call made when the library is cleaned up",
+            \staticProgramSandboxLimitTest());
+        addTestCase("a background compile in LLVM is waited for when the library is left to a blocked foreign thread",
+            \staticProgramForeignThreadHeldCompileTest());
+        addTestCase("a thread of another runtime that is blocked in Qore code does not hold up the end of the process",
+            \staticProgramForeignThreadTest());
+        addTestCase("a thread of another runtime that is blocked in the code of a user module does not hold up the end "
+            "of the process", \staticProgramForeignThreadInModuleTest());
+        addTestCase("a foreign thread cannot enter a Program once its teardown at the end of the process has begun",
+            \staticProgramForeignEntryTest());
+        addTestCase("a Program in which a foreign thread is blocked does not keep the library cleanup from ending",
+            \staticProgramForeignThreadBlockedTest());
         set_return_value(main());
     }
 
@@ -71,7 +106,27 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         teardown exception reaches std::terminate(), or by the JVM's crash handler) rather than as
         any status the script could have set itself
     */
-    private int runChild(string statement, int expected, string module = "jni") {
+    #! returns a command prefix that kills the command after it when it still runs after \a secs seconds
+    /** timeout(1) is not installed on every platform (macOS has none); without it, perl forks the command and kills it
+        when the alarm fires; the status of a killed command is 137 (128 + SIGKILL), as with timeout -s KILL.  With
+        neither, the prefix is empty, and a hang is ended by the test runner
+    */
+    private static string killAfter(int secs) {
+        string cmd = trim(backquote("command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -s KILL %d ", cmd, secs);
+        }
+        cmd = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (cmd.val()) {
+            return sprintf("%s -e 'my $s = shift; my $p = fork; exit 127 if !defined $p; if (!$p) { exec @ARGV; "
+                "exit 127; } $SIG{ALRM} = sub { kill 9, $p; }; alarm $s; waitpid $p, 0; "
+                "exit($? & 127 ? 128 + ($? & 127) : $? >> 8);' %d ", cmd, secs);
+        }
+        return "";
+    }
+
+    private int runChild(string statement, int expected, string module = "jni", string options = "",
+            *reference<string> output, string extra_env = "") {
         # the statement is embedded in single quotes below, so it must not contain any;
         # String::find() returns -1 when the substring is absent
         @assert(statement.find("'") == -1);
@@ -79,11 +134,16 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         # reported by the shell only as "Abort trap: 6" or "Aborted", and the reason - a JVM fatal
         # error report, an assertion, a Qore exception - is only in the child's own output.
         # Discarding it left a CI failure with nothing to act on.
-        string out_file = sprintf("%s/qore-cleanup-child-%d.log", tmp_location(), gettid());
+        # the process ID keeps test processes running in parallel from sharing the file
+        string out_file = sprintf("%s/qore-cleanup-child-%d-%d.log", tmp_location(), getpid(), gettid());
         on_exit unlink(out_file);
-        int rc = system(sprintf("%s%s -l %s -e '%s' >%s 2>&1", env_prefix, qore_exe, module,
+        int rc = system(sprintf("%s%s%s %s -l %s -e '%s' >%s 2>&1", env_prefix, extra_env, qore_exe, options, module,
             statement, out_file));
-        if (rc != expected) {
+        if (exists output) {
+            output = File::readTextFile(out_file);
+        }
+        # a negative status means that the caller checks the status and the output itself
+        if (expected >= 0 && rc != expected) {
             printf("--- child (-l %s, %s) exited with status %d, expected %d; output follows ---\n",
                 module, statement, rc, expected);
             try {
@@ -94,6 +154,25 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
             printf("--- end child output ---\n");
         }
         return rc;
+    }
+
+    #! checks that the test module "staticpgm" is in the module path, and fails the test case with the reason if not
+    /** "staticpgm" is a test module of the build tree (target "staticpgm"), put in the module path by run_tests.sh
+        when it exists.  A build tree that was not built completely lacks it, and the children then die with a
+        module load error that says nothing about the build: say what is missing and how to build it instead.
+
+        @return true if the module can be loaded
+    */
+    private bool requireStaticPgm() {
+        if (staticpgm_available < 0) {
+            staticpgm_available = system(sprintf("%s%s -l staticpgm -e 'exit(0);' >/dev/null 2>&1", env_prefix,
+                qore_exe)) == 0 ? 1 : 0;
+        }
+        assertTrue(staticpgm_available == 1, "the test module 'staticpgm' cannot be loaded: it is not in the module "
+            "path (QORE_MODULE_DIR) because the build tree does not have it; build it with: cmake --build "
+            "<build directory> --target staticpgm (run_tests.sh puts the modules of the build tree in the module "
+            "path)");
+        return staticpgm_available == 1;
     }
 
     #! a child that returns normally, to show the harness reports a clean run as 0
@@ -133,11 +212,375 @@ class ProgramCleanupAtExitTest inherits QUnit::Test {
         singleton's std::mutex after ~QoreJIT() had already destroyed it
     */
     private staticProgramExitTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
         assertEq(0, runChild("exit(0);", 0, "staticpgm"),
             "exit(0) tears the process down without crashing");
     }
 
+    #! a script that ends normally, with no call of exit(): the teardown of the static Program runs from the exit
+    #! handlers of the process after the thread-local data of the main thread was destroyed
+    /** the teardown scopes of the Programs that a thread deletes were a thread_local std::vector, which the main
+        thread destroyed when exit() started; the Program of "staticpgm" is deleted afterwards by a static
+        destructor, which pushed onto the destroyed vector: a heap use-after-free that aborted the process
+        ("corrupted double-linked list", status 134)
+    */
+    private staticProgramNormalEndTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
+        assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgm"),
+            "a script that ends normally tears the process down without crashing");
+    }
+
+    #! the static Program of the module "staticpgmcode" runs Qore code (closures, recursion, exceptions, containers) from
+    #! the destructor of its global object, which runs from a static destructor after the main thread's thread-local
+    #! objects were destroyed (qore#5778)
+    /** the IR call-frame pool and the IR expression-handler cache were thread_local objects with destructors, which the
+        main thread destroys when exit() starts: the Qore code that ran afterwards used them (a heap use-after-free; the
+        child crashed with a segmentation fault in ast, ir and jit mode)
+    */
+    private staticProgramCodeExitTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes: it is not in the module "
+                "path (QORE_MODULE_DIR) because the build tree does not have it; build it with: cmake --build "
+                "<build directory> --target staticpgmcode (run_tests.sh puts the modules of the build tree in the "
+                "module path)");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, \output), "exit(0): " + mode);
+            assertRegex(TeardownMarker, output, "exit(0): the destructor ran to its end: " + mode);
+            assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options), "exit(7): " + mode);
+        }
+    }
+
+    #! a thread that the library did not start (a daemon thread of the Python module, for example) is blocked in Qore
+    #! code of a Program that outlives the modules when the process ends normally
+    /** qore_cleanup() cleared the data of such a Program (qore#6045) by waiting for all of its threads to end, which a
+        thread blocked in Queue::get() never does: every python3 process that ended with a blocked daemon thread hung
+        forever.  The module "staticpgmcode" starts such a thread when QORE_STATICPGM_FOREIGN_THREAD is set and returns
+        when the thread is in the call, so the state at the end of the process is the same at every run.  A hang is
+        ended by killAfter(), which gives 137 instead of the status 0 expected
+    */
+    private staticProgramForeignThreadTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        string tenv = "QORE_STATICPGM_FOREIGN_THREAD=1 " + kill_after;
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", options, \output, tenv),
+                "normal end: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+            assertEq(0, runChild("exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
+            assertEq(7, runChild("exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a background JIT compile in LLVM is waited for when qore_cleanup() leaves the library to a foreign thread
+    /** qore_cleanup() returns early when a foreign thread is blocked in a Program (see
+        staticProgramForeignThreadTest()), and it returned without waiting for a background compile that it had
+        detached in LLVM: a program that returned from main() then ran exit(), which destroyed LLVM's static objects
+        under the compile (issue #6296).  The script holds the compile of a function in LLVM until the end (a test
+        hook of a debug library); qore_cleanup() lets it go and waits for it, which QORE_JIT_TIMING reports
+    */
+    private staticProgramForeignThreadHeldCompileTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_hold_bg_compile() requires library debugging");
+        }
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        TmpDir dir("qore-cleanup-held-compile-");
+        string script = dir.path + "/held.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\n"
+            "int sub held(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i * 4; } return s; }\n"
+            # the compile of held() stops in LLVM and is still there at the end of the process
+            "call_function(\"dbg_hold_bg_compile\", \"llvm\", \"held\");\n"
+            "int t = held(10) + held(10);\n"
+            "printf(\"held: %y result: %d\\n\", call_function(\"dbg_wait_bg_compile_held\", \"llvm\", 60000), t);\n");
+        f.close();
+        string out_file = dir.path + "/out.log";
+        # functions are compiled in the background at their first call
+        foreach string mode in (("jit", "tiered")) {
+            int rc = system(sprintf("env -u QORE_JIT_SYNC_COMPILE %sQORE_STATICPGM_FOREIGN_THREAD=1 QORE_JIT_TIMING=1 "
+                "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 %s%s --exec-mode=%s -l staticpgmcode %s >%s 2>&1",
+                env_prefix, kill_after, qore_exe, mode, script, out_file));
+            string output = File::readTextFile(out_file);
+            assertEq(0, rc, sprintf("%s: the process ends normally: %s", mode, output));
+            assertTrue(output =~ /^held: True result: 360$/m, sprintf("%s: the compile was held: %s", mode, output));
+            assertTrue(output.find("[BG-JIT] waited for the abandoned compile in qore_cleanup()") >= 0,
+                sprintf("%s: qore_cleanup() waited for the compile: %s", mode, output));
+            # the library was left to the foreign thread: the JIT is not released
+            assertEq(-1, output.find("released the JIT in shutdown()"), sprintf("%s: the JIT is kept: %s", mode,
+                output));
+        }
+    }
+
+    #! a thread of another runtime is blocked in the code of a user module when the process ends normally
+    /** the Program of a user module is deleted, and its data cleared, in the module cleanup, which waited for every
+        thread that runs module code: the blocked thread never leaves it, so the process hung.  The thread is started by
+        staticpgm_foreign_call() of the module "staticpgmcode" from the user module ForeignBlockModule, and the script
+        ends when it is blocked there (the module's start() returns then)
+    */
+    private staticProgramForeignThreadInModuleTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        # the module ForeignBlockModule is in the directory of this test
+        string mod_dir = get_script_dir();
+        string module_path = (ENV.QORE_MODULE_DIR ? ENV.QORE_MODULE_DIR + ":" : "") + mod_dir;
+        string tenv = sprintf("QORE_MODULE_DIR=%s %s", module_path, kill_after);
+        string code = "%requires ForeignBlockModule\nForeignBlockModule::start();";
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild(code, 0, "staticpgmcode", options, \output, tenv), "normal end: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+            assertEq(0, runChild(code + " exit(0);", 0, "staticpgmcode", options, NOTHING, tenv), "exit(0): " + mode);
+            assertEq(7, runChild(code + " exit(7);", 7, "staticpgmcode", options, NOTHING, tenv), "exit(7): " + mode);
+        }
+    }
+
+    #! a foreign thread tries to enter the Program of "staticpgmcode" while the library cleans it up
+    /** The teardown has found no foreign thread in the Program and does not wait for foreign threads, so one that
+        entered meanwhile would run in a Program whose data is destroyed: the entry is refused (PROGRAM-ERROR).  The
+        cleanup callback of the module runs in the window between the decision and the destruction of the data; it
+        starts the foreign thread and waits for its result (QORE_STATICPGM_FOREIGN_ENTRY), so the order is the same
+        at every run
+    */
+    private staticProgramForeignEntryTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", "--exec-mode=" + mode, \output,
+                "QORE_STATICPGM_FOREIGN_ENTRY=1 " + kill_after), "normal end: " + mode);
+            assertRegex("staticpgmcode: foreign thread entry refused", output, "the entry was refused: " + mode);
+        }
+    }
+
+    #! the static Program of the module "staticpgmcode" at the end of a script that does not call exit() (qore#6045)
+    /** qore_cleanup() freed the types (and the JIT engine and the thread data) before the static destructor of the
+        module deleted the Program, and the Qore code of its global object's destructor then ran on freed memory: the
+        child crashed with a segmentation fault in every execution mode (valgrind: invalid reads of freed type data).
+        qore_cleanup() now clears the data of the Programs that outlive the modules while the library can still run
+        their code, so the destructor runs to its end, once, before the library is cleaned up
+    */
+    private staticProgramCodeNormalEndTest() {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string options = "--exec-mode=" + mode;
+            string output = "";
+            assertEq(0, runChild("int i = 0; ++i;", 0, "staticpgmcode", options, \output), "normal end: " + mode);
+            # the destructor runs exactly once: when the library is cleaned up, not again from the static destructor
+            assertEq(1, (output =~ x/(staticpgmcode: teardown complete)/g).size(),
+                "normal end: the destructor ran to its end once: " + mode);
+            assertEq(Qore::False, output =~ /unexpected|exception/i, "normal end: no error output: " + mode);
+        }
+    }
+
+    #! runs the code in \a code as the code of the static Program of "staticpgmcode" (QORE_STATICPGM_CODE_FILE) in a
+    #! script that ends normally, in each execution mode, and calls \a check with the mode, the status and the output
+    private runStaticProgramCode(string name, string code, code check, string extra_env = "") {
+        if (system(sprintf("%s%s -l staticpgmcode -e 'exit(0);' >/dev/null 2>&1", env_prefix, qore_exe)) != 0) {
+            assertTrue(False, "the test module 'staticpgmcode' cannot be loaded or crashes; build it with: cmake "
+                "--build <build directory> --target staticpgmcode");
+            return;
+        }
+        TmpDir tmp("qore-program-cleanup-" + name + "-");
+        string file = tmp.path + DirSep + name + ".q";
+        File f();
+        f.open2(file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            string output = "";
+            int rc = runChild("int i = 0; ++i;", -1, "staticpgmcode", "--exec-mode=" + mode, \output,
+                sprintf("QORE_STATICPGM_CODE_FILE=%s %s", file, extra_env));
+            check(mode, rc, output);
+        }
+    }
+
+    #! an exception raised by the destructor of an object of the static Program when the library is cleaned up is
+    #! reported as an unhandled exception and makes the process fail, without a crash
+    private staticProgramDestructorExceptionTest() {
+        runStaticProgramCode("throw", "%modern
+class Thrower {
+    destructor() {
+        printf(\"thrower: start\\n\");
+        throw \"STATICPGM-TEARDOWN-ERROR\", \"thrown by a destructor when the library is cleaned up\";
+    }
+}
+our Thrower t = new Thrower();
+", sub (string mode, int rc, string output) {
+            # a crash gives 128 + the signal number
+            assertTrue(rc > 0 && rc < 128, sprintf("%s: the process fails without a crash (status %d)", mode, rc));
+            assertRegex("thrower: start", output, mode + ": the destructor ran");
+            assertRegex("STATICPGM-TEARDOWN-ERROR", output, mode + ": the exception is reported");
+        });
+    }
+
+    #! the static Program holds a child Program and an object of a class of the child, which it releases in its own
+    #! destructor before the child: the object's destructor reads a global variable of the child, which still has its
+    #! data, as when the owner deletes the static Program
+    private staticProgramChildProgramTest() {
+        runStaticProgramCode("child", "%modern
+class Holder {
+    private {
+        Program child;
+        object obj;
+    }
+
+    constructor() {
+        child = new Program(PO_NEW_STYLE);
+        child.parse(\"our string label = 'child-global';
+class ChildObj {
+    destructor() {
+        printf('child destructor: %s\\n', label);
+    }
+}
+ChildObj sub make() {
+    return new ChildObj();
+}\", \"child\");
+        # assigns the global variable of the child
+        child.run();
+        obj = child.callFunction(\"make\");
+    }
+
+    destructor() {
+        # the object of the child Program is released before the child Program
+        delete obj;
+        printf(\"holder: done\\n\");
+    }
+}
+our Holder h = new Holder();
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process succeeds; output: " + output);
+            assertRegex("child destructor: child-global\nholder: done", output,
+                mode + ": the child's object was destroyed with the child's data, before the holder ended");
+        });
+    }
+
+    #! no thread can be started by Qore code that runs when the library is cleaned up: the threads have been waited
+    #! for; a timed wait still times out
+    private staticProgramThreadStartTest() {
+        runStaticProgramCode("thread", "%modern
+class Starter {
+    destructor() {
+        try {
+            background printf(\"thread: ran\\n\");
+            printf(\"thread: started\\n\");
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"thread: %s\\n\", ex.err);
+        }
+        Counter c(1);
+        printf(\"wait: %d\\n\", c.waitForZero(20));
+    }
+}
+our Starter s = new Starter();
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process succeeds; output: " + output);
+            # Counter::waitForZero() returns a non-zero error code when it times out
+            assertRegex("thread: THREAD-CREATION-FAILURE\nwait: [1-9]", output,
+                mode + ": the thread was refused and the timed wait timed out");
+            assertEq(Qore::False, output =~ /thread: (ran|started)/, mode + ": no thread was started");
+        });
+    }
+
+    #! a call with a sandbox wall time limit made by a destructor when the library is cleaned up fails at its first
+    #! cancellation point: the watchdog thread that enforces the limit has been stopped and is not started again
+    private staticProgramSandboxLimitTest() {
+        runStaticProgramCode("sandbox", "%modern
+%no-child-restrictions
+class Limited {
+    private {
+        Program p;
+    }
+
+    constructor() {
+        SandboxManager sm();
+        sm.setWallTimeLimit(5000);
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(\"%new-style
+int sub f() {
+    Counter c(1);
+    c.waitForZero(10);
+    return 42;
+}\", \"sandboxed\");
+        # the limit is enforced while the library runs
+        printf(\"before: %d\\n\", p.callFunction(\"f\"));
+    }
+
+    destructor() {
+        try {
+            printf(\"sandboxed: %d\\n\", p.callFunction(\"f\"));
+        } catch (hash<ExceptionInfo> ex) {
+            printf(\"sandboxed: %s: %s\\n\", ex.err, ex.desc);
+        }
+    }
+}
+our Limited l = new Limited();
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process succeeds; output: " + output);
+            assertRegex("before: 42", output, mode + ": the call succeeds while the library runs");
+            assertRegex("sandboxed: SANDBOX-ERROR: .*wall time limit of 5000 ms cannot be enforced", output,
+                mode + ": the call fails closed when the library is cleaned up");
+        });
+    }
+
+    #! a foreign thread (registered with q_register_foreign_thread()) is blocked in a call of the static Program when
+    #! the library is cleaned up; the module never deletes the Program, as a host language does that abandons its
+    #! threads at exit (ex: the daemon threads of Python in the python module)
+    /** The cleanup waited for the thread to leave the Program before it cleared the Program's data, i.e. forever: the
+        process hung at its normal end (module-python: a Python process exiting with a daemon thread blocked in a
+        Qore call).  The data of a Program that another thread runs in is not cleared: the thread can use it
+    */
+    private staticProgramForeignThreadBlockedTest() {
+        runStaticProgramCode("foreign", "%modern
+our Counter blocked(1);
+our Queue q();
+sub staticpgm_block() {
+    blocked.dec();
+    # blocks forever: the process exits while the thread waits here
+    q.get();
+}
+sub staticpgm_wait_blocked() {
+    blocked.waitForZero();
+    printf(\"foreign: blocked\\n\");
+}
+", sub (string mode, int rc, string output) {
+            assertEq(0, rc, mode + ": the process ends with its status; output: " + output);
+            assertRegex("foreign: blocked", output, mode + ": the foreign thread was blocked in the Program");
+            assertEq(Qore::False, output =~ /exception|error/i, mode + ": no error output: " + output);
+        }, "QORE_STATICPGM_FOREIGN_BLOCK=1 ");
+    }
+
     private staticProgramExitStatusTest() {
+        if (!requireStaticPgm()) {
+            return;
+        }
         assertEq(7, runChild("exit(7);", 7, "staticpgm"),
             "the exit status set by the script survives teardown");
     }

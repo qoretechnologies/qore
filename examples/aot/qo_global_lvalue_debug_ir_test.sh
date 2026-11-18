@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     QoreProgram* pgm = qore_create_program(
         PO_NEW_STYLE | PO_STRICT_ARGS | PO_ALLOW_DEBUGGER);
     if (!pgm) {
-        fprintf(stderr, "qore_create_program failed\n");
+        fprintf(stderr, "qore_create_program failed: %s\n", qore_last_error(nullptr) ? qore_last_error(nullptr) : "(no error)");
         qore_cleanup();
         return 1;
     }

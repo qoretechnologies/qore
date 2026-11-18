@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-inline-mask-subscript.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+# test-exec-mode: children - its probes run in child processes that set their own --exec-mode
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameInlineMaskSubscriptTest
+
+#! A DataFrame subscript with an inline RowMask expression (&, |, ^, ~) as the key filters the rows, and a method call
+#! on such an expression is a RowMask method call, in each execution mode (qore#6141)
+class DataFrameInlineMaskSubscriptTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! the RowMask expressions as subscript keys and method call targets, in a function and at top level
+        const Script = "%modern
+%requires dataframe
+
+list<int> sub masks(DataFrame::DataFrame df, DataFrame::RowMask m, DataFrame::RowMask n) {
+    return (
+        df[m & n].numRows(),
+        df[m | n].numRows(),
+        df[m ^ n].numRows(),
+        df[~m].numRows(),
+        df[(m & n) | ~m].numRows(),
+        df[df.column(\"id\") > 1].numRows(),
+        (m & n).count(),
+        (m | n).count(),
+        (m ^ n).count(),
+        (~m).count(),
+    );
+}
+
+DataFrame::DataFrame df(({\"id\": 1}, {\"id\": 2}, {\"id\": 3}, {\"id\": 4}));
+DataFrame::RowMask m = df.column(\"id\") > 1;
+DataFrame::RowMask n = df.column(\"id\") < 4;
+for (int i = 0; i < 3; ++i) {
+    printf(\"%y\\n\", masks(df, m, n));
+}
+printf(\"%d %d %y\\n\", df[m & n].numRows(), (m ^ n).count(), df[~n][\"id\"]);
+";
+
+        #! the output of the script
+        const Expected = "[2, 4, 2, 1, 3, 3, 2, 4, 2, 1]\n[2, 4, 2, 1, 3, 3, 2, 4, 2, 1]\n"
+            "[2, 4, 2, 1, 3, 3, 2, 4, 2, 1]\n2 2 [4]\n";
+    }
+
+    constructor() : QUnit::Test("DataFrameInlineMaskSubscriptTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("inline RowMask expressions in each mode", \testModes());
+
+        set_return_value(main());
+    }
+
+    testModes() {
+        TmpDir tmp("qore-dataframe-inline-mask-");
+        string src = tmp.path + "/inline-mask.q";
+        {
+            File f();
+            f.open2(src, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(Script);
+        }
+        foreach string mode in (("ast", "ir", "jit", "tiered")) {
+            assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1 "
+                "QORE_JIT_THRESHOLD=1 %s --exec-mode=%s %s 2>&1", libqore_dir, libqore_dir, qore_bin, mode, src)),
+                mode);
+        }
+    }
+}

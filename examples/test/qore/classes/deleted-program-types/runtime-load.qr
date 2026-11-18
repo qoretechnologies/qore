@@ -1,0 +1,11 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Uses RuntimeLoadTest (compiled by deleted-program-types.qtest into a directory of the module path), which loads a
+# native module from its own Program at run time, and ends; see deleted-program-types.qtest.
+
+%modern
+
+%requires RuntimeLoadTest
+
+print(runtime_load_test_load() + "\n");

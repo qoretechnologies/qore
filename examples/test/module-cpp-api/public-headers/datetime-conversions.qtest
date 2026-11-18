@@ -1,0 +1,163 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - overload resolution of the DateTime constructors with the system compiler (Apple clang)
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The public DateTime and DateTimeNode C++ API takes no value that converts silently to another date: a pointer, a
+# bool, a number, a string or a struct tm pointer given where a DateTime is expected does not compile (a pointer was
+# converted to an empty date through DateTime(bool), a bool to 1970-01-01 00:00:01 through DateTime(int64)), and the
+# checked arithmetic overloads with an ExceptionSink have deleted pointer overloads.  The default constructors are not
+# explicit, so that the empty-brace forms (DateTime w = {};, return {};, f({})) compile.
+#
+# Each form is compiled with -fsyntax-only by each C++ compiler available (CXX, or else g++ and clang++), as in
+# public-header-warnings.qtest; the headers are the ones of the source tree, and the generated headers come from the
+# build directory of the qore binary that runs the test.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class DateTimeConversionsTest
+
+class DateTimeConversionsTest inherits QUnit::Test {
+    public {
+        #! the declarations that the forms use
+        const Prologue = "#include <qore/Qore.h>
+#include <ctime>
+void f(const DateTime&);
+void fn(const DateTimeNode&);
+void g(const DateTime* p, DateTimeNode* n, SimpleRefHolder<DateTimeNode>& h, ExceptionSink* xsink, DateTime& d,
+        const AbstractQoreNode* an, int64 secs, const char* str, char* mstr, struct tm* tms, const struct tm* ctms) {
+";
+
+        #! the forms that must compile, all in one function
+        const Good = (
+            "delete d.add(*p, xsink);",
+            "delete d.subtractBy(*p, xsink);",
+            "ReferenceHolder<DateTimeNode> s1(n->add(**h, xsink), xsink);",
+            "ReferenceHolder<DateTimeNode> s2(n->subtractBy(*n, xsink), xsink);",
+            "d.setDate(*p);",
+            "DateTime c1(*p);",
+            "f(*n);",
+            "fn(*n);",
+            "DateTime c2;",
+            "DateTime c3 = {};",
+            "DateTime c4[2] = {};",
+            "f({});",
+            "auto empty = []() -> DateTime { return {}; }; DateTime c5 = empty(); (void)c5;",
+            "DateTime c6(true);",
+            "DateTime c7(secs);",
+            "DateTime c8(secs, 5);",
+            "DateTime c9((int64)1);",
+            "DateTime c10(str);",
+            "DateTime c11(\"20260101\");",
+            "DateTime c12(ctms);",
+            "f(DateTime(str));",
+            "d.setDate(str);",
+            "d.setDate(ctms);",
+            "d.setDate(secs);",
+            "ReferenceHolder<DateTimeNode> n1(new DateTimeNode, xsink);",
+            "ReferenceHolder<DateTimeNode> n2(new DateTimeNode(true), xsink);",
+            "ReferenceHolder<DateTimeNode> n3(new DateTimeNode(secs), xsink);",
+            "ReferenceHolder<DateTimeNode> n4(new DateTimeNode(str), xsink);",
+            "ReferenceHolder<DateTimeNode> n5(new DateTimeNode(tms), xsink);",
+            "delete d.add(p);",
+            "delete d.subtractBy(p);",
+            "d.isEqual(p);",
+        );
+
+        #! the forms that must not compile, each in a function of its own
+        const Bad = (
+            "d.add(p, xsink);",
+            "d.subtractBy(p, xsink);",
+            "n->add(*h, xsink);",
+            "n->subtractBy(n, xsink);",
+            "d.setDate(p);",
+            "DateTime x(p);",
+            "f(p);",
+            "DateTime x = n;",
+            "f(an);",
+            "f(true);",
+            "DateTime x = true;",
+            "f(secs);",
+            "DateTime x = secs;",
+            "f(1);",
+            "f(1.5);",
+            "f({secs});",
+            "f(str);",
+            "f(mstr);",
+            "f(\"2026-01-01\");",
+            "DateTime x = str;",
+            "f(tms);",
+            "f(ctms);",
+            "DateTime x = ctms;",
+            "f({str});",
+            "auto x = []() -> DateTime { return true; };",
+            "auto x = []() -> DateTime { return \"20260101\"; };",
+        );
+    }
+
+    constructor() : QUnit::Test("DateTime conversions", "1.0", \ARGV) {
+        addTestCase("DateTime C++ API conversions", \testConversions());
+        set_return_value(main());
+    }
+
+    testConversions() {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string generated_include = join_paths(ENV.QORE_LIBDIR ?? dirname(qore_bin), "include");
+        if (!is_file(join_paths(generated_include, "qore", "qore-version.h"))) {
+            testSkip(sprintf("the generated headers of the build are not in %y; the test runs with the qore of a "
+                "build directory", generated_include));
+        }
+        list<string> compilers = ENV.CXX
+            ? (ENV.CXX,)
+            : (select ("g++", "clang++"), !system(sprintf("command -v %s > /dev/null 2>&1", $1)));
+        if (!compilers) {
+            testSkip("no C++ compiler is available (CXX is not set, and neither g++ nor clang++ is in the path)");
+        }
+        string source_include = join_paths(get_script_dir(), "..", "..", "..", "..", "include");
+
+        string dir = make_tmp_dir("datetime-conversions");
+        on_exit remove_tree(dir);
+
+        foreach string cxx in (compilers) {
+            string good = join_paths(dir, "good.cpp");
+            writeSource(good, join("", map "    " + $1 + "\n", Good));
+            hash<auto> r = compile(cxx, source_include, generated_include, good);
+            assertEq(0, r.rc, sprintf("%s compiles the good forms: %s", cxx, r.out));
+
+            foreach string form in (Bad) {
+                string bad = join_paths(dir, sprintf("bad-%d.cpp", $#));
+                writeSource(bad, "    " + form + "\n");
+                r = compile(cxx, source_include, generated_include, bad);
+                assertNeq(0, r.rc, sprintf("%s rejects: %s", cxx, form));
+                # the error is the one of the form, not of another part of the source
+                assertRegex("DateTime", r.out, sprintf("%s gives a DateTime error for: %s", cxx, form));
+            }
+        }
+    }
+
+    private writeSource(string path, string body) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(Prologue + body + "}\n");
+        f.close();
+    }
+
+    private hash<auto> compile(string cxx, string source_include, string generated_include, string source) {
+        string cmd = sprintf("%s -std=c++17 -fsyntax-only -I%s -I%s %s 2>&1", cxx, shell_quote(source_include),
+            shell_quote(generated_include), shell_quote(source));
+        int rc;
+        string out = backquote(cmd, \rc);
+        return {"rc": rc, "out": out};
+    }
+
+    #! returns the string quoted for the shell
+    private static string shell_quote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+}

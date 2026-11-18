@@ -418,7 +418,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @note Worker processes run in their own process groups, so they are not stopped by a signal sent to the
         process building the index; call this method when that process is asked to stop
     */
-    static int cancelWorkers() {
+    static int cancelWorkers() [dom=PROCESS_CONTROL] {
 %ifdef NoProcess
         {
             AutoLock al(worker_lock);
@@ -496,7 +496,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @since %ProviderIndex 1.0
     */
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
-            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) {
+            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{})
+            [dom=PROCESS_CONTROL,FILESYSTEM] {
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
@@ -1097,7 +1098,7 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         }
 
         hash<string, bool> app_filter = map {$1: True}, apps.iterator();
-        list<hash<DataProviderAppInfo>> rv;
+        list<hash<DataProviderAppInfo>> rv = ();
         foreach hash<DataProviderAppInfo> app in (all_apps) {
             if (remove app_filter{app.name}) {
                 push rv, app;
@@ -1386,7 +1387,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
 
         @since %ProviderIndex 1.2
     */
-    static prepareIndexWorker(string batch_path) {
+    static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL,FILESYSTEM] {
         getWorkerBatch(batch_path);
     }
 
@@ -1418,7 +1419,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @since %ProviderIndex 1.2
     */
-    static int runIndexWorker(string batch_path, *code<nothing()> setup) {
+    static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL,FILESYSTEM] {
         DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {

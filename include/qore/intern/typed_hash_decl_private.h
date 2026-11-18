@@ -34,7 +34,10 @@
 #define _QORE_INTERN_TYPED_HASH_DECL_PRIVATE_H
 
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreDeferredRelease.h"
 
+#include <algorithm>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <string>
@@ -52,7 +55,8 @@ public:
             : QoreMemberInfoBase(loc, n_typeInfo, n_parseTypeInfo, e) {
     }
 
-    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init) {
+    DLLLOCAL HashDeclMemberInfo(const HashDeclMemberInfo& old) : QoreMemberInfoBase(old), init(old.init),
+            default_receiver_type_info(old.default_receiver_type_info) {
     }
 
     DLLLOCAL bool equal(const HashDeclMemberInfo& other) const;
@@ -72,26 +76,40 @@ public:
 
     DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 
+    //! Returns the type that the default value of the member is evaluated with as the receiver, or nullptr
+    /** The member of an instantiation of a generic hashdecl (HD<string> of HD<X>) shares the initializer of the
+        generic hashdecl, whose types can name its type parameters (new hash<HD2<X, int>>()); they are the type
+        arguments of the instantiation when the initializer is evaluated with its type as the receiver (qore#6240)
+    */
+    DLLLOCAL const QoreTypeInfo* getDefaultReceiverTypeInfo() const {
+        return default_receiver_type_info;
+    }
+
 private:
     //! has parseInit() been called on this member?
     bool init = false;
+    //! the type of the instantiation of a generic hashdecl whose member this is, if it has a default value
+    const QoreTypeInfo* default_receiver_type_info = nullptr;
 };
 
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
 
 class typed_hash_decl_private {
+    template <class> friend class QoreTypeOwnerOf;
 friend class typed_hash_decl_member_iterator;
 friend class TypedHashDecl;
 public:
+    //! creates a hashdecl declared in the current Program, which is its source Program
     DLLLOCAL typed_hash_decl_private(const QoreProgramLocation* loc) : loc(loc), orig(this) {
         assignModule();
+        setSourceProgram(getProgram());
     }
 
     DLLLOCAL typed_hash_decl_private(const QoreProgramLocation* loc, const char* n, const char* p,
             TypedHashDecl* thd) :
             loc(loc), name(n), path(p), thd(thd), orig(this),
-            typeInfo(new QoreHashDeclTypeInfo(thd, n, p)),
-            orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, n, p)) {
+            typeInfo(new QoreHashDeclTypeInfo(thd, n, p, instance_serial)),
+            orNothingTypeInfo(new QoreHashDeclOrNothingTypeInfo(thd, n, p, instance_serial)) {
         assignModule();
     }
 
@@ -99,9 +117,7 @@ public:
 
     DLLLOCAL ~typed_hash_decl_private() {
         assert(!refs.reference_count());
-        for (auto& i : parameterized_hashdecl_cache) {
-            typed_hash_decl_private::get(*i.second)->deref();
-        }
+        releaseDependencies();
         // the next hashdecl allocated can reuse these addresses
         qore_purge_derived_types(thd, typeInfo, orNothingTypeInfo);
         // method dispatch caches keyed by these type pointers must miss from now on
@@ -109,6 +125,70 @@ public:
         delete typeInfo;
         delete orNothingTypeInfo;
         delete parse_parent;
+        // the declarations named by this hashdecl's member types are no longer kept for it (issue #5790)
+        qore_type_owner_destroyed(&type_owner);
+    }
+
+    // QoreTypeOwner (issue #5790)
+    DLLLOCAL const void* getTypeOwnerKey() const {
+        return thd;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerType() const {
+        return typeInfo;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeOwnerOrNothingType() const {
+        return orNothingTypeInfo;
+    }
+
+    DLLLOCAL int getTypeOwnerReferenceCount() const {
+        return refs.reference_count();
+    }
+
+    DLLLOCAL bool isTypeOwnerSystem() const {
+        return sys && !copied;
+    }
+
+    //! A retired hashdecl keeps its members, its parent and its source, as the type checks compare them
+    DLLLOCAL bool keepsTypeOwnerMembers() const {
+        return true;
+    }
+
+    DLLLOCAL void retireTypeOwner() {
+        releaseCaches();
+    }
+
+    DLLLOCAL void freeTypeOwner() {
+        assert(!refs.reference_count());
+        delete thd;
+    }
+
+    //! The declarations named by the member types
+    DLLLOCAL void getTypeOwnerNames(std::vector<QoreTypeOwner*>& names) const {
+        for (auto& i : members.member_list) {
+            if (i.second) {
+                qore_type_owner_add_name(names, i.second->getTypeInfo(), &type_owner);
+            }
+        }
+    }
+
+    //! The parent and the source of a copy
+    DLLLOCAL void getTypeOwnerHeldRefs(std::vector<QoreTypeOwner*>& refs) const {
+        if (parentHashDecl) {
+            refs.push_back(&const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->type_owner);
+        }
+        if (copy_source) {
+            refs.push_back(&copy_source->type_owner);
+        }
+    }
+
+    DLLLOCAL void refTypeOwner() {
+        ref();
+    }
+
+    DLLLOCAL void derefTypeOwner() {
+        deref();
     }
 
     DLLLOCAL TypedHashDecl* newTypedHashDecl(const char* n) {
@@ -201,12 +281,17 @@ public:
             return true;
         }
         if (refs.ROdereference()) {
-            assert(thd->priv == this);
-            delete thd;
+            derefLast();
             return true;
         }
         return false;
     }
+
+    //! Releases the hashdecl after its last reference was released (see deref())
+    /** Not inline, so that the release of a reference that is not the last one costs no more than before
+        (issue #5790)
+    */
+    DLLLOCAL void derefLast();
 
     DLLLOCAL int parseInit();
 
@@ -224,24 +309,57 @@ public:
 
     DLLLOCAL int parseCheckComplexHashAssignment(const QoreProgramLocation* loc, const QoreTypeInfo* vti) const;
 
+    DLLLOCAL QoreHashNode* newHash(const QoreParseListNode* args, bool runtime_check,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
+
     DLLLOCAL QoreHashNode* newHash(const QoreParseListNode* args, bool runtime_check, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink, QoreHashNode* rv = nullptr) const;
 
+    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, bool runtime_check, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
     DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, const QoreHashNode* overrides, bool runtime_check,
             ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreHashNode* newHash(const QoreHashNode* init, const QoreHashNode* overrides, bool runtime_check,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL QoreHashNode* newHashWithOverridesImpl(const QoreHashNode* init, const QoreHashNode* overrides,
+            bool runtime_check, ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
 
     DLLLOCAL QoreHashNode* newHashFromTemporary(QoreHashNode* init, bool runtime_check,
             ExceptionSink* xsink, bool values_prechecked = false,
             bool layout_prechecked = false) const;
 
-    DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+    //! Initializes the members of a hash of the hashdecl
+    /** A member initializer that is code of a Program that must be entered (see needsInitEntry()) is evaluated with
+        that Program kept; the usual case, a hashdecl that needs nothing, is tested with one load
+    */
+    DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const {
+        if (__builtin_expect(!hier_code_init.load(std::memory_order_relaxed), 1)) {
+            return initHashDirect(h, init, xsink);
+        }
+        return initHashChecked(h, init, nullptr, false, false, xsink);
+    }
 
+    //! see initHash(QoreHashNode*, const QoreHashNode*, ExceptionSink*)
     DLLLOCAL int initHash(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink) const {
+        if (__builtin_expect(!hier_code_init.load(std::memory_order_relaxed), 1)) {
+            return initHashDirect(h, init, overrides, xsink);
+        }
+        return initHashChecked(h, init, overrides, false, false, xsink);
+    }
 
-    DLLLOCAL int initHashInPlace(QoreHashNode* h, ExceptionSink* xsink,
-            bool values_prechecked = false) const;
+    //! see initHash(QoreHashNode*, const QoreHashNode*, ExceptionSink*); the values given are those in the hash
+    DLLLOCAL int initHashInPlace(QoreHashNode* h, ExceptionSink* xsink, bool values_prechecked = false) const {
+        if (__builtin_expect(!hier_code_init.load(std::memory_order_relaxed), 1)) {
+            return initHashInPlaceDirect(h, xsink, values_prechecked);
+        }
+        return initHashChecked(h, nullptr, nullptr, true, values_prechecked, xsink);
+    }
 
     DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink) const {
         const HashDeclMemberInfo* mem = findMember(key);
@@ -261,22 +379,31 @@ public:
         }
         return 0;
     }
+    DLLLOCAL int runtimeAssignKey(const char* key, ValueHolder& val, ExceptionSink* xsink, LexicalSemanticPolicy policy) const {
+        const HashDeclMemberInfo* mem = findMember(key);
+        if (!mem) {
+            if (xsink) {
+                xsink->raiseException("HASHDECL-KEY-ERROR", "cannot assign unknown key '%s' to hashdecl '%s'", key,
+                    name.c_str());
+            }
+            return -1;
+        }
+        // the outcome must reflect only this type check; see ScopedTypeCheckSink
+        ScopedTypeCheckSink ts(xsink);
+        QoreTypeInfo::acceptInputKey(mem->getTypeInfo(), key, *val, *ts, policy);
+        if (ts.raised()) {
+            (*ts)->appendLastDescription(" (while assigning to hashdecl '%s')", name.c_str());
+            return -1;
+        }
+        return 0;
+    }
 
     DLLLOCAL int parseCheckMemberAccess(const QoreProgramLocation* loc, const char* mem,
             const QoreTypeInfo*& memberTypeInfo, int pflag) const;
 
-    //! Calls the function for each member, including inherited members, parent members first
-    /** @param f called with the member name and info; returning non-zero stops the iteration
-
-        @return the non-zero value returned by \a f, or 0 if every member was visited
-    */
+    //! Calls the function for each member declared in this hashdecl itself; see forEachMember()
     template <typename F>
-    DLLLOCAL int forEachMember(F&& f) const {
-        if (parentHashDecl) {
-            if (int rc = get(*parentHashDecl)->forEachMember(f)) {
-                return rc;
-            }
-        }
+    DLLLOCAL int forEachLocalMember(F& f) const {
         for (auto& i : members.member_list) {
             if (int rc = f(i.first, i.second)) {
                 return rc;
@@ -285,13 +412,39 @@ public:
         return 0;
     }
 
-    DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
-        const HashDeclMemberInfo* mi = members.find(m);
-        if (mi) {
-            return mi;
+    //! Calls the function for each member, including inherited members, parent members first
+    /** The chain of parents is walked iteratively, as it can be as long as the code declares it (issue #6047)
+
+        @param f called with the member name and info; returning non-zero stops the iteration
+
+        @return the non-zero value returned by \a f, or 0 if every member was visited
+    */
+    template <typename F>
+    DLLLOCAL int forEachMember(F&& f) const {
+        if (!parentHashDecl) {
+            return forEachLocalMember(f);
         }
-        if (parentHashDecl) {
-            return get(*parentHashDecl)->findMember(m);
+        std::vector<const typed_hash_decl_private*> chain;
+        for (const typed_hash_decl_private* p = this; p;
+                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
+            chain.push_back(p);
+        }
+        for (auto i = chain.rbegin(), e = chain.rend(); i != e; ++i) {
+            if (int rc = (*i)->forEachLocalMember(f)) {
+                return rc;
+            }
+        }
+        return 0;
+    }
+
+    //! Returns the member, which can be inherited, or nullptr if there is none
+    /** The chain of parents is walked iteratively (see forEachMember()) */
+    DLLLOCAL const HashDeclMemberInfo* findMember(const char* m) const {
+        for (const typed_hash_decl_private* p = this; p;
+                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
+            if (const HashDeclMemberInfo* mi = p->members.find(m)) {
+                return mi;
+            }
         }
         return nullptr;
     }
@@ -367,12 +520,14 @@ public:
         return hd ? hd->getTypeInfo(or_nothing) : nullptr;
     }
 
+    //! Returns true if the hashdecl has the member, which can be inherited
+    /** The chain of parents is walked iteratively (see forEachMember()) */
     DLLLOCAL bool hasMember(const char* name) const {
-        if (members.inList(name)) {
-            return true;
-        }
-        if (parentHashDecl) {
-            return get(*parentHashDecl)->hasMember(name);
+        for (const typed_hash_decl_private* p = this; p;
+                p = p->parentHashDecl ? get(*p->parentHashDecl) : nullptr) {
+            if (p->members.inList(name)) {
+                return true;
+            }
         }
         return false;
     }
@@ -472,6 +627,118 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
+    //! Sets the Program that declared the hashdecl, whose code its member initializers are
+    /** @param pgm the Program, or nullptr for a hashdecl whose initializers are no code of a Program (builtin
+        hashdecls, hashdecls of C++ modules)
+    */
+    DLLLOCAL void setSourceProgram(QoreProgram* pgm) {
+        src_pgm = pgm;
+        src_pgm_id = pgm ? pgm->getProgramId() : 0;
+    }
+
+    //! Enters the Program that declared the hashdecl, so that it is not deleted while its member initializers run
+    /** Called before the first member initializer of the hashdecl is evaluated; the initializers of a parent
+        hashdecl are those of its own Program.  See QoreDeclaringProgramHelper.
+
+        @param h the helper that enters the Program and leaves it when it is destroyed
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program has been deleted; may be nullptr
+
+        @return 0 for OK, -1 if the Program has been deleted, in which case the initializers must not be evaluated
+    */
+    DLLLOCAL int enterSourceProgram(QoreDeclaringProgramHelper& h, ExceptionSink* xsink) const {
+        if (!src_pgm) {
+            return 0;
+        }
+        return h.enter(src_pgm, src_pgm_id, src_pgm_module_lifetime, xsink);
+    }
+
+    //! returns true if a local member initializer of the hashdecl is code (see HashDeclMemberInfo::initIsCode())
+    /** The members do not change once the hashdecl is in use, so the result is computed once
+    */
+    DLLLOCAL bool hasCodeInit() const {
+        int8_t rv = code_init.load(std::memory_order_relaxed);
+        if (rv < 0) {
+            rv = 0;
+            for (auto& i : members.member_list) {
+                if (i.second && i.second->initIsCode()) {
+                    rv = 1;
+                    break;
+                }
+            }
+            code_init.store(rv, std::memory_order_relaxed);
+        }
+        return rv;
+    }
+
+    //! returns true if the hashdecl or a parent has a member initializer that is code and a source Program
+    DLLLOCAL bool hasHierarchyCodeInit() const {
+        for (const typed_hash_decl_private* hd = this; hd;
+                hd = hd->parentHashDecl ? get(*hd->parentHashDecl) : nullptr) {
+            if (hd->src_pgm && hd->hasCodeInit()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! returns true if the language's creation of a hash must enter the Programs that declared the hashdecls
+    /** True if the hashdecl or a parent is a copy of another Program's hashdecl (one that a Program inherited or
+        imported) with member initializers that are code, unless the Programs that declared them have module
+        lifetime and it is in effect.  A Program's own hashdecl is created directly by the language only in the code of
+        that Program, which the thread is in, so that the Program is not deleted; the paths that create a hash from a
+        type that can be another Program's (the type of a value with the reflection API or in C++ code, the element
+        type of a list or hash that is converted) enter it in any case (see newHashFromType() and
+        enterSourceProgramsForApi())
+
+        The part that depends on the hashdecls is computed once
+    */
+    DLLLOCAL bool needsInitEntry() const {
+        int8_t rv = hier_code_init.load(std::memory_order_relaxed);
+        if (rv < 0) {
+            rv = computeInitEntry();
+        }
+        return rv == 1 || (rv == 2 && !qore_module_lifetime_active());
+    }
+
+    //! computes and caches the part of needsInitEntry() that depends on the hashdecls
+    /** @return 0 if no hashdecl needs its Program entered, 1 if one does, 2 if only hashdecls whose Programs have
+        module lifetime do
+    */
+    DLLLOCAL int8_t computeInitEntry() const {
+        int8_t rv = 0;
+        // a copy's parents are declarations of another Program too, also one that is not a copy itself (a non-public
+        // parent is not copied with a public child); so is a parent that another Program declared
+        bool foreign = false;
+        for (const typed_hash_decl_private* hd = this; hd;
+                hd = hd->parentHashDecl ? get(*hd->parentHashDecl) : nullptr) {
+            foreign = foreign || hd->copied || hd->src_pgm_id != src_pgm_id;
+            if (!foreign || !hd->src_pgm || !hd->hasCodeInit()) {
+                continue;
+            }
+            if (!hd->src_pgm_module_lifetime.load(std::memory_order_acquire)) {
+                rv = 1;
+                break;
+            }
+            rv = 2;
+        }
+        hier_code_init.store(rv, std::memory_order_relaxed);
+        return rv;
+    }
+
+    //! Enters the Programs that declared the hashdecl and its parents for an API path (see needsInitEntry())
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int enterSourceProgramsForApi(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
+            const QoreHashNode* overrides, ExceptionSink* xsink) const {
+        return hasHierarchyCodeInit() ? enterSourcePrograms(h, init, overrides, xsink) : 0;
+    }
+
+    //! Creates a hash of the hashdecl from a type that can be another Program's (see needsInitEntry())
+    DLLLOCAL QoreHashNode* newHashFromType(const QoreHashNode* init, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreHashNode* newHashFromType(const QoreHashNode* init, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
     //! Sets the parse-time parent hashdecl type to be resolved during parseInit
     DLLLOCAL void setParseParent(QoreParseTypeInfo* parent) {
         assert(!parse_parent);
@@ -488,8 +755,57 @@ public:
 
     //! Sets the parent hashdecl directly (for system hashdecls)
     DLLLOCAL void setParentHashDecl(const TypedHashDecl* parent) {
+        if (parent) {
+            get(*parent)->ref();
+        }
+        releaseParentHashDecl();
         parentHashDecl = parent;
         parentHashDeclName = parent ? get(*parent)->getPath() : "";
+        // the initializers of the hierarchy have changed
+        hier_code_init.store(-1, std::memory_order_relaxed);
+    }
+
+    //! Releases the reference to the parent hashdecl, if any, and clears it
+    /** The hashdecl keeps its parent, which the Program that declared the parent can have released: a non-public
+        parent of a public hashdecl is not copied to a Program that inherits the child
+    */
+    //! Releases the caches of the hashdecl, its parent, its source and its registration; can be called again
+    DLLLOCAL void releaseDependencies() {
+        releaseCaches();
+        releaseParentHashDecl();
+        if (copy_source) {
+            copy_source->deref();
+            copy_source = nullptr;
+        }
+    }
+
+    //! Releases the caches of the hashdecl and its registration; can be called again
+    /** Called by releaseDependencies(), and when the hashdecl is retired (see QoreTypeOwner)
+    */
+    DLLLOCAL void releaseCaches() {
+        // issue #5765: no eviction may call the cache once its destruction has started
+        if (parameterized_hashdecl_registration) {
+            qore_generic_cache_unregister(parameterized_hashdecl_registration.get());
+            parameterized_hashdecl_registration.reset();
+        }
+        // a retired concrete declaration is no longer live
+        if (parameterized_base && !parameterized_released) {
+            parameterized_released = true;
+            qore_live_parameterized_hashdecls.fetch_sub(1, std::memory_order_relaxed);
+        }
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private::get(*i.second)->deref();
+        }
+        parameterized_hashdecl_cache.clear();
+    }
+
+    DLLLOCAL void releaseParentHashDecl() {
+        if (parentHashDecl) {
+            // the release of the parent can release its own parent in turn: a long chain of inheritance is released
+            // with a bounded recursion (issue #6047)
+            qore_release_parent_hashdecl(const_cast<typed_hash_decl_private*>(get(*parentHashDecl)));
+            parentHashDecl = nullptr;
+        }
     }
 
     //! Returns the name of the parent hashdecl (for use when updating parent pointers after copying)
@@ -511,9 +827,22 @@ public:
         return false;
     }
 
+    //! Returns the process-unique serial number of this private hashdecl instance; see instance_serial
+    DLLLOCAL uint64_t getInstanceSerial() const {
+        return instance_serial;
+    }
+
 protected:
     // references
     mutable QoreReferenceCounter refs;
+    //! the identity of this private hashdecl instance for the lifetime of the process
+    /** Declared after refs so that the reference count stays at the start of the object, as ref() and deref()
+        are frequent; it must be declared before the types, as their constructors take it.
+
+        Unlike the address, which a later hashdecl can reuse after this one is freed, no other private hashdecl,
+        class or enum ever has this serial number (see qore_get_type_identity_serial()).
+    */
+    const uint64_t instance_serial = qore_get_next_class_instance_serial();
     const QoreProgramLocation* loc;
     std::string name;
     std::string path;
@@ -522,6 +851,22 @@ protected:
     qore_ns_private* ns = nullptr;
     // the module that defined this class, if any
     std::string from_module;
+
+    //! the Program that declared the hashdecl, whose code its member initializers are, or nullptr if none did
+    /** Not referenced: the hashdecl can outlive it (a hash<T> value or a Program that inherited or imported the
+        hashdecl keeps the hashdecl), so it is identified with its ID; see enterSourceProgram()
+    */
+    QoreProgram* src_pgm = nullptr;
+    //! the ID of \a src_pgm, which tells it from a later Program at the same address
+    qore_program_id_t src_pgm_id = 0;
+    //! true once the initializers have found that \a src_pgm has module lifetime; never cleared
+    mutable std::atomic<bool> src_pgm_module_lifetime{false};
+    //! the cached result of hasCodeInit(): -1 if not yet computed, 0 or 1
+    mutable std::atomic<int8_t> code_init{-1};
+    //! the cached result of computeInitEntry(): -1 if not yet computed
+    mutable std::atomic<int8_t> hier_code_init{-1};
+    //! true if the hashdecl is a copy of a hashdecl of \a src_pgm in another Program (inherited or imported)
+    bool copied = false;
 
     // original declaration
     const typed_hash_decl_private* orig;
@@ -535,9 +880,96 @@ protected:
 
     // Source generic type parameters and cached concrete instantiations.
     std::vector<QoreGenericTypeParam> type_params;
+    //! the key of a concrete declaration of this generic hashdecl: each type argument with its identity serial
+    /** A type argument can be a class, hashdecl or enum of another Program, which is freed with its Program while
+        this cache keeps the concrete declaration; a later type can be allocated at the same address, so the address
+        alone would match the declaration made for the destroyed type.  qore_get_type_identity_serial() makes the
+        key unique for the lifetime of the process.
+    */
+    typedef std::vector<std::pair<const QoreTypeInfo*, uint64_t>> parameterized_hashdecl_key_t;
+    //! orders the keys of the concrete declarations, and finds a key by the live type arguments without making one
+    /** A lookup passes the type arguments themselves (the caller's vector, read under the cache's lock), and their
+        identity serials are read as they are compared, so a cache hit allocates nothing; the owned key is made only
+        when a declaration is added.
+    */
+    struct parameterized_hashdecl_key_less_t {
+        typedef void is_transparent;
+
+        DLLLOCAL bool operator()(const parameterized_hashdecl_key_t& a, const parameterized_hashdecl_key_t& b) const {
+            return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(), lessEntry);
+        }
+
+        DLLLOCAL bool operator()(const parameterized_hashdecl_key_t& a, const std::vector<const QoreTypeInfo*>& b)
+                const {
+            return compare(a, b) < 0;
+        }
+
+        DLLLOCAL bool operator()(const std::vector<const QoreTypeInfo*>& a, const parameterized_hashdecl_key_t& b)
+                const {
+            return compare(b, a) > 0;
+        }
+
+    private:
+        DLLLOCAL static bool lessEntry(const std::pair<const QoreTypeInfo*, uint64_t>& a,
+                const std::pair<const QoreTypeInfo*, uint64_t>& b) {
+            if (a.first != b.first) {
+                return std::less<const QoreTypeInfo*>()(a.first, b.first);
+            }
+            return a.second < b.second;
+        }
+
+        //! compares a key with live type arguments as the key made from them would compare: <0, 0 or >0
+        /** Every key of a generic hashdecl's cache and every lookup has one type argument per type parameter
+            (getParameterizedHashDecl() checks the number), so the sizes are not compared.
+        */
+        DLLLOCAL static int compare(const parameterized_hashdecl_key_t& a, const std::vector<const QoreTypeInfo*>& b) {
+            assert(a.size() == b.size());
+            const std::pair<const QoreTypeInfo*, uint64_t>* ai = a.data();
+            for (const QoreTypeInfo* bt : b) {
+                if (ai->first != bt) {
+                    return std::less<const QoreTypeInfo*>()(ai->first, bt) ? -1 : 1;
+                }
+                uint64_t bs = qore_get_type_identity_serial(bt);
+                if (ai->second != bs) {
+                    return ai->second < bs ? -1 : 1;
+                }
+                ++ai;
+            }
+            return 0;
+        }
+    };
     mutable std::mutex parameterized_hashdecl_cache_lock;
-    mutable std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*> parameterized_hashdecl_cache;
+    mutable std::map<parameterized_hashdecl_key_t, TypedHashDecl*, parameterized_hashdecl_key_less_t>
+        parameterized_hashdecl_cache;
+    //! The registration of parameterized_hashdecl_cache by the types of its keys (issue #5765)
+    class ParameterizedHashDeclCache : public QoreGenericTypeCache {
+    public:
+        DLLLOCAL ParameterizedHashDeclCache(const typed_hash_decl_private& hd) : hd(hd) {
+        }
+
+        DLLLOCAL virtual void evictDeadTypes(const std::set<const QoreTypeInfo*>& dead,
+                qore_generic_cache_release_list_t& release);
+
+    private:
+        const typed_hash_decl_private& hd;
+    };
+    //! created with the first concrete declaration, under parameterized_hashdecl_cache_lock; unregistered by the
+    //! destructor
+    mutable std::unique_ptr<ParameterizedHashDeclCache> parameterized_hashdecl_registration;
     const TypedHashDecl* parameterized_base = nullptr;
+    //! true once a concrete declaration has been subtracted from the live count (releaseDependencies())
+    bool parameterized_released = false;
+    //! The hashdecl that this one was copied from, referenced by the copy (issue #5790)
+    /** A copy shares the types of the members of its source, which the source's Program frees with the source
+        otherwise: a copy imported into or inherited by another Program can outlive the source Program
+    */
+    typed_hash_decl_private* copy_source = nullptr;
+
+public:
+    //! the declaration's QoreTypeOwner (issue #5790); the last member, so the layout of the others is not changed
+    QoreTypeOwnerOf<typed_hash_decl_private> type_owner{this};
+
+protected:
     std::vector<const QoreTypeInfo*> type_args;
 
     // parent hashdecl (resolved after parseInit)
@@ -568,6 +1000,48 @@ protected:
             from_module = mod_name;
         }
     }
+
+    //! Enters the Programs that declared the hashdecl and its parents for the member initializers to evaluate
+    /** @param h the helper that enters the Programs and leaves them when it is destroyed
+        @param init the hash whose values the members are given, if any
+        @param overrides the hash whose values take precedence over \a init, if any
+        @param xsink for the \c PROGRAM-ERROR exception raised if a Program whose initializer would be evaluated has
+        been deleted; may be nullptr
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int enterSourcePrograms(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
+            const QoreHashNode* overrides, ExceptionSink* xsink) const;
+
+    //! Initializes a hash of a hashdecl that may need its Programs entered (see needsInitEntry() and initHash())
+    /** Enters the Programs whose initializers are evaluated, unless they are the current Program
+    */
+    DLLLOCAL int initHashChecked(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            bool in_place, bool values_prechecked, ExceptionSink* xsink) const;
+
+    //! initializes the members of a hash, with no Program entered
+    DLLLOCAL int initHashDirect(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
+    //! initializes the members of a hash, with no Program entered
+    DLLLOCAL int initHashDirect(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink) const;
+    //! initializes the members of a hash in place, with no Program entered
+    DLLLOCAL int initHashInPlaceDirect(QoreHashNode* h, ExceptionSink* xsink, bool values_prechecked) const;
+
+    //! Enters the Program that declared the hashdecl if a member initializer that is code will be evaluated
+    /** Called by enterSourcePrograms() for a hashdecl with member initializers that are code (see hasCodeInit())
+        that is not declared by the current Program
+
+        @return 0 for OK, -1 if the Program has been deleted and an initializer that is code would be evaluated
+    */
+    DLLLOCAL int enterSourceProgramForInitSlow(QoreDeclaringProgramHelper& h, const QoreHashNode* init,
+            const QoreHashNode* overrides, ExceptionSink* xsink) const;
+
+    DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL int initHashInternImpl(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy) const;
 
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, ExceptionSink* xsink) const;
     DLLLOCAL int initHashIntern(QoreHashNode* h, const QoreHashNode* init, const QoreHashNode* overrides,

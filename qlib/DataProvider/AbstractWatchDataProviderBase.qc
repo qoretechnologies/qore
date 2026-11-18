@@ -78,6 +78,13 @@ public namespace DataProvider {
     @since DataProvider 3.4
 */
 public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObservable {
+    private:internal {
+        #! The TID of the polling thread while it is running; protected by @ref sleep_m
+        /** internal: stopping the provider cancels this thread, so a subclass must not be able to set it
+        */
+        *int poll_tid;
+    }
+
     private {
         #! WaitGroup for tracking the polling thread
         WaitGroup wg();
@@ -94,8 +101,6 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         #! True once the polling thread has been started
         bool started = False;
 
-        #! The TID of the polling thread while it is running; protected by @ref sleep_m
-        *int poll_tid;
 
         #! Optional callback that durably stores a provider-owned checkpoint
         *code<nothing(hash<auto>)> checkpoint_saver;

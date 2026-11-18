@@ -143,6 +143,12 @@ Child<int> child();
 int echoed = child.echo(value);
     @endcode
 
+    A generic class is inherited with type arguments (<tt>inherits Base&lt;int&gt;</tt>, or
+    <tt>inherits Base&lt;auto&gt;</tt> for a value-erased parent), as it is instantiated with them: <tt>inherits
+    Base</tt> without type arguments is a parse error (<tt>MISSING-TYPE-ARGUMENTS</tt>), unless the class is declared
+    <tt>[legacy_raw]</tt> (see below).  A class that inherits one generic class with different type arguments through
+    its parent classes is also a parse error.
+
     Type parameters can have defaults and upper bounds:
 
     @code{.py}
@@ -190,6 +196,29 @@ class Factory<T> {
 Factory<int> f = Factory<int>::make(10);
 int made = f.get();
     @endcode
+
+    A static method called without type arguments of its generic class has the class's type parameters bound as
+    follows:
+    - through a class that inherits a specialization of the generic class, directly or through other classes, they
+      are the type arguments of the specialization: with <tt>class IntFactory inherits Factory&lt;int&gt;</tt>,
+      <tt>IntFactory::make(10)</tt> is <tt>Factory&lt;int&gt;::make(10)</tt>; the same holds for a call through the
+      generic class or an implicit call in the code of such a class, and for a call reference
+      (<tt>\\IntFactory::make()</tt>), @ref Qore::call_static_method() "call_static_method()" and
+      @ref Qore::call_static_method_args() "call_static_method_args()"; the classes between can be generic
+      (<tt>class Base&lt;U&gt; inherits Factory&lt;U&gt;</tt> and <tt>class IntBase inherits Base&lt;int&gt;</tt>) or
+      not, and the class can declare a static method of the same name, whose variants are then selected with those of
+      the generic class (<tt>static string make(string s)</tt> in <tt>IntFactory</tt>:
+      <tt>IntFactory::make(10)</tt> still calls <tt>Factory&lt;int&gt;::make(10)</tt>)
+    - in the code of the generic class or of a generic class that inherits it (<tt>make(10)</tt>,
+      <tt>Factory::make(10)</tt> or <tt>\\Factory::make()</tt> in a method of <tt>Factory&lt;T&gt;</tt>), they are
+      those of the running instantiation
+    - otherwise they are inferred from the types of the arguments that are known when the code is parsed
+      (<tt>Factory::make(10)</tt> is <tt>Factory&lt;int&gt;::make(10)</tt>), and for a call reference or a dynamic call,
+      from the types of the argument values when it is made
+
+    The type arguments of a static call can be type parameters of the code making the call
+    (<tt>Factory&lt;U&gt;::make(v)</tt> in <tt>sub f&lt;U&gt;(U v)</tt>); they are then those of the running
+    instantiation of that code.
 
     Methods and static methods can also declare their own call-local type
     parameters after the method name. These type parameters can be inferred from
@@ -336,6 +365,19 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
 }
     @endcode
 
+    @anchor outofline_methods_in_namespaces
+    An out-of-line method definition in a @ref qore_namespaces "namespace" block names its class relative to that
+    namespace, as do the scoped functions and constants declared in it: in
+    <tt>namespace NS { namespace I { class C {} } int I::C::m() { return 1; } }</tt>, \c I::C is \c NS::I::C.  The
+    class path is resolved in the namespaces and classes declared before the method in the same block, and it cannot
+    be anchored at the root namespace (<tt>::NS::I::C</tt>).  A class path that starts with the name of the enclosing
+    namespace (<tt>int NS::I::C::m() { return 1; }</tt> in \c NS) is also accepted when it does not name a class
+    relative to the namespace.  A class path that names no class this way is a parse error (before %Qore 3.0, release
+    builds ignored the first part of such a path and could add the method to a class of the enclosing namespace).
+    Like any out-of-line method definition, one in a namespace block is refused under
+    @ref strong-encapsulation "%strong-encapsulation", which @ref modern "%modern" sets, so it is code for the AST
+    interpreter only.
+
     @note Because method definitions are allowed out-of-line, this means that builtin classes may be extended with new user methods, however user constructor, destructor, and copy methods cannot be added to builtin classes; to customize the behavior of these methods for builtin classes, subclass the class instead.\n\n
     When parse option @ref allow-bare-refs "%allow-bare-refs" or @ref new-style "%new-style" is enabled, no \c "$" or \c "$." prefixes can be used with variable or method or member names.
     A bare name in a method then refers to the first of: a local variable of the method (or of a closure in it), a
@@ -357,7 +399,8 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     @subsection private_methods Private Methods
     Methods declared with the <tt><b>private</b></tt> access modifier can only be called by other member methods of the same class or in the same class hierarchy. Any attempt to call these methods from outside the class hierarchy will result in a run-time exception.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n
     Methods declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared method.  This can be used to ensure that the declared method can be changed in later versions of the class without affecting API compatibility.\n\n
-    Methods declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
+    Methods declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.\n\n
+    The body and the default argument values of a @ref qore_functions "function" are always outside every class and resolved in the function's namespace, also when the function is called from a method of the class, so they cannot call the class's private methods, rely on its private inheritance or see the method's local variables; a @ref closure "closure" declared in a method is inside the method's class.
 
     @subsection synchronized_methods Synchronized Methods
     Methods declared with the <tt><b>synchronized</b></tt> keyword will only run in one thread at a time.\n\n
@@ -427,12 +470,37 @@ int id = d.getId();          # OK
     Static methods may be declared <tt><b>private</b></tt>, <tt><b>private:internal</b></tt>, or <tt><b>public</b></tt> or <tt><b>synchronized</b></tt> like non-static methods; static methods can also access private members of a class (through an object of the class for non-static members).   Static methods may not be also @ref abstract "abstract".\n\n
     Static method calls take a special syntax as documented in @ref static_method_calls .\n
 
+    @anchor static_methods_through_object
+    A static method called through an object (<tt>o.method()</tt>) is bound to the declared class of the receiver
+    when the code is parsed, as <tt>DeclaredClass::method()</tt> is, whatever the class of the object, also when the
+    receiver's type is declared with an or-nothing class type (<tt>*DeclaredClass</tt>); a static method of the same
+    name that a child class declares is not called.  Only when the receiver's class is not known when the code is
+    parsed (an untyped receiver, or one declared as \c object) is the method resolved at runtime on the class of the
+    object.
+    @code{.py}
+class Base {
+    static int create(int x) { return x; }
+}
+class Child inherits Base {
+    static string create(int x) { return "child"; }
+}
+Base b = new Child();
+# Base::create() is called: 1
+int i = b.create(1);
+auto a = b;
+# resolved at runtime on the class of the object: Child::create() is called
+string s = a.create(1);
+    @endcode
+
     @subsection abstract Abstract Methods
     Methods declared with the <tt><b>abstract</b></tt> keyword define methods interfaces that must be defined in child
     classes for the class to be instantiated.  Methods defining the declared interfaces in child classes must define
     exactly the same parameters in order for the abstract method to match, but the return type of the concrete method
     in the child class has to simply be compatible with the return type of the abstract method in the parent
     class.\n\n
+    An abstract method can also be defined by another parent class of a class that inherits more than one class; a
+    call of the method, also an unqualified or qualified call through \c self, then calls that definition (when all
+    of the variants of the method in the class that declares it are abstract).\n\n
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
     be also @ref static_methods "static".\n\n
@@ -449,10 +517,20 @@ int id = d.getId();          # OK
     |!Name|!Description
     |<tt>constructor(</tt><em>[params...]</em><tt>) {}</tt>|Called when objects are created when instantiated by a variable declaration with a class type and constructor arguments or explicitly with the new operator. User code may not explicitly call \c constructor() methods directly. In a class tree, \c constructor() methods are called for base classes first in left-to-right, depth-first declaration order.\n\n\c constructor() methods may be @ref overloaded_methods "overloaded" and also private constructors may be defined.  Constructors declared <tt><b>private</b></tt> can only be called from within the class hierarchy, and those declared <tt><b>private:internal</b></tt> can only be called within the class itself.
     |<tt>copy() {}</tt>|When a user explicitly calls a copy method, %Qore will generate a new object with references to the same members as the source object. Then, if there are any base classes, base class \c copy() methods are called in the same order as the \c constructor() methods. If a \c copy() method is defined, it will be run in the new object with a reference to the old object passed as the first argument. Any other arguments passed to the \c copy() method are ignored.\n\n\c copy() methods cannot be @ref overloaded_methods "overloaded" and cannot be private.
-    |<tt>destructor() {}</tt>|Called when objects are implicitly collected (see @ref garbage_collection) or are explicitly deleted. User code may not explicitly call \c destructor() methods. In a class tree, \c destructor() methods are called for base classes in the opposite order in which the constructors are called.\n\n\c destructor() methods cannot be @ref overloaded_methods "overloaded" and cannot be private.
+    |<tt>destructor() {}</tt>|Called when objects are implicitly collected (see @ref garbage_collection) or are explicitly deleted. User code may not explicitly call \c destructor() methods. In a class tree, \c destructor() methods are called for base classes in the opposite order in which the constructors are called.  For destructors that run on a cancelled or interrupted thread, see @ref cancel_destructors "Destructors on a Cancelled Thread".\n\n\c destructor() methods cannot be @ref overloaded_methods "overloaded" and cannot be private.
     |@ref auto_type "auto" <tt>@ref memberGate_methods "memberGate"(</tt>@ref string_type "string" <em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when read access is attempted to private member or members that do not exist in the current object; the return value of this method is returned as the value of the member.\n\n\c memberGate() methods cannot be @ref overloaded_methods "overloaded". User-defined gates are not inherited; builtin gates are inherited by subclasses.
     |@ref auto_type "auto" <tt>@ref methodGate_methods "methodGate"(</tt>@ref string_type "string" <em>method_param_name</em><tt>, ...) {}</tt>|If this method is implemented in the class, it is called when methods are called on the object that do not exist in the current object and the return value of this method is returned as the value of the method call.\n\n\c methodGate() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
     |<tt>@ref memberNotification_methods "memberNotification"(</tt>@ref string_type "string" <em>member_param_name</em><tt>) {}</tt>|If this method is implemented in the class, it is called when an object member is updated outside the class with the member name as the argument. Note that this method is called after the member has been updated and without locking; the call is not atomic respective to other threads that also may update the same member simultaneously.\n\n\c memberNotification() methods cannot be @ref overloaded_methods "overloaded" and are not inherited by subclasses.
+
+    @anchor constructor_argument_cleanup
+    @par Exceptions While Releasing Constructor Arguments
+    Once the constructor body and its local cleanup complete successfully, an exception raised while releasing
+    its parameters or implicit arguments does not turn the object into a partially constructed object: the
+    construction releases its reference normally, running the object's destructor when no other reference remains.
+    The argument exception remains primary; an exception raised by the object's destructor is chained after it.
+    A reference published by the constructor remains valid until it is released. If member initialization, a base
+    constructor, the constructor body, or its local cleanup fails, the existing partial-construction behavior still
+    applies and user destructors are not run.
 
     @subsection final_methods Final Methods
 	Methods declared <b><tt>final</tt></b> cannot be reimplemented in a subclass.  Methods can be declared <b><tt>final</tt></b> to prevent a subclass from altering the behavior of a method that is critical to the class's functionality.\n\n
@@ -473,6 +551,10 @@ int id = d.getId();          # OK
     - a variant of the same name with another signature that accepts arguments that the <b><tt>final</tt></b> variant
       accepts: a narrower or broader parameter type, an untyped parameter, an optional extra parameter or variable
       arguments; a variant whose parameters accept none of the same arguments is allowed
+    - a variant of the same name that a @ref named_arguments_virtual_dispatch "named call" of the
+      <b><tt>final</tt></b> variant can select: it accepts the names of its parameters (after the arguments given by
+      position) with types that can accept the same values, such as <tt>m(string b, int a)</tt> for a
+      <b><tt>final</tt></b> <tt>m(int a, string b)</tt>
     - a parent class listed before the class with the <b><tt>final</tt></b> method that declares or inherits a method
       of the same name, as the subclass's calls of the name are then resolved in that method, or one of its variants
       is selected first
@@ -591,9 +673,21 @@ D::p = new Program(PO_NEW_STYLE);
     @subsection public_members Public Member Declarations
     If a class has a public member declaration (a <tt>public</tt> block, even an empty one or one that declares only constants or static class variables), or inherits a class with one, then only those members declared as public can be accessed from outside the class, and from within the class only members explicitly declared can be accessed as well (unless the class also defines a @ref memberGate_methods "memberGate() method"). In this way typographical errors in member names can be caught (at parse time if types are declared).
 
+    @subsection member_method_names Members With the Name of a Method
+    Since %Qore 3.0, accessing a member that is not declared and that has the name of a method of the class (a method
+    of the class or of a class that it inherits, normal or static, except the \c private:internal methods of a base
+    class) is a parse exception in every mode when the class of the object is known at parse time and has no
+    @ref memberGate_methods "memberGate() method" (for reading) or member write gate (for writing), and also with the
+    old-style <tt>$.</tt> syntax inside the class, for which a \c memberGate() method is not called: it is almost
+    always a method call without its argument list, ex:
+    @code{.py}
+HashIterator i(h);
+while (i.next) {}  # parse exception: the call is i.next()
+    @endcode
+
     @subsection private_members Private Members
     Members declared <b><tt>private</tt></b> can only be accessed within the class hierarchy; trying to access private members form outside the class hierarchy will result in either a parse or runtime exception, depending on when the illegal access is caught.  This access modifier, when used without any modifiers, is equivalent to <tt><b>private:hierarchy</b></tt> and is functionally identical to C++'s \a protected access modifier.\n\n
-    Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.\n\n
+    Members declared as <tt><b>private:internal</b></tt> are not available outside the class, even in classes in the same class hierarchy, providing strong encapsulation of the declared member.  This can be used to ensure that the declared member can be changed in later versions of the class without affecting API compatibility.  A <tt><b>private:internal</b></tt> member is separate from the members with the same name declared by other classes in the hierarchy: each class reads and writes its own, which is initialized in every object of the class or of a subclass, however deep the hierarchy.\n\n
     Members declared as <tt><b>private:hierarchy</b></tt> are equivalent to those declared <tt><b>private</b></tt> and are only private from outside the class hierarchy.
 
     @subsection transient Transient Members
@@ -607,7 +701,8 @@ D::p = new Program(PO_NEW_STYLE);
     @code{.py} self."&member-name"@endcode
 
     @subsection memberGate_methods memberGate() Method
-    If the class implements a \c memberGate() method, then whenever a non-existent member of the class is accessed (read), this method will be called with the name of the member as the sole argument, so that the class can create the member (or react in some other way) on demand. This method is also called when methods of the same class try to access (read) non-existent methods, but is not called from within the \c memberGate() method itself.
+    If the class implements a \c memberGate() method, then whenever a non-existent member of the class is accessed (read), this method will be called with the name of the member as the sole argument, so that the class can create the member (or react in some other way) on demand. This method is also called when methods of the same class try to access (read) non-existent members (except with
+    the old-style <tt>$.</tt> syntax), but is not called from within the \c memberGate() method itself.
 
     @note User-defined \c memberGate() methods must be explicitly implemented in each class. Since %Qore 3.0,
     builtin member gates are inherited, including by Qore subclasses, unless the subclass defines its own gate.
@@ -636,6 +731,22 @@ D::p = new Program(PO_NEW_STYLE);
     @subsection member_initialization Member Initialization
     Members that have intialization expressions in the class definition are initialized before the constructor is executed (but after any base class constructors have run).  An exception raised in a member initialization expression will cause the constructor to fail and for the object to be deleted immediately.
 
+    Member initialization expressions, like those of @ref static_class_variables "static class variables", are parsed
+    in their own scope, not in the scope of the code that first uses the class: they can refer to the top-level local
+    variables of the program, whose value is that of the thread that evaluates the expression (see
+    @ref threading_and_variables), and to global variables, but not to the local variables of a function, method or
+    closure, so naming one is a parse error.  A static class variable's initializer is evaluated when the class is
+    initialized, which can be before the top-level code has assigned the variable.
+
+    An untyped member that more than one class of the hierarchy declares (possible only without
+    @ref require-types "%require-types": a class that declares a member of a base class again, or two base classes
+    that declare the same member; a typed declaration of such a member is a parse error) is one member of the object.
+    Its initialization expressions run in the order of initialization, base classes first and in the order of the
+    inheritance list, each once: the last one gives the value, it can read the value that the one before it gave (ex:
+    <tt>class B inherits A { public { $.a = $.a + 1; } }</tt>), and the value that it replaces is released (an object
+    that nothing else references is destroyed).  A declaration without an initialization expression leaves the value
+    as it is.
+
     @note The automatic <tt>argv</tt> local variable is instantiated as usual in all class methods where there are more arguments than variables declared in the method declaration.\n\n
 
     @section object_method_calls Object Method Calls
@@ -661,6 +772,21 @@ Thread::Mutex::lock();
 lock();
     @endcode\n
     Calls to object methods can be made outside the class by using the above syntax as well. If the object's class is not known at parse time, then the call is resolved at run-time, and if a call is attempted to a private function outside the defining class, then a run-time \c METHOD-IS-PRIVATE (if the method is private) or \c BASE-CLASS-IS-PRIVATE (if the method resolves to a privately-inherited base class) exception is raised.
+
+    @anchor method_call_deleted_object
+    @par Method Calls on a Deleted Object
+    A method call on an object chooses what it calls before its arguments are evaluated: a method of the object's
+    class, a static method of the class, a member holding a call reference, a pseudo-method of objects or the
+    @ref methodGate_methods "methodGate()" method of the class.  A call on an object that has been deleted raises
+    \c OBJECT-ALREADY-DELETED; when the arguments of the call delete the object, the call raises it after them and
+    nothing is called: <tt>cannot call C::m() on an object that has already been deleted</tt>, naming, for a method or
+    a static method, the class of the method that the call would run and the method; for a call by a name that the
+    class has no method of, the class of the object and the name of the call, or \c C::methodGate() for a class with
+    a \c methodGate() method that has no pseudo-method of the name and no member of the name whose declared type can
+    hold a call reference and that the call can read (a \c private:internal member only in its class; the error is
+    chosen from the declaration of the member, whose value is gone with the object).  A static method called in a method of its class without an object (<tt>s()</tt>) is called whatever its
+    arguments did to the object.  The behavior is the same in every @ref exec_mode_overview "execution mode", also for
+    calls with named arguments.
 
     @anchor methodGate_methods
     @par methodGate() methods

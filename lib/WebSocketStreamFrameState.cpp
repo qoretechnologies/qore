@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 
+#include "qore/intern/HttpStreamConsumeHook.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QC_Queue.h"
 
@@ -53,21 +54,97 @@ WebSocketStreamFrameState::~WebSocketStreamFrameState() {
     }
 }
 
+bool WebSocketStreamFrameState::setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
+    // the queue's hook serves every stream whose messages it receives; without a queue, no message is kept, and the
+    // data is credited as it is fed (creditUnusedData())
+    if (msg_queue) {
+        item_hook = msg_queue->getItemConsumeHook();
+    }
+    stream_hook = std::move(hook);
+    return true;
+}
+
+void WebSocketStreamFrameState::closeItem() {
+    if (stream_hook && progress_bytes) {
+        stream_hook->closeItem();
+    }
+    progress_bytes = 0;
+}
+
+void WebSocketStreamFrameState::reportProgress() {
+    if (stream_hook && pending_bytes > progress_bytes) {
+        stream_hook->progress(pending_bytes - progress_bytes);
+        progress_bytes = pending_bytes;
+    }
+}
+
+void WebSocketStreamFrameState::creditUnusedData() {
+    // data that made no message is reported at once, unless it is part of a message still being read: a frame still
+    // being decoded, or the fragments of a message that the queue gets when it is complete (their credit is
+    // advanced by reportProgress(), so a fragmented message does not have the client buffer without bound)
+    if (stream_hook && pending_bytes && !decoder.bufferedBytes()
+            && !(item_hook && reassembler.isFragmenting())) {
+        closeItem();
+        stream_hook->consumed(pending_bytes);
+        pending_bytes = 0;
+    }
+}
+
 int WebSocketStreamFrameState::feedData(const void* data, size_t len) {
     if (error_state || peer_closed) {
         // Ignore further data once the stream is done — control-frame
         // responses have already been dispatched (or never will be).
+        // The ignored data counts as consumed (issue #5820).
+        if (stream_hook && len) {
+            closeItem();
+            stream_hook->consumed(len + pending_bytes);
+            pending_bytes = 0;
+        }
         return 0;
     }
     if (data && len) {
         decoder.appendData(data, len);
+        pending_bytes += len;
     }
-    return processFrames();
+    int rv = processFrames();
+    creditUnusedData();
+    // a message in progress can be larger than the stream's window (issue #5820)
+    reportProgress();
+    return rv;
 }
 
 int WebSocketStreamFrameState::processFrames() {
     int pushed_before = messages_pushed;
-    while (decoder.hasCompleteFrame() && !error_state) {
+    while (!error_state) {
+        // a data frame whose declared length is over the limit is rejected on its header, before its payload is
+        // buffered; the error state discards the rest of the stream's data as it arrives (issue #5878)
+        WsFrameHeader h;
+        if (decoder.peekHeader(h)) {
+            bool data = h.opcode == WSOP_TEXT || h.opcode == WSOP_BINARY || h.opcode == WSOP_CONTINUATION;
+            bool control = h.opcode == WSOP_CLOSE || h.opcode == WSOP_PING || h.opcode == WSOP_PONG;
+            // an invalid length, a control frame over 125 bytes (RFC 6455 section 5.5) or a reserved opcode is a
+            // protocol error, rejected on the header before anything is buffered
+            if (h.invalid_length || (!data && !control) || (control && h.payload_len > 125)) {
+                decoder.clear();
+                fragment_bytes = 0;
+                setError(h.invalid_length ? "Invalid WebSocket frame length"
+                    : (control ? "WebSocket control frame too big" : "Reserved WebSocket opcode"),
+                    WSCC_ProtocolError);
+                break;
+            }
+            // the size of the message so far plus the frame's, without overflow
+            uint64_t so_far = h.opcode == WSOP_CONTINUATION ? fragment_bytes : 0;
+            if (data && (h.payload_len > max_message_size || so_far > max_message_size - h.payload_len)) {
+                decoder.clear();
+                fragment_bytes = 0;
+                setError("WebSocket message exceeds the maximum message size of " + std::to_string(max_message_size)
+                    + " bytes", WSCC_MessageTooBig);
+                break;
+            }
+        }
+        if (!decoder.hasCompleteFrame()) {
+            break;
+        }
         ExceptionSink xs;
         WsFrame frame = decoder.nextFrame(&xs);
         if (xs) {
@@ -84,14 +161,14 @@ int WebSocketStreamFrameState::processFrames() {
             break;
         }
 
-        // Enforce per-message size limit against decoded frame size before
-        // handing off to the reassembler (reassembler checks post-merge size
-        // at every append, but this guards the single-frame fast-path too)
+        // Enforce the per-message size limit against the decoded frame size before handing it to the reassembler;
+        // the fragments of a message are checked as they arrive (handleFrame())
         if (frame.payload && frame.payload->size() > max_message_size) {
             ExceptionSink dx;
             frame.payload->deref(&dx);
             dx.clear();
-            setError("WebSocket frame exceeds max message size", WSCC_MessageTooBig);
+            setError("WebSocket frame exceeds the maximum message size of " + std::to_string(max_message_size)
+                + " bytes", WSCC_MessageTooBig);
             break;
         }
 
@@ -168,6 +245,19 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
         return;
     }
 
+    // a fragmented message is checked as its fragments arrive, not once it is complete (issue #5861)
+    if (frame.opcode == WSOP_CONTINUATION || !frame.fin) {
+        size_t total = (frame.opcode == WSOP_CONTINUATION ? fragment_bytes : 0)
+            + (frame.payload ? frame.payload->size() : 0);
+        if (total > max_message_size) {
+            fragment_bytes = 0;
+            setError("WebSocket message exceeds the maximum message size of " + std::to_string(max_message_size)
+                + " bytes", WSCC_MessageTooBig);
+            return;
+        }
+        fragment_bytes = frame.fin ? 0 : total;
+    }
+
     // Data frames — feed to reassembler for fragmentation support
     ExceptionSink xs;
     bool complete = reassembler.processFrame(frame, &xs);
@@ -202,7 +292,8 @@ void WebSocketStreamFrameState::handleFrame(WsFrame& frame) {
     }
 
     if (payload && payload->size() > max_message_size) {
-        setError("WebSocket message exceeds max message size", WSCC_MessageTooBig);
+        setError("WebSocket message exceeds the maximum message size of " + std::to_string(max_message_size)
+            + " bytes", WSCC_MessageTooBig);
         return;
     }
 
@@ -238,6 +329,14 @@ void WebSocketStreamFrameState::pushMessage(MessageKind kind, BinaryNode* payloa
         h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), &xs);
     }
     if (!xs && msg_queue) {
+        // the data fed since the last message is reported with this message (issue #5820)
+        if (item_hook) {
+            // the message is complete: its data is reported with it
+            closeItem();
+            item_hook->record(*h, stream_hook, pending_bytes);
+            pending_bytes = 0;
+        }
+        // a message that is not queued is forgotten by the queue's item hook: its data counts as consumed
         msg_queue->push(&xs, h.release());
         if (!xs) {
             ++messages_pushed;
@@ -258,11 +357,11 @@ void WebSocketStreamFrameState::setError(const std::string& msg, uint16_t wire_c
     }
     error_state = true;
     error_msg = msg;
-    // Notify the handler
-    pushMessage(MessageKind::Error, nullptr, /* rsv */ 0, wire_code, msg.c_str());
     // Attempt to send a close frame to the peer so they see a proper
     // termination rather than an abrupt stream reset.  Caller may also
-    // tear down the transport.
+    // tear down the transport.  The close is queued before the handler is
+    // notified, so a handler that ends the connection when it is told of the
+    // error finds the close frame queued (issue #5900).
     if (!close_sent && send_cb) {
         SimpleRefHolder<BinaryNode> close_frame(
             WebSocketFrameEncoder::encodeClose(wire_code, msg.c_str(),
@@ -274,6 +373,8 @@ void WebSocketStreamFrameState::setError(const std::string& msg, uint16_t wire_c
             close_sent = true;
         }
     }
+    // Notify the handler
+    pushMessage(MessageKind::Error, nullptr, /* rsv */ 0, wire_code, msg.c_str());
 }
 
 void WebSocketStreamFrameState::sendText(const char* text, size_t len) {
@@ -328,6 +429,12 @@ void WebSocketStreamFrameState::sendClose(uint16_t code, const char* reason) {
 }
 
 void WebSocketStreamFrameState::pushCloseSentinel() {
+    // the data of a message that the stream did not end makes no message
+    if (stream_hook && pending_bytes) {
+        closeItem();
+        stream_hook->consumed(pending_bytes);
+        pending_bytes = 0;
+    }
     if (!msg_queue) {
         return;
     }

@@ -50,9 +50,15 @@ int SmartMutex::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeo
         xsink->raiseException("LOCK-ERROR", "TID %d called %s::lock() twice without an intervening %s::unlock()", tid, getName(), getName());
         return -1;
     }
+    // a wait that ends with the lock still held waits again only for the rest of the timeout
+    QoreWaitDeadline deadline(timeout_ms);
     while (tid >= 0) {
+        int64 wait_ms = timeout_ms;
+        if (deadline.active() && !(wait_ms = deadline.remainingMs())) {
+            return -1;
+        }
         waiting++;
-        int rc =  nvl->waitOn((AbstractSmartLock *)this, vl, xsink, timeout_ms);
+        int rc =  nvl->waitOn((AbstractSmartLock *)this, vl, xsink, wait_ms);
         waiting--;
         if (rc) {
             return -1;

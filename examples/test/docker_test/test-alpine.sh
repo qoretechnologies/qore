@@ -279,16 +279,16 @@ chown -R qore:qore ${QORE_SRC_DIR}
 
 # Core tests need native modules from the image (for example yaml and xml), but
 # must not see AOT user modules compiled by the image's older Qore. Native
-# modules carry an API suffix; expose only those through an isolated link farm.
+# modules carry an API suffix; expose only those through an isolated link farm,
+# and only those built for a module API that this qore loads (see
+# ci-native-modules.sh).
+. "${QORE_SRC_DIR}/test/docker_test/ci-native-modules.sh"
 SYSTEM_BINARY_MODULE_DIR=$(${QORE_SRC_DIR}/build/qore --module-dir)
 # The link farm is a directory of this run's own, so no other content has to be removed from it; the qore user that
 # runs the tests reads it
 CI_NATIVE_MODULE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/qore-ci-native-modules.XXXXXX")
 chmod 755 "${CI_NATIVE_MODULE_DIR}"
-for qmod in "${SYSTEM_BINARY_MODULE_DIR}"/*-api-*.qmod; do
-    [ -e "${qmod}" ] || continue
-    ln -s "${qmod}" "${CI_NATIVE_MODULE_DIR}/"
-done
+qore_ci_native_module_farm "${QORE_SRC_DIR}/build/qore" "${CI_NATIVE_MODULE_DIR}" "${SYSTEM_BINARY_MODULE_DIR}"
 
 # run the tests against job-built modules, source qlib, and compatible native
 # modules only. run_tests.sh prepends the build qmod and binary-module paths.
@@ -365,14 +365,29 @@ gosu qore:qore env \
 qore_ci_resource_report "after the tests"
 # the databases, schemas and users that killed test runs (of this job or of earlier ones) left on the shared test
 # database servers; a server that cannot be reached is reported, and the cleanup never fails the job
+# the script needs modules that the build makes (yaml, json and reflection, through Util and the isolation modules):
+# its module path is the one that run_tests.sh gives the tests, with the build's qmods and binary module directories
+# before QORE_MODULE_DIR
+LEFTOVERS_MODULE_DIR="${QORE_MODULE_DIR}"
+for moddir in "${QORE_SRC_DIR}"/build/modules/*/; do
+    if [ -d "${moddir}" ]; then
+        LEFTOVERS_MODULE_DIR="${moddir%/}:${LEFTOVERS_MODULE_DIR}"
+    fi
+done
+if [ -d "${QORE_SRC_DIR}/build/qlib-qmod" ]; then
+    LEFTOVERS_MODULE_DIR="${QORE_SRC_DIR}/build/qlib-qmod:${LEFTOVERS_MODULE_DIR}"
+fi
 gosu qore:qore env \
-    QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_MODULE_DIR="${LEFTOVERS_MODULE_DIR}" \
     QORE_MODULE_DIR_ONLY="${QORE_MODULE_DIR_ONLY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     "${QORE_DEBUG_BINARY}" examples/test/docker_test/drop-test-run-leftovers.q || true
 
 # the cores of the processes the tests started are kept with those of the tests
 qore_ci_collect_cores "$CORE_DIR"
+# the notice of QORE_CI_NATIVE_MODULE_API_TRANSITION (the native modules whose tests were skipped, or that it is not
+# needed), at the end of the job's log
+qore_ci_native_module_notice
 if [ "${TEST_RC}" != "0" ]; then
     qore_ci_end_job_processes || true
     exit ${TEST_RC}

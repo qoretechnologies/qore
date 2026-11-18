@@ -43,6 +43,8 @@ module SmartSheetRestClient {
         ConnectionSchemeCache::registerScheme("smartsheetrest",
             SmartSheetRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage SmartSheetRestClient Module

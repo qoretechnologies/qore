@@ -280,6 +280,23 @@ class AzureActionsTest inherits QUnit::Test {
             assertEq("AQID", accepted.data[0].b64_json);
             assertFalse(exists accepted.data[0].prompt_filter_results);
             assertFalse(exists accepted.data[0].content_filter_results);
+            # the fields of a live image edit response (2026-11-15), with the safety_identifier that the Azure
+            # document omits (qore#6169): the effective identifier of the request (its safety_identifier, or else its
+            # user), or null
+            foreach AbstractDataProviderType type in (image_type, Serializable::deserialize(image_type.serialize())) {
+                hash<auto> live = {"created": 1970-01-01Z, "background": "opaque", "data": ({"b64_json": "AQID"},),
+                    "output_format": "png", "quality": "low", "safety_identifier": NOTHING, "size": "1024x1024",
+                    "usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30,
+                        "input_tokens_details": {"image_tokens": 4, "text_tokens": 6}}};
+                accepted = type.acceptsValue(live);
+                assertEq("AQID", accepted.data[0].b64_json, action);
+                assertFalse(exists accepted.safety_identifier, action);
+                accepted = type.acceptsValue(live + {"safety_identifier": "user-1234"});
+                assertEq("user-1234", accepted.safety_identifier, action);
+                assertThrows("TYPE-VALUE-ERROR", sub () {
+                    type.acceptsValue(live + {"safety_identifier": {"id": "user-1234"}});
+                }, NOTHING, action);
+            }
         }
         foreach string action in ("create-transcription", "create-translation") {
             auto op = AzureOpenAiSchema::getOperationEx(action);

@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 and HTTP/3 client connections and the re-poll of their async I/O poll operations
+
+/*  HttpClientDrainLimit.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5839: a read pass of an HTTP/2 or HTTP/3 client dispatches a limited number of responses.  HTTP/2 took
+    the next response from its operation before it checked the limit, and lost it; neither protocol polled again
+    for the responses left at the limit, which waited for the next socket event or timer.  The responses are now
+    all dispatched, by passes that follow at once.  A test hook lowers the limit to one response and holds the
+    responses of the client until they have all arrived, so that one read pass finds them all.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpClientDrainLimitTest
+
+class OkHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "ok", {"Content-Type": MimeTypeText});
+    }
+}
+
+public class HttpClientDrainLimitTest inherits QUnit::Test {
+    private {
+        #! the bound of a wait that only guards against a hang
+        const HangGuard = 30s;
+        #! the number of responses held; with a drain limit of one, the pass after the hold finds them all
+        /** Without the fix, HTTP/2 lost every second one, and HTTP/3 dispatched the ones left by a pass when a later
+            packet or timer woke it
+        */
+        const Held = 40;
+
+        HttpServer server;
+        string h2_url;
+        *string h3_url;
+    }
+
+    constructor() : Test("HttpClientDrainLimitTest", "1.0") {
+        addTestCase("HTTP/2: responses past the drain limit are dispatched", \h2Test());
+        addTestCase("HTTP/3: responses past the drain limit are dispatched", \h3Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("drain-limit", LoggerLevel::getLevelInfo()),
+        });
+        server.setHandler("ok", "/ok", NOTHING, new OkHandler());
+        h2_url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port);
+        try {
+            h3_url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port);
+        } catch (hash<ExceptionInfo> ex) {
+            # QUIC is not available; the HTTP/3 test is skipped
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    h2Test() {
+        checkAvailable();
+        drainTest("h2", h2_url);
+    }
+
+    h3Test() {
+        checkAvailable(True);
+        drainTest("h3", h3_url);
+    }
+
+    #! Skips the test unless the library is a debug build, and HTTP/3 is available if needed
+    private checkAvailable(*bool http3) {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the drain hooks are only registered in a library-debug build");
+        }
+        if (http3 && !h3_url) {
+            testSkip("QUIC is not available");
+        }
+    }
+
+    private drainTest(string protocol, string url) {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "connect_timeout": HangGuard,
+            "request_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        # the connection is made before the hold
+        assertEq(200, mgr.requestAsync(url, "GET", "/ok").get(HangGuard).status_code, "the first request");
+
+        call_function("dbg_http_client_drain_limit", 1);
+        on_exit call_function("dbg_http_client_drain_limit", 0);
+        call_function("dbg_http_client_hold_outputs", True);
+        on_exit call_function("dbg_http_client_hold_outputs", False);
+
+        int stranded = call_function("dbg_http_client_stranded_passes");
+        list<auto> futures = map mgr.requestAsync(url, "GET", "/ok"), xrange(Held);
+        assertTrue(call_function("dbg_http_client_wait_held_outputs", Held, HangGuard),
+            "the responses arrive while they are held");
+        call_function("dbg_http_client_hold_outputs", False);
+        # the response to this request starts the read pass that finds all the responses
+        push futures, mgr.requestAsync(url, "GET", "/ok");
+
+        int ok;
+        foreach auto f in (futures) {
+            if (f.get(HangGuard).status_code == 200) {
+                ++ok;
+            }
+        }
+        assertEq(Held + 1, ok, "every response is dispatched");
+        # without the fix, HTTP/3 dispatched the responses left by a pass when a later packet or timer woke it
+        assertEq(0, call_function("dbg_http_client_stranded_passes") - stranded,
+            "no read pass leaves responses without polling again at once");
+        assertEq(1, mgr.getStats().total_connections, "the requests are made on one connection");
+    }
+}

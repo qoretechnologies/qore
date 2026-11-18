@@ -35,10 +35,30 @@
 #include "qore/intern/FunctionalOperator.h"
 #include "qore/intern/FunctionalOperatorInterface.h"
 
+template <bool StrictBoolean>
 class QoreFunctionalStreamingOperator;
 
 class QoreStreamingOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
-    friend class QoreFunctionalStreamingOperator;
+public:
+    //! true if the operand of the given index is evaluated for each element as a statement of its own: it can create
+    //! a temporary besides its value whose release can be observed (qore#6288, qore_expr_may_create_observable_temp())
+    DLLLOCAL bool elementScope(unsigned i) const {
+        return element_scopes.get() & (1u << i);
+    }
+
+    //! returns the element scope flags: a bit for each operand, by index (see elementScope())
+    DLLLOCAL uint8_t elementScopes() const {
+        return element_scopes.get();
+    }
+
+private:
+    //! a bit for each operand, by index (see elementScope())
+    QoreElementScopeFlags element_scopes;
+
+    //! decides the element scope flags of the operator given (q_element_scope_decider_t)
+    DLLLOCAL static void decideElementScopes(AbstractQoreNode* op);
+
+    template <bool> friend class QoreFunctionalStreamingOperator;
 
 public:
     enum Kind {
@@ -51,6 +71,9 @@ public:
         TakeWhile,
         TakeUntil,
     };
+
+    DLLLOCAL static QoreStreamingOperatorNode* create(LexicalSemanticPolicy policy,
+        const QoreProgramLocation* loc, Kind kind, QoreValue predicate, QoreValue source);
 
     DLLLOCAL QoreStreamingOperatorNode(const QoreProgramLocation* loc, Kind kind, QoreValue predicate,
             QoreValue source) : QoreBinaryOperatorNode<>(loc, predicate, source), kind(kind) {
@@ -73,7 +96,7 @@ public:
         if (*xsink) {
             return nullptr;
         }
-        QoreStreamingOperatorNode* rv = new QoreStreamingOperatorNode(loc, kind, n_left.release(), n_right.release());
+        QoreStreamingOperatorNode* rv = create(getSemanticPolicy(), loc, kind, n_left.release(), n_right.release());
         rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->right.getInternalNode());
         return rv;
     }
@@ -98,6 +121,12 @@ public:
             ExceptionSink* xsink) const;
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* getFunctionalIteratorCommon(
+        FunctionalValueType& value_type, ExceptionSink* xsink) const;
+
     Kind kind;
     const QoreTypeInfo* elementTypeInfo = nullptr;
     const QoreTypeInfo* returnTypeInfo = nullptr;
@@ -115,6 +144,7 @@ protected:
     DLLLOCAL bool isPredicateOperator() const;
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalStreamingOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalStreamingOperator(const QoreStreamingOperatorNode* n_op, FunctionalOperatorInterface* n_f,

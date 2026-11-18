@@ -34,6 +34,7 @@
 #define _QORE_FUNCTIONREFERENCENODE_H
 
 class RuntimeConfig;
+class ResolvedCallReferenceNode;
 
 //! base class for call references, reference-counted, dynamically allocated only
 /** cannot be a ParseNode or SimpleQoreNode because we require deref(xsink)
@@ -110,9 +111,23 @@ private:
     /** in debug mode this function calls assert(false)
     */
     DLLLOCAL virtual bool is_equal_hard(const AbstractQoreNode* v, ExceptionSink* xsink) const;
+
+    friend const ResolvedCallReferenceNode* qore_get_sandbox_bound_callback(const AbstractQoreNode* callback);
+
+    //! Internal cycle-collector edge for a sandbox-bound callback.
+    /** The default returns nullptr for ordinary and unresolved call references. The runtime's sandbox wrapper
+        overrides this entry to expose its immutable, borrowed callback without RTTI or a reference-count change.
+        Native subclasses inherit the default; they do not need to implement this entry.
+
+        @return the borrowed wrapped callback, or nullptr for a call reference that is not sandbox-bound
+        @note This entry is part of the module API 2.2 vtable change; modules must rebuild for that API.
+    */
+    DLLEXPORT virtual const ResolvedCallReferenceNode* getSandboxBoundCallback() const;
 };
 
 class QoreFunction;
+
+class LexicalSemanticPolicy;
 
 //! base class for resolved call references
 class ResolvedCallReferenceNode : public AbstractCallReferenceNode {
@@ -148,6 +163,10 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT QoreValue invoke(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    //! Internal invocation by a parsed operation with an immutable compatibility policy.
+    DLLLOCAL QoreValue invokeLexical(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
 
     //! returns a pointer to the QoreProgram object associated with this reference (can be nullptr)
     /** this function is not exported in the library's public interface
@@ -205,6 +224,28 @@ protected:
         @return always returns false
     */
     DLLEXPORT virtual bool derefImpl(ExceptionSink* xsink);
+
+    //! Invocation entry used by invoke(); native subclasses continue to implement execValue().
+    /** The default entry scopes canonical compatibility semantics around the native callback and restores the
+        caller's native invocation after success or failure. Internal Qore references override this entry with
+        their existing declaration-bound execution path, so ordinary Qore calls retain one virtual dispatch.
+        Modules must rebuild for the current QORE_MODULE_API_MINOR because these entry slots extend the vtable.
+
+        @param args arguments passed by invoke()
+        @param xsink receives an exception from the callback
+        @return the callback result, owned by the caller
+    */
+    DLLEXPORT virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+
+    //! Internal counterpart for a source-bound call; native subclasses need not override this entry.
+    /** @param args arguments passed by the parsed invocation
+        @param xsink receives an exception from the callback
+        @param policy immutable policy of the invocation operation; user code retains its declaration policy
+        @return the callback result, owned by the caller
+    */
+    DLLEXPORT virtual QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const;
+
 };
 
 class OptionalCallReferenceAccessHelper {

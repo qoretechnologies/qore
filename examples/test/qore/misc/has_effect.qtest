@@ -65,6 +65,13 @@ public class HasEffectTest inherits QUnit::Test {
         assertEq(NOTHING, parse_result);
     }
 
+    #! the value of the operand of a compound assignment is used: a call in it gives no RETURN-VALUE-IGNORED warning
+    private noReturnValueIgnoredImpl(string statements) {
+        Program p(PO_NEW_STYLE);
+        *hash parse_result = p.parse(statements, "", WARN_RETURN_VALUE_IGNORED){"err", "desc"};
+        assertEq(NOTHING, parse_result, statements);
+    }
+
     hasNoEffect() {
         hasNoEffectImpl("1+2;");
         hasNoEffectImpl("1+int(2);", True, True);
@@ -115,5 +122,12 @@ public class HasEffectTest inherits QUnit::Test {
         hasEffectImpl("string s = 'asdf '; s += 'zxcv';");
         hasEffectImpl("int n = 18; n += 3; n++; ++n; n *= 2; --n;");
         hasEffectImpl("string s1 = 'asdf '; string s2 = ' zxcv'; map trim(\$1), (s1, s2);");
+
+        # a call without side effects in the operand of a compound assignment: its value is used (qore#6140)
+        foreach string op in (("*=", "/=", "+=", "-=", "%=", "&=", "|=", "^=", "<<=", ">>=")) {
+            noReturnValueIgnoredImpl("auto n = 8; n " + op + " abs(2);");
+        }
+        noReturnValueIgnoredImpl("float f = 8.0; f *= sqrt(4.0); f /= sqrt(4.0);");
+        noReturnValueIgnoredImpl("hash<auto> h = {\"2\": 3}; h{abs(2)} *= 2; h{abs(2)} /= 2;");
     }
 }

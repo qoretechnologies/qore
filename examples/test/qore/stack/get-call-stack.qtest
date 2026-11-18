@@ -35,6 +35,12 @@ class GetCallThreadTest inherits QUnit::Test {
 
         remove h{gettid()}[0].function;
         remove l[0].function;
+        # the frames are located at their calls, which are other calls with other columns: frame 0 at
+        # get_all_thread_call_stacks() or get_thread_call_stack(), and frame 2 at the call of f1()
+        foreach int i in ((0, 2)) {
+            remove h{gettid()}[i]{"start_column", "end_column"};
+            remove l[i]{"start_column", "end_column"};
+        }
         remove h{gettid()}[2].line;
         remove l[2].line;
         remove h{gettid()}[2].endline;

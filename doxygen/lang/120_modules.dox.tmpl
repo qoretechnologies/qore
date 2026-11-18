@@ -24,6 +24,7 @@
 %requires ../../directory/Module.qm
     @endcode \n
 
+    @anchor separated_modules
     Module implementation could be separated to multiple files and stored as a directory named with the same name as the module. To require them use @ref requires "%requires ModuleName" without ".qm" extension. All files with the extenstion *qc, *ql (e.g. functions and classes) inside the directory will be automatically included at program parse time.
 
     Examlpe of such separated module:
@@ -1337,7 +1338,7 @@ ModuleName/
 
     Binary modules are written in C++ and delivered in binary form. They must conform to the %Qore Module API and have the file extension \c "*.qmod". Binary modules normally depend on other shared libraries and therefore can only be loaded if the libraries they require are present on the system and can be found in the library path.
 
-    Binary modules are merged into @ref Qore::Program "Program" objects in the same way as the static system namespace objects are imported.  It is possible to import a binary module and be able to use only part of its functionality, for example, if the importing @ref Qore::Program "Program" cannot access the filesystem, and the module has functions that access the filesystem, only the functions that access the filesystem will not be available.  In user modules, the functional domain is set on the module level and not on the individual function or method level as with builtin objects, so user modules are either completely imported or not at all.
+    Binary modules are merged into @ref Qore::Program "Program" objects in the same way as the static system namespace objects are imported.  It is possible to import a binary module and be able to use only part of its functionality, for example, if the importing @ref Qore::Program "Program" cannot access the filesystem, and the module has functions that access the filesystem, only the functions that access the filesystem will not be available.  User modules are either completely imported or not at all; their functions and methods can declare @ref function_domains "functional domains" as builtin functions and methods do, which a %Program that may not use them cannot reference.
 
     Please note that as of version 0.7.0 onwards, the source code for binary modules has been split from the main %Qore library source code into separate projects; see <a href="http://www.qore.org">%Qore's home page</a> for more information.
 
@@ -1408,7 +1409,10 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     Note that global variables exported from a module's @ref Qore::Program "Program" object are exported as
     references; each global variable declared in a module is unique, and they reside in the module's
-    @ref Qore::Program "Program" object.
+    @ref Qore::Program "Program" object.  A module cannot export a @ref thread_local "thread_local" variable; see
+    @ref mod_public "public".  Sandboxed code and code in a @ref Qore::Program "Program" with
+    @ref Qore::PO_NO_PROCESS_CONTROL set can read but not change the variables that a trusted module exports and the
+    static members of its classes; see @ref module_public_variables.
 
     Furthermore, when using an environment with multiple @ref Qore::Program "Program" objects, if a user module has
     already been loaded and initialized, then it's functional domain mask is compared against any importing
@@ -1575,7 +1579,7 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt><b>desc</b> = &quot;</tt><i>description string</i><tt>&quot;;</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt><b>author</b> = &quot;</tt><i>author string</i><tt>&quot;;</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>url</b> = &quot;</tt><i>URL string</i><tt>&quot;;]</tt>\n
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>license</b> = &quot;</tt><i>license string</i><tt>&quot;;]</tt>\n
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>license</b> = &quot;</tt><i>license string</i><tt>&quot;;]</tt>\n    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>domains</b> = &quot;</tt><i>functional domains</i><tt>&quot;;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>init</b> = </tt><i>@ref closure "initialization closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<tt>[<b>del</b> = </tt><i>@ref closure "deletion closure"</i><tt>;]</tt>\n
     &nbsp;&nbsp;&nbsp;&nbsp;<tt>}</tt>
@@ -1586,6 +1590,48 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     - \c author: (required) must be assigned to a string giving the module's author's name
     - \c url: (optional) if present, must be a string giving the URL of the module
     - \c license: (optional) if present, must be a string giving the license of the module
+    - \c domains: (optional) if present, must be a string giving the @ref function_domains "functional domains" that
+      the module's own code uses, separated by commas and without the \c QDOM_ prefix, as in the attribute list of a
+      function (ex: <tt>domains = "PROCESS_CONTROL,THREAD_CONTROL";</tt>); only domains that a parse option restricts
+      can be given (not \c INJECTION, \c DEBUGGER nor \c IN_MODULE).  The module's @ref Qore::Program "Program" does
+      not have the restrictions of these domains, which it would otherwise inherit from the %Program that loads the
+      module, so a %Program restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can load a module
+      that registers process-wide functionality when it is loaded.  The declaration applies only to a module found in a
+      directory of the process-wide module path (\c QORE_MODULE_DIR (see @ref environment_variables) and the built-in module
+      directories, not a directory that a %Program adds with @ref append-module-path "%append-module-path" or
+      @ref prepend-module-path "%prepend-module-path", nor a module loaded by its path): a module from anywhere else
+      has the restrictions of the %Program that loads it.  The code after the module declaration, including
+      @ref conditional_parsing "%ifdef" directives for the restricting parse options, sees the options without these
+      restrictions, as do the \c init and \c del closures.  The code that calls the module is still checked against
+      its own restrictions.  Each module declares the domains that its own code uses; the modules that it requires do
+      not get them.  A declaration must not make the module's public API a way around the caller's restrictions: the
+      module's public functions and methods whose effect is the restricted capability itself (changing process-wide
+      state such as environment variables, registrations, caches or settings, exiting the process, signal handlers,
+      loading modules) declare the domain too, so that a restricted caller cannot call them, and module code that would
+      use the capability for its caller checks the caller first
+      (@ref Qore::Program::getCallerCapabilityMask() "Program::getCallerCapabilityMask()"); what the module does for its
+      own work (its threads, waits and thread data) needs no such declaration.  The module's own code may use the
+      builtin functionality of the declared domains also when a call is resolved at run time
+      (@ref Qore::call_function() "call_function()", a method call on an untyped value, a call reference that the
+      module's code creates), for a sandboxed caller too; the same calls that the caller's code makes are checked
+      against the caller's restrictions.  The module's own functions and methods that declare a domain are checked
+      against the code that calls the module when they are entered: code restricted from the domain cannot reach them
+      through other code of the module either (a function or method of the module that does not declare the domain, a
+      call that the module resolves at run time, a call reference that the module creates, or a thread that the module
+      starts, whose calling code is the code that called the module when the thread was started).  The \c init closure
+      of a module whose declaration applies (a module found in the process-wide module path, see above), and the
+      threads that it starts, are not called by the code that loads the module, and neither is a closure that it
+      creates and runs later as deferred module initialization: a module that runs initialization code that other
+      modules register with it for later (such as the lazy application actions of the DataProvider catalog and the
+      pending connection schemes of the ConnectionProvider module) tests it with is_module_init_closure() when it is
+      registered and runs it with call_module_init_closure(), which raises \c MODULE-INIT-CLOSURE-ERROR for code that
+      the initialization of its library module did not create, created while code that is not a library module's ran
+      above the module's initialization, or when the code that calls it is not a library module's, so code cannot give
+      its own code this exemption.  A module that is not library code (one loaded by its path, for example) has the
+      restrictions of the %Program that loaded it, and its code is checked as the calling code.  Work
+      that module code hands to a
+      thread that it started earlier (through a queue, for example) runs with the restrictions of the code that the
+      thread was started for, not with those of the code that hands it over.  Since %Qore 3.0
     - \c init: (optional) if present, must be a closure that will be executed when the module is loaded; this can be
       used to initialize the module, for example
     - \c del: (optional) if present, must be a closure that will be executed when the module is unloaded; this can be
@@ -1596,7 +1642,11 @@ xcrun notarytool submit MyModule.zip --keychain-profile my-notary-profile --wait
     - Unhandled exceptions in the \c init and \c del closures are displayed on @ref Qore::stdout "stdout"
     - \c init and \c del closures are parsed with restricted capabilities; they are parsed with
       @ref Qore::PO_LOCKDOWN "PO_LOCKDOWN" permissions except that
-      @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set
+      @ref Qore::PO_NO_REFLECTION "PO_NO_REFLECTION" is not set, and that the domains given with \c domains are not
+      restricted (unless the module inherits their restrictions from the %Program that loads it); calls of functions
+      and methods that declare @ref function_domains "functional domains" in %Qore source (such as the registration
+      APIs of the @ref dataproviderintro "DataProvider" module) are not restricted by these permissions either, only
+      by the restrictions that the module inherits from the %Program that loads it
 
     @anchor user_module_exit_hooks
     A module's \c del closure runs after the library has waited for every background thread of the process to end, so a
@@ -1655,6 +1705,16 @@ public MyNamespace {
 public namespace MyNamespace {
     public our int OurInt;
 }@endcode
+      A module may not declare a @ref thread_local "thread_local" variable <b><tt>public</tt></b>; doing so raises a
+      \c MODULE-PUBLIC-THREAD-LOCAL parse exception.  A public variable of a module is one variable shared by every
+      @ref Qore::Program "Program" that imports the module, so a public thread-local variable would let any importer
+      set a value on a thread that any other importer reads on the same thread.  Keep thread-local variables private
+      to the module and export public functions or methods that read and set them instead; see @ref thread_local.
+
+      Every importer shares a module's public variable, and the static members of the module's classes, so sandboxed
+      code and code in a @ref Qore::Program "Program" with @ref Qore::PO_NO_PROCESS_CONTROL set can read them but not
+      change them: a write raises a \c MODULE-VARIABLE-READ-ONLY exception.  A module that lets such code change a
+      value exports a public function or method that sets it; see @ref module_public_variables.
 
     @note Global variable declarations in a namespace declaration cannot be initialized at the point they are
     declared, also, since @ref Qore::PO_NO_TOP_LEVEL_STATEMENTS is set for user module @ref Qore::Program "Program"
@@ -1666,71 +1726,91 @@ public namespace MyNamespace {
     contrast with @ref binary_modules "binary modules", which can be imported even if they expose functionality not
     allowed in the importing @ref Qore::Program "Program", however that functionality will not be available in that
     case).  User module @ref Qore::Program "Program" objects have a functional domain attribute set on the
-    @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.
+    @ref Qore::Program "Program" level, so either a user module is imported in its entirety or not at all.  The
+    functions and methods of a user module can declare @ref function_domains "functional domains": an importing
+    %Program that may not use a domain can import the module, and is refused only the code that declares the domain;
+    a module whose own code uses a domain declares it with the \c domains key of its module declaration (see above).
 
     @subsection user_module_runtime_context Module Code at Run Time
 
-    Code in a user module runs with the restrictions of the code that calls it as well as its own, in every
-    @ref execution_modes "execution mode", but where it runs depends on the kind of code:
-    - a module <b>function</b> runs in the @ref Qore::Program "Program" that calls it, so the names that it resolves at
-      run time by name, with @ref Qore::call_function() "call_function()" or
-      @ref Qore::create_object() "create_object()", for example, are resolved in the calling @ref Qore::Program "Program", where only the module's
-      @ref mod_public "exported" names exist, and the @ref thread_local_data_family "thread-local data" that it uses is
-      the calling @ref Qore::Program "Program's"
-    - a <b>method</b> of a class defined in the module, and a @ref closure "closure" created in module code, run in the
-      module's own @ref Qore::Program "Program", so the names that they resolve at run time are those of the module,
-      including its private names, and the thread-local data that they use is the module's own
-
-    A module function that needs to look up a private name of its module at run time must therefore either have that
-    name exported with the <b><tt>public</tt></b> keyword or refer to it directly: a direct call, a
-    @ref call_reference "call reference" or a <tt>new</tt> expression in module code is resolved when the module is
-    parsed and so always refers to the module's own definition.
+    Code in a user module runs in the module's own @ref Qore::Program "Program" in every
+    @ref execution_modes "execution mode", whatever the kind of code: a module <b>function</b>, a <b>method</b> of a
+    class defined in the module (static or not) and a @ref closure "closure" created in module code alike.  When code
+    of another @ref Qore::Program "Program" calls it, the call crosses the %Program barrier, as a call into any other
+    %Program's code does.  So module code:
+    - resolves the names that it looks up at run time by name, with @ref Qore::call_function() "call_function()",
+      @ref Qore::create_object() "create_object()", @ref Qore::load_module() "load_module()" or the reflection API, for
+      example, in the module's %Program, where its private names exist as well as its exported ones
+    - uses the module's own @ref thread_local_data_family "thread-local data"
+    - creates objects that belong to the module's %Program
 
     @par Example:
     @code{.py}
 public namespace MyModule {
-class Helper {
-}
-
 string sub private_func() {
     return "private";
 }
 
 public string sub lookup_by_name() {
-    # raises NO-FUNCTION: the name is resolved in the calling Program, where private_func() does not exist
+    # works: a module function runs in the module's Program, where private_func() exists
     return call_function("MyModule::private_func");
-}
-
-public string sub direct() {
-    # works: the direct call is resolved when the module is parsed
-    return private_func();
 }
 
 public class Lookup {
     static string byName() {
-        # works: a method runs in the module's Program, where private_func() exists
+        # works: a method runs in the module's Program as well
         return call_function("MyModule::private_func");
     }
 }
 }
     @endcode
 
-    The restrictions of the network and of the filesystem (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
-    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") are not inherited: module code has its own
-    @ref Qore::Program "Program's" options for them, and its network and filesystem access is governed by the
-    @ref Qore::SandboxManager "SandboxManager" of the @ref Qore::Program "Program" that it runs for (see
-    @ref sandbox_po_limitations).
+    A module is a capability: once it is loaded, any code that imports it can use its functions, classes and methods,
+    and module code runs with its own @ref Qore::Program "Program's" options.  At run time, it is governed by the
+    @ref Qore::SandboxManager "SandboxManager" of the code that calls it: its filesystem and network policy, its
+    resource limits and its interrupts apply to module code as they apply to the caller (see @ref sandboxing).  What a
+    module may use is decided when it is loaded: a user module inherits the restrictions of the
+    @ref Qore::Program "Program" that loads it first, and cannot be loaded by it if its code uses functionality that
+    those restrictions forbid (see @ref module_parse_option_masks).
 
-    The caller's restrictions also apply to the module code that a module function or method calls and to a
-    @ref call_reference "call reference" to a method of an object that module code created.  They only ever narrow
-    what the code may do: an explicitly-allowed option such as @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" or
-    @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER" applies only if both the caller and the module have it, module
-    code keeps the restrictions of its own @ref Qore::Program "Program", and the code of another
-    @ref Qore::Program "Program" that module code runs (with @ref Qore::Program::run() "Program::run()", for example)
-    keeps that @ref Qore::Program "Program's" restrictions.  The module's \c init and \c del closures run with the
-    module's own options.  Some builtins that act only on the module's own state or on the calling thread, or that
-    run the module's own code asynchronously, are checked differently when module code calls them; see
-    @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
+    The restrictions of a caller that is sandboxed (code of a @ref Qore::Program "Program" with a
+    @ref Qore::SandboxManager "SandboxManager", or that sandboxed code created, and threads, pool tasks and
+    asynchronous operations that run for sandboxed code) are part of its sandbox: module code that a sandboxed caller
+    calls also runs with the caller's restrictions, in every execution mode.  They also apply to the module code that
+    such code calls and to a @ref call_reference "call reference" to a method of an object that module code created,
+    and they only ever narrow what the code may do: an explicitly-allowed option such as
+    @ref Qore::PO_ALLOW_INJECTION "PO_ALLOW_INJECTION" or @ref Qore::PO_ALLOW_DEBUGGER "PO_ALLOW_DEBUGGER" applies only
+    if both the sandboxed caller and the module have it, and module code keeps the restrictions of its own
+    @ref Qore::Program "Program".  The restrictions of the network and of the filesystem
+    (@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") are never inherited:
+    module code has its own @ref Qore::Program "Program's" options for them, and the
+    @ref Qore::SandboxManager "SandboxManager" governs its network and filesystem access (see
+    @ref sandbox_po_limitations).  Some builtins that act only on the module's own state or on the calling thread, or
+    that run the module's own code asynchronously, are checked differently when module code calls them for a sandboxed
+    caller; see @ref OWN_PROGRAM_STATE, @ref CURRENT_THREAD_ONLY and @ref MODULE_OWNED.
+
+    The restrictions of a caller that is not sandboxed restrict only the caller's own code.  Parse options alone are
+    not a run-time boundary for module code: a @ref Qore::Program "Program" that is restricted only by its parse options
+    and can import modules can use every module that another %Program has loaded already, with all of the functionality
+    that the module's code uses, including the names that it resolves at run time on the caller's behalf.  To keep code
+    from reaching functionality through modules, give its %Program a @ref Qore::SandboxManager "SandboxManager", or
+    @ref Qore::PO_NO_MODULES "PO_NO_MODULES" so that it cannot import modules at all.
+
+    The code of another @ref Qore::Program "Program" that module code runs (a callback of its caller, or code that it
+    runs with @ref Qore::Program::run() "Program::run()", for example) runs in that %Program with that
+    %Program's restrictions.  The module's \c init and \c del closures run with the module's own options.
+
+    Calls into module code take no lock of the module's @ref Qore::Program "Program", so that any number of threads
+    can call a module concurrently.  The threads running module code for calls from other Programs therefore count as
+    threads of the calling Programs only: @ref Qore::Program::getThreadList() "Program::getThreadList()" of the
+    module's %Program and a debugger attached to the module's %Program do not see them, and the module's %Program
+    waits for them only when the modules are deleted at the end of the process.  Once the modules' data is being
+    deleted then, no other thread can enter module code: a call from a thread that is still running (a signal handler
+    of another %Program, a thread pool or a foreign thread) raises \c PROGRAM-ERROR.  The work that the deletion itself
+    hands to other threads is not refused: a @ref Qore::Thread::ThreadPool "ThreadPool" task submitted, a
+    @ref background "background" thread started, or a timer or an asynchronous I/O operation added to the
+    @ref Qore::AsyncIoController "AsyncIoController", by a destructor that runs while the modules are deleted can call
+    module code.
 
     The @ref background "background" operator in module code is checked against the module's own options when the
     module is parsed, so module code can start threads for a caller with
@@ -1738,24 +1818,27 @@ public class Lookup {
     governed by the caller's @ref Qore::SandboxManager "SandboxManager", whose thread limit bounds their number (see
     @ref sandbox_po_threads).  A module that runs its callers' code asynchronously should use
     @ref Qore::call_async() "call_async()" or @ref Qore::AsyncIoController "AsyncIoController", which apply the
-    caller's restrictions (see @ref MODULE_OWNED) and its sandbox, or a @ref Qore::Thread::ThreadPool "ThreadPool",
-    which applies the sandbox of the code that submits each task; the threads of a pool count against the thread limit
-    of the sandbox of the %Program that created it, which for module code is the sandbox of the %Program that loaded
-    the module first, if it has one.
+    restrictions of a sandboxed caller (see @ref MODULE_OWNED) and its sandbox, or a
+    @ref Qore::Thread::ThreadPool "ThreadPool", which applies the sandbox of the code that submits each task; the
+    threads of a pool count against the thread limit of the sandbox of the %Program that created it, which for module
+    code is the sandbox of the %Program that loaded the module first, if it has one.
 
     @subsection module_parse_option_masks Module Restrictions and Parse Option Masks
 
     A user module inherits the restrictions (the @ref parse_options "parse options" that restrict functionality) of
     the @ref Qore::Program "Program" that loads it first, and a module whose code uses functionality that its loader
-    may not use cannot be loaded by it.  Source modules (<tt>.qm</tt>) and @ref aot_compilation "AOT modules"
+    may not use cannot be loaded by it.  Source modules (<tt>.qm</tt>) and @ref exec_mode_aot "AOT modules"
     (<tt>.qmod</tt>) are treated the same way: an AOT module records the restrictions that its code would conflict
     with, which are checked when it is loaded.  A refused AOT module raises \c AOT-MODULE-RESTRICTED, with the
     restrictions that refuse it; if the module's source is found, the source module is loaded instead, and the refusal
     is reported with it (see @ref aot_module_source_fallback).  A module that another
     @ref Qore::Program "Program" has loaded already
     is not checked against the restrictions of a @ref Qore::Program "Program" that imports it: it is a capability that
-    the host gave the @ref Qore::Program "Program", and its code runs with the restrictions of its callers as well as
-    its own (see @ref user_module_runtime_context).
+    the host gave the @ref Qore::Program "Program", and its code runs with its own options, and for a sandboxed caller
+    with the caller's restrictions as well (see @ref user_module_runtime_context).  Restrictions of parse options
+    alone are therefore not a run-time boundary for module code: a host that runs code that must not reach the
+    functionality of modules through their code gives its %Program a @ref Qore::SandboxManager "SandboxManager" or
+    @ref Qore::PO_NO_MODULES "PO_NO_MODULES".
 
     A @ref thread_local "thread_local" variable declared in a user module does not count as thread control:
     a module that keeps per-thread state can be loaded by code with @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL".
@@ -1848,7 +1931,8 @@ module MyBaseExtension {
     A child module's namespace is <b>not</b> imported into any @ref Qore::Program "Program" object; only its
     initialization code runs.  Code that needs the child's classes must load the child explicitly.
 
-    A child declaration is optional, so no child ever fails the declaring module's load.  A child that is not
+    A child declaration is optional, so a child does not fail the declaring module's load, except where it cannot be
+    loaded within the stack of the loading thread (see below).  A child that is not
     installed is silently ignored, and a child that is installed but cannot be loaded (due to a parse error, an error
     in its initialization code, or a version mismatch) is skipped, leaving the declaring module fully usable without
     it.  Because an extension that silently disappears is a deployment problem in its own right, a child that could
@@ -1862,6 +1946,17 @@ module MyBaseExtension {
     so retrying it on every load of the parent would only repeat the cost and the diagnostic.  An extension fixed on
     disk is therefore picked up the next time the program is started.
 
+    A child that cannot be loaded within the stack of the loading thread is not a broken child: the outcome depends on
+    the thread, not on what is installed.  The declaring module's load fails with the error, and the child stays
+    pending, so that a load in a thread with enough stack attaches it.  This is a child whose parse raises
+    \c PARSE-STACK-LIMIT-EXCEEDED, or whose initialization raises \c STACK-LIMIT-EXCEEDED in a thread whose stack is
+    smaller than the default thread stack size (see get_default_thread_stack_size() and @ref parse_nesting_limit).  A
+    child whose initialization exceeds the stack of the primary thread or of a thread whose total stack size is at
+    least the default size fails as any other broken child does, on the assumption that the child has a bug.  The
+    rule compares the total size of the thread's stack, not the stack that remains, so a correct child can also fail
+    this way where its parent is loaded deep in such a thread, with a reduced default size, or in a small primary
+    thread (see @ref parse_nesting_limit).
+
     Attachment status can be queried with get_module_hash(), which reports each declared child module under the
     \c "child-modules" key of the declaring module's entry:
     @code{.py}
@@ -1874,8 +1969,8 @@ printf("%N\n", get_module_hash().MyBase."child-modules");
     |\c "attached"|the child module was loaded
     |\c "absent"|the child module is not installed; this is not an error
     |\c "failed"|the child module is installed but could not be loaded; the declaring module is loaded without it, and the child's own error is reported in the \c "err" and \c "desc" keys
-    |\c "skipped"|the child module was not loaded because module loading is not allowed in the declaring module's @ref Qore::Program "Program" object; the reason is reported in the \c "desc" key
-    |\c "pending"|the attachment has not been attempted yet
+    |\c "skipped"|the child module was not loaded because it is blacklisted (see @ref Qore::qore_add_module_to_blacklist() "qore_add_module_to_blacklist()"), or because module loading is not allowed in the declaring module's @ref Qore::Program "Program" object; the reason is reported in the \c "desc" key
+    |\c "pending"|the attachment has not been attempted yet, or the child could not be loaded within the stack of the loading thread, which failed the declaring module's load; a later load attaches it
 
     @since %Qore 3.0
 

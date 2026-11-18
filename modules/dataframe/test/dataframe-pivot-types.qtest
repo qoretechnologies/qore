@@ -1,0 +1,150 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-pivot-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFramePivotTypesTest
+
+#! pivot() aggregates a values column of numbers and raises an error for any other values column, whatever the type
+#! of the index column, and groups the rows by the values of an index column of any type (qore#6099)
+class DataFramePivotTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFramePivotTypesTest", "1.0", \ARGV) {
+        addTestCase("values that are not numbers", \nonNumericTest());
+        addTestCase("numbers in a column that holds any value", \autoTest());
+        addTestCase("index columns of any type", \indexTest());
+        addTestCase("exact keys and labels", \keyTest());
+        addTestCase("null cells", \nullTest());
+        addTestCase("decimal values with an int index", \decimalTest());
+        addTestCase("keys that are not scalars and duplicate names", \errorTest());
+        set_return_value(main());
+    }
+
+    #! a values column of strings, bools or dates raises an error, which crashed with an index column that is not an
+    #! int column
+    nonNumericTest() {
+        list<list<auto>> values = (("s1", "s2"), (True, False), (2024-01-01Z, 2024-01-02Z), (c'a', "x"));
+        foreach list<auto> index in ((("a", "b")), (1, 2)) {
+            foreach list<auto> vals in (values) {
+                DataFrame::DataFrame df({"k": index, "c": ("x", "y"), "v": vals});
+                assertThrows("DATAFRAME-ERROR", \df.pivot(), ("k", "c", "v"), sprintf("index %y, values %y", index,
+                    vals));
+            }
+        }
+    }
+
+    #! numbers in a column that holds any value (a decimal column, for example) are aggregated
+    autoTest() {
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"k": ("a", "a", "b"), "c": ("x", "x", "y"),
+            "v": (1.25n, 2.5n, 4n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}});
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(cr);
+        assertEq("auto", df.dtypes()[2], "a decimal column");
+        DataFrame::DataFrame wide = df.pivot("k", "c", "v");
+        assertEq(("k", "x", "y"), wide.columnNames(), "the columns");
+        assertEq((3.75, NOTHING), wide.getColumn("x"), "the sums of x");
+        assertEq((NOTHING, 4.0), wide.getColumn("y"), "the sums of y");
+    }
+
+    #! the rows are grouped by the values of an index column of any type
+    indexTest() {
+        foreach list<auto> index in ((1.5, 1.5, 2.5), (True, True, False), (2024-01-01, 2024-01-01, 2024-01-02)) {
+            DataFrame::DataFrame df({"k": index, "c": ("x", "y", "x"), "v": (1, 2, 4)});
+            DataFrame::DataFrame wide = df.pivot("k", "c", "v");
+            string label = sprintf("index %y", index);
+            assertEq(2, wide.numRows(), label + ": one row per index value");
+            assertEq((1.0, 4.0), wide.getColumn("x"), label + ": x");
+            assertEq((2.0, NOTHING), wide.getColumn("y"), label + ": y");
+        }
+    }
+
+    #! different values make different rows and columns, which are labelled with their string forms
+    keyTest() {
+        DataFrame::DataFrame floats({"k": (0.1, 0.10000000000000002, 0.0, -0.0), "c": ("x", "x", "x", "x"),
+            "v": (1, 2, 4, 8)});
+        DataFrame::DataFrame wide = floats.pivot("k", "c", "v");
+        assertEq(("0.1", "0.10000000000000002", "0"), wide.getColumn("k"), "close floats; -0.0 is 0.0");
+        assertEq((1.0, 2.0, 12.0), wide.getColumn("x"), "close floats: values");
+        DataFrame::DataFrame dates({"k": (2024-01-01T00:00:00.5Z, 2024-01-01T00:00:00.7Z), "c": (True, False),
+            "v": (1, 2)});
+        wide = dates.pivot("k", "c", "v");
+        assertEq(2, wide.numRows(), "dates less than a second apart");
+        assertEq(("k", "True", "False"), wide.columnNames(), "bool columns values");
+        # durations are labelled with their length as ISO-8601 durations
+        DataFrame::DataFrame durations({"k": (c'z', PT1S, PT1.5S, -PT2M, PT0S), "c": ("x", "x", "x", "x", "x"),
+            "v": (1, 2, 4, 8, 16)});
+        assertEq(("z", "PT1S", "PT1.5S", "-PT120S", "PT0S"), durations.pivot("k", "c", "v").getColumn("k"),
+            "durations");
+        DataFrame::DataFrame ints({"k": ("a", "a"), "c": (1, 2), "v": (1.0, 2.0)});
+        assertEq(("k", "1", "2"), ints.pivot("k", "c", "v").columnNames(), "int columns values");
+    }
+
+    #! decimal values with an int index, which make an int index column in the result
+    decimalTest() {
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "k": (1, 1, 2),
+            "c": ("x", "x", "y"),
+            "v": (1.25n, 2.5n, 4n),
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}},
+        }));
+        foreach string agg in (("sum", "mean")) {
+            DataFrame::DataFrame wide = df.pivot("k", "c", "v", agg);
+            assertEq((1, 2), wide.getColumn("k"), agg + ": int index");
+            assertEq((agg == "sum" ? 3.75 : 1.875, NOTHING), wide.getColumn("x"), agg + ": x");
+            assertEq((NOTHING, 4.0), wide.getColumn("y"), agg + ": y");
+        }
+    }
+
+    #! a row with a null index or columns cell is left out, and a null value is not aggregated
+    nullTest() {
+        DataFrame::DataFrame df({"k": ("a", NOTHING, "", "a", "a"), "c": ("x", "x", "x", NOTHING, "x"),
+            "v": (2, 4, 8, 16, NOTHING)});
+        foreach string agg in (("sum", "mean")) {
+            DataFrame::DataFrame wide = df.pivot("k", "c", "v", agg);
+            assertEq(("a", ""), wide.getColumn("k"), agg + ": index");
+            assertEq((2.0, 8.0), wide.getColumn("x"), agg + ": values");
+        }
+        # the general path: a float index
+        DataFrame::DataFrame floats({"k": (1.5, 1.5, NOTHING), "c": ("x", "x", "x"), "v": (2, NOTHING, 4)});
+        assertEq((2.0,), floats.pivot("k", "c", "v", "mean").getColumn("x"), "general path: mean");
+        DataFrame::DataFrame all_null = (new DataFrame::DataFrame({"k": (1, 1), "c": ("x", "x"), "v": (NOTHING, 1)}))
+            .filter("v", "is_null", NOTHING);
+        assertEq((NOTHING,), all_null.pivot("k", "c", "v").getColumn("x"), "only null values");
+        # the int64/string path: a row with a null columns cell makes no index row
+        DataFrame::DataFrame ints({"k": (1, 2, NOTHING, 1), "c": ("x", NOTHING, "y", "x"), "v": (1, 2, 4, NOTHING)});
+        DataFrame::DataFrame wide = ints.pivot("k", "c", "v");
+        assertEq((1,), wide.getColumn("k"), "int index: rows");
+        assertEq(("k", "x"), wide.columnNames(), "int index: columns");
+        assertEq((1.0,), ints.pivot("k", "c", "v", "mean").getColumn("x"), "int index: mean");
+        # a values column with only null cells, of any type
+        DataFrame::DataFrame empty({"k": (), "c": (), "v": ()});
+        assertEq(0, empty.pivot("k", "c", "v").numRows(), "an empty frame");
+        DataFrame::DataFrame null_strings = (new DataFrame::DataFrame({"k": (1, 1), "c": ("x", "x"),
+            "v": ("a", NOTHING)})).filter("v", "is_null", NOTHING);
+        assertEq((NOTHING,), null_strings.pivot("k", "c", "v").getColumn("x"), "a string column of null cells");
+    }
+
+    #! an index or columns value that is not a scalar, or two values with the same column name, raise an error
+    errorTest() {
+        DataFrame::DataFrame hashes({"k": (c'z', {"a": 1}, {}), "c": ("x", "x", "x"), "v": (1, 2, 3)});
+        assertThrows("DATAFRAME-ERROR", \hashes.pivot(), ("k", "c", "v"), "hash keys");
+        DataFrame::DataFrame dup({"k": (1.5, 2.5), "c": (c'z', "z"), "v": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", \dup.pivot(), ("k", "c", "v"), "a char and a string with the same name");
+        DataFrame::DataFrame index_name({"k": (1.5, 2.5), "c": ("x", "k"), "v": (1, 2)});
+        assertThrows("DATAFRAME-ERROR", \index_name.pivot(), ("k", "c", "v"), "a column named as the index");
+        # the int64/string path
+        DataFrame::DataFrame int_index({"k": (1, 2), "c": ("x", "k"), "v": (1, 2)});
+        # index values of different types with the same string form
+        DataFrame::DataFrame mixed({"k": (c'z', 1, 1.0), "c": ("x", "x", "x"), "v": (1, 2, 3)});
+        assertThrows("DATAFRAME-ERROR", \mixed.pivot(), ("k", "c", "v"), "1 and 1.0 in the index");
+        assertThrows("DATAFRAME-ERROR", \int_index.pivot(), ("k", "c", "v"), "int index: a column named as the index");
+    }
+}

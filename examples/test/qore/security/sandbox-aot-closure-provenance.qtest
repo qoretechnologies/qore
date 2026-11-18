@@ -1,0 +1,154 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - a qcc-compiled module dylib built, loaded and called under sandbox filesystem policy
+
+# A closure that the code of a compiled (qcc) module creates for a sandboxed caller keeps the caller's sandbox,
+# also when the caller's call is the first call of the module's function, which builds the function's compiled
+# context while it runs (issue #6149)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires Util
+%requires FsUtil
+%exec-class SandboxAotClosureProvenanceTest
+
+class SandboxAotClosureProvenanceTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        *string qcc_bin;
+        TmpDir tmp("qore-aot-closure-provenance-");
+        #! the file that the sandbox denies
+        string denied;
+        #! the compiled module
+        string qmod;
+    }
+
+    const ModuleName = "AotClosureProvenanceProbe";
+
+    const ModuleSource = "%modern
+module AotClosureProvenanceProbe {
+    version = \"1.0\";
+    desc = \"closure provenance probe\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace AotClosureProvenanceProbe {
+    #! reads the file, or returns the error
+    public string sub read(string path) {
+        try {
+            ReadOnlyFile f(path);
+            return \"read:\" + trim(f.read(-1));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    #! returns a closure that reads the file
+    public code sub make_closure(string path) {
+        return string sub () { return AotClosureProvenanceProbe::read(path); };
+    }
+
+    #! returns a closure that reads the file; only ever called by trusted code
+    public code sub make_trusted_closure(string path) {
+        return string sub () { return AotClosureProvenanceProbe::read(path); };
+    }
+}
+";
+
+    const SandboxedSource = "
+%requires AotClosureProvenanceProbe
+code sub get_closure(string path) { return AotClosureProvenanceProbe::make_closure(path); }
+";
+
+    constructor() : QUnit::Test("sandbox AOT closure provenance", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE;
+        if (!qcc_bin) {
+            foreach string dir in ((libqore_dir, dirname(qore_bin))) {
+                if (is_file(dir + DirSep + "qcc")) {
+                    qcc_bin = dir + DirSep + "qcc";
+                    break;
+                }
+            }
+        }
+        addTestCase("a closure created by compiled module code for a sandboxed caller", \closureTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        denied = tmp.path + DirSep + "denied.txt";
+        write(denied, "secret\n");
+        if (!qcc_bin) {
+            return;
+        }
+        string src = tmp.path + DirSep + ModuleName + ".qm";
+        write(src, ModuleSource);
+        on_exit unlink(src);
+        qmod = tmp.path + DirSep + ModuleName + ".qmod";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s --module "
+            "-o %s %s 2>&1", libqore_dir, libqore_dir, libqore_dir, qcc_bin, qmod, src));
+        if (!is_file(qmod)) {
+            throw "COMPILE-ERROR", compile_out;
+        }
+    }
+
+    closureTest() {
+        if (!qcc_bin) {
+            testSkip(sprintf("the in-tree qcc executable is not available in %y; set QCC to test compiled code",
+                libqore_dir));
+        }
+        # trusted code loads the compiled module by path
+        load_module(qmod);
+
+        SandboxManager manager();
+        manager.addFilesystemDeniedPath(denied);
+        Program sandboxed(PO_NEW_STYLE);
+        sandboxed.setSandboxManager(manager);
+        sandboxed.parse(SandboxedSource, "sandboxed");
+
+        # the first call of make_closure() is the sandboxed caller's; the closure is called later by trusted code
+        code closure = sandboxed.callFunction("get_closure", denied);
+        assertEq("FILESYSTEM-ACCESS-DENIED", closure());
+        assertEq("FILESYSTEM-ACCESS-DENIED", callInBackground(closure));
+        # the same function called later by trusted code gives a closure that is not governed
+        code trusted_closure = call_function("AotClosureProvenanceProbe::make_closure", denied);
+        assertEq("read:secret", trusted_closure());
+        # a closure that trusted code gets with the first call of a function
+        trusted_closure = call_function("AotClosureProvenanceProbe::make_trusted_closure", denied);
+        assertEq("read:secret", trusted_closure());
+        # the sandboxed closure keeps its provenance
+        assertEq("FILESYSTEM-ACCESS-DENIED", closure());
+    }
+
+    #! calls the closure in a thread that trusted code starts and returns its result
+    private auto callInBackground(code c) {
+        Queue q();
+        background sub () {
+            try {
+                q.push({"rv": c()});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push({"ex": ex});
+            }
+        }();
+        hash<auto> h = q.get();
+        if (h.ex) {
+            throw h.ex.err, h.ex.desc;
+        }
+        return h.rv;
+    }
+
+    #! writes a file
+    private static write(string path, string text) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(text);
+    }
+}

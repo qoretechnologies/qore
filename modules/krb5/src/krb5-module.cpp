@@ -73,6 +73,8 @@ extern "C" DLLEXPORT void krb5_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = krb5_module_init;
     mod_info.ns_init = krb5_module_ns_init;
     mod_info.del = krb5_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &krb5ns;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }
@@ -2919,5 +2921,5 @@ static void krb5_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, Exceptio
 }
 
 static void krb5_module_delete() {
-    krb5ns.clear(nullptr);
+    // krb5ns is purged by the module manager after this function returns (see QoreModuleInfo::ns)
 }

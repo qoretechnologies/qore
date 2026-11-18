@@ -1,0 +1,72 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# PendingFailFixture.qm registers a factory, and a deferred app with external I/O that is not sandbox-aware whose initialization fails, for AppExternalIo.qtest
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider >= 3.12
+
+module PendingFailFixture {
+    version = "1.0";
+    desc = "deferred external I/O app fixture: its initialization fails";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new PendingFailFactory());
+        # the app is deferred: its declarations are known only once it is initialized
+        DataProviderActionCatalog::registerPendingApp("QoreTestPendingFailApp", sub () {
+            throw "FIXTURE-INIT-ERROR", "the deferred app cannot be initialized";
+        });
+    };
+}
+
+#! The fixture's data provider
+public class PendingFailProvider inherits AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "PendingFailProvider",
+            "supports_request": True,
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return "PendingFailProvider";
+    }
+
+    *string getDesc() {
+        return "deferred external I/O app fixture provider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+#! The fixture's factory: it belongs to this module, which registers the app
+public class PendingFailFactory inherits AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("PendingFailProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "qoretestpendingfail",
+            "desc": "deferred external I/O app fixture",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return PendingFailProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}

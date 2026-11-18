@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+#
+# fixture of IRInPlaceListPushTypeError.qtest: a push to a fresh local list that the IR pushes in place raises a type
+# error; the list stays in the local, which releases it once
+%modern
+
+list<auto> sub literalPush() {
+    list<auto> l = ("a",);
+    push l, 2;
+    return l;
+}
+
+list<int> sub intPush(auto v) {
+    list<int> l = (1, 2);
+    push l, v;
+    return l;
+}
+
+class C {
+    list<auto> loopPush() {
+        list<auto> l = ("a", "b");
+        for (int i = 0; i < 3; ++i) {
+            push l, i;
+        }
+        return l;
+    }
+}
+
+# the error is caught in the function itself
+string sub caughtPush() {
+    list<auto> l = ("a",);
+    try {
+        push l, 2;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s:%d:%s", ex.err, l.size(), l[0]);
+    }
+    return "none";
+}
+
+string sub check(code c) {
+    try {
+        return sprintf("%y", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+
+C c();
+for (int i = 0; i < 16; ++i) {
+    printf("%s:%s:%s:%s:%s\n", check(\literalPush()), check(list<int> sub () { return intPush("x"); }),
+        check(list<int> sub () { return intPush(3); }), check(\c.loopPush()), caughtPush());
+}

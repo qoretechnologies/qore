@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Unit tests of the internal classes with which the destructor of a WebSocketClient waits for the threads that waited
+# for its action (issue #5983): WscActionCall keeps the state of each thread's outermost call in a static hash (not in
+# the thread data, whose functions are in the THREAD_CONTROL functional domain, which the module does not declare),
+# and WscActionWaitCount counts the calls that waited.
+#
+# No case depends on timing: a wait that must time out uses a short timeout, and a wait that must end is woken before
+# it starts or by another thread that the test releases with a Queue.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires WebSocketClient
+%requires QUnit
+
+%exec-class WebSocketClientActionCallStateTest
+
+public class WebSocketClientActionCallStateTest inherits QUnit::Test {
+    constructor() : Test("WebSocketClientActionCallStateTest", "1.0") {
+        addTestCase("the outermost call of a thread registers its state, inner calls share it",
+            \nestingTest());
+        addTestCase("the states of a client are removed by its key only", \removeClientTest());
+        addTestCase("the count wait times out while a call is counted and ends with the call", \countWaitTest());
+        addTestCase("the count wait is woken by a call of another thread", \countWakeTest());
+        addTestCase("the module's states are not in the thread data", \noThreadDataTest());
+        set_return_value(main());
+    }
+
+    nestingTest() {
+        WscActionWaitCount count();
+        string key = WscActionWaitCount::getKey();
+        assertNothing(WscActionCall::getState(key));
+        {
+            WscActionCall outer(count, key);
+            *WscActionCallState state = WscActionCall::getState(key);
+            assertTrue(state instanceof WscActionCallState);
+            {
+                WscActionCall inner(count, key);
+                # the inner call shares the outer call's state
+                assertTrue(WscActionCall::getState(key) == state);
+                state.markWaited();
+            }
+            # the end of the inner call neither removes the state nor ends its count
+            assertTrue(WscActionCall::getState(key) == state);
+            assertTrue(state.isCounted());
+            assertFalse(count.waitAtMost(0, 1ms));
+
+            # another thread has a state of its own for the same client
+            Queue q();
+            Counter done(1);
+            background sub () {
+                on_exit done.dec();
+                bool own = False;
+                # pushed also if the thread raises an exception
+                on_exit q.push(own);
+                WscActionCall other(count, key);
+                own = WscActionCall::getState(key) != state;
+            }();
+            on_exit done.waitForZero();
+            assertTrue(q.get());
+        }
+        # the end of the outer call removes the state and ends its count
+        assertNothing(WscActionCall::getState(key));
+        assertTrue(count.waitAtMost(0, 1ms));
+    }
+
+    removeClientTest() {
+        WscActionWaitCount count();
+        string key = WscActionWaitCount::getKey();
+        # a key of another client that starts with this client's key
+        string other_key = key + "0";
+        WscActionCall call(count, key);
+        WscActionCall other_call(count, other_key);
+        WscActionCallState state = WscActionCall::getState(key);
+        state.markWaited();
+
+        WscActionCall::removeClient(key);
+        assertNothing(WscActionCall::getState(key));
+        assertTrue(WscActionCall::getState(other_key) instanceof WscActionCallState);
+        # removing the states of a client that has none changes nothing
+        WscActionCall::removeClient(key);
+        assertNothing(WscActionCall::getState(key));
+        assertTrue(WscActionCall::getState(other_key) instanceof WscActionCallState);
+
+        # the call still ends its count after its state was removed
+        assertFalse(count.waitAtMost(0, 1ms));
+        delete call;
+        assertTrue(count.waitAtMost(0, 1ms));
+
+        # a new call of the thread registers a new state
+        WscActionCall next(count, key);
+        assertTrue(WscActionCall::getState(key) instanceof WscActionCallState);
+        assertTrue(WscActionCall::getState(key) != state);
+    }
+
+    countWaitTest() {
+        WscActionWaitCount count();
+        string key = WscActionWaitCount::getKey();
+        # an uncounted call is not waited for
+        {
+            WscActionCall call(count, key);
+            assertTrue(count.waitAtMost(0, 1ms));
+            WscActionCallState state = WscActionCall::getState(key);
+            state.markWaited();
+            # marked twice, counted once
+            state.markWaited();
+            assertFalse(count.waitAtMost(0, 1ms));
+            # a limit of one allows this call
+            assertTrue(count.waitAtMost(1, 1ms));
+        }
+        assertTrue(count.waitAtMost(0, 1ms));
+    }
+
+    countWakeTest() {
+        WscActionWaitCount count();
+        string key = WscActionWaitCount::getKey();
+        Queue counted();
+        Queue release();
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            # the test is not left waiting if the thread raises an exception before it pushes below
+            on_exit counted.push(False);
+            WscActionCall call(count, key);
+            WscActionCallState state = WscActionCall::getState(key);
+            state.markWaited();
+            counted.push(True);
+            release.get();
+        }();
+        # the thread ends also if an assertion below fails (registered first, so it runs last)
+        on_exit done.waitForZero();
+        on_exit release.push(True);
+        assertTrue(counted.get());
+        assertFalse(count.waitAtMost(0, 1ms));
+        # the call ends while the wait below can be in progress or not started yet; either way it ends with the call
+        release.push(True);
+        assertTrue(count.waitAtMost(0, 60s));
+    }
+
+    noThreadDataTest() {
+        WscActionWaitCount count();
+        string key = WscActionWaitCount::getKey();
+        hash<auto> before = get_all_thread_data();
+        WscActionCall call(count, key);
+        assertEq(before, get_all_thread_data());
+    }
+}

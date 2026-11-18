@@ -63,6 +63,18 @@ public:
         return typeInfo;
     }
 
+    //! Returns true if the parse chose the int division for every value of the operands (their types are int types):
+    //! the operands are converted with getAsBigInt(), which takes NOTHING as 0
+    DLLLOCAL bool parseUsesIntDivision() const {
+        return pfunc == &QoreDivisionOperatorNode::bigIntDivision;
+    }
+
+    //! Returns true if the parse chose the float division for every value of the operands: the operands are converted
+    //! with getAsFloat(), which takes NOTHING as 0.0
+    DLLLOCAL bool parseUsesFloatDivision() const {
+        return pfunc == &QoreDivisionOperatorNode::floatDivision;
+    }
+
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
         return copyBackgroundExplicit<QoreDivisionOperatorNode>(xsink);
     }

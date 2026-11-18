@@ -7,15 +7,11 @@
 
 %modern
 
-%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/dataframe"
-
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires Util
 
-%try-module dataframe
-%define NoDataFrame
-%endtry
+%requires dataframe
 
 %exec-class DataFrameDbiTest
 
@@ -53,9 +49,6 @@ class DataFrameDbiTest inherits QUnit::Test {
     }
 
     private verifyDriver(string label, Datasource ds) {
-%ifdef NoDataFrame
-        testSkip("dataframe module not available");
-%endif
         try {
             ds.open();
         } catch (hash<ExceptionInfo> ex) {
@@ -139,8 +132,20 @@ class DataFrameDbiTest inherits QUnit::Test {
         if (!connstr) {
             testSkip(label + " connection string not set");
         }
-        Datasource ds(connstr);
-        verifyDriver(label, ds);
+        verifyDriver(label, getDatasource(label, connstr));
+    }
+
+    #! Returns a datasource for the datasource string; skips the test case if the module of its driver cannot be
+    #! loaded (LOAD-MODULE-ERROR: it is not installed, or it was built for another module API)
+    private Datasource getDatasource(string label, string connstr) {
+        try {
+            return new Datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+            testSkip(sprintf("%s driver module unavailable: %s: %s", label, ex.err, ex.desc));
+        }
     }
 
     private pgsqlTest() {
@@ -168,7 +173,6 @@ class DataFrameDbiTest inherits QUnit::Test {
     }
 
     private sqliteTest() {
-        Datasource ds("sqlite3", "", "", ":memory:");
-        verifyDriver("sqlite3", ds);
+        verifyDriver("sqlite3", getDatasource("sqlite3", "sqlite3:@:memory:"));
     }
 }

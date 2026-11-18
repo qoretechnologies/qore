@@ -38,12 +38,33 @@
 #include "qore/intern/FunctionalOperatorInterface.h"
 
 class QoreSelectOperatorNode : public QoreBinaryOperatorNode<>, public FunctionalOperator {
-    friend class QoreFunctionalSelectListOperator;
-    friend class QoreFunctionalSelectSingleValueOperator;
-    friend class QoreFunctionalSelectIteratorOperator;
-    friend class QoreFunctionalSelectOperator;
+public:
+    //! true if the operand of the given index is evaluated for each element as a statement of its own: it can create
+    //! a temporary besides its value whose release can be observed (qore#6288, qore_expr_may_create_observable_temp())
+    DLLLOCAL bool elementScope(unsigned i) const {
+        return element_scopes.get() & (1u << i);
+    }
+
+    //! returns the element scope flags: a bit for each operand, by index (see elementScope())
+    DLLLOCAL uint8_t elementScopes() const {
+        return element_scopes.get();
+    }
+
+private:
+    //! a bit for each operand, by index (see elementScope())
+    QoreElementScopeFlags element_scopes;
+
+    //! decides the element scope flags of the operator given (q_element_scope_decider_t)
+    DLLLOCAL static void decideElementScopes(AbstractQoreNode* op);
+
+    template <bool> friend class QoreFunctionalSelectListOperator;
+    template <bool> friend class QoreFunctionalSelectSingleValueOperator;
+    template <bool> friend class QoreFunctionalSelectIteratorOperator;
+    template <bool> friend class QoreFunctionalSelectOperator;
 
 public:
+    DLLLOCAL static QoreSelectOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue left, QoreValue right);
     DLLLOCAL QoreSelectOperatorNode(const QoreProgramLocation* loc, QoreValue l, QoreValue r)
             : QoreBinaryOperatorNode<>(loc, l, r), returnTypeInfo(nullptr), iterator_func(nullptr) {
     }
@@ -80,6 +101,10 @@ public:
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* getFunctionalIteratorCommon(
+        FunctionalValueType& value_type, ExceptionSink* xsink) const;
+
     const QoreTypeInfo* returnTypeInfo;
     FunctionalOperator* iterator_func;
 
@@ -101,6 +126,7 @@ protected:
     DLLLOCAL QoreValue selectIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalSelectListOperator : public FunctionalOperatorInterface, public ConstListIterator {
 public:
     DLLLOCAL QoreFunctionalSelectListOperator(const QoreSelectOperatorNode* s, QoreListNode* l, ExceptionSink* xs)
@@ -122,6 +148,7 @@ protected:
     ExceptionSink* xsink;
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalSelectSingleValueOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalSelectSingleValueOperator(const QoreSelectOperatorNode* s, QoreValue n, ExceptionSink* xs)
@@ -145,6 +172,7 @@ protected:
     ExceptionSink* xsink;
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalSelectIteratorOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalSelectIteratorOperator(const QoreSelectOperatorNode* s, bool t, AbstractIteratorHelper n_h,
@@ -174,6 +202,7 @@ protected:
     ExceptionSink* xsink;
 };
 
+template <bool StrictBoolean>
 class QoreFunctionalSelectOperator : public FunctionalOperatorInterface {
 public:
     DLLLOCAL QoreFunctionalSelectOperator(const QoreSelectOperatorNode* s, FunctionalOperatorInterface* n_f)

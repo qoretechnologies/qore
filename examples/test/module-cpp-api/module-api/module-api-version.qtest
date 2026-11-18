@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - binary module loading and its module API version check
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every check loads the test modules in a child process that sets its own --exec-mode
+#
+# The apicur and apiold test modules (examples/test/module-cpp-api) are built into the build tree and never
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class ModuleApiVersionTest
+
+#! A binary module built for another module API is not loaded
+/** The current module API adds callback dispatch slots to bind native compatibility semantics,
+    so a module built with the preceding minor API must not be loaded. The fixture is built from the
+    header's major/minor constants: apiold declares the preceding minor and apicur declares the current API.
+    A feature-name lookup reports the incompatible module; a path lookup rejects its declared API.
+*/
+class ModuleApiVersionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string env;
+        string current_api;
+        string old_api;
+        string old_filename;
+    }
+
+    constructor() : QUnit::Test("module API version", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        load_module("apicur");
+        hash<auto> current = get_module_hash().apicur;
+        current_api = sprintf("%d.%d", current.api_major, current.api_minor);
+        old_api = sprintf("%d.%d", current.api_major, current.api_minor - 1);
+        old_filename = "apiold-api-" + old_api + ".qmod";
+        addTestCase("API version check", \versionTest());
+        addTestCase("not found hint", \hintTest());
+        set_return_value(main());
+    }
+
+    private versionTest() {
+        # apiold declares the preceding minor (see module-cpp-api/CMakeLists.txt)
+        *string old_path;
+        foreach string dir in ((ENV.QORE_MODULE_DIR ?? "").split(":")) {
+            string path = dir + DirSep + old_filename;
+            if (is_file(path)) {
+                old_path = path;
+                break;
+            }
+        }
+        assertTrue(exists old_path, old_filename + " in QORE_MODULE_DIR: " + (ENV.QORE_MODULE_DIR ?? "<none>"));
+        if (!exists old_path) {
+            return;
+        }
+        string probe = get_script_dir() + "/module-api-probe.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            # the probe only loads modules: no code of its own is compiled to native code in any mode
+            string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s %s", env, qore_bin, mode, probe,
+                old_path), NativeCheck::None);
+            assertRegex("^feature apiold: LOAD-MODULE-ERROR: feature 'apiold' is not builtin and no module with this "
+                "name could be found in the module path: [^\n]*; found '[^'\n]*" + quote(old_filename)
+                + "' built for module API " + quote(old_api) + ": rebuild it for module API "
+                + quote(current_api) + "\n", out, mode + ": apiold by feature name");
+            assertRegex("\npath apiold: LOAD-MODULE-ERROR: module '[^']*" + quote(old_filename)
+                + "': feature 'apiold': API mismatch, module supports API " + quote(old_api)
+                + ", however only version " + quote(current_api) + " is supported\n", out,
+                mode + ": apiold by path");
+            assertRegex("\napicur: loaded API " + quote(current_api) + "\n$", out, mode + ": apicur");
+        }
+    }
+
+    #! the hint names each file of the feature built for another module API, in the flat and the split form, and no other
+    private hintTest() {
+        TmpDir tmp("qore-module-api-hint-");
+        string dir = tmp.path;
+        mkdir(dir + DirSep + "hint");
+        # not loaded: only the names matter
+        foreach string name in ("hint-api-1.9.qmod", "hint" + DirSep + "hint-api-3.0.qmod",
+                # not <major>.<minor>.qmod, or another feature
+                "hint-api-2.2x.qmod", "hint-api-.qmod", "hint-api-2.-1.qmod", "hint-api-2..qmod", "hint-api-.1.qmod",
+                "hint-api-+2.1.qmod", "hint-api- 2.1.qmod", "hint-api-2.2234567890.qmod", "hint-api-2.qmod",
+                "hint-api-a.1.qmod", "hint-api-2.2.qm", "hintx-api-1.0.qmod", "other-api-1.0.qmod") {
+            File f();
+            f.open2(dir + DirSep + name, O_CREAT | O_WRONLY | O_TRUNC);
+            f.close();
+        }
+        string probe = get_script_dir() + "/module-api-hint-probe.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string cmd = sprintf("%s QORE_MODULE_DIR=%s QORE_MODULE_DIR_ONLY=1 %s --exec-mode=%s %s", env, dir,
+                qore_bin, mode, probe);
+            string out = ExecModeHarness::run(cmd + " hint", NativeCheck::None);
+            assertRegex("^hint: LOAD-MODULE-ERROR: feature 'hint' is not builtin and no module with this name could be "
+                "found in the module path: [^\n]*; found '" + quote(dir) + "/hint-api-1\\.9\\.qmod' built for module API "
+                "1\\.9: rebuild it for module API " + quote(current_api) + "; found '" + quote(dir) + "/hint/hint-api-3\\.0\\.qmod' built for "
+                "module API 3\\.0: rebuild it for module API " + quote(current_api) + "\n$", out, mode + ": hint");
+            assertEq(2, (out =~ x/(; found ')/g).size(), mode + ": hint count");
+
+            # no file of the feature: no hint
+            out = ExecModeHarness::run(cmd + " nohint", NativeCheck::None);
+            assertRegex("^nohint: LOAD-MODULE-ERROR: feature 'nohint' is not builtin and no module with this name "
+                "could be found in the module path: [^\n;]*\n$", out, mode + ": nohint");
+        }
+    }
+
+    #! escapes the regular expression characters of a path
+    static string quote(string str) {
+        return regex_subst(str, "([\\\\.^$|?*+()\\[\\]{}])", "\\\\$1", RE_Global);
+    }
+}

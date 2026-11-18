@@ -33,6 +33,7 @@
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/FunctionCallNode.h>
+#include <qore/intern/QoreDotEvalOperatorNode.h>
 #include <qore/intern/QoreAOTBinary.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/ScopedObjectCallNode.h>
@@ -191,6 +192,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::CmpFloat:
         case QoreIROpcode::UnaryMinusInt:
         case QoreIROpcode::ToInt:
+        case QoreIROpcode::ToIntChecked:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeInt, bigIntTypeInfo);
             break;
         case QoreIROpcode::AddFloat:
@@ -199,6 +201,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
         case QoreIROpcode::DivFloat:
         case QoreIROpcode::UnaryMinusFloat:
         case QoreIROpcode::ToFloat:
+        case QoreIROpcode::ToFloatChecked:
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeFloat, floatTypeInfo);
             break;
         case QoreIROpcode::EqInt:
@@ -217,6 +220,7 @@ static void qore_ir_set_opcode_value_facts(QoreIRFunction* func, QoreIRValue val
             qore_ir_set_native_value_facts(func, value, QoreIRValueRepresentation::NativeBool, boolTypeInfo);
             break;
         case QoreIROpcode::ToString:
+        case QoreIROpcode::ToStringChecked:
             if (!q_env_is_set("QORE_DISABLE_IR_ASSIGNED_STRING_CONVERSION_FACTS")) {
                 QoreIRValueFacts facts;
                 facts.type_info = stringTypeInfo;
@@ -612,6 +616,51 @@ QoreIRInstruction* QoreIRBuilder::createHashSetCommonType(QoreIRValue hash, Qore
     inst->loc = loc;
     inst->operands.push_back(hash);
     inst->operands.push_back(state);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createCheckCancelEvery(QoreIRValue count, QoreIRCancelPoint point,
+        const QoreProgramLocation* loc, QoreIRValue limit) {
+    QoreIRValue point_val = createConstInt(static_cast<int64_t>(point), loc)->result;
+    if (!limit.isValid()) {
+        limit = createConstInt(0, loc)->result;
+    }
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckCancelEvery);
+    inst->loc = loc;
+    inst->operands.push_back(count);
+    inst->operands.push_back(point_val);
+    inst->operands.push_back(limit);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createCheckRangeBound(QoreIRValue bound, QoreIRRangeBound which,
+        const QoreProgramLocation* loc) {
+    QoreIRValue which_val = createConstInt(static_cast<int64_t>(which), loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckRangeBound);
+    inst->loc = loc;
+    inst->operands.push_back(bound);
+    inst->operands.push_back(which_val);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createListSelectorStep(QoreIRValue result, QoreIRValue seq, int64_t flags,
+        const std::vector<QoreIRValue>& selectors, const QoreProgramLocation* loc) {
+    bool begin = flags & static_cast<int64_t>(QoreIRListSelectorFlag::Begin);
+    assert(begin || !selectors.empty());
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSelectorStep);
+    inst->loc = loc;
+    if (begin) {
+        // the Begin step makes the result, so it has no result operand
+        inst->result = func->createValue();
+    } else {
+        inst->operands.push_back(result);
+    }
+    inst->operands.push_back(seq);
+    inst->operands.push_back(flags_val);
+    for (const QoreIRValue& value : selectors) {
+        inst->operands.push_back(value);
+    }
     return inst;
 }
 
@@ -1172,6 +1221,33 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
     return inst;
 }
 
+QoreIRExprInstruction* QoreIRBuilder::createCheckCallTarget(const QoreValue& call, QoreIRValue target,
+        QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc,
+        const QoreClass* check_class, const QoreMethod* check_method) {
+    auto inst = append<QoreIRExprInstruction>(QoreIROpcode::CheckCallTarget, call);
+    // no target: the call is made through self, on the current object (issue #5823)
+    if (target.isValid()) {
+        inst->operands.push_back(target);
+    }
+    inst->exception_target = exception_target;
+    inst->loc = loc;
+    if (check_class && check_method) {
+        inst->check_class = check_class;
+        inst->check_method_class = check_method->getClass();
+    }
+    // the cache of the call site, for the IR interpreter's inline test
+    if (const AbstractQoreNode* node = call.isPointer() ? call.getPtr() : nullptr) {
+        if (node->getType() == NT_SELF_CALL) {
+            inst->check_cache = &static_cast<const SelfFunctionCallNode*>(node)->check_cache;
+        } else if (const QoreDotEvalOperatorNode* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+            if (dot->getMethodCall()) {
+                inst->check_cache = &dot->getMethodCall()->check_cache;
+            }
+        }
+    }
+    return inst;
+}
+
 QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKind kind,
         const std::string& name, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc) {
@@ -1493,9 +1569,11 @@ QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc,
+        QoreIRBasicBlock* exception_target) {
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ThreadExit);
     inst->loc = loc;
+    inst->exception_target = exception_target;
     return inst;
 }
 
@@ -1596,6 +1674,21 @@ QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createNestedPushTempMark(const QoreProgramLocation* loc) {
+    QoreIRInstruction* mark = block && !block->instructions.empty() ? block->instructions.back().get() : nullptr;
+    if (!mark || mark->opcode != QoreIROpcode::PushTempMark || temp_scope_id_stack.empty()
+            || mark->temp_scope_id != temp_scope_id_stack.back() || mark->temp_scope_id != exception_temp_scope_id) {
+        return createPushTempMark(loc);
+    }
+    // the mark's temp_scope_id stays the outer scope's; the inner scope is opened as createPushTempMark() opens it
+    mark->opcode = QoreIROpcode::PushTempMarkPair;
+    mark->unwind_inner_temp_scope_id = next_temp_scope_id++;
+    temp_scope_id_stack.push_back(mark->unwind_inner_temp_scope_id);
+    exception_temp_scope_id_stack.push_back(exception_temp_scope_id);
+    exception_temp_scope_id = mark->unwind_inner_temp_scope_id;
+    return mark;
+}
+
 void QoreIRBuilder::createUnwindTemps(size_t from_depth, size_t to_depth, const QoreProgramLocation* loc) {
     assert(from_depth <= temp_scope_id_stack.size());
     assert(to_depth <= from_depth);
@@ -1623,6 +1716,10 @@ uint32_t QoreIRBuilder::getExceptionTempScopeId() const {
     return exception_temp_scope_id;
 }
 
+uint32_t QoreIRBuilder::allocateUnmarkedTempScopeId() {
+    return next_temp_scope_id++;
+}
+
 void QoreIRBuilder::abandonTempScope() {
     if (!temp_scope_id_stack.empty()) {
         temp_scope_id_stack.pop_back();
@@ -1645,6 +1742,31 @@ QoreIRInstruction* QoreIRBuilder::createDebugStatement(const AbstractStatement* 
     assert(statement);
     auto inst = append<QoreIRDebugStatementInstruction>(statement);
     inst->loc = statement->loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createDebugStatementEnd(uint16_t depth, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRDebugStatementInstruction>(nullptr);
+    inst->nest_depth = depth;
+    inst->nest_flags = QORE_IR_DEBUG_NEST_VALID | QORE_IR_DEBUG_NEST_END;
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createDebugBlockUnwind(uint16_t depth, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRDebugStatementInstruction>(nullptr);
+    inst->nest_depth = depth;
+    inst->nest_flags = QORE_IR_DEBUG_NEST_VALID | QORE_IR_DEBUG_NEST_UNWIND;
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createCheckReleaseException(QoreIRBasicBlock* handler,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
+    inst->loc = loc;
+    inst->exception_target = handler;
+    inst->release_check = QoreIRReleaseCheck::Pending;
     return inst;
 }
 
@@ -1675,6 +1797,41 @@ QoreIRInstruction* QoreIRBuilder::createReleaseOwnedTemp(QoreIRValue value, cons
     auto inst = append<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
     inst->operands.push_back(value);
     inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HandlerReturn);
+    if (value.isValid()) {
+        inst->operands.push_back(value);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSetCodeParseOptions(const QoreParseOptions& po,
+        const QoreProgramLocation* loc) {
+    // four 32-bit words, each an integer that every tier holds inline (an int of 64 bits can be a node)
+    uint64_t lo = static_cast<uint64_t>(po.getLo());
+    uint64_t hi = static_cast<uint64_t>(po.getHi());
+    QoreIRValue words[4] = {
+        createConstInt(static_cast<int64_t>(lo & 0xffffffffu), loc)->result,
+        createConstInt(static_cast<int64_t>(lo >> 32), loc)->result,
+        createConstInt(static_cast<int64_t>(hi & 0xffffffffu), loc)->result,
+        createConstInt(static_cast<int64_t>(hi >> 32), loc)->result,
+    };
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SetCodeParseOptions);
+    for (const QoreIRValue& word : words) {
+        inst->operands.push_back(word);
+    }
+    inst->loc = loc;
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createReleaseStageInput(QoreIRValue input, QoreIRValue kept,
+        const QoreProgramLocation* loc) {
+    QoreIRInstruction* inst = createReleaseOwnedTemp(input, loc);
+    inst->operands.push_back(kept);
     return inst;
 }
 
@@ -1741,6 +1898,87 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
     inst->opcode = QoreIROpcode::IteratorCreateIterate;
     inst->loc = loc;
     inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSource(QoreIRValue operand,
+        QoreIRIteratorSourceKind kind, int64_t flags, QoreIRValue first, QoreIRValue second,
+        const QoreProgramLocation* loc) {
+    QoreIRValue kind_val = createConstInt(static_cast<int64_t>(kind), loc)->result;
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    if (!first.isValid()) {
+        first = createConstNothing(loc)->result;
+    }
+    if (!second.isValid()) {
+        second = createConstNothing(loc)->result;
+    }
+    auto inst = append<QoreIRIteratorCreateInstruction>(operand);
+    inst->opcode = QoreIROpcode::IteratorCreateSource;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(kind_val);
+    inst->operands.push_back(flags_val);
+    inst->operands.push_back(first);
+    inst->operands.push_back(second);
+    return inst;
+}
+
+QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateSelectors(QoreIRValue seq, int64_t flags,
+        int64_t count, const QoreProgramLocation* loc) {
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    QoreIRValue count_val = createConstInt(count, loc)->result;
+    auto inst = append<QoreIRIteratorCreateInstruction>(seq);
+    inst->opcode = QoreIROpcode::IteratorCreateSelectors;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(flags_val);
+    inst->operands.push_back(count_val);
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorPending(QoreIRValue iterator,
+        const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorPending);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    inst->operands.push_back(iterator);
+    return inst;
+}
+
+QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNextSelectors(QoreIRValue iterator,
+        QoreIRBasicBlock* none_target, QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRIteratorNextInstruction>(iterator, none_target, continue_target);
+    inst->opcode = QoreIROpcode::IteratorNextSelectors;
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createSelectorIteratorFeed(QoreIRValue iterator, int64_t flags,
+        const std::vector<QoreIRValue>& selector, const QoreProgramLocation* loc) {
+    assert(selector.size() == ((flags & static_cast<int64_t>(QoreIRListSelectorFlag::Range)) ? 2 : 1));
+    QoreIRValue flags_val = createConstInt(flags, loc)->result;
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SelectorIteratorFeed);
+    inst->loc = loc;
+    inst->operands.push_back(iterator);
+    inst->operands.push_back(flags_val);
+    for (const QoreIRValue& value : selector) {
+        inst->operands.push_back(value);
+    }
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createExceptionSuspend(const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ExceptionSuspend);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createExceptionResume(QoreIRValue handle, const QoreProgramLocation* loc) {
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ExceptionResume);
+    inst->loc = loc;
+    inst->operands.push_back(handle);
     return inst;
 }
 
@@ -1976,4 +2214,39 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
+}
+
+// documented in QoreIRBuilder.h
+bool qore_ir_takes_region_exception_target(QoreIROpcode opcode) {
+    switch (opcode) {
+        case QoreIROpcode::MakeList:
+        case QoreIROpcode::MakeHash:
+        case QoreIROpcode::MakeHashConstKeys:
+        case QoreIROpcode::CreateEmptyList:
+        case QoreIROpcode::CreateSizedList:
+        case QoreIROpcode::NewHashDecl:
+        case QoreIROpcode::NewHashDeclFromHash:
+        case QoreIROpcode::NewComplexHash:
+        case QoreIROpcode::NewComplexList:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// documented in QoreIRBuilder.h
+void QoreIRBuilder::recordRegionInstruction(QoreIRInstruction* inst) {
+    if (qore_ir_takes_region_exception_target(inst->opcode)) {
+        if (!inst->exception_target) {
+            region_record->containers.push_back({inst, block, region_record->exception_stack->empty() ? nullptr
+                : region_record->exception_stack->back()});
+        }
+        return;
+    }
+    if (inst->opcode == QoreIROpcode::Phi && !region_record->exception_stack->empty()) {
+        region_record->phis.push_back({inst, block, region_record->exception_stack->back()});
+    }
+    if (getOpcodeProducesResult(static_cast<int>(inst->opcode))) {
+        region_record->values.push_back(inst);
+    }
 }

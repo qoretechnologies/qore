@@ -71,17 +71,16 @@ class ContextStatement : public AbstractStatement {
 public:
     char *name;
     QoreValue exp, where_exp, sort_ascending, sort_descending;
+    //! True if the context, where or sort expressions, which run as AST at run time, contain an implicit index
+    //! (\c $#) that reads an operator's or foreach statement's index (qore#6341); conservative: also set for a \c $#
+    //! of an operator in these expressions
+    bool reads_implicit_element = false;
     StatementBlock* code;
     LVList* lvars = nullptr;
 
     DLLLOCAL ContextStatement(int start_line, int end_line, char* n, QoreValue expr, ContextModList* cm,
             StatementBlock* cd);
     DLLLOCAL virtual ~ContextStatement();
-
-    // faked here; checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return false;
-    }
 
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 

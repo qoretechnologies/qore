@@ -1,0 +1,282 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-join-key-types.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameJoinKeyTypesTest
+
+#! join() matches keys by their type and exact value, and a key column of a right or outer join whose key columns
+#! differ in type holds any value (qore#6116)
+class DataFrameJoinKeyTypesTest inherits QUnit::Test {
+    constructor() : Test("DataFrameJoinKeyTypesTest", "1.0", \ARGV) {
+        addTestCase("join() of key columns of different types", \joinTypesTest());
+        addTestCase("join() keys", \joinKeyTest());
+        addTestCase("join() column schemas", \schemaTest());
+        set_return_value(main());
+    }
+
+    #! a right or outer join of key columns of different types makes a key column that holds any value
+    joinTypesTest() {
+        list<list<auto>> pairs = (
+            ((1, 2), ("1", "3")),
+            ((1, 2), (1.5, 2.0)),
+            ((1h, 2h), (c'z', 1h)),
+        );
+        foreach list<auto> pair in (pairs) {
+            DataFrame::DataFrame l({"k": pair[0], "a": (10, 20)});
+            DataFrame::DataFrame r({"k": pair[1], "b": (100, 300)});
+            foreach string how in (("inner", "left", "right", "outer")) {
+                string label = sprintf("%s join of %y and %y", how, pair[0], pair[1]);
+                DataFrame::DataFrame j = l.join(r, ("k",), how);
+                list<hash<auto>> rows = j.toRecords();
+                list<auto> jkeys = map $1.k, rows;
+                # every key of the result is a key of one of the sides, with its type
+                foreach auto k in (jkeys) {
+                    assertTrue((select pair[0] + pair[1], $1.typeCode() == k.typeCode() && $1 === k).size() > 0,
+                        sprintf("%s: key %y", label, k));
+                }
+                if (how == "right" || how == "outer") {
+                    assertEq("auto", j.dtypes()[0], label + ": key column type");
+                }
+            }
+        }
+        # the right join of the issue
+        DataFrame::DataFrame l(({"k": 1, "a": 10}, {"k": 2, "a": 20}));
+        DataFrame::DataFrame r(({"k": "1", "b": 100}, {"k": "3", "b": 300}));
+        assertEq(({"k": "1", "a": NOTHING, "b": 100}, {"k": "3", "a": NOTHING, "b": 300}),
+            l.join(r, ("k",), "right").toRecords(), "an int key column and a string key column");
+    }
+
+    #! keys match by their type and exact value
+    joinKeyTest() {
+        # floats that differ after the sixth decimal place do not match; -0.0 matches 0.0
+        DataFrame::DataFrame l({"k": (1.0000001, 2.0, -0.0)});
+        DataFrame::DataFrame r({"k": (1.0000002, 2.0, 0.0), "b": (1, 2, 4)});
+        assertEq((2, 4), l.join(r, ("k",)).getColumn("b"), "float keys");
+        # an int64 key column matches the ints of a column that holds any value, a string column its strings,
+        # but an int never matches a string
+        DataFrame::DataFrame ints({"k": (1, 2)});
+        DataFrame::DataFrame any({"k": (c'z', 1, "2"), "b": (1, 2, 4)});
+        assertEq((2,), ints.join(any, ("k",)).getColumn("b"), "int64 and any-value keys");
+        DataFrame::DataFrame strs({"k": ("1", "2")});
+        assertEq((4,), strs.join(any, ("k",)).getColumn("b"), "string and any-value keys");
+        # lists and hashes match by their elements
+        DataFrame::DataFrame ll({"k": (c'z', (1, 2), {"a": 1})});
+        DataFrame::DataFrame rl({"k": (c'z', (3, 4), (1, 2), {"a": 2}, {"a": 1}), "b": (1, 2, 4, 8, 16)});
+        assertEq((1, 4, 16), ll.join(rl, ("k",)).getColumn("b"), "list and hash keys");
+        # several key columns with null values
+        DataFrame::DataFrame lm({"a": ("x", NOTHING, "x"), "k": (1.5, 1.5, NOTHING)});
+        DataFrame::DataFrame rm({"a": ("x", NOTHING, "x"), "k": (1.5, 1.5, NOTHING), "b": (1, 2, 4)});
+        assertEq((1, 2, 4), lm.join(rm, ("a", "k")).getColumn("b"), "several keys with null values");
+        # which rows match: an int64 key column and a column that holds any value
+        DataFrame::DataFrame il({"k": (1, 2, 3)});
+        DataFrame::DataFrame ar({"k": (c'z', 1, 1.0, "1", True, (1,), NOTHING, 3), "b": (1, 2, 4, 8, 16, 32, 64, 128)});
+        assertEq((2, 128), il.join(ar, ("k",)).getColumn("b"), "int64 and any-value keys: matches");
+        assertEq(9, il.join(ar, ("k",), "outer").numRows(), "int64 and any-value keys: outer join rows");
+        # durations of the same length match, in a column of durations and a column that holds any value
+        DataFrame::DataFrame dl({"k": (1h, 2h)});
+        DataFrame::DataFrame dr({"k": (c'z', 60m, 24h), "b": (1, 2, 4)});
+        assertEq((2,), dl.join(dr, ("k",)).getColumn("b"), "durations of the same length");
+        # NaN keys match NaN keys, as they make one group in groupBy()
+        DataFrame::DataFrame nl({"k": (@nan@, 1.0)});
+        DataFrame::DataFrame nr({"k": (@nan@, 2.0), "b": (1, 2)});
+        assertEq((1,), nl.join(nr, ("k",)).getColumn("b"), "NaN keys");
+        # two key columns, one of different types, in an outer join
+        DataFrame::DataFrame tl({"a": ("x", "y"), "k": (1, 2), "l": (10, 20)});
+        DataFrame::DataFrame tr({"a": ("x", "z"), "k": ("1", "3"), "r": (100, 300)});
+        DataFrame::DataFrame t = tl.join(tr, ("a", "k"), "outer");
+        assertEq(("string", "auto"), t.dtypes()[0..1], "key column types");
+        assertEq(4, t.numRows(), "rows");
+        # numbers match by their exact values at any precision (qore#6107): 0.1 and 0.1 widened to the maximum
+        # precision match, 0.1 at a higher precision does not; 1e-1000 (more than 4096 bits) matches itself widened
+        number zmax = number("0." + strmul("0", 1700));
+        number a = 0.1n;
+        number hi = number("0.1000000000000000000000000000000000000000000000000000000000000000000000000000");
+        number tn = number("1e-1000");
+        DataFrame::DataFrame numl({"k": (c'z', a, tn, -0n)});
+        DataFrame::DataFrame numr({"k": (c'y', a + zmax, hi, tn + zmax, 0n), "b": (1, 2, 4, 8, 16)});
+        assertEq((2, 8, 16), numl.join(numr, ("k",)).getColumn("b"), "number keys");
+        # a decimal key column keeps its schema
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 2.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        foreach string how in (("inner", "outer")) {
+            list<auto> v = DataFrame::DataFrame::fromArrowIpc(dec.join(dec, ("v",), how).toArrowIpc()).getColumn("v");
+            assertTrue(v[0].typeCode() == NT_NUMBER && v[0] == 1.25n, sprintf("%s join of decimal keys: %y", how, v));
+        }
+    }
+
+    #! the columns of a join keep their schemas, and decimal key columns of different schemas get a common one
+    schemaTest() {
+        # timestamp key columns of two units and zones: microseconds, UTC and no native type in a right or outer
+        # join, the left schema with its native type in an inner or left join
+        DataFrame::DataFrame tl = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T10:00:00Z, 2024-01-01T11:00:00Z),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "UTC", "nullable": True,
+                "native_type": "timestamp[ms, tz=UTC]"}},
+        }));
+        DataFrame::DataFrame tr = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T10:00:00Z, 2024-01-01T12:00:00Z), "b": (1, 2),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "s", "timezone": "Europe/Prague", "nullable": True,
+                "native_type": "timestamp[s, tz=Europe/Prague]"}},
+        }));
+        foreach string how in (("inner", "left", "right", "outer")) {
+            hash<auto> s = schema(tl.join(tr, ("t",), how), "t");
+            if (how == "right" || how == "outer") {
+                assertEq(("us", "UTC", NOTHING), (s.time_unit, s.timezone, s.native_type), how + ": timestamps");
+            } else {
+                assertEq(("ms", "UTC", "timestamp[ms, tz=UTC]"), (s.time_unit, s.timezone, s.native_type),
+                    how + ": timestamps");
+            }
+        }
+        # in a right or outer join: a timestamp key column with a native type and a plain date key column, in both
+        # orders: microseconds and no native type; two equal timestamp schemas keep their native type; durations of
+        # two units: microseconds and no native type
+        DataFrame::DataFrame plain({"t": (2024-01-01T10:00:00Z, 2024-01-03T10:00:00Z), "c": (1, 2)});
+        hash<auto> dur_schema = {"kind": "duration", "nullable": True};
+        DataFrame::DataFrame ds = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"t": (1s, 2s)}, {"t": {"schema": dur_schema + {"time_unit": "s", "native_type": "duration[s]"}}}));
+        DataFrame::DataFrame dms = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"t": (1s, 3s), "b": (1, 2)},
+            {"t": {"schema": dur_schema + {"time_unit": "ms", "native_type": "duration[ms]"}}}));
+        foreach string how in (("right", "outer")) {
+            foreach list<DataFrame::DataFrame> pair in (((tl, plain), (plain, tl))) {
+                hash<auto> s = schema(pair[0].join(pair[1], ("t",), how), "t");
+                assertEq(("us", NOTHING), (s.time_unit, s.native_type), how + ": a timestamp and a plain date");
+            }
+            hash<auto> s = schema(tl.join(tl, ("t",), how), "t");
+            assertEq(("ms", "timestamp[ms, tz=UTC]"), (s.time_unit, s.native_type), how + ": one timestamp schema");
+            DataFrame::DataFrame dj = ds.join(dms, ("t",), how);
+            s = schema(dj, "t");
+            assertEq(("us", NOTHING), (s.time_unit, s.native_type), how + ": durations of two units");
+            list<auto> dv = DataFrame::DataFrame::fromArrowIpc(dj.toArrowIpc()).getColumn("t");
+            assertTrue((select dv, is_date_relative($1) && $1 == 3s).size() == 1,
+                sprintf("%s: durations exported: %y", how, dv));
+        }
+        # a date-kind key column (date32[day] or date64[ms]) and a timestamp key column in a right or outer join, in
+        # both orders: the timestamp schema (its kind is what shows that the key column holds times of day) in
+        # microseconds (unless both units are the same) and UTC, with no native type, nullable if a side is; the
+        # times of day also survive an export (with either schema, so that check does not test the schema)
+        DataFrame::DataFrame ts = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "t": (2024-01-01T00:00:00Z, 2024-01-03T10:30:00Z), "b": (1, 2),
+        }, {
+            "t": {"schema": {"kind": "timestamp", "time_unit": "ms", "timezone": "Europe/Prague", "nullable": False,
+                "native_type": "timestamp[ms, tz=Europe/Prague]"}},
+        }));
+        foreach list<string> date_schema in ((("day", "date32[day]"), ("ms", "date64[ms]"))) {
+            DataFrame::DataFrame dt = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+                "t": (2024-01-01T00:00:00Z, 2024-01-02T00:00:00Z),
+            }, {
+                "t": {"schema": {"kind": "date", "time_unit": date_schema[0], "nullable": True,
+                    "native_type": date_schema[1]}},
+            }));
+            foreach string how in (("right", "outer")) {
+                foreach list<DataFrame::DataFrame> pair in (((dt, ts), (ts, dt))) {
+                    DataFrame::DataFrame j = pair[0].join(pair[1], ("t",), how);
+                    hash<auto> s = schema(j, "t");
+                    string label = sprintf("%s join of %s and a timestamp (%s first)", how, date_schema[1],
+                        pair[0] == dt ? "date" : "timestamp");
+                    # the unit is kept if both have it (date64[ms] and timestamp[ms])
+                    string unit = date_schema[0] == "ms" ? "ms" : "us";
+                    assertEq(("timestamp", unit, "UTC", NOTHING, True),
+                        (s.kind, s.time_unit, s.timezone, s.native_type, s.nullable), label);
+                    # the right join of the timestamp column and the date column has the keys of the date column only
+                    if (how == "right" && pair[1] == dt) {
+                        continue;
+                    }
+                    list<auto> tv = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("t");
+                    assertTrue((select tv, $1 == 2024-01-03T10:30:00Z).size() == 1,
+                        sprintf("%s: the time of day on export (with any schema): %y", label, tv));
+                }
+            }
+        }
+        # a decimal and a float key column in an outer join: a key column that holds any value with no schema, which
+        # cannot be exported
+        DataFrame::DataFrame dk = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"k": (1.25n,)}, {"k": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        DataFrame::DataFrame fk({"k": (2.5,), "b": (1,)});
+        DataFrame::DataFrame jk = dk.join(fk, ("k",), "outer");
+        assertEq("auto", schema(jk, "k").kind, "a decimal and a float key column");
+        assertThrows("DATAFRAME-IO-ERROR", \jk.toArrowIpc(), (), "a key column of two types cannot be exported");
+        # a string key column with no schema exports
+        DataFrame::DataFrame sl({"k": ("a", "b")});
+        DataFrame::DataFrame sr({"k": ("b", "c"), "b": (1, 2)});
+        assertEq(3, DataFrame::DataFrame::fromArrowIpc(sl.join(sr, ("k",), "outer").toArrowIpc()).numRows(),
+            "a string key column exports");
+        string dir = get_script_dir() + DirSep + "data" + DirSep;
+        DataFrame::DataFrame f32 = DataFrame::DataFrame::readParquet(dir + "dense_float32.parquet");
+        f32.addColumn("k", (1, 2, 3, 4, 5, 6));
+        hash<auto> f32_schema = schema(f32, "v");
+        DataFrame::DataFrame g({"k": (2, 3, 9), "z": (7, 8, 9)});
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 2.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2}}}));
+        DataFrame::DataFrame dec12 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 3.5n)}, {"v": {"schema": {"kind": "decimal128", "precision": 12, "scale": 2}}}));
+        DataFrame::DataFrame dec_s3 = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"v": (1.25n, 4.125n)}, {"v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 3}}}));
+        foreach string how in (("inner", "left", "right", "outer")) {
+            # a float32 non-key column and a float32 key column keep their schema, which is the type of their Arrow
+            # export (a joined column that holds its values as float64 has a ColumnarResult schema with the buffer
+            # type of its storage: qore#6214)
+            DataFrame::DataFrame j = f32.join(g, ("k",), how);
+            assertEq(f32_schema, exportSchema(j, "v"), how + ": a float32 non-key column");
+            j = f32.join(f32, ("v",), how);
+            assertEq(f32_schema, exportSchema(j, "v"), how + ": a float32 key column");
+            # decimal key columns of one schema keep it, of two schemas get a common one, which holds the keys of
+            # both sides exactly on export
+            j = dec.join(dec, ("v",), how);
+            assertEq(("decimal128", 10, 2), schema(j, "v"){"kind", "precision", "scale"}.values(),
+                how + ": one schema");
+            j = dec.join(dec12, ("v",), how);
+            list<auto> v = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("v");
+            assertTrue((select v, $1.typeCode() == NT_NUMBER).size() == v.size(), sprintf("%s: numbers %y", how, v));
+            if (how == "right" || how == "outer") {
+                assertEq(("decimal128", 12, 2), schema(j, "v"){"kind", "precision", "scale"}.values(),
+                    how + ": two precisions");
+                j = dec.join(dec_s3, ("v",), how);
+                assertEq(("decimal128", 11, 3), schema(j, "v"){"kind", "precision", "scale"}.values(),
+                    how + ": two scales");
+                list<auto> v3 = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("v");
+                assertTrue((select v3, $1 == 4.125n).size() == 1, sprintf("%s: 4.125 kept: %y", how, v3));
+                # a common schema of more than 38 digits: no schema, the exact keys, and no export
+                DataFrame::DataFrame d38_10 = DataFrame::DataFrame::fromColumnarResult(
+                    ColumnarResult::fromColumnHash({"v": (1.25n,)},
+                        {"v": {"schema": {"kind": "decimal128", "precision": 38, "scale": 10}}}));
+                DataFrame::DataFrame d38_0 = DataFrame::DataFrame::fromColumnarResult(
+                    ColumnarResult::fromColumnHash({"v": (12345678901234567890123456789012345678n,)},
+                        {"v": {"schema": {"kind": "decimal128", "precision": 38, "scale": 0}}}));
+                j = d38_10.join(d38_0, ("v",), how);
+                assertEq("auto", schema(j, "v").kind, how + ": more than 38 digits");
+                assertTrue((select j.getColumn("v"), $1 == 12345678901234567890123456789012345678n).size() == 1,
+                    how + ": the exact key");
+                assertThrows("DATAFRAME-IO-ERROR", \j.toArrowIpc(), (), how + ": no export");
+            }
+        }
+    }
+
+    #! returns the columnar schema of a column: its kind, element type, precision, scale, time unit and zone
+    #! returns the schema of a column of a DataFrame after an Arrow round trip
+    private hash<auto> exportSchema(DataFrame::DataFrame df, string name) {
+        return schema(DataFrame::DataFrame::fromArrowIpc(df.toArrowIpc()), name);
+    }
+
+    private hash<auto> schema(DataFrame::DataFrame df, string name) {
+        foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
+            if (column.name == name) {
+                return column{"kind", "buffer_type", "precision", "scale", "time_unit", "timezone", "native_type",
+                    "nullable"};
+            }
+        }
+        return {};
+    }
+}

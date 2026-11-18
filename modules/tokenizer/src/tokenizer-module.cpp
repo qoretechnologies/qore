@@ -49,6 +49,8 @@ extern "C" DLLEXPORT void tokenizer_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = tokenizer_module_init;
     mod_info.ns_init = tokenizer_module_ns_init;
     mod_info.del = tokenizer_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &TokNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

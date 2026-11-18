@@ -1,0 +1,91 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child qore processes started without an execution mode
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../../../examples/test/TestInterpreter.qm
+%requires FsUtil
+
+%exec-class ParquetMemoryPoolTest
+
+#! issue #6171: Parquet and Arrow IPC reads and writes allocate from the module's Arrow memory pool only
+/** The module gives Arrow the system memory pool; the Parquet file reader, the Parquet column writers and the IPC
+    readers took Arrow's default pool instead (default_reader_properties(), WriterProperties::Builder and
+    IpcReadOptions::Defaults() all default to it), which is mimalloc or jemalloc in most Arrow builds, and so did
+    the Arrow schema that store_schema writes (arrow::ipc::SerializeSchema() ignores the pool it is given).  With
+    mimalloc, valgrind reported an "Invalid free()" for every block of that pool: it intercepts free() in
+    libmimalloc, and mi_free() is the same function there, while mi_malloc_aligned() is not intercepted.
+
+    The child script writes, reads and round-trips data through every such path; the test checks its results and,
+    when valgrind is available, that valgrind reports no error in it.
+*/
+class ParquetMemoryPoolTest inherits QUnit::Test {
+    public {
+        const Expected = "whole: 200 rows, score sum 29850.0\n"
+            "part: 100 rows, first id 150, columns [\"name\", \"id\"]\n"
+            "schema: 200 rows, dtypes [\"int64\", \"string\", \"float64\", \"bool\"]\n"
+            "ipc: 200 rows, last name name-3\n";
+    }
+
+    private {
+        string qore_bin;
+        string env;
+        string script;
+    }
+
+    constructor() : QUnit::Test("Parquet memory pool", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        env = sprintf("env -u DEBUGINFOD_URLS LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        script = get_script_dir() + "/data/parquet-memory-pool.q";
+
+        addTestCase("results", \resultsTest());
+        addTestCase("valgrind", \valgrindTest());
+        set_return_value(main());
+    }
+
+    #! the child script reads back what it writes
+    private resultsTest() {
+        TmpDir tmp("parquet-memory-pool");
+        int rc;
+        string out = backquote(sprintf("%s %s -b %s %s 2>&1", env, qore_bin, script, tmp.path), \rc);
+        assertEq(0, rc, "the child script ends normally: " + out);
+        assertEq(Expected, out);
+    }
+
+    #! valgrind reports no error in the child script
+    private valgrindTest() {
+        if (is_file("/proc/self/maps") && ReadOnlyFile::readTextFile("/proc/self/maps") =~ /valgrind|vgpreload/) {
+            testSkip("the test runs under valgrind already");
+        }
+        *string valgrind = find_valgrind();
+        if (!valgrind) {
+            testSkip("valgrind is not available");
+        }
+        TmpDir tmp("parquet-memory-pool");
+        int rc;
+        # valgrind cannot run AVX-512 instructions, which Arrow selects at run time on a CPU that has them (its
+        # bit-unpacking routines, for example); ARROW_USER_SIMD_LEVEL limits that choice to AVX2, which valgrind runs
+        # (it only lowers the level that Arrow detects, so a CPU without AVX2 is unaffected), issue #6375
+        string out = backquote(sprintf("%s QORE_PCRE2_NO_JIT=1 ARROW_USER_SIMD_LEVEL=AVX2 %s --leak-check=no "
+            "--error-exitcode=99 %s -b %s %s 2>&1", env, valgrind, qore_bin, script, tmp.path), \rc);
+        assertEq(0, rc, "valgrind reports no error: " + out);
+        assertRegex("ERROR SUMMARY: 0 errors", out, "valgrind reports no error");
+        assertTrue(out.find(Expected) >= 0, "the child script reads back what it writes: " + out);
+    }
+
+    #! returns the path of valgrind, if it is in the PATH
+    private static *string find_valgrind() {
+        foreach string dir in ((ENV.PATH ?? "").split(":")) {
+            if (dir && is_executable(dir + "/valgrind")) {
+                return dir + "/valgrind";
+            }
+        }
+    }
+}

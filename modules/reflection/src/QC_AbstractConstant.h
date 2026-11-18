@@ -49,6 +49,11 @@ public:
     }
 
     DLLLOCAL virtual const QoreClass* getClass() const = 0;
+
+    //! Returns the namespace of a namespace constant, or nullptr for a class constant
+    DLLLOCAL virtual const QoreNamespace* getConstantNamespace() const {
+        return nullptr;
+    }
 };
 
 DLLEXPORT extern qore_classid_t CID_ABSTRACTCONSTANT;

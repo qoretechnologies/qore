@@ -41,6 +41,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include "qore/intern/QoreThreadScratch.h"
+
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -151,6 +153,9 @@ struct QuicPacketBatch {
     @since %Qore 3.0
 */
 constexpr size_t QUIC_SEND_CMSG_BUF_SIZE = 64;
+// each buffer of an array of them is aligned for a cmsghdr (CMSG_FIRSTHDR())
+static_assert(QUIC_SEND_CMSG_BUF_SIZE % alignof(struct cmsghdr) == 0,
+    "QUIC_SEND_CMSG_BUF_SIZE must be a multiple of the alignment of struct cmsghdr");
 
 //! Check whether a sockaddr holds a wildcard (any) address
 /** Returns true for INADDR_ANY (0.0.0.0) or in6addr_any (::).
@@ -281,6 +286,14 @@ DLLLOCAL void qore_quic_test_take_back_sent(int fd, const struct sockaddr* addr,
 */
 DLLLOCAL int qore_quic_test_send_error(int fd);
 
+//! Debug-only: receives the datagrams of a UDP socket that has none as the QUIC poll operations do
+/** For the test of the receive buffers that cannot be allocated: the socket must have no datagram to receive, as
+    there is no session to dispatch it to.
+
+    @return 0 if no datagram was received, -1 if an exception was raised in \a xsink
+*/
+DLLLOCAL int qore_quic_test_recv_dispatch(int fd, ExceptionSink* xsink);
+
 //! Debug-only: counts datagrams received on a socket for the QUIC test clock (see qore_quic_test_advance_clock())
 /** @param fd the socket the datagrams were received on
     @param src the source address of the datagrams
@@ -357,7 +370,7 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
                                 socklen_t local_addrlen = 0) {
     // Build cmsg template once (shared by all packets in this batch)
     // Zero-init to avoid valgrind warnings about CMSG_SPACE alignment padding
-    uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE] = {};
+    alignas(alignof(struct cmsghdr)) uint8_t cmsg_template[QUIC_SEND_CMSG_BUF_SIZE] = {};
     size_t cmsg_len = 0;
     bool use_cmsg = local_addr && buildSendCmsg(local_addr, local_addrlen,
                                                  cmsg_template, cmsg_len);
@@ -369,16 +382,27 @@ inline int sendQuicPacketsBatch(int fd, const QuicPacketBatch& batch,
     QuicTestSentCount sent_count(fd, addr, addrlen, total, offset);
 #endif
 #ifdef __linux__
-    // All large arrays are thread-local to avoid ~9KB of stack pressure per call.
-    // This inline function is called from many sites; without thread_local, the
+    // All large arrays are per-thread heap scratch to avoid ~9KB of stack pressure per call.
+    // This inline function is called from many sites; on the stack, the
     // inlined arrays compound with callers' own stack usage, triggering stack
     // protector failures under GCC 15+ (which enables -fstack-protector-strong
-    // by default).
+    // by default).  They are not static thread_local objects either, which would
+    // take their size from the stack of every thread (see QoreThreadScratch).
     // Per-message cmsg buffers: each message needs its own copy because
     // sendmmsg() accesses all msg_control pointers during the single syscall.
-    static thread_local uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
-    static thread_local struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
-    static thread_local struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
+    struct SendBatchScratch {
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_bufs[QUIC_COMMON_MAX_SEND_BATCH][QUIC_SEND_CMSG_BUF_SIZE];
+        struct mmsghdr msgs[QUIC_COMMON_MAX_SEND_BATCH];
+        struct iovec iovecs[QUIC_COMMON_MAX_SEND_BATCH];
+    };
+    QoreThreadScratch<SendBatchScratch> scratch;
+    if (!scratch) {
+        errno = ENOMEM;
+        return -1;
+    }
+    auto& cmsg_bufs = scratch->cmsg_bufs;
+    auto& msgs = scratch->msgs;
+    auto& iovecs = scratch->iovecs;
 
     while (offset < total) {
         int batch_size = std::min(total - offset, QUIC_COMMON_MAX_SEND_BATCH);
@@ -518,6 +542,9 @@ inline int enableQuicPktinfo(int fd, int family) {
 
 //! Maximum size of ancillary data buffer for recvmsg() pktinfo extraction
 constexpr size_t QUIC_CMSG_BUF_SIZE = 128;
+// each buffer of an array of them is aligned for a cmsghdr (CMSG_FIRSTHDR())
+static_assert(QUIC_CMSG_BUF_SIZE % alignof(struct cmsghdr) == 0,
+    "QUIC_CMSG_BUF_SIZE must be a multiple of the alignment of struct cmsghdr");
 
 //! Receive a single UDP datagram with ancillary data (control messages)
 /** Wraps recvmsg() to provide both the source address and control message

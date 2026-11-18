@@ -43,6 +43,7 @@ enum qore_var_t {
 };
 
 #include "qore/intern/RSet.h"
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/VRMutex.h"
 #include "qore/intern/QoreLValue.h"
 #include "qore/intern/qore_var_rwlock_priv.h"
@@ -52,6 +53,8 @@ enum qore_var_t {
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <vector>
+#include <type_traits>
 #include <set>
 #include <string>
 
@@ -62,6 +65,8 @@ class QoreSquareBracketsOperatorNode;
 class QoreSquareBracketsRangeOperatorNode;
 class QoreHashObjectDereferenceOperatorNode;
 class RuntimeConfig;
+struct QoreLValuePathKeys;
+class QoreLValuePathKeyCache;
 
 union qore_gvar_ref_u {
     bool b;
@@ -97,9 +102,29 @@ union qore_gvar_ref_u {
     DLLLOCAL int write(ExceptionSink* xsink) const;
 };
 
-DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new, bool& finalized);
+//! Returns the current thread's value of the thread_local variable with the given serial (Var::tl_serial)
+/** @param serial the serial of the variable
+    @param pgm the Program owning the variable (Var::tl_pgm), for identification only
+    @param pgm_id the ID of \a pgm
+    @param lvar set to the thread's value
+    @param is_new set to true if the thread had no value of the variable
+*/
+DLLLOCAL void get_thread_local_lvalue(uint64_t serial, const QoreProgram* pgm, qore_program_id_t pgm_id,
+        QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new);
+//! Returns the Program owning a thread_local variable created now, which is the current Program, and its ID
+DLLLOCAL const QoreProgram* qore_get_thread_local_var_owner(qore_program_id_t& pgm_id);
+
+//! Returns true if the current thread is ending and releasing its thread-local values
+DLLLOCAL bool thread_local_vars_finalizing();
+//! Releases the value of every thread of the thread_local variable with the given serial; called when it is deleted
+/** see ThreadLocalVarRegistry in lib/thread.cpp and design/program-teardown-lifetime.md
+*/
+DLLLOCAL void release_thread_local_var(uint64_t serial, ExceptionSink* xsink);
+//! Returns a new serial for a thread_local variable; never 0 and never reused
+DLLLOCAL uint64_t qore_get_next_thread_local_var_serial();
 
 class LValueHelper;
+class lvalue_ref;
 class QoreVarInfo;
 class qore_hash_private;
 struct qore_list_private;
@@ -120,6 +145,22 @@ enum class LVPathStepKind : uint8_t;
 */
 DLLLOCAL QoreVarInfo* qore_find_static_var_by_path(QoreProgram& pgm, const std::string& full_name,
         std::string& var_name);
+
+//! Returns true if the code of \a writer may not change the state of a trusted module now (qore#5664)
+/** The state of a trusted module is its public variables and the static members of its classes, which every
+    Program importing the module shares; see qore_program_private::restrictsModuleVarWrites()
+
+    @param writer the Program whose code writes, or nullptr if unknown, when the write is allowed
+*/
+DLLLOCAL bool qore_module_state_write_restricted(const QoreProgram* writer);
+
+//! Raises \c MODULE-VARIABLE-READ-ONLY for a write to a trusted module's state
+/** @param what what is written, ex: \c "public variable" or \c "static member"
+    @param path the name of what is written
+    @param module_name the module, or nullptr if unknown
+*/
+DLLLOCAL void qore_raise_module_state_read_only(ExceptionSink* xsink, const char* what, const char* path,
+        const char* module_name);
 
 // structure for global variables
 class Var : protected QoreReferenceCounter {
@@ -148,9 +189,66 @@ private:
     bool aot_import = false;            // true for AOT placeholders resolved by link/load context
     bool aot_init_done = false;         // declaration initializer has run for this storage
     bool pub;                           // is this global var public (valid and set for modules only)
-    mutable bool finalized;             // has this var already been cleared during Program destruction?
+    //! has this var already been cleared during Program destruction?
+    /** Set by the Program clearing its variables; a thread that ends finalizes its thread_local variables for itself
+        only (see checkFinalized()): it set this flag, and so made the variable read-only in every other thread
+    */
+    mutable bool finalized;
     bool is_thread_local;               // is this a thread_local var?
+    //! the key of the values of a thread_local variable in each thread; never reused, 0 if not thread_local
+    /** The address of the variable is not a key: a variable of a Program created after another one was deleted can
+        have the address of a deleted variable, and was given the value that the deleted variable had in the thread
+    */
+    uint64_t tl_serial = 0;
+    //! the Program owning a thread_local variable, which it is parsed or loaded in, for identification only
+    /** A thread that ends, or whose values are cleared between tasks, enters it to release its value, so that the
+        Program can still run the value's destructors (see ThreadLocalVarRegistry in lib/thread.cpp); the Program can
+        be deleted before the variable, which another Program can import
+    */
+    const QoreProgram* tl_pgm = nullptr;
+    //! the ID of tl_pgm, which identifies it: its address can be reused by a Program created after it was deleted
+    qore_program_id_t tl_pgm_id = 0;
+
+    //! What a reference to a trusted module's public variable records about the import (qore#5664)
+    struct ModuleVarImport {
+        //! the Program whose namespace holds the reference: the importer
+        /** The reference is one of the Program's global variables, so the Program outlives every write that its
+            code makes through it; a reference that another Program holds to this one (see Var(Var*, ...)) is
+            written through without reading this pointer (see getLValueIntern())
+        */
+        QoreProgram* importer;
+        //! the name of the module that declares the variable
+        std::string module_name;
+        //! the namespace path of the variable in the importer, ex: \c "MyModule::value"
+        std::string path;
+    };
+    //! Set on a reference to a public variable of a trusted module, or to such a reference, and never changed
+    /** Set before the reference is published in its Program's namespace; a write through the reference is refused
+        when the importer is sandboxed or restricted from controlling the process at the time of the write; see
+        checkModuleVarWrite().  Reads never look at it.
+    */
+    std::unique_ptr<ModuleVarImport> module_import;
+
     DLLLOCAL void del(ExceptionSink* xsink);
+
+    //! Sets the serial and the owning Program of a thread_local variable
+    DLLLOCAL void initThreadLocal() {
+        if (is_thread_local) {
+            tl_serial = qore_get_next_thread_local_var_serial();
+            tl_pgm = qore_get_thread_local_var_owner(tl_pgm_id);
+        }
+    }
+
+    //! Returns the lvalue of the variable; \a check_import is false for the target of a reference
+    DLLLOCAL int getLValueIntern(LValueHelper& lvh, bool for_remove, bool check_import) const;
+    //! Removes the variable's value; \a check_import is false for the target of a reference
+    DLLLOCAL void removeIntern(LValueRemoveHelper& lvrh, bool check_import);
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the importer may not write the module's variable
+    DLLLOCAL int checkModuleVarWrite(ExceptionSink* xsink) const;
+    //! Returns true if the code of the importer may not write the module's variable now
+    DLLLOCAL bool moduleVarWriteRestricted() const;
+    //! Returns true if this reference may not be written; see getLValueIntern()
+    DLLLOCAL bool refWriteRefused(bool check_import) const;
 
     // not implemented
     Var(const Var&) = delete;
@@ -164,7 +262,8 @@ protected:
     }
 
     DLLLOCAL int checkFinalized(ExceptionSink* xsink) const {
-        if (finalized) {
+        // a thread_local variable is also finalized in a thread that is ending, for that thread only
+        if (finalized || (is_thread_local && thread_local_vars_finalizing())) {
             xsink->raiseException("DESTRUCTOR-ERROR", "illegal variable assignment after second phase of variable " \
                 "destruction");
             return -1;
@@ -176,7 +275,7 @@ protected:
         if (is_thread_local) {
             QoreLValue<qore_gvar_ref_u>* lvar;
             bool is_new;
-            get_thread_local_lvalue((void*)this, lvar, is_new, finalized);
+            get_thread_local_lvalue(tl_serial, tl_pgm, tl_pgm_id, lvar, is_new);
             if (is_new) {
                 if (is_ref) {
                     lvar->set(QV_Ref);
@@ -193,17 +292,20 @@ protected:
 public:
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, bool is_thread_local = false)
             : loc(loc), name(n_name), pub(false), finalized(false), is_thread_local(is_thread_local) {
+        initThreadLocal();
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, QoreParseTypeInfo* n_parseTypeInfo,
             bool is_thread_local = false) : loc(loc), name(n_name), parseTypeInfo(n_parseTypeInfo),
             pub(false), finalized(false), is_thread_local(is_thread_local) {
+        initThreadLocal();
     }
 
     DLLLOCAL Var(const QoreProgramLocation* loc, const char* n_name, const QoreTypeInfo* n_typeInfo,
             bool builtin = false, bool is_thread_local = false)
             : loc(loc), name(n_name), pub(false), finalized(false),
               is_thread_local(is_thread_local), builtin(builtin) {
+        initThreadLocal();
         const QoreTypeInfo* base_ti;
         no_narrowing = isNoNarrowMarkerType(n_typeInfo, base_ti);
         typeInfo = base_ti;
@@ -235,6 +337,15 @@ public:
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
     DLLLOCAL void clearLocal(ExceptionSink* xsink) {
+        // a thread_local variable that no other Program imports is used by no thread when its Program clears it, so
+        // the values of every thread are released, while the Program can still run their destructors; the values of
+        // the other threads of an imported one are released when the last Program holding it releases it (del())
+        if (is_thread_local && reference_count() == 1) {
+            finalized = true;
+            printd(5, "Var::clearLocal() clearing thread_local '%s' %p\n", name.c_str(), this);
+            release_thread_local_var(tl_serial, xsink);
+            return;
+        }
         QoreLValue<qore_gvar_ref_u>& val = getVal();
         if (!is_ref) {
             ValueHolder h(xsink);
@@ -376,6 +487,38 @@ public:
         return pub;
     }
 
+    //! Returns the variable that this reference refers to directly
+    DLLLOCAL Var* getRefTarget() const {
+        assert(is_ref);
+        return val.v.getPtr();
+    }
+
+    //! Returns true if this is a reference to a trusted module's public variable (or to such a reference)
+    DLLLOCAL bool isTrustedModuleVarImport() const {
+        return (bool)module_import;
+    }
+
+    //! Records that this reference imports a trusted module's public variable into \a importer (qore#5664)
+    /** Must be called before the reference is published in the importer's namespace
+        @param importer the Program whose namespace holds this reference
+        @param module_name the name of the module that declares the variable, or nullptr if unknown
+        @param ns_path the namespace path of the variable in the importer (\c "" or \c "::" for the root namespace)
+    */
+    DLLLOCAL void setTrustedModuleVarImport(QoreProgram* importer, const char* module_name, const std::string& ns_path);
+
+    //! Raises \c MODULE-VARIABLE-READ-ONLY and returns -1 if the code of \a writer may not write the variable
+    /** For code that writes for another Program, such as the reflection API (see QoreExternalGlobalVar::setValue()):
+        the variable is a trusted module's if it is an import of a module's public variable or a variable of the
+        Program of a trusted module (\a owner)
+    */
+    DLLLOCAL int checkModuleStateWriter(const QoreProgram* writer, const QoreProgram* owner, ExceptionSink* xsink) const;
+
+    //! Records that this reference imports into \a importer the same module variable as \a src
+    DLLLOCAL void setTrustedModuleVarImport(QoreProgram* importer, const Var& src, const std::string& ns_path) {
+        assert(src.module_import);
+        setTrustedModuleVarImport(importer, src.module_import->module_name.c_str(), ns_path);
+    }
+
     DLLLOCAL void setPublic() {
         assert(!pub);
         pub = true;
@@ -449,11 +592,153 @@ typedef std::vector<ObjCountRec> ocvec_t;
 /** for tests; see dbg_get_lvalue_scan_count()
 */
 DLLLOCAL int64 q_get_lvalue_scan_count();
+//! returns the number of values examined while collecting objects held by removals in this thread
+DLLLOCAL int64 q_get_lvalue_removal_visit_count();
+//! returns the number of object identity comparisons made by removal bookkeeping in this thread
+DLLLOCAL int64 q_get_lvalue_removal_probe_count();
+//! records one object identity comparison by removal bookkeeping
+DLLLOCAL void q_record_lvalue_removal_probe();
+//! returns the number of lazy removal-tracker states allocated in this thread
+DLLLOCAL int64 q_get_lvalue_removal_allocation_count();
+//! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
+/** for tests; see dbg_get_number_old_value_copy_count()
+*/
+DLLLOCAL int64 q_get_number_old_value_copy_count();
 #endif
+
+//! Identities held by a removal until its recursive-reference scan completes
+/** The first two objects are stored inline.  Larger object sets and nested-container visitation use lazy storage, so
+    an ordinary lvalue has the same storage as the old vector and removing a flat value with up to two objects allocates nothing.
+    These pointers borrow the removed values' lifetime; no reference is released by this tracker.
+*/
+class QoreRemovedValueTracker {
+public:
+    DLLLOCAL QoreRemovedValueTracker() = default;
+    DLLLOCAL QoreRemovedValueTracker(QoreRemovedValueTracker&& other) noexcept
+            : first(other.first), second(other.second), state(other.state) {
+        other.first = other.second = nullptr;
+        other.state = nullptr;
+    }
+    DLLLOCAL ~QoreRemovedValueTracker() {
+        if (state) {
+            releaseState();
+        }
+    }
+    DLLLOCAL bool empty() const { return !first; }
+    DLLLOCAL void add(const RObject* obj);
+    DLLLOCAL bool contains(const RObject* obj) const;
+    DLLLOCAL bool visit(const AbstractQoreNode* container);
+    DLLLOCAL bool tracking() const { return state; }
+
+    //! Calls \a f with each object tracked (#6335)
+    /** \a f may scan the objects, which can add to the tracker: the inline objects are read before each call, and the
+        objects of the lazy table are copied first.  The tracker borrows the identities of live objects; the scan needs
+        them as mutable objects.
+    */
+    template <typename F>
+    DLLLOCAL void forEach(F f) const {
+        RObject* a = const_cast<RObject*>(first);
+        RObject* b = const_cast<RObject*>(second);
+        if (state) {
+            std::vector<RObject*> more;
+            collectState(more);
+            if (a) f(a);
+            if (b) f(b);
+            for (RObject* o : more) f(o);
+            return;
+        }
+        if (a) f(a);
+        if (b) f(b);
+    }
+
+private:
+    struct ObjectEqual;
+    struct State;
+    const RObject* first = nullptr;
+    const RObject* second = nullptr;
+    State* state = nullptr;
+
+    DLLLOCAL void releaseState();
+    DLLLOCAL State& getState();
+    DLLLOCAL void collectState(std::vector<RObject*>& out) const;
+    DLLLOCAL QoreRemovedValueTracker(const QoreRemovedValueTracker&) = delete;
+    DLLLOCAL QoreRemovedValueTracker& operator=(const QoreRemovedValueTracker&) = delete;
+};
+static_assert(sizeof(QoreRemovedValueTracker) == sizeof(std::vector<const RObject*>),
+    "removal bookkeeping must not grow ordinary lvalue frames");
 
 // this class grabs global variable or object locks for the duration of the scope of the object
 // no evaluations can be done while this object is in scope or a deadlock may result
-class LValueHelper {
+//! The Programs of the references that an lvalue was reached through, entered until the lvalue has been used
+/** Each Program was entered with a thread count, which release() leaves (qore_program_private::decThreadCount()):
+    the LValueHelper's destructor, and its constructors when they throw, call it; the class has no destructor of its
+    own, so that an lvalue reached through no reference to another Program costs only the test in release().  An entry
+    that add() cannot store is left before the exception is passed on.
+*/
+class QoreLValueReferencePrograms {
+public:
+    DLLLOCAL QoreLValueReferencePrograms() = default;
+
+    DLLLOCAL QoreLValueReferencePrograms(QoreLValueReferencePrograms&& o) {
+        if (o.first) {
+            first = o.first;
+            more = o.more;
+            tid = o.tid;
+            o.first = nullptr;
+        }
+    }
+
+    DLLLOCAL ~QoreLValueReferencePrograms() {
+        // the owner has left the Programs
+        assert(!first);
+    }
+
+    QoreLValueReferencePrograms(const QoreLValueReferencePrograms&) = delete;
+    QoreLValueReferencePrograms& operator=(const QoreLValueReferencePrograms&) = delete;
+
+    //! Adds a Program entered, which is left if it cannot be stored (std::bad_alloc)
+    /** @param e the entry; all entries are the current thread's
+    */
+    DLLLOCAL void add(const QoreReferenceProgramEntry& e) {
+        assert(e.pgm);
+        if (!first) {
+            first = e.pgm;
+            more = nullptr;
+            tid = e.tid;
+            return;
+        }
+        assert(tid == e.tid);
+        addMore(e.pgm);
+    }
+
+    //! Leaves the Programs
+    /** @param xsink for the exceptions of clearing a Program deleted while the thread was in it, or nullptr to handle
+        them here
+    */
+    DLLLOCAL void release(ExceptionSink* xsink) {
+        // a lvalue reached through no reference to another Program, the usual case, costs only this test
+        if (first) {
+            releaseIntern(xsink);
+        }
+    }
+
+private:
+    //! the first Program; a chain of references through other Programs adds the others to \a more
+    QoreProgram* first = nullptr;
+    //! set, and read, only if \a first is set
+    std::vector<QoreProgram*>* more;
+    //! the TID of the thread that entered the Programs; set, and read, only if \a first is set
+    int tid;
+
+    //! adds a Program after the first one; see add()
+    DLLLOCAL void addMore(QoreProgram* p);
+
+    //! leaves the Programs; \a first is set
+    DLLLOCAL void releaseIntern(ExceptionSink* xsink);
+};
+
+class LValueHelper final {
+    friend struct qore_type_safe_ref_helper_priv_t;
     friend class LValueRemoveHelper;
     friend class LValueLockHandoffHelper;
 
@@ -474,7 +759,66 @@ protected:
         }
     }
 
+    //! Replaces the enum value \a current that the lvalue holds with an owned copy of its base value
+    /** see qore_enum_value_copy_for_write(); the lvalue's reference to the enum member is released here (releasing
+        it executes no Qore code)
+
+        @param current the enum value that the lvalue holds
+        @param desc the description of the operation that modifies the copy in place, or nullptr; see ensureUnique()
+
+        @return -1 if the lvalue's type refuses the copy and an exception was raised (only with \a desc), 0 if not
+    */
+    DLLLOCAL int replaceEnumForWrite(const QoreValue& current, const char* desc);
+
+    //! ensureUnique() and ensureUnique(const char*): \a desc is used only if \a Checked
+    template <bool Checked>
+    DLLLOCAL int ensureUniqueImpl(const char* desc) {
+        // a write-protected variable's container is only read (see setReadOnlyResolution())
+        if (read_only_resolution) {
+            return 0;
+        }
+        member_lvalue_modified = true;
+        // an enum (QV_Enum, which QoreLValue::getValue() returns borrowed), a container or a string: never a scalar
+        // that the lvalue stores natively in a node that getValue() would create and keep (qore#6094)
+        QoreValue current = val ? val->getValue() : *qv;
+        // an enum value, a short string held inline and an opaque reference take the slow path
+        if (!current.isPlainPointer()) [[unlikely]] {
+            return ensureUniqueSlow(current, Checked ? desc : nullptr);
+        }
+        assert(!val || !val->optimized());
+        ensureUniqueNode();
+        return 0;
+    }
+
+    //! ensureUnique() for a value other than an ordinary node pointer: an enum value, an inline short string or an
+    //! opaque reference; returns -1 if the copy of an enum value is refused (only with \a desc, see
+    //! ensureUnique(const char*))
+    DLLLOCAL QORE_INTERN_NOINLINE int ensureUniqueSlow(const QoreValue& current, const char* desc);
+
+    //! ensureUnique() for a node held as an ordinary pointer or through an opaque reference
+    DLLLOCAL void ensureUniqueNode() {
+        AbstractQoreNode* current_value = getNodeValue();
+        assert(current_value && current_value->getType() != NT_OBJECT);
+
+        if (current_value->is_unique()) {
+            return;
+        }
+        if (qv) {
+            // a value stored in a container can be held through an opaque reference: the copy keeps its
+            // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
+            saveTemp(qore_value_copy_on_write(*qv));
+            return;
+        }
+        // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
+        assert(!val->getValue().isOpaque());
+        AbstractQoreNode* old = current_value;
+        assignNodeIntern(current_value->realCopy());
+        saveTemp(old);
+    }
+
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
+    //! checks the stack and records the lvalue ID of a reference that is resolved; nullptr if the stack is exhausted
+    DLLLOCAL const lvalue_ref* startReferenceLValue(const ReferenceNode* ref);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
 public:
@@ -506,6 +850,9 @@ protected:
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, bool for_remove);
     DLLLOCAL int doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* op, RuntimeConfig& rc, bool for_remove);
+    //! the root of the lvalue of a background expression, or an error for another value that is not an lvalue
+    //! (issue #5723); out of line, so that doLValue() stays as small as before for the lvalues of other expressions
+    DLLLOCAL __attribute__((noinline, cold)) int doBackgroundRootLValue(const QoreValue& n);
 
     DLLLOCAL int makeIntQv(const char* desc);
 
@@ -529,7 +876,9 @@ protected:
     DLLLOCAL bool numberResultNeedsConversion() const;
 
     //! stores a number result of an operation, converted to the lvalue's type; takes the reference of \a n
-    DLLLOCAL void storeNumberResult(QoreNumberNode* n, const char* desc);
+    /** @return 0 for OK, -1 if the lvalue's type refused the result (an exception was raised)
+    */
+    DLLLOCAL int storeNumberResult(QoreNumberNode* n, const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
     //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
@@ -537,6 +886,22 @@ protected:
 
     DLLLOCAL int makeFloat(const char* desc);
     DLLLOCAL int makeNumber(const char* desc);
+
+    //! returns the value of the lvalue; see getValue() const
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue getValueIntern() const {
+        if (!val) {
+            return *qv;
+        }
+        QoreValue rv = val->getValue();
+        // only a natively stored scalar can be returned in a new node; a node or an inline value is the lvalue's
+        if (val->optimized() && rv.isPointer()) {
+            keepCreatedNode(rv);
+        }
+        return rv;
+    }
+
+    //! keeps the node that getValue() created for a natively stored scalar in tvec
+    DLLLOCAL QORE_INTERN_NOINLINE void keepCreatedNode(QoreValue rv) const;
 
     DLLLOCAL int doRecursiveException() {
         vl.xsink->raiseException("REFERENCE-ERROR", "recursive reference detected in assignment");
@@ -548,8 +913,13 @@ public:
 
 private:
     typedef std::vector<AbstractQoreNode*> nvec_t;
-    nvec_t tvec;
+    //! values released when the helper is destroyed, after the locks; getValue() adds the nodes that it creates
+    mutable nvec_t tvec;
     lvid_set_t* lvid_set = nullptr;
+    //! the Programs of the references that the lvalue was reached through, entered until the lvalue has been used
+    /** see keepReferenceProgram() and adoptReferenceProgram()
+    */
+    QoreLValueReferencePrograms ref_pgms;
     // to track object count changes
     ocvec_t ocvec;
 
@@ -570,7 +940,7 @@ private:
     //! objects other than \a robj that a value needing a scan was removed from; each holds a weak reference
     std::vector<RObject*> removal_objects;
     //! the objects removed by this write, which it still holds while it scans; see removedValue()
-    std::vector<const RObject*> removed_objects;
+    QoreRemovedValueTracker removed_objects;
 
     // recursive delta: change to recursive reference count
     int rdt = 0;
@@ -619,6 +989,113 @@ private:
     };
     std::unique_ptr<MemberLValue> member_lvalue;
     bool assignment_only = false;
+    //! called once, before the root of the lvalue (a variable, a member of self, a static class variable or a
+    //! reference) is resolved and locked, when the keys and indices of the path to it have been evaluated (see the
+    //! constructor with a root hook); a non-zero return value stops the resolution of the lvalue
+    int (*root_hook)(void*) = nullptr;
+    //! the argument of root_hook
+    void* root_hook_arg = nullptr;
+public:
+    //! a key or an index of the path to the root that evalPathKeys() evaluated
+    struct PathKey {
+        QoreValue value;
+        //! true if the helper owns a reference to the value
+        bool needs_deref = false;
+    };
+    //! the keys and indices of a path that evalPathKeys() evaluated, the one nearest the root first
+    /** The store lives in the frame of the outermost step of the path, only for a path whose keys are evaluated first
+        (qore#5753); a path of up to BufSize keys is held without an allocation.
+    */
+    struct PathKeyStore {
+        static constexpr size_t BufSize = 8;
+        //! the keys of a path of up to BufSize keys, constructed when they are written (the first count are valid)
+        alignas(PathKey) unsigned char buf[BufSize * sizeof(PathKey)];
+        std::vector<PathKey> more;
+        size_t count = 0;
+
+        DLLLOCAL PathKey* data() {
+            return more.empty() ? reinterpret_cast<PathKey*>(buf) : more.data();
+        }
+    };
+    static_assert(std::is_trivially_destructible<PathKey>::value, "the keys are not destroyed in the buffer");
+
+private:
+    //! the keys of the path being resolved, if they were evaluated first
+    PathKeyStore* path_keys = nullptr;
+
+    //! takes the key at the end of the evaluated keys of the path; returns false if there is none
+    DLLLOCAL bool takePathKey(ValueOptionalRefHolder& holder) {
+        if (!path_keys || !path_keys->count) {
+            return false;
+        }
+        PathKey& key = path_keys->data()[--path_keys->count];
+        holder.setValue(key.value, key.needs_deref);
+        return true;
+    }
+
+    //! releases the evaluated keys of the path that no step took
+    DLLLOCAL void clearPathKeys();
+
+    //! returns the keys of the lvalue path \a n, the one nearest the root first, if they are evaluated before it is
+    //! resolved: at least two of them need an evaluation, so that their order can be observed; cached in \a cache,
+    //! the cache of the last step of the path
+    DLLLOCAL static const QoreLValuePathKeys* getPathKeys(QoreLValuePathKeyCache& cache, const QoreValue& n);
+
+    //! evaluates the keys of the path \a n, whose last step's key cache is \a cache, from the root out if it needs
+    //! it, and then resolves the step with \a step; returns -1 on error
+    /** Out of line, so that a path that does not need it costs nothing more than the test of its cache
+    */
+    template <typename Step>
+    DLLLOCAL int doStepWithPathKeys(const QoreValue& n, QoreLValuePathKeyCache& cache, Step step);
+
+    //! the evaluation of the keys of the path at its outermost step, and the release of the keys left
+    class PathKeyScope;
+    friend class PathKeyScope;
+
+    //! evaluates the keys and indices of the path \a n to the root, from the root out, into path_keys
+    /** As the other execution modes and the expression as a value do: <tt>h.(k1()).(k2())[i()] = v</tt> evaluates
+        k1(), k2() and i() in this order.  Nothing is evaluated unless at least two keys need an evaluation, as the
+        order cannot be observed otherwise; each key is a statement of its own, whose temporaries are released when
+        it has been evaluated.
+
+        @return -1 if a key raised an exception, 0 if not
+    */
+    DLLLOCAL int evalPathKeys(const QoreLValuePathKeys& keys);
+
+    //! runs the root hook once, if any; returns its return value, or 0 if there is no hook
+    DLLLOCAL int runRootHook() {
+        if (root_hook) {
+            int (*hook)(void*) = root_hook;
+            root_hook = nullptr;
+            return hook(root_hook_arg);
+        }
+        return 0;
+    }
+public:
+    //! how a helper made with ReadAccess resolves the lvalue
+    enum read_access_e : uint8_t {
+        //! for writing: the default
+        RA_NONE = 0,
+        //! only to read the variable that a reference names directly
+        RA_VAR = 1,
+        //! only to read an element or member of a variable that a reference names
+        RA_ELEMENT = 2,
+    };
+private:
+    //! set while the helper only reads the lvalue that a reference names (see ReadAccess)
+    /** A read-only import, such as a sandboxed Program's import of a trusted module's public variable, can then be
+        read through a reference.  Resolving an element or member of such a variable could change it (it can create
+        a missing hash key or copy a shared container), so its containers are then resolved without being changed
+        (see setReadOnlyResolution())
+    */
+    read_access_e read_access = RA_NONE;
+    //! set when the caller needs isWriteProtected(): only then is the variable that a reference names checked
+    bool track_write_protection = false;
+    //! set with read_access when the variable read could not have been written; see isWriteProtected()
+    bool write_protected = false;
+    //! set while the containers of a write-protected variable are resolved to read an element; see
+    //! setReadOnlyResolution()
+    bool read_only_resolution = false;
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
@@ -649,17 +1126,85 @@ public:
         bool for_assignment = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
+    //! resolves the lvalue \a exp and calls \a hook with \a hook_arg once, before its root is resolved and locked
+    /** The keys and indices of the path to the root are evaluated before the hook is called, in the order in which
+        the other constructors evaluate them; code that the hook runs, such as the selectors of a remove or delete
+        expression, can read the lvalue without its lock (qore#5696).  The hook is not called if the evaluation of a
+        key or an index raises an exception; it must not raise exceptions in \a xsink, which the resolution of the
+        lvalue that follows it uses.  If the hook returns a non-zero value, the root is not resolved, and the helper
+        holds no lvalue, without an exception in \a xsink.
+    */
+    DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, int (*hook)(void*),
+        void* hook_arg);
     DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false,
         bool for_assignment = false);
 
+    //! tag for the constructor that only reads the value of a reference
+    struct ReadAccess {};
+
+    //! Resolves a reference only to read its value (see ReferenceNode::doEval())
+    /** The helper must not be used to change the lvalue: a variable that the reference names directly is resolved
+        without the checks for writing it (a read-only import, a trusted module's public variable in a sandboxed
+        importer), which still apply to a variable whose element or member the reference names
+    */
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, ReadAccess);
+    //! Resolves a reference only to read its value, without creating a missing value when \a for_remove is true
+    /** isWriteProtected() then tells whether the variable that the reference names could have been written
+    */
+    DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove);
+
     DLLLOCAL LValueHelper(ExceptionSink* xsink, bool for_assignment = false);
+
+    //! Finishes the parent lvalue before a callback that can replace or remove it
+    /** The caller must first retain the target object. Completes counts, locks, reference Program entries,
+        writebacks, scans and deferred releases, then leaves an empty helper. Pending member notifications stay
+        with this helper until its original scope ends. The caller must not read the old lvalue afterwards.
+        Object mutation does not write its reference back to an external parent member.
+    */
+    DLLLOCAL void finishForCallback();
+
+    //! Returns how the helper resolves the lvalue (see ReadAccess)
+    DLLLOCAL read_access_e getReadAccess() const {
+        return read_access;
+    }
+
+    //! Returns true if the caller needs isWriteProtected()
+    DLLLOCAL bool tracksWriteProtection() const {
+        return track_write_protection;
+    }
+
+    //! Records that the variable read could not have been written (see ReadAccess)
+    DLLLOCAL void setWriteProtected() {
+        assert(read_access == RA_VAR);
+        write_protected = true;
+    }
+
+    //! Records that the variable whose element or member a reference names may not be written
+    /** The containers in the variable (hashes and lists) are then resolved without being changed: a missing element
+        is not created, so that the lvalue does not exist and reads as no value, and a shared container is not
+        copied.  An object in the variable ends it: the object's members are resolved as for any other reference.
+        isWriteProtected() is then true.
+    */
+    DLLLOCAL void setReadOnlyResolution() {
+        assert(read_access == RA_ELEMENT);
+        read_only_resolution = true;
+        write_protected = true;
+    }
+
+    //! Returns true if the variable read through a reference could not have been written through it
+    DLLLOCAL bool isWriteProtected() const {
+        return write_protected;
+    }
 
     DLLLOCAL LValueHelper(LValueHelper&& o);
 
     // to scan objects after initialization
     DLLLOCAL LValueHelper(QoreObject& obj, ExceptionSink* xsink);
+    //! Scan an already pinned object after unlocked native callbacks, without reading its member counts
+    struct ObjectScan {};
+    DLLLOCAL LValueHelper(QoreObject& self, ExceptionSink* xsink, ObjectScan);
 
     DLLLOCAL ~LValueHelper();
 
@@ -733,6 +1278,22 @@ public:
     */
     DLLLOCAL void removedValue(const QoreValue& v);
 
+private:
+    //! removedValue() for a value at the given nesting depth below the removed value
+    DLLLOCAL void removedValueIntern(const QoreValue& v, unsigned depth);
+
+    //! removedValue() for a deeply nested list or hash, with a work stack instead of recursion (qore#6117)
+    DLLLOCAL void removedValueWithoutRecursion(const QoreValue& v);
+
+public:
+    //! Records the objects in the value that a removal took into the given lvalue storage
+    /** Only a node held by the storage can be or contain an object; a scalar held inline is not read, as
+        QoreLValue::getValue() boxes a large integer or a special float in a new node that the caller must release
+    */
+    DLLLOCAL void removedValue(const QoreLValueGeneric& v) {
+        removedValue(QoreValue(static_cast<const AbstractQoreNode*>(v.getInternalNode())));
+    }
+
     DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {
@@ -763,6 +1324,32 @@ public:
     */
     DLLLOCAL void rollbackVivification();
 
+    //! Enters the Program of a reference that the lvalue is reached through until the lvalue has been used
+    /** The Program's teardown waits until the helper is destroyed, so that it cannot release the variable while the
+        lvalue is used: the Program was only kept while the reference was resolved, and its teardown released a
+        variable that another thread was assigning through a reference.  The Programs are left in the destructor once
+        the lvalue's locks are released, before the values that the write replaced are released.
+
+        @return 0 for OK, -1 if the reference's Program is being deleted or has been (PROGRAM-ERROR raised)
+    */
+    DLLLOCAL int keepReferenceProgram(const lvalue_ref& r);
+
+    //! Takes over the entry into the Program of a reference that a RuntimeReferenceHelper resolved the lvalue with
+    /** The RuntimeReferenceHelper that resolved the lvalue entered the reference's Program with its context, which it
+        leaves when it is destroyed, before the lvalue is used: the entry is handed over to this helper
+        (RuntimeReferenceHelperBase::takeProgramEntry()), which leaves the Program when the lvalue has been used (see
+        keepReferenceProgram()).  The Program is entered once: entering it again before the RuntimeReferenceHelper was
+        created made 4 threads using references held by local variables 66 to 88% slower.
+
+        @param e the entry, with no Program if the RuntimeReferenceHelper did not enter one (the reference's Program
+        was the current Program)
+    */
+    DLLLOCAL void adoptReferenceProgram(const QoreReferenceProgramEntry& e) {
+        if (e.pgm) {
+            ref_pgms.add(e);
+        }
+    }
+
     DLLLOCAL void saveTemp(QoreValue n);
 
     //! Saves the value that the lvalue holds, which the caller then overwrites, for release after the locks
@@ -774,7 +1361,9 @@ public:
         if (qv) {
             saveTemp(*qv);
         } else {
-            saveTemp(getValue().getInternalNode());
+            // the node that the variable holds, if any: a scalar that it stores natively has none (getValue() would
+            // return it in a new node that this helper already keeps)
+            saveTemp(val->getInternalNode());
         }
     }
 
@@ -793,8 +1382,16 @@ public:
     DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove,
             bool remove_root = false);
 
+    //! Resolves the lvalue of a reference held by a variable, and keeps its Program entered until the lvalue has been
+    //! used (see keepReferenceProgram())
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
+
+    //! Resolves the lvalue of a reference that the caller resolves with a RuntimeReferenceHelper
+    /** The helper entered the reference's Program, and the caller hands its entry over (see adoptReferenceProgram())
+    */
+    DLLLOCAL int doEnteredReferenceLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
+    //! see doLValue(const ReferenceNode*, bool)
     DLLLOCAL int doLValue(const ReferenceNode* ref, RuntimeConfig& rc, bool for_remove);
 
     DLLLOCAL void setAndLock(QoreVarRWLock& rwl);
@@ -917,12 +1514,20 @@ public:
         return qv->getType() == NT_REFERENCE ? qv->get<const ReferenceNode>() : nullptr;
     }
 
-    DLLLOCAL const QoreValue getValue() const {
-        return val ? val->getValue() : *qv;
+    //! returns the value of the lvalue, which stays valid while this helper exists
+    /** A scalar that the lvalue stores natively and that a value holds in a node (an integer outside the inline range
+        or a special float) is returned in a new node, which this helper keeps and releases with its other temporary
+        values (qore#6094); the value is therefore never the caller's own, and a caller that keeps it takes its own
+        reference.  Each call makes and keeps a new node for such a value until the helper is destroyed, so a caller
+        that needs the value more than once reads it once
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE const QoreValue getValue() const {
+        return getValueIntern();
     }
 
-    DLLLOCAL QoreValue getValue() {
-        return val ? val->getValue() : *qv;
+    //! returns the value of the lvalue, which stays valid while this helper exists; see getValue() const
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue getValue() {
+        return getValueIntern();
     }
 
     DLLLOCAL AbstractQoreNode* getNodeValue() {
@@ -931,8 +1536,8 @@ public:
     }
 
     //! returns the node stored in the lvalue, or nullptr if it holds none
-    /** unlike getValue(), this never creates a value: a large int stored natively is returned by getValue() as a
-        new heap node that the caller would have to release
+    /** unlike getValue(), this never creates a node: getValue() returns a natively stored large int or special float
+        in a new node, which this helper keeps until it is destroyed
     */
     DLLLOCAL const AbstractQoreNode* getInternalNode() const {
         return val ? val->getInternalNode() : qv->getInternalNode();
@@ -954,35 +1559,41 @@ public:
 
     DLLLOCAL QoreValue getReferencedValue() const;
 
-    // only call if there is a reference-counted AbstractQoreNode value in place
+    //! Raises RUNTIME-TYPE-ERROR for a value that the operation \a desc would give the lvalue, which its type refuses
+    /** For an operation that leaves the lvalue unchanged instead of making a value that its type refuses (ex: += on a
+        string enum lvalue with no value, qore#6195); only call if the lvalue's type refuses \a n
+
+        @param desc the description of the operation
+        @param n a value of the type that the operation would make (only its type is used)
+
+        @return -1 (an exception has been raised)
+    */
+    DLLLOCAL int refuseValue(const char* desc, const QoreValue& n);
+
+    //! Makes the value of the lvalue unique, so that it can be modified in place
+    /** Only call if there is a reference-counted AbstractQoreNode value in place.
+
+        An enum value is replaced with an owned copy of its base value; for an operation that modifies a string or a
+        number in place, which leaves a plain value of the enum's base type, use ensureUnique(const char*), which
+        checks that the lvalue's type accepts it.  A container is never an enum value.
+    */
     // FIXME: port operators to LValueHelper instead and remove this function
     DLLLOCAL void ensureUnique() {
-        member_lvalue_modified = true;
-        QoreValue current = getValue();
-        if (current.isShortString()) {
-            char buf[7];
-            current.getShortString(buf);
-            assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
-            return;
-        }
+        ensureUniqueImpl<false>(nullptr);
+    }
 
-        AbstractQoreNode* current_value = getNodeValue();
-        assert(current_value && current_value->getType() != NT_OBJECT);
+    //! Makes the value of the lvalue unique for an operation that modifies a string or a number in place
+    /** As ensureUnique(), but an enum value is replaced with its base value only if the lvalue's type accepts a
+        plain value of the enum's base type, which the operation leaves: if it does not (an enum type),
+        RUNTIME-TYPE-ERROR is raised with \a desc, and the lvalue is left unchanged (qore#6195).
 
-        if (current_value->is_unique()) {
-            return;
-        }
-        if (qv) {
-            // a value stored in a container can be held through an opaque reference: the copy keeps its
-            // representation, and the value replaced is released as it is held (see qore_value_copy_on_write())
-            saveTemp(qore_value_copy_on_write(*qv));
-            return;
-        }
-        // a variable holds its node as an ordinary reference (QoreLValue never holds an opaque value)
-        assert(!val->getValue().isOpaque());
-        AbstractQoreNode* old = current_value;
-        assignNodeIntern(current_value->realCopy());
-        saveTemp(old);
+        @param desc the description of the operation (ex: \c "<trim operator>")
+
+        @return -1 if the lvalue's type refused the copy of an enum value and an exception was raised, 0 if not
+    */
+    DLLLOCAL int ensureUnique(const char* desc) {
+        assert(desc);
+        return ensureUniqueImpl<true>(desc);
     }
 
     DLLLOCAL int64 getAsBigInt() const;
@@ -1019,7 +1630,9 @@ public:
     DLLLOCAL void divideEqualsNumber(QoreValue r, const char* desc = "<lvalue>");
     DLLLOCAL void preIncrementNumber(const char* desc = "<lvalue>");
     DLLLOCAL void preDecrementNumber(const char* desc = "<lvalue>");
+    //! increments a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postIncrementNumber(bool ref_rv, const char* desc = "<lvalue>");
+    //! decrements a number lvalue; returns the old value if \a ref_rv is true, or nullptr if an exception was raised
     DLLLOCAL QoreNumberNode* postDecrementNumber(bool ref_rv, const char* desc = "<lvalue>");
 
     DLLLOCAL QoreNumberNode* ensureUniqueNumber(const char* desc = "<lvalue>") {
@@ -1056,6 +1669,15 @@ public:
     DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true,
             AssignmentMode mode = AssignmentMode::Normal);
 
+    DLLLOCAL int assign(QoreValue val, const char* desc, LexicalSemanticPolicy policy,
+            bool check_types = true, AssignmentMode mode = AssignmentMode::Normal);
+
+    DLLLOCAL int assignNative(QoreValue val, const char* desc);
+
+    template <bool Lexical, bool Native = false>
+    DLLLOCAL int assignImpl(QoreValue val, const char* desc, bool check_types, AssignmentMode mode,
+            LexicalSemanticPolicy policy);
+
     DLLLOCAL QoreValue removeValue(bool for_del);
     DLLLOCAL QoreValue remove(bool& static_assignment);
 
@@ -1085,6 +1707,19 @@ protected:
 public:
     DLLLOCAL LValueRemoveHelper(const ReferenceNode& ref, ExceptionSink* n_xsink, bool fd);
     DLLLOCAL LValueRemoveHelper(const QoreValue& exp, ExceptionSink* n_xsink, bool fd);
+
+    //! Releases what a removal that an exception ended removed
+    /** A list of selectors (l[a, b..c]) whose later selector raises an exception still removes what the earlier
+        selectors selected (doRemove()); the removed values are then not taken by remove() or deleteLValue() and are
+        released here, after the lvalue's lock (qore#5675)
+    */
+    DLLLOCAL ~LValueRemoveHelper() {
+        bool static_assignment = false;
+        QoreValue v = rv.remove(static_assignment);
+        if (!static_assignment) {
+            v.discard(xsink);
+        }
+    }
 
     DLLLOCAL void doRemove(QoreValue exp);
 

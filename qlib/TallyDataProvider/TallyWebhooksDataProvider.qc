@@ -64,7 +64,7 @@ public class TallyWebhooksDataProvider inherits TallyDataProviderBase {
     constructor(*hash<auto> options) : TallyDataProviderBase(options) {}
     string getName() { return ProviderInfo.name; }
 
-    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params = {};
         if (search_options.page) params.page = search_options.page;

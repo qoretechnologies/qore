@@ -16,8 +16,8 @@ import sys
 
 # the cache entries of the third-party include directories of libqore's headers (see the libqore target's include
 # directories in CMakeLists.txt)
-INCLUDE_DIR_ENTRIES = ("OPENSSL_INCLUDE_DIR", "MPFR_INCLUDE_DIR", "MPFRGMP_INCLUDE_DIR", "PCRE2_INCLUDE_DIRS",
-                       "ZLIB_INCLUDE_DIR", "BZIP2_INCLUDE_DIR", "ICONV_INCLUDE_DIR")
+INCLUDE_DIR_ENTRIES = ("OPENSSL_INCLUDE_DIR", "MPFR_INCLUDE_DIR", "MPFRGMP_INCLUDE_DIR", "GMP_INCLUDE_DIR",
+                       "PCRE2_INCLUDE_DIRS", "ZLIB_INCLUDE_DIR", "BZIP2_INCLUDE_DIR", "ICONV_INCLUDE_DIR")
 # directories the compiler searches anyway: naming one with -I would reorder the system headers (#include_next)
 DEFAULT_INCLUDE_DIRS = ("/usr/include", "/usr/local/include")
 

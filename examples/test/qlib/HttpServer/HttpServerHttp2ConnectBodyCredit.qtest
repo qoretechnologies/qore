@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 connections, extended CONNECT streams and their flow control
+
+/*  HttpServerHttp2ConnectBodyCredit.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5841: an HTTP/2 server resets an extended-CONNECT stream (a WebSocket tunnel) whose data goes over the
+    listener's maximum request body size, and discards the chunk that went over it.  The server credited that chunk
+    to neither the stream nor the connection, so every such tunnel took its size from the connection's flow-control
+    window, until the client could send nothing more on the connection.  The discarded data is now credited.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerHttp2ConnectBodyCreditTest
+
+#! a hang guard only, never a timing assertion
+const HangGuard = 30s;
+
+#! the listener's maximum request body size: every tunnel's first chunk goes over it
+const MaxBody = 1024;
+
+#! the payload of the message sent on each tunnel: its frame fits one HTTP/2 DATA frame (16384 bytes)
+const Chunk = 16000;
+
+#! the tunnels reset on one connection: their data is twice the default 65535-byte connection window; without the
+#! fix, the client could send nothing more after the fifth, and the next tunnel was never reset
+const Tunnels = 8;
+
+class HttpServerHttp2ConnectBodyCreditTest inherits QUnit::Test {
+    constructor() : QUnit::Test("HttpServerHttp2ConnectBodyCredit", "1.0") {
+        addTestCase("HTTP/2: the data of an oversized tunnel is credited to the connection", \testCredit());
+        set_return_value(main());
+    }
+
+    testCredit() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_http2_default_connection_window() is only registered in a library-debug build");
+        }
+        # the sessions keep the default connection window, so lost credit is not hidden by a larger one
+        call_function("dbg_http2_default_connection_window", True);
+        on_exit call_function("dbg_http2_default_connection_window", False);
+
+        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("test", LoggerLevel::getLevelInfo())});
+        on_exit server.stop();
+        server.setDefaultHandler("ws", new WebSocketHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "max_request_body_size": MaxBody,
+        }).port;
+        server.waitForAsyncIo();
+
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+        });
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+
+        hash<auto> before = call_function("dbg_http2_connection_window_updates");
+        # each tunnel's data reaches the server only if the data of the tunnels before it was credited
+        for (int i = 0; i < Tunnels; ++i) {
+            resetTunnel(mgr, url, i);
+        }
+        assertEq(1, mgr.getStats().total_connections, "the tunnels use one connection");
+        # the data of the tunnels was credited to the connection: nghttp2 sends a WINDOW_UPDATE for every half of the
+        # 65535-byte window that is consumed, 2 for the 8 * 16008 bytes (after the third and the sixth tunnel); without
+        # the fix, the discarded data was never credited, and the server sent none
+        hash<auto> after = call_function("dbg_http2_connection_window_updates");
+        assertGe(2, after.server - before.server, "the server credits the discarded data to the connection");
+    }
+
+    #! Opens a WebSocket tunnel and sends a message over the server's limit, which resets the tunnel
+    private resetTunnel(HttpClientConnectionManager mgr, string url, int i) {
+        HttpClientStreamHandle stream = mgr.acquireStream(url);
+        on_exit {
+            try {
+                stream.cancel();
+            } catch () {
+            }
+        }
+        stream.startStreaming("CONNECT", "/", {
+            ":protocol": "websocket",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        }, True);
+        auto rh = stream.readData(HangGuard);
+        assertEq(200, rh.status_code, sprintf("tunnel %d: the server accepts the WebSocket connection", i));
+        # client frames are masked
+        stream.sendData(ws_encode_message(binary(strmul("x", Chunk)), WSOP_Binary, True));
+        # the server resets the tunnel when it gets the data, which is the next event of the stream; without the fix,
+        # the data of the sixth tunnel never reached the server, and the next event was the server's WebSocket ping
+        # (its heartbeat), 20 seconds later
+        string event;
+        try {
+            auto d = stream.readData(HangGuard);
+            event = (d.typeCode() == NT_HASH && d.end_stream && !d.body) ? "end" : sprintf("data: %y", d);
+        } catch (hash<ExceptionInfo> ex) {
+            event = ex.err;
+        }
+        assertEq("end", event, sprintf("tunnel %d: the server resets the tunnel", i));
+    }
+}

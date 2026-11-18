@@ -31,6 +31,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/LexicalSemanticPolicy.h"
 #include <qore/QoreEnumDecl.h>
 
 #include "qore/intern/qore_string_private.h"
@@ -160,7 +161,7 @@ int QoreStringNode::getAsString(QoreString &str, int foff, ExceptionSink* xsink)
 
 bool qore_string_get_as_bool(const char* str, size_t len) {
     // check if we should do perl-style boolean evaluation
-    if (runtime_check_parse_option(PO_STRICT_BOOLEAN_EVAL)) {
+    if (qore_get_native_semantic_policy().strictBoolean()) {
         return q_strtod(str);
     }
     if (len == 1 && str[0] == '0') {
@@ -232,6 +233,19 @@ QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_off
     qore_string_private* pp = qore_string_private::get(parent);
     assert(byte_offset <= pp->len);
     assert(byte_offset + byte_len <= pp->len);
+    // a view always reaches the end of its parent, whose terminator it shares: a part in the middle would need a
+    // terminator of its own, made by a copy on its first read, which a read of a string shared between threads cannot
+    // make safely (issue #6239); such a part is copied here, as almost every use of it would copy it anyway
+    if (byte_offset + byte_len != pp->len) {
+        // an exact allocation, as materialize() makes, and the part of the string's known ASCII prefix that the
+        // copy holds (see qore_string_private::asciiPrefixStorage())
+        size_t prefix = pp->getAsciiPrefix();
+        prefix = prefix > byte_offset ? std::min(prefix - byte_offset, byte_len) : 0;
+        qore_string_private* cp = new qore_string_private;
+        cp->encoding = pp->getEncoding();
+        cp->adoptCopy(pp->effective_buf() + byte_offset, byte_len, prefix);
+        return new QoreStringNode(cp);
+    }
 
     // Collapse view-of-view: never chain. If parent is itself a view, hop once.
     QoreStringNode* actual_parent = parent;
@@ -249,6 +263,10 @@ QoreStringNode* QoreStringNode::makeView(QoreStringNode* parent, size_t byte_off
     vp->encoding = actual_parent->getEncoding();
     vp->view_parent = actual_parent;
     vp->view_offset = actual_offset;
+    // the view starts with the part of the known ASCII prefix of its parent that it contains (see
+    // qore_string_private::asciiPrefixStorage()); the parent does not change while the view exists
+    size_t parent_prefix = qore_string_private::get(actual_parent)->getAsciiPrefix();
+    vp->allocated = parent_prefix > actual_offset ? std::min(parent_prefix - actual_offset, byte_len) : 0;
 
     actual_parent->ref();
     return new QoreStringNode(vp);
@@ -314,6 +332,7 @@ QoreStringNode* QoreStringNode::substr(qore_offset_t offset, qore_offset_t lengt
     if (priv->compute_substr_range(offset, length, byte_offset, byte_len, xsink)) {
         return nullptr;
     }
+    // (makeView() copies a part that does not reach the end of the string, issue #6239)
     if (byte_len < QORE_VIEW_SUBSTR_THRESHOLD) {
         QoreStringNode* ns = new QoreStringNode(priv->getEncoding());
         ns->concat(priv->effective_buf() + byte_offset, byte_len);

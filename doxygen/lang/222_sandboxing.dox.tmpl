@@ -117,14 +117,25 @@ Program p(opts);
     - <b>No resource limits</b>: Cannot limit the number of threads
     - <b>No interruption</b>: Cannot stop runaway code (infinite loops)
     - <b>No SSRF prevention</b>: Cannot block specific IP ranges
-    - <b>The Program's own code</b>: @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
-      @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" restrict the code parsed in the %Program.  Module code that the
-      %Program calls does not inherit them: a module that the host gave the %Program is a capability that the host
-      granted it, and the network and filesystem access of module code, also on the I/O threads that run it, is
-      governed by the %Program's @ref Qore::SandboxManager "SandboxManager".  To keep a %Program and the modules it
-      was given off the network or the filesystem, give it a @ref Qore::SandboxManager "SandboxManager" with a
-      default deny policy (see @ref sandbox_net_rules and @ref sandbox_fs_policy); the other restrictions of the
-      %Program apply to the module code that it calls (see @ref user_module_runtime_context)
+    - <b>The Program's own code</b>: parse options restrict the code parsed in the %Program.  They are not a run-time
+      boundary for module code: a module that the host gave the %Program, or that another %Program loaded already and
+      the %Program imports, is a capability, and its code runs in the module's %Program with the module's own options
+      (see @ref user_module_runtime_context).  Only a sandboxed %Program (one with a
+      @ref Qore::SandboxManager "SandboxManager", or created by sandboxed code) passes its restrictions on to the
+      module code that it calls, except @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" and
+      @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM": the network and filesystem access of module code, also on the I/O
+      threads that run it, is governed by the @ref Qore::SandboxManager "SandboxManager".  To keep code from reaching
+      functionality through module code, give its %Program a @ref Qore::SandboxManager "SandboxManager" (with a default
+      deny policy to keep it and the modules it was given off the network or the filesystem; see
+      @ref sandbox_net_rules and @ref sandbox_fs_policy), or @ref Qore::PO_NO_MODULES "PO_NO_MODULES" so that it cannot
+      import modules
+    - <b>Code of other Programs</b>: only module code, the code of a %Program with
+      @ref Qore::PO_IN_MODULE "PO_IN_MODULE" (the %Program of a user module), inherits the restrictions of a sandboxed
+      caller.  The code of any other %Program that a sandboxed %Program calls, such as a function imported with
+      @ref Qore::Program::importFunction() "Program::importFunction()" or a method of a class imported with
+      @ref Qore::Program::importClass() "Program::importClass()", runs with the options of the %Program that defined
+      it; only the caller's @ref Qore::SandboxManager "SandboxManager" governs it.  The same holds for code that
+      runs through a @ref Qore::Program "Program" object that the code holds (see @ref sandbox_program_capability)
     - <b>Threads started by module code</b>: @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and the other
       thread parse options are checked when the code of the %Program is parsed, so they do not guarantee that the
       %Program cannot cause concurrent execution; see @ref sandbox_po_threads
@@ -143,17 +154,23 @@ Program p(opts);
     restricted %Program in another thread.  A Program with
     @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" can therefore cause concurrent execution of its code.  A user
     module that the restricted %Program loads first inherits its restrictions and so cannot use
-    @ref background "background" (see @ref module_parse_option_masks); module threads come from modules that the host
-    loaded already or that are loaded with a parse option mask, which the host gives the %Program as capabilities.
+    @ref background "background" (see @ref module_parse_option_masks), unless it declares the \c THREAD_CONTROL domain
+    in its module header and is library code (see the \c domains key in @ref user_module_declarations); module threads
+    come from modules that the host loaded already, from modules loaded with a parse option mask, which the host gives
+    the %Program as capabilities, and from library modules that declare the domain.
 
     What the %Program's restrictions do guarantee when module code is involved:
-    - the restrictions of the %Program apply to the builtins that module code calls for it, as described in
+    - the restrictions of a sandboxed %Program apply to the builtins that module code calls for it, as described in
       @ref user_module_runtime_context; a builtin that runs code asynchronously, such as
       @ref Qore::call_async() "call_async()", @ref Qore::parallel_map() "parallel_map()" or
-      @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a caller that
-      may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
+      @ref Qore::AsyncIoController::addTimer() "AsyncIoController::addTimer()", refuses to run the code of a sandboxed
+      caller that may not control threads (see @ref MODULE_OWNED), but the @ref background "background" operator in module code is
       checked against the module's own parse options only, and module code can always run its own closures, which can
       call the caller's code
+    - the caller's code that module code runs, on the caller's thread or on a thread of the module, keeps the
+      restrictions of its own %Program: they are checked when it is parsed and, for a dynamic call such as
+      @ref Qore::call_function() "call_function()", when the call is made; only the thread it runs on is one that the
+      caller could not have started
     - a thread that module code starts on behalf of a sandboxed caller inherits the caller's
       @ref Qore::SandboxManager "SandboxManager": its filesystem and network policy, its interrupts, its cancellation
       scope and its thread limit apply to the thread as they apply to the caller (see @ref sandbox_resources)
@@ -165,8 +182,17 @@ Program p(opts);
       @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" does not prevent; a pool created by a %Program without a
       sandbox manager is not limited, and runs each task under the sandbox of the code that submitted it
 
-    To bound the threads of restricted code, give its %Program a @ref Qore::SandboxManager "SandboxManager" with a
-    thread limit.  A run-time refusal of the @ref background "background" operator in module code for restricted
+    What they do not guarantee:
+    - the restrictions of a %Program without a @ref Qore::SandboxManager "SandboxManager" (parse options only) are not
+      passed on to module code at run time: module code runs with its own parse options, and the
+      @ref MODULE_OWNED checks do not apply, so module code can run the %Program's closures and call references on
+      its own threads and timers; parse options restrict the code of the %Program itself
+    - a module that module code loads at run time (with @ref Qore::load_module() "load_module()", or a data provider
+      factory or type that is loaded on demand) is loaded with the restrictions of the %Program of the module that
+      loads it, which a module's \c domains declaration relaxes, not with those of the caller
+
+    To contain restricted code that uses modules, and to bound its threads, give its %Program a
+    @ref Qore::SandboxManager "SandboxManager", with a thread limit for the latter.  A run-time refusal of the @ref background "background" operator in module code for restricted
     callers would break the modules that run their callers' code on their own threads, while the sandbox already
     governs those threads.
 
@@ -210,7 +236,10 @@ auto result = p.callFunction("main");
     invoking the reference later also enforces its creation policy, even when trusted code makes the call and
     the method is implemented in a shared module. The nearest calling Program's policy still applies; an access
     must satisfy both it and every active creation policy. Copies, asynchronous callbacks, and bound callbacks
-    preserve this protection. A manager's interrupt and thread limits remain effective as well.
+    preserve this protection. A manager's interrupt and thread limits remain effective as well. A call reference
+    that sandboxed code gets from another Program with @ref Qore::Program::getCallReference() is created under the
+    caller's sandbox in the same way as one that it makes with the <tt>\\</tt> operator (see
+    @ref sandbox_program_capability).
 
     Creation provenance does not track later changes to a shared object. When a tenant configures an existing
     handler, keep its interface Program wrapper or bind its callback while executing in that interface:
@@ -245,6 +274,171 @@ authenticate();
     around direct native implementations. Foreign runtime I/O that does not use Qore's policy checks remains outside
     this mechanism; provenance is execution context, not data taint tracking.
 
+    @subsection sandbox_program_capability Program Objects Are Capabilities
+
+    A @ref Qore::Program "Program" object is a capability: code that holds one can use everything that the
+    %Program can do.  The methods that run the %Program's code or return its callables, such as
+    @ref Qore::Program::callFunction() "Program::callFunction()",
+    @ref Qore::Program::callFunctionArgs() "Program::callFunctionArgs()",
+    @ref Qore::Program::callStaticMethod() "Program::callStaticMethod()",
+    @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()",
+    @ref Qore::Program::run() "Program::run()",
+    @ref Qore::Program::getCallReference() "Program::getCallReference()" and
+    @ref Qore::Program::getExpression() "Program::getExpression()", run code with the freedom of that %Program, not
+    with the freedom of the code that holds the object.
+
+    - <b>Parse options belong to each %Program</b>: they restrict the code that is parsed in that %Program (see
+      @ref sandbox_parse_options).  They are not carried into another %Program that the code calls: the code of
+      the other %Program runs with its own parse options
+    - <b>The runtime sandbox policy follows the caller</b>: the @ref Qore::SandboxManager "SandboxManager" that
+      governs the caller also governs the code that runs for it in the other %Program, and the objects and call
+      references created for the caller keep the caller's sandbox as their provenance, also when trusted code uses
+      them later (see @ref sandbox_provenance)
+    - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
+      @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
+      host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
+      tenant code a controlled operation, import a function that implements only that operation into the tenant's
+      %Program (see @ref Qore::Program::importFunction() "Program::importFunction()") instead
+
+    @since %Qore 3.0
+
+    @subsection sandbox_datasource_options Datasource Options Are Judged by the Code That Sets Them
+
+    A DBI driver applies the options of a datasource when it opens a connection, which can happen long after the
+    options were set, on another thread and for other code: a @ref Qore::SQL::DatasourcePool "DatasourcePool" opens a
+    connection on the thread that first needs one, and code can open a
+    @ref Qore::SQL::Datasource "Datasource" that other code configured.  An option that does something that
+    restricted or sandboxed code must not do, such as the \c classpath option of the \c jdbc driver of the \c jni
+    module, which loads jars into a %Program's class loader, is therefore judged by the code that set it:
+    <b>whoever configures a datasource decides what its options may do</b>.
+
+    The restrictions (the sandbox and the restricting parse options) and the filesystem policy of the code that sets
+    an option are recorded with it by:
+    - @ref Qore::SQL::Datasource::setOption() "Datasource::setOption()", also on an open connection (a value that the
+      driver refuses keeps the previous setter)
+    - the options of a @ref Qore::SQL::Datasource "Datasource" constructor, also in a connection string
+    - a @ref Qore::SQL::DatasourcePool "DatasourcePool": the code that creates the pool is the setter of the options
+      of every connection of the pool, also of a connection that the pool creates later on the thread of other code
+
+    A copy of a datasource or of a pool keeps the setters of the options that it copies; an option's value and its
+    setter are kept together, so a copy made while another thread sets an option pairs each copied value with the code
+    that set it.  A copy of a datasource with an open connection therefore takes the option values as they were set
+    (with \c setOption(), a constructor or a connection string) instead of the values that the driver reports for
+    them, and the values that the driver reports only for the options that were never set: a driver that normalizes
+    the value of an option hands the copy the value as it was set, which it normalizes again when the copy opens its
+    connection.  An option with no stored value that is being set on the open connection at the moment of the copy
+    is not copied, as it has no setter yet, and a stored value of \c NOTHING or \c False is not copied even if the
+    driver reports a value for the option, as such a value counts as not set.  So:
+    - a datasource whose option sandboxed code set is refused the option when trusted code opens it (or a copy that
+      trusted code makes of it)
+    - a trusted pool or datasource keeps its configuration when a connection is opened on a sandboxed caller's
+      thread
+    - a configuration (a connection string, an option hash, serialized data) that trusted code itself turns into a
+      datasource is the trusted code's configuration: check where it came from before using it
+
+    A binary DBI driver reads the setter of an option with \c Datasource::getOptionRestrictions() and
+    \c Datasource::getOptionPolicyManagerRef() in the C++ API (\c _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS); an option
+    with no recorded setter is judged by the code that is running.  The restrictions of the setter are checked first:
+    an option that they refuse (the setter was sandboxed or restricted) is refused whatever the policy is, because
+    the policy manager is missing whenever no sandbox policy governed the setter, also for sandboxed code that runs
+    inside a trusted @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" call.
+    Only an option that the restrictions allow is checked against the setter's policy.
+
+    @subsection sandbox_datasource_connect_choosers A Connection Is Judged by the Code That Chose It
+
+    A DBI driver that must not connect to a destination that sandboxed code chose (such as the \c jdbc driver of the
+    \c jni module, which connects through Java's own network stack) judges a connection by the code that chose it,
+    never by the code that is running when it connects (qore#6142).  A datasource records:
+    - its <b>creators</b>: the code that created it (with a constructor, a connection string or by deserialization);
+      for a copy, the code that copied it and the creators of the original; for a connection of a
+      @ref Qore::SQL::DatasourcePool "DatasourcePool", the creators of the pool (the code that created the pool, and
+      for a copy of a pool also the code that copied it), whatever thread grows the pool
+    - the <b>setter</b> of each connection value: the user name, the password, the database name, the host name and
+      the port; the last setter of a value replaces the previous one.  The encoding is not one of them, as it chooses
+      neither the destination nor the credentials
+    - the setters of the options that the driver names as choosing the destination (see
+      @ref sandbox_datasource_options)
+
+    The setters of the connection values that a connect uses are those of the values that the connection is opened
+    with: a value that is set on an open connection judges the next open (\c open(), \c reset(), a reopen after a lost
+    connection), not a driver's own reconnect with the values in use.  A connection is restricted if any of the code
+    that chose it may not use uncontrolled APIs (see @ref sandbox_uncontrolled_api); for code that a sandbox governs,
+    that is read from the sandbox when the connection is made, so a host that changes
+    @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" later is
+    honored in both directions.  So:
+    - sandboxed code that opens or uses a trusted datasource or pool that it did not change is not restricted by
+      the driver: the connection is the trusted code's choice (a behaviour change of %Qore 3.0 for such drivers,
+      which judged the code that opened the connection before)
+    - a trusted pool that grows for sandboxed code, or on a thread that sandboxed code started, is not restricted
+    - a datasource that sandboxed code created, copied or deserialized, or whose connection value or destination
+      option it set, is restricted, also when trusted code opens it, copies it or reconnects it; trusted code that
+      sets a value again replaces the sandboxed setter of that value, but never a sandboxed creator
+    - trusted code that sandboxed code calls (a library function, a closure) records what a policy check of that
+      code would see, which is the sandboxed caller's policy unless the trusted code establishes a barrier
+      (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
+      @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()")
+    - a datasource or pool that trusted code creates lazily, when a sandboxed caller first needs it, is restricted for
+      its lifetime: create shared objects of this kind at startup, or inside a barrier
+    - a barrier or a capability that builds a datasource from its caller's arguments, or trusted code that
+      deserializes data that sandboxed code produced, records itself as the code that chose the connection: it must
+      validate those arguments (an allowlist of destinations, for example) or not take them from the caller
+
+    A binary DBI driver reads the record with \c Datasource::getConnectChoosers() and
+    \c Datasource::addOptionChooser() in the C++ API (\c _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS).
+
+    @subsection sandbox_module_state Module State
+
+    The public variables of a module and the static members of its classes are shared by every Program that imports
+    the module.  The code of a sandboxed Program, and of a Program with @ref Qore::PO_NO_PROCESS_CONTROL set, can read
+    the public variables and static members of a trusted module but not change them, also through a reference or a
+    closure that it creates; a write raises \c MODULE-VARIABLE-READ-ONLY.  The rule is decided on the Program whose
+    code writes: a function of a trusted Program that sandboxed code calls writes as usual.  The rule protects the
+    variable or static member, not the objects that it refers to, which keep the access control of their classes;
+    hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
+    method that sets it.  See @ref module_public_variables.
+
+    @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
+
+    A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
+    restrictions of the code that calls it (the sandbox of a sandboxed caller still applies).  A module that performs
+    an operation of a functional domain on behalf of its caller, such as opening a database connection from a
+    connection string or a datasource configuration that the caller gives, must therefore check the caller itself,
+    or a caller restricted from that domain uses the module to do what it cannot do directly:
+    - a method or function that is in a domain declares it (<tt>[dom=DATABASE]</tt>, see @ref function_domains); a
+      caller restricted from the domain cannot call it, when its code is parsed or at run time through a call
+      reference, a closure or @ref Qore::call_function() "call_function()", nor through other code of the module or
+      of another module that calls it for the caller, also on a thread that module code starts: a module's function
+      or method that declares a domain checks the calling code when it is entered (\c INVALID-FUNCTION-ACCESS)
+    - module code that the caller reaches through other code and whose decision depends on its arguments, such as the
+      deserialization of an object, asks whether the calling code is restricted with
+      @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"
+      (\c qore_caller_restricts_domain() in the C++ API, \c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) and refuses the
+      operation with \c PERMISSION-DENIED
+
+    The calling code is the code of the nearest %Program on the thread's call stack that is not the %Program of a
+    user module, through any number of calls between modules (on a thread that module code started, where no such
+    %Program is on the stack, the code that called the module when it started the thread): its parse options decide
+    (for example
+    @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions of
+    a sandboxed caller that the module code runs with; a sandbox that does not restrict the domain does not, so a
+    trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs
+    in the %Program that created it, so a closure of restricted code that trusted code calls back is restricted code.
+
+    The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
+    variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
+    @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of
+    @ref SqlUtil::Table "Table" and @ref SqlUtil::Database "Database" that take one are in the \c DATABASE domain and
+    check the caller when other module code calls them, and the deserialization of a table and
+    @ref DbDataProvider::DbDataProviderBase::getDatasource() "DbDataProviderBase::getDatasource()" check the caller,
+    as does a @ref DbDataProvider::DatasourceConnection "DatasourceConnection" when it is created or deserialized, so
+    the code that gives its URL decides; the datasources and connections that the host gives the code, and the names
+    that the host's datasource lookup resolves, are not affected (but code governed by a sandbox that restricts the
+    \c DATABASE domain runs the module code with that restriction, so it cannot open a connection through them
+    either: \c INVALID-FUNCTION-ACCESS).  A module that creates connection objects when they are first looked up
+    must therefore create them in the host's context, or before restricted code can look them up.
+
+    @since %Qore 3.0
+
     @subsection sandbox_module_init Module Initialization
 
     In this section, code that is not trusted is code that a sandbox governs, and code whose parse options restrict a
@@ -272,8 +466,9 @@ authenticate();
     registrations in the module's own registries, threads it starts) belongs to no sandbox, so a later caller that
     uses it is not affected by the sandbox of the code that happened to load the module.  Every later call into the
     module is governed by its caller, as any other call.  The restrictions of the loading %Program's parse options
-    still apply to the module.  The time limits of the loading call still count the time that the initialization
-    takes.
+    still apply to the module.  The limits of the loading call still count the work of the initialization: its wall
+    time and CPU time limits count the time that the initialization takes, and its memory limit the memory that it
+    allocates.
 
     Library code that code that is not trusted loads is not shaped by that code:
     - its source is parsed with the parse defines that the loading %Program's host set (with
@@ -315,6 +510,24 @@ authenticate();
       that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
       a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
       naming the module and its file
+
+    @subsection sandbox_static_modules Statically Linked Modules
+
+    A module compiled by qcc to a <tt>.qo</tt> object and linked into a program is registered by native code (the
+    <tt>qore_</tt><em>name</em><tt>_register()</tt> function that qcc emits for it), not loaded from a file.  It is
+    never library code, whatever path the registration names: its code is linked into the program, not loaded from a
+    directory of library code.  It is checked as a load of the same module by path from outside the directories of
+    library code, for the code that calls the registration:
+    - that is the %Qore code running in the calling thread, also when it registers the module into another %Program
+      (through a native function that it calls); an embedding application that registers a module with no %Qore code
+      running is trusted, unless the target %Program has a @ref Qore::SandboxManager "SandboxManager": the target's
+      code is then the caller;
+    - registered for code that is not trusted, the module cannot have the name of a module in a directory of library
+      code, and a module with a name of its own is given only to code with the same sandbox, as above;
+    - if a module with its name is already loaded, that module is used instead, as for a load of a module that is
+      already loaded;
+    - registered while a library module that code that is not trusted loaded is initialized, the module is governed by
+      the sandbox of that code, as a module that the library module loads by path.
 
     @section sandbox_filesystem Filesystem Security
 
@@ -489,6 +702,15 @@ sm.setFilesystemDefaultPolicy(False);
 sm.setFilesystemDefaultPolicy(True);
     @endcode
 
+    @subsection sandbox_fs_shell Shell Commands
+
+    system(), backquote() and the @ref backquote_operator "backquote operator" run their command with the shell, so
+    the filesystem policy must allow \c /bin/sh to be executed; otherwise they raise \c FILESYSTEM-ACCESS-DENIED.
+    Allowing it allows any command, as the shell runs what it is given:
+    @code{.py}
+sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
+    @endcode
+
     @section sandbox_network Network Security
 
     The network security system controls socket connections and provides SSRF (Server-Side Request Forgery)
@@ -642,6 +864,143 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     |@ref Qore::QSEC_NET_UNIX "QSEC_NET_UNIX"|4|UNIX domain sockets
     |@ref Qore::QSEC_NET_ALL "QSEC_NET_ALL"|7|All protocols
 
+    @section sandbox_external_io I/O That Qore Does Not See: Java Code
+
+    The filesystem and network policies of a sandbox are enforced for the I/O that goes through %Qore: sockets,
+    QUIC, and file and directory operations.  Code that does its own I/O is not subject to them: Java code called
+    through the <a href="https://github.com/qoretechnologies/module-jni">jni</a> module uses the JVM's own network
+    and file APIs (\c java.net, \c java.nio, \c java.io, JDBC drivers and other Java libraries), which %Qore never
+    sees, and the JDK has no in-process replacement for its removed Security Manager (JEP 411, JEP 486).  The same
+    applies to any module that embeds another runtime or a library that opens connections or files itself.
+
+    For this reason, Java classes imported through the \c jni module are tagged with the
+    \c QDOM_UNCONTROLLED_API functional domain, so a Program with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" cannot use them directly.  Sandboxed code can still
+    reach Java code indirectly, for example through a data provider action implemented in Java that connects to a
+    destination taken from a connection, so such Java code must apply the policy itself.  The \c jni module provides
+    the class \c org.qore.jni.QoreSandbox for this; its checks apply the policy of the %Qore code that called into
+    Java:
+    - \c checkNetworkAccess(host, port) resolves the host name once with the %Qore resolver and checks every
+      address it resolves to with the policy of %Qore sockets (see @ref sandbox_net_rules), with the host name, so
+      that allowed host patterns apply; it raises \c NETWORK-ACCESS-DENIED naming a denied address, and returns the
+      checked addresses, which the Java code must connect to instead of resolving the host name again, so that no
+      DNS rebinding can occur between the check and the connection
+    - \c checkFileAccess(path, mode) checks a path with the policy of %Qore file operations (see
+      @ref sandbox_fs_path_resolution) and raises \c FILESYSTEM-ACCESS-DENIED
+    - \c capture() captures the policy for work that Java runs on threads of its own (executors, connection pools,
+      the I/O threads of a library); a check on a Java thread that has no %Qore caller and no captured policy
+      raises \c JNI-SANDBOX-ERROR instead of allowing the operation
+
+    In a system-policy capability (@ref Qore::SandboxManager::createSystemPolicyCall() "createSystemPolicyCall()")
+    the checks apply the system policy, as they do for %Qore sockets and files.  %Qore code that Java calls back on
+    a Java thread runs under the sandbox of the code that handed it to Java (see @ref sandbox_provenance), so the
+    checks it makes through Java use that sandbox.
+
+    The checks constrain only Java code that makes them.  Java code may be offered to sandboxed callers only if it
+    has been audited to check every network destination and every path it uses before using them; the audit rules
+    are in \c design/module-sandboxing-audit-guide.md in the %Qore source and in the "Sandboxing Java I/O" section
+    of the \c jni module documentation.
+
+    A data provider app declares this when it is registered: \c external_io in its
+    @ref DataProvider::DataProviderAppInfo "DataProviderAppInfo" says that it does I/O that the sandbox does not
+    see, and \c sandbox_aware that it has been audited to check all of that I/O against its caller's policy.  A
+    sandboxed caller is refused an app that sets \c external_io without \c sandbox_aware, with an
+    \c APP-SANDBOX-ACCESS-DENIED exception naming the app: the data provider catalog refuses it itself the providers
+    of such an app's actions, and the factories and connections of the module that registers it refuse their I/O
+    (also when trusted code created them, and also as subclasses defined elsewhere), and data provider consumers that
+    serve a sandboxed caller on another thread apply the rule with
+    @ref DataProvider::DataProviderActionCatalog::checkSandboxAccess() "DataProviderActionCatalog::checkSandboxAccess()"
+    or \c AbstractConnection::checkSandboxAccess(); trusted callers are not affected.  A caller counts as sandboxed
+    for this rule when a sandbox that refuses uncontrolled APIs governs it (see @ref sandbox_uncontrolled_api).
+
+    The module commands of the \c jni module follow the same model: a Program's own classpath entries
+    (\c add-classpath, \c add-relative-classpath, and the \c classpath option of the \c jdbc database driver) are
+    checked against its filesystem policy, and the commands that change state of the JVM that every Program shares
+    (\c global-add-classpath, \c global-add-relative-classpath, \c set-property, \c register-shared-class) or that
+    run Java code (\c kotlin-eval) are refused to sandboxed code and in a Program with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", where \c define-class and \c define-pending-class
+    are refused too; a sandboxed Program defines classes only in its own class loader.  A Program that is only restricted with parse options (ex:
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS", @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" or
+    @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM") and has no @ref Qore::SandboxManager "SandboxManager" is not
+    sandboxed for this rule; such a Program cannot use the \c jni module's Java classes itself.
+
+    @subsection sandbox_uncontrolled_api Uncontrolled APIs and Trusted Code That a Sandbox Governs
+
+    Code that a sandbox governs is refused uncontrolled APIs at run time, as code restricted with
+    @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" is: a call of a function, method or class of the
+    uncontrolled-API functional domain (for example a Java class of the \c jni module, a Python object of the
+    \c python module, @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" or
+    the debug hooks) raises \c INVALID-FUNCTION-ACCESS, unless the sandbox allows uncontrolled APIs.  The check is
+    made when the call runs, also for a call resolved when it was parsed, in every execution mode and in code compiled
+    with \c qcc.  The sandbox is resolved as for a filesystem or network policy check: the Programs on the call stack,
+    the provenance of an object or callback created under a sandbox (also when trusted code calls it later), and the
+    sandbox that a thread inherits; a system-policy capability that trusted code created
+    (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") is not governed,
+    and a policy barrier cannot be established by the sandboxed code itself.  Library module code that runs for
+    sandboxed code is refused as well: a module that makes such calls for its callers refuses them itself first with
+    an error of its own (for example the data provider apps that declare
+    @ref DataProvider::DataProviderAppInfo::external_io "external_io").
+
+    A refused call runs no code: the refusal comes once the variant of the call is known and before any of its
+    default arguments is evaluated.  The rule applies to builtin code (implemented in C++, such as the Java and Python
+    classes); the methods of a %Qore class that inherits a builtin class of the domain (a %Qore class that extends a
+    Java class, for example), its destructor included, are %Qore code and run for sandboxed code, while each builtin
+    method that they call, inherited or not, is refused.  The destructor of a builtin class is not refused: it only
+    releases what the object holds, and the object is destroyed in any case, so sandboxed code that deletes such an
+    object, or releases its last reference, does not get an error.  The exemption covers that destructor only: a
+    builtin method that a %Qore destructor calls, also on another object, is judged as any other call and refused.
+    Releasing what the object holds can run foreign code that the object refers to (the \c __del__() method of a
+    %Python object that is released, for example, or a Java finalizer or cleaner): that code runs when the last
+    reference to the foreign object is released, which happens whenever the object is destroyed (also at the end of
+    a scope, or when the %Program is deleted), so refusing the destructor would not prevent it; the code that created
+    the foreign object chose it.  For the authors of binary modules this means that the destructor of a builtin class
+    of the domain runs for code that a sandbox refusing uncontrolled APIs governs: it must only release what the
+    object holds, and must not do I/O or run code for the caller (see the C++ API documentation of binary modules).
+
+    The sandbox introspection and barrier methods
+    @ref Qore::SandboxManager::isGoverned() "SandboxManager::isGoverned()",
+    @ref Qore::SandboxManager::getGoverningPolicies() "SandboxManager::getGoverningPolicies()" and
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" exist for trusted code
+    acting for sandboxed code, so they are judged by the code that calls them, not by the whole call stack: the code of
+    a %Program that is not sandboxed (the host's code, a library module, a closure that such code created) calls them
+    for a sandboxed caller further down the call stack, for an object or callback created under a sandbox, and in a
+    thread that sandboxed code started; @ref Qore::SandboxManager::isGoverned() "isGoverned()" then returns
+    @ref True and @ref Qore::SandboxManager::getGoverningPolicies() "getGoverningPolicies()" lists the caller's
+    sandbox.  The code of a sandboxed %Program (one that has a sandbox, or that sandboxed code created or loaded by a
+    path of its own) is refused them as any uncontrolled API unless every sandbox that governs it allows uncontrolled
+    APIs, so sandboxed code cannot establish a policy barrier of its own.  A closure or a call reference is judged by
+    the %Program that created it, whoever calls it: one that sandboxed code created is refused also when trusted code
+    calls it, and one that trusted code created is allowed also when sandboxed code calls it, as a capability is.
+
+    A host may attach a @ref Qore::SandboxManager "SandboxManager" to code that it trusts, only for its resource
+    limits, interrupts and force-termination, or its I/O policy.  Such code is not sandboxed in the sense of the rules
+    above: it may use uncontrolled APIs (Java, Python, and other code that does I/O %Qore does not see), and the host
+    says so with @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy(True)".
+    The default is to refuse them, so a sandbox fails closed.
+
+    The policy decides whether code counts as restricted for the rules that keep sandboxed code from I/O that %Qore
+    does not control: the @ref DataProvider::DataProviderAppInfo "external_io" apps of the data provider catalog
+    and their factories and connections, and the module checks that use the same query.  It does not lift the rules
+    that keep what code registers process-wide from carrying a sandbox: the data provider catalog's registrations,
+    change listeners and callbacks are refused to code that any sandbox governs
+    (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), because an object or callback created
+    under a sandbox carries it (see @ref sandbox_provenance), so its interrupts and limits would apply to every
+    caller of what was registered.  @ref Qore::SandboxManager::isRestricted() "SandboxManager::isRestricted()" answers it, seeing the
+    sandbox through a policy barrier or a system-policy capability as
+    @ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()" does;
+    @ref Qore::SandboxManager::isUncontrolledApiAllowed() "SandboxManager::isUncontrolledApiAllowed()" answers it as
+    a policy check, honouring them; module code in C++ uses \c qore_sandbox_allows_uncontrolled_apis().  When more
+    than one sandbox governs the code, the uncontrolled APIs are allowed only if every one of them allows them.
+
+    @code{.py}
+# trusted code, governed by a sandbox only so that it can be interrupted
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+sm.setUncontrolledApiPolicy(True);
+pgm.setSandboxManager(sm);
+    @endcode
+
     @section sandbox_resources Resource Limits
 
     A SandboxManager limits the number of threads that sandboxed code runs at once, which prevents it from
@@ -733,6 +1092,13 @@ sm.setMaxStackSize(1024 * 1024);
     @ref Qore::Thread::ThreadPool "ThreadPool" tasks, and asynchronous I/O operations and tasks.  With nested
     sandboxes, the deadline of every enclosing call stays in force in the inner sandbox.
 
+    The work that the call causes in its own thread counts as well, also when it runs code that is not sandboxed: a
+    module that the call loads (its initialization, see @ref sandbox_module_init) and code that it parses, with the
+    initializers of their constants.  Such an initializer runs with the parse options of the code that declares it,
+    not with the restrictions of the call, so that its value does not depend on the code that happens to trigger it,
+    but the time and memory that it takes are charged to the call (to all its limits: wall time, CPU time and memory),
+    so a sandbox cannot obtain work outside its limits by parsing or loading code again and again.
+
     When the deadline passes, every thread of the call raises a \c SANDBOX-TIMEOUT exception (with
     <tt>arg = {"wall_time_limit": </tt><em>ms</em><tt>}</tt>) at its next
     @ref sandbox_interrupt_check_points "check point", and a thread blocked at a check point wakes at once.  The
@@ -763,9 +1129,11 @@ try {
       large list, or a blocking call into a library that is not interruptible, is stopped when it returns, as with
       @ref Qore::SandboxManager::requestInterrupt() "requestInterrupt()".  A database query that a driver can cancel
       when the sandbox is interrupted is not cancelled by a timeout; the timeout is raised when the query returns.
-    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" defers a timeout like any other cancellation, so that
-      cleanup code can finish; do not give sandboxed code the \c THREAD_CONTROL functional domain
-      (@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL") if it must not be able to postpone its timeout.
+    - @ref Qore::defer_thread_cancel() "defer_thread_cancel()" in trusted code defers a timeout like any other
+      cancellation, so that cleanup code can finish; sandboxed code is never deferred, also when it has the
+      \c THREAD_CONTROL functional domain or when trusted code calls it in a cleanup section (see
+      @ref cancel_security).  The destructor of a trusted class, which completes on a cancelled thread, does not defer
+      a timeout or a memory limit; see @ref cancel_destructors.
     - If the resources to track a call's limits cannot be allocated, the call fails with \c SANDBOX-ERROR
       instead of running without them: at its next cancellation point, and, if it has a stack limit, at its next
       call.  The exception names the limits that cannot be enforced, and its \c arg hash has a key for each of them
@@ -911,13 +1279,22 @@ sm.clearInterrupt();
     - <b>Standard I/O</b>: StdoutOutputStream::write(), StderrOutputStream::write()
     - <b>Database operations</b>: Datasource transaction lock acquisition
 
-    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.
+    When interrupted, a \c PROGRAM-INTERRUPTED exception is raised.  The destructors of the sandboxed program's
+    classes do not run while the interrupt is pending, and the destructors of trusted classes (builtin classes and
+    the classes of programs without a sandbox manager) complete before it is raised; see @ref cancel_destructors.
     For external process functions (system(), backquote(), and the backquote operator), a SandboxManager also
     starts the child in a new process group so that requestInterrupt() can terminate the entire process group.
-    Every process in the group is killed with \c SIGKILL when the call is interrupted, including a process that the
-    command was starting at that moment; a process that the command moves to another process group or session is
-    not.  Without a SandboxManager, children remain in the current process group and receive terminal signals (for example,
-    Ctrl-C) along with the parent.
+    When the call is interrupted, every process in the group is sent \c SIGKILL before the call returns, including a
+    process that the command was starting at that moment:
+    - on Linux, the signal sent to the group reaches every process in it;
+    - on macOS, a process being started does not receive a signal sent to its group, so the call kills the group
+      again each time processes in it end, and returns when no process of the command is left, or when none has
+      ended for two seconds: a killed process can be held by an uninterruptible wait (for example, on a network file
+      system that does not respond), and it ends when that wait ends.
+
+    A process that the command moves to another process group or session is not killed.  Without a SandboxManager,
+    children remain in the current process group and receive terminal signals (for example, Ctrl-C) along with the
+    parent.
 
     @subsection sandbox_interrupt_polling Waking Blocked Threads
 
@@ -998,6 +1375,43 @@ hash<auto> fs_config = sm.getFilesystemConfiguration();
 # Get network-specific configuration
 hash<auto> net_config = sm.getNetworkConfiguration();
     @endcode
+
+    @subsection sandbox_restricts Asking Whether a Sandbox Restricts Anything
+
+    A sandbox manager that allows everything and sets no limit restricts nothing, also when it is attached to a
+    %Program.  The following methods answer from the state of the manager (the parse options and functional domains of
+    a %Program are not part of it):
+
+    |!Method|!True if
+    |@ref Qore::SandboxManager::networkRestricts() "networkRestricts()"|the default network policy denies, or there are allowed or denied IP ranges (blockPrivateNetworks() adds denied ranges) or allowed ports; allowed host patterns alone do not count
+    |@ref Qore::SandboxManager::filesystemRestricts() "filesystemRestricts()"|the default filesystem policy denies, or there are allowed or denied paths or a sandbox root
+    |@ref Qore::SandboxManager::limitsRestrict() "limitsRestrict()"|the thread, wall time, CPU time, stack size or memory limit is greater than 0
+    |@ref Qore::SandboxManager::restricts() "restricts()"|any of the above
+    |@ref Qore::SandboxManager::trustsUncontrolledApis() "trustsUncontrolledApis()"|the policy allows uncontrolled APIs (setUncontrolledApiPolicy()); for a combination of sandboxes, every member allows them
+
+    @code{.py}
+SandboxManager sm();
+sm.setFilesystemDefaultPolicy(True);
+sm.setNetworkDefaultPolicy(True);
+assert(!sm.restricts());
+sm.setMaxThreads(4);
+assert(sm.limitsRestrict() && !sm.networkRestricts());
+    @endcode
+
+    Binary modules use the C++ equivalents, QoreSandboxManager::restricts() and its relatives, instead of testing
+    whether a manager is attached or reading <tt>network().getConfiguration()</tt>, which is empty for the combination
+    of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
+    macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
+
+    A module that refuses an operation that only an unrestricted caller may use refuses it if and only if
+    <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager (resolved with
+    QoreSandboxManagerHelper::Policy): a sandbox that restricts nothing, or whose host trusts its code to use
+    uncontrolled APIs, does not make the caller untrusted.  Unlike the other predicates, a combination of sandboxes
+    trusts only if every member does (the AND over the members), because one member that does not trust is enough.
+
+    The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
+    synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a
+    policy and is not reported.
 
     @section sandbox_exceptions Security Exceptions
 

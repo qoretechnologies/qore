@@ -40,7 +40,7 @@ class CMakeGenericIncrementalTest inherits CMakeBuildHelpersTestBase::GenericQcc
         - A, B and A again: B is the body the previous step wrote, changed
     */
     testSingleComponentCompiles() {
-        TmpDir tmp("qore-cmake-qcc-incremental-");
+        TmpDir tmp("qore-cmake-qcc-incremental-", NOTHING, cmakeTmpBase());
         hash<GenericQccProject> project = buildGenericBaseline(tmp.path);
         settleGenericBaseline(project);
 

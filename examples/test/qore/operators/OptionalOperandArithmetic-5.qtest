@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation of arithmetic on operands of an or-nothing type
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%include OptionalOperandArithmetic.qc
+
+%exec-class OptionalOperandArithmeticPart5
+
+#! runs part 5 of 5 of the cases of OptionalOperandArithmeticBase: the qcc executables of compound
+class OptionalOperandArithmeticPart5 inherits OptionalOperandArithmeticBase {
+    constructor() : OptionalOperandArithmeticBase("OptionalOperandArithmeticPart5", 5) {
+    }
+}

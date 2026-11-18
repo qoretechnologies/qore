@@ -40,6 +40,8 @@ module BillwerkRestClient {
         ConnectionSchemeCache::registerScheme("billwerkrest", BillwerkRestConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("billwerkrests", BillwerkRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage BillwerkRestClient Module
@@ -93,6 +95,8 @@ printf("Response body: %Y\n", response.body);
     @section Billwerkrestclientrelnotes Release Notes
 
     @subsection billwerkrestclientv1_2 BillwerkRestClient v1.2
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - added the @ref BillwerkRestClient::BillwerkRestClientIo "BillwerkRestClientIo" class, which makes the
       module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
       @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
@@ -224,9 +228,10 @@ BillwerkRestClient billwerk(
                     throw "BILLWERKRESTCLIENT-ERROR", sprintf("missing required option %y", key);
                 }
                 if (value.typeCode() != NT_STRING) {
+                    # only the type of the value, which can be a credential
                     throw "BILLWERKRESTCLIENT-ERROR",
-                            sprintf("required option %y was passed as a %s (%y); expecting \"string\"",
-                                    key, value.type(), value);
+                            sprintf("required option %y was passed as a %s; expecting \"string\"",
+                                    key, value.type());
                 }
                 self{key} = value;
             }

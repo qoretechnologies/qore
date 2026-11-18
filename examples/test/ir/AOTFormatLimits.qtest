@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - all checks run qcc and the programs it compiles in child processes
+# test-platform: macos - AOT code generation, native executable and module linking and loading with qcc
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class AOTFormatLimitsTest
+
+/*  Limits of the AOT format that qcc must respect instead of writing an artifact that fails at run time (qore#6127);
+    the limits are lowered with environment variables that exist for these tests, as code that reaches the real
+    limits takes too long to compile:
+    - QORE_AOT_TEST_MAX_IR_BLOCKS: the basic blocks of a serialized IR function (u16 block indices); qcc refuses a
+      function with more
+    - QORE_AOT_TEST_MAX_METADATA_SIZE: the size of compressed metadata once decompressed, which the loader refuses
+      above 100 MB; qcc writes bigger metadata uncompressed
+*/
+class AOTFormatLimitsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? (libqore_dir + "/qcc");
+        TmpDir tmp("aot-format-limits-");
+
+        # the size of each string literal of the metadata tests
+        const LiteralSize = 200000;
+        # the lowered metadata limit: less than the metadata of the code with two such literals
+        const MaxMetadataSize = 300000;
+    }
+
+    constructor() : Test("AOTFormatLimits", "1.0", \ARGV) {
+        addTestCase("qcc refuses a function with too many IR blocks", \testIRBlocks());
+        addTestCase("qcc writes executable metadata over the limit uncompressed", \testExecutableMetadata());
+        addTestCase("qcc writes module metadata over the limit uncompressed", \testModuleMetadata());
+        set_return_value(main());
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+
+    private string environment() {
+        return "LD_LIBRARY_PATH=" + shellQuote(libqore_dir) + " DYLD_LIBRARY_PATH=" + shellQuote(libqore_dir)
+            + " QORE_LIBDIR=" + shellQuote(libqore_dir) + " ";
+    }
+
+    private writeFile(string path, string code) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    private hash<ExecModeHarness::ModeRunResult> runCommand(string command) {
+        return ExecModeHarness::run_command(environment() + command);
+    }
+
+    # functions returning distinct string literals of LiteralSize characters
+    private static string literalFunctions(int count, *string prefix) {
+        string chunk = strmul("abcdefghij", LiteralSize / 10);
+        string code;
+        for (int i = 0; i < count; ++i) {
+            code += sprintf("%sstring sub f%d() { return \"%d%s\"; }\n", prefix ?? "", i, i, chunk);
+        }
+        return code;
+    }
+
+    testIRBlocks() {
+        string path = tmp.path + "/blocks.q";
+        string code = "%modern\nint sub f(bool a) {\n    int n = 0;\n";
+        for (int i = 0; i < 50; ++i) {
+            code += "    if (a) ++n;\n";
+        }
+        code += "    return n;\n}\nprintf(\"%d\\n\", f(True));\n";
+        writeFile(path, code);
+        string executable = tmp.path + "/blocks";
+
+        # the function compiles with the real limit
+        hash<ExecModeHarness::ModeRunResult> r = runCommand(shellQuote(qcc_bin) + " -O0 -o " + shellQuote(executable)
+            + " " + shellQuote(path));
+        assertEq(0, r.rc, r.out);
+        r = runCommand(shellQuote(executable) + " -b");
+        assertEq(0, r.rc, r.out);
+        assertEq("50\n", r.stdout);
+        unlink(executable);
+
+        # with a lower limit, qcc refuses it and writes no executable
+        r = runCommand("QORE_AOT_TEST_MAX_IR_BLOCKS=20 " + shellQuote(qcc_bin) + " -O0 -o " + shellQuote(executable)
+            + " " + shellQuote(path));
+        assertNeq(0, r.rc, r.out);
+        assertRegex("AOT cannot compile function 'f\\(bool\\)': its IR has [0-9]+ basic blocks, but the AOT format "
+            "supports at most 20", r.out);
+        assertFalse(is_file(executable));
+    }
+
+    testExecutableMetadata() {
+        string path = tmp.path + "/meta.q";
+        writeFile(path, "%modern\n" + literalFunctions(2) + "printf(\"%d %d\\n\", f0().size(), f1().size());\n");
+        string expected = sprintf("%d %d\n", LiteralSize + 1, LiteralSize + 1);
+        foreach bool lowered in ((False, True)) {
+            string executable = tmp.path + "/meta-" + (lowered ? "lowered" : "default");
+            hash<ExecModeHarness::ModeRunResult> r = runCommand((lowered
+                ? "QORE_AOT_TEST_MAX_METADATA_SIZE=" + MaxMetadataSize + " " : "")
+                + shellQuote(qcc_bin) + " -O0 -o " + shellQuote(executable) + " " + shellQuote(path));
+            assertEq(0, r.rc, r.out);
+            if (lowered) {
+                assertRegex("warning: the AOT metadata is [0-9]+ bytes, more than the " + MaxMetadataSize
+                    + " bytes that the AOT loader can decompress; it is written uncompressed", r.stderr);
+            } else {
+                assertNRegex("written uncompressed", r.out);
+            }
+            r = runCommand(shellQuote(executable) + " -b");
+            assertEq(0, r.rc, r.out);
+            assertEq(expected, r.stdout);
+        }
+    }
+
+    testModuleMetadata() {
+        string mod = tmp.path + "/AOTFormatLimitsMod.qm";
+        writeFile(mod, "%modern\nmodule AOTFormatLimitsMod {\n    version = \"1.0\";\n    desc = \"test\";\n"
+            "    author = \"Qore\";\n    license = \"MIT\";\n}\n" + literalFunctions(2, "public "));
+        string qmod = tmp.path + "/AOTFormatLimitsMod.qmod";
+        hash<ExecModeHarness::ModeRunResult> r = runCommand("QORE_AOT_TEST_MAX_METADATA_SIZE=" + MaxMetadataSize + " "
+            + shellQuote(qcc_bin) + " -O0 -m " + shellQuote(mod) + " -o " + shellQuote(qmod));
+        assertEq(0, r.rc, r.out);
+        assertRegex("written uncompressed", r.stderr);
+        string script = tmp.path + "/run-qmod.qr";
+        writeFile(script, "%modern\n%requires ./AOTFormatLimitsMod.qmod\nprintf(\"%d %d\\n\", f0().size(), "
+            "f1().size());\n");
+        r = runCommand(shellQuote(qore_bin) + " -b " + shellQuote(script));
+        assertEq(0, r.rc, r.out);
+        assertEq(sprintf("%d %d\n", LiteralSize + 1, LiteralSize + 1), r.stdout);
+    }
+}

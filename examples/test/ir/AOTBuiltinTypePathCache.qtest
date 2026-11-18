@@ -1,0 +1,43 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - native AOT type lookup, protected pages and concurrent contexts
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%exec-class AOTBuiltinTypePathCacheTest
+
+class AOTBuiltinTypePathCacheTest inherits QUnit::Test {
+    constructor() : Test("AOT builtin type path cache", "1.0", \ARGV) {
+        addTestCase("reused path addresses and concurrent contexts", \nativeValidation());
+        set_return_value(main());
+    }
+
+    private nativeValidation() {
+        string native = ENV.QORE_AOT_BUILTIN_TYPE_PATH_TEST ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-aot-builtin-type-path-test";
+        if (!is_file(native)) {
+            testSkip("the native AOT builtin type path test executable is not available");
+            return;
+        }
+        string prefix;
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        foreach int disabled in ((0, 1)) {
+            int rc;
+            string output = backquote(prefix + (disabled ? "env QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE=1 " : "env -u QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE ")
+                + shellQuote(native) + " 2>&1", \rc);
+            assertEq(0, rc, output);
+            assertEq("PASS: builtin AOT type paths, address reuse, guarded shorter path and concurrent contexts\n", output);
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

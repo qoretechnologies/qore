@@ -473,6 +473,32 @@ int ParseOptions::toInt() [flags=CONSTANT] {
     return pod->get().getLo();
 }
 
+//! Returns all parse options that give code more freedom instead of restricting it
+/** These are the options that a Program that does not have @ref PO_NO_CHILD_PO_RESTRICTIONS cannot give a child
+    Program or itself, including the extended options (above bit 63, such as \c allow-opaque-references) that the
+    integer constant @ref PO_POSITIVE_OPTIONS cannot hold; code that checks for positive options should use this mask
+
+    @return a new ParseOptions object with all positive parse options
+
+    @par Example:
+    @code{.py}
+# refuse to restore options that would give the Program more freedom
+ParseOptions positive = to_set.mask(ParseOptions::positiveOptions());
+if (!positive.empty()) {
+    throw "PARSE-OPTION-RESTORE-ERROR", sprintf("cannot restore positive parse options %y", positive.toStringList());
+}
+    @endcode
+
+    @see @ref PO_POSITIVE_OPTIONS
+
+    @since %Qore 3.0
+*/
+static ParseOptions ParseOptions::positiveOptions() [flags=CONSTANT] {
+    QoreObject* obj = new QoreObject(QC_PARSEOPTIONS, getProgram());
+    obj->setPrivate(CID_PARSEOPTIONS, new QoreParseOptionsData(QoreParseOptions::POSITIVE_OPTIONS));
+    return obj;
+}
+
 //! Returns @ref True if this object equals another ParseOptions object
 /** @param other the other ParseOptions object to compare
 

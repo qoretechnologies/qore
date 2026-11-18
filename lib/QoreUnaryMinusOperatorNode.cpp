@@ -32,6 +32,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreUnaryMinusOperatorNode::unaryminus_str("unary minus (-) operator expression");
 
@@ -47,7 +48,7 @@ int QoreUnaryMinusOperatorNode::getAsString(QoreString& str, int foff, Exception
 }
 
 QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder v(exp, xsink);
+    QoreOperandEvalHolder v(exp, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -67,7 +68,8 @@ QoreValue QoreUnaryMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
 
         case NT_DATE: {
             needs_deref = true;
-            return v->get<const DateTimeNode>()->unaryMinus();
+            // a component that is the smallest int has no negative that fits: INVALID-DATE (qore#6103)
+            return v->get<const DateTimeNode>()->unaryMinus(xsink);
         }
 
         case NT_CHAR:

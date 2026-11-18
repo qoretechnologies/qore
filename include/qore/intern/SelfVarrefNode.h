@@ -63,6 +63,12 @@ public:
     // returns the string, caller owns the memory
     DLLLOCAL char* takeString();
 
+    //! evaluates the member as an argument of a call: the read is not held by the statement, the argument list holds
+    //! its reference and releases it when the call returns (see VarRefNode::evalCallArg())
+    /** @return the value of the member, referenced for the caller
+    */
+    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+
     //! returns the declared type of the member set when the node was initialized
     DLLLOCAL const QoreTypeInfo* getMemberTypeInfo() const {
         return returnTypeInfo;
@@ -73,6 +79,9 @@ protected:
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
+    //! returns the value of the member, referenced for the caller, without handing it to the statement
+    DLLLOCAL QoreValue evalValue(RuntimeConfig& rc, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 

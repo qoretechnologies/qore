@@ -37,6 +37,9 @@ class RuntimeConfig;
 
 class QoreQuestionMarkOperatorNode : public QoreNOperatorNodeBase<3> {
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue evalCommon(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
+
     static QoreString question_mark_str;
 
     const QoreTypeInfo* typeInfo = nullptr;
@@ -47,6 +50,8 @@ protected:
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
 
 public:
+    DLLLOCAL static QoreQuestionMarkOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+            QoreValue e0, QoreValue e1, QoreValue e2);
     DLLLOCAL QoreQuestionMarkOperatorNode(const QoreProgramLocation* loc, QoreValue e0, QoreValue e1, QoreValue e2)
             : QoreNOperatorNodeBase<3>(loc, e0, e1, e2) {
     }
@@ -59,6 +64,12 @@ public:
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
         qore_string_private::get(str)->concat(&question_mark_str);
         return 0;
+    }
+
+    //! Returns the expression of the given branch: 0 for the condition, 1 if it is true, 2 if it is false
+    DLLLOCAL QoreValue getExpression(unsigned i) const {
+        assert(i < 3);
+        return e[i];
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
@@ -80,7 +91,7 @@ public:
         ValueHolder n_e2(copy_value_and_resolve_lvar_refs(e[2], xsink), xsink);
         if (*xsink)
             return nullptr;
-        return new QoreQuestionMarkOperatorNode(get_runtime_location(), n_e0.release(), n_e1.release(),
+        return create(getSemanticPolicy(), get_runtime_location(), n_e0.release(), n_e1.release(),
             n_e2.release());
     }
 

@@ -26,7 +26,7 @@ class FakeMilvusRest inherits MilvusRestClient::MilvusRestClientIo {
     constructor() : MilvusRestClientIo({"url": "http://localhost:19530", "apikey": "k"}) {
     }
 
-    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         push requests, {"path": path, "body": body};
         hash<auto!> result = {"code": 0};
         if (path == "/entities/query") {

@@ -281,6 +281,12 @@ private:
         if (started && started_pid == pid) {
             return 0;
         }
+        // the thread is not started again once qore_cleanup() has stopped it for good: nothing would stop it then, so
+        // a limit that would need it cannot be enforced (qore#6045)
+        if (qore_thread_start_closed.load(std::memory_order_acquire)) {
+            errno = EAGAIN;
+            return -1;
+        }
         // after fork() the thread does not exist in this process
         started = stopping = false;
         int rc = pthread_create(&native_id, nullptr, entry, this);

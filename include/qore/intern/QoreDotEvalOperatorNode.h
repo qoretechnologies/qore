@@ -34,6 +34,7 @@
 #define _QORE_QOREDOTEVALOPERATORNODE_H
 
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreCallTargetCheckCache.h"
 
 //! Check if a hash member is a call reference or closure
 /** Used by both AST (evalWithBase) and JIT (qore_rt_dot_eval_method_direct)
@@ -45,6 +46,34 @@ static inline const AbstractQoreNode* check_call_ref(const AbstractQoreNode* op,
     return (ref.getType() == NT_FUNCREF || ref.getType() == NT_RUNTIME_CLOSURE) ? ref.getInternalNode() : nullptr;
 }
 
+//! Raises the error of a method call on an object before the arguments are evaluated, as the AST interpreter does
+/** The object has been deleted, or the method is looked up by name (the object's class is neither the parse-time
+    class @a qc nor the class of @a method) and is private or missing (issues #5784, #5824).
+
+    @param cache the cache of the call site, if any: a lookup by name that found a method for the object's class from
+    the current class context is not made again
+
+    @return -1 if the error was raised, 0 if the call can be made
+*/
+DLLLOCAL int qore_check_object_method_call(QoreObject* obj, const char* name, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, ExceptionSink* xsink,
+        const QoreCallTargetCheckCache* cache = nullptr);
+
+//! Raises the exception that a method call raises for its receiver @a base before it evaluates its arguments, if any
+/** As QoreDotEvalOperatorNode::evalWithBase() dispatches the call: an object that has been deleted (also through a
+    weak reference), or a value whose pseudo-class has no method @a name; for a hash whose member @a name is a method
+    call reference, the error of the reference (an object that has been deleted, issue #6225).  The call is given by its method name and by what parse initialization resolved (@a qc,
+    @a method, @a variant, @a pseudo), so that the AOT runtime can make the check from the call's target as well
+    (issue #5784).
+
+    @param cache the cache of the call site, if any (see qore_check_object_method_call())
+
+    @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_method_call_receiver(QoreValue base, const char* name, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant, bool pseudo, ExceptionSink* xsink,
+        const QoreCallTargetCheckCache* cache = nullptr);
+
 class QoreDotEvalOperatorNode : public QoreOperatorNode {
 protected:
     static QoreString name;
@@ -55,6 +84,12 @@ protected:
     const QoreTypeInfo *returnTypeInfo;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalWithBaseCommon(QoreValue base, ExceptionSink* xsink) const;
+
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
@@ -66,6 +101,7 @@ public:
     DLLLOCAL QoreDotEvalOperatorNode(const QoreProgramLocation* loc, QoreValue n_left, MethodCallNode* n_m)
             : QoreOperatorNode(loc), left(n_left), m(n_m), returnTypeInfo(nullptr) {
         //printd(5, "QoreDotEvalOperatorNode::QoreDotEvalOperatorNode() this: %p left: %p m: %p\n", this, &left, m);
+        setDotEvalOperator();
     }
 
     DLLLOCAL ~QoreDotEvalOperatorNode() {
@@ -97,6 +133,13 @@ public:
     DLLLOCAL MethodCallNode* getMethodCall() const {
         return m;
     }
+
+    //! evaluates the call of a method of an object resolved at run time by parameter name with evaluated values
+    /** used by compiled code (IR, JIT, AOT), which evaluates the receiver and the arguments itself
+
+        @param args the receiver followed by the arguments of the call in source order; the list is taken over
+    */
+    DLLLOCAL QoreValue evalRuntimeNamedWithArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL void replaceExpression(QoreValue n_left) {
         left.discard(nullptr);
@@ -136,6 +179,48 @@ public:
         The caller is responsible for managing the lifetime of @a base.
     */
     DLLLOCAL QoreValue evalWithBase(QoreValue base, ExceptionSink* xsink) const;
+
+    //! Raises the exception that evalWithBase() raises for @a base before it evaluates the arguments, if any
+    /** The compiled execution modes evaluate the arguments of a call before they dispatch it; they check the
+        receiver first when the arguments can have side effects, so that a call on an object that has been deleted
+        or on a value without the method evaluates no argument, as in the AST interpreter (issue #5784).
+
+        @return -1 if an exception was raised, 0 if not
+    */
+    DLLLOCAL int checkReceiver(QoreValue base, ExceptionSink* xsink) const;
 };
+
+//! Parse-time choice of invocation entry; ordinary dot calls keep their existing virtual dispatch.
+class LexicalDotEvalOperatorNode : public QoreDotEvalOperatorNode {
+public:
+    using QoreDotEvalOperatorNode::QoreDotEvalOperatorNode;
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(needs_deref, xsink);
+    }
+};
+
+template <typename... Args>
+QoreDotEvalOperatorNode* qore_make_dot_call(LexicalSemanticPolicy policy, Args&&... args) {
+    QoreDotEvalOperatorNode* node = policy.isDefault() ? new QoreDotEvalOperatorNode(std::forward<Args>(args)...)
+        : new LexicalDotEvalOperatorNode(std::forward<Args>(args)...);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+//! Returns the node as a QoreDotEvalOperatorNode if it is one, otherwise nullptr
+/** The same result as dynamic_cast<const QoreDotEvalOperatorNode*>(), from a flag that the QoreDotEvalOperatorNode
+    constructor sets, so that it covers its subclass LexicalDotEvalOperatorNode: a dynamic_cast searches the class
+    hierarchy with string comparisons of the type names, which is too slow for the per-call paths of compiled code.
+    Every node with NT_OPERATOR is a QoreOperatorNode.
+*/
+DLLLOCAL inline const QoreDotEvalOperatorNode* qore_get_dot_eval_operator_node(const AbstractQoreNode* n) {
+    const QoreDotEvalOperatorNode* rv = (n && n->getType() == NT_OPERATOR
+            && static_cast<const QoreOperatorNode*>(n)->isDotEvalOperator())
+        ? static_cast<const QoreDotEvalOperatorNode*>(n)
+        : nullptr;
+    assert(rv == dynamic_cast<const QoreDotEvalOperatorNode*>(n));
+    return rv;
+}
 
 #endif

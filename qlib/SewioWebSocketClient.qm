@@ -38,7 +38,7 @@
 %requires json
 
 module SewioWebSocketClient {
-    version = "1.2";
+    version = "1.3";
     desc = "user module for providing client support for the WebSocket protocol for Sewio.net RTLS Studio servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -47,6 +47,8 @@ module SewioWebSocketClient {
         ConnectionSchemeCache::registerScheme("sewiows", SewioWebSocketConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("sewiowss", SewioWebSocketConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage SewioWebSocketClient Module
@@ -88,6 +90,10 @@ c.waitForZero();
     @endcode
 
     @section sewiowebsocketclient_relnotes SewioWebSocketClient Module Release History
+
+    @subsection swsc_v1_3 v1.3
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
 
     @subsection swsc_v1_2 v1.2
     - implemented support for a data provider scheme cache and rich option information for connections
@@ -173,7 +179,7 @@ SewioWebSocketClient ws(\event(), ("url": "ws://example.com:8080/path"));
             if (!exists v || v == "")
                 throw "SEWIOWEBSOCKETCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
             if (v.typeCode() != NT_STRING)
-                throw "SEWIOWEBSOCKETCLIENT-ERROR", sprintf("required option %y was passed as a %s (%y); expecting \"string\"", key, v.type(), v);
+                throw "SEWIOWEBSOCKETCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting \"string\"", key, v.type());
 
             self{key} = v;
         }

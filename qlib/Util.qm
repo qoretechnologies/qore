@@ -108,6 +108,9 @@ module Util {
 
 
     @section util_3_0 Util 3.0
+    - @ref Util::string_ends_with() "string_ends_with()" finds a suffix that ends with a multi-byte character in
+      UTF-8 and other multi-byte encodings (ex: <tt>string_ends_with("café", "é")</tt> is @ref True "True"; it was
+      @ref False "False") (issue #6246)
     - @ref Util::get_random_string() "get_random_string()" makes the characters from
       @ref Qore::get_random_bytes() instead of reading \c /dev/urandom, so it no longer raises
       \c FILESYSTEM-ACCESS-DENIED in a program that is not allowed to access the filesystem, such as a sandboxed
@@ -1643,6 +1646,13 @@ int port = get_free_port();
     - Do not try to close that window by keeping the socket bound without listening on it: a connect to a
       bound-but-not-listening socket is not refused promptly on all platforms (Darwin in particular), so
       negative connection tests written that way fail there.
+    - The port is free for TCP only: TCP and UDP ports are separate, so the same port number can be in use by a UDP
+      socket, and the function cannot be used for a UDP port, such as the port of an HTTP/3 (QUIC) server or a port
+      where an HTTP/3 connection fails.  For a server, bind UDP port \c 0 and read the port back (ex:
+      \c HttpServer::addQuicListener() with port \c 0 returns the bound port in its \c port key).  For a port where
+      a connection fails, hold the port with a UDP socket connected to another local socket while it is used: a
+      connected UDP socket receives only its peer's datagrams, so the system refuses the client's, whereas a bound
+      socket that is not connected receives them and the client waits for its timeout.
     - Requires network access; this function cannot be called in a @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK"
       @ref Qore::Program "Program".
 

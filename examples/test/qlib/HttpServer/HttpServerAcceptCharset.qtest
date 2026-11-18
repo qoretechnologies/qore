@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS and HTTP/3 (QUIC) connections, and iconv encodings
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires ../../TestCertificates.qm
+
+%exec-class HttpServerAcceptCharsetTest
+
+#! records the response encoding of a request and answers with text, which the server sends in that encoding
+class AcceptCharsetHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the values seen for the last request
+        hash<auto> seen;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        seen = {
+            "accept-charset": cx."header-info"."accept-charset",
+            "response-encoding": cx."response-encoding",
+        };
+        return makeResponse(200, HttpServerAcceptCharsetTest::Text, {"Content-Type": MimeTypeText});
+    }
+}
+
+#! An HTTP server chooses the response encoding from Accept-Charset as RFC 9110 defines it (qore#6343)
+/** The value is a comma-separated list of charsets or \c "*" with optional weights (<tt>;q=</tt>) and optional
+    whitespace (RFC 9110 sections 12.5.2, 12.4.2 and 5.6.1): UTF-8 or \c "*" was recognized only at the start of an
+    element directly after a comma, weights were ignored (\c "utf-8;q=0" gave UTF-8), and otherwise the first element
+    was taken, whatever its weight and even if Qore does not support it.
+*/
+class HttpServerAcceptCharsetTest inherits QUnit::Test {
+    public {
+        #! the text of the responses, which ISO-8859-2 can encode
+        const Text = "Řeřicha žluťoučká";
+
+        #! the Accept-Charset values and the response encodings that they give
+        const Cases = (
+            # whitespace after a comma is skipped: UTF-8 is listed with the same weight as ISO-8859-2
+            ("iso-8859-2, utf-8", "utf8"),
+            ("iso-8859-2,utf-8", "utf8"),
+            ("iso-8859-2 ,\tutf-8", "utf8"),
+            # the highest weight wins
+            ("iso-8859-2;q=0.1, utf-8;q=0.9", "utf8"),
+            ("iso-8859-2;q=0.9, utf-8;q=0.5", "iso-8859-2"),
+            ("utf-8;q=0.5, iso-8859-2", "iso-8859-2"),
+            ("iso-8859-1;q=0.2, iso-8859-2;q=0.8, windows-1250;q=0.5", "iso-8859-2"),
+            # whitespace around the parameters; the parameter name and the charset are case-insensitive
+            ("UTF-8 ; q=0.4, ISO-8859-2 ;Q=0.6", "ISO-8859-2"),
+            ("Utf8;q=0.7, iso-8859-2;q=0.6", "utf8"),
+            # q=0 means not acceptable
+            ("utf-8;q=0, iso-8859-2", "iso-8859-2"),
+            ("iso-8859-2;q=0, utf-8;q=0.001", "utf8"),
+            # nothing acceptable: UTF-8 is kept
+            ("utf-8;q=0", "utf8"),
+            ("iso-8859-2;q=0.000", "utf8"),
+            # "*" is any charset: UTF-8, unless UTF-8 is listed
+            ("*", "utf8"),
+            ("iso-8859-2;q=0.5, *", "utf8"),
+            ("iso-8859-2, *;q=0.5", "iso-8859-2"),
+            ("utf-8;q=0, *, iso-8859-2;q=0.5", "iso-8859-2"),
+            # a charset that Qore does not know is skipped, also one that iconv accepts with characters that it
+            # ignores; an alias is known
+            ("x-no-such-charset, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("x-no-such-charset", "utf8"),
+            ("iso-8859-2!, utf-8;q=0.5", "utf8"),
+            ("iso-8859-2~~, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("utf-8!", "utf8"),
+            ("ISO8859-2, utf-8;q=0.5", "ISO8859-2"),
+            # an alias that iconv does not take: the encoding is converted to by its own name
+            ("LATIN-2, utf-8;q=0.5", "LATIN-2"),
+            # of charsets with the same weight, the first one
+            (" windows-1250 , iso-8859-2", "windows-1250"),
+            # empty elements are ignored, and an element with an invalid weight or another error
+            (",, iso-8859-2 ,,", "iso-8859-2"),
+            ("utf-8;q=2, iso-8859-2", "iso-8859-2"),
+            ("utf-8;q=0.1234, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("utf-8;q=x, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("utf-8 x, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("*;q=0", "utf8"),
+            ("utf-8;q=0, *", "utf8"),
+            # the forms of a weight
+            ("utf-8;q=1.000, iso-8859-2", "utf8"),
+            ("utf-8;q=1.0001, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("utf-8;q=1.001, iso-8859-2;q=0.5", "iso-8859-2"),
+            ("utf-8;q=0., iso-8859-2;q=0.5", "iso-8859-2"),
+            ("utf-8;q=\"0.5\", iso-8859-2;q=0.1", "iso-8859-2"),
+            ("utf-8;q =0.5, iso-8859-2;q=0.1", "iso-8859-2"),
+            ("utf-8;q, iso-8859-2;q=0.1", "iso-8859-2"),
+            ("utf-8;q=, iso-8859-2;q=0.1", "iso-8859-2"),
+            # a trailing ";" is allowed
+            ("iso-8859-2;, utf-8;q=0.5", "iso-8859-2"),
+            ("iso-8859-2;", "iso-8859-2"),
+            # a charset must be a token: iconv takes a suffix after a name, which is not a charset
+            ("iso-8859-2//x, utf-8;q=0.5", "utf8"),
+            ("iso-8859-2//x", "utf8"),
+            ("utf-8//IGNORE;q=0.9, iso-8859-2;q=0.5", "iso-8859-2"),
+            # other parameters are ignored, with a token or quoted-string value; a comma in a quoted string does not
+            # end the element
+            ("iso-8859-2;level=1;q=0.9, utf-8;q=0.5", "iso-8859-2"),
+            ("iso-8859-2;x=\"a,b\";q=0.9, utf-8;q=0.5", "iso-8859-2"),
+            # an invalid element ends at a comma outside a quoted string only
+            ("x-bad;q=9;p=\"y, iso-8859-2, z\", utf-8;q=0.5", "utf8"),
+            ("iso-8859-2;x=\"a\\\"b\";q=0.9, utf-8;q=0.5", "iso-8859-2"),
+            ("iso-8859-2;x=\"a, utf-8", "utf8"),
+            # empty or no value
+            ("", "utf8"),
+            (" ", "utf8"),
+            (NOTHING, "utf8"),
+        );
+
+        #! the Accept-Charset values sent to the servers
+        const ServerCases = (
+            ("iso-8859-2, utf-8", "utf8"),
+            ("iso-8859-2;q=0.1, utf-8;q=0.9", "utf8"),
+            ("utf-8;q=0, iso-8859-2", "iso-8859-2"),
+            ("utf-8;q=0", "utf8"),
+            ("x-no-such-charset, ISO-8859-2;Q=0.5", "ISO-8859-2"),
+            (NOTHING, "utf8"),
+            # a repeated header: the lines are one list (RFC 9110 section 5.3; qore#6445); the last line alone
+            # gives utf8
+            (("iso-8859-2;q=0.5", "utf-8;q=0.1"), "iso-8859-2"),
+        );
+    }
+
+    constructor() : Test("HttpServer Accept-Charset test", "1.0") {
+        addTestCase("get_http_accept_charset()", \ruleTest());
+        addTestCase("HTTP/1.1", \http1Test());
+        addTestCase("HTTP/2", \http2Test());
+        addTestCase("HTTP/3", \http3Test());
+        set_return_value(main());
+    }
+
+    ruleTest() {
+        foreach list<auto> c in (Cases) {
+            assertEq(c[1], get_http_accept_charset(c[0]), sprintf("Accept-Charset: %y", c[0]));
+        }
+    }
+
+    http1Test() {
+        AcceptCharsetHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ac", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        checkRequests(new HTTPClient({"url": sprintf("http://127.0.0.1:%d", port)}), handler, "HTTP/1.1");
+        # the header information of Socket::readHTTPHeader() on the server side
+        Socket listener();
+        on_exit listener.close();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        int sport = listener.getSocketInfo().port;
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", sport));
+        on_exit client.close();
+        Socket conn = listener.accept();
+        on_exit conn.close();
+        client.send("GET / HTTP/1.1\r\nHost: x\r\nAccept-Charset: utf-8;q=0 , iso-8859-2;q=0.3\r\n\r\n");
+        hash<auto> info;
+        conn.readHTTPHeader(5s, \info);
+        assertEq("iso-8859-2", info."accept-charset", "Socket::readHTTPHeader()");
+        # repeated lines are one list: a later line that selects nothing does not reset the result, and a later line
+        # does not replace an earlier one with a higher weight (qore#6445)
+        list<list<auto>> repeated = (
+            (("iso-8859-2", "x-no-such-charset"), "iso-8859-2"),
+            (("utf-8", "iso-8859-2"), "utf8"),
+            (("iso-8859-2", "windows-1250;q=0.5"), "iso-8859-2"),
+            (("utf-8;q=0", "iso-8859-2;q=0.3", "windows-1250;q=0.2"), "iso-8859-2"),
+        );
+        foreach list<auto> c in (repeated) {
+            client.send("GET / HTTP/1.1\r\nHost: x\r\n" + (foldl $1 + $2, (map "Accept-Charset: " + $1 + "\r\n",
+                c[0])) + "\r\n");
+            remove info;
+            hash<auto> hdr = conn.readHTTPHeader(5s, \info);
+            assertEq(c[1], info."accept-charset", sprintf("Socket::readHTTPHeader(): lines %y", c[0]));
+            # the header itself keeps the values of the lines
+            assertEq(c[0], hdr."accept-charset", sprintf("Socket::readHTTPHeader(): header of lines %y", c[0]));
+        }
+    }
+
+    http2Test() {
+        AcceptCharsetHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ac", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            "http_version": "2.0",
+            "enable_h3": False,
+        }).port;
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "http_version": "2.0"});
+        hc.connect();
+        assertEq("HTTP/2", hc.getHttpVersion(), "HTTP/2 is negotiated");
+        checkRequests(hc, handler, "HTTP/2");
+    }
+
+    http3Test() {
+        AcceptCharsetHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("ac", handler);
+        server.waitForAsyncIo();
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "cert": new SSLCertificate(TestCertificates::CertPem),
+                "key": new SSLPrivateKey(TestCertificates::KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+        HTTPClient hc({"url": sprintf("https://127.0.0.1:%d", port), "ssl_verify_cert": False,
+            "http_version": "3"});
+        hc.connect();
+        if (hc.getHttpVersion() != "HTTP/3") {
+            testSkip(sprintf("HTTP/3 not negotiated (got %y)", hc.getHttpVersion()));
+        }
+        checkRequests(hc, handler, "HTTP/3");
+    }
+
+    #! sends each request and checks the response encoding that the handler saw and the response
+    private checkRequests(HTTPClient hc, AcceptCharsetHandler handler, string proto) {
+        foreach list<auto> c in (ServerCases) {
+            hash<auto> hdr = exists c[0] ? {"Accept-Charset": c[0]} : {};
+            hash<auto> rv = hc.send(NOTHING, "GET", "/ac", hdr, True);
+            string what = sprintf("%s Accept-Charset %y", proto, c[0]);
+            assertEq(200, rv.status_code, what + ": the request succeeded");
+            assertEq({"accept-charset": c[1], "response-encoding": c[1]}, handler.seen,
+                what + ": the response encoding");
+            # the response is sent in the response encoding, and labeled with it
+            string charset = c[1] == "utf8" ? "UTF-8" : c[1].upr();
+            assertEq(charset, get_http_content_type_info(rv."_qore_orig_content_type" ?? "").charset.upr(),
+                what + ": the charset of the response");
+            assertEq(Text, convert_encoding(rv.body, "UTF-8"), what + ": the response text");
+        }
+    }
+}

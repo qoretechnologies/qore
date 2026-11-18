@@ -185,7 +185,9 @@ switch (val) {
 
     @par Description
     The first \a expression is evaluated and then compared to the value of each \a case_expression in declaration order until one of the \a case_expressions matches or is evaluated to @ref True "True". In this case all code up to a @ref break "break statement" is executed, at which time execution flow exits the <tt><b>switch</b></tt> statement.\n\n
-    Unless relational operators are used, the comparisons are "hard" comparisons; no type conversions are done, so in order for a match to be made, both the value and types of the expressions must match exactly. When relational operators are used, the operators are executed exactly as they are in the rest of %Qore, so type conversions may be performed if nesessary.  The exceptions are string/string comparisons, which use a soft comparison so strings do not fail to match only because their encodings are different, and char/string comparisons, where a @ref char value matches a string containing the same single codepoint.\n\n
+    Unless an operator is used, the comparisons are "hard" comparisons; no type conversions are done, so in order for a match to be made, both the value and types of the expressions must match exactly.  The exceptions are string/string comparisons, which use a soft comparison so strings do not fail to match only because their encodings are different, and char/string comparisons, where a @ref char value matches a string containing the same single codepoint.\n\n
+    @anchor switch_case_operators
+    A case with an operator (<tt>case</tt> <em>OP</em> <em>x</em><tt>:</tt>, see @ref case_expressions "below") matches when <tt>value</tt> <em>OP</em> <tt>x</tt> is @ref True "True" as the condition of an @ref if "if statement", where \a value is the value of the switch expression: the operator is executed exactly as it is in the rest of %Qore, with the types of the switch expression and the case value, so type conversions may be performed if necessary, and a @ref buffer "buffer" compared elementwise gives a buffer, which matches when it is not empty.  This is the same in every @ref exec_mode_overview "execution mode".\n\n
     To use soft comparisons, you must explicitly specify the soft equals operator as follows:\n
     @code{.py}
 switch (1) {
@@ -303,6 +305,16 @@ Skips the rest of a loop and jumps right to the evaluation of the iteration expr
     A single variable can be specified in the catch block to be instantiated with the exception hash, giving information about the exception that has occurred. For detailed information about the exception hash, see @ref exception_handling .\n\n
     If no variable is given in the <tt><b>catch</b></tt> declaration, it will not be possible to access any information about the exception in the <b><tt>catch</tt></b> block. However, the @ref rethrow "rethrow statement" can be used to rethrow exceptions at any time in a <tt><b>catch</b></tt> block.
 
+    @anchor try_return
+    @par Return Statements in try and catch Blocks
+    A @ref return "return statement" in the <tt><b>try</b></tt> or <tt><b>catch</b></tt> block gives its value to the
+    block that contains the <tt><b>try</b></tt> statement when the statement ends, after the locals and the handlers of
+    the blocks inside it: in the code of an @ref on_exit "on_exit", @ref on_success "on_success" or
+    @ref on_error "on_error" statement, it replaces the value of the return that left the handler's block, which is
+    released then (see @ref on_exit_return).  A return that an exception interrupts (a value that the declared return
+    type rejects, or an exception raised after the return in a handler of a block inside the
+    <tt><b>try</b></tt> block) gives no value.
+
     <hr>
     @section rethrow rethrow Statements
 
@@ -341,7 +353,10 @@ Skips the rest of a loop and jumps right to the evaluation of the iteration expr
     <tt><b>catch</b></tt> block is not run, and an exception raised while the thread exits (for example by an
     @ref on_exit "on_exit" handler) is discarded by the first <tt><b>try</b></tt> block it reaches.  Each block that
     the thread leaves runs its @ref on_exit "on_exit" and @ref on_success "on_success" handlers, and its
-    @ref on_error "on_error" handlers only for an exception raised while the thread exits.
+    @ref on_error "on_error" handlers only for an exception raised while the thread exits.  A
+    @ref rethrow "rethrow" in an @ref on_error "on_error" handler replaces only the exception: a pending
+    <tt><b>thread_exit</b></tt> (executed by the block, by another of its handlers or by a block that the exception
+    left) stays pending, and the thread exits after the handlers as without the <tt><b>rethrow</b></tt>.
 
     <hr>
     @section context context Statements
@@ -503,6 +518,68 @@ string sub getName() {
 }
 string name = getName();@endcode
 
+    @anchor missing_return
+    @par Missing Return Statements
+    The code of a function, method or closure whose declared return type does not accept @ref nothing "NOTHING" is
+    refused with a \c MISSING-RETURN parse error when its end can be reached without a \c return statement, where
+    every condition that is not a constant is assumed to go both ways (as in the definite return analysis of other
+    languages), while a call whose code is not known when the code is parsed makes the end uncertain, which is not an
+    error (see below).  The end is reached when the last statement can complete; the check follows these rules:
+    - a condition (of an @ref if "if" statement, a loop or the @ref conditional_operator "?:" operator) is assumed to
+      be able to be true and false, unless it is a constant boolean or integer, even when other code makes one of its
+      values impossible (ex: <tt>if (b) { return 1; } if (!b) { return 2; }</tt> is refused): the end of
+      <tt>if (i) { return 1; }</tt> is reachable, while a <tt>while (True)</tt> or <tt>for (;;)</tt> loop without a
+      @ref break "break" statement does not complete; the value of another constant (such as a string) depends on
+      the boolean semantics in effect, so either branch may be the one that runs
+    - a @ref switch "switch" statement over a constant value runs the case that the value matches; one over another
+      value without a \c default case is assumed to be able to match no case, unless its cases are not all values or
+      its expression is of an @ref enums "enum" type, \c bool, or a type that is not declared
+    - a @ref throw "throw", @ref rethrow "rethrow", @ref thread_exit "thread_exit" or \c return statement does not
+      complete; nor does a block whose @ref on_exit "on_exit" or @ref on_success "on_success" code does not complete
+    - a @ref try "catch" block is taken to be reached when the \c try block contains a \c throw or \c rethrow
+      statement that can run, or calls user code that can raise an exception; an exception raised by other
+      calls, by an \@assert statement (which @ref enable-debug "%enable-debug" enables) or by an operator is
+      possible but not certain, and when an \c on_exit or @ref on_error "on_error" handler of the block that raises
+      it ends the thread or the process instead, the exception is not taken to leave the block
+    - a call completes if the code that it calls can return: the code of a user function, of a static method, or of a
+      method that the call names with its class (<tt>Base::m()</tt>) or of a @ref final_classes "final" class, in
+      the same %Program, can return if one of its paths reaches a \c return statement or the end of the code; a
+      builtin function returns, except @ref Qore::exit() "exit()", @ref Qore::abort() "abort()" and
+      @ref Qore::exec() "exec()", which do not
+
+    A call whose code is not known when the code is parsed (a call of a @ref closure "closure" or a
+    @ref call_reference "call reference", of a method that a subclass can override, or of a function of another
+    %Program or of a module), a recursive call, a constructor of a user class, a builtin that can run user code (a
+    builtin method, which can call the methods of its object that a user class overrides; the \c call_*() functions
+    such as @ref Qore::call_function() "call_function()", @ref Qore::load_module() "load_module()" and the functions
+    that run the cleanup code of thread resources; a builtin given an argument that can be a closure, a call
+    reference or an object; a pseudo-method of a value that can be an object, a hash or code), the creation of a
+    value of a @ref hashdecl "hashdecl", the @ref delete "delete" operator, the member of an object (which can be
+    read by its \c memberGate() method) and the iteration of an object (which calls its \c next() method) may or may
+    not complete; code whose end can only be reached through such a construct is accepted.  A destructor that runs
+    when the last reference to an object is released is not taken into account.
+
+    @par Example
+    @code{.py}
+# MISSING-RETURN: the end is reached when i is 0
+int sub get(int i) {
+    if (i) {
+        return i;
+    }
+}
+
+sub error(string err) {
+    throw err, "invalid value";
+}
+
+# accepted: error() never returns
+int sub check(int i) {
+    if (i > 0) {
+        return i;
+    }
+    error("INVALID-VALUE");
+}@endcode
+
     @anchor return_interrupted_by_exception
     @par Return Interrupted by an Exception
     When an exception interrupts a return, such as an error raised for a value that the declared return type rejects
@@ -537,8 +614,23 @@ string name = getName();@endcode
     requires the cleanup.\n\n
     Note that if this statement is reached when executing in a loop, the <tt><b>on_exit</b></tt> code will be executed
     for each iteration of the loop.\n\n
+    @anchor on_block_exit_in_block
+    An <tt><b>on_exit</b></tt>, <tt><b>on_success</b></tt> or <tt><b>on_error</b></tt> statement must be a statement of
+    a block in braces, as it runs when that block ends: it cannot be the body of another statement without braces
+    (an @ref if "if" or \c else, a loop, a \c try or \c catch, a \c context, \c subcontext or \c summarize
+    statement, or another \c on_exit, \c on_success or \c on_error statement), whose scope would be unclear; <tt>if (x) on_success f();</tt> is a parse error, and
+    <tt>if (x) { on_success f(); }</tt> runs \c f() when the \c if block ends.  Inside braces, it can be nested
+    (<tt>on_exit { on_success f(); }</tt>).\n\n
     By using this statement, programmers ensure that necessary cleanup will be performed regardless of the exit status
     of the block (exception, @ref return "return", etc).
+
+    @anchor on_exit_return
+    @par Return Statements in Handlers
+    The code of <tt><b>on_exit</b></tt>, <tt><b>on_success</b></tt> and <tt><b>on_error</b></tt> statements runs with
+    the return value of the block: a @ref return "return statement" in it replaces the value of a return that left
+    the block, which is released at the end of the return statement, and a return without a value replaces it with no
+    value; a handler that runs later can replace it again.  A return in a @ref try "try statement" in the handler
+    replaces it when the try statement ends (see @ref try_return).
 
     @par Example
 @code{.py}
@@ -580,7 +672,8 @@ string name = getName();@endcode
     similar to <tt><b>on_success</b></tt> statements, except <tt><b>on_error</b></tt> statements are only executed
     when there is an active exception when the block is exited.\n\n
     Note that if this statement is reached when executing in a loop, the <tt><b>on_success</b></tt> code will be
-    executed for each iteration of the loop (as long as there is no active exception).
+    executed for each iteration of the loop (as long as there is no active exception).\n\n
+    See @ref on_block_exit_in_block "on_exit statements" for where it can be used.\n
 
     @par Example
 @code{.py}
@@ -628,7 +721,8 @@ string name = getName();@endcode
     @ref rethrow "rethrow statements" are allowed in \c on_error statements, allowing for exception enrichment.
     Note that the code in this statement can only be executed once in any block, as a block (even a block within a
     loop) can only exit the loop once with an active exception (in contrast to @ref on_success "on_success" and
-    @ref on_exit "on_exit statements", which are executed for every iteration of a loop).
+    @ref on_exit "on_exit statements", which are executed for every iteration of a loop).\n\n
+    See @ref on_block_exit_in_block "on_exit statements" for where it can be used.\n
 
     @par Example
 @code{.py}{

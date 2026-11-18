@@ -7,8 +7,34 @@
     Binary modules are shared libraries (<tt>.so</tt> / <tt>.dylib</tt> / <tt>.dll</tt>) that extend the %Qore language with new classes,
     functions, constants, and namespaces.
 
-    Since %Qore 3.0, binary modules use Module API 2.0, which requires a single
+    Since %Qore 3.0, binary modules use Module API 2.3, which requires a single
     \c extern \c "C" module description function instead of the old-style exported global variables.
+
+    @subsection module_api_version Module API Version
+
+    A binary module carries the inline code and the type layouts of the %Qore headers that it was compiled with, so
+    %Qore loads only a module built for the module API that it implements (@ref QORE_MODULE_API_MAJOR and
+    @ref QORE_MODULE_API_MINOR, which the module sets in its description function).  A module file is named
+    <tt>{name}-api-{major}.{minor}.qmod</tt> after the module API of the headers that it was built with, and a module
+    built with the headers of another module API must be rebuilt:
+    - looked up by its feature name (\c %%requires, @ref Qore::load_module() "load_module()"), only the files of the
+      supported module API are considered, so the module is not found; the \c LOAD-MODULE-ERROR exception names each
+      file of the feature built for another module API that is in the module path:
+      <tt>...; found '/usr/lib/qore-modules/xml-api-2.2.qmod' built for module API 2.2: rebuild it for module API
+      2.3</tt>
+    - loaded by its path, it is refused with a \c LOAD-MODULE-ERROR exception that reports the API mismatch
+
+    Module API 2.1 covers all public ABI changes made during %Qore 3.0 development after module API 2.0 was introduced
+    (enum value ownership, new virtual methods in the I/O, iterator and polling classes, the representation of
+    @ref QoreValue, program IDs, among others); a module built with the 2.0 headers is refused.  Module API 2.2 adds
+    the source-compatible callback invocation slots for lexical semantics in ResolvedCallReferenceNode; a module built
+    with the 2.1 headers is refused.  Module API 2.3 adds QoreModuleInfo::cmd_caller_aware and
+    QoreModuleCommandContext, through which a module command handler judges the code that issues a command (see the
+    parse command handler below); a module built with the 2.2 headers is refused.
+
+    @note Any change to inline code, or to an exported or inline-visible type or function, in the public headers
+    (<tt>include/qore</tt>, outside <tt>include/qore/intern</tt>) that a module compiled with the previous headers would
+    get wrong increments @ref QORE_MODULE_API_MINOR (or @ref QORE_MODULE_API_MAJOR for an incompatible redesign).
 
     @subsection module_header Module Description Function
 
@@ -31,6 +57,7 @@
         mod_info.init = mymodule_module_init;
         mod_info.ns_init = mymodule_module_ns_init;
         mod_info.del = mymodule_module_delete;
+        mod_info.ns = &MyModuleNS;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
     }
@@ -47,10 +74,14 @@
     - \c ns_init — the namespace initialization callback (@ref qore_module_ns_init_t)
     - \c del — the module cleanup/destructor callback (@ref qore_module_delete_t)
     - \c parse_cmd — optional parse command handler (@ref qore_module_parse_cmd_t); set to \c nullptr if not used
+    - \c cmd_caller_aware — set to \c true if the parse command handler honors the restrictions of the code that issues
+      a command (QoreModuleCommandContext); a module that does not set it is not given commands from restricted code
     - \c license — the license type (default: @ref QL_MIT); set to @ref QL_GPL if the module links with GPL code
     - \c license_str — the license as a string (e.g. \c "MIT", \c "LGPL", \c "GPL")
     - \c dependencies — a list of other binary module names this module depends on (\c strvec_t)
     - \c info — an optional @ref QoreHashNode pointer with extra module metadata (default: \c nullptr)
+    - \c ns — the module's namespace with static storage duration, if any (default: \c nullptr); it is purged when
+      the module is deleted, see @ref qore_module_teardown (since %Qore 3.0, @ref QORE_HAS_MODULE_NS_PURGE)
 
     @note The @ref QoreModuleInfo struct uses default member initializers, so fields like \c license (defaults to
     @ref QL_MIT) and callback pointers (default to \c nullptr) only need to be set if non-default values are
@@ -87,7 +118,8 @@
     @endcode
 
     Called when the module is unloaded (typically when the %Qore library shuts down).  Free any resources allocated
-    during initialization.
+    during initialization, including every Qore value the module holds outside its namespace; see
+    @ref qore_module_teardown.
 
     @par Parse Command Handler — \c qore_module_parse_cmd_t (optional)
 
@@ -95,8 +127,229 @@
     typedef void (*qore_module_parse_cmd_t)(const QoreString& cmd, ExceptionSink* xsink);
     @endcode
 
-    If set, allows the module to handle parse-time commands issued via the \c %module-cmd directive.  Set to
-    \c nullptr in the description function if not used (this is the default).
+    If set, allows the module to handle parse-time commands issued via the \c %module-cmd directive, and the commands
+    issued at run time with Program::issueModuleCmd(), QoreProgram::issueModuleCmd() and
+    ModuleManager::issueRuntimeCmd(), as well as the commands that a compiled program records and replays when it is
+    loaded.  Set to \c nullptr in the description function if not used (this is the default).
+
+    @par Module Commands and the Restrictions of the Code that Issues Them (module API 2.3)
+
+    The handler runs in the Program that the command applies to: \c getProgram() there is the target of the command,
+    and its parse options say nothing about the code that issued the command.  A handler decides what a command may do
+    from the restrictions of the issuing code, which Qore gives it in the QoreModuleCommandContext returned by
+    QoreModuleCommandContext::get(), captured from the issuing code before Qore switches to the target Program:
+    - the restricting parse options of the issuing code (QoreModuleCommandRestrictions::getParseOptions()), which are
+      its effective run-time parse options, so also a \c %push-parse-options block; code of a library module (a module
+      found in a module directory, not one that the code loading it chose by a path of its own) is governed only by
+      the sandbox, as module code is everywhere in %Qore: the parse options of its Program are only what it inherited
+      from the code that loaded it, so a command issued at run time by library module code has none, and neither has a
+      \c %module-cmd directive in the source of a library module that is being loaded; a module that the loading code
+      chose by a path of its own is judged by the restrictions of that code; for a \c %module-cmd directive in other
+      code, the options in force at the directive (and those of the code that runs the parse); for a command replayed from a compiled program, the options of
+      the code that loads the program together with the options that were in force at the directive when the program
+      was compiled (the options that the program is declared with, for a program compiled before they were recorded),
+      except for a library module that is loaded compiled, which has only the latter;
+    - whether a sandbox governs the issuing code (QoreModuleCommandRestrictions::isSandboxed()); a sandbox that allows
+      uncontrolled APIs (QoreSandboxManager::setUncontrolledApiPolicy()), which a host attaches to trusted code only
+      for its interrupts or limits, does not make the code sandboxed;
+    - how the command arrived (QoreModuleCommandContext::getOrigin()), and the issuing and target Programs.
+
+    The restrictions only grow within a command: a command that a handler issues itself has at least the restrictions
+    of the command it handles.  The context is valid only while the handler runs, on its thread: pass
+    QoreModuleCommandContext::copy() to another thread.  Check every command that executes code, changes a classpath or
+    a search path, touches the filesystem or the network, or changes state that all Programs share, and refuse it
+    when the issuing code may not do that:
+
+    @code{.cpp}
+    static void mymodule_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
+        const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+        assert(ctx);
+        if (cmd == "exec") {
+            // not for sandboxed code, nor for code that forbids uncontrolled APIs or embedded logic
+            if (ctx->check(PO_NO_UNCONTROLLED_APIS | PO_NO_EMBEDDED_LOGIC, true, "MYMODULE-COMMAND-ERROR", "exec", xsink)) {
+                return;
+            }
+            // ...
+        }
+    }
+    @endcode
+
+    A module whose handler checks the context for every such command sets \c QoreModuleInfo::cmd_caller_aware to
+    \c true in its description function.  A module that does not set it is not given a command that restricted code
+    issues (code that is sandboxed or has a parse option that restricts a functional domain): the command is refused
+    with \c PARSE-COMMAND-ERROR or \c RUNTIME-COMMAND-ERROR before the handler runs.  Code that is not restricted can
+    issue commands to every module.
+
+    @warning The library creates the @ref QoreModuleInfo struct and validates the module API version only after the
+    description function has filled it in, since the version is one of its fields: the version cannot be checked
+    before the description function runs.  A struct created by a library that implements module API 2.2 or earlier
+    has no \c cmd_caller_aware field, so a module built with module API 2.3 that such a library loads (by an explicit
+    path or a file name without the API suffix; the library does not look for a \c -api-2.3.qmod file) would write
+    past the end of the struct.  A module that may be loaded by such a library sets the field only if the library
+    implements module API 2.3; the library then refuses the module for its API version, without the write:
+    @code{.cpp}
+    // the field exists only in a library that implements module API 2.3
+    if (is_module_api_supported(2, 3)) {
+        mod_info.cmd_caller_aware = true;
+    }
+    @endcode
+
+    @note Through library module code, restrictions travel as they do everywhere in %Qore: a sandbox that governs the
+    caller governs the module code that issues a command (QoreModuleCommandRestrictions::isSandboxed() is true, and a
+    handler refuses what sandboxed code may not do), but a parse option that restricts the caller, or that the module's
+    Program inherited from its loader (\c PO_NO_FILESYSTEM, for example), does not restrict the module code: a command
+    to change a classpath that the code of a library module issues at run time is not refused for a caller that has
+    only \c PO_NO_FILESYSTEM (see design/module-sandboxing-audit-guide.md).
+
+    @par The Restrictions of the Caller of a Module Function (module API 2.3)
+
+    A module function or method that decides what its caller may do (a database driver that judges a classpath
+    option, for example) asks QoreModuleCommandRestrictions::getCallerRestrictions() instead of reading
+    \c getProgram()->getParseOptions() or using QoreReflectionCaller.  It returns what a module command issued by
+    the same code would have in its QoreModuleCommandContext: the restricting parse options of the calling code and
+    whether a sandbox governs it.  Code of a library module has no parse options, only its sandbox, so a module
+    that applies the rule that a command issued by library module code is judged by the sandbox only, applies it
+    to its functions as well; the parse options of the Program of a library module are only what it inherited from
+    the code that loaded it.
+
+    @par Destructors of Builtin Classes of the Uncontrolled-API Domain
+
+    A sandbox that refuses uncontrolled APIs refuses every call of a builtin function or method in the
+    \c QDOM_UNCONTROLLED_API domain made for the code that it governs (\c INVALID-FUNCTION-ACCESS), with two
+    exceptions.  The sandbox introspection and barrier methods \c SandboxManager::isGoverned(),
+    \c SandboxManager::getGoverningPolicies() and \c SandboxManager::callWithSystemPolicy() are judged by the code
+    that calls them, not by the whole call stack, so trusted code can call them for a sandboxed caller.  And the
+    destructor of a builtin class is not refused, because the object is destroyed whenever its last reference is
+    released (also at the end of a scope or when its %Program is deleted) and a refusal would only leave its resources
+    unreleased.  A builtin destructor therefore runs for sandboxed code: it must only release what the object holds
+    (memory, handles, references to foreign objects) and must not do I/O, open connections, or run code on behalf of
+    the caller; work of that kind belongs in a method, which the sandbox judges.  Releasing a foreign object that the
+    object holds can run the foreign runtime's own cleanup (a %Python \c __del__() method, a Java cleaner), which
+    happens at release in any case.  See @ref sandbox_uncontrolled_api in the language reference.
+
+    @par The Setter of a Datasource Option
+
+    A DBI driver applies the options of a datasource when it opens a connection (Datasource::getConnectOptions()),
+    which can happen on another thread and for other code than the code that set them: a DatasourcePool opens a
+    connection on the thread that first needs one.  A driver that judges an option therefore asks
+    Datasource::getOptionRestrictions() for the restrictions of the code that set it, and
+    Datasource::getOptionPolicyManagerRef() for that code's filesystem policy, instead of
+    QoreModuleCommandRestrictions::getCallerRestrictions(); it falls back to the caller only when no setter is
+    recorded.  For an option that is judged like a module command (an option that does something itself, such as
+    adding to a classpath), the restrictions are checked first, and an option that they refuse is refused whatever the
+    policy is: Datasource::getOptionPolicyManagerRef() returns nullptr whenever no sandbox policy governed the setter,
+    also for sandboxed code inside a trusted \c SandboxManager::callWithSystemPolicy() call, so for such an option a
+    missing policy does not mean that the setter was trusted.  Only an option that the restrictions allow is checked
+    against the policy.  An option that chooses the destination of a connection (such as a JDBC URL) is judged
+    instead like the connection values, by the policy rule of the code that chose the connection (below), where a
+    setter without a policy manager counts as trusted:
+
+    @code{.cpp}
+static int my_set_option(Datasource* ds, const char* opt, const QoreValue val, ExceptionSink* xsink) {
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+    QoreModuleCommandRestrictions setter;
+    if (!ds->getOptionRestrictions(opt, setter)) {
+        setter = QoreModuleCommandRestrictions::getCallerRestrictions();
+    }
+#else
+    QoreModuleCommandRestrictions setter = QoreModuleCommandRestrictions::getCallerRestrictions();
+#endif
+    // first: the restrictions of the setter refuse the option regardless of its policy
+    if (setter.check(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM, true, "MY-OPTION-ERROR", "set the option", xsink)) {
+        return -1;
+    }
+#ifdef _QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS
+    // then: the files that the option names are checked against the setter's policy, if one governed it
+    ReferenceHolder<QoreSandboxManager> policy(ds->getOptionPolicyManagerRef(opt), xsink);
+    ...
+#endif
+    ...
+}
+    @endcode
+
+    While a driver's option-setting function runs for \c Datasource::setOption() on an open connection, the new
+    setter is pending: it is visible to the driver (\c Datasource::getOptionRestrictions()), but it is not yet stored,
+    and copies of the datasource do not see it; it is stored with the value once the driver accepts the value.  An
+    option that had no value before appears in \c Datasource::getConnectOptions() meanwhile as a placeholder entry
+    with no value.  A connection that the driver opens meanwhile (a reconnect from the option-setting function) is
+    not given the placeholder by the Qore library, but a driver's open function that reads
+    \c Datasource::getConnectOptions() itself sees it: during an open the placeholder has no setter
+    (\c Datasource::getOptionRestrictions() returns false for it), and the driver treats it as not set.  An option
+    whose stored value is \c NOTHING has a setter and is a value like any other.  While a connection is opened, the
+    setters that the driver reads are those of the stored values that the connection is given.  A driver must not
+    call \c Datasource::setOption() from its own open or option-setting functions.
+
+    @par The Code That Chose a Connection
+
+    A driver that must not connect to a destination that sandboxed code chose judges a connection by the code that
+    chose it, not by the code that is running when it connects (qore#6142): \c Datasource::getConnectChoosers() fills
+    a \c QoreDatasourceConnectChoosers object with the creators of the datasource and the setters of the connection
+    values in use, and \c Datasource::addOptionChooser() adds the setter of each option that the driver uses to choose
+    the destination (the %Qore library does not know which options of a driver do that).  The connection is
+    restricted if any entry does not allow uncontrolled APIs; read each entry's result once, and derive the aggregate
+    from those results, as a host can change a policy at any time.  This is the policy rule, not the rule of a
+    module command: an entry without a policy manager (code that no sandbox governed, or that ran under a trusted
+    barrier such as \c SandboxManager::callWithSystemPolicy() or a capability) allows uncontrolled APIs, so every
+    entry that restricts the connection has a policy manager, and a restricted connection is checked against the
+    policy managers of the entries that restrict it.  An empty record (\c size() == 0) is never a permission:
+    \c QoreDatasourceConnectChoosers::allowsUncontrolledApis() reports it as restricted.  Call them as
+    \c Datasource::getConnectOptions() is called: from the open function, or while the thread holds the connection
+    (also for the driver's own reconnect):
+
+    @code{.cpp}
+static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
+#ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
+    QoreDatasourceConnectChoosers c;
+    if (ds->getConnectChoosers(c, xsink)) {
+        return -1;
+    }
+    // the options that choose the destination
+    ConstHashIterator hi(ds->getConnectOptions());
+    while (hi.next()) {
+        if (!strcasecmp(hi.getKey(), "url") && ds->addOptionChooser(hi.getKey(), c, xsink) < 0) {
+            return -1;
+        }
+    }
+    // an empty record is never a permission
+    if (!c.size()) {
+        xsink->raiseException("MY-CONNECT-ERROR", "the code that chose the connection is not known");
+        return -1;
+    }
+    for (size_t i = 0; i < c.size(); ++i) {
+        if (c.allowsUncontrolledApis(i)) {
+            continue;
+        }
+        // restricted: check the destination against this entry's policy
+        ReferenceHolder<QoreSandboxManager> policy(c.getPolicyManagerRef(i), xsink);
+        if (!policy) {
+            xsink->raiseException("MY-CONNECT-ERROR", "the sandbox policy of the code that chose the connection "
+                "cannot be determined");
+            return -1;
+        }
+        ...
+    }
+#endif
+    return 0;
+}
+    @endcode
+
+    The record covers the connection only: the values and the options that a connect uses.  Input that the calling
+    code passes with a single call, such as the options of \c Datasource::bulkLoadBegin(), the arguments and the text
+    of a statement, or the arguments of any other per-call method, is chosen by the code that makes the call, at the
+    time of the call, and is not recorded as a chooser.  A driver therefore judges such input by the calling code
+    (\c QoreModuleCommandRestrictions::getCallerRestrictions() and the caller's sandbox policy), never by the record of
+    the connection: a connection that the record allows does not make the input of a sandboxed caller trusted.
+
+    A driver must not call \c Datasource::getPendingUsername(), \c Datasource::getPendingPassword(),
+    \c Datasource::getPendingDBName(), \c Datasource::getPendingDBEncoding(), \c Datasource::getPendingHostName(),
+    \c Datasource::getPendingPort(), \c Datasource::getConfigHash(), \c Datasource::getConfigString(),
+    \c Datasource::getConnectChoosers() or \c Datasource::addOptionChooser() from its statement close or free
+    functions (\c QDBI_METHOD_STMT_CLOSE, \c QDBI_METHOD_STMT_FREE): the pending connection
+    values are guarded by an internal lock of the datasource that is held while those functions are called, and the
+    lock is not recursive (<a href="https://github.com/qoretechnologies/qore/issues/6142">issue 6142</a>).  A debug
+    build of the %Qore library asserts this.
+
+    See @ref sandbox_datasource_options in the language reference.
 
     @subsection module_example Complete Example
 
@@ -108,6 +361,9 @@
     static void mymodule_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
     static void mymodule_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
     static void mymodule_module_delete();
+
+    // Reference namespace — initialized once, copied for each QoreProgram
+    static QoreNamespace MyModuleNS("Qore::mymodule");
 
     // Module description function — the entry point discovered by the Qore library
     extern "C" DLLEXPORT void mymodule_qore_module_desc(QoreModuleInfo& mod_info) {
@@ -121,12 +377,11 @@
         mod_info.init = mymodule_module_init;
         mod_info.ns_init = mymodule_module_ns_init;
         mod_info.del = mymodule_module_delete;
+        // the namespace is purged when the module is deleted, before the types are freed
+        mod_info.ns = &MyModuleNS;
         mod_info.license = QL_MIT;
         mod_info.license_str = "MIT";
     }
-
-    // Reference namespace — initialized once, copied for each QoreProgram
-    static QoreNamespace MyModuleNS("Qore::mymodule");
 
     static void mymodule_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
         // Register classes, constants, and functions in the namespace
@@ -140,7 +395,7 @@
     }
 
     static void mymodule_module_delete() {
-        // Free any resources allocated during initialization
+        // Free any resources allocated during initialization; MyModuleNS is purged after this returns
     }
     @endcode
 
@@ -152,6 +407,79 @@
 
     @note Classes must not be created more than once, because each Qore class gets a unique ID at creation time.
     Initialize classes in the \c init callback and use \c copy() in the \c ns_init callback.
+
+    @subsection qore_module_teardown Releasing Module State at Shutdown
+
+    A module releases all the %Qore state it owns when it is deleted: its namespace and the constants, classes,
+    hashdecls and enums in it, and any %Qore value it keeps elsewhere (objects, call references, hashes, lists,
+    strings, and Programs that the module created).  Modules are deleted by qore_cleanup(), modules that require
+    another module before it, and all of this must be released then, before the library frees the types.  It must
+    never be left to a C++ static destructor: static destructors run after qore_cleanup() has freed the types, when
+    releasing a %Qore value (and running a destructor of a Qore object) is no longer safe, and they do not run at
+    all when the process ends with \c _exit() (as it does when a background JIT compile is still running when the
+    process exits, or in a child process that requested qore_fork_child_exit_quickly()), so a leak checker such as
+    valgrind reports their values as lost.
+
+    - a namespace with static storage duration is registered with QoreModuleInfo::ns in the description function;
+      after the module's \c del function has run, it is purged with QoreNamespace::purge(), which releases
+      everything in it and leaves it empty, so that its C++ static destructor has nothing left to release.  The
+      \c del function can still use the namespace, and does not need to call QoreNamespace::clear() or
+      QoreNamespace::purge() itself
+    - everything else is released by the \c del function: a QoreProgram that the module owns is deleted there (with
+      QoreProgram::waitForTerminationAndDeref()), and objects, call references and other values are dereferenced
+      there
+    - a module that also supports %Qore versions without QoreModuleInfo::ns tests @ref QORE_HAS_MODULE_NS_PURGE and
+      calls QoreNamespace::clear() in its \c del function otherwise
+
+    @code{.cpp}
+    static QoreNamespace MyModuleNS("Qore::mymodule");
+    static ResolvedCallReferenceNode* my_callback = nullptr;
+
+    extern "C" DLLEXPORT void mymodule_qore_module_desc(QoreModuleInfo& mod_info) {
+        // ...
+        mod_info.del = mymodule_module_delete;
+    #ifdef QORE_HAS_MODULE_NS_PURGE
+        mod_info.ns = &MyModuleNS;
+    #endif
+    }
+
+    static void mymodule_module_delete() {
+        if (my_callback) {
+            ExceptionSink xsink;
+            my_callback->deref(&xsink);
+            my_callback = nullptr;
+        }
+    #ifndef QORE_HAS_MODULE_NS_PURGE
+        MyModuleNS.clear(nullptr);
+    #endif
+    }
+    @endcode
+
+    Debug builds of the library count the module namespaces that still hold values when the types are freed;
+    with the \c QORE_TEARDOWN_REPORT environment variable set, the count and each such namespace are printed on
+    \c stderr, and a registered namespace destroyed with content after that point fails an assertion.  The report
+    also prints \c "[TEARDOWN] declarations of Programs left after qore_cleanup(): N", the number of class, hashdecl and
+    enum declarations of deleted Programs that were not freed when the library cleanup ended (N must be 0 unless a value
+    or a Program held at static scope references them).
+
+    @subsection module_thread_exit Thread Cleanup Functions and Thread-Local Destructors
+
+    A thread that %Qore starts (a \c background thread, a thread of q_start_thread(), a \c ThreadPool worker) runs
+    the thread cleanup functions of the modules (\c tclist.push()) when its code has ended, and then the
+    thread-local destructors of the C++ runtime and of the libraries that the modules use (\c thread_local objects,
+    the destructors of \c pthread_key_create() keys, such as the per-thread state of a client library) when it
+    exits.  Both run on the exiting thread before the library has joined it, and neither may block or take long: a
+    cleanup function or a thread-local destructor that waits for a lock, a network peer or another thread delays
+    the end of its thread, and with it:
+    - qore_cleanup(), which waits without a bound until every thread that %Qore started has been joined, and the end
+      of the main Program of the \c qore binary, which waits so for every thread but the \c ThreadPool workers
+    - \c exit(), which ends the process at once with \c _Exit(), without running the static destructors and the
+      \c atexit() handlers, while a thread is still running its cleanup functions or a thread started with
+      \c QTF_EXTERNAL_LIFECYCLE (a \c ThreadPool worker) has not been joined, and which waits at most 10 seconds
+      for the thread-local destructors of the other threads
+
+    It does not delay the joins of the other threads, which the library joins on other threads meanwhile, but each
+    blocked thread holds its own thread, and a thread of the library joining it, until it ends.
 
     @subsection module_cpp_api_dev Sharing a C++ API Between Modules
 

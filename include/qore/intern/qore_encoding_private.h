@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QORE_ENCODING_PRIVATE_H
 #define _QORE_INTERN_QORE_ENCODING_PRIVATE_H
 
+#include <atomic>
 #include <functional>
 #include <string>
 
@@ -105,6 +106,14 @@ struct qore_encoding_private {
     */
     bool stateful = false;
 
+    //! 1 if every ASCII character is the same byte in the encoding, 0 if not, -1 if not determined yet
+    /** Stricter than \c ascii_compat, which tolerates ASCII punctuation that the encoding does not have (ex: \c "\\" in
+        ISO646-FR, whose byte 0x5c is U+00E7) and is left set for an encoding that iconv does not know.  Only with this
+        property are the bytes of text in the encoding that are the same as an ASCII string the same characters
+        as it; see isAsciiIdentical().
+    */
+    mutable std::atomic<signed char> ascii_identical{-1};
+
     //! the bytes that iconv writes at the start of text converted to a stateful encoding, if any
     /** (ex: the designation of the character set that glibc writes at the start of ISO-2022-KR text); a character
         or a separator converted on its own has them, but they are not in the middle of text in the encoding, so they
@@ -121,12 +130,31 @@ struct qore_encoding_private {
             fpos(fpos), fcharlen(fcharlen), get_unicode(get_unicode), ascii_compat(ascii_compat) {
     }
 
+    //! determines and stores \c ascii_identical with iconv and returns it
+    DLLLOCAL bool probeAsciiIdentical() const;
+
     DLLLOCAL unsigned getMinCharWidth() const {
         return minwidth;
     }
 
     DLLLOCAL bool isAsciiCompat() const {
         return ascii_compat;
+    }
+
+    //! returns true if every ASCII character is known to be the same byte in the encoding, without determining it
+    /** for a lookup that compares bytes when this is true and converts text otherwise, which is correct for any
+        encoding; see isAsciiIdentical()
+    */
+    DLLLOCAL bool isKnownAsciiIdentical() const {
+        return ascii_identical.load(std::memory_order_relaxed) == 1;
+    }
+
+    //! returns true if every ASCII character is the same byte in the encoding and iconv can convert all of them
+    /** determined with iconv on the first call for the encoding
+    */
+    DLLLOCAL bool isAsciiIdentical() const {
+        signed char v = ascii_identical.load(std::memory_order_relaxed);
+        return v < 0 ? probeAsciiIdentical() : (v != 0);
     }
 
     //! returns true if the encoding is stateful; see \c stateful
@@ -194,5 +222,26 @@ struct qore_encoding_private {
         return enc.priv;
     }
 };
+
+//! Returns the encoding that a character encoding name from untrusted data selects, or nullptr (qore#6460)
+/** The name selects an encoding that Qore knows already (a built-in encoding, an alias, or an encoding registered
+    before; the name is matched in any case), or the encoding of a label in a fixed table of standard character set
+    names and their common labels (ex: \c "Shift_JIS", \c "x-sjis", \c "EUC-KR", \c "ks_c_5601-1987",
+    \c "GB18030"), which is registered then if it is not built in; any other name, and a name with a NUL
+    character, selects none and registers nothing.  Names from data that Qore does not control (HTTP headers and
+    bodies, MIME messages) are looked up with it instead of QoreEncodingManager::findCreate(), which registers every
+    name that it does not know for the life of the process: iconv accepts an unbounded number of spellings of one
+    encoding, so that such data could make the registry grow without limit.
+
+    @param name the character encoding name, NUL-terminated after \a len bytes; may be nullptr or empty, in which
+    case nullptr is returned
+    @param len the length of the name in bytes
+*/
+DLLLOCAL const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len);
+
+//! Returns the encoding that a NUL-terminated character encoding name from untrusted data selects, or nullptr
+/** See qore_find_untrusted_encoding(const char*, size_t)
+*/
+DLLLOCAL const QoreEncoding* qore_find_untrusted_encoding(const char* name);
 
 #endif

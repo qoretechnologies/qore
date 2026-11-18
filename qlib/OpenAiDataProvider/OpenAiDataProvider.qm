@@ -40,6 +40,9 @@
 %requires yaml
 
 module OpenAiDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    # the module's own code starts the background thread that produces a streamed response
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "1.7";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
@@ -571,6 +574,8 @@ module OpenAiDataProvider {
 /** @page openaidataprovider_relnotes Release Notes
 
     @section openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - the \c multipart/form-data boundary of a file upload is random; it was made from the current time
+      (<a href="https://github.com/qoretechnologies/qore/issues/6307">issue 6307</a>)
     - a failed request is not retried while
       @ref DataProvider::DataProviderRetryUtil::retriesSuppressed() "retries are suppressed", for example while
       example data is requested (see @ref dataprovider_retries)

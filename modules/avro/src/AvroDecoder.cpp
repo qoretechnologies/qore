@@ -215,11 +215,11 @@ QoreValue avro_apply_logical_type(const AvroNode* node, QoreValue v, ExceptionSi
 
         case ALT_TIME_MILLIS:
             return DateTimeNode::makeRelativeFromSeconds(v.getAsBigInt() / 1000,
-                (int)((v.getAsBigInt() % 1000) * 1000));
+                (int)((v.getAsBigInt() % 1000) * 1000), xsink);
 
         case ALT_TIME_MICROS:
             return DateTimeNode::makeRelativeFromSeconds(v.getAsBigInt() / 1000000,
-                (int)(v.getAsBigInt() % 1000000));
+                (int)(v.getAsBigInt() % 1000000), xsink);
 
         case ALT_TIMESTAMP_MILLIS:
         case ALT_LOCAL_TIMESTAMP_MILLIS: {

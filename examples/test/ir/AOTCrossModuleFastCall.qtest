@@ -1,0 +1,245 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - AOT code generation and loading of modules calling each other's native fast entries
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class AOTCrossModuleFastCallTest
+
+#! An AOT module calls the functions of another AOT module through their native fast entries (qore#6035)
+/** The consumer module (\c AOTCrossModuleFastCall/XfcConsumer.qm) calls the functions of the provider module
+    (\c AOTCrossModuleFastCall/XfcProvider.qm).  When both are compiled, a call that the runtime path would make with
+    qore_rt_call_direct_aot() calls the provider's fast entry natively, through the pointer that the provider
+    registered when it was loaded, after entering the provider's Program as the runtime path does; a call that
+    cannot be made natively (a default argument, variable arguments, a reference argument, a generic function), a
+    provider loaded from source, and \c QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS keep the runtime path.
+
+    The values, exceptions, exception locations and call stacks of the calls must be the same with the modules loaded
+    from source, compiled, compiled with the native calls disabled, and with a compiled consumer of a source
+    provider; and at each optimization level and in each execution mode of the calling script.
+*/
+class AOTCrossModuleFastCallTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string fixture_dir;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! the output of values.qr
+        const ExpectedValues = "addInt: 42
+scale-default: 5.0
+scale: 8.0
+mulFloat: 8.0
+isPositive: [True, False]
+label: [\"utf-8\", \"latin1\"]
+maybe: [\"odd-1\", null]
+doubled: [2, 4, 6]
+kind: [\"int:1\", \"string:a\"]
+countArgs: [0, 3]
+increment: 2
+identity: [7, \"seven\"]
+map: [101, 102, 103]
+map-label: [\"utf-8\", \"x\"]
+nested: 33
+hot: 113
+method: 42
+closure: 42
+callback: 5
+error(2): {value: 50}
+error(-1): {err: \"XFC-ERROR\", desc: \"negative value -1\", file: \"XfcProvider.qm\", line: 73, stack: [\"check\", \"checkTwice\", \"error\"]}
+error(-2): {err: \"XFC-ERROR\", desc: \"negative value -2\", file: \"XfcProvider.qm\", line: 73, stack: [\"check\", \"checkTwice\", \"error\"]}
+stack: [\"stackNames\", \"stack\"]
+rootIsDir: True
+thread: 43 \"negative value -1\"
+sandbox: [True, 22]
+";
+
+        #! the calls of XfcConsumer::hot(4) of provider functions: four iterations of three calls and three more
+        const HotCalls = 15;
+    }
+
+    constructor() : QUnit::Test("AOTCrossModuleFastCallTest", "1.0", \ARGV) {
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        fixture_dir = get_script_dir() + "/AOTCrossModuleFastCall";
+
+        addTestCase("the modules loaded from source give the expected values", \testSourceValues());
+        addTestCase("compiled modules give the same values at each optimization level and in each mode",
+            \testCompiledValues());
+        addTestCase("a compiled module calls another compiled module's functions natively", \testNativeCalls());
+        addTestCase("the consumer's native code resolves the provider's fast entries", \testNativeShape());
+        addTestCase("a compiled consumer of a provider loaded from source keeps the runtime path",
+            \testSourceProvider());
+        addTestCase("a provider rebuilt after the consumer is called natively only with the same fast-entry ABI",
+            \testRebuiltProvider());
+
+        set_return_value(main());
+    }
+
+    #! Copies the module sources into \a dir
+    private copyModules(string dir) {
+        foreach string name in (("XfcProvider", "XfcConsumer")) {
+            copy_file(fixture_dir + "/" + name + ".qm", dir + "/" + name + ".qm");
+        }
+    }
+
+    #! Compiles a module source in \a dir to a .qmod and returns the compiler output
+    private string compileModule(string dir, string name, int opt_level, string env = "") {
+        return backquote(sprintf("QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s %s -b --compile-module --strip-source "
+            "--opt-level=%d --output %s/%s.qmod %s/%s.qm 2>&1", libqore_dir, dir, env, qore_bin, opt_level, dir,
+            name, dir, name));
+    }
+
+    #! Compiles both modules into \a dir and removes their sources, so that only the compiled modules can be loaded
+    /** @return the consumer's compiler output
+    */
+    private string buildModules(string dir, int opt_level = 2, string consumer_env = "") {
+        copyModules(dir);
+        string out = compileModule(dir, "XfcProvider", opt_level);
+        assertTrue(is_file(dir + "/XfcProvider.qmod"), "compiled the provider: " + out);
+        out = compileModule(dir, "XfcConsumer", opt_level, consumer_env);
+        assertTrue(is_file(dir + "/XfcConsumer.qmod"), "compiled the consumer: " + out);
+        unlink(dir + "/XfcProvider.qm");
+        unlink(dir + "/XfcConsumer.qm");
+        return out;
+    }
+
+    #! Returns the command that runs a script of the fixture with the modules in \a module_dir
+    private string command(string module_dir, string script, string env = "", *string mode) {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s -b%s %s/%s", libqore_dir, module_dir, env,
+            qore_bin, mode ? " --exec-mode=" + mode : "", fixture_dir, script);
+    }
+
+    #! Returns the number of calls made with the runtime direct-call helper when running XfcConsumer::hot(4)
+    private int runtimeDirectCalls(string module_dir, string env = "", string expected = "32") {
+        string out = backquote(command(module_dir, "hot.qr", env + " QORE_AOT_TRACE_LINK_RELOCS=1") + " 2>&1");
+        assertTrue(out.split("\n").contains(expected), sprintf("hot(4) value %s: %s", expected, out));
+        int n = 0;
+        foreach string line in (out.split("\n")) {
+            if (line.find("helper=qore_rt_call_direct_aot ") >= 0) {
+                ++n;
+            }
+        }
+        return n;
+    }
+
+    testSourceValues() {
+        TmpDir src("qore-aot-xfc-src-");
+        copyModules(src.path);
+        foreach string mode in (Modes) {
+            assertEq(ExpectedValues, ExecModeHarness::run(command(src.path, "values.qr", "", mode)),
+                sprintf("source modules, exec-mode=%s", mode));
+        }
+    }
+
+    testCompiledValues() {
+        foreach int opt_level in ((0, 2, 3)) {
+            TmpDir aot("qore-aot-xfc-qmod-");
+            buildModules(aot.path, opt_level);
+            foreach string mode in (Modes) {
+                assertEq(ExpectedValues, ExecModeHarness::run(command(aot.path, "values.qr", "", mode)),
+                    sprintf("compiled modules -O%d, exec-mode=%s", opt_level, mode));
+                assertEq(ExpectedValues, ExecModeHarness::run(command(aot.path, "values.qr",
+                    "QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS=1", mode)),
+                    sprintf("compiled modules -O%d without native cross-module calls, exec-mode=%s", opt_level,
+                        mode));
+            }
+        }
+    }
+
+    testNativeCalls() {
+        TmpDir aot("qore-aot-xfc-native-");
+        buildModules(aot.path);
+        assertEq(0, runtimeDirectCalls(aot.path), "every call of hot() is made natively");
+        assertEq(HotCalls, runtimeDirectCalls(aot.path, "QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS=1"),
+            "with native cross-module calls disabled, every call of hot() takes the runtime path");
+    }
+
+    testNativeShape() {
+        TmpDir aot("qore-aot-xfc-shape-");
+        string dump = buildModules(aot.path, 2, "QORE_DUMP_LLVM_IR=1");
+        assertNeq(-1, dump.find("qore_rt_try_get_cross_module_fast_entry"),
+            "the consumer resolves the provider's fast entries");
+        assertNeq(-1, dump.find("qore_rt_enter_cross_module_call"), "the consumer enters the provider's Program");
+        assertNeq(-1, dump.find("qore_rt_leave_cross_module_call"), "the consumer leaves the provider's Program");
+        # the symbol of the fast entry that a call was compiled for is the key that the call is resolved with
+        assertNeq(-1, dump.find("XfcProvider__addInt_int_int_"), "the consumer names the provider's fast entry");
+
+        TmpDir off("qore-aot-xfc-shape-off-");
+        dump = buildModules(off.path, 2, "QORE_DUMP_LLVM_IR=1 QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS=1");
+        assertEq(-1, dump.find("qore_rt_try_get_cross_module_fast_entry"),
+            "a consumer compiled without native cross-module calls does not resolve fast entries");
+    }
+
+    testSourceProvider() {
+        TmpDir aot("qore-aot-xfc-mixed-build-");
+        buildModules(aot.path);
+        TmpDir mixed("qore-aot-xfc-mixed-");
+        copy_file(aot.path + "/XfcConsumer.qmod", mixed.path + "/XfcConsumer.qmod");
+        copy_file(fixture_dir + "/XfcProvider.qm", mixed.path + "/XfcProvider.qm");
+        foreach string mode in (Modes) {
+            assertEq(ExpectedValues, ExecModeHarness::run(command(mixed.path, "values.qr", "", mode)),
+                sprintf("compiled consumer of a source provider, exec-mode=%s", mode));
+        }
+        # a provider loaded from source registers no fast entries
+        assertEq(HotCalls, runtimeDirectCalls(mixed.path), "every call of hot() takes the runtime path");
+    }
+
+    #! Builds both modules, then rebuilds the provider from its source with \a from replaced by \a to
+    private string rebuildProvider(string dir, string from, string to) {
+        copyModules(dir);
+        compileModule(dir, "XfcProvider", 2);
+        string out = compileModule(dir, "XfcConsumer", 2);
+        assertTrue(is_file(dir + "/XfcConsumer.qmod"), "compiled the consumer: " + out);
+        string path = dir + "/XfcProvider.qm";
+        string src = ReadOnlyFile::readTextFile(path);
+        assertNeq(-1, src.find(from), "the provider source has the text to change");
+        write(path, replace(src, from, to));
+        unlink(dir + "/XfcProvider.qmod");
+        out = compileModule(dir, "XfcProvider", 2);
+        assertTrue(is_file(dir + "/XfcProvider.qmod"), "rebuilt the provider: " + out);
+        unlink(dir + "/XfcProvider.qm");
+        unlink(dir + "/XfcConsumer.qm");
+        return dir;
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Returns the output of hot.qr (XfcConsumer::hot(4)) with the modules in \a module_dir
+    private string hotValue(string module_dir) {
+        return trim(backquote(command(module_dir, "hot.qr") + " 2>&1"));
+    }
+
+    testRebuiltProvider() {
+        # a change of the body only: the consumer, which took no fact about the body, calls the new body natively;
+        # label("utf8") is one character longer, in each of the four iterations
+        TmpDir body("qore-aot-xfc-rebuilt-body-");
+        rebuildProvider(body.path, "\"utf-8\" : enc;", "\"utf-8!\" : enc;");
+        assertEq("36", hotValue(body.path), "the value of the rebuilt provider's body");
+        assertEq(0, runtimeDirectCalls(body.path, "", "36"), "the calls of the rebuilt provider are made natively");
+
+        # another fast-entry ABI for addInt(): its native int parameters become boxed ones, which its fast entry's
+        # symbol encodes, so its four calls take the runtime path, while the other calls stay native
+        TmpDir abi("qore-aot-xfc-rebuilt-abi-");
+        rebuildProvider(abi.path, "int sub addInt(int a, int b)", "int sub addInt(softint a, softint b)");
+        assertEq("32", hotValue(abi.path), "the value with the provider's other ABI");
+        assertEq(4, runtimeDirectCalls(abi.path, "", "32"), "only the calls of the function whose ABI changed take "
+            "the runtime path");
+    }
+}

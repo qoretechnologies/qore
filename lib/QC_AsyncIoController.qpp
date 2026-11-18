@@ -335,6 +335,11 @@ AsyncIoController::copy() {
     there is subject to the same policy as one made by the submitting code; an operation submitted by such a step
     is governed by the same sandbox
 
+    @note A builtin HTTP or WebSocket client or server poll operation, @ref Qore::PollPipeline "PollPipeline" or
+    @ref Qore::DelegatingPollOperation "DelegatingPollOperation" that is deleted with the @ref delete "delete operator"
+    while the controller holds it is canceled: it is not continued again, and its result is a canceled result; its
+    state is released when the controller no longer uses it
+
     @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,
@@ -662,6 +667,13 @@ static hash<auto> AsyncIoController::getInfo() {
     @note an \c HttpServer sets its logger here while it runs and gives back the logger it replaced when it stops,
     unless the logger has been replaced since
 
+    @note an exception raised by the code of a timer (@ref addTimer(), @ref addTimerDelay()), by the timer callback
+    (@ref setTimerCallback()) or by a callback of an operation that the controller runs (a completion, frame or stream
+    callback, for example) is logged by this logger at the error level, or else by the async I/O logger
+    (@ref Qore::set_async_io_logger() "set_async_io_logger()"); without a logger, it is reported as an unhandled
+    exception on the standard error output, so that the failure of a callback is never silent.  An exception raised by
+    a task (@ref submitTask()) is always reported as an unhandled exception on the standard error output
+
     @see getLogger()
 
     @since %Qore 3.0
@@ -724,8 +736,15 @@ static *LoggerInterfaceBase AsyncIoController::getLogger() {
         to deliver through the @ref setTimerCallback() handler
     @return the unique timer ID
 
+    @note The deadline is a time of the system clock: a step of the system clock (a VM's time synchronization, a manual
+    change) moves the time at which the timer fires; use @ref addTimerDelay() for a timer that fires after an interval
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
+
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -766,8 +785,15 @@ static int AsyncIoController::addTimer(date deadline, auto user_data)
     @param owner the owner identifier to tag the timer's callback dispatch with
     @return the unique timer ID
 
+    @note The deadline is a time of the system clock: a step of the system clock (a VM's time synchronization, a manual
+    change) moves the time at which the timer fires; use @ref addTimerDelay() for a timer that fires after an interval
+
     @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
     its own, or with non-callable data
+
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -787,6 +813,94 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
     return ctrl->addTimer(deadline, udata, xsink, owner->c_str());
 }
 
+//! Adds a timer on the global singleton that fires after the given delay
+/** As @ref addTimer(date, auto), but the timer fires when \a delay has passed since the call, measured on the
+    monotonic clock: a step of the system clock (a VM's time synchronization, a manual change) does not move it, as it
+    moves a timer added with @ref addTimer() for @ref Qore::now_us() "now_us()" plus an interval.  Use it for timers
+    of an interval: heartbeats, idle checks, retries and timeouts.
+
+    @par Example:
+    @code{.py}
+# check the connection once a second, whatever the system clock does
+int timer_id = AsyncIoController::addTimerDelay(1s, sub () { checkConnection(); });
+    @endcode
+
+    @par Module Code and Restricted Callers
+    As for @ref addTimer(date, auto); see @ref MODULE_OWNED
+
+    @param delay the time after which the timer fires; zero or a negative value fires it at once
+    @param user_data either a closure/call-reference to dispatch, or arbitrary user data
+        to deliver through the @ref setTimerCallback() handler
+    @return the unique timer ID, which @ref cancelTimer() takes
+
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
+    its own, or with non-callable data
+
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
+
+    @since %Qore 3.0
+*/
+static int AsyncIoController::addTimerDelay(timeout delay, auto user_data)
+        [dom=NETWORK,THREAD_CONTROL;flags=NAMED_ARGS,MODULE_OWNED] {
+    if (qore_check_module_owned_code(user_data, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+            "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
+        return 0;
+    }
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return 0;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    return ctrl->addTimerDelay(delay * 1000, user_data, xsink);
+}
+
+//! Adds an owner-tagged timer on the global singleton that fires after the given delay
+/** As @ref addTimerDelay(timeout, auto), with the callback dispatch tagged with \a owner as with
+    @ref addTimer(date, auto, string)
+
+    @par Example:
+    @code{.py}
+int timer_id = AsyncIoController::addTimerDelay(30s, sub () { sendHeartbeat(); }, owner);
+    @endcode
+
+    @par Module Code and Restricted Callers
+    As for @ref addTimer(date, auto); see @ref MODULE_OWNED
+
+    @param delay the time after which the timer fires; zero or a negative value fires it at once
+    @param udata either a closure/call-reference to dispatch, or arbitrary user data
+        to deliver through the @ref setTimerCallback() handler
+    @param owner the owner identifier to tag the timer's callback dispatch with
+    @return the unique timer ID, which @ref cancelTimer() takes
+
+    @throw INVALID-FUNCTION-ACCESS module code running for a restricted caller added a timer with code that is not
+    its own, or with non-callable data
+
+    @note an exception that the code of the timer raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
+
+    @since %Qore 3.0
+*/
+static int AsyncIoController::addTimerDelay(timeout delay, auto udata, string owner)
+        [dom=NETWORK,THREAD_CONTROL;flags=MODULE_OWNED] {
+    if (qore_check_module_owned_code(udata, QDOM_NETWORK | QDOM_THREAD_CONTROL,
+            "AsyncIoController::addTimerDelay()", "schedule", xsink)) {
+        return 0;
+    }
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return 0;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    return ctrl->addTimerDelay(delay * 1000, udata, xsink, owner->c_str());
+}
+
 //! Cancels a timer on the global singleton
 /** @param timer_id the timer ID returned by @ref addTimer()
     @return @ref True "True" if the timer was found and canceled
@@ -796,6 +910,18 @@ static int AsyncIoController::addTimer(date deadline, auto udata, string owner)
     timers that module code added for the same application, the first %Program in the chain of callers that is not a
     module; for any other timer, this method returns @ref False "False", so a restricted caller cannot use module code
     to cancel timers of other applications or of the host; see @ref MODULE_OWNED
+
+    A timer belongs to the application of the call that adds it.  A thread that module code starts while it runs for
+    a restricted caller serves no caller of its own: it keeps the restrictions of the code that started it, but not
+    its application, so the timers that it adds on its own (for work handed to it by a call of another application,
+    for example) belong to no application: no application can cancel them, and the thread itself can cancel only
+    such timers, not those of an application nor those of the host, so it cannot be used to cancel the timers of an
+    application.  Code that does not run module code for a restricted caller (the host, code without restrictions,
+    and a thread that module code starts outside a call for a restricted caller, as in its initialization) can
+    cancel any timer: a module that relays the requests of applications to such a thread lets them cancel each
+    other's timers.  Module code cannot yet give the context of a call to the thread that serves it, so that the work
+    of the thread would belong to the call's application and keep its restrictions; see
+    <a href="https://github.com/qoretechnologies/qore/issues/6245">issue #6245</a>.
 
     @since %Qore 3.0
 */
@@ -818,6 +944,10 @@ static bool AsyncIoController::cancelTimer(int timer_id) [dom=NETWORK,THREAD_CON
 
     @param callback a callback that accepts a @ref TimerEventInfo hash argument, or
         @ref nothing to disable timer event delivery for non-callable \c user_data
+
+    @note an exception that the callback raises is logged at the error level by the controller's logger
+    (@ref setLogger()) or else by the async I/O logger (@ref Qore::set_async_io_logger() "set_async_io_logger()");
+    without a logger, it is reported as an unhandled exception on the standard error output
 
     @since %Qore 3.0
 */
@@ -846,6 +976,9 @@ static nothing AsyncIoController::setTimerCallback(*code callback) [dom=NETWORK,
     allows what the caller may not.  The caller's own code (a closure, or a method that a class of the caller
     overrides) is refused with \c INVALID-FUNCTION-ACCESS, whose description gives the reason, for example <em>the
     callback's Program does not allow thread control (PO_NO_THREAD_CONTROL)</em>; see @ref MODULE_OWNED
+
+    @note an exception that the task raises is reported as an unhandled exception on the standard error output, not
+    to the controller's logger (@ref setLogger())
 
     @since %Qore 3.0
 */

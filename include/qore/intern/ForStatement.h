@@ -41,12 +41,10 @@ class RuntimeConfig;
 
 class ForStatement : public AbstractStatement {
 public:
+    DLLLOCAL static ForStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+            QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd);
     DLLLOCAL ForStatement(int start_line, int end_line, QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd);
     DLLLOCAL virtual ~ForStatement();
-    // faked here; checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
-    }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     DLLLOCAL QoreValue getAssignment() const {
@@ -73,6 +71,12 @@ public:
     DLLLOCAL const LVList* getLVList() const {
         return lvars;
     }
+
+protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
 
 private:
     QoreValue assignment{};

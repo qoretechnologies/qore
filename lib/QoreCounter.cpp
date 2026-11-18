@@ -41,6 +41,8 @@ struct qore_counter_private {
     QoreCondition cond;
     int cnt;
     int waiting;
+    //! the threads waiting for the count to fall to a value other than 0 (waitForCountAtMost()); also in waiting
+    int count_waiting = 0;
 
     DLLLOCAL qore_counter_private(int nc) : cnt(nc), waiting(0) {
         assert(nc >= 0);
@@ -80,7 +82,7 @@ struct qore_counter_private {
             return -1;
         }
 
-        if (!--cnt && waiting)
+        if (!--cnt ? waiting : count_waiting)
             cond.broadcast();
 
         return cnt;
@@ -91,6 +93,8 @@ struct qore_counter_private {
         // counter hit zero, so even it it's bigger than zero by the time we are allowed to execute, it's ok
         // --- synchronization must be done externally
         int rc = 0;
+        // a wait that ends without the counter reaching zero waits again only for the rest of the timeout
+        QoreWaitDeadline deadline(timeout_ms);
         SafeLocker sl(&l);
         ++waiting;
         while (cnt && cnt != Cond_Deleted) {
@@ -103,7 +107,12 @@ struct qore_counter_private {
                 }
             } else {
                 // Use interruptible wait with timeout for sandbox support
-                rc = cond.waitWithInterrupt(&l, timeout_ms, xsink);
+                int64 wait_ms = timeout_ms;
+                if (deadline.active() && !(wait_ms = deadline.remainingMs())) {
+                    rc = QORE_COND_RESULT_TIMEOUT;
+                    break;
+                }
+                rc = cond.waitWithInterrupt(&l, wait_ms, xsink);
                 if (rc == QORE_COND_RESULT_INTERRUPTED) {
                     --waiting;
                     return -1;  // Exception already raised
@@ -132,8 +141,32 @@ struct qore_counter_private {
 
     DLLLOCAL void dec() {
         AutoLocker al(&l);
-        if (!--cnt && waiting)
+        if (!--cnt ? waiting : count_waiting)
             cond.broadcast();
+    }
+
+    DLLLOCAL int waitForCountAtMost(int n, int timeout_ms) {
+        assert(n >= 0);
+        assert(timeout_ms > 0);
+        AutoLocker al(&l);
+        if (cnt <= n) {
+            return 0;
+        }
+        int64 deadline = q_get_monotonic_us() / 1000 + timeout_ms;
+        ++waiting;
+        ++count_waiting;
+        int rc = 0;
+        while (cnt > n) {
+            int64 left = deadline - q_get_monotonic_us() / 1000;
+            if (left <= 0) {
+                rc = ETIMEDOUT;
+                break;
+            }
+            cond.wait(&l, static_cast<int>(left));
+        }
+        --count_waiting;
+        --waiting;
+        return rc;
     }
 };
 
@@ -155,6 +188,7 @@ void QoreCounter::unlockForFork() {
 void QoreCounter::reinitAfterFork(int count) {
     // the waiting threads do not exist in the child
     priv->waiting = 0;
+    priv->count_waiting = 0;
     if (count >= 0) {
         priv->cnt = count;
     }
@@ -194,6 +228,10 @@ void QoreCounter::waitForZero() {
 }
 
 // internal only
+int QoreCounter::waitForCountAtMost(int n, int timeout_ms) {
+    return priv->waitForCountAtMost(n, timeout_ms);
+}
+
 void QoreCounter::dec() {
     priv->dec();
 }

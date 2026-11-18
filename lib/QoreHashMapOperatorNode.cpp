@@ -29,11 +29,32 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+
+namespace {
+class LexicalHashMapOperatorNode : public QoreHashMapOperatorNode {
+public:
+    using QoreHashMapOperatorNode::QoreHashMapOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreHashMapOperatorNode* QoreHashMapOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue p0, QoreValue p1, QoreValue p2) {
+    auto* node = policy.needsFilter()
+        ? static_cast<QoreHashMapOperatorNode*>(new LexicalHashMapOperatorNode(loc, p0, p1, p2))
+        : new QoreHashMapOperatorNode(loc, p0, p1, p2);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
 
 QoreString QoreHashMapOperatorNode::map_str("map operator expression");
 
@@ -90,6 +111,10 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
 }
 
 int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
+    // the code may run for no element, and leave before its end; see ParseLoopAssignedStateHelper
+    ParseLoopAssignedStateHelper loop_assigned_state;
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -114,6 +139,9 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
             QoreTypeInfo::getImplicitArgTypeForIterator(e[2], iteratorTypeInfo);
 
         ParseImplicitArgTypeHelper pia(implicitArgType);
+        // the code runs for each element with the element's index as $# (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.setFlags(PF_IMPLICIT_ELEMENT);
 
         // check key expression — no hint propagation; keys are almost
         // always strings and the hash-literal's own key coercion
@@ -132,13 +160,28 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
         if (parse_init_value(e[1], parse_context) && !err) {
             err = -1;
         }
-        expTypeInfo2 = parse_context.typeInfo;
+        // qore#6288: see elementScope()
+        qore_parse_decide_element_scopes(this, decideElementScopes);
+        // the values in the result are those of run-time values: a date has no subtype then (issue #5722)
+        expTypeInfo2 = QoreTypeInfo::getRuntimeValueType(parse_context.typeInfo);
     }
 
     parse_context.typeInfo = setReturnTypeInfo(returnTypeInfo, expTypeInfo2,
         iteratorTypeInfo, expected_hint);
     // the analysis left by the value expression describes the values, not the hash
     qore_set_result_parse_analysis(parse_context, parse_context.typeInfo);
+    if (qore_type_contains_type_parameter(returnTypeInfo)) {
+        // the result of a hash map in a generic callable has the type argument of the call in place of the type
+        // parameter; other hash maps keep their code path (issue #5988)
+        ReferenceHolder<> holder(this, nullptr);
+        QoreHashMapOperatorNode* generic_map = getSemanticPolicy().needsFilter()
+            ? static_cast<QoreHashMapOperatorNode*>(new QoreGenericHashMapOperatorNode<true>(*this))
+            : new QoreGenericHashMapOperatorNode<false>(*this);
+        generic_map->setParseAnalysis(parse_context.analysis);
+        // the node that runs is decided again when the parse ends, as this one would have been (qore#6288)
+        qore_parse_decide_element_scopes(generic_map, decideElementScopes);
+        val = generic_map;
+    }
     return err;
 }
 
@@ -147,7 +190,18 @@ QoreHashNode* QoreHashMapOperatorNode::getNewHash() const {
     return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
 }
 
+QoreHashNode* QoreHashMapOperatorNode::getNewGenericHash() const {
+    const QoreTypeInfo* typeInfo = QoreTypeInfo::getUniqueReturnComplexHash(
+        qore_substitute_type_params_if_needed(returnTypeInfo));
+    return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
+}
+
 QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical, bool Generic>
+QoreValue QoreHashMapOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     ValueEvalOptimizedRefHolder arg_lst(e[2], xsink);
     if (*xsink || arg_lst->isNothing())
         return QoreValue();
@@ -158,7 +212,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
 
     qore_type_t arglst_type = arg_lst->getType();
     assert(arglst_type != NT_NOTHING);
-    ReferenceHolder<QoreHashNode> ret_val(ref_rv ? getNewHash() : nullptr, xsink);
+    ReferenceHolder<QoreHashNode> ret_val(ref_rv ? (Generic ? getNewGenericHash() : getNewHash()) : nullptr, xsink);
     if (NT_LIST != arglst_type) { // Single value
         // check if it's an AbstractIterator object
         if (NT_OBJECT == arglst_type) {
@@ -167,17 +221,20 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             if (*xsink)
                 return QoreValue();
             if (h)
-                return mapIterator(h, xsink); // TODO!!
+                return mapIterator<Lexical, Generic>(h, xsink); // TODO!!
             // passed iterator
         }
 
         // check if value can be mapped
+        // a single value is the operator's only element: $# is 0, as for a list of one element (qore#5690)
+        ImplicitElementHelper eh(0);
         SingleArgvContextHelper argv_helper(arg_lst.takeReferencedValue(), xsink);
-        ValueEvalOptimizedRefHolder arg_key(e[0], xsink);
+        // the temporaries of an element are released when its value has been computed (qore#6288)
+        QoreScopedEvalHolder arg_key(e[0], elementScope(0), xsink);
         if (*xsink)
             return QoreValue();
 
-        ValueEvalOptimizedRefHolder arg_val(e[1], xsink);
+        QoreScopedEvalHolder arg_val(e[1], elementScope(1), xsink);
         if (*xsink)
             return QoreValue();
 
@@ -197,7 +254,12 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             }
 
             // Insert key-Value pair to the hash
-            ret_val->setKeyValue(str_util.c_str(), arg_val.takeReferencedValue(), xsink);
+            if constexpr (Lexical) {
+                qore_hash_private::setKeyValueLexical(**ret_val, str_util.c_str(), arg_val.takeReferencedValue(), xsink,
+                    getSemanticPolicy());
+            } else {
+                qore_hash_private::setKeyValueCanonical(**ret_val, str_util.c_str(), arg_val.takeReferencedValue(), xsink);
+            }
         }
     } else { // List of values
         ConstListIterator li(arg_lst->get<const QoreListNode>());
@@ -207,7 +269,8 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             SingleArgvContextHelper argv_helper(li.getReferencedValue(), xsink);
 
             {
-                ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+                // the temporaries of an element's key, value and predicate are released when each is evaluated (qore#6288)
+                QoreScopedEvalHolder ekey(e[0], elementScope(0), xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -216,7 +279,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
                 if (*xsink)
                     return QoreValue();
 
-                ValueEvalOptimizedRefHolder val(e[1], xsink);
+                QoreScopedEvalHolder val(e[1], elementScope(1), xsink);
                 if (*xsink)
                     return QoreValue();
 
@@ -234,7 +297,12 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
                         vcommon = false;
                     }
 
-                    ret_val->setKeyValue(key.c_str(), val.takeReferencedValue(), xsink);
+                    if constexpr (Lexical) {
+                        qore_hash_private::setKeyValueLexical(**ret_val, key.c_str(), val.takeReferencedValue(), xsink,
+                            getSemanticPolicy());
+                    } else {
+                        qore_hash_private::setKeyValueCanonical(**ret_val, key.c_str(), val.takeReferencedValue(), xsink);
+                    }
                 }
             }
             // if there is an exception dereferencing one of the evaluted nodes above, then exit the loop
@@ -255,8 +323,9 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     return ret_val.release();
 }
 
+template <bool Lexical, bool Generic>
 QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const {
-    ReferenceHolder<QoreHashNode> rv(ref_rv ? getNewHash() : nullptr, xsink);
+    ReferenceHolder<QoreHashNode> rv(ref_rv ? (Generic ? getNewGenericHash() : getNewHash()) : nullptr, xsink);
 
     // try to find a common value type, if any
     bool vcommon = false;
@@ -281,7 +350,8 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
         SingleArgvContextHelper argv_helper(iv.release(), xsink);
 
         {
-            ValueEvalOptimizedRefHolder ekey(e[0], xsink);
+            // the temporaries of an element's key, value and predicate are released when each is evaluated (qore#6288)
+            QoreScopedEvalHolder ekey(e[0], elementScope(0), xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -290,7 +360,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
             if (*xsink)
                 return QoreValue();
 
-            ValueEvalOptimizedRefHolder val(e[1], xsink);
+            QoreScopedEvalHolder val(e[1], elementScope(1), xsink);
             if (*xsink)
                 return QoreValue();
 
@@ -308,7 +378,12 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
                     vcommon = false;
                 }
 
-                rv->setKeyValue(key.c_str(), val.takeReferencedValue(), xsink);
+                if constexpr (Lexical) {
+                    qore_hash_private::setKeyValueLexical(**rv, key.c_str(), val.takeReferencedValue(), xsink,
+                        getSemanticPolicy());
+                } else {
+                    qore_hash_private::setKeyValueCanonical(**rv, key.c_str(), val.takeReferencedValue(), xsink);
+                }
             }
         }
         // if there is an exception dereferencing one of the evaluted nodes above, then exit the loop
@@ -323,4 +398,48 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
     }
 
     return rv.release();
+}
+
+template <bool Lexical>
+QoreGenericHashMapOperatorNode<Lexical>::QoreGenericHashMapOperatorNode(QoreHashMapOperatorNode& old)
+        : QoreHashMapOperatorNode(old) {
+    // the operands belong to this operator now
+    old.e[0] = QoreValue();
+    old.e[1] = QoreValue();
+    old.e[2] = QoreValue();
+}
+
+template <bool Lexical>
+QoreGenericHashMapOperatorNode<Lexical>::QoreGenericHashMapOperatorNode(const QoreProgramLocation* loc, QoreValue p0,
+        QoreValue p1, QoreValue p2)
+        : QoreHashMapOperatorNode(loc, p0, p1, p2) {
+}
+
+template <bool Lexical>
+QoreValue QoreGenericHashMapOperatorNode<Lexical>::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<Lexical, true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreHashMapOperatorNode* QoreGenericHashMapOperatorNode<Lexical>::createBackgroundCopy(QoreValue p0, QoreValue p1,
+        QoreValue p2) const {
+    // a background expression keeps the class of the operator, generic and lexical
+    QoreGenericHashMapOperatorNode* node = new QoreGenericHashMapOperatorNode(loc, p0, p1, p2);
+    ParseNode::bindSemanticPolicy(QoreValue(node), getSemanticPolicy());
+    return node;
+}
+
+template class QoreGenericHashMapOperatorNode<false>;
+template class QoreGenericHashMapOperatorNode<true>;
+
+void QoreHashMapOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreHashMapOperatorNode* self = static_cast<QoreHashMapOperatorNode*>(op);
+    uint8_t v = 0;
+    if (qore_expr_may_create_observable_temp(self->e[0])) {
+        v |= 1u << 0;
+    }
+    if (qore_expr_may_create_observable_temp(self->e[1])) {
+        v |= 1u << 1;
+    }
+    self->element_scopes.set(v);
 }

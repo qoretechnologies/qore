@@ -30,6 +30,16 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/qore_date_private.h"
+
+int qore_date_multiply_equals(LValueHelper& v, const QoreValue& rhs, ExceptionSink* xsink) {
+    ValueHolder product(qore_date_private::multiply(v.getValue(), rhs, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    // assigned as for x = x * y: the lvalue's type accepts, converts or refuses the date
+    return v.assign(product.release(), "<*= operator>");
+}
 
 QoreString QoreMultiplyEqualsOperatorNode::op_str("*= operator expression");
 
@@ -50,8 +60,13 @@ QoreValue QoreMultiplyEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 
     // the result is the value the lvalue holds afterwards, as for an assignment (x *= y gives what x = x * y gives):
     // the lvalue's type can convert the value computed (a softint lvalue stores 17.5 as 17)
-    // is either side a number?
-    if (v.getType() == NT_NUMBER || res->getType() == NT_NUMBER) {
+    // is either side a date? the product is a relative date, as with the * operator (qore#6109)
+    if (v.getType() == NT_DATE || res->getType() == NT_DATE) {
+        if (qore_date_multiply_equals(v, *res, xsink)) {
+            return QoreValue();
+        }
+    } else if (v.getType() == NT_NUMBER || res->getType() == NT_NUMBER) {
+        // is either side a number?
         v.multiplyEqualsNumber(*res, "<*= operator>");
     } else if (v.getType() == NT_FLOAT || res->getType() == NT_FLOAT) {
         // is either side a float?

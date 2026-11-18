@@ -753,9 +753,13 @@ DLLEXPORT int qore_push_cancel_deferral();
 */
 DLLEXPORT void qore_pop_cancel_deferral();
 
-//! Returns true if cancellation delivery is currently deferred on this thread
-/** Allows blocking primitives to skip their cancellation poll interval and wait without polling,
-    since no cancellation can be delivered while a deferral is active.
+//! Returns true if a cancellation deferral pushed with @ref qore_push_cancel_deferral() is active on this thread
+/** Allows blocking primitives to wait without registering for a cancellation wakeup, since no cancellation can be
+    delivered while such a deferral is active.
+
+    Only the explicit deferral is reported: not the deferral in effect while the destructor of a trusted class runs,
+    in which a sandbox limit can still be delivered, so waits must stay registered for its wakeup.  Code of a
+    sandboxed %Program never runs with a deferral active: entering it suspends the deferral until it returns.
 
     @since %Qore 3.0
 */

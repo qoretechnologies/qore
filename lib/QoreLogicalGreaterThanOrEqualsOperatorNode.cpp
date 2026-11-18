@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreLogicalGreaterThanOrEqualsOperatorNode::op_str(">= operator expression");
 
@@ -63,31 +64,54 @@ static int try_plugin_binary_parse_ge(QoreParseContext& parse_context, const Qor
     return 0;
 }
 
+//! compares the values of the operands as the operator does when it has no specialization for their types: a buffer
+//! elementwise, then with a plugin operation, then as scalars
+static QORE_INTERN_ALWAYS_INLINE QoreValue ge_eval_values(const QoreValue& lh, const QoreValue& rh,
+        ExceptionSink* xsink) {
+    if (qore_buffer_binary_op_applies(lh, rh)) {
+        return qore_buffer_binary_op(lh, rh, QoreBufferBinaryOperation::GreaterThanOrEqual, xsink);
+    }
+
+    if (qore_plugin_value_may_have_operation(lh) || qore_plugin_value_may_have_operation(rh)) {
+        bool plugin_matched = false;
+        QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "ge",
+            QorePluginHelperAbi::BinaryValue, lh, rh, plugin_matched, xsink);
+        if (*xsink || plugin_matched) {
+            return plugin_result;
+        }
+    }
+
+    return QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(lh, rh, xsink);
+}
+
+QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalValues(const QoreValue& lh, const QoreValue& rh,
+        ExceptionSink* xsink) const {
+    // the specializations of parse initialization for the types of the operands (evalImpl())
+    if (pfunc == &QoreLogicalGreaterThanOrEqualsOperatorNode::floatGreaterThanOrEquals) {
+        return lh.getAsFloat() >= rh.getAsFloat();
+    }
+    if (pfunc == &QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals) {
+        return lh.getAsBigInt() >= rh.getAsBigInt();
+    }
+    assert(!pfunc);
+    // a buffer and a plugin value are nodes: two inline values are compared as scalars
+    if (!lh.isPointer() && !rh.isPointer()) {
+        return doGreaterThanOrEquals(lh, rh, xsink);
+    }
+    return ge_eval_values(lh, rh, xsink);
+}
+
 QoreValue QoreLogicalGreaterThanOrEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
    if (pfunc)
       return (this->*pfunc)(xsink);
 
-   ValueEvalOptimizedRefHolder lh(left, xsink);
+   QoreOperandEvalHolder lh(left, xsink);
    if (*xsink)
       return QoreValue();
-   ValueEvalOptimizedRefHolder rh(right, xsink);
+   QoreOperandEvalHolder rh(right, xsink);
    if (*xsink)
       return QoreValue();
-
-   if (qore_buffer_binary_op_applies(*lh, *rh)) {
-      return qore_buffer_binary_op(*lh, *rh, QoreBufferBinaryOperation::GreaterThanOrEqual, xsink);
-   }
-
-   if (qore_plugin_value_may_have_operation(*lh) || qore_plugin_value_may_have_operation(*rh)) {
-      bool plugin_matched = false;
-      QoreValue plugin_result = qore_plugin_try_dispatch_binary(getProgram(), "ge",
-         QorePluginHelperAbi::BinaryValue, *lh, *rh, plugin_matched, xsink);
-      if (*xsink || plugin_matched) {
-         return plugin_result;
-      }
-   }
-
-   return doGreaterThanOrEquals(*lh, *rh, xsink);
+   return ge_eval_values(*lh, *rh, xsink);
 }
 
 int QoreLogicalGreaterThanOrEqualsOperatorNode::parseInitIntern(const char* name, QoreValue& val,
@@ -135,6 +159,16 @@ int QoreLogicalGreaterThanOrEqualsOperatorNode::parseInitIntern(const char* name
         return err;
     }
 
+    // a plugin operation that applies to some values of the operands (an or-nothing or a union type with the
+    // plugin's type) is dispatched at runtime, so the operator is not specialized for the other types, and its
+    // result can be the plugin's (qore#5911)
+    if (qore_plugin_binary_operation_may_apply(parse_context.pgm, lti, rti, "ge")) {
+        typeInfo = autoTypeInfo;
+        parse_context.typeInfo = autoTypeInfo;
+        set_binary_analysis_ge(parse_context, left_analysis, right_analysis);
+        return err;
+    }
+
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && left.isValue() && right.isValue()) {
         SimpleRefHolder<QoreLogicalGreaterThanOrEqualsOperatorNode> del(this);
@@ -146,8 +180,10 @@ int QoreLogicalGreaterThanOrEqualsOperatorNode::parseInitIntern(const char* name
 
     // check for optimizations based on type; but only if types are known on both sides, although the highest priority
     // (float) can be assigned if either side is a float
+    // a float is not compared as a float with an operand that can be a number (ex: *number, union<int, number>), which
+    // is compared as a number (qore#5875)
     if (!QoreTypeInfo::parseReturns(lti, NT_BUFFER) && !QoreTypeInfo::parseReturns(rti, NT_BUFFER)
-            && !QoreTypeInfo::isType(lti, NT_NUMBER) && !QoreTypeInfo::isType(rti, NT_NUMBER)) {
+            && !QoreTypeInfo::parseReturns(lti, NT_NUMBER) && !QoreTypeInfo::parseReturns(rti, NT_NUMBER)) {
         if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT))
             pfunc = &QoreLogicalGreaterThanOrEqualsOperatorNode::floatGreaterThanOrEquals;
         else if (QoreTypeInfo::hasType(lti) && QoreTypeInfo::hasType(rti)) {
@@ -164,18 +200,18 @@ int QoreLogicalGreaterThanOrEqualsOperatorNode::parseInitIntern(const char* name
 }
 
 bool QoreLogicalGreaterThanOrEqualsOperatorNode::floatGreaterThanOrEquals(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsFloat() >= rh->getAsFloat();
 }
 
 bool QoreLogicalGreaterThanOrEqualsOperatorNode::bigIntGreaterThanOrEquals(ExceptionSink *xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return false;
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return false;
 
     return lh->getAsBigInt() >= rh->getAsBigInt();
@@ -197,10 +233,11 @@ bool QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(const Qor
             case NT_FLOAT:
                 return l.get<const QoreNumberNode>()->greaterThanOrEqual(r.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return l.get<const QoreNumberNode>()->greaterThanOrEqual(r.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> rn(new QoreNumberNode(r), xsink);
                 return l.get<const QoreNumberNode>()->greaterThanOrEqual(**rn);
             }
         }
@@ -212,10 +249,11 @@ bool QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(const Qor
             case NT_FLOAT:
                 return r.get<const QoreNumberNode>()->lessThanOrEqual(l.getAsFloat());
             case NT_BOOLEAN:
+            case NT_CHAR:
             case NT_INT:
                 return r.get<const QoreNumberNode>()->lessThanOrEqual(l.getAsBigInt());
             default: {
-                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l.getInternalNode()), xsink);
+                ReferenceHolder<QoreNumberNode> ln(new QoreNumberNode(l), xsink);
                 return r.get<const QoreNumberNode>()->lessThanOrEqual(**ln);
             }
         }
@@ -238,9 +276,16 @@ bool QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(const Qor
         return ls->compare(*rs) >= 0;
     }
 
+    // a char is compared with any other value but a string as its code point, as an int is, and as the == and <=>
+    // operators compare it (a char with a string is compared as a one-character string, above)
+    if (lt == NT_CHAR || rt == NT_CHAR) {
+        return l.getAsBigInt() >= r.getAsBigInt();
+    }
+
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeValueHelper ld(l);
-        DateTimeValueHelper rd(r);
+        // a number converted to a relative date out of range raises INVALID-DATE (qore#6103)
+        DateTimeValueHelper ld(l, xsink);
+        DateTimeValueHelper rd(r, xsink);
         return DateTime::compareDates(*ld, *rd) >= 0;
     }
 

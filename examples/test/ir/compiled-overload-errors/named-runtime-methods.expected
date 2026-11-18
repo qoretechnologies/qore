@@ -1,0 +1,45 @@
+object label first: B::sw(int count, string label) count=1 label="x"
+object count first: B::sw(int count, string label) count=1 label="x"
+object float: B::sw(string label, float count) label="x" count=1.5
+object reference: B::rf(string b, reference<int> a) b="x" ri=11
+object dflt a: B::dflt(int a, string b) a=1 b="db"
+object dflt b: B::dflt(string b, *int c) b="x" c=null
+object dflt b c nothing: B::dflt(string b, *int c) b="x" c=null
+object one a: B::one(int a) a=1
+object one b: B::one(string b) b="x"
+object one b int: RUNTIME-OVERLOAD-ERROR
+object public: B::pv(int a) a=1
+self: B::sw(int count, string label) count=1 label="x"
+self one a: B::one(int a) a=1
+self one b: B::one(string b) b="x"
+self private: B::pv(string b) b="x"
+self static: B::ss(int count, string label) count=1 label="x"
+scoped self: B::sw(int count, string label) count=1 label="x"
+static label first: B::ss(int count, string label) count=1 label="x"
+static float: B::ss(string label, float count) label="x" count=1.5
+child override: C::sw(int count, string label) count=1 label="x"
+child inherited: B::sw(string label, float count) label="x" count=1.5
+child self: C::sw(int count, string label) count=1 label="x"
+child base call: B::sw(int count, string label) count=1 label="x"
+child scoped self: B::sw(int count, string label) count=1 label="x"
+abstract: AI::am(int count, string label) count=1 label="x"
+abstract float: AI::am(string label, float count) label="x" count=1.5
+abstract scoped: AI::am(int count, string label) count=1 label="x"
+abstract scoped float: AI::am(string label, float count) label="x" count=1.5
+final: F::fs(int count, string label) count=1 label="x"
+final self: F::fs(int count, string label) count=1 label="x"
+optional receiver: B::sw(int count, string label) count=1 label="x"
+no receiver: PSEUDO-METHOD-DOES-NOT-EXIST
+deleted: OBJECT-ALREADY-DELETED
+loop: ["B::one(string b) b=\"s0\"", "C::sw(int count, string label) count=0 label=\"l0\"", "B::ss(int count, string label) count=0 label=\"s0\"", "B::one(int a) a=1", "C::sw(int count, string label) count=1 label=\"l1\"", "B::ss(int count, string label) count=1 label=\"s1\"", "B::one(string b) b=\"s2\"", "C::sw(int count, string label) count=2 label=\"l2\"", "B::ss(int count, string label) count=2 label=\"s2\"", "B::one(int a) a=3", "C::sw(int count, string label) count=3 label=\"l3\"", "B::ss(int count, string label) count=3 label=\"s3\""]
+background object: B::sw(int count, string label) count=1 label="x"
+background static: B::ss(int count, string label) count=1 label="x"
+background object call: B::qsw(Queue q, int count, string label) count=1 label="x"
+background self call: B::qsw(Queue q, int count, string label) count=1 label="x"
+default static: B::ss(int count, string label) count=1 label="v"
+default object: B::sw(int count, string label) count=2 label="v"
+member static: B::ss(int count, string label) count=3 label="v"
+member object: B::sw(int count, string label) count=4 label="v"
+default self: B::sw(int count, string label) count=1 label="v"
+default self child: C::sw(int count, string label) count=1 label="v"
+default self bound: B::two(int a, string b) a=1 b="s"

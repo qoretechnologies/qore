@@ -1,0 +1,2 @@
+%requires XfcConsumer
+printf("%d\n", XfcConsumer::hot(4));

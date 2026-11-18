@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module whose initialization loads a module that uses locale control; DdAix
+# requires it before its header (qore#6351)
+
+%modern
+
+module DdPreInit {
+    version = "1.0";
+    desc = "a module whose initialization loads another";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () { load_module("DdInner"); };
+}
+
+public namespace DdPreInit {
+}

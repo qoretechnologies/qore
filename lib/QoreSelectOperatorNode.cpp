@@ -29,6 +29,8 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/StatementBlock.h"
+#include "qore/intern/QoreStatementTemps.h"
 #include "qore/intern/qore_string_private.h"
 
 #include "qore/intern/qore_program_private.h"
@@ -37,6 +39,37 @@
 #include "qore/intern/qore_list_private.h"
 
 #include <memory>
+
+namespace {
+class StrictBooleanSelectOperatorNode : public QoreSelectOperatorNode {
+public:
+    using QoreSelectOperatorNode::QoreSelectOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        StrictBooleanSelectOperatorNode* rv = copyBackgroundIterating<StrictBooleanSelectOperatorNode>(xsink, false);
+        if (rv) {
+            rv->iterator_func = dynamic_cast<FunctionalOperator*>(rv->left.getInternalNode());
+        }
+        return rv;
+    }
+    FunctionalOperatorInterface* getFunctionalIteratorImpl(FunctionalValueType& value_type,
+            ExceptionSink* xsink) const override {
+        return getFunctionalIteratorCommon<true>(value_type, xsink);
+    }
+};
+}
+
+QoreSelectOperatorNode* QoreSelectOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue left, QoreValue right) {
+    QoreSelectOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanSelectOperatorNode(loc, left, right) : new QoreSelectOperatorNode(loc, left, right);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
+        ExceptionSink* xsink) const {
+    return getFunctionalIteratorCommon<false>(value_type, xsink);
+}
+
 
 QoreString QoreSelectOperatorNode::select_str("select operator expression");
 
@@ -52,6 +85,10 @@ int QoreSelectOperatorNode::getAsString(QoreString& str, int foff, ExceptionSink
 }
 
 int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
+    // the code may run for no element, and leave before its end; see ParseLoopAssignedStateHelper
+    ParseLoopAssignedStateHelper loop_assigned_state;
     assert(!parse_context.typeInfo);
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
@@ -76,11 +113,16 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     {
         // set implicit argv arg type
         ParseImplicitArgTypeHelper pia(elementTypeInfo);
+        // the code runs for each element with the element's index as $# (qore#5690)
+        QoreParseContextFlagHelper element_flag(parse_context);
+        element_flag.setFlags(PF_IMPLICIT_ELEMENT);
 
         QoreParseContextAnalysisHelper ah(parse_context);
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
+        // qore#6288: see elementScope()
+        qore_parse_decide_element_scopes(this, decideElementScopes);
         select_analysis = parse_context.analysis;
     }
 
@@ -173,7 +215,7 @@ QoreValue QoreSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
                 vcommon = false;
             }
 
-            rv->push(val, xsink);
+            qore_list_private::pushCanonical(**rv, val, xsink);
         }
     }
 
@@ -184,13 +226,14 @@ QoreValue QoreSelectOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
     return rv.release();
 }
 
-FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(FunctionalValueType& value_type,
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorCommon(FunctionalValueType& value_type,
         ExceptionSink* xsink) const {
     if (iterator_func) {
         std::unique_ptr<FunctionalOperatorInterface> f(iterator_func->getFunctionalIterator(value_type, xsink));
         if (*xsink || value_type == nothing)
             return 0;
-        return new QoreFunctionalSelectOperator(this, f.release());
+        return new QoreFunctionalSelectOperator<StrictBoolean>(this, f.release());
     }
 
     ValueEvalOptimizedRefHolder marg(left, xsink);
@@ -213,7 +256,7 @@ FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(F
                     temp = true;
                 }
                 value_type = list;
-                return new QoreFunctionalSelectIteratorOperator(this, temp, h, xsink);
+                return new QoreFunctionalSelectIteratorOperator<StrictBoolean>(this, temp, h, xsink);
             }
         }
         if (t == NT_NOTHING) {
@@ -222,14 +265,15 @@ FunctionalOperatorInterface* QoreSelectOperatorNode::getFunctionalIteratorImpl(F
         }
 
         value_type = single;
-        return new QoreFunctionalSelectSingleValueOperator(this, marg.getReferencedValue(), xsink);
+        return new QoreFunctionalSelectSingleValueOperator<StrictBoolean>(this, marg.getReferencedValue(), xsink);
     }
 
     value_type = list;
-    return new QoreFunctionalSelectListOperator(this, marg.takeReferencedNode<QoreListNode>(), xsink);
+    return new QoreFunctionalSelectListOperator<StrictBoolean>(this, marg.takeReferencedNode<QoreListNode>(), xsink);
 }
 
-bool QoreFunctionalSelectListOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalSelectListOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     while (true) {
         if (!next())
             return true;
@@ -239,10 +283,11 @@ bool QoreFunctionalSelectListOperator::getNextImpl(ValueOptionalRefHolder& val, 
         SingleArgvContextHelper argv_helper(getReferencedValue(), xsink);
 
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
         if (*xsink)
             return false;
-        if (!result->getAsBool())
+        if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
             continue;
 
         val.setValue(getReferencedValue(), true);
@@ -251,20 +296,24 @@ bool QoreFunctionalSelectListOperator::getNextImpl(ValueOptionalRefHolder& val, 
     return false;
 }
 
-bool QoreFunctionalSelectSingleValueOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalSelectSingleValueOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     if (done)
         return true;
 
     done = true;
 
     // setup the implicit argument
+    // a single value is the operator's only element: $# is 0, as for a list of one element (qore#5690)
+    ImplicitElementHelper eh(0);
     SingleArgvContextHelper argv_helper(v.refSelf(), xsink);
 
     // check if value can be selected
-    ValueEvalOptimizedRefHolder result(select->right, xsink);
+    // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
     if (*xsink)
         return false;
-    if (!result->getAsBool())
+    if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
         return true;
 
     val.setValue(v, true);
@@ -272,7 +321,8 @@ bool QoreFunctionalSelectSingleValueOperator::getNextImpl(ValueOptionalRefHolder
     return false;
 }
 
-bool QoreFunctionalSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalSelectIteratorOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     while (true) {
         bool b = h.next(xsink);
         if (!b)
@@ -290,10 +340,11 @@ bool QoreFunctionalSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder& v
         // setup the implicit argument
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
         if (*xsink)
             return false;
-        if (!result->getAsBool())
+        if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
             continue;
 
         val.setValue(iv.release(), true);
@@ -302,7 +353,8 @@ bool QoreFunctionalSelectIteratorOperator::getNextImpl(ValueOptionalRefHolder& v
     return false;
 }
 
-bool QoreFunctionalSelectOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+bool QoreFunctionalSelectOperator<StrictBoolean>::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
     while (true) {
         ValueOptionalRefHolder iv(xsink);
         if (f->getNext(iv, xsink))
@@ -316,10 +368,11 @@ bool QoreFunctionalSelectOperator::getNextImpl(ValueOptionalRefHolder& val, Exce
         // setup the implicit argument
         SingleArgvContextHelper argv_helper(iv->refSelf(), xsink);
         // check if value can be selected
-        ValueEvalOptimizedRefHolder result(select->right, xsink);
+        // the temporaries of an element's condition are released at its end (qore#6288)
+        QoreScopedEvalHolder result(select->right, select->elementScope(1), xsink);
         if (*xsink)
             return false;
-        if (!result->getAsBool())
+        if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*result))
             continue;
 
         iv.ensureReferencedValue();
@@ -327,4 +380,13 @@ bool QoreFunctionalSelectOperator::getNextImpl(ValueOptionalRefHolder& val, Exce
         break;
     }
     return false;
+}
+
+void QoreSelectOperatorNode::decideElementScopes(AbstractQoreNode* op) {
+    QoreSelectOperatorNode* self = static_cast<QoreSelectOperatorNode*>(op);
+    uint8_t v = 0;
+    if (qore_expr_may_create_observable_temp(self->right)) {
+        v |= 1u << 1;
+    }
+    self->element_scopes.set(v);
 }

@@ -1,0 +1,6 @@
+list<number>
+list<string>
+hash<string, float>
+list<string>
+list<int>
+list<int> list<string>

@@ -5,9 +5,10 @@
 %requires HttpServer
 %requires Logger
 
-# HttpServer with a trivial handler on a fixed port; GET /quit ends it and reports the process CPU time
-
-const Port = 38765;
+# HttpServer with a trivial handler; GET /quit ends it and reports the process CPU time
+#
+# It listens on the port in HTTP_BENCH_PORT, else on a port of its own (port 0), so that concurrent runs on a host do
+# not share a server, and prints "ready <port>" once it listens.
 
 class QuickHandler inherits AbstractHttpRequestHandler {
     private {
@@ -19,10 +20,17 @@ class QuickHandler inherits AbstractHttpRequestHandler {
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<HttpResponseInfo> rv = makeResponse(200, "ok", {"Content-Type": "text/plain"});
         if (hdr.path == "quit") {
-            quit.dec();
+            # the server is stopped once the response has been written to the socket: HttpServer::stop() cancels the
+            # sends that are still pending, so stopping it as soon as the request arrives could close the connection
+            # before the response was sent (SOCKET-CLOSED in the client, #5811)
+            Counter q = quit;
+            rv.after_send = sub (hash<auto> cx, bool sent) {
+                q.dec();
+            };
         }
-        return makeResponse(200, "ok", {"Content-Type": "text/plain"});
+        return rv;
     }
 
     #! with HTTP_BENCH_INLINE=1 the handler opts in to inline dispatch on the async callback dispatcher worker
@@ -44,13 +52,14 @@ HttpServer server(<HttpServerOptionInfo>{"logger": logger});
 QuickHandler handler();
 server.setHandler("handler", "", NOTHING, handler);
 server.setDefaultHandler("handler", handler);
-server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": Port});
+int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1",
+    "service": (ENV.HTTP_BENCH_PORT ?? 0).toInt()}).port;
 server.waitForAsyncIo();
 # with HTTP_BENCH_FAST=1 "GET /" is a fast route: the async I/O thread answers it without calling Qore code
 if (ENV.HTTP_BENCH_FAST == "1") {
     server.addFastRoute("/", {"public": True, "response": {"code": 200, "body": "ok", "content_type": "text/plain"}});
 }
-printf("ready\n");
+printf("ready %d\n", port);
 stdout.sync();
 handler.waitForQuit();
 # fields 14 and 15 of /proc/self/stat are utime and stime in clock ticks

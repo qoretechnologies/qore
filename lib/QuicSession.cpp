@@ -35,6 +35,8 @@
 #include <qore/QoreSSLPrivateKey.h>
 
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/WebSocketFrameCodec.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
 
@@ -49,6 +51,7 @@
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/ql_debug.h"
 
 #include <unordered_set>
 #include <set>
@@ -353,6 +356,82 @@ std::string QuicSession::getCipherVersion() const {
 // ===== Timestamp helper =====
 
 #ifdef DEBUG
+//! Protects the state of qore_quic_test_hold_client_settings() and qore_quic_test_wait_settings_waiters()
+static std::mutex quic_test_settings_m;
+// a leaf lock: its holder takes only the settings_wait_lock_ of sessions; a test process can fork (see QoreForkHandlers.h)
+static QoreForkStdMutex quic_test_settings_fork_handler(quic_test_settings_m, QFLR_LEAF, "quic_test_settings");
+//! Signaled when quic_test_settings_waiters changes
+static std::condition_variable quic_test_settings_cond;
+//! True while the server's SETTINGS are held back from client sessions
+static bool quic_test_hold_settings = false;
+//! The client sessions whose SETTINGS are held; a session removes itself in its destructor
+static std::map<QuicSession*, std::weak_ptr<QuicSession>> quic_test_held_sessions;
+//! The number of threads waiting in QuicSession::waitForRemoteSettings()
+static int64_t quic_test_settings_waiters = 0;
+
+//! Counts a thread waiting in QuicSession::waitForRemoteSettings() while it exists
+class QuicTestSettingsWaiter {
+public:
+    DLLLOCAL QuicTestSettingsWaiter() {
+        {
+            std::lock_guard<std::mutex> g(quic_test_settings_m);
+            ++quic_test_settings_waiters;
+        }
+        quic_test_settings_cond.notify_all();
+    }
+
+    DLLLOCAL ~QuicTestSettingsWaiter() {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        --quic_test_settings_waiters;
+    }
+};
+
+void qore_quic_test_hold_client_settings(bool hold) {
+    std::lock_guard<std::mutex> g(quic_test_settings_m);
+    quic_test_hold_settings = hold;
+    if (hold) {
+        return;
+    }
+    // record the held SETTINGS as they were received; applyRemoteSettings() takes only settings_wait_lock_
+    for (auto& i : quic_test_held_sessions) {
+        QuicSession* session = i.first;
+        session->test_settings_held_ = false;
+        session->applyRemoteSettings(session->test_held_enable_connect_);
+    }
+    quic_test_held_sessions.clear();
+}
+
+int64_t qore_quic_test_idle_close_held_client_sessions() {
+    // the sessions are kept alive by the references taken here; mtx_ is not taken with quic_test_settings_m held, as
+    // the SETTINGS callback takes them in the other order
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        for (auto& i : quic_test_held_sessions) {
+            std::shared_ptr<QuicSession> session = i.second.lock();
+            if (session) {
+                sessions.push_back(std::move(session));
+            }
+        }
+    }
+    for (auto& session : sessions) {
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        session->closeIdleLocked();
+    }
+    return static_cast<int64_t>(sessions.size());
+}
+
+int64_t qore_quic_test_held_client_settings() {
+    std::lock_guard<std::mutex> g(quic_test_settings_m);
+    return static_cast<int64_t>(quic_test_held_sessions.size());
+}
+
+bool qore_quic_test_wait_settings_waiters(int64_t count, int64_t timeout_ms) {
+    std::unique_lock<std::mutex> ul(quic_test_settings_m);
+    return quic_test_settings_cond.wait_for(ul, std::chrono::milliseconds(timeout_ms),
+        [count] () { return quic_test_settings_waiters >= count; });
+}
+
 //! The total advance of the QUIC test clock in nanoseconds; see qore_quic_test_advance_clock()
 static std::atomic<int64_t> quic_test_clock_offset_ns{0};
 
@@ -907,6 +986,20 @@ QuicSession::QuicSession() : session_id_(next_session_id_.fetch_add(1, std::memo
 }
 
 QuicSession::~QuicSession() {
+#ifdef DEBUG
+    // the extended-CONNECT buffers are released with the session (issue #5821)
+    for (auto& i : connect_stream_data_) {
+        qore_dbg_quic_connect_buffered.fetch_sub(static_cast<int64_t>(i.second.size()), std::memory_order_relaxed);
+    }
+    // the credit deferred for streams still open when the session ends is settled with them (issue #5820)
+    for (auto& i : deferred_stream_credit_) {
+        qore_dbg_stream_credit_stats.settled.fetch_add(i.second, std::memory_order_relaxed);
+    }
+    {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        quic_test_held_sessions.erase(this);
+    }
+#endif
     {
         ExceptionSink xsink;
         std::unordered_map<QoreObject*, size_t> waiters;
@@ -1147,9 +1240,145 @@ std::shared_ptr<QuicSession> QuicSession::createServer(
                             ssl_verify_mode, ssl_accept_all_certs, retry_odcid) != 0) {
         return nullptr;
     }
+    // whether the session advertises extended CONNECT (RFC 9220); setupHttp3() runs after the session is created
+    session->enable_connect_protocol_ = sock->h3_enable_connect_protocol.load(std::memory_order_acquire);
     // Clear the temporary socket pointer; it was only needed during init
     session->clearSockPtr();
     return session;
+}
+
+int QuicSession::checkExtendedConnectAllowed(ExceptionSink* xsink) const {
+    if (!remote_settings_received_.load(std::memory_order_acquire)) {
+        // the HTTP clients wait for the SETTINGS before they submit an extended CONNECT (see
+        // Http3ClientPollOperationPriv::waitForExtendedConnectSettings()); a request gets here when it was made on the
+        // I/O thread, which cannot wait, or directly on a QUIC socket (see Socket::waitForQuicSettings())
+        xsink->raiseException("HTTP3-EXTENDED-CONNECT-ERROR", "cannot send an extended CONNECT request (RFC 9220): "
+            "the server's HTTP/3 SETTINGS have not been received yet, so it is not known whether the server supports "
+            "it");
+        return -1;
+    }
+    // a definitive answer of the server, with an error code of its own, which callers do not retry on a fresh
+    // connection (issue #5678)
+    if (!remote_enable_connect_protocol_.load(std::memory_order_acquire)) {
+        xsink->raiseException("HTTP3-EXTENDED-CONNECT-UNSUPPORTED", "server does not support extended CONNECT "
+            "protocol (RFC 9220); SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
+        return -1;
+    }
+    return 0;
+}
+
+void QuicSession::onRemoteSettings(bool enable_connect_protocol) {
+#ifdef DEBUG
+    if (!is_server_) {
+        std::lock_guard<std::mutex> g(quic_test_settings_m);
+        if (quic_test_hold_settings) {
+            test_settings_held_ = true;
+            test_held_enable_connect_ = enable_connect_protocol;
+            quic_test_held_sessions[this] = weak_from_this();
+            return;
+        }
+    }
+#endif
+    applyRemoteSettings(enable_connect_protocol);
+}
+
+void QuicSession::applyRemoteSettings(bool enable_connect_protocol) {
+    // the setting before the flag: a thread that sees the SETTINGS received sees what they advertised
+    if (enable_connect_protocol) {
+        remote_enable_connect_protocol_.store(true, std::memory_order_release);
+    }
+    remote_settings_received_.store(true, std::memory_order_release);
+    wakeSettingsWaiters();
+}
+
+void QuicSession::wakeSettingsWaiters() {
+    AutoLocker al(settings_wait_lock_);
+    ++settings_wait_gen_;
+    settings_wait_cond_.broadcast();
+}
+
+const char* QuicSession::raiseSettingsWaitCloseError(ExceptionSink* xsink) const {
+    switch (getCloseReason()) {
+        case CloseReason::Idle:
+            xsink->raiseException("HTTP3-IDLE-CLOSE", "QUIC connection closed by its idle timer before the "
+                "server's HTTP/3 SETTINGS were received; the request was not sent");
+            return "HTTP3-IDLE-CLOSE";
+        case CloseReason::PeerClose:
+            xsink->raiseException("HTTP3-PEER-CLOSE", "QUIC connection closed by the server before its HTTP/3 "
+                "SETTINGS were received; the request was not sent");
+            return "HTTP3-PEER-CLOSE";
+        default:
+            // closed locally, or the session was released from its waiters (its client operation was closed, or the
+            // socket dropped it)
+            xsink->raiseException("HTTP3-LOCAL-CLOSE", "QUIC connection closed locally before the server's HTTP/3 "
+                "SETTINGS were received; the request was not sent");
+            return "HTTP3-LOCAL-CLOSE";
+    }
+}
+
+void QuicSession::releaseSettingsWaiters() {
+    settings_wait_released_.store(true, std::memory_order_release);
+    wakeSettingsWaiters();
+}
+
+QuicSession::SettingsWait QuicSession::waitForRemoteSettings(int64_t timeout_ms, ExceptionSink* xsink) {
+    const bool has_deadline = timeout_ms >= 0;
+    // on the monotonic clock, so a wall-clock step does not change it, and not restarted by a wakeup
+    const int64 deadline_us = has_deadline ? q_clock_getmicros_monotonic() + timeout_ms * 1000 : 0;
+#ifdef DEBUG
+    std::unique_ptr<QuicTestSettingsWaiter> test_waiter;
+#endif
+    while (true) {
+        // the generation is read before the state is checked, so a change after the check ends the wait below
+        uint64_t gen;
+        {
+            AutoLocker al(settings_wait_lock_);
+            gen = settings_wait_gen_;
+        }
+        if (remote_settings_received_.load(std::memory_order_acquire)) {
+            return SettingsWait::Received;
+        }
+        // isClosed() takes mtx_, so not with settings_wait_lock_ held: wakeSettingsWaiters() is called with mtx_ held
+        if (settings_wait_released_.load(std::memory_order_acquire) || isClosed()) {
+            return SettingsWait::Closed;
+        }
+#ifdef DEBUG
+        if (!test_waiter) {
+            test_waiter.reset(new QuicTestSettingsWaiter);
+        }
+#endif
+        bool deadline_reached = false;
+        {
+            AutoLocker al(settings_wait_lock_);
+            while (settings_wait_gen_ == gen) {
+                int64 wait_ms = -1;
+                if (has_deadline) {
+                    int64 remaining_us = deadline_us - q_clock_getmicros_monotonic();
+                    if (remaining_us <= 0) {
+                        deadline_reached = true;
+                        break;
+                    }
+                    // round up, so the wait never ends before the deadline
+                    wait_ms = (remaining_us + 999) / 1000;
+                }
+                // a cancelled thread or an interrupted Program ends the wait (THREAD-CANCELLED, PROGRAM-INTERRUPTED)
+                if (settings_wait_cond_.waitWithInterrupt(settings_wait_lock_, wait_ms, xsink)
+                        == QORE_COND_RESULT_INTERRUPTED) {
+                    return SettingsWait::Interrupted;
+                }
+            }
+        }
+        if (deadline_reached) {
+            // what happened until the deadline wins over the timeout: the SETTINGS, then a close
+            if (remote_settings_received_.load(std::memory_order_acquire)) {
+                return SettingsWait::Received;
+            }
+            if (settings_wait_released_.load(std::memory_order_acquire) || isClosed()) {
+                return SettingsWait::Closed;
+            }
+            return SettingsWait::Timeout;
+        }
+    }
 }
 
 // ===== SSL Context Setup =====
@@ -1873,8 +2102,8 @@ int QuicSession::setupHttp3(ExceptionSink* xsink) {
     // Disable QPACK dynamic table — eliminates the need for deferred_consume
     h3_settings.qpack_max_dtable_capacity = 0;
     h3_settings.qpack_blocked_streams = 0;
-    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3
-    if (is_server_) {
+    // RFC 9220: Server advertises Extended CONNECT support for WebSocket over HTTP/3 unless its socket disabled it
+    if (is_server_ && enable_connect_protocol_) {
         h3_settings.enable_connect_protocol = 1;
     }
     // RFC 9297: Enable HTTP/3 datagrams (SETTINGS_H3_DATAGRAM)
@@ -2033,6 +2262,8 @@ int QuicSession::readPacketLocked(const uint8_t* data, size_t len,
     if (rv != 0) {
         // Handle specific error codes
         if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
+            // the peer closed the connection, or it is closing: the threads waiting for the SETTINGS see it closed
+            wakeSettingsWaiters();
             return 0;  // connection closing gracefully
         }
         // A server receives these for a client Initial whose CRYPTO data does not start the
@@ -2161,6 +2392,8 @@ int QuicSession::readPacketBatch(const QuicReceivedPacket* packets, int count,
                                        packets[i].data, packets[i].len, last_rx_ts_);
         if (rv != 0) {
             if (rv == NGTCP2_ERR_DRAINING || rv == NGTCP2_ERR_CLOSING) {
+                // see readPacketLocked()
+                wakeSettingsWaiters();
                 break;  // connection shutting down — no more packets can be processed
             }
             // see readPacketLocked(): drop silently so the client's retransmitted Initial starts
@@ -2276,7 +2509,8 @@ int QuicSession::writePacketsLocked(QuicPacketBatch& packets, ExceptionSink* xsi
                 return -1;
             }
             if (sveccnt > 0 || stream_id >= 0) {
-                size_t vec_total = 0;
+                // only the traces read it
+                [[maybe_unused]] size_t vec_total = 0;
                 for (nghttp3_ssize i = 0; i < sveccnt; ++i) {
                     vec_total += vec[i].len;
                 }
@@ -2688,6 +2922,16 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
 int64_t QuicSession::submitRequest(const char* method, const char* path,
                                    const qore_http_header_pairs_t& headers,
                                    const void* body, size_t body_len, ExceptionSink* xsink) {
+    // the pseudo-headers of the request are built here, and others are not sent: an extended CONNECT request
+    // (RFC 9220) without its :protocol would be a malformed CONNECT (RFC 9114 section 4.4)
+    {
+        const std::string* protocol = qore_find_http_header(headers, ":protocol");
+        if (protocol && !protocol->empty()) {
+            xsink->raiseException("HTTP3-REQUEST-ERROR", "an extended CONNECT request (RFC 9220, with a "
+                "\":protocol\" pseudo-header) must be made as a streaming request; the request was not sent");
+            return -1;
+        }
+    }
     // Build header name-value pairs OUTSIDE the lock (reserve to avoid
     // reallocations: 4 pseudo-headers + user headers).
     //
@@ -2935,6 +3179,12 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     if (refuseRequestOnClosedLocked(xsink)) {
         return -1;
     }
+    // RFC 9220: an extended CONNECT request only when the server advertised support for it; after the check of a
+    // closed connection, whose error (HTTP3-PEER-CLOSE, ...) tells the caller that the request can be repeated on a
+    // new connection
+    if (proto_val && !proto_val->empty() && checkExtendedConnectAllowed(xsink)) {
+        return -1;
+    }
 
     // Open a new bidirectional stream
     int64_t stream_id;
@@ -2976,133 +3226,6 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     }
 
     // Signal that there's data to write (headers)
-    pending_write_.store(true, std::memory_order_release);
-
-    return stream_id;
-}
-
-int64_t QuicSession::submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
-                                           const char* protocol, ExceptionSink* xsink) {
-    // Build header name-value pairs OUTSIDE the lock
-    // Reserve: 5 pseudo-headers (:method, :path, :scheme, :authority, :protocol) + user headers
-    std::vector<nghttp3_nv> nva;
-    nva.reserve(headers.size() + 5);
-    auto add_nv = [&nva](const char* name, size_t namelen,
-                          const char* value, size_t valuelen) {
-        nva.push_back({
-            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(name)),
-            const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(value)),
-            namelen, valuelen, NGHTTP3_NV_FLAG_NONE
-        });
-    };
-
-    // Defensive path normalization — RFC 9220 Section 3: extended CONNECT
-    // includes :path, which follows the same absolute-path rule as other
-    // request methods (RFC 9114 §4.3.1).  See submitRequest() for rationale.
-    std::string path_norm;
-    if (path && *path && *path != '/') {
-        qore_async_io_log(QORE_LOG_LEVEL_WARN,
-            "QuicSession::submitConnectRequest: caller passed non-absolute "
-            ":path %s for extended CONNECT :protocol %s — auto-prepending "
-            "leading '/' to avoid H3_MALFORMED_HTTP_HEADER rejection; fix "
-            "the caller to pass an absolute path",
-            path, protocol);
-        path_norm.reserve(strlen(path) + 1);
-        path_norm.push_back('/');
-        path_norm.append(path);
-        path = path_norm.c_str();
-    }
-
-    // Pseudo-headers — RFC 9220 Section 3: extended CONNECT includes all 5
-    add_nv(":method", 7, "CONNECT", 7);
-    add_nv(":path", 5, path, strlen(path));
-    add_nv(":scheme", 7, "https", 5);
-
-    // Authority from headers or fallback to stored host:port
-    std::string authority;
-    if (const std::string* auth_val = qore_find_http_header(headers, "host")) {
-        authority = *auth_val;
-    } else if (!host_.empty()) {
-        authority = host_;
-        if (port_ != 0 && port_ != 443) {
-            authority += ":" + std::to_string(port_);
-        }
-    }
-    if (!authority.empty()) {
-        add_nv(":authority", 10, authority.c_str(), authority.size());
-    }
-
-    // RFC 9220: :protocol pseudo-header for extended CONNECT
-    add_nv(":protocol", 9, protocol, strlen(protocol));
-
-    // Regular headers (same filtering as submitRequest)
-    std::vector<std::string> lower_keys;
-    lower_keys.reserve(headers.size());
-    for (const auto& h : headers) {
-        if (h.first.empty() || h.first[0] == ':' || strcasecmp(h.first.c_str(), "host") == 0) {
-            continue;
-        }
-        std::string lower_key = h.first;
-        std::transform(lower_key.begin(), lower_key.end(), lower_key.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-        if (h3_forbidden_headers.count(lower_key)) {
-            continue;
-        }
-        lower_keys.push_back(std::move(lower_key));
-        add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
-                h.second.c_str(), h.second.size());
-    }
-
-    // Deferred data reader — CONNECT tunnel keeps the stream open indefinitely
-    nghttp3_data_reader dr;
-    dr.read_data = h3ReadDataCallback;
-
-    std::lock_guard<std::recursive_mutex> lock(mtx_);
-
-    if (!h3_conn_) {
-        xsink->raiseException("QUIC-HTTP3-ERROR", "HTTP/3 layer not initialized");
-        return -1;
-    }
-    if (refuseRequestOnClosedLocked(xsink)) {
-        return -1;
-    }
-
-    // Open a new bidirectional stream
-    int64_t stream_id;
-    int rv = ngtcp2_conn_open_bidi_stream(conn_, &stream_id, nullptr);
-    if (rv != 0) {
-        xsink->raiseException("QUIC-ERROR", "failed to open bidi stream: %s",
-                              ngtcp2_strerror(rv));
-        return -1;
-    }
-    noteBidiStreamOpenLocked(stream_id);
-
-    // Set up deferred streaming body data — h3ReadDataCallback returns
-    // NGHTTP3_ERR_WOULDBLOCK until data is pushed via sendStreamData()
-    streaming_body_data_[stream_id] = QuicStreamingBodyData{};
-    streaming_body_data_[stream_id].deferred = true;
-
-    rv = nghttp3_conn_submit_request(h3_conn_, stream_id, nva.data(), nva.size(),
-                                     &dr, nullptr);
-    if (rv != 0) {
-        xsink->raiseException("QUIC-HTTP3-ERROR",
-            "nghttp3_conn_submit_request failed for CONNECT: %s",
-            nghttp3_strerror(rv));
-        streaming_body_data_.erase(stream_id);
-        ngtcp2_conn_shutdown_stream_write(conn_, 0, stream_id, NGHTTP3_H3_INTERNAL_ERROR);
-        return -1;
-    }
-
-    // Create stream info — mark as CONNECT so h3EndHeadersCallback and
-    // h3RecvDataCallback handle the bidirectional tunnel correctly
-    auto* stream = getOrCreateStream(stream_id);
-    stream->method = "CONNECT";
-    stream->path = path;
-    stream->connect_protocol = protocol;
-    stream->is_connect = true;
-    stream->connect_tunnel_active = true;
-    stream->state = QuicStreamState::Open;
-
     pending_write_.store(true, std::memory_order_release);
 
     return stream_id;
@@ -3340,7 +3463,7 @@ int QuicSession::sendOnClosedStream(int64_t stream_id, size_t len, bool end_stre
 }
 
 int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
-                                 bool end_stream, ExceptionSink* xsink) {
+                                 bool end_stream, ExceptionSink* xsink, bool ignore_limit) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
 
     // If the peer reset the stream with an error (RESET_STREAM, or a close carrying an application error code),
@@ -3392,13 +3515,29 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 
     auto& sbd = it->second;
 
+    // a close frame was staged on the stream (by its WebSocket frame state or by the application): no data frame may
+    // follow it (RFC 6455 section 5.5.1), so a data frame (an opcode below the control frames') is refused under the
+    // lock the close was staged with; a control frame (a ping) and a FIN without data are not (issue #6077)
+    if (!ignore_limit && sbd.close_frame_staged && data && len > 0
+            && (static_cast<const uint8_t*>(data)[0] & 0x0f) < WSOP_CLOSE) {
+        xsink->raiseException("WEBSOCKET-CLOSING-ERROR", "cannot send data on HTTP/3 stream %" PRId64 ": its "
+            "WebSocket connection sent a close frame; no data frame may follow a close frame (RFC 6455 section "
+            "5.5.1)", stream_id);
+        return -1;
+    }
+
     // Check backpressure: if staging buffer > 1MB, signal caller to retry.
     // sent_bufs holds data already given to nghttp3/ngtcp2 (not counted here
     // because it will be freed via h3AckedStreamDataCallback).
     // Skip backpressure for FIN-only submissions (no data to append) — rejecting
     // the FIN when the buffer is transiently above the threshold would leave the
     // stream open forever if the caller has no retry loop for the FIN.
-    if (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0)) {
+    // a stream with its own limit (setStreamSendLimit()) refuses data that would take the staged data over it
+    // a WebSocket control frame of the frame state is staged past the limit (sendStreamControlFrame())
+    bool over_limit = !ignore_limit && (sbd.send_limit
+        ? (data && len > 0 && !sbd.data.empty() && sbd.data.size() + len > sbd.send_limit)
+        : (sbd.data.size() > QUIC_MAX_STREAM_BODY && (data && len > 0)));
+    if (over_limit) {
         ASYNC_IO_TRACE("QuicSession::sendStreamData BACKPRESSURE session=%lld stream_id=%lld len=%zu pending=%zu sent_bufs=%zu\n",
             (long long)getSessionId(), (long long)stream_id, len,
             sbd.data.size(), sbd.sent_bufs.size());
@@ -3444,6 +3583,91 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
     return 0;
 }
 
+int QuicSession::setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionSink* xsink) {
+    if (limit <= 0) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "invalid send limit %lld for stream %" PRId64 ": must be > 0",
+            (long long)limit, stream_id);
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end()) {
+        xsink->raiseException("QUIC-HTTP3-ERROR", "cannot set the send limit of stream %" PRId64 ": no streaming "
+            "response", stream_id);
+        return -1;
+    }
+    it->second.send_limit = (size_t)limit;
+    return 0;
+}
+
+int QuicSession::sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    uint8_t opcode = (data && len) ? (static_cast<const uint8_t*>(data)[0] & 0x0f) : 0;
+    // a close frame is staged past the limit once per stream: a close is never dropped (issue #5900); one staged
+    // before, also by the application (sendStreamCloseFrame()), is not followed by another (issue #6077)
+    if (opcode == WSOP_CLOSE) {
+        int rv = sendStreamCloseFrame(stream_id, data, len, false, xsink);
+        return rv == 2 ? 0 : rv;
+    }
+    int rv = sendStreamData(stream_id, data, len, false, xsink);
+    auto it2 = streaming_body_data_.find(stream_id);
+    if (opcode == WSOP_PONG && it2 != streaming_body_data_.end()) {
+        // no pong is kept to follow a close frame staged before it
+        if (rv == 1 && !it2->second.close_frame_staged) {
+            // the staged data is over its limit: the pong is kept, replacing an older one (it answers the most
+            // recent ping, RFC 6455 section 5.5.3), and staged by h3ReadDataCallback() once the staged data has
+            // been handed to the transport
+            const uint8_t* p = static_cast<const uint8_t*>(data);
+            it2->second.pending_pong.assign(p, p + len);
+            printd(5, "QuicSession::sendStreamControlFrame() stream " QLLD ": staged data over its limit; pong of "
+                "%zu bytes kept\n", (int64)stream_id, len);
+            return 0;
+        }
+        if (!rv) {
+            // a pong kept before is answered by this newer one
+            it2->second.pending_pong.clear();
+        }
+    }
+    return rv;
+}
+
+int QuicSession::sendStreamCloseFrame(int64_t stream_id, const void* data, size_t len, bool end_stream,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it != streaming_body_data_.end() && it->second.close_frame_staged) {
+        // a close frame was staged on the stream before: no other follows it (RFC 6455 section 5.5.1)
+        if (end_stream && sendStreamData(stream_id, nullptr, 0, true, xsink) < 0) {
+            return -1;
+        }
+        return 2;
+    }
+    int rv = sendStreamData(stream_id, data, len, end_stream, xsink, true);
+    if (!rv) {
+        auto it2 = streaming_body_data_.find(stream_id);
+        if (it2 != streaming_body_data_.end()) {
+            it2->second.close_frame_staged = true;
+            // a pong kept before is not sent after the close frame
+            it2->second.pending_pong.clear();
+            // the connection's record outlives the stream and the session (#6077).  It is set here, under the
+            // session's mutex, because every close frame of the stream is staged here and the callers hold the
+            // mutex already (the frame state's close frame comes through sendStreamControlFrame() under it);
+            // setting it is one atomic store, which calls nothing, so it cannot block or re-enter
+            auto rit = ws_close_records_.find(stream_id);
+            if (rit != ws_close_records_.end()) {
+                rit->second->setCloseSent();
+            }
+        }
+    }
+    return rv;
+}
+
+WebSocketCloseRecordRef QuicSession::getWebSocketCloseRecord(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = ws_close_records_.find(stream_id);
+    return it == ws_close_records_.end() ? WebSocketCloseRecordRef() : it->second;
+}
+
 int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
     (void)timeout_ms;
 
@@ -3459,6 +3683,17 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
     }
 
     return closed_.load(std::memory_order_acquire) ? -1 : 1;
+}
+
+int QuicSession::streamSendFlushed(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streaming_body_data_.find(stream_id);
+    if (it == streaming_body_data_.end() || closed_.load(std::memory_order_acquire)) {
+        return 0;
+    }
+    // the data handed to nghttp3 stays in sent_bufs until the peer acknowledges it: data moved there can still be
+    // unsent when flow control blocks the stream
+    return (it->second.data.empty() && it->second.pending_pong.empty() && it->second.sent_bufs.empty()) ? 0 : 1;
 }
 
 void QuicSession::notifyStreamDrain() {
@@ -3643,16 +3878,67 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     return 0;
 }
 
-QoreValue QuicSession::readConnectStreamData(int64_t stream_id, ExceptionSink* xsink) {
-    std::lock_guard<std::mutex> lg(connect_data_mutex_);
+void QuicSession::appendConnectStreamDataLocked(int64_t stream_id, const uint8_t* data, size_t len) {
+    auto& buf = connect_stream_data_[stream_id];
+    buf.insert(buf.end(), data, data + len);
+#ifdef DEBUG
+    qore_dbg_quic_connect_buffered.fetch_add(static_cast<int64_t>(len), std::memory_order_relaxed);
+#endif
+}
+
+std::vector<uint8_t> QuicSession::takeConnectStreamDataLocked(int64_t stream_id) {
+    std::vector<uint8_t> rv;
     auto it = connect_stream_data_.find(stream_id);
-    if (it == connect_stream_data_.end() || it->second.empty()) {
+    if (it != connect_stream_data_.end()) {
+        rv.swap(it->second);
+#ifdef DEBUG
+        qore_dbg_quic_connect_buffered.fetch_sub(static_cast<int64_t>(rv.size()), std::memory_order_relaxed);
+#endif
+    }
+    return rv;
+}
+
+void QuicSession::eraseConnectStreamDataLocked(int64_t stream_id) {
+    auto it = connect_stream_data_.find(stream_id);
+    if (it != connect_stream_data_.end()) {
+#ifdef DEBUG
+        qore_dbg_quic_connect_buffered.fetch_sub(static_cast<int64_t>(it->second.size()), std::memory_order_relaxed);
+#endif
+        connect_stream_data_.erase(it);
+    }
+}
+
+QoreValue QuicSession::readConnectStreamData(int64_t stream_id, ExceptionSink* xsink, bool* credit_due) {
+    if (credit_due) {
+        *credit_due = false;
+    }
+    if (!is_server_) {
+        // a client holds the data of a CONNECT stream once, in its body (issue #5821)
+        std::vector<char> data;
+        {
+            std::lock_guard<std::recursive_mutex> lock(mtx_);
+            auto it = streams_.find(stream_id);
+            // only a CONNECT stream's data is read here; the response body of any other stream is its response's
+            if (it == streams_.end() || !it->second->is_connect || it->second->body.empty()) {
+                return QoreValue();  // NOTHING
+            }
+            data.swap(it->second->body);
+            // the data is consumed now
+            if (it->second->credit_on_consume && creditConsumedStreamData(stream_id, data.size()) && credit_due) {
+                *credit_due = true;
+            }
+        }
+        // the value is made without the session lock, which the I/O thread takes for every packet
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+        bin->append(data.data(), data.size());
+        return bin.release();
+    }
+    std::lock_guard<std::mutex> lg(connect_data_mutex_);
+    // Extract data with swap — avoids copy and releases vector memory
+    std::vector<uint8_t> data = takeConnectStreamDataLocked(stream_id);
+    if (data.empty()) {
         return QoreValue();  // NOTHING
     }
-
-    // Extract data with swap — avoids copy and releases vector memory
-    std::vector<uint8_t> data;
-    data.swap(it->second);
     SimpleRefHolder<BinaryNode> bin(new BinaryNode());
     bin->append(data.data(), data.size());
     return bin.release();
@@ -3683,16 +3969,17 @@ void QuicSession::registerConnectStreamQueue(int64_t stream_id, Queue* queue) {
     connect_stream_queues_[stream_id] = queue;
 
     // Flush any data that was buffered before the Queue was registered
-    auto it = connect_stream_data_.find(stream_id);
-    if (it != connect_stream_data_.end() && !it->second.empty()) {
-        SimpleRefHolder<BinaryNode> bin(new BinaryNode());
-        bin->append(it->second.data(), it->second.size());
-        printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
-            " flushing %d buffered bytes to Queue\n", (int64)stream_id, (int)it->second.size());
-        queue->pushAndTakeRef(bin.release());
-        it->second.clear();
+    {
+        std::vector<uint8_t> buffered = takeConnectStreamDataLocked(stream_id);
+        if (!buffered.empty()) {
+            SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+            bin->append(buffered.data(), buffered.size());
+            printd(5, "QuicSession::registerConnectStreamQueue() stream_id=" QLLD
+                " flushing %d buffered bytes to Queue\n", (int64)stream_id, (int)buffered.size());
+            queue->pushAndTakeRef(bin.release());
+        }
     }
-    connect_stream_data_.erase(stream_id);
+    eraseConnectStreamDataLocked(stream_id);
 
     // If END_STREAM already arrived before registration, push sentinel and release
     if (already_complete) {
@@ -3717,6 +4004,20 @@ void QuicSession::deregisterConnectStreamQueue(int64_t stream_id) {
 void QuicSession::registerConnectStreamFrameState(int64_t stream_id, Queue* msg_queue) {
     ExceptionSink xsink;
 
+    // the record of the stream's close frame exists before the stream can carry one, so that the connection's stream
+    // context gets it also if it is created after the frame state's close frame and the end of the stream (#6077)
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        if (ws_close_records_.find(stream_id) == ws_close_records_.end()) {
+            WebSocketCloseRecordRef rec = WebSocketCloseRecordRef::create();
+            auto it = streaming_body_data_.find(stream_id);
+            if (it != streaming_body_data_.end() && it->second.close_frame_staged) {
+                rec->setCloseSent();
+            }
+            ws_close_records_.emplace(stream_id, std::move(rec));
+        }
+    }
+
     // Capture a weak self-reference via 'this' — safe because the QuicSession
     // outlives the frame state (the frame state is stored inside the session
     // itself and gets released when the session is destroyed or the stream
@@ -3729,8 +4030,8 @@ void QuicSession::registerConnectStreamFrameState(int64_t stream_id, Queue* msg_
                 return;
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
-            int rv = sendStreamData(stream_id, holder->getPtr(), holder->size(),
-                false, &cxsink);
+            // a pong or a close echo is never refused for a full buffer (issue #5900)
+            int rv = sendStreamControlFrame(stream_id, holder->getPtr(), holder->size(), &cxsink);
             if (cxsink || rv < 0) {
                 // Send failures here are non-fatal for incoming data
                 // processing — the transport teardown path will handle
@@ -3766,12 +4067,13 @@ void QuicSession::registerConnectStreamFrameState(int64_t stream_id, Queue* msg_
     connect_stream_frame_states_[stream_id] = frame_state;
 
     // Flush any buffered bytes from connect_stream_data_ into the state machine
-    auto buf_it = connect_stream_data_.find(stream_id);
-    if (buf_it != connect_stream_data_.end() && !buf_it->second.empty()) {
-        frame_state->feedData(buf_it->second.data(), buf_it->second.size());
-        buf_it->second.clear();
+    {
+        std::vector<uint8_t> buffered = takeConnectStreamDataLocked(stream_id);
+        if (!buffered.empty()) {
+            frame_state->feedData(buffered.data(), buffered.size());
+        }
     }
-    connect_stream_data_.erase(stream_id);
+    eraseConnectStreamDataLocked(stream_id);
 
     // Ownership: the caller transferred ONE reference of msg_queue to us;
     // that reference now lives inside `frame_state` (which derefs it in
@@ -3898,12 +4200,59 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
 }
 
 bool QuicSession::hasCompletedStreams() const {
-    return has_completed_streams_.load(std::memory_order_acquire);
+    bool rv = has_completed_streams_.load(std::memory_order_acquire);
+#ifdef DEBUG
+    // a test can hold the completed responses of clients, which then accumulate in the session (issue #5839)
+    if (rv && !is_server_ && QoreHttpClientDrainDebug::get().hold.load(std::memory_order_acquire)) {
+        size_t queued;
+        {
+            std::lock_guard<std::recursive_mutex> lock(mtx_);
+            queued = completed_streams_.size();
+        }
+        QoreHttpClientDrainDebug::get().recordHeld(queued);
+        return false;
+    }
+#endif
+    return rv;
 }
 
 void QuicSession::setHeadersOnlyMode(bool v) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     headers_only_mode_ = v;
+}
+
+void QuicSession::setStreamCreditOnConsume(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        it->second->credit_on_consume = true;
+    }
+}
+
+size_t QuicSession::creditConsumedStreamData(int64_t stream_id, size_t len) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto i = deferred_stream_credit_.find(stream_id);
+    size_t take = (i == deferred_stream_credit_.end()) ? 0 : std::min(len, i->second);
+#ifdef DEBUG
+    if (len > take) {
+        qore_dbg_stream_credit_stats.excess.fetch_add(len - take, std::memory_order_relaxed);
+    }
+#endif
+    if (!take) {
+        return 0;
+    }
+    if (!(i->second -= take)) {
+        deferred_stream_credit_.erase(i);
+    }
+#ifdef DEBUG
+    qore_dbg_stream_credit_stats.credited.fetch_add(take, std::memory_order_relaxed);
+#endif
+    // a stream that has closed takes no stream credit
+    if (conn_ && streams_.find(stream_id) != streams_.end()) {
+        ngtcp2_conn_extend_max_stream_offset(conn_, stream_id, static_cast<uint64_t>(take));
+        pending_write_.store(true, std::memory_order_release);
+    }
+    return take;
 }
 
 void QuicSession::setStreamStreaming(int64_t stream_id) {
@@ -4161,7 +4510,7 @@ bool QuicSession::cleanupStream(int64_t stream_id) {
         // Erasing the shared_ptr drops our ref; if it's the last one, the
         // frame state's destructor releases its Queue reference too.
         connect_stream_frame_states_.erase(stream_id);
-        connect_stream_data_.erase(stream_id);
+        eraseConnectStreamDataLocked(stream_id);
     }
     // the handler is done with the stream, so it sends nothing more on it: the record of a reset by the peer is not
     // needed any more (handlers that outlive their streams learn of resets from takePendingPeerResetReports())
@@ -4257,14 +4606,17 @@ int QuicSession::resetStream(int64_t stream_id) {
     // Clean up any buffered extended-CONNECT tunnel data for this stream
     {
         std::lock_guard<std::mutex> cg(connect_data_mutex_);
-        connect_stream_data_.erase(stream_id);
+        eraseConnectStreamDataLocked(stream_id);
     }
     return result;
 }
 
 
 
-QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
+QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete, bool* credit_due) {
+    if (credit_due) {
+        *credit_due = false;
+    }
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
     if (it == streams_.end()) {
@@ -4294,7 +4646,13 @@ QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
     // consumes data, not when it arrives. This naturally caps the buffer to the
     // initial flow control window (QUIC_SERVER_INITIAL_MAX_STREAM_DATA = 256KB)
     // and provides backpressure when the handler is slow.
-    if (conn_) {
+    if (conn_ && it->second->streaming && !is_server_) {
+        // a client streaming response was credited as it was received: the connection always, the stream unless
+        // its credit is deferred until the data is consumed (issue #5820), which is now
+        if (it->second->credit_on_consume && creditConsumedStreamData(stream_id, consumed) && credit_due) {
+            *credit_due = true;
+        }
+    } else if (conn_) {
         ngtcp2_conn_extend_max_stream_offset(conn_, stream_id,
                                               static_cast<uint64_t>(consumed));
         ngtcp2_conn_extend_max_offset(conn_, static_cast<uint64_t>(consumed));
@@ -4347,6 +4705,9 @@ QuicSession::CloseReason QuicSession::getCloseReason() const {
 
 void QuicSession::markClosed() {
     closed_.store(true, std::memory_order_release);
+
+    // Wake the threads waiting for the peer's SETTINGS
+    wakeSettingsWaiters();
 
     // Wake controller-backed stream data waiters.
     notifyStreamData();
@@ -4558,6 +4919,20 @@ int QuicSession::submitShutdownNotice(ExceptionSink* xsink) {
     return 0;
 }
 
+int QuicSession::submitDrainNotice(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (drain_notice_sent_) {
+        return 0;
+    }
+    drain_notice_sent_ = true;
+    return submitShutdownNotice(xsink);
+}
+
+bool QuicSession::hasActiveApplicationStreams() const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return hasActiveApplicationStreamsLocked();
+}
+
 int QuicSession::submitShutdown(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!h3_conn_) {
@@ -4760,6 +5135,18 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
     bool peer_reset = (flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)
         && app_error_code != NGHTTP3_H3_NO_ERROR;
 
+    // a closed stream takes no more stream credit: the credit deferred until the data is consumed is settled
+    // (issue #5820); data consumed later is reported in vain
+    {
+        auto dit = session->deferred_stream_credit_.find(stream_id);
+        if (dit != session->deferred_stream_credit_.end()) {
+#ifdef DEBUG
+            qore_dbg_stream_credit_stats.settled.fetch_add(dit->second, std::memory_order_relaxed);
+#endif
+            session->deferred_stream_credit_.erase(dit);
+        }
+    }
+
     try {
         if (session->h3_conn_) {
             if (!(flags & NGTCP2_STREAM_CLOSE_FLAG_APP_ERROR_CODE_SET)) {
@@ -4869,7 +5256,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
             // be needed by readConnectStreamData callers)
             auto cit = session->connect_stream_data_.find(stream_id);
             if (cit != session->connect_stream_data_.end() && cit->second.empty()) {
-                session->connect_stream_data_.erase(cit);
+                session->eraseConnectStreamDataLocked(stream_id);
             }
         }
 
@@ -4895,6 +5282,14 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 // For CONNECT tunnel streams, set body_complete directly without
                 // re-dispatching via markStreamComplete()
                 sit->second->body_complete = true;
+                // on the client, the close of a tunnel (also when the peer reset it without END_STREAM) ends it: the
+                // stream is reported once more, so that takeCompletedStream() releases its record and the reader
+                // gets the end of the stream, or the reset recorded above as an error (issue #5862)
+                if (!session->is_server_ && sit->second->connect_tunnel_active) {
+                    sit->second->connect_tunnel_active = false;
+                    session->completed_streams_.push(stream_id);
+                    session->has_completed_streams_.store(true, std::memory_order_release);
+                }
             } else {
                 session->markStreamComplete(stream_id);
             }
@@ -5237,7 +5632,7 @@ int QuicSession::beginPathValidationCallback(ngtcp2_conn* /* conn */,
                                               const ngtcp2_path* /* fallback_path */,
                                               void* user_data) {
     try {
-        auto* session = static_cast<QuicSession*>(user_data);
+        [[maybe_unused]] auto* session = static_cast<QuicSession*>(user_data);
         printd(3, "QuicSession::beginPathValidationCallback(): path validation started "
             "(session %lld)\n", (long long)session->session_id_);
     } catch (const std::exception& e) {
@@ -5281,8 +5676,8 @@ int QuicSession::dcidStatusCallback(ngtcp2_conn* /* conn */,
                                      const uint8_t* /* token */,
                                      void* user_data) {
     try {
-        auto* session = static_cast<QuicSession*>(user_data);
-        const char* type_str;
+        [[maybe_unused]] auto* session = static_cast<QuicSession*>(user_data);
+        [[maybe_unused]] const char* type_str;
         switch (type) {
             case NGTCP2_CONNECTION_ID_STATUS_TYPE_ACTIVATE:
                 type_str = "ACTIVATE";
@@ -5713,12 +6108,11 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                     } else {
                         // Fallback: buffer for later (neither frame-state
                         // nor Queue registered yet)
-                        auto& buf = session->connect_stream_data_[stream_id];
-                        buf.insert(buf.end(), data, data + datalen);
+                        session->appendConnectStreamDataLocked(stream_id, data, datalen);
                         buffered = true;
                         ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback CONNECT_SRV_BUFFER session=%lld stream_id=%lld datalen=%zu total_buffered=%zu (no Queue registered)\n",
                             (long long)session->getSessionId(), (long long)stream_id,
-                            datalen, buf.size());
+                            datalen, session->connect_stream_data_.find(stream_id)->second.size());
                         printd(5, "h3RecvDataCallback() stream_id=" QLLD
                             " datalen=%d buffered (no Queue registered)\n",
                             (int64)stream_id, (int)datalen);
@@ -5726,7 +6120,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                 }
             }
             if (frame_state) {
-                int pushed = frame_state->feedData(data, datalen);
+                [[maybe_unused]] int pushed = frame_state->feedData(data, datalen);
                 ASYNC_IO_TRACE("QuicSession::h3RecvDataCallback CONNECT_SRV_FRAME session=%lld stream_id=%lld datalen=%zu msgs_pushed=%d\n",
                     (long long)session->getSessionId(), (long long)stream_id,
                     datalen, pushed);
@@ -5745,26 +6139,27 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             return 0;
         }
 
-        // Client-side CONNECT tunnel: deliver each DATA chunk to the
-        // connect_stream_data_ buffer so readConnectStreamData() (used by
-        // the low-level readHttp3StreamData API) can retrieve it.
-        // Also push to completed_streams_ for the async I/O pipeline
-        // (ChannelAction → Channel → readData()).
+        // Client-side CONNECT tunnel: each DATA chunk is held once, in the stream's body, which the async I/O
+        // pipeline delivers (ChannelAction → Channel → readData(), or a frame state), or which
+        // readConnectStreamData() takes (the low-level Socket::readQuicConnectStreamData() API) (issue #5821)
         if (stream->is_connect && !session->is_server_) {
-            {
-                std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
-                auto& buf = session->connect_stream_data_[stream_id];
-                buf.insert(buf.end(), data, data + datalen);
-            }
             stream->body.insert(stream->body.end(), data, data + datalen);
             // Mark as "completed" for incremental delivery — getOutput() builds
             // the response hash with the accumulated body and resets it.
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
-            // Extend flow control
-            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
-                                                  static_cast<uint64_t>(datalen));
+            // the connection credit is granted now; the stream credit when the application consumes the data, if a
+            // consume hook reports it (issues #5820 and #5821), otherwise now
             ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            if (stream->credit_on_consume) {
+                session->deferred_stream_credit_[stream_id] += datalen;
+#ifdef DEBUG
+                qore_dbg_stream_credit_deferred(datalen);
+#endif
+            } else {
+                ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                      static_cast<uint64_t>(datalen));
+            }
             return 0;
         }
 
@@ -5790,10 +6185,18 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             stream->body.insert(stream->body.end(), data, data + datalen);
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
-            // Extend flow control
-            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
-                                                  static_cast<uint64_t>(datalen));
+            // the connection credit is granted now; the stream credit when the application consumes the data, if a
+            // consume hook reports it (issue #5820), otherwise now
             ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            if (stream->credit_on_consume) {
+                session->deferred_stream_credit_[stream_id] += datalen;
+#ifdef DEBUG
+                qore_dbg_stream_credit_deferred(datalen);
+#endif
+            } else {
+                ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                      static_cast<uint64_t>(datalen));
+            }
             return 0;
         }
 
@@ -6079,6 +6482,61 @@ int QuicSession::h3ResetStreamCallback(nghttp3_conn* /* conn */, int64_t stream_
     return 0;
 }
 
+#ifdef DEBUG
+namespace {
+//! the sessions whose staged data dbg_quic_hold_stream_data() held back since the last release
+std::mutex dbg_quic_held_sessions_m;
+std::vector<std::weak_ptr<QuicSession>> dbg_quic_held_sessions;
+
+//! called from nghttp3's C callback: no exception may leave it
+void dbg_quic_note_held_session(QuicSession* session) {
+    try {
+        std::weak_ptr<QuicSession> w = session->weak_from_this();
+        if (w.expired()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lg(dbg_quic_held_sessions_m);
+        for (const auto& i : dbg_quic_held_sessions) {
+            if (!i.owner_before(w) && !w.owner_before(i)) {
+                return;
+            }
+        }
+        dbg_quic_held_sessions.push_back(std::move(w));
+    } catch (...) {
+        printd(0, "dbg_quic_note_held_session(): the held session could not be recorded\n");
+    }
+}
+}
+
+void QuicSession::dbgResumeHeldStreams() {
+    std::vector<std::weak_ptr<QuicSession>> sessions;
+    {
+        std::lock_guard<std::mutex> lg(dbg_quic_held_sessions_m);
+        sessions.swap(dbg_quic_held_sessions);
+    }
+    for (auto& w : sessions) {
+        std::shared_ptr<QuicSession> session = w.lock();
+        if (!session) {
+            continue;
+        }
+        std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+        if (!session->h3_conn_) {
+            continue;
+        }
+        for (auto& [stream_id, sbd] : session->streaming_body_data_) {
+            if (sbd.deferred) {
+                int rv = nghttp3_conn_resume_stream(session->h3_conn_, stream_id);
+                if (!rv) {
+                    sbd.deferred = false;
+                    // as sendStreamData(): the session's next write cycle writes the stream's data
+                    session->pending_write_.store(true, std::memory_order_release);
+                }
+            }
+        }
+    }
+}
+#endif
+
 nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                                                nghttp3_vec* vec, size_t veccnt,
                                                uint32_t* pflags,
@@ -6115,6 +6573,18 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
     auto sit = session->streaming_body_data_.find(stream_id);
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
+#ifdef DEBUG
+        // tests hold the staged data back, as a client that grants no flow-control credit does; the session is
+        // recorded, so that the release resumes the stream (dbgResumeHeldStreams()), and the hold is checked again
+        // after it is recorded: a release in between finds the session recorded, or this check sees it released
+        if (!sbd.eof && qore_dbg_quic_stream_data_held(session->getSessionId(), stream_id)) {
+            dbg_quic_note_held_session(session);
+            if (qore_dbg_quic_stream_data_held(session->getSessionId(), stream_id)) {
+                sbd.deferred = true;
+                return NGHTTP3_ERR_WOULDBLOCK;
+            }
+        }
+#endif
         if (!sbd.data.empty()) {
             if (veccnt > 0) {
                 // Move staging data into sent_bufs for stable pointer lifetime.
@@ -6122,7 +6592,12 @@ nghttp3_ssize QuicSession::h3ReadDataCallback(nghttp3_conn* /* conn */, int64_t 
                 // entries for retransmission — the buffer must remain valid
                 // until acked_stream_data fires or the stream is closed.
                 sbd.sent_bufs.emplace_back(std::move(sbd.data));
-                // data is now moved-from (empty), ready for new appends
+                // data is now moved-from (empty), ready for new appends; a WebSocket pong kept while the staged data
+                // was over its limit is staged now, so that it is provided next (issue #5900)
+                sbd.data.clear();
+                if (!sbd.pending_pong.empty() && !sbd.eof) {
+                    sbd.data.swap(sbd.pending_pong);
+                }
                 auto& buf = sbd.sent_bufs.back();
 
                 vec[0].base = const_cast<uint8_t*>(buf.data());
@@ -6182,9 +6657,15 @@ int QuicSession::h3AckedStreamDataCallback(nghttp3_conn* /* conn */, int64_t str
     if (sit != session->streaming_body_data_.end()) {
         auto& sbd = sit->second;
         sbd.front_acked += datalen;
+        bool released = false;
         while (!sbd.sent_bufs.empty() && sbd.front_acked >= sbd.sent_bufs.front().size()) {
             sbd.front_acked -= sbd.sent_bufs.front().size();
             sbd.sent_bufs.pop_front();
+            released = true;
+        }
+        // a waiter for the stream's data to be sent (streamSendFlushed()) waits for its acknowledgement
+        if (released && sbd.sent_bufs.empty()) {
+            session->notifyStreamDrain();
         }
         ASYNC_IO_TRACE("QuicSession::h3AckedStreamDataCallback session=%lld stream_id=%lld datalen=%llu remaining_bufs=%zu pending=%zu\n",
             (long long)session->getSessionId(), (long long)stream_id,
@@ -6201,10 +6682,7 @@ int QuicSession::h3RecvSettings2Callback(nghttp3_conn* /* conn */,
                                           const nghttp3_proto_settings* settings,
                                           void* conn_user_data) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
-    session->remote_settings_received_.store(true, std::memory_order_release);
-    if (settings->enable_connect_protocol) {
-        session->remote_enable_connect_protocol_.store(true, std::memory_order_release);
-    }
+    session->onRemoteSettings(settings->enable_connect_protocol);
     return 0;
 }
 #else
@@ -6212,10 +6690,7 @@ int QuicSession::h3RecvSettingsCallback(nghttp3_conn* /* conn */,
                                          const nghttp3_settings* settings,
                                          void* conn_user_data) {
     auto* session = static_cast<QuicSession*>(conn_user_data);
-    session->remote_settings_received_.store(true, std::memory_order_release);
-    if (settings->enable_connect_protocol) {
-        session->remote_enable_connect_protocol_.store(true, std::memory_order_release);
-    }
+    session->onRemoteSettings(settings->enable_connect_protocol);
     return 0;
 }
 #endif

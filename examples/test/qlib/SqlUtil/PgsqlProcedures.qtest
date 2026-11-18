@@ -12,6 +12,14 @@
 %requires PgsqlSqlUtilBase
 %requires ./PgsqlTestIsolation.qm
 
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class PgsqlProceduresTest
 
 #! A connection to the PostgreSQL server that reports the version of PostgreSQL 10, and records the queries
@@ -51,16 +59,32 @@ class PgsqlProceduresTest inherits QUnit::Test {
         # label -> datasource string
         hash<string, string> conns;
 
+        # why there is no connection, when there is none
+        string skip_reason = "no PostgreSQL connection available";
+
         const Function = "create function qtest_pp_f(a integer) returns integer language plpgsql as $$ begin "
             "return a; end; $$";
         const Procedure = "create procedure qtest_pp_p(a integer) language plpgsql as $$ begin perform a; end; $$";
     }
 
     constructor() : Test("PgsqlProceduresTest", "1.0", \ARGV) {
+        # driver -> the module that the driver needs, when it cannot be loaded
+        hash<string, string> unavailable = {};
+%ifdef NoPgsql
+        unavailable.pgsql = "pgsql";
+%endif
+%ifdef NoJni
+        unavailable.jdbc = "jni";
+%endif
         foreach hash<auto> i in ({"pgsql": "QORE_DB_CONNSTR_PGSQL", "jdbc": "QORE_DB_CONNSTR_JDBC_PGSQL"}
                 .pairIterator()) {
             *string connstr = ENV{i.value};
             if (!connstr.val()) {
+                continue;
+            }
+            # a connection whose driver module cannot be loaded is not used
+            if (unavailable{i.key}) {
+                skip_reason = sprintf("%s is set, but the %s module is unavailable", i.value, unavailable{i.key});
                 continue;
             }
             # the run's own schema
@@ -86,7 +110,7 @@ class PgsqlProceduresTest inherits QUnit::Test {
 
     private skipIfNone() {
         if (!conns) {
-            testSkip("no PostgreSQL connection available");
+            testSkip(skip_reason);
         }
     }
 

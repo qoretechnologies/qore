@@ -44,6 +44,8 @@ module PdfCoRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("pdfco", PdfCoRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage PdfCoRestClient Module

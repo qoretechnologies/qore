@@ -93,9 +93,9 @@ int rc = state->continuePoll(xsink);
 if (rc > 0) {
     std::vector<struct pollfd> fds;
     // there is no socket descriptor while the host name is resolved
-    if (sock.getSocket() >= 0) {
+    if (sock.getDescriptorForLibrary() >= 0) {
         short events = ((rc & SOCK_POLLIN) ? POLLIN : 0) | ((rc & SOCK_POLLOUT) ? POLLOUT : 0);
-        fds.push_back({sock.getSocket(), events, 0});
+        fds.push_back({sock.getDescriptorForLibrary(), events, 0});
     }
     for (const ExtraWaitFd& extra : state->getExtraWaitFds()) {
         short events = (extra.want_read ? POLLIN : 0) | (extra.want_write ? POLLOUT : 0);

@@ -8,9 +8,17 @@ Copyright (C) 2026 Qore Technologies, s.r.o.
   is refused by it if its code uses functionality those restrictions forbid. The two forms of a module are loaded
   under the same conditions.
 - A module that is already loaded is **not** checked against the restrictions of a Program that imports it: it is a
-  capability that the host gave the Program, and module code runs with the restrictions of its callers as well as
-  its own (`doxygen/lang/120_modules.dox.tmpl`, "Module Code at Run Time"). Qore's own tests rely on this (a
-  `PO_NO_THREAD_CLASSES` Program importing `QUnit`, a `PO_NO_FILESYSTEM` Program importing `Util`).
+  capability that the host gave the Program. Module code (functions, methods and closures alike) runs in the module's
+  Program with its own options, and only the sandbox governs it at run time: the restrictions of a sandboxed caller
+  are part of its sandbox and are composed into module code at the module-call boundary
+  (`qore_get_module_call_runtime_po_override()` in `lib/Function.cpp`; `doxygen/lang/120_modules.dox.tmpl`, "Module
+  Code at Run Time"). Qore's own tests rely on unchecked imports (a `PO_NO_THREAD_CLASSES` Program importing
+  `QUnit`, a `PO_NO_FILESYSTEM` Program importing `Util`).
+- Restrictions of parse options alone are therefore **not a run-time boundary** for module code: whether a Program
+  restricted only by parse options gets a module depends on whether another Program loaded it first, and once it has
+  it, it can use all the functionality the module's code uses, including names the module resolves at run time on
+  its behalf. A host that runs code that must not reach functionality through modules gives its Program a
+  `SandboxManager` (which makes its restrictions apply to module code as well) or `PO_NO_MODULES`.
 - A `thread_local` declaration in a user module (`PO_IN_MODULE`) is not refused by `PO_NO_THREAD_CONTROL`
   (`qore_ns_private::checkGlobalVarDecl()`): thread-local storage is not thread control. In user code it still is.
 
@@ -80,6 +88,11 @@ that refused its source.
 own restrictions refuse it (since 899a44f110, Qore 0.8.12; before, every use was recorded). `dom` was only used by the
 import check of `QoreUserModule::addToProgramImpl()`, which therefore never refused a module; that inert check has been
 removed rather than restored, because restoring it refused imports that Qore relies on (see Rules).
+
+With nothing reading it, the Program's functional domain (`dom`, and `pend_dom`, the domains of a parse that its
+commit added to it) and its accessors (`getDomain()`, `runtimeAddDomain()`) were removed (issue #6178): they were not
+synchronized, so a runtime user would have raced with the commits.  `parseAddDomain()` now only returns the domains
+that the Program's restrictions refuse, and records every domain that the code uses in `aot_used_dom` for AOT images.
 
 ## Module parse option masks
 

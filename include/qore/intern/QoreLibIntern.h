@@ -142,6 +142,18 @@ static inline bool isoctaldigit(const char x) {
     return x >= '0' && x <= '7';
 }
 
+//! for the fast path of a hot internal function, whose slow path is a separate function marked QORE_INTERN_NOINLINE
+#if defined(__GNUC__) || defined(__clang__)
+#define QORE_INTERN_ALWAYS_INLINE __attribute__((always_inline)) inline
+#define QORE_INTERN_NOINLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define QORE_INTERN_ALWAYS_INLINE __forceinline
+#define QORE_INTERN_NOINLINE __declspec(noinline)
+#else
+#define QORE_INTERN_ALWAYS_INLINE inline
+#define QORE_INTERN_NOINLINE
+#endif
+
 // here we define virtual types
 #define NT_NONE             -1
 #define NT_ALL              -2
@@ -200,10 +212,25 @@ struct QoreParseContext {
     //!
     //! Motivation + scope: see `design/parser-lvalue-type-propagation.md`.
     const QoreTypeInfo* expected_type_info = nullptr;
+    //! The expression whose value is stored in a value of type @ref target_type, if any (issue #5782)
+    /** Unlike @ref expected_type_info, a hint that the operands of the expression also see, this names the one
+        expression whose value is assigned (the right-hand side of an assignment, the initializer of a typed
+        constant, or a value of a list or hash literal that is itself such an expression): a list or hash literal
+        checks its values against the value type of @ref target_type only when it is this expression.
+    */
+    const AbstractQoreNode* target_value = nullptr;
+    //! The type of the value that @ref target_value is stored in (issue #5782)
+    const QoreTypeInfo* target_type = nullptr;
     //! True when parse initialization of the current expression saw a qcc
     //! --stub external constant. Constants with such dependencies cannot be
     //! folded at compile time; AOT must preserve their initializer expression.
     bool external_stub_constant_ref = false;
+    //! The number of implicit index references (\c $#) that read the index of an enclosing operator or foreach
+    //! statement initialized so far (qore#6341)
+    /** A context statement and a find expression compare it before and after the initialization of their
+        expressions, which run as AST at run time, to know whether they read \c $#
+    */
+    unsigned implicit_element_reads = 0;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }
@@ -280,6 +307,28 @@ struct QoreParseContext {
     }
 };
 
+//! Sets the expression whose value is stored in a value of a type for the parse initialization of the expression,
+//! and restores the previous one (see QoreParseContext::target_value; issue #5782)
+class QoreParseTargetHelper {
+public:
+    DLLLOCAL QoreParseTargetHelper(QoreParseContext& parse_context, const QoreValue& value,
+            const QoreTypeInfo* type) : parse_context(parse_context), old_value(parse_context.target_value),
+            old_type(parse_context.target_type) {
+        parse_context.target_value = value.hasNode() ? value.getInternalNode() : nullptr;
+        parse_context.target_type = type;
+    }
+
+    DLLLOCAL ~QoreParseTargetHelper() {
+        parse_context.target_value = old_value;
+        parse_context.target_type = old_type;
+    }
+
+private:
+    QoreParseContext& parse_context;
+    const AbstractQoreNode* old_value;
+    const QoreTypeInfo* old_type;
+};
+
 class QoreParseContextFlagHelper {
 public:
     DLLLOCAL QoreParseContextFlagHelper(QoreParseContext& parse_context) : parse_context(parse_context),
@@ -312,6 +361,42 @@ private:
     int pflag;
 };
 
+//! Sets one parse flag while in scope and restores only that flag: unlike QoreParseContextFlagHelper, it keeps the
+//! flags that the code parsed in its scope sets for the code around it (ex: PF_NARROWED_TYPE)
+class QoreParseContextFlagScope {
+public:
+    DLLLOCAL QoreParseContextFlagScope(QoreParseContext& parse_context, int flag, bool set = true)
+            : parse_context(parse_context), flag(flag), was_set(parse_context.pflag & flag) {
+        if (set) {
+            parse_context.pflag |= flag;
+        }
+    }
+
+    DLLLOCAL ~QoreParseContextFlagScope() {
+        if (was_set) {
+            parse_context.pflag |= flag;
+        } else {
+            parse_context.pflag &= ~flag;
+        }
+    }
+
+    //! Clears the flag while in scope instead of setting it; the parse of an operand that is read in all cases (ex:
+    //! the key expression of an lvalue)
+    struct Clear {};
+    DLLLOCAL QoreParseContextFlagScope(QoreParseContext& parse_context, int flag, Clear)
+            : parse_context(parse_context), flag(flag), was_set(parse_context.pflag & flag) {
+        parse_context.pflag &= ~flag;
+    }
+
+    QoreParseContextFlagScope(const QoreParseContextFlagScope&) = delete;
+    QoreParseContextFlagScope& operator=(const QoreParseContextFlagScope&) = delete;
+
+private:
+    QoreParseContext& parse_context;
+    int flag;
+    bool was_set;
+};
+
 class QoreParseContextAnalysisHelper {
 public:
     DLLLOCAL QoreParseContextAnalysisHelper(QoreParseContext& parse_context)
@@ -339,6 +424,20 @@ private:
 */
 DLLLOCAL void qore_set_result_parse_analysis(QoreParseContext& parse_context, const QoreTypeInfo* typeInfo);
 
+#ifdef HAVE_NANOSLEEP
+//! sleeps the given number of nanoseconds with the given nanosleep() function, as qore_usleep() does with nanosleep()
+/** A sleep that a signal interrupts (\c EINTR) is continued with the time that \a sleep_func reports as left in its
+    second argument, so that a signal does not lengthen the sleep (issue #6364).  The function is a parameter so that a
+    unit test can report interruptions without signals.
+
+    @param ns the number of nanoseconds to sleep
+    @param sleep_func the function that sleeps, with the signature of nanosleep()
+
+    @return 0 if the time was slept, -1 if \a sleep_func failed with an error other than \c EINTR (in \c errno)
+*/
+DLLLOCAL int qore_nanosleep_with(int64 ns, int (*sleep_func)(const struct timespec*, struct timespec*));
+#endif
+
 class QoreParseContextLvarHelper {
 public:
     DLLLOCAL QoreParseContextLvarHelper(QoreParseContext& parse_context, LVList*& lvars)
@@ -362,13 +461,45 @@ DLLLOCAL int parse_init_value(QoreValue& val, QoreParseContext& parse_context);
 */
 constexpr size_t QORE_PARSE_STACK_RESERVE = 64 * 1024;
 
+//! The error code of the parse error raised for code that cannot be parsed within the stack of the parsing thread
+/** Distinct from the other parse errors, as it depends on the thread that parses the code and not on the code: a
+    module that cannot be parsed for this reason is not a module that is unavailable, so the error of its load is
+    the error of the parse that loads it also with %%try-module (see QoreModuleManager::parseLoadModule())
+*/
+#define QORE_PARSE_STACK_ERR "PARSE-STACK-LIMIT-EXCEEDED"
+
+//! The description of the parse error QORE_PARSE_STACK_ERR
+#define QORE_PARSE_STACK_DESC "the code is nested too deeply to be parsed within the stack of this thread"
+
 //! Raises a parse error and returns -1 if the thread's stack has reached QORE_PARSE_STACK_RESERVE, otherwise 0
 /** Called before parse initialization recurses into a nested expression or statement: the parser accepts nesting
     that a thread with a small stack cannot initialize, which would otherwise overflow the stack
 
+    The error is QORE_PARSE_STACK_ERR.  Inline, so that the common case, with enough stack, is a comparison (see
+    q_thread_stack_reserve_exceeded()); defined after qore_thread_intern.h is included below.
+
     @param loc the location of the code being initialized, if known
 */
-DLLLOCAL int parse_check_stack(const QoreProgramLocation* loc);
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc);
+
+//! Raises the parse error QORE_PARSE_STACK_ERR for parse_check_stack() and returns -1
+DLLLOCAL int parse_raise_stack_error(const QoreProgramLocation* loc);
+
+//! Returns true if the exception sink holds an error that depends on the stack of the thread, not on the code
+/** The parse error QORE_PARSE_STACK_ERR, raised where the parse of the code or of a module that it loads ran short of
+    the stack of the thread, always is.  \c STACK-LIMIT-EXCEEDED, raised where code that runs while a module is loaded
+    or initialized (the initialization of its constants, for example) ran short of it, is only in a thread whose stack
+    is smaller than the default thread stack size (q_thread_stack_smaller_than_default(), which compares the total
+    stack size, not the stack that remains): with at least that much stack, a module that exceeds it is assumed to
+    have a bug, such as a recursion without end, and is handled as a module that cannot be loaded.  A module whose
+    load fails with an error that depends on the thread is not a module that is not available (see
+    QoreModuleManager::parseLoadModule())
+*/
+DLLLOCAL bool qore_has_thread_stack_error(const ExceptionSink& xsink);
+
+//! Returns the first exception in the sink with an error that depends on the stack of the thread, or nullptr
+/** See qore_has_thread_stack_error() */
+DLLLOCAL const QoreException* qore_find_thread_stack_error(const ExceptionSink& xsink);
 
 //! Parse-initializes a node that is not a level of nesting of its own
 /** For a node that parse initialization replaces with another node in the same place, and for a node that the
@@ -393,9 +524,25 @@ constexpr unsigned QORE_EVAL_STACK_CHECK_INTERVAL = 16;
 DLLLOCAL QoreValue q_call_static_method_args(QoreProgram* pgm, const QoreStringNode* class_name,
         const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);
 
+DLLLOCAL QoreValue q_call_static_method_args(LexicalSemanticPolicy policy, QoreProgram* pgm,
+    const QoreStringNode* class_name, const QoreStringNode* method, const QoreListNode* args, ExceptionSink* xsink);
+DLLLOCAL q_func_t qore_get_lexical_object_builtin(q_func_t func);
+DLLLOCAL q_method_t qore_get_lexical_program_method(q_method_t method);
+
 // returns true if the node needs to be scanned for recursive references or not
 DLLLOCAL bool needs_scan(const AbstractQoreNode* n);
 DLLLOCAL bool needs_scan(const QoreValue& v);
+
+//! returns the node that a call reference value holds and that is scanned for recursive references, or nullptr
+/** the callback of a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+*/
+DLLLOCAL const AbstractQoreNode* qore_get_call_reference_scan_node(const AbstractQoreNode* n);
+
+#ifdef DEBUG
+//! the offset in microseconds that debug builds add to the system clock (q_epoch(), q_epoch_us(), q_epoch_ns()), to test
+//! code under a step of the system clock; set with dbg_set_realtime_offset(); the monotonic clock is not affected
+DLLLOCAL extern std::atomic<int64> qore_dbg_realtime_offset_us;
+#endif
 
 #ifdef DEBUG
 //! Returns the number of heap integers (QoreBigIntNode) that exist in the process
@@ -436,6 +583,13 @@ DLLLOCAL int64 q_get_list_create_count();
 */
 DLLLOCAL int64 q_get_cancel_check_count();
 
+//! Returns the number of cancellation checks of the current thread that looked up its governing sandbox manager
+/** A check looks up the manager only while an interrupt is requested of a sandbox manager (see
+    qore_sandbox_interrupt_count), so tests use the count to verify that a check with no request pending makes no
+    lookup; see dbg_get_cancel_sandbox_lookup_count().
+*/
+DLLLOCAL int64 q_get_cancel_sandbox_lookup_count();
+
 //! Returns the number of times a cancellation request woke a registered wait of the given thread (debug builds)
 /** A wait that a request wakes through its registered condition or wakeup channel is counted once per request; a
     wait that only noticed a request at a periodic check would not be counted.  A negative TID means the current
@@ -468,6 +622,9 @@ static inline int64 qore_int_div(int64 l, int64 r) {
     assert(r);
     return r == -1 ? static_cast<int64>(0 - static_cast<uint64_t>(l)) : l / r;
 }
+
+//! Raises DIVISION-BY-ZERO for a modulo operator (\c %, \c %=) with a divisor of zero (qore#1034)
+DLLLOCAL void qore_raise_modulo_by_zero(ExceptionSink* xsink);
 
 //! Returns the remainder of an integer division by a divisor that is not zero
 /** The remainder of a division by -1 is 0, also for the smallest integer, where the CPU's division instruction
@@ -856,6 +1013,15 @@ struct QoreDiagnostic {
             this->metadata.id = this->code;
         }
     }
+
+    //! An error diagnostic for an exception raised in a parse, at the location of the exception
+    DLLLOCAL QoreDiagnostic(const char* code, const std::string& file, const std::string& source,
+            const QoreProgramLineLocation& loc, const char* message)
+            : error(true), code(code ? code : ""), file(file), source(source), start_line(loc.start_line),
+            end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column),
+            message(message ? message : "") {
+        metadata.id = this->code;
+    }
 };
 
 DLLLOCAL QoreString* findFileInPath(const char* file, const char* path);
@@ -873,7 +1039,39 @@ DLLLOCAL void qore_process_params(unsigned num_params, type_vec_t& typeList, arg
 
 // call to get a node with reference count 1 (copy on write)
 void ensure_unique(AbstractQoreNode** v, ExceptionSink* xsink);
+//! Gives \a v a node with reference count 1 that the caller can modify in place (copy on write)
+/** A short string held inline is replaced with a string node, and an enum value with an owned copy of its base value
+    (see qore_enum_value_copy_for_write()).
+*/
 void ensure_unique(QoreValue& v, ExceptionSink* xsink);
+
+//! Checks the elements of a list or hash that trim or chomp modify in place, before any of them is modified
+/** trim and chomp replace a string element that holds an enum value with a plain string (see ensure_unique()), which
+    the element type of a typed container or the type of a hashdecl member refuses if it is an enum type: then
+    RUNTIME-TYPE-ERROR is raised with \a desc for the first such element, and the caller leaves the container
+    unchanged (qore#6195).  The elements are only read if the type of the container can refuse a plain string.
+
+    @param container a list or a hash
+    @param desc the description of the operation
+    @param xsink for the exception
+
+    @return -1 if an exception was raised, 0 if not
+*/
+DLLLOCAL int qore_check_in_place_container_strings(const QoreValue& container, const char* desc,
+        ExceptionSink* xsink);
+
+//! Returns an owned copy of the base value of the enum value \a v, which the caller can modify in place
+/** An enum value (QoreValue::isEnum()) holds a reference to its enum member, not to the member's base value, which is
+    shared and constant: a node reached through it with QoreValue::get() or QoreValue::getInternalNode() has a
+    reference count of 1 although the value that reaches it does not own it.  Code that modifies a value in place
+    replaces an enum value with this copy first, so that the enum member never changes.
+
+    @param v an enum value
+    @return a string base value as a new string node (also when it is held inline), any other base value held by a
+    node as a copy of the node, and a base value held inline (int, float) as it is; the caller owns the value
+    returned
+*/
+DLLLOCAL QoreValue qore_enum_value_copy_for_write(const QoreValue& v);
 
 //! Returns a value holding \a copy, a copy of the hash or list that \a v holds, in the representation of \a v
 /** A copy of a container held through an opaque reference (the \c \@= operator) is held through an opaque
@@ -893,7 +1091,10 @@ DLLLOCAL QoreValue qore_value_with_copy(const QoreValue& v, AbstractQoreNode* co
     QoreValue::discard() or LValueHelper::saveTemp(): releasing it as a plain node would leave the registration of
     an opaque value with the opaque target registry (see design/dgc.md, "Opaque references").
 
-    @param v a value holding a node other than an object
+    An enum value does not own the node that it reaches (see qore_enum_value_copy_for_write()): the callers replace it
+    with an owned copy of its base value instead of calling this function.
+
+    @param v a value holding a node other than an object; not an enum value
     @return the value replaced, or NOTHING if the node was unique
 */
 DLLLOCAL QoreValue qore_value_copy_on_write(QoreValue& v);
@@ -1006,12 +1207,129 @@ DLLLOCAL int check_lvalue(QoreValue n, bool assign = true, qore_lvalue_use_e use
 DLLLOCAL int check_lvalue(AbstractQoreNode* n, bool assign = true, qore_lvalue_use_e use = qore_lvalue_use_e::MODIFY);
 DLLLOCAL bool parse_is_readonly_receiver_expression(QoreValue n, int pflag);
 DLLLOCAL int check_const_method_lvalue(const QoreProgramLocation* loc, QoreValue n);
+
+//! what a background expression would modify with an lvalue (see parse_check_background_lvalue())
+enum class qore_background_lvalue_e {
+    //! a global variable, which the thread shares, or an object reached through the path: allowed
+    SHARED,
+    //! a local, closure-bound or thread-local variable of the code that starts the thread, or a value contained in
+    //! it, which the thread takes when it starts: refused (a local declared as a reference, such as
+    //! reference<list<int>>, is a local too)
+    LOCAL,
+    //! a member of the object of the code that starts the thread, or a value contained in it: refused
+    MEMBER,
+    //! a value contained in a local or a member, through a step whose type is not known: refused
+    UNKNOWN,
+};
+
+//! Returns what the lvalue of a modification in a background expression modifies, by its access path (issue #5723)
+/** The background operator takes the values of the local, closure-bound and thread-local variables and of the members
+    of the code that starts the thread when the thread starts, so a modification of one of them, or of a value it
+    contains (an element of a list, a key of a hash), changes only the thread's copy: it is refused.  A step of the path whose type is
+    an object makes the rest of the path a part of that object, which the thread shares: the modification is allowed,
+    as a method call on the object is.  A step whose type is not known (auto, any, no type) could be either.
+*/
+DLLLOCAL qore_background_lvalue_e parse_check_background_lvalue(QoreValue n);
+
+//! Raises the parse error for the lvalue of a modification refused by parse_check_background_lvalue()
+/** @param what the description of the place of the lvalue, as in the error messages of the operator */
+DLLLOCAL void parse_raise_background_lvalue_error(const QoreProgramLocation* loc, qore_background_lvalue_e kind,
+        const char* what);
 DLLLOCAL int check_readonly_receiver_method_call(const QoreProgramLocation* loc, const char* name,
         const MethodVariantBase* variant, const QoreFunction* func = nullptr);
+//! returns true if an lvalue of the given soft type does not hold a value of the type that an operator computes, but
+//! converts it when it is assigned, as for an assignment (ex: a softstring or softbool lvalue and an integer result)
+/** the operator then takes the generic path that converts the value, and its result type follows the lvalue's type
+    (qore#6304)
+*/
+DLLLOCAL bool qore_lvalue_converts_result(const QoreTypeInfo* typeInfo, qore_type_t t);
 DLLLOCAL int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
 DLLLOCAL int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+//! makes sure an lvalue can be assigned the result of a compound assignment operator, else raises a parse exception
+//! and returns -1
+/** The result is one of the types given; the lvalue's type is checked as for an assignment of each of them, so the
+    error is raised only if the lvalue's type can accept none of them: the result can never be stored (qore#6103)
+
+    @param loc the location of the operator
+    @param typeInfo the declared type of the lvalue
+    @param name the operator (ex: \c "*=")
+    @param results the types that the result can have
+    @param value_desc the description of the result in the error (ex: \c "a date value")
+*/
+DLLLOCAL int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo,
+        const char* name, std::initializer_list<const QoreTypeInfo*> results, const char* value_desc);
+// makes sure the lvalue can be assigned a string value, else raises a parse exception and returns -1
+DLLLOCAL int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name);
+
+//! returns the one-character UTF-8 string that the += operator adds for a char operand (a new reference)
+/** a char operand of += is added exactly as the one-character string is, for every lvalue type; out of line, as a
+    char operand is rare and its conversion must not enlarge the callers' common paths
+*/
+DLLLOCAL QORE_INTERN_NOINLINE QoreStringNode* qore_plus_equals_char_string(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for a char operand: the char converted as its
+//! one-character string is (\c "5" gives 5, \c "a" 0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_char_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for a char operand: the char converted as its one-character
+//! string is (\c "5" gives 5.0, \c "a" 0.0); out of line, as qore_plus_equals_char_string()
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_char_float_operand(const QoreValue v);
+
+//! returns true if a divisor of an arbitrary-precision division is zero: the divisor as the division converts it
+/** A number is tested itself, and any other value as the number that it converts to, so that a divisor that is not
+    zero but converts to the float \c 0.0 (ex: \c 1e-400n) is not taken for zero (qore#6387); an int, a float, a
+    boolean, NOTHING and NULL are tested by their float, which is zero exactly when their number is
+*/
+DLLLOCAL bool qore_number_divisor_is_zero(const QoreValue& v);
+
+//! returns true if a constant divisor of the \c / operator is zero for every type of the dividend: as a float and as
+//! a number (see qore_number_divisor_is_zero(); qore#6387)
+DLLLOCAL bool qore_constant_divisor_is_zero(const QoreValue& v);
+
+//! QoreValue::isNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_nothing(const QoreValue& v) {
+    if (v.rawBits() == QoreValue::makeNothing().rawBits()) {
+        return true;
+    }
+    return v.isPointer() && is_nothing(v.get<const AbstractQoreNode>());
+}
+
+//! QoreValue::isNullOrNothing() with the test of an inline value made inline, for the compound assignment paths
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool qore_value_is_null_or_nothing(const QoreValue& v) {
+    uint64_t bits = v.rawBits();
+    if (bits == QoreValue::makeNothing().rawBits() || bits == QoreValue::makeNull().rawBits()) {
+        return true;
+    }
+    if (!v.isPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.get<const AbstractQoreNode>();
+    return is_nothing(n) || is_null(n);
+}
+
+//! returns the integer that += adds to an integer lvalue for an operand that is not an inline integer: a char as its
+//! one-character string is, any other value as QoreValue::getAsBigInt() converts it
+/** It takes the same steps as QoreValue::getAsBigInt() after its test for an inline integer, which its callers make
+    (the slow path of native code, and qore_plus_equals_int_operand()), so that it costs no more than that conversion
+*/
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_boxed_int_operand(const QoreValue v);
+
+//! returns the integer that += adds to an integer lvalue for an operand: a char as its one-character string is, any
+//! other value as QoreValue::getAsBigInt() converts it, in the same steps, so that it costs no more than that
+//! conversion
+DLLLOCAL QORE_INTERN_NOINLINE int64 qore_plus_equals_int_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand that is not a float: a char as its one-character
+//! string is, any other value as QoreValue::getAsFloat() converts it (the same steps after its test for a float)
+DLLLOCAL QORE_INTERN_NOINLINE double qore_plus_equals_nonfloat_float_operand(const QoreValue v);
+
+//! returns the float that += adds to a float lvalue for an operand: a float itself, else as
+//! qore_plus_equals_nonfloat_float_operand()
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE double qore_plus_equals_float_operand(const QoreValue v) {
+    return v.isFloat() ? v.getDouble() : qore_plus_equals_nonfloat_float_operand(v);
+}
 
 DLLLOCAL extern QoreClass* QC_PSEUDOVALUE;
 DLLLOCAL extern QoreClass* QC_PSEUDONOTHING;
@@ -1169,6 +1487,10 @@ public:
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/lvalue_ref.h"
 #include "qore/intern/qore_thread_intern.h"
+
+DLLLOCAL inline int parse_check_stack(const QoreProgramLocation* loc) {
+    return q_thread_stack_reserve_exceeded(QORE_PARSE_STACK_RESERVE) ? parse_raise_stack_error(loc) : 0;
+}
 #include "qore/intern/Function.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/CallReferenceNode.h"
@@ -1215,7 +1537,24 @@ public:
 
 DLLLOCAL extern std::atomic<bool> qore_initialized;
 DLLLOCAL extern std::atomic<bool> qore_shutdown;
+//! set by qore_cleanup() once no thread but the calling one runs and none can be waited for any more: no thread can be
+//! started from then on (THREAD-CREATION-FAILURE), and a wait cannot be cancelled by another thread (qore#6045)
+DLLLOCAL extern std::atomic<bool> qore_thread_start_closed;
+//! set by qore_stop_module_uncounted_entries() if a foreign thread runs in the code of a module that its Program does
+//! not count (see qore_program_private::leaveForeignThreads())
+DLLLOCAL extern std::atomic<bool> qore_foreign_threads_in_module_code;
 DLLLOCAL extern std::atomic<bool> qore_exiting;
+//! Returns true if the calling thread is a foreign thread: a thread of another runtime registered with
+//! q_register_foreign_thread() or q_register_reserved_foreign_thread()
+DLLLOCAL bool q_thread_is_foreign() noexcept;
+//! set by qore_cleanup() once the types are freed; Qore values released after that are released too late
+DLLLOCAL extern std::atomic<bool> qore_types_deleted;
+
+//! returns the number of module namespaces with static storage duration that still hold Qore values and are not
+//! registered with QoreModuleInfo::ns: they are released by their C++ static destructors, after qore_cleanup()
+/** Counted in debug builds only; always 0 otherwise.  If \a report is true, each one is named on stderr.
+*/
+DLLLOCAL unsigned qore_count_late_module_namespaces(bool report);
 
 #ifdef DEBUG
 //! Asserts that a hash, list or object being freed is not registered as the target of an opaque reference
@@ -1576,6 +1915,7 @@ public:
         // and save the return type
         parse_context.typeInfo = nullptr;
         error = parse_init_value(n, parse_context);
+        typeInfo = parse_context.typeInfo;
         //printd(5, "QorePossibleListNodeParseInitHelper::QorePossibleListNodeParseInitHelper() n: %s\n",
         //    n.getFullTypeName());
         if (n.getType() == NT_LIST) {
@@ -1597,6 +1937,11 @@ public:
 
     DLLLOCAL bool noArgument() const {
         return finished;
+    }
+
+    //! Returns the parse type of the whole expression, as its parse initialization gave it
+    DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
     }
 
     DLLLOCAL bool next() {
@@ -1627,6 +1972,8 @@ private:
     bool finished = true;
     size_t pos = -1;
     const QoreTypeInfo* singleTypeInfo = nullptr;
+    //! the parse type of the whole expression
+    const QoreTypeInfo* typeInfo = nullptr;
     bool error = false;
 
     DLLLOCAL size_t sizeIntern() const {
@@ -1695,9 +2042,17 @@ public:
         already hold an unrelated exception when a caller reuses a long-lived sink
     */
     DLLLOCAL int assign(QoreValue v, ExceptionSink* xsink);
+    DLLLOCAL int assignNative(QoreValue v, ExceptionSink* xsink);
+    template <bool Native>
+    DLLLOCAL int assignNativeImpl(QoreValue v, ExceptionSink* xsink);
 
     //! assigns the value to the key; returns 0 for OK, -1 if THIS assignment failed (see the overload above)
     DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL int assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL int assignImpl(QoreValue v, SafeDerefHelper& sdh, ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
     DLLLOCAL QoreValue swap(QoreValue v) {
         return swapImpl(v);
@@ -1869,6 +2224,84 @@ public:
 };
 
 class ClosureParseEnvironment;
+class VNode;
+
+//! A variable or member whose initialization expression is being parsed (qore#526)
+/** A use of the variable or member in its own initialization expression reads it before it has a value: the
+    expression is parsed while an object of this class exists, a use is recorded with parseUse(), and the code that
+    parses the declaration raises the parse error with raiseUseError() if getUseLoc() gives a location.
+
+    A use in the body of a closure created in the expression is not recorded: the closure captures the variable and
+    reads it when it is called, which can be after the variable is assigned (ex: a closure that calls itself).  The
+    targets are hidden in a new variable block (VariableBlockHelper), such as a function body parsed on demand while
+    the expression is parsed.
+*/
+class QoreParseInitializerTarget {
+public:
+    //! starts the parse of the initialization expression of the given variable or member
+    /** @param target the local variable (LocalVar), the static class variable (QoreVarInfo) or the class of the
+        member (qore_class_private)
+        @param member the name of the member for a member, otherwise nullptr
+    */
+    DLLLOCAL QoreParseInitializerTarget(const void* target, const char* member = nullptr);
+
+    DLLLOCAL ~QoreParseInitializerTarget();
+
+    //! returns the location of the first use of the target in its initialization expression, or nullptr
+    DLLLOCAL const QoreProgramLocation* getUseLoc() const {
+        return use_loc;
+    }
+
+    //! raises the parse error for a use of the target in its initialization expression, if there was one
+    /** @param what the kind of the target in the message (ex: \c "local variable")
+        @param name the name of the target
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL int raiseUseError(const char* what, const char* name) const {
+        return raiseUseError(use_loc, what, name);
+    }
+
+    //! raises the parse error for a use of a variable or member at the given location in its initialization
+    //! expression, if a location is given
+    /** for a declaration that raises the error after its other parse errors, such as type errors
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL static int raiseUseError(const QoreProgramLocation* use_loc, const char* what, const char* name);
+
+    //! records a use of the given variable or member at parse time
+    DLLLOCAL static void parseUse(const void* target, const char* member, const QoreProgramLocation* loc);
+
+    //! sets the targets of the current parse and returns the previous ones (for a new variable block)
+    DLLLOCAL static QoreParseInitializerTarget* swapCurrent(QoreParseInitializerTarget* targets);
+
+private:
+    const void* target;
+    const char* member;
+    //! the closure parse environment of the initialization expression
+    ClosureParseEnvironment* cenv;
+    //! the location of the first use, if any
+    const QoreProgramLocation* use_loc = nullptr;
+    QoreParseInitializerTarget* prev;
+};
+
+//! hides the initialization expressions being parsed for its scope (qore#526)
+/** For the initialization expression of a member or a static class variable, which can be parsed on demand while
+    another initialization expression is parsed, and which runs at another time than that expression
+*/
+class QoreParseInitializerTargetBarrier {
+public:
+    DLLLOCAL QoreParseInitializerTargetBarrier() : saved(QoreParseInitializerTarget::swapCurrent(nullptr)) {
+    }
+
+    DLLLOCAL ~QoreParseInitializerTargetBarrier() {
+        QoreParseInitializerTarget::swapCurrent(saved);
+    }
+
+private:
+    QoreParseInitializerTarget* saved;
+};
 
 // pushes a marker on the local variable parse stack so that searches can skip to global thread-local variables when the search hits the marker
 /* the block is also a new capture root: a closure being parsed in the enclosing context (e.g. one whose body
@@ -1881,6 +2314,25 @@ public:
     DLLLOCAL ~VariableBlockHelper();
 
 private:
+    ClosureParseEnvironment* closure_parse_env;
+    //! the initialization expressions being parsed outside of the block (qore#526)
+    QoreParseInitializerTarget* initializer_targets;
+};
+
+//! Parses the initializer of a declaration (a class or hashdecl member, a class static variable) in its own scope
+/** A declaration's initializer is code of the declaration, not of the code whose parse makes it parse it: a class or
+    a hashdecl is parsed when it is first used, which can be in a function, a method or a closure.  The initializer
+    sees the program's top-level local variables, as the code of a function does, and none of the local variables of
+    the code being parsed, and it is in no closure, so that a top-level variable that it refers to is not captured by
+    the closure being parsed (qore#6268)
+*/
+class DeclarationParseScopeHelper {
+public:
+    DLLLOCAL DeclarationParseScopeHelper();
+    DLLLOCAL ~DeclarationParseScopeHelper();
+
+private:
+    VNode* vstack;
     ClosureParseEnvironment* closure_parse_env;
 };
 
@@ -1906,14 +2358,29 @@ public:
 
 DLLLOCAL extern ParseOptionMaps pomaps;
 
+//! Returns the QDOM_* bit for a functional domain name as given in a \c [dom=...] attribute list or a module's
+//! \c domains key (the names of the \c DOM_* constants, or the qpp names PROCESS and MODULES; case-insensitive,
+//! without the \c QDOM_ prefix), or -1 if the name is unknown
+DLLLOCAL int64 qore_get_source_domain(const char* name);
+
+//! Returns the domain names of the given QDOM_* bits as written in a \c [dom=...] attribute list
+//! ("PROCESS_CONTROL,NETWORK")
+DLLLOCAL std::string qore_get_source_domain_names(int64 dom);
+
+//! Returns a description of the given QDOM_* bits for error messages: each domain name with the parse option that
+//! restricts it ("PROCESS_CONTROL (restricted by PO_NO_PROCESS_CONTROL)")
+DLLLOCAL std::string qore_describe_source_domains(int64 dom);
+
 //! The parse options that code must be parsed with to be run by IR, JIT or tiered execution or compiled by qcc
 /** This is \c PO_MODERN: \c PO_ALLOW_BARE_REFS | \c PO_ASSUME_LOCAL (together \c PO_NEW_STYLE) | \c PO_REQUIRE_TYPES |
     \c PO_STRICT_ARGS | \c PO_STRONG_ENCAPSULATION.  \c PO_MODERN also implies the extended option
     QoreParseOptions::NO_SUMMARIZE, but that bit is set whenever all of the bits above are (see
     qore_program_private::applyParseOptionImplications()), so it is not tested separately.
 
-    Other options, including the \c PO_BROKEN_* compatibility options, do not affect acceptance.  Code whose final
-    parse options lack any of these bits (for example a <tt>.q</tt> file without \c %modern, code with only
+    The option-setting APIs also forbid incompatible compatibility bits while %modern is in effect. Native
+    lowering checks the lexical context of every statement and expression with QoreNativeParseInfo, rather than
+    relying on the first statement or the Program's final options alone. Code whose final parse options lack any
+    of these bits (for example a <tt>.q</tt> file without \c %modern, code with only
     \c %new-style, or \c %modern code in which a later \c %old-style, \c %require-dollar, \c %assume-global or
     \c %loose-args directive disabled one of them) is executed by the AST interpreter only.
 */

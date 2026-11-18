@@ -64,6 +64,7 @@ class QoreMapSelectOperatorNode;
 class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
 class QoreStreamingOperatorNode;
+class QoreSquareBracketsOperatorNode;
 class QoreIROnBlockExitInstruction;
 class ForEachStatement;
 class QoreBackgroundOperatorNode;
@@ -123,6 +124,20 @@ private:
 
 class QoreIRLowering {
 public:
+    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
+    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
+     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
+     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
+     */
+    struct VirtualImplicitContext {
+        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
+        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
+        QoreIRValue element;   //!< virtual $# value
+        bool active = false;   //!< true when virtual context is in effect
+        //! true when the implicit argument list (and element, if any) is also set at run time
+        bool runtime = false;
+    };
+
     //! Handler metadata for inline compilation at block exit points
     /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
      *  and location information. These are lowered inline at block exit points rather than
@@ -133,15 +148,18 @@ public:
         StatementBlock* code;                               //!< handler code block
         const QoreProgramLocation* loc;                     //!< source location for error reporting
         QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
-    };
-
-    //! Captured variables needed by a handler for parent scope access
-    /** Phase 3b: Stores information about local and global variables referenced by a handler.
-     *  These are captured as parameters to the handler IR function so it can access parent scope.
-     */
-    struct HandlerVariableCapture {
-        std::vector<LocalVar*> referenced_locals;      //!< local vars referenced by handler
-        std::unordered_set<LocalVar*> referenced_set;  //!< set for O(1) duplicate detection
+        //! the debugger's nesting depth of the statement that declares the handler, whose place its statements take
+        //! (#5816)
+        uint16_t debug_nest_depth = 0;
+        //! the depth of the statements of the catch block that the handler is declared in, or -1 (see
+        //! QoreIRLowering::debug_catch_child_depth)
+        int debug_catch_child_depth = -1;
+        //! the virtual implicit arguments and element of the block that declares the handler, which it runs in at
+        //! every exit, also one in a loop nested in the block that has its own (qore#6383)
+        VirtualImplicitContext virtual_implicit;
+        //! the statement that declares the handler, whose parse options its code runs with, in top-level code whose
+        //! statements have different options; nullptr otherwise (see QoreIRLowering::top_level_code_parse_options)
+        const AbstractStatement* code_po_statement = nullptr;
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
@@ -213,6 +231,21 @@ public:
     QoreIRValue lowerAndEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerOrEquals(const QoreValue& expr, std::string& error);
     QoreIRValue lowerXorEquals(const QoreValue& expr, std::string& error);
+    //! Lowers a pre-increment or pre-decrement of lvexp, or a post-increment or post-decrement whose value is unused
+    /** @param expr the operator expression
+        @param lvexp the lvalue expression
+        @param int_op true for the int-specialized operator (the lvalue is typed int)
+        @param increment true for an increment, false for a decrement
+        @param post true for a post-increment or post-decrement whose value is unused: an error that the lvalue's type
+        raises names the post operator (<tt><++ (post) operator></tt>), as the AST interpreter's does
+        @param loc the source location
+        @param error set on failure
+
+        @return the new value of the lvalue (the old one for a post operator whose lvalue's type can raise an error,
+        see qore_ir_incdec_may_name_operator()), or an invalid value on failure
+    */
+    QoreIRValue lowerPreIncDec(const QoreValue& expr, const QoreValue& lvexp, bool int_op, bool increment, bool post,
+        const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerPreIncrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPostIncrement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPreDecrement(const QoreValue& expr, std::string& error);
@@ -244,7 +277,119 @@ public:
     QoreIRValue lowerRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBracketsRange(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSquareBrackets(const QoreValue& expr, std::string& error);
+    //! Lowers a list of selectors with ranges that can have side effects as ListSelectorStep instructions
+    /** Each selector is evaluated only after the previous one has been applied, and none is evaluated for a
+        sequence that no selector applies to, as in the AST interpreter (qore#5665)
+    */
+    QoreIRValue lowerListSelectorSteps(const QoreSquareBracketsOperatorNode* op, QoreIRValue seq,
+        const std::vector<QoreValue>& selectors, std::string& error);
+    //! Returns true if the sequence of a list of selectors is always a list, a string or a binary object
+    bool listSelectorSeqAlwaysApplies(const QoreValue& expr) const;
+    //! Returns true if a bound of a range operator can evaluate to NOTHING
+    bool rangeBoundMayBeNothing(const QoreValue& expr) const;
+    //! A list of selectors with ranges (seq[a..b, c]) that a foreach statement or a functional or streaming
+    //! operator iterates lazily, as the AST interpreter does (see QoreIROpcode::IteratorCreateSelectors)
+    struct LazySelectorSource {
+        const QoreSquareBracketsOperatorNode* op = nullptr;
+        std::vector<QoreValue> selectors;
+
+        explicit operator bool() const {
+            return op != nullptr;
+        }
+    };
+    //! Returns true and sets \a src if \a expr is a list of selectors with ranges whose lazy iteration can be
+    //! observed: a selector with side effects, or a range with negative offsets, which the AST interpreter iterates
+    //! index by index instead of as the range of the sequence that it selects
+    bool getLazySelectorSource(const QoreValue& expr, LazySelectorSource& src) const;
+    //! Returns true if \a expr is a list of selectors with ranges that is iterated lazily (see getLazySelectorSource())
+    bool hasLazySelectorSource(const QoreValue& expr) const {
+        LazySelectorSource src;
+        return getLazySelectorSource(expr, src);
+    }
+    //! Lowers the source of an iterator: the sequence and IteratorCreateSelectors for a lazy list of selectors, or
+    //! the expression and IteratorCreate (or IteratorCreateIterate if \a iterate) otherwise
+    /** @param source set to the value iterated: the sequence for a lazy list of selectors
+        @param in_temp_scope true to lower the expression in a temp scope of its own
+
+        @return the iterator handle, or an invalid value on error
+    */
+    //! The list of a foreach statement that is iterated with the AST interpreter's iterator of its operator
+    struct ForeachSourceOperator {
+        //! the operator
+        QoreIRIteratorSourceKind kind = QoreIRIteratorSourceKind::Keys;
+        //! the operand of keys, or the sequence
+        QoreValue operand;
+        //! the start of a slice, or the list of indices
+        QoreValue first;
+        //! the end of a slice
+        QoreValue second;
+        //! the QoreIRListSelectorFlag flags of a list of indices
+        int64_t flags = 0;
+        //! true if the list is such an operator
+        bool valid = false;
+
+        explicit operator bool() const {
+            return valid;
+        }
+    };
+    //! Returns true and sets \a src if \a list, the list of a foreach statement, is keys, a slice or a list of indices
+    //! (without a range) whose operand can hold an object
+    /** The AST interpreter's iterator of the operator keeps the hash or the sequence for the whole loop, while the
+        other temporaries of the list are released before the body runs; an object that it holds is then destroyed
+        after the loop (qore#5770).  An operand that holds no object cannot show when it is released: its list is
+        built first, as for any other expression.
+    */
+    bool getForeachSource(const QoreValue& list, ForeachSourceOperator& src);
+    //! Lowers the iterator of the foreach source \a src: its operand and indices, and IteratorCreateSource, in a temp
+    //! scope of their own that ends once the iterator is made
+    /** @return the iterator handle, or an invalid value on error
+    */
+    QoreIRValue lowerForeachSourceIterator(const ForeachSourceOperator& src, const QoreProgramLocation* loc,
+        std::string& error);
+    QoreIRValue lowerSourceIterator(const QoreValue& expr, const LazySelectorSource& src, bool iterate,
+        bool in_temp_scope, const QoreProgramLocation* loc, QoreIRValue& source, std::string& error);
+    //! Emits the iteration of a lazy list of selectors in place of IteratorNext
+    /** Emits IteratorNextSelectors in the current block, which gives the next value to \a body_block; when the iterator
+        has no value, a block asks it which selector it needs (SelectorIteratorPending), evaluates it in a temp scope of
+        its own and gives it to the iterator (SelectorIteratorFeed), and returns to IteratorNextSelectors, or releases
+        the iterator and branches to \a exit_block when every value has been given.  An exception raised by a selector
+        or the iterator goes to \a exception_target, which must release the iterator; if it is null, to a block that
+        releases the iterator and branches to the handler in this frame, if any.
+
+        @return the IteratorNextSelectors instruction, whose result is the value, or nullptr on error
+    */
+    QoreIRIteratorNextInstruction* emitSelectorIteratorNext(const LazySelectorSource& src, QoreIRValue iter,
+        QoreIRBasicBlock* exit_block, QoreIRBasicBlock* body_block, QoreIRBasicBlock* exception_target,
+        std::string& error);
+    //! Returns true if the lazy list of selectors \a src is iterated with the selector-segment loop in native code
+    /** The sequence must be a list whose values hold no reference, whose release cannot be observed, so that native
+        code can read each value from the list (qore#5711)
+    */
+    bool useSelectorSegmentLoop(const LazySelectorSource& src) const;
+    //! Returns true if evaluating the selector \a selector (or the bounds of a range) can create a node temp
+    static bool selectorMayCreateTemp(const QoreValue& selector);
+    //! Returns the QoreIRListSelectorFlag flags of the iterator of a lazy list of selectors
+    static int64_t selectorIteratorFlags(const LazySelectorSource& src);
+    //! Fills the handler of a selector of a remove or delete expression with a list of selectors that raised an
+    //! exception: it removes what the \a selector_count selectors before it select, releases the removed values,
+    //! and branches with the exceptions to the handler of the expression, as the AST interpreter does
+    //! (LValueRemoveHelper::doRemove()); see tryEmitLValuePathOp()
+    //! (\a slice_ranges: the selectors of the path that are ranges, QoreIRLValuePathInstruction::slice_ranges)
+    void emitPartialSliceRemove(QoreIRBasicBlock* partial_block, const std::vector<LVPathStep>& path,
+        const std::vector<bool>& slice_ranges, const std::vector<QoreIRValue>& dyn_vals, size_t selector_count,
+        AssignmentMode mode,
+        const QoreProgramLocation* loc);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
+
+    //! Lowers the right operand of a compound assignment as lowerMutationOperand() does; with \a force_int (an
+    //! operation that converts its operand to an int), a constant-key read of a hash with int enum values reads the
+    //! int (qore#6477)
+    //! the node of the operand of an int compound assignment being lowered, or nullptr (see
+    //! lowerIntMutationOperand(), qore#6477)
+    const AbstractQoreNode* int_operand_node = nullptr;
+
+    QoreIRValue lowerIntMutationOperand(const QoreValue& lvalue, const QoreValue& expr,
+        const QoreProgramLocation* loc, std::string& error, bool force_int);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
     QoreIRValue lowerShift(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPush(const QoreValue& expr, std::string& error);
@@ -267,6 +412,14 @@ public:
     QoreIRValue lowerContainerLiteral(const QoreValue& expr, std::string& error);
     QoreIRValue lowerContainerElement(const QoreValue& expr, std::string& error);
     QoreIRValue lowerParseHash(const QoreValue& expr, std::string& error);
+    //! Returns true if a value can be NOTHING although its parse type does not accept NOTHING: a read of an lvalue
+    //! that may have no value, or +, - or * of two such values (qore#5937)
+    DLLLOCAL bool valueMayBeNothingDespiteType(const QoreValue& value) const;
+
+    //! Returns true if the typed operation (given by its int opcode) of the operands does not give the result of the
+    //! AST interpreter when an operand has no value, so the generic operation must be used (qore#5937)
+    DLLLOCAL bool typedOpNeedsNothingFallback(QoreIROpcode int_op, const QoreValue& left,
+        const QoreValue& right) const;
     QoreIRValue lowerParseList(const QoreValue& expr, std::string& error);
     QoreIRValue lowerExists(const QoreValue& expr, std::string& error);
     QoreIRValue lowerElements(const QoreValue& expr, std::string& error);
@@ -287,6 +440,18 @@ public:
             std::string& error, F&& lower);
     //! Sets the source of the functional operator being lowered to the base source of its fused pipeline
     void setFunctionalBaseSource(const QoreValue& base_source);
+    //! The block that an exception leaving the loop of a functional operator goes to (see the definition)
+    class FunctionalLoopExceptionCleanup;
+    class LoopBodyRegion;
+    //! Lowers code that runs with an element as the implicit argument and its index as the implicit element, which
+    //! are restored on every path, also when the code raises an exception (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitContext(QoreIRValue element, QoreIRValue index, const QoreProgramLocation* loc,
+            QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
+    //! Lowers code that runs with the implicit argument list (arg0) or (arg0, arg1) (see the definition)
+    template <typename F>
+    QoreIRValue lowerWithImplicitArgs(QoreIRValue arg0, QoreIRValue arg1, QoreIRValue index,
+            const QoreProgramLocation* loc, QoreIRBasicBlock* loop_cleanup, std::string& error, F&& lower);
     QoreIRValue lowerMap(const QoreValue& expr, std::string& error);
     QoreIRValue lowerSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerMapSelect(const QoreValue& expr, std::string& error);
@@ -300,6 +465,10 @@ public:
     QoreIRValue lowerNullCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerValueCoalescing(const QoreValue& expr, std::string& error);
     QoreIRValue lowerQuestionMark(const QoreValue& expr, std::string& error);
+    //! Lowers a typed hash or list construction whose initializer is lowered as the operand \a init
+    /** @param type_only a NewComplexHashNode or NewComplexListNode of the type without an initializer */
+    QoreIRValue lowerNewComplexFromOperand(QoreIROpcode opcode, const QoreValue& type_only, QoreIRValue init,
+            const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerCast(const QoreValue& expr, std::string& error);
     QoreIRValue lowerBuiltinTypeConversion(const QoreValue& expr, std::string& error);
     QoreIRValue lowerFunctionCall(const QoreValue& expr, std::string& error);
@@ -319,20 +488,6 @@ private:
     //! Returns true and sets the lowering error if the thread's stack has reached the lowering reserve
     bool stackReserveReached(std::string& error);
 
-    //! Phase 3b: Analyze handler code for variable references to enable parameter capture
-    /** Walks the handler AST to identify which parent scope variables are referenced.
-     *  These variables will be passed as parameters to the compiled handler IR function.
-     */
-    HandlerVariableCapture analyzeHandlerVariables(const StatementBlock* handler_code);
-
-    //! Phase 3b: Compile handler code to IR function with captured variable parameters
-    /** Creates a QoreIRFunction for the handler with captured variables passed as parameters.
-     *  The handler body is lowered into the new function, which can be executed from any context.
-     *  Returns nullptr on compilation failure.
-     */
-    QoreIRFunction* compileHandlerToIR(const StatementBlock* handler_code,
-            const HandlerVariableCapture& capture, std::string& error);
-
     //! Native IR lowering for map operator with implicit argument context
     QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
     //! Native IR lowering for select operator with implicit argument context
@@ -344,9 +499,10 @@ private:
     //! Native reverse-fold lowering over an already-lowered iterable value.
     QoreIRValue lowerFoldrNativeValue(const QoreFoldrOperatorNode* foldr, QoreIRValue input_list,
         const QoreTypeInfo* element_type, std::string& error);
-    //! Insert runtime $1/$2 setup before an AST-delegated fold body.
-    QoreIRValue insertFoldImplicitArgvSetup(QoreIRBasicBlock* body, size_t position,
-        QoreIRValue accumulator, QoreIRValue element, const QoreProgramLocation* loc);
+    //! Restores the implicit arguments that the SetImplicitArgv of a fold's (accumulator, element) argument list
+    //! replaced (\a old_argv; see lowerWithImplicitArgs()), and releases the reference to them that the IR
+    //! interpreter's slot keeps
+    void createFoldPopImplicitArg(QoreIRValue old_argv, const QoreProgramLocation* loc);
     //! Native IR lowering for map+select operator
     QoreIRValue lowerMapSelectNative(const QoreMapSelectOperatorNode* ms, const QoreValue& expr, std::string& error);
     //! Native IR lowering for hash map operator
@@ -400,8 +556,29 @@ private:
     //! Collects a supported lazy source chain into ordered stages and an innermost source expression.
     bool collectLazyPipelineStages(const QoreValue& source, QoreValue& base_source,
         std::vector<LazyPipelineStage>& source_stages, std::string& error);
+    //! Decides if the list of selectors \a source, which a consumer iterates, is iterated lazily, and records it
+    /** It is iterated lazily unless its selectors are stable and the consumer's code - the expressions of \a stages,
+        \a consumer_exprs, the lvalue \a written_lvalue and the statements of \a block - does not write the locals that
+        they read (qore#5675).  getLazySelectorSource() then gives the decision.
 
-    //! Lowers a pipeline stage with virtual $1/$# values and materializes the runtime context only for AST delegation.
+        @return true if the list is iterated lazily
+    */
+    /** With \a pure_consumer_ok (a map, select, map/select or foldl operator without other stages), a list whose
+        selectors have side effects is also evaluated before the iteration when the operator's expressions only
+        compute values from numeric elements (qore_ir_consumer_expr_is_pure()), as neither side can observe the other.
+        Any other consumer iterates a list of stable selectors over a list whose values hold no reference lazily as
+        well (useSelectorSegmentLoop()) when it has at least as many ranges as single indices, which gives the same
+        values without building the list of them; a list with more single indices is built first, as a lazy single
+        index costs a step of the iteration protocol where the list costs one element (qore#5711).
+    */
+    bool decideLazySelectorSource(const QoreValue& source, const std::vector<LazyPipelineStage>& stages,
+        const std::vector<const QoreValue*>& consumer_exprs, const QoreValue* written_lvalue = nullptr,
+        const StatementBlock* block = nullptr, bool pure_consumer_ok = false);
+    //! The decisions of decideLazySelectorSource(), by list of selectors
+    std::unordered_map<const AbstractQoreNode*, bool> lazy_selector_decisions;
+
+    //! Lowers a pipeline stage with virtual $1/$# values, and with the element as the implicit argument list also at
+    //! run time when the stage needs it (see the definition)
     QoreIRValue lowerLazyPipelineStage(const QoreValue& stage_expr, const QoreProgramLocation* stage_loc,
         QoreIRValue element, QoreIRValue index, std::string& error);
 
@@ -424,7 +601,7 @@ private:
         AssignmentMode mode, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
         LVUnaryOp unary_op = LVUnaryOp::PreInc,
         LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push,
-        const QoreValue& pattern_expr = QoreValue());
+        const QoreValue& pattern_expr = QoreValue(), bool ref_rv = true);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
@@ -447,8 +624,31 @@ private:
     bool ensureBuilderContext(std::string& error) const;
     QoreIRValue tryPluginLowering(const QoreValue& expr, std::string& error);
     QoreIRBasicBlock* createBlock(const std::string& prefix);
+    //! Continues lowering in the join block of an operator whose operands are lowered in blocks of their own (?:, ??,
+    //! ?*, &&, ||, a list of selectors), after laying it out after the blocks that the operands created
+    /** The native tiers lower the blocks of a function in layout order, and assign the temporaries of a block to the
+        temp scopes open when it is lowered: an operand that calls a function in a try block (or in a block with
+        local variables) continues in a block created after the join block, which holds the end of the statement
+        (its DiscardTemps), so a temporary that the statement releases at its end (a receiver, or an argument of a
+        call that qcc folds) was released only when the next statement ended (qore#6080), and its exception edges
+        had no mark of the statement's temp scope (qore#5997).  An if statement lays out its merge block in the same
+        way.
+    */
+    void setJoinBlock(QoreIRBasicBlock* join_block);
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
+    //! Gives the load of a variable that can hold a reference the exception target in effect, if any
+    /** A variable whose type allows a reference (no type or a reference type) can hold one, and its read reads the
+        referenced lvalue, which raises an exception if it no longer exists (OBJECT-ALREADY-DELETED for a member of a
+        deleted object, PROGRAM-ERROR for a variable of a deleted Program): the exception is handled by the enclosing
+        try or scope cleanup, as in the AST interpreter.  The read of any other variable cannot raise, and its load
+        gets no exception edge, which would constrain the optimization of the code around it.
+
+        @param load a LoadLocal, LoadClosure, LoadGlobal or LoadThreadLocal instruction, or an AddAssignLocalInt
+        instruction, which reads its source as a load does
+        @param type_info the declared type of the variable read
+    */
+    void setReferenceLoadExceptionTarget(QoreIRInstruction* load, const QoreTypeInfo* type_info);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
         const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, AssignmentMode mode = AssignmentMode::Normal,
         QoreIRValue* store_result = nullptr);
@@ -472,6 +672,53 @@ private:
     bool markReferenceArgumentAssignmentsUnknown(const QoreParseListNode* parse_args,
         const QoreListNode* args, std::string& error);
     bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
+    //! Returns true if evaluating an argument of a call can have an effect that the order of evaluation can show
+    //! (issue #5784); conservative: only a value and a read of a local variable have none
+    bool callArgsMayHaveSideEffects(const QoreParseListNode* parse_args, const QoreListNode* args) const;
+
+public:
+    //! Gives the "self" local of the method lowered, the object that a call through self or an unqualified call to a
+    //! method is made on; null (the default) for code without one
+    void setSelfLocal(LocalVar* n_self_local) {
+        self_local = n_self_local;
+    }
+    //! Gives a plugin dispatch instruction the active handler (see withExceptionTarget())
+    /** An exception that the plugin operation raises then branches to an enclosing try/catch in the same function
+        instead of returning from the frame (qore#6135).
+    */
+    QoreIRPluginInstruction* withPluginExceptionTarget(QoreIRPluginInstruction* inst) const {
+        return withExceptionTarget(inst);
+    }
+
+private:
+    //! the "self" local of the method lowered, if any (see setSelfLocal())
+    LocalVar* self_local = nullptr;
+
+    //! Emits the check of the object of a call through self (issue #5823), before the arguments are evaluated
+    /** The direct calls of a method of a final class or of a final method on self (CallMethodDirect,
+        InvokeMethodDirect) call the method without checking the object, so they are always checked; a call that is
+        dispatched at run time checks the object itself, after its arguments, so it is checked here only when the
+        arguments can show the order (callArgsMayHaveSideEffects()).
+
+        The check has no operand: it takes the current object (see QoreIRBuilder::createCheckCallTarget()).
+
+        @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param loc the location of the call
+        @param check_class the class of the method resolved at parse time, if any
+        @param check_method the method resolved at parse time, if any
+        @param check_any_class true for a qualified call (Base::m()), which is not virtual: its method is called on
+        an object of any class (QoreIRExprInstruction::check_any_class)
+    */
+    //! Emits the check of the target of a call after its arguments (QoreIRExprInstruction::check_after_args)
+    /** @param call the call (QoreDotEvalOperatorNode or SelfFunctionCallNode)
+        @param target the value that the method is called on; invalid for a call through self, on the current object
+        @param loc the location of the call
+    */
+    void emitCallTargetCheckAfterArgs(const QoreValue& call, QoreIRValue target, const QoreProgramLocation* loc);
+
+    void emitSelfCallTargetCheck(const QoreValue& call, const QoreProgramLocation* loc,
+        const QoreClass* check_class = nullptr, const QoreMethod* check_method = nullptr,
+        bool check_any_class = false);
     bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
         const QoreParseListNode* parse_args, const QoreListNode* args) const;
     bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
@@ -485,6 +732,8 @@ private:
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left, QoreIRValue right,
         const QoreProgramLocation* loc, std::string& error);
+    //! returns true if the comparison \a op of the operator \a node may dispatch to a plugin operation (qore#5911)
+    static bool comparisonMayDispatchToPlugin(QoreIROpcode op, const QoreOperatorNode* node);
     QoreIRValue lowerUnaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue value,
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue emitHashKeyCompoundOp(const VarRefNode* container_var, const std::string& key_name,
@@ -534,6 +783,14 @@ private:
     */
     QoreIRValue lowerExpressionInTempScope(const QoreValue& expr, const QoreProgramLocation* loc,
         std::string& error, bool containers_only = false);
+    //! Lowers an expression that a functional operator evaluates for an element, as a statement of its own
+    /** The temporaries of an element are released when its value has been computed, before the next element, as in
+        the AST interpreter (qore#6288): the expression is lowered with lowerExpressionInTempScope() when it can create
+        a temporary besides its value whose release a destructor can observe (a call's or a construction's value, an
+        object-holding read of a variable that other code can change), and directly otherwise, so that a loop of plain
+        reads keeps its optimizations.
+    */
+    QoreIRValue lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     QoreIRBasicBlock* getGuardExceptionTarget() const;
     //! Gives an instruction that can raise an exception the active handler
@@ -564,6 +821,10 @@ private:
         CF_NONE = 0,
         CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
         CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break and return)
+        //! close the catch blocks left (CatchScope entries) in their place among the other cleanups: a catch block
+        //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
+        //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
+        CF_CATCH_SCOPES = 4,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -595,6 +856,10 @@ private:
         @param returned_local the local variable whose value the statement returns, if it returns one as it is
     */
     DLLLOCAL bool returnCleanupObservesError(const LocalVar* returned_local) const;
+
+    //! Returns true if a return statement here runs a handler before it returns: an on_exit or on_success handler
+    //! of a block that it leaves
+    DLLLOCAL bool returnRunsHandlers() const;
 
     //! Determine if a handler should execute for a given exit type
     /** Handlers are filtered by type:
@@ -667,11 +932,28 @@ private:
         QoreIRValue value;
         //! true if the operator's value can be the source's (a source that is not known to be a list)
         bool may_alias = false;
+        //! the list that the stages of a lazy pipeline gave a fold, which the fold iterates as its source (foldr $1,
+        //! (select l, c)), released after the operator before the source (issue #6262)
+        QoreIRValue intermediate;
     };
     //! The sources of the functional operators being lowered, innermost last
     std::vector<FunctionalSourceCapture> functional_source_captures;
     //! Releases the temporary that a functional operator's source gave once the operator has run (see the definition)
     class FunctionalSourceRelease;
+    //! returns true if the source of the functional operator being lowered is released after the operator (a
+    //! temporary or a plain read of a local, see FunctionalSourceRelease)
+    DLLLOCAL bool functionalSourceReleased() const;
+    //! Releases the value that a functional operator's expression gave once its result container holds it
+    /** The container takes a reference of its own, as the AST interpreter's operator pushes the value, which the
+        container then holds alone; see the definition.  Nothing is emitted for a value of a type that holds no object,
+        or for \a element, the element that the operator's expression reads (<tt>map $1, l</tt>)
+    */
+    DLLLOCAL void releaseStoredOperatorValue(QoreIRValue value, const QoreTypeInfo* ti, QoreIRValue element,
+            const QoreProgramLocation* loc);
+    //! Returns the single value that a functional operator over a single value gives, \a unwrapped, read from its
+    //! result list \a list, with a reference of its own, and releases the list (see the definition)
+    DLLLOCAL QoreIRValue ownUnwrappedOperatorValue(QoreIRValue unwrapped, QoreIRValue list,
+            const QoreProgramLocation* loc);
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
@@ -681,6 +963,32 @@ private:
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
     int statement_block_depth = 0;  //!< Nesting depth for debug block markers
+    //! True if the root block that this lowering lowers is the body of a handler (on_exit, on_error, on_success)
+    /** The body of a handler has the block event of the debugger, as in the AST interpreter, which makes one for the
+        block of each handler that it runs: a handler lowered inline is a nested block, which has it, while the body of
+        a handler compiled to an IR function of its own is the root block of that function, which has none (#5870)
+    */
+    bool handler_body = false;
+    //! True if the code lowered is top-level code whose statements have different parse options, which sets the
+    //! options of each statement (QoreIROpcode::SetCodeParseOptions): its handlers run with the options of the
+    //! statements that declare them (InlineHandler::code_po_statement, qore#6293)
+    bool top_level_code_parse_options = false;
+    //! true while the block cleanups of a return statement in a try statement of a handler body (handler_body) are
+    //! lowered: the value of the return (handover_try_value) is handed to the function that the handler runs for when
+    //! the walk leaves the outermost try statement of the handler, as the AST interpreter's try statement gives the
+    //! value of its return to the enclosing block when it ends (QoreIROpcode::HandlerReturn, #6074)
+    bool handover_try_active = false;
+    //! the value of the return of handover_try_active; invalid for a return without a value
+    QoreIRValue handover_try_value;
+    //! the value of the switch statement whose case with an operator is being lowered: the value of the
+    //! QoreSwitchValueOperatorNode in the case's comparison (qore#6252)
+    QoreIRValue switch_case_value;
+    //! the switch expression whose value is switch_case_value: the guaranteed type of the switch value in the case's
+    //! comparison is that of the expression (qore#6252)
+    QoreValue switch_case_expr;
+    //! the handler body that lowerHandlerAtExit() lowers inline next: its block gets an exception path of its own for
+    //! its locals (see lowerStatementBlock(), #6002)
+    const StatementBlock* inline_handler_block = nullptr;
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 
@@ -702,21 +1010,49 @@ private:
         //! non-local exit inside the handler body cannot re-enter the same
         //! handler range. Cleanup entries below that Scope still run.
         enum Type { Scope, Lvars, RefForeachRecord, RefForeach, Context, HandlerBarrier, CatchVar,
-            ForeachElement, ForeachSource };
+            ForeachElement, ForeachSource, CatchScope };
         Type type;
         uint32_t scope_id = 0;                    //!< scope ID for Scope entries
         size_t handler_start = 0;                 //!< index into block_handlers at scope entry (for inline lowering)
+        //! for a HandlerBarrier entry: the number of handlers of the protected scope that stay registered while the
+        //! handler runs (those registered before it), which a return in the handler runs after it (#5992)
+        size_t keep_handlers = 0;
+        //! for the last entry of a try statement that an exit leaves (the Scope entry of its try block, the
+        //! CatchScope entry of its catch block): try_depth in the statement, 0 for the other entries (#5992)
+        int try_end_depth = 0;
+        //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
+        //! once the statement has ended goes to (#6128; the hand-over of a return in it, #6074)
+        QoreIRBasicBlock* try_outer_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
+        //! the exception target where the entry was pushed, outside the block: an exception that a destructor raises
+        //! when a break, a continue or a return releases the locals of an Lvars or CatchVar entry goes there, to the
+        //! cleanups of the enclosing blocks and the handler that encloses them, as when the block ends (qore#6084)
+        QoreIRBasicBlock* outer_exception_target = nullptr;
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
+        //! for a RefForeach entry: the exception target outside the statement, where an exception raised by the
+        //! write-back of the list goes (an enclosing try block's handler, or nullptr to leave the frame; qore#6197)
+        QoreIRBasicBlock* ref_foreach_exception_target = nullptr;
         QoreIRValue old_implicit_element;          //!< saved $# for RefForeachRecord/ForeachElement
         QoreValue var_expr;                        //!< loop variable expression for RefForeachRecord
         QoreIRValue context_state;                 //!< Context* handle for Context entries
         LocalVar* catch_var = nullptr;             //!< single local for CatchVar entries (try-catch exception param)
+        //! the value of the CatchException of the catch block of a CatchScope entry, which the CatchCleanup that
+        //! closes it releases (see QoreIRFunction::catch_cleanup_results, #6079)
+        uint32_t catch_result_id = 0;
         QoreIRValue foreach_iterator;              //!< iterator handle released by a ForeachSource entry, if any
         QoreIRValue foreach_list;                  //!< list temporary released by a ForeachSource entry, if any
         QoreIRValue foreach_element;               //!< current element released by a ForeachSource entry, if any
         size_t temp_scope_depth = 0;               //!< temp scopes open when the entry was pushed
+        //! the lowering state where the entry was pushed: the number of scope_stack entries, catch_cleanup_depth and
+        //! the number of try_catch_cleanup_depth_stack entries
+        /** The handlers of a Scope entry that a return, break or continue runs are lowered with this state: they
+            run after the exit has left the blocks, catch blocks and try statements inside the block, so code in them
+            must not count those (qore#6017)
+        */
+        size_t open_scopes = 0;
+        int open_catch_depth = 0;
+        size_t open_try_depth = 0;
         //! true for the Scope entry of a statement block with on_exit/on_success/on_error handlers
         bool block_scope = false;
         //! the exception target of the body of the block of a Scope entry with handlers (block_scope)
@@ -767,13 +1103,61 @@ private:
     */
     DLLLOCAL bool expressionReadsWeakCapableLocal(const QoreValue& expr) const;
 
-    //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
-    /** Releases the iterator, the list and the loop variables, as the AST's foreach statement does when an exception
-        unwinds it, before the handler of the enclosing try block or block with handlers runs.
+    //! Returns true if evaluating \a expr reads, other than as its own value, a local variable whose value can be or
+    //! hold an object and whose release by the cleanups of a return statement can be observed (see
+    //! localReleaseObservedByReturn())
+    /** The value read is a temporary of the statement, which can keep the variable's object after the variable is
+        released: the AST interpreter releases the temporaries of the statement first, so the object is destroyed when
+        its variable is, in reverse declaration order with the other locals (qore#6309).
     */
+    DLLLOCAL bool expressionReadsReleasedObjectLocal(const QoreValue& expr) const;
+
+    //! Returns true if the cleanups of a return statement release the local and then release or run something else
+    //! that can see when the local's object is destroyed
+    /** The local is one of a block that the return leaves, or the variable of a catch block that it leaves; what
+        is released after it is a local declared before it in its block that can be or hold an object, or a cleanup of
+        an enclosing block (an object local, a catch variable, a handler, a foreach).  A temporary of the statement
+        that keeps the local's object is observable only then.
+    */
+    DLLLOCAL bool localReleaseObservedByReturn(const LocalVar* lv) const;
+
+    //! Emits the block that an exception leaving the body of a value foreach loop goes to before \a outer_target
+    /** Releases the element (if valid), the values that map expressions gave from it last (the valid ones, in their
+        order: the list holds a reference of its own), the partial result (if valid: the list that a functional operator built so far), the
+        iterator (if valid), the list and the loop variables, in this order, as the AST's foreach statement and
+        functional operators do when an exception unwinds them, before the handler of the enclosing try block or block
+        with handlers runs.  Without \a outer_target, the exception then leaves the function (a synthetic rethrow).
+    */
+    //! Releases the value of a functional operator's predicate once it has been converted to a bool, if it can
+    //! hold an object
+    /** The AST interpreter holds the value of the predicate for the element (ValueEvalOptimizedRefHolder) and
+        releases it when it has decided on the element; as a temporary of the statement, it was released when the
+        next element's value was, or with the statement's temporaries after the operator's values when an exception
+        left the operator.  Nothing is emitted for a value that cannot hold an object, whose release cannot be
+        observed, or that is the element (\a element) itself.
+    */
+    DLLLOCAL void releasePredicateValue(QoreIRValue value, const QoreValue& expr, QoreIRValue element,
+            const QoreProgramLocation* loc);
+
+    //! Creates the block that restores the implicit element of a foreach statement for an exception that leaves its
+    //! body for a handler of this function, and puts it on the exception stack (qore#6432)
+    /** Returns nullptr, and changes nothing, when no handler of this function encloses the body: the exception then
+        leaves the function.  The block is emitted with emitForeachElementExceptionRestore() once the body has been
+        lowered; \a next is set to the exception target that the block continues to.
+    */
+    DLLLOCAL QoreIRBasicBlock* beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error);
+
+    //! Emits the block of beginForeachElementExceptionRestore(): it restores the implicit element that the loop set
+    //! (\a old_element, the result of its PushImplicitElement) and continues to \a next with the exception, so that
+    //! the handlers of the enclosing blocks run with the element of the code around the loop, as in the AST
+    //! interpreter, whose foreach statement restores it when the exception unwinds it (qore#6432)
+    DLLLOCAL void emitForeachElementExceptionRestore(QoreIRBasicBlock* block, QoreIRBasicBlock* next,
+            QoreIRValue old_element, const QoreProgramLocation* loc);
+
     DLLLOCAL void emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
             QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
-            const QoreProgramLocation* loc);
+            const QoreProgramLocation* loc, QoreIRValue partial_result = QoreIRValue(),
+            const std::vector<QoreIRValue>& element_values = {});
 
     //! Top-level handlers saved before block_handlers is erased
     /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
@@ -802,10 +1186,13 @@ private:
         QoreIRBasicBlock* break_target = nullptr;
         QoreIRBasicBlock* continue_target = nullptr;
         bool is_switch = false;
-        int catch_cleanup_depth = 0;   //!< catch_cleanup_depth when this flow target was created
         size_t cleanup_stack_depth = 0;  //!< cleanup_stack depth when this flow target was created
         QoreIRValue old_implicit_element;  //!< saved $# value for foreach loops (for break/continue cleanup)
         size_t temp_scope_depth = 0;     //!< temp scopes open when this flow target was created
+        //! the exception target in force when this flow target was created: a continue or break that branches to a
+        //! block that checks for cancellation raises it in the scope of the loop, as the loop's own branches do,
+        //! and not in a try block that the statement is in inside the loop
+        QoreIRBasicBlock* loop_exception_target = nullptr;
     };
     std::vector<FlowTarget> flow_stack;
     //! Push a block cleanup entry, recording the number of temp scopes open where it is pushed
@@ -826,12 +1213,110 @@ private:
     //! Depth of active catch scopes that need CatchCleanup on non-local exit
     int catch_cleanup_depth = 0;
 
+    //! An active catch block (see catch_exit_stack)
+    struct CatchExitInfo {
+        //! true if it has an exit block, which closes it when an exception leaves it
+        bool has_exit;
+        //! its catch variable, if any
+        LocalVar* catch_var;
+    };
+    //! the active catch blocks, innermost last (see the lowering of TryStatement, #5968)
+    std::vector<CatchExitInfo> catch_exit_stack;
+    //! A block with an exception path of its own (lowerStatementBlock()), and the catch blocks without exit blocks
+    //! whose statements' exceptions go to it
+    struct AnchorCatchInfo {
+        //! the block's exception path
+        QoreIRBasicBlock* anchor = nullptr;
+        //! catch_cleanup_depth in the block
+        int catch_depth = 0;
+        //! the catch variables of those catch blocks
+        std::vector<LocalVar*> vars;
+        //! true if there is any
+        bool any = false;
+    };
+    //! the blocks with exception paths of their own being lowered, innermost last (#5968)
+    std::vector<AnchorCatchInfo> anchor_catch_stack;
+    //! The catch blocks to leave at each exception block of a statement that is an exception target of its own and
+    //! runs code before the exception goes on (see pushExceptionAnchor()), once its body has been lowered (qore#6472)
+    std::unordered_map<const QoreIRBasicBlock*, AnchorCatchInfo> exception_block_catches;
+
+    //! Makes an exception block of a statement the exception target of the code lowered until popExceptionAnchor()
+    /** The block runs code of its own on the exception path before the exception goes on to the handlers of the
+        enclosing blocks: the exception cleanup of a foreach statement, the restoration of its implicit element, the
+        catch block of a foreach over a reference or of a context statement.  A catch block without an exit block whose
+        statements' exceptions go to it is left there first, as at the exception path of a block or a try statement:
+        its catch variable is released before the code of the block, the code of the blocks that the exception goes on
+        to and their handlers run, as the AST interpreter leaves the catch block when the exception leaves it (#5968,
+        qore#6472); emitAnchorCatchLeave() emits that at the start of the block.
+    */
+    DLLLOCAL void pushExceptionAnchor(QoreIRBasicBlock* block);
+    //! Ends pushExceptionAnchor(), keeping the catch blocks to leave at the block for emitAnchorCatchLeave()
+    DLLLOCAL void popExceptionAnchor();
+    //! Emits the leaving of the catch blocks whose statements' exceptions went to an exception block of a statement
+    //! (see pushExceptionAnchor()), at the start of the block's code, after its landing pad if it has one
+    DLLLOCAL void emitAnchorCatchLeave(const QoreIRBasicBlock* block, const QoreProgramLocation* loc);
+    //! Emits the leaving of catch blocks without exit blocks whose statements raised an exception: their catch
+    //! variables are released and the catch blocks of the frame opened since \a catches.catch_depth that are still
+    //! open are closed (#5968)
+    DLLLOCAL void emitCatchLeave(const AnchorCatchInfo& catches, const QoreProgramLocation* loc);
+
     //! catch_cleanup_depth at the body of each enclosing try statement, innermost last
     /** An exception raised in a try body lands in that try statement's catch block, so a throw or rethrow there
         leaves only the catch scopes entered since the try body began; the catch scopes that enclose the try statement
         stay active (see catchScopesLeftByThrow()).
     */
     std::vector<int> try_catch_cleanup_depth_stack;
+    //! the values of the Return instructions in the try block of each enclosing try statement, innermost last (see
+    //! QoreIRFunction::catch_interrupted_returns)
+    std::vector<std::vector<uint32_t>> try_return_value_stack;
+    //! the number of try statements (their try and catch blocks) that enclose the code being lowered
+    /** A try statement runs its blocks with a return value of its own (TryStatement::execImpl()), so a return in a
+        try statement in a handler does not replace the value of the return that the handler runs after (#5992).
+    */
+    int try_depth = 0;
+    //! the value of the return statement whose block cleanups are being lowered, which a return in a handler that
+    //! they lower inline replaces (#5992)
+    /** As in the AST interpreter, where the handlers of a block run with the block's return value and a return
+        statement in one replaces it and releases the replaced value (ReturnStatement::execImpl()), the return of a
+        handler releases this value when it replaces it.  An invalid value is no value (a return without one), or
+        none to release.
+    */
+    QoreIRValue pending_return;
+    //! the value that pending_return took a reference of its own to before the block cleanups, if any, which holds a
+    //! reference of the frame until the frame ends; released with it (#5992)
+    QoreIRValue pending_return_base;
+    //! true while the block cleanups of a return statement are lowered (see pending_return)
+    bool pending_return_active = false;
+    //! try_depth at the return statement of pending_return
+    int pending_return_try_depth = 0;
+    //! the nesting of emitBlockCleanups() and lowerHandlersAtExit() calls (see QORE_IR_INLINE_HANDLER_BUDGET in
+    //! QoreIRLowering.cpp)
+    int exit_lowering_nesting = 0;
+    //! the nesting of the handler bodies being lowered inline by lowerHandlerAtExit()
+    int inline_handler_body_depth = 0;
+    //! the handler bodies lowered inline since the outermost exit being lowered began
+    size_t inline_handlers_lowered = 0;
+    class ExitLoweringNesting;
+    //! the value of the return that a return in a try statement in a handler replaces when the walk of its
+    //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST
+    //! interpreter's try statement replaces it when it ends (TryStatement::execImpl(), #5992)
+    QoreIRValue try_replaced_return;
+    //! the value that try_replaced_return took a reference of its own to (see pending_return_base)
+    QoreIRValue try_replaced_return_base;
+    //! the try_depth of the try statement whose end releases try_replaced_return, or 0
+    int try_replaced_depth = 0;
+    //! Returns true if a return at the current point replaces the value of pending_return (see there)
+    DLLLOCAL bool replacesPendingReturn() const;
+    //! Releases the value of the return that a return in a handler replaces (see pending_return)
+    DLLLOCAL void releaseReplacedReturn(const QoreProgramLocation* loc);
+    //! Hands the value of a return statement in a handler body run out of line (handler_body) to the function that
+    //! the handler runs for (QoreIROpcode::HandlerReturn, #6074); in a try statement of the handler, when the outermost
+    //! one ends (handover_try_active); an invalid \a value is a return without a value
+    DLLLOCAL void emitHandlerReturn(QoreIRValue value, const QoreProgramLocation* loc);
+    //! the depth of the statements lowered, for the nesting of DebugStatement instructions (#5816)
+    uint16_t debug_nest_depth = 0;
+    //! the depth of the statements of the catch block lowered, or -1 (QORE_IR_DEBUG_NEST_IN_CATCH)
+    int debug_catch_child_depth = -1;
 
     //! Returns the number of active catch scopes that a throw or rethrow statement at the current point leaves
     /** These are the catch scopes entered since the body of the innermost enclosing try statement began, or all of
@@ -842,17 +1327,25 @@ private:
         return catch_cleanup_depth - (try_catch_cleanup_depth_stack.empty() ? 0 : try_catch_cleanup_depth_stack.back());
     }
 
-    //! Virtual implicit argument context - eliminates push/pop runtime calls for map/select/foldl/foldr
-    /** When active, $1/$2/$# references in lowerExpression() use these IR values directly
-     * instead of emitting LoadImplicitArg/LoadImplicitElement runtime calls.
-     * This eliminates 6+ runtime calls (push/pop/load for arg and element) per loop iteration.
-     */
-    struct VirtualImplicitContext {
-        QoreIRValue arg0;      //!< virtual $1 value (offset 0)
-        QoreIRValue arg1;      //!< virtual $2 value (offset 1, for foldl/foldr)
-        QoreIRValue element;   //!< virtual $# value
-        bool active = false;   //!< true when virtual context is in effect
-    };
+    //! Releases the catch variable of the catch block that a throw or rethrow statement closes (see
+    //! catchScopesClosedByThrow()), if any
+    void emitCatchVarReleaseForThrow(const QoreProgramLocation* loc);
+    //! Closes the catch block that a throw statement closes (see catchScopesClosedByThrow()), if any, after
+    //! releasing its catch variable
+    void emitCatchCloseForThrow(const QoreProgramLocation* loc);
+
+    //! Returns the number of the catch scopes that a throw or rethrow statement at the current point closes before
+    //! it raises the exception
+    /** A catch block with an exit block is closed there, after the code in it that the exception leaves; one without
+        (see qore_ir_catch_block_needs_exit()) has no code in it that the exception leaves, can only be the innermost
+        catch block, and is closed by the statement, as no code can see its exception afterwards (#5968).
+    */
+    int catchScopesClosedByThrow() const {
+        // the innermost catch block that the statement is in: the handlers of a block left by a return, break or
+        // continue are lowered with the state of their block (catch_cleanup_depth, qore#6017)
+        return catchScopesLeftByThrow() > 0 && !catch_exit_stack[catch_cleanup_depth - 1].has_exit ? 1 : 0;
+    }
+
     VirtualImplicitContext virtual_implicit;
 
     //! The state of the lowering of a background helper function; see lowerBackgroundHelper()
@@ -880,6 +1373,12 @@ private:
     //! The number of the background helper this lowering lowers, if any (see bg_helper)
     unsigned bg_helper_index = 0;
 
+    //! The handler functions compiled by the outermost lowering and the lowerings of the handlers nested in it
+    //! (see compileBlockHandlerIRs(), #6087)
+    struct HandlerIRCache;
+    //! Created by the first handler compiled; the lowerings of the handlers share their parent's
+    std::shared_ptr<HandlerIRCache> handler_ir_cache;
+
     //! Lowers a value that a background expression takes when the thread starts, while lowering its helper
     /** @param expr the expression to lower
         @param rv the load of the parameter holding the value (for a reference, a reference to the parameter), if
@@ -889,6 +1388,21 @@ private:
         @return true if \a expr is such a value, false if not
     */
     bool lowerBackgroundLeaf(const QoreValue& expr, QoreIRValue& rv, std::string& error);
+
+    //! Returns the parameter of the background helper being lowered that holds a value the expression takes when the
+    //! thread starts, created for the key if it does not exist yet (see lowerBackgroundLeaf())
+    LocalVar* backgroundLeafParam(std::string key, const QoreValue& expr);
+
+    //! Extracts the access path of an lvalue (the file-level extractLValuePath() function)
+    /** In a background helper, the root of a path that is a member of the object of the code that starts the thread is
+        the value of the member that the thread took when it started, as for the AST interpreter, which the helper
+        holds in a parameter: the new thread has no object context (issue #5723: <tt>background (o.x = 1)</tt> in a
+        method of a class with an object member \c o raised "no object context for self member access")
+    */
+    //! (\a slice_ranges: required with \a allow_slice; see QoreIRLValuePathInstruction::slice_ranges)
+    bool extractLValuePath(const QoreValue& expr, std::vector<LVPathStep>& path,
+            std::vector<QoreValue>& dynamic_operands, bool allow_slice = false,
+            std::vector<bool>* slice_ranges = nullptr);
 
     //! Lowers a background expression to a helper function and the instruction starting the thread with it
     /** See QoreIRBackgroundInstruction.

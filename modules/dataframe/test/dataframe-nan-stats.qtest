@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-nan-stats.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameNanStatsTest
+
+#! describe() and the min, max and median aggregations order the values, and raise NAN-COMPARE-ERROR for a NaN
+#! value, as the <=> operator and sortBy() do, instead of giving results that depend on the order of the rows
+#! (qore#6107)
+class DataFrameNanStatsTest inherits QUnit::Test {
+    constructor() : Test("DataFrameNanStatsTest", "1.0", \ARGV) {
+        addTestCase("describe()", \describeTest());
+        addTestCase("aggregations", \aggTest());
+        set_return_value(main());
+    }
+
+    describeTest() {
+        foreach list<auto> vals in ((1.0, @nan@, 3.0, 2.0, 5.0), (5.0, 2.0, 3.0, @nan@, 1.0), (@nan@,)) {
+            DataFrame::DataFrame df({"v": vals});
+            assertThrows("NAN-COMPARE-ERROR", \df.describe(), (), sprintf("%y", vals));
+        }
+        # a null value is not a NaN
+        DataFrame::DataFrame df({"i": (1, 2, 3, 4, 5), "v": (5.0, 2.0, 3.0, NOTHING, 1.0)});
+        hash<auto> s = df.describe()[1];
+        assertEq(4, s.count);
+        assertEq(1.0, s.min);
+        assertEq(1.75, s.q25);
+        assertEq(2.5, s.q50);
+        assertEq(3.5, s.q75);
+        assertEq(5.0, s.max);
+        # the NaN values are dropped as the docs show
+        DataFrame::DataFrame nan({"v": (1.0, @nan@, 3.0)});
+        assertEq(2, nan.filter("v", ">=", -@inf@).describe()[0].count, "describe() without the NaN values");
+        assertEq((2.0,), (new DataFrame::DataFrame({"g": (1, 1, 1), "v": (1.0, @nan@, 3.0)}))
+            .filter("v", ">=", -@inf@).groupBy(("g",)).agg({"v": "median"}).getColumn("v"), "median without NaN");
+    }
+
+    aggTest() {
+        foreach list<auto> vals in ((1.0, @nan@, 3.0), (3.0, @nan@, 1.0)) {
+            DataFrame::DataFrame df({"g": (1, 1, 1), "v": vals});
+            GroupedDataFrame gdf = df.groupBy(("g",));
+            foreach string func in (("min", "max", "median")) {
+                assertThrows("NAN-COMPARE-ERROR", \gdf.agg(), {"v": func}, sprintf("%s %y", func, vals));
+            }
+            # the aggregations that do not order the values give a result
+            assertEq((NOTHING,), gdf.agg({"v": "sum"}).getColumn("v"), "sum of a NaN");
+            assertEq((vals[0],), gdf.agg({"v": "first"}).getColumn("v"), "first");
+        }
+        # null values are left out
+        DataFrame::DataFrame df({"g": (1, 1, 2), "v": (1.0, NOTHING, 3.0)});
+        assertEq((1.0, 3.0), df.groupBy(("g",)).agg({"v": "median"}).getColumn("v"), "median with a null value");
+    }
+}

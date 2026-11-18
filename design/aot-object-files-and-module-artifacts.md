@@ -304,6 +304,25 @@ Every AOT metadata blob carries:
 
 Loaders must reject metadata requiring unsupported features or newer opcodes.
 
+From format version 43 (`QORE_AOT_METADATA_CHECKSUM_VERSION`), the encoded
+metadata (compressed, when it is compressed) is followed by its XXH64 checksum
+(seed 0, little-endian u64), and the header flags have
+`QORE_AOT_FLAG_METADATA_CHECKSUM` (qore#6451). The writer appends it
+(`qore_aot_seal_metadata()`; the compression of the metadata recomputes it over
+the new encoding), and `QoreAOTBinaryReader::open()` checks it before it reads
+anything else, for the module loader and for qcc's reads of object data alike.
+The checksum of a module's metadata is computed once per load: the metadata
+that `QoreAOTDebugMetadata` keeps for lazy and debug IR (or its copy of it) is
+opened again with `verify_checksum` false, as the reader of the module checked
+it.
+Metadata that does not match is refused as a whole ("the AOT metadata does not
+match its checksum"), and its module is not loaded, as a module whose metadata
+cannot be read: the source module is loaded instead when there is one. The
+checksum detects metadata changed after qcc wrote it; it is not a signature.
+The readers still check every read and value of the metadata (qore#6265,
+qore#6451): tests that patch the metadata of a module set its checksum again
+with `qore-aot-reseal` to check them.
+
 Native `.qmod` code has an additional ABI contract independent of the metadata
 format and the C/C++ binary-module API. Generated module descriptors encode the
 exact `QORE_AOT_MODULE_ABI_VERSION` in a tagged form of the existing module
@@ -407,18 +426,67 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (2), payload size,
+The record is little-endian: magic `QAMI`, format version (4), payload size,
 then the module name, the dependency count and dependencies, the optional
 module count and requests, the count and names of the modules the module was
 compiled with (every module it requires, directly or not, and every module one
 of them re-exports, which the loader checks; see `aot-linked-module-sources.md`),
 and the counts and directories of the module's own `%prepend-module-path` and
 `%append-module-path` directives (which its initialization searches, so the
-loader finds the modules it checks with them), each string as a 32-bit length
-and its bytes.  Version 2 added the last three lists. Every
-string is nonempty and contains no NUL; payloads are bounded to 16 MiB and
-65,536 entries per list. `QoreAOTModuleFileInfo` in
-`include/qore/intern/QoreAOTBinary.h` documents the layout.
+loader finds the modules it checks with them), and the count and entries of the
+restricting parse options that the module's `%requires` and `%try-module`
+directives gave its dependencies, in directive order.  Each string is a 32-bit
+length and its bytes; each parse option entry is a module name, the options
+as four 32-bit words, the low and high halves of each of the two option words,
+and a 32-bit word of flags (`QMDR_*` in `include/qore/intern/SyncParseOptions.h`;
+any other bit makes the record invalid).
+The loader loads those dependencies first, in that order, and adds their
+options to the restrictions that they inherit; the decoder keeps only the
+options that qcc writes, the restrictions that a loaded module inherits.
+A module that declares functional domains in its header also lists the
+modules that it requested before its header, in every form of module request
+(`%requires` in any form, `%try-module`, in an included file), with the flag
+`QMDR_BEFORE_HEADER`: the loader loads them before the module's initialization
+removes the declared domains from the restrictions, as its source loads them.
+A conditional directive before its header makes every entry `QMDR_INEXACT`, as
+what it requests there can depend on where it is loaded: the loader then loads
+every listed module with the restrictions of the loading code, relieving none
+(fail-closed; qore#6386).  Then (version 4) follow the functional domains that
+the module declares in its header (a 64-bit value as two 32-bit words, low word first),
+the count and names of the dependencies that it requires only after its
+header, and the functional domains that its own code restricts (64-bit, as
+before; qore#6351): the dependencies of a module loaded as library code that it
+requires after its header inherit the restrictions without the declared
+domains, as the source's do.  That relief never applies to a module listed with
+`QMDR_BEFORE_HEADER`, and a record with a `QMDR_INEXACT` entry relieves nothing,
+neither with its declared domains nor with a relief from a module loading it:
+qcc then writes no post-header dependency and `QDOM_ALL` as the restricted
+domains, and the loader enforces both rules for any record.  The relief
+applies only to the load of the dependency itself (the load frame that is a
+direct child of the module's own, with the dependency's name), not to a load
+that the loading Program's code makes meanwhile (a callback or a constant of
+the dependency that runs it).  Both domain fields hold only functional domains
+(`QDOM_ALL`; the decoder refuses other bits), and the module's initialization
+refuses a module whose record declares other domains than its
+`MODULE_DOMAINS` section.
+
+When the restrictions refuse a module that a `%try-module` directive before
+the header requests, the qmod, compiled where the request succeeded and with no
+code for its failure, is refused with the error of that module's load
+(`AOT-MODULE-RESTRICTED` when the module is itself a qmod; fail-closed), while
+the source continues without the module and fails or not by its own code (with
+`PARSE-EXCEPTION` when it calls the module that it did not load).
+
+Version 2 added the compiled-with and module path lists, version 3 the parse
+option list, which came with AOT format version 44
+(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), and version 4 the three
+fields of the declared domains, with AOT format version 45
+(`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
+reports tells which record it has; a runtime reads only its own record version
+and refuses any other, asking for the module to be rebuilt. Every string is
+nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
+per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
+documents the layout.
 
 qcc adds the section as a constant global of the LLVM module
 (`addAOTModuleInfoSection()` in `lib/QoreAOT.cpp`) to the object that is linked
@@ -703,6 +771,66 @@ Build tools should treat these hashes as a dependency-planning contract. Runtime
 loading still depends on the normal AOT metadata sections, not on the symbol
 index.
 
+## Native Calls Between Modules
+
+A compiled module calls a plain function of another compiled module through the
+callee's native fast entry, as it calls the functions of its own image
+([#6035](https://github.com/qoretechnologies/qore/issues/6035)); before, every such
+call took the runtime path (`qore_rt_call_direct_aot()`), which binds the arguments
+to the callee's parameter locals and runs its cached function, some 3,700
+instructions more per call than a native call of the same function in the module.
+
+- **Provider.** `compileModule()` writes a `qore_fast_v1` record for each fast
+  entry of the module's functions to its symbol index, and the module's ABI v2
+  descriptor carries a table of its plain functions' fast entries: the function's
+  standard entry, its fast entry and the fast entry's symbol.  The module's init
+  registers the table with its metadata
+  (`qore_aot_register_module_fast_entries_v1()`) when it succeeds; the
+  registration is published only when the module manager has completed the load
+  (`QoreAOTPendingFastEntriesHelper` in `loadBinaryModuleFromDesc()`), as an image
+  whose load fails after its init is unloaded without its delete function, and the
+  delete unregisters it.  The registry's lock is a leaf lock with a fork handler.
+  Methods, generic functions and functions with implicit `self` are not in the
+  table.
+- **Consumer.** When a module is compiled, the plain functions of the other
+  compiled modules that are loaded are added to its fast-entry map
+  (`addAOTCrossModuleFastEntries()`, `BatchCalleeInfo::cross_module`) from the
+  registered metadata: only the ABI of the fast entry is taken (the parameter and
+  return kinds, which arguments it borrows or modifies, and whether its return value
+  can be NOTHING), never a body summary or effect fact, as the provider is a
+  separate image that can be rebuilt without the consumer.  Such a call is never
+  fused with its consumer, and its frame is named by its call target.
+- **The call** (`QoreIRToLLVM::emitAotBatchFastEntryOrFallback()`,
+  `emitCrossModuleFastEntryCall()`) resolves the callee's AOT context and fast
+  entry once per call slot (`qore_rt_try_get_cross_module_fast_entry()`, with the
+  fast entry's symbol as the key, cached in the slot's `QoreAOTCallTarget`), and
+  takes the runtime path if there is none: the provider was loaded from source,
+  was rebuilt with another ABI for the function (its symbol carries the ABI's
+  hash), or the call must run in a Program other than the function's.  Otherwise it
+  enters the function's Program as the runtime path does, before the call's frame
+  is pushed (`qore_rt_enter_cross_module_call()`: the Program's reference, its
+  thread entry, the clear of a calling closure's captured locals, the override of
+  the runtime parse options for module code, and then, as `execJITWithDeopt()`
+  does, the function's own runtime parse options and location, all in a buffer of
+  the caller's frame), calls the fast entry through the registered pointer, and
+  leaves the Program after the frame is popped
+  (`qore_rt_leave_cross_module_call()`).  If the Program cannot be entered, the call
+  is not made and the exception stays in the caller's sink.
+- `QORE_DISABLE_AOT_CROSS_MODULE_FAST_CALLS` keeps the runtime path, both when a
+  module is compiled and when it runs.
+
+`examples/test/ir/AOTCrossModuleFastCall.qtest` checks that the calls give the
+same values, exceptions, locations and call stacks from source, compiled, compiled
+with the native calls disabled, and as a compiled consumer of a source provider, at
+`-O0`, `-O2` and `-O3` and in every execution mode of the calling script, from
+functions, methods, closures, threads, a sandboxed Program and a call back into the
+consumer; and that a provider rebuilt after its consumer is called natively with the
+same fast-entry ABI and through the runtime path with another one.
+
+A module compiled by another libqore never meets these entries: the AOT runtime
+identity (above) refuses it before its init runs, so the table and the records need
+no format version of their own.
+
 ## Source Locations
 
 AOT-compiled code keeps the thread's runtime location as JIT code does: each
@@ -803,6 +931,30 @@ default.
 
 The `qcc-format` stamp controls mass qmod rebuilds. Only changes that can alter
 qmod output or qcc compile semantics should update that stamp.
+
+The stamp and the runtime identity header derived from it are written by the
+commands of the `qcc-format-version` target, which runs in every build and
+rewrites each file only when its content changes
+(`qore_aot_runtime_identity_targets()` in `cmake/QoreMacrosIntern.cmake`).
+libqore depends on it through `qore-aot-runtime-identity`, and every qmod
+depends on it, so both files are current before libqore, qcc or any qmod is
+built, and a build in which no fingerprinted input changed rebuilds nothing.
+They are no custom command outputs: with policy CMP0113 OLD (the build requires
+CMake 3.14), the Makefile generators give a copy of such a rule to every target
+of the directory that depends on the output, so a qmod target wrote the stamp
+again after libqore had been compiled. A fingerprinted source edited while a
+build was running then left that build's qmods newer than the stamp of the new
+identity although qcc had compiled them for the previous one, and the next build
+relinked libqore with the new identity and compiled no qmod
+(`examples/test/cmake/test_aot_runtime_identity_rebuild.py`, qore#6221).
+
+Each in-tree qmod also depends on the identity header itself
+(`QORE_AOT_RUNTIME_IDENTITY_HEADER`, see `QORE_USER_MODULE_AOT_RULES()`), which
+is rewritten exactly when the identity changes: a qmod older than the header was
+compiled for a previous identity, whatever the stamp's modification time says.
+This also rebuilds the qmods of a build tree that the previous rules left with
+qmods newer than the stamp but compiled for the previous identity, and costs
+nothing otherwise, as the header only changes together with the stamp.
 
 The stamp is a content digest -- path, size and SHA-256 per entry -- over a
 curated list of libqore's AOT/IR codegen sources (`_qcc_format_sources` in

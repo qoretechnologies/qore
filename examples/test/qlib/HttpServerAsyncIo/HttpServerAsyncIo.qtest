@@ -149,6 +149,29 @@ class BodyCaptureTarget inherits HttpAsyncTarget {
     }
 }
 
+#! Target that answers during preparation, after a short delay, with a body larger than a socket can take at once
+class DelayedLargeResponseTarget inherits TestTarget {
+    public {
+        const BodySize = 16 * 1024 * 1024;
+        Queue prepared();
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        prepared.push(True);
+        return <HttpRequestResultInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Length": string(BodySize),
+                "Connection": "keep-alive",
+            },
+            "body": strmul("x", BodySize).toBinary(),
+            "status_message": "OK",
+            "return_to_idle": True,
+            "response_delay": 50ms,
+        };
+    }
+}
+
 #! Target that rejects during preparation with server-enforced response pacing
 class DelayedPreparationTarget inherits TestTarget {
     public {
@@ -174,6 +197,24 @@ class DelayedPreparationTarget inherits TestTarget {
             "return_to_idle": True,
             "response_delay": delay,
         };
+    }
+}
+
+#! Target that steps the system clock back while it prepares a delayed response (debug builds; qore#6534)
+class ClockStepDelayedTarget inherits DelayedPreparationTarget {
+    public {
+        #! the step of the system clock in microseconds
+        int step_us;
+    }
+
+    constructor(int step_us) {
+        self.step_us = step_us;
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        # the client has taken the time when it sent the request, and the server arms the delay after this
+        call_function("dbg_set_realtime_offset", step_us);
+        return DelayedPreparationTarget::prepareHttpRequest(info);
     }
 }
 
@@ -268,6 +309,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("SseEventFormat test", \sseEventFormatTest());
         addTestCase("Target class test", \targetClassTest());
         addTestCase("delayed preparation response", \delayedPreparationResponseTest());
+        addTestCase("a drain waits for a delayed response", \delayedResponseDrainTest());
         addTestCase("response delay guard for blocking bodies",
             \delayedStreamingResponseGuardTest());
         addTestCase("HttpIdlePollOperation basic test", \idlePollOperationBasicTest());
@@ -305,7 +347,109 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("POST Content-Length body pre-read", \postBodyReadTest());
         addTestCase("SSE close drains queued final frame after partial send",
             \sseCloseDrainsQueuedFinalFrameTest());
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            addTestCase("a step back of the system clock does not stop the SSE heartbeat",
+                \sseClockStepHeartbeatTest());
+            addTestCase("a step back of the system clock does not shorten a measured response delay",
+                \delayedResponseClockStepTest());
+            addTestCase("a step forward of the system clock does not time out an HttpIdlePollOperation",
+                \idleClockStepTest());
+            addTestCase("a step forward of the system clock does not time out an HttpKeepAlivePollOperation",
+                \keepAliveClockStepTest());
+        }
         set_return_value(main());
+    }
+
+    #! A step forward of the system clock does not time out an idle connection (#6150)
+    /** The idle timeout is measured on the monotonic clock: on the system clock, a step forward of an hour ended a
+        timeout of a minute at once.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    idleClockStepTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpIdlePollOperation op(sp[1], 60s);
+        on_exit op.abort();
+        op.continuePoll();
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertFalse(op.timedOut(), "the idle timeout has not expired");
+        assertEq("idle", op.getState());
+    }
+
+    #! A step forward of the system clock does not time out a keep-alive connection, in its idle phase or while it
+    #! reads a request header (#6150)
+    /** The idle timeout and the header read timeout are measured on the monotonic clock: on the system clock, a step
+        forward of an hour ended them at once.  The step is made with dbg_set_realtime_offset() (debug builds).
+    */
+    keepAliveClockStepTest() {
+        list<Socket> sp = socketPair();
+        on_exit map $1.close(), sp;
+        HttpKeepAlivePollOperation op(sp[1], 60s);
+        on_exit op.abort();
+        op.continuePoll();
+        {
+            call_function("dbg_set_realtime_offset", 3600 * 1000000);
+            on_exit call_function("dbg_set_realtime_offset", 0);
+            op.continuePoll();
+            assertFalse(op.timedOut(), "the idle timeout has not expired");
+            assertEq("idle", op.getPhase());
+        }
+
+        # a partial request header starts the header phase
+        sp[0].send("GET / HTTP/1.1\r\n");
+        int deadline = clock_get_monotonic_us() + 5000000;
+        while (op.getPhase() == "idle" && clock_get_monotonic_us() < deadline) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (!info) {
+                break;
+            }
+            Socket::poll((info,), 50ms);
+        }
+        assertEq("header", op.getPhase());
+        call_function("dbg_set_realtime_offset", 3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        op.continuePoll();
+        assertFalse(op.timedOut(), "the header read timeout has not expired");
+        assertEq("header", op.getPhase());
+    }
+
+    #! A step back of the system clock does not stop the SSE heartbeat
+    /** The time since the last send is measured on the monotonic clock: on the system clock, a step back of an hour
+        made it negative, so no heartbeat was sent until the system clock was back where it was.  The step is made
+        with dbg_set_realtime_offset() (debug builds).
+    */
+    sseClockStepHeartbeatTest() {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        Socket client();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port);
+        Socket accepted = server.accept(5s);
+        on_exit {
+            try { accepted.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { client.close(); } catch (hash<ExceptionInfo> ex) {}
+            try { server.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+
+        # the operation takes the time of its last send when it is created, before the system clock steps back
+        HttpServerAsyncIo::HttpSseStreamPollOperation op(accepted);
+        on_exit op.abort();
+        op.setHeartbeat(50, ":hb\n\n");
+        op.continuePoll();
+        call_function("dbg_set_realtime_offset", -3600 * 1000000);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+
+        # the operation is driven until the client receives the heartbeat, at most for 20 seconds
+        int deadline = clock_get_monotonic_us() + 20000000;
+        string received = "";
+        while (received !~ /:hb/ && clock_get_monotonic_us() < deadline) {
+            op.continuePoll();
+            if (client.isDataAvailable(20ms)) {
+                received += client.recv(0, 1s);
+            }
+        }
+        assertRegex(":hb", received, "the client receives the heartbeat after its interval");
     }
 
     #! Regression: an SSE frame queued behind an in-flight (partially-sent) frame
@@ -338,6 +482,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         HttpServerAsyncIo::HttpSseStreamPollOperation op(accepted);
         # disable the heartbeat so the only frames on the wire are the ones we queue
         op.setHeartbeat(0);
+        # the stream holds both frames: the bound of the queued data (qore#5792) is not what this case tests
+        op.setMaxBufferSize(64 * 1024 * 1024);
 
         # A frame far larger than any socket send/receive buffer: with the client
         # not yet reading, the first continuePoll() can only send part of it, so it
@@ -487,6 +633,93 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         sock.close();
     }
 
+    #! A step back of the system clock while a response is delayed changes neither the delay nor its measurement
+    /** The server's delay is on the monotonic clock, and the test measures it there too (sendDelayedRequest()):
+        measured on the system clock, a step back can make a response delayed by 200 ms measure as 94 ms (qore#6534).
+        The step is made with dbg_set_realtime_offset() (debug builds) after the request is sent and before the server
+        arms the delay; a step back of an hour would also keep a delay on the system clock from ending within the
+        client's receive timeout.
+    */
+    delayedResponseClockStepTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        ClockStepDelayedTarget target(-3600 * 1000000);
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Socket client();
+        on_exit client.close();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port, 2s);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        hash<auto> event = sendDelayedRequest(client, "/delayed");
+        assertEq(1, target.preparation_count, "the request reaches preparation once");
+        assertRegex("503 Service Unavailable", event.response, "the delayed response is sent");
+        assertGe(150, event.elapsed_ms,
+            sprintf("the response is measured as delayed after a step back of the system clock (%d ms)",
+                event.elapsed_ms));
+    }
+
+    #! a drain counts a connection whose response waits for its delay until the response is sent (qore#5899)
+    delayedResponseDrainTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        DelayedLargeResponseTarget target();
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Socket client();
+        on_exit client.close();
+        client.connect("127.0.0.1:" + port, 10s);
+        client.send("GET /large HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertTrue(target.prepared.get(10s), "the request is prepared");
+
+        # the response is sent after its delay, and its send cannot end while the client reads nothing: the drain
+        # must wait for it all that time
+        ctrl.startDrain();
+        assertTrue(ctrl.isDraining());
+        assertFalse(ctrl.waitDrain(5s), "the drain waits for the delayed response that is being sent");
+
+        hash<auto> h = client.readHTTPHeader(30s);
+        assertEq(200, h.status_code, "the delayed response is sent");
+        assertEq("close", h.connection, "the response closes the connection");
+        int size = 0;
+        while (size < DelayedLargeResponseTarget::BodySize) {
+            size += client.recvBinary(0, 30s).size();
+        }
+        assertEq(DelayedLargeResponseTarget::BodySize, size, "the whole response is received");
+        assertTrue(ctrl.waitDrain(30s), "the drain ends when the delayed response has been sent");
+    }
+
+    #! Sends a request on the connection and returns the response with the time until it arrived
+    /** The time is measured on the monotonic clock: on the system clock, a step of the clock while the response is
+        delayed changes it, so that a response delayed by 200 ms can be measured as arriving after 94 ms (qore#6534)
+    */
+    static hash<auto> sendDelayedRequest(Socket client, string path) {
+        int started = clock_get_monotonic_us();
+        client.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", path));
+        string response = client.recv(0, 3s);
+        return {
+            "path": path,
+            "response": response,
+            "elapsed_ms": (clock_get_monotonic_us() - started) / 1000,
+        };
+    }
+
     delayedPreparationResponseTest() {
         AsyncSocketIoController io_ctrl(False);
         on_exit io_ctrl.stop();
@@ -511,16 +744,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 on_exit client.close();
                 client.connect("127.0.0.1:" + port, 2s);
                 foreach string path in (("/delayed", "/delayed-again")) {
-                    date started = now_us();
-                    client.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n",
-                        path));
-                    string response = client.recv(0, 3s);
-                    client_events.push({
-                        "path": path,
-                        "response": response,
-                        "elapsed_ms":
-                            (now_us() - started).durationMilliseconds(),
-                    });
+                    client_events.push(sendDelayedRequest(client, path));
                 }
                 client.send("GET /pending-at-stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 client_events.push({"pending_sent": True});
@@ -556,9 +780,10 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             "the long-delay request reaches preparation before shutdown");
         assertEq(1, ctrl.getStats().delayed_responses,
             "the long-delay response is tracked while pending");
-        date started = now_us();
+        # measured on the monotonic clock, as a step of the system clock would change the interval (qore#6534)
+        int started = clock_get_monotonic_us();
         ctrl.stop();
-        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        int elapsed_ms = (clock_get_monotonic_us() - started) / 1000;
         assertTrue(elapsed_ms < 2000,
             sprintf("shutdown cancels pending delayed responses promptly (%d ms)",
                 elapsed_ms));
@@ -706,11 +931,15 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         server.bind("127.0.0.1:0");
         server.listen();
         on_exit server.close();
-        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         # the connection is waiting to be accepted before the operation polls
         Socket client();
         client.connect("127.0.0.1:" + server.getSocketInfo().port);
         on_exit client.close();
+        # connect() returns when the client side of the TCP handshake completes, which under load can be before the
+        # listener has queued the connection: the listener is readable once it has, so the accept completes in the
+        # cycle that the test expects
+        assertTrue(server.isDataAvailable(5s), "the connection is waiting to be accepted");
+        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
         call_function("dbg_poll_close_before_open_state", op, "ssl-handshake");
@@ -779,10 +1008,14 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         server.bind("127.0.0.1:0");
         server.listen();
         on_exit server.close();
-        HttpAcceptPollOperation op(server, False);
         Socket client();
         client.connect("127.0.0.1:" + server.getSocketInfo().port);
         on_exit client.close();
+        # connect() returns when the client side of the TCP handshake completes, which under load can be before the
+        # listener has queued the connection: the listener is readable once it has, so the accept completes in the
+        # cycle that the test expects
+        assertTrue(server.isDataAvailable(5s), "the connection is waiting to be accepted");
+        HttpAcceptPollOperation op(server, False);
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
         call_function("dbg_poll_close_before_open_state", op, "accept-complete");
@@ -834,10 +1067,14 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         server.bind("127.0.0.1:0");
         server.listen();
         on_exit server.close();
-        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         Socket client();
         client.connect("127.0.0.1:" + server.getSocketInfo().port);
         on_exit client.close();
+        # connect() returns when the client side of the TCP handshake completes, which under load can be before the
+        # listener has queued the connection: the listener is readable once it has, so the accept completes in the
+        # cycle that the test expects
+        assertTrue(server.isDataAvailable(5s), "the connection is waiting to be accepted");
+        HttpAcceptPollOperation op(server, True, CertPem, KeyPem, SSL_VERIFY_NONE, True, "auto");
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
         call_function("dbg_poll_close_before_open_state", op, "release-current-op");

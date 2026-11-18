@@ -37,17 +37,27 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <unistd.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h>
+#include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
+#include <llvm/ExecutionEngine/Orc/CompileUtils.h>
+#include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/MC/MCContext.h>
+#include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include "qore/intern/QoreIRFrameCheck.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/JITRuntime.h"
 
@@ -192,6 +202,7 @@ static std::vector<const QoreIRBasicBlock*> qore_ir_get_normal_successors(
             break;
         }
         case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
         case QoreIROpcode::TypedForeachNextInt:
         case QoreIROpcode::TypedForeachNextFloat:
         case QoreIROpcode::TypedForeachNextBool:
@@ -396,20 +407,35 @@ static std::unordered_set<const void*> qore_ir_collect_local_keys(const QoreIRFu
     return keys;
 }
 
+//! Returns the locals assigned on entry to a block: the intersection of the assigned sets of its predecessors
+/** A predecessor not visited yet has the top element (every local assigned), the identity of the intersection, so
+    it is left out; with no predecessor visited, the result is \a universe.  A block without predecessors has none.
+*/
 static std::unordered_set<const void*> qore_ir_intersect_assigned(
-        const std::vector<std::unordered_set<const void*>>& out_sets,
-        const std::vector<size_t>& preds, bool* cancelled = nullptr) {
+        const std::vector<std::unordered_set<const void*>>& out_sets, const std::vector<char>& visited,
+        const std::unordered_set<const void*>& universe, const std::vector<size_t>& preds,
+        bool* cancelled = nullptr) {
     if (preds.empty()) {
         return {};
     }
-    std::unordered_set<const void*> rv = out_sets[preds.front()];
-    for (size_t i = 1; i < preds.size(); ++i) {
+    size_t first = 0;
+    while (first < preds.size() && !visited[preds[first]]) {
+        ++first;
+    }
+    if (first == preds.size()) {
+        return universe;
+    }
+    std::unordered_set<const void*> rv = out_sets[preds[first]];
+    for (size_t i = first + 1; i < preds.size(); ++i) {
         if (i && !(i % 100)
                 && qore_check_cancel(nullptr, "IR native local predecessor intersection")) {
             if (cancelled) {
                 *cancelled = true;
             }
             return rv;
+        }
+        if (!visited[preds[i]]) {
+            continue;
         }
         const auto& pred_out = out_sets[preds[i]];
         size_t local_count = 0;
@@ -464,6 +490,7 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
     }
 
     std::vector<std::vector<size_t>> preds(ir_func.blocks.size());
+    std::vector<std::vector<size_t>> succs(ir_func.blocks.size());
     for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "IR native local successor analysis")) {
             return incomplete();
@@ -474,6 +501,7 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
             auto it = block_index.find(succ);
             if (it != block_index.end()) {
                 preds[it->second].push_back(i);
+                succs[i].push_back(it->second);
             }
         }
         if (successor_cancelled) {
@@ -494,13 +522,47 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
     std::unordered_set<const void*> assigned_universe = all_keys;
     assigned_universe.insert(initially_assigned.begin(), initially_assigned.end());
     std::vector<std::unordered_set<const void*>> in_sets(ir_func.blocks.size());
+    // the assigned sets at the ends of the blocks; a block not visited yet has the top element (every local
+    // assigned), which is not stored: see qore_ir_intersect_assigned()
     std::vector<std::unordered_set<const void*>> out_sets(ir_func.blocks.size());
-    for (size_t i = 0; i < out_sets.size(); ++i) {
-        if (i && !(i % 10)
-                && qore_check_cancel(nullptr, "IR native local lattice initialization")) {
-            return incomplete();
+    std::vector<char> visited(ir_func.blocks.size(), 0);
+
+    // the blocks are visited in reverse postorder of the normal edges from the entry block, then from each block
+    // that they do not reach (a landing pad, for example), so that a block comes after its predecessors except
+    // across a loop's back edge; the result does not depend on the order, but the number of passes and of the
+    // assigned sets computed from the top element of a predecessor not visited yet does
+    std::vector<size_t> order;
+    order.reserve(ir_func.blocks.size());
+    {
+        std::vector<char> seen(ir_func.blocks.size(), 0);
+        std::vector<std::pair<size_t, size_t>> stack;
+        size_t steps = 0;
+        for (size_t root = 0; root < ir_func.blocks.size(); ++root) {
+            if (seen[root]) {
+                continue;
+            }
+            // the blocks that this root reaches first, in reverse postorder
+            size_t root_start = order.size();
+            seen[root] = 1;
+            stack.emplace_back(root, 0);
+            while (!stack.empty()) {
+                if (!(++steps % 1000) && qore_check_cancel(nullptr, "IR native local block order")) {
+                    return incomplete();
+                }
+                auto& top = stack.back();
+                if (top.second < succs[top.first].size()) {
+                    size_t succ = succs[top.first][top.second++];
+                    if (!seen[succ]) {
+                        seen[succ] = 1;
+                        stack.emplace_back(succ, 0);
+                    }
+                    continue;
+                }
+                order.push_back(top.first);
+                stack.pop_back();
+            }
+            std::reverse(order.begin() + root_start, order.end());
         }
-        out_sets[i] = assigned_universe;
     }
 
     auto transfer_block = [&](size_t block_id,
@@ -623,14 +685,15 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
         if (++iterations % 10 == 0 && qore_check_cancel(nullptr, "IR native local assigned-state analysis")) {
             return incomplete();
         }
-        for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
-            if (i && !(i % 100)
+        for (size_t oi = 0; oi < order.size(); ++oi) {
+            if (oi && !(oi % 100)
                     && qore_check_cancel(nullptr, "IR native local assigned-state block transfer")) {
                 return incomplete();
             }
+            size_t i = order[oi];
             bool intersect_cancelled = false;
             std::unordered_set<const void*> assigned = i == 0
-                ? initially_assigned : qore_ir_intersect_assigned(out_sets,
+                ? initially_assigned : qore_ir_intersect_assigned(out_sets, visited, assigned_universe,
                     preds[i], &intersect_cancelled);
             if (intersect_cancelled) {
                 return incomplete();
@@ -642,7 +705,17 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
                 return incomplete();
             }
 
-            if (out_sets[i] != assigned) {
+            if (!visited[i]) {
+                // a successor visited before this block (across a back edge) took the top element for it
+                visited[i] = 1;
+                for (size_t succ : succs[i]) {
+                    if (visited[succ]) {
+                        changed = true;
+                        break;
+                    }
+                }
+                out_sets[i] = std::move(assigned);
+            } else if (out_sets[i] != assigned) {
                 out_sets[i] = std::move(assigned);
                 changed = true;
             }
@@ -700,11 +773,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_fast_entry_param_kinds(
         }
 
         const QoreTypeInfo* ti = ir_func.specializeType(lv->getTypeInfo());
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -736,8 +809,12 @@ bool qore_ir_fast_entry_param_is_private(
     // A safe local referenced by lowered IR would be in ir_only_locals.
     // Therefore absence from both local inventories proves that the parameter
     // is unused. Object locals are excluded because their lifetime still
-    // requires the runtime stack even when their value is not loaded.
+    // requires the runtime stack even when their value is not loaded.  A written
+    // parameter is not unused, whatever kept it off the IR-only path: its store
+    // goes to the runtime stack, where the fast entry would not have instantiated
+    // it (an optional object, *T, which has no unique class; issue #6148)
     return !ir_func.has_opaque_ast_local_access
+        && !qore_ir_local_is_written(ir_func, local)
         && !ir_func.isAstVisibleLocal(key)
         && !local->isTopLevel()
         && !QoreTypeInfo::getUniqueReturnClass(local->getTypeInfo());
@@ -756,11 +833,11 @@ std::vector<BatchCalleeParamKind> qore_ir_get_signature_param_kinds(
         }
         const LocalVar* lv = sig->lv[i];
         const QoreTypeInfo* ti = lv ? lv->getTypeInfo() : nullptr;
-        if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+        if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
             kinds[i] = BatchCalleeParamKind::NativeInt;
-        } else if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
             kinds[i] = BatchCalleeParamKind::NativeFloat;
-        } else if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+        } else if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
             kinds[i] = BatchCalleeParamKind::NativeBool;
         }
     }
@@ -773,13 +850,13 @@ BatchCalleeParamKind qore_ir_get_scalar_local_kind(const LocalVar* local) {
             || QoreTypeInfo::parseAcceptsReturns(type, NT_NOTHING)) {
         return BatchCalleeParamKind::Boxed;
     }
-    if (QoreTypeInfo::isType(type, NT_INT) && !QoreTypeInfo::getReturnEnum(type)) {
+    if (QoreTypeInfo::isPlainType(type, NT_INT)) {
         return BatchCalleeParamKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(type, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(type, NT_FLOAT)) {
         return BatchCalleeParamKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(type, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(type, NT_BOOLEAN)) {
         return BatchCalleeParamKind::NativeBool;
     }
     return BatchCalleeParamKind::Boxed;
@@ -824,13 +901,13 @@ BatchCalleeReturnKind qore_ir_get_fast_entry_return_kind(
     const QoreTypeInfo* ti = ir_func
         ? ir_func->specializeType(sig->getReturnTypeInfo())
         : sig->getReturnTypeInfo();
-    if (QoreTypeInfo::isType(ti, NT_INT) && !QoreTypeInfo::getReturnEnum(ti)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_INT)) {
         return BatchCalleeReturnKind::NativeInt;
     }
-    if (QoreTypeInfo::isType(ti, NT_FLOAT)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_FLOAT)) {
         return BatchCalleeReturnKind::NativeFloat;
     }
-    if (QoreTypeInfo::isType(ti, NT_BOOLEAN)) {
+    if (QoreTypeInfo::isPlainType(ti, NT_BOOLEAN)) {
         return BatchCalleeReturnKind::NativeBool;
     }
     return BatchCalleeReturnKind::Boxed;
@@ -903,7 +980,13 @@ int QoreJIT::getEffectiveJITOptLevel(const QoreProgram* pgm) {
 }
 
 //! Run LLVM optimization passes on a module before JIT compilation
-static void optimizeModule(llvm::Module& module, int opt_level) {
+/** @param module the module to optimize
+    @param opt_level the optimization level
+    @param detached if not null, set when the compile is detached (see QoreJIT::waitForBgCompileQueue(QoreProgram*)):
+    the optional passes that remain are skipped then, as the result is discarded.  A pass that is running is not
+    interrupted.
+*/
+static void optimizeModule(llvm::Module& module, int opt_level, const std::atomic<bool>* detached) {
     if (opt_level <= 0) {
         return;
     }
@@ -940,11 +1023,21 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
         return;
     }
 
+    // the instrumentation only answers whether an optional pass runs, so the pipeline of a background compile is the
+    // same as that of a synchronous compile until the compile is detached; the callback is only registered for a
+    // background compile, which can be detached.  It is declared before the analysis managers, whose results refer
+    // to it.
+    llvm::PassInstrumentationCallbacks PIC;
+    if (detached) {
+        PIC.registerShouldRunOptionalPassCallback([detached](llvm::StringRef, llvm::Any) -> bool {
+            return !detached->load(std::memory_order_relaxed);
+        });
+    }
     llvm::LoopAnalysisManager LAM;
     llvm::FunctionAnalysisManager FAM;
     llvm::CGSCCAnalysisManager CGAM;
     llvm::ModuleAnalysisManager MAM;
-    llvm::PassBuilder PB(tm);
+    llvm::PassBuilder PB(tm, llvm::PipelineTuningOptions(), std::nullopt, detached ? &PIC : nullptr);
     PB.registerModuleAnalyses(MAM);
     PB.registerCGSCCAnalyses(CGAM);
     PB.registerFunctionAnalyses(FAM);
@@ -971,7 +1064,15 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     engine here would invalidate native entry points that those callbacks can still reach.
 */
 static void qore_jit_shutdown_at_exit() {
-    QoreJIT::instance().stopBackgroundCompiler();
+    QoreJIT& jit = QoreJIT::instance();
+    jit.stopBackgroundCompiler();
+    // a compile still running in LLVM is waited for here, so that the static objects of LLVM that are destroyed after
+    // this handler runs (those registered before it, as LLVM's global options are when the library is loaded) are not
+    // destroyed under it; function-local statics that LLVM creates later, during its first compile, are destroyed
+    // before this handler runs, so a process should not rely on this: qore_cleanup() waits for the compile (see
+    // QoreJIT::shutdown()), and qore_exit_process() ends the process with _exit() if it still runs (see
+    // QoreJIT::exitQuickly()).
+    jit.joinAbandonedCompileThread();
 }
 
 // The singleton is allocated once and deliberately never destroyed.  Programs are torn down from
@@ -1025,6 +1126,183 @@ bool QoreJIT::canJit(int64 parse_options, std::string& reason) const {
     return true;
 }
 
+// The GDB JIT interface's descriptor and rendezvous function, defined and exported by LLVM's JITLoaderGDB
+extern "C" {
+extern struct jit_descriptor __jit_debug_descriptor;
+void __jit_debug_register_code();
+}
+
+namespace {
+//! Compiles a module of the JIT to an object; a function whose frame is larger than the stack guard allows gets a
+//! thunk that checks the stack for its frame (see QoreIRFrameCheck, qore#6414)
+class QoreFrameCheckCompiler : public llvm::orc::IRCompileLayer::IRCompiler {
+public:
+    QoreFrameCheckCompiler(std::unique_ptr<llvm::TargetMachine> tm)
+            : llvm::orc::IRCompileLayer::IRCompiler(llvm::orc::irManglingOptionsFromTargetOptions(tm->Options)),
+            tm(std::move(tm)) {
+    }
+
+    llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>> operator()(llvm::Module& m) override {
+        llvm::SmallVector<char, 0> obj;
+        std::string error;
+        bool ok = QoreIRFrameCheck::emit(m, [&](llvm::Module& mod, std::string& err) {
+            obj.clear();
+            llvm::raw_svector_ostream os(obj);
+            llvm::legacy::PassManager pm;
+            llvm::MCContext* mc_ctx;
+            if (tm->addPassesToEmitMC(pm, mc_ctx, os)) {
+                err = "the target machine cannot emit machine code";
+                return false;
+            }
+            pm.run(mod);
+            return true;
+        }, error);
+        if (!ok) {
+            return llvm::make_error<llvm::StringError>(error, llvm::inconvertibleErrorCode());
+        }
+        return std::make_unique<llvm::SmallVectorMemoryBuffer>(std::move(obj),
+            m.getModuleIdentifier() + "-jitted-objectbuffer", false);
+    }
+
+private:
+    std::unique_ptr<llvm::TargetMachine> tm;
+};
+
+//! creates the compiler of the JIT's modules (QoreFrameCheckCompiler)
+static llvm::Expected<std::unique_ptr<llvm::orc::IRCompileLayer::IRCompiler>> qore_jit_create_compiler(
+        llvm::orc::JITTargetMachineBuilder jtmb) {
+    auto tm = jtmb.createTargetMachine();
+    if (!tm) {
+        return tm.takeError();
+    }
+    return std::make_unique<QoreFrameCheckCompiler>(std::move(*tm));
+}
+
+//! Deregisters the debug objects of removed JIT code from the GDB JIT interface (qore#5772)
+/** LLVM's debugger support (ELFDebugObjectPlugin, installed by enableDebuggerSupport()) registers a copy of each
+    linked object with the GDB JIT interface (__jit_debug_descriptor), but ORC never deregisters it: when the code is
+    removed (ResourceTracker::remove(), or when the engine is released), the plugin frees the copy and the list entry
+    stays, pointing at freed memory, which a debugger that attaches later reads; each removed code unit leaked one.
+    This plugin, installed after LLVM's, records the entries that each emitted object added (keyed by its
+    ResourceKey, following merged resources) and unregisters them through the GDB JIT protocol when the resources are
+    removed or the materialization fails, as LLVM's GDBRegistrationListener for RuntimeDyld does: the entry is
+    unlinked, reported as JIT_UNREGISTER_FN in the descriptor, the debugger's breakpoint function is called, and the
+    entry, which LLVM allocated with new (appendJITDebugDescriptor() in JITLoaderGDB.cpp), is deleted.  The gap in
+    LLVM is https://github.com/llvm/llvm-project/issues/242224; this plugin can go once LLVM deregisters the objects.
+
+    LLVM registers an entry while the object is finalized, in the materialization of a lookup; the JIT only looks up
+    and removes code with QoreJIT::compile_mutex held, so the registrations, this plugin's callbacks and its changes
+    to the list are serialized by that lock.  An entry that LLVM added is identified as one at the head of the list
+    that this plugin has not seen yet: LLVM inserts entries at the head.  Another user of the GDB JIT interface in the
+    process that registers entries while this JIT links an object (outside compile_mutex) would have its entries
+    attributed to that object; the JIT is the only user that Qore starts.
+*/
+class QoreGdbJitDeregistrationPlugin : public llvm::orc::ObjectLinkingLayer::Plugin {
+public:
+    QoreGdbJitDeregistrationPlugin() {
+        // entries registered before, by other code, are not this JIT's
+        for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e; e = e->next_entry) {
+            known.insert(e);
+        }
+    }
+
+    llvm::Error notifyEmitted(llvm::orc::MaterializationResponsibility& MR) override {
+        std::vector<jit_code_entry*> added = takeNewEntries();
+        if (added.empty()) {
+            return llvm::Error::success();
+        }
+        llvm::Error err = MR.withResourceKeyDo([&](llvm::orc::ResourceKey K) {
+            std::lock_guard<std::mutex> lock(m);
+            std::vector<jit_code_entry*>& v = entries[K];
+            v.insert(v.end(), added.begin(), added.end());
+        });
+        if (err) {
+            // the resources were removed in the meantime: the entries go now
+            unregisterEntries(added);
+        }
+        return err;
+    }
+
+    llvm::Error notifyFailed(llvm::orc::MaterializationResponsibility& MR) override {
+        // an object that was finalized before the materialization failed was registered; its memory is freed now
+        unregisterEntries(takeNewEntries());
+        return llvm::Error::success();
+    }
+
+    llvm::Error notifyRemovingResources(llvm::orc::JITDylib& JD, llvm::orc::ResourceKey K) override {
+        std::vector<jit_code_entry*> removed;
+        {
+            std::lock_guard<std::mutex> lock(m);
+            auto i = entries.find(K);
+            if (i == entries.end()) {
+                return llvm::Error::success();
+            }
+            removed.swap(i->second);
+            entries.erase(i);
+        }
+        unregisterEntries(removed);
+        return llvm::Error::success();
+    }
+
+    void notifyTransferringResources(llvm::orc::JITDylib& JD, llvm::orc::ResourceKey DstKey,
+            llvm::orc::ResourceKey SrcKey) override {
+        std::lock_guard<std::mutex> lock(m);
+        auto i = entries.find(SrcKey);
+        if (i == entries.end()) {
+            return;
+        }
+        std::vector<jit_code_entry*>& dst = entries[DstKey];
+        dst.insert(dst.end(), i->second.begin(), i->second.end());
+        entries.erase(i);
+    }
+
+private:
+    //! protects the members; the list itself is serialized by QoreJIT::compile_mutex (see above)
+    std::mutex m;
+    //! the entries seen in the list
+    std::unordered_set<jit_code_entry*> known;
+    //! the entries that this JIT's objects registered, by their resource key
+    std::unordered_map<llvm::orc::ResourceKey, std::vector<jit_code_entry*>> entries;
+
+    //! returns the entries that were added at the head of the list since the last call
+    std::vector<jit_code_entry*> takeNewEntries() {
+        std::vector<jit_code_entry*> added;
+        std::lock_guard<std::mutex> lock(m);
+        for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e && !known.count(e); e = e->next_entry) {
+            added.push_back(e);
+        }
+        known.insert(added.begin(), added.end());
+        return added;
+    }
+
+    //! unregisters the given entries from the GDB JIT interface and frees them
+    void unregisterEntries(const std::vector<jit_code_entry*>& removed) {
+        if (removed.empty()) {
+            return;
+        }
+        std::lock_guard<std::mutex> lock(m);
+        for (jit_code_entry* e : removed) {
+            known.erase(e);
+            if (e->prev_entry) {
+                e->prev_entry->next_entry = e->next_entry;
+            } else {
+                __jit_debug_descriptor.first_entry = e->next_entry;
+            }
+            if (e->next_entry) {
+                e->next_entry->prev_entry = e->prev_entry;
+            }
+            __jit_debug_descriptor.relevant_entry = e;
+            __jit_debug_descriptor.action_flag = JIT_UNREGISTER_FN;
+            // a debugger that is attached removes the entry's symbols at its breakpoint in this function
+            __jit_debug_register_code();
+            delete e;
+        }
+        __jit_debug_descriptor.relevant_entry = nullptr;
+        __jit_debug_descriptor.action_flag = JIT_NOACTION;
+    }
+};
+}
+
 bool QoreJIT::initialize(std::string& error) {
     qore_llvm_initialize_targets();
 
@@ -1042,9 +1320,12 @@ bool QoreJIT::initialize(std::string& error) {
     jtmb->setCodeGenOptLevel(llvm::CodeGenOptLevel::None);
     auto jit_or_err = llvm::orc::LLJITBuilder()
         .setJITTargetMachineBuilder(std::move(*jtmb))
+        .setCompileFunctionCreator(qore_jit_create_compiler)
         .create();
 #else
-    auto jit_or_err = llvm::orc::LLJITBuilder().create();
+    auto jit_or_err = llvm::orc::LLJITBuilder()
+        .setCompileFunctionCreator(qore_jit_create_compiler)
+        .create();
 #endif
     if (!jit_or_err) {
         error = llvm::toString(jit_or_err.takeError());
@@ -1062,6 +1343,16 @@ bool QoreJIT::initialize(std::string& error) {
         printd(1, "QoreJIT::init() WARNING: failed to enable debugger support: %s\n",
             llvm::toString(std::move(err)).c_str());
     }
+#if LLVM_VERSION_MAJOR <= 22
+    // LLVM (checked up to 22.1.8) never deregisters what its debugger support registers; this plugin does when the
+    // code is removed (qore#5772).  A newer LLVM can deregister and delete the entries itself
+    // (https://github.com/llvm/llvm-project/issues/242224): the plugin would then unlink and delete them a second
+    // time, so it is installed only for the versions checked; ir/jit-code-release fails with a newer version until it
+    // is checked again
+    else if (auto* oll = llvm::dyn_cast<llvm::orc::ObjectLinkingLayer>(&jit->getObjLinkingLayer())) {
+        oll->addPlugin(std::make_unique<QoreGdbJitDeregistrationPlugin>());
+    }
+#endif
 
     if (!registerRuntimeSymbols(error)) {
         jit.reset();
@@ -1077,7 +1368,6 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     }
 
     auto& es = jit->getExecutionSession();
-    auto& dl = jit->getDataLayout();
     auto& jd = jit->getMainJITDylib();
 
     // Build symbol map for all C ABI runtime helpers
@@ -1160,7 +1450,12 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
 
     // Serialize the entire compilation pipeline: LLVM's code generation (MCStreamer,
     // DWARF emission, debugger support) is not thread-safe for concurrent compilations.
-    std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    std::unique_lock<std::mutex> compile_lock;
+    if (!lockForSyncCompile(compile_lock, error)) {
+        return false;
+    }
+    // the code units released while the lock was held are removed before it is released
+    CompileLockScope lock_scope(*this, compile_lock);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1176,6 +1471,44 @@ bool QoreJIT::compileFunction(const QoreIRFunction& func, std::string& error,
         }
     }
     return rc;
+}
+
+bool QoreJIT::lockForSyncCompile(std::unique_lock<std::mutex>& lock, std::string& error) {
+    lock = std::unique_lock<std::mutex>(compile_mutex, std::try_to_lock);
+    if (lock) {
+        return true;
+    }
+    // A detached background compile holds compile_mutex until LLVM returns, which can take without bound, and so does
+    // the compile thread abandoned at process exit; once the compiler stops, nothing is worth waiting for.  The caller
+    // runs the code in the IR tier instead.  Otherwise the lock is held by a compile that will be published, which is
+    // waited for as before.  A compile detached after this check is waited for too: the check is not made under the
+    // lock that orders it with the detachment, as the holder of compile_mutex takes bg_queue_mutex.
+    if (bg_in_progress_detached.load(std::memory_order_acquire) || bg_thread_abandoned.load(std::memory_order_acquire)
+            || !bg_accept_work.load(std::memory_order_acquire)) {
+        error = "the JIT is busy with a background compile whose result is discarded, or it is stopped";
+        return false;
+    }
+    // the background thread takes no more work until this compile has the lock (see sync_compile_waiters); the order
+    // of the locks is compile_mutex, then bg_queue_mutex, as for the holder of compile_mutex
+    {
+        std::lock_guard<std::mutex> g(bg_queue_mutex);
+        ++sync_compile_waiters;
+#ifdef DEBUG
+        dbg_sync_compile_waiting_cv.notify_all();
+#endif
+    }
+    // the count is decremented however the wait ends
+    struct SyncWaiterHelper {
+        QoreJIT& jit;
+        ~SyncWaiterHelper() {
+            std::lock_guard<std::mutex> g(jit.bg_queue_mutex);
+            if (!--jit.sync_compile_waiters) {
+                jit.bg_queue_cv.notify_all();
+            }
+        }
+    } waiter_helper{*this};
+    lock.lock();
+    return true;
 }
 
 bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& error,
@@ -1202,6 +1535,26 @@ bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& err
     fall back to the IR tier, which already executes the function.
     See QoreJIT::getMaxJITIRInstructions().
 */
+//! Returns false when \a handler_cost exceeds the limit of QoreJIT::getMaxJITHandlerCost() (qore#6104)
+/** Like jit_check_size_budget(), for a function with many on_block_exit handlers and locals: the code that runs the
+    handlers takes a number of instructions in the product of the two, which makes its compilation take minutes
+    though the function is small; it stays on the IR tier.
+*/
+static bool jit_check_handler_budget(const std::string& func_name, size_t handler_cost, std::string& error) {
+    const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITHandlerCost());
+    if (!budget || handler_cost <= budget) {
+        return true;
+    }
+    error = "function '" + func_name + "' is too expensive for native compilation (about " + std::to_string(handler_cost)
+        + " instructions to run its on_block_exit handlers; limit " + std::to_string(budget)
+        + "); it remains on the IR tier";
+    if (q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[JIT] skipped native compilation of '%s' (handler budget exceeded; about %zu instructions; "
+            "limit %zu)\n", func_name.c_str(), handler_cost, budget);
+    }
+    return false;
+}
+
 static bool jit_check_size_budget(const std::string& func_name, size_t instruction_count,
         std::string& error) {
     const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
@@ -1219,10 +1572,12 @@ static bool jit_check_size_budget(const std::string& func_name, size_t instructi
     return false;
 }
 
-int QoreJIT::adoptDefinedFunction(const std::string& name, std::string& error) {
+int QoreJIT::adoptDefinedFunction(const std::string& name, const void* owner, std::string& error) {
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         if (compiled_functions.find(name) != compiled_functions.end()) {
+            // the code that the function runs is in the unit that defines it
+            addCodeOwnerLocked(name, owner);
             return 1;
         }
         if (!defined_batch_symbols.count(name)) {
@@ -1241,12 +1596,309 @@ int QoreJIT::adoptDefinedFunction(const std::string& name, std::string& error) {
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions[name] = fn_ptr;
+        addCodeOwnerLocked(name, owner);
     }
     if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] reused '%s' compiled in an earlier batch\n", name.c_str());
     }
     return 1;
 }
+
+const void* QoreJIT::getCodeOwner(const QoreIRFunction& func) {
+    return func.jit_owner ? func.jit_owner : static_cast<const void*>(func.pgm);
+}
+
+std::vector<std::string> QoreJIT::getLinkedSymbols(const llvm::Module& module) {
+    // the module declares the runtime helpers and the functions of other units that it calls; only the latter are
+    // recorded in symbol_units, which addCodeUnitLocked() checks
+    std::vector<std::string> linked;
+    for (const llvm::Function& f : module.functions()) {
+        if (f.isDeclaration() && !f.isIntrinsic()) {
+            linked.push_back(f.getName().str());
+        }
+    }
+    return linked;
+}
+
+void QoreJIT::addCodeUnitLocked(llvm::orc::ResourceTrackerSP rt, const std::vector<std::string>& linked,
+        std::vector<std::string> symbols, const std::vector<const void*>& owners) noexcept {
+    std::unique_ptr<CodeUnit> unit;
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    try {
+        unit.reset(new CodeUnit);
+        unit->rt = rt;
+        std::sort(symbols.begin(), symbols.end());
+        symbols.erase(std::unique(symbols.begin(), symbols.end()), symbols.end());
+        unit->symbols = std::move(symbols);
+        // the units that the code links to stay while it does: compile_mutex is held since the module was built, so
+        // none of them has been removed
+        for (const std::string& name : linked) {
+            auto i = symbol_units.find(name);
+            if (i == symbol_units.end()) {
+                continue;
+            }
+            CodeUnit* dep = i->second;
+            if (std::find(unit->deps.begin(), unit->deps.end(), dep) == unit->deps.end()) {
+                unit->deps.push_back(dep);
+                ++dep->refs;
+            }
+        }
+        for (const void* owner : owners) {
+            if (!owner) {
+                continue;
+            }
+            std::vector<CodeUnit*>& units = owner_units[owner];
+            if (std::find(units.begin(), units.end(), unit.get()) == units.end()) {
+                units.push_back(unit.get());
+                ++unit->refs;
+            }
+        }
+        // a unit without an owner (code compiled from AOT IR, which has no Program) stays for the life of the
+        // process, as do the units that it links to
+        if (!unit->refs) {
+            unit->refs = 1;
+        }
+        code_units.insert(unit.get());
+        for (const std::string& name : unit->symbols) {
+            symbol_units[name] = unit.get();
+        }
+    } catch (...) {
+        // no memory: nothing refers to the unit, and its code stays in the JIT for the life of the process, as the
+        // code of a unit without an owner does
+        if (unit) {
+            for (CodeUnit* dep : unit->deps) {
+                --dep->refs;
+            }
+            for (auto i = owner_units.begin(); i != owner_units.end();) {
+                i->second.erase(std::remove(i->second.begin(), i->second.end(), unit.get()), i->second.end());
+                i = i->second.empty() ? owner_units.erase(i) : std::next(i);
+            }
+            for (auto i = symbol_units.begin(); i != symbol_units.end();) {
+                i = i->second == unit.get() ? symbol_units.erase(i) : std::next(i);
+            }
+            code_units.erase(unit.get());
+        }
+        if (rt) {
+            // the extra reference keeps the tracker, and so its code, as unit->rt is released with the unit
+            rt->Retain();
+        }
+        printd(0, "QoreJIT: a compiled module was not recorded as a code unit (out of memory); it stays\n");
+        return;
+    }
+    unit.release();
+}
+
+void QoreJIT::addCodeOwnerLocked(const std::string& symbol, const void* owner) {
+    if (!owner) {
+        return;
+    }
+    auto i = symbol_units.find(symbol);
+    if (i == symbol_units.end()) {
+        return;
+    }
+    std::vector<CodeUnit*>& units = owner_units[owner];
+    if (std::find(units.begin(), units.end(), i->second) == units.end()) {
+        units.push_back(i->second);
+        ++i->second->refs;
+    }
+}
+
+namespace {
+//! true while the calling thread holds QoreJIT::compile_mutex (see QoreJIT::holdsCompileLock())
+thread_local bool qore_jit_holds_compile_lock = false;
+}
+
+bool QoreJIT::holdsCompileLock() {
+    return qore_jit_holds_compile_lock;
+}
+
+void QoreJIT::setHoldsCompileLock(bool holds) {
+    qore_jit_holds_compile_lock = holds;
+}
+
+QoreJIT::CompileLockScope::CompileLockScope(QoreJIT& jit, std::unique_lock<std::mutex>& lock) : jit(jit), lock(lock) {
+    assert(lock.owns_lock());
+    setHoldsCompileLock(true);
+}
+
+QoreJIT::CompileLockScope::~CompileLockScope() {
+    // the code units released while the lock was held are removed before it is released
+    jit.processPendingCodeReleasesLocked();
+    setHoldsCompileLock(false);
+    if (lock.owns_lock()) {
+        lock.unlock();
+    }
+    jit.processPendingCodeReleasesAfterUnlock();
+}
+
+void QoreJIT::processPendingCodeReleasesAfterUnlock() noexcept {
+    // a releaser that did not get the lock left its release to the thread holding it; one queued after that thread
+    // processed the queue is processed here, unless another thread holds the lock now, which processes it then.  The
+    // releases stay queued while the abandoned compile thread runs in LLVM (see processPendingCodeReleasesLocked()),
+    // so a pass that takes nothing ends the loop
+    while (!bg_thread_abandoned.load(std::memory_order_acquire)) {
+        bool pending;
+        {
+            std::lock_guard<std::mutex> lock(cache_mutex);
+            pending = !pending_unit_unrefs.empty();
+        }
+        if (!pending || !compile_mutex.try_lock()) {
+            return;
+        }
+        setHoldsCompileLock(true);
+        bool taken = processPendingCodeReleasesLocked();
+        setHoldsCompileLock(false);
+        compile_mutex.unlock();
+        // nothing was taken (the abandoned compile thread runs in LLVM, or there was no memory): the releases stay
+        if (!taken) {
+            return;
+        }
+    }
+}
+
+void QoreJIT::releaseCodeOwner(const void* owner) noexcept {
+    if (!owner) {
+        return;
+    }
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        auto i = owner_units.find(owner);
+        if (i == owner_units.end()) {
+            return;
+        }
+        // the references are taken from the owner at once, as its address can be reused by a new owner
+        try {
+            pending_unit_unrefs.insert(pending_unit_unrefs.end(), i->second.begin(), i->second.end());
+        } catch (...) {
+            // no memory: the owner's units stay (and its entry, which a reused address shares)
+            printd(0, "QoreJIT: the code of an owner was not released (out of memory)\n");
+            return;
+        }
+        owner_units.erase(i);
+    }
+    // never waits: a compile that holds the lock (possibly without bound, when detached) processes the releases when
+    // it releases the lock (CompileLockScope, releaseCompileLock()), also when that is the calling thread
+    if (holdsCompileLock() || !compile_mutex.try_lock()) {
+        return;
+    }
+    setHoldsCompileLock(true);
+    processPendingCodeReleasesLocked();
+    setHoldsCompileLock(false);
+    compile_mutex.unlock();
+    processPendingCodeReleasesAfterUnlock();
+}
+
+bool QoreJIT::processPendingCodeReleasesLocked() noexcept {
+    // the compile thread abandoned when the compiler stopped can be in LLVM: nothing is removed then; the code units go
+    // with the engine (see releaseEngine(), after shutdown() has waited for the thread)
+    if (bg_thread_abandoned.load(std::memory_order_acquire)) {
+        return false;
+    }
+    std::vector<CodeUnit*> removed;
+    bool taken = false;
+    try {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        if (pending_unit_unrefs.empty()) {
+            return false;
+        }
+        // a unit no longer referenced is removed after the units that link to it, which release it
+        std::vector<CodeUnit*> work;
+        work.swap(pending_unit_unrefs);
+        taken = true;
+        while (!work.empty()) {
+            CodeUnit* unit = work.back();
+            work.pop_back();
+            assert(unit->refs);
+            if (--unit->refs) {
+                continue;
+            }
+            // taken for removal first: if there is no memory below, it is removed all the same
+            removed.push_back(unit);
+            // its functions can no longer be looked up, and a later compile defines them again if it needs them
+            for (const std::string& name : unit->symbols) {
+                compiled_functions.erase(name);
+                defined_batch_symbols.erase(name);
+                defined_fast_entry_abi.erase(name);
+                auto i = symbol_units.find(name);
+                if (i != symbol_units.end() && i->second == unit) {
+                    symbol_units.erase(i);
+                }
+            }
+            code_units.erase(unit);
+            work.insert(work.end(), unit->deps.begin(), unit->deps.end());
+        }
+    } catch (...) {
+        // no memory: the units taken from the cache so far are removed below; the references not processed yet were
+        // taken from the queue and are dropped, so the units that they refer to stay in the JIT
+        printd(0, "QoreJIT: code units were not removed (out of memory)\n");
+    }
+    for (CodeUnit* unit : removed) {
+        if (unusable_after_fork || !jit) {
+            // the LLVM objects of a child process created with fork() while the parent was compiling can be
+            // inconsistent: the tracker is neither used nor destroyed, as the JIT itself (see shutdown()); the extra
+            // reference keeps it
+            if (unit->rt) {
+                unit->rt->Retain();
+            }
+        } else if (unit->rt) {
+            // removes the module's symbols and frees its code, which no thread runs (see releaseCodeOwner())
+            if (llvm::Error err = unit->rt->remove()) {
+                printd(0, "QoreJIT: failed to remove a code unit: %s\n", llvm::toString(std::move(err)).c_str());
+            }
+        }
+        delete unit;
+    }
+    return taken;
+}
+
+#ifdef DEBUG
+size_t QoreJIT::dbgGetCodeUnitCount() {
+    // waits for a compile that holds the lock, which processes the releases when it releases it, unless it can hold it
+    // without bound
+    {
+        std::unique_lock<std::mutex> compile_lock(compile_mutex, std::try_to_lock);
+        if (!compile_lock && !bg_in_progress_detached.load(std::memory_order_acquire)
+                && !bg_thread_abandoned.load(std::memory_order_acquire)) {
+            compile_lock.lock();
+        }
+        if (compile_lock) {
+            // processes the pending releases
+            CompileLockScope lock_scope(*this, compile_lock);
+        }
+    }
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    return code_units.size();
+}
+
+size_t QoreJIT::dbgGetDebuggerEntryCount() {
+    // as dbgGetCodeUnitCount(): the removals pending for the compile lock are made first; the list is changed only
+    // with the compile lock held (see QoreGdbJitDeregistrationPlugin)
+    std::unique_lock<std::mutex> compile_lock(compile_mutex, std::try_to_lock);
+    if (!compile_lock && !bg_in_progress_detached.load(std::memory_order_acquire)
+            && !bg_thread_abandoned.load(std::memory_order_acquire)) {
+        compile_lock.lock();
+    }
+    if (!compile_lock) {
+        // a detached compile holds the lock and can register entries meanwhile: they are not counted (test hook)
+        return 0;
+    }
+    size_t n = 0;
+    {
+        // processes the pending releases first, and those queued meanwhile after the lock is released
+        CompileLockScope lock_scope(*this, compile_lock);
+        processPendingCodeReleasesLocked();
+        for (jit_code_entry* e = __jit_debug_descriptor.first_entry; e; e = e->next_entry) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+size_t QoreJIT::dbgGetCompiledFunctionCount() const {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    return compiled_functions.size();
+}
+#endif
 
 bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
         void* deopt_counter, const std::string* symbol_name) {
@@ -1256,17 +1908,23 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     // or functions with complex IR patterns.  The local copy is made before any LLVM
     // heap activity and remains valid even if the original is corrupted.
     const std::string func_name = symbol_name ? *symbol_name : func.name;
+    // taken before the lowering ends: a background compile reads nothing of the Program afterwards
+    const void* code_owner = getCodeOwner(func);
+
+    // the units released while no compile held the lock are removed before the JIT is looked up or changed
+    processPendingCodeReleasesLocked();
 
     // Re-check under compile lock: another thread may have compiled this function, or a batch module may have
     // defined it
     {
-        int rc = adoptDefinedFunction(func_name, error);
+        int rc = adoptDefinedFunction(func_name, code_owner, error);
         if (rc) {
             return rc > 0;
         }
     }
 
-    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)) {
+    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)
+            || !jit_check_handler_budget(func_name, func.getHandlerCostEstimate(), error)) {
         return false;
     }
 
@@ -1294,8 +1952,20 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         }
     }
 
+    // the optimization level is read from the Program while the lowering phase lasts
+    const int opt_level = getEffectiveJITOptLevel(func.pgm);
+
+    // From here on, the compile works on the self-contained module only, and a background compile can be detached by
+    // the teardown of a Program that it refers to (see bgEndLowering()): nothing below reads func or any other data of
+    // a Program.
+    bgEndLowering();
+
     // Run LLVM optimization passes
-    optimizeModule(*module, getEffectiveJITOptLevel(func.pgm));
+    optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -1305,11 +1975,30 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         llvm_dump << "=== END LLVM IR ===\n";
     }
 
+    if (bgCheckDetached()) {
+        error = "the compile of '" + func_name + "' was detached";
+        return false;
+    }
+
+    // every module is added with a resource tracker of its own, so that it can be removed from the JIT again, with the
+    // symbols it defines and its code: by a detached compile, or when its owners are gone (qore#5772)
+    llvm::orc::ResourceTrackerSP rt = jit->getMainJITDylib().createResourceTracker();
+    // the functions of other units that the module links to, which must stay while it does
+    std::vector<std::string> linked = getLinkedSymbols(*module);
+
     // Add the module to the JIT
     auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
-    auto err = jit->addIRModule(std::move(tsm));
+    auto err = jit->addIRModule(rt, std::move(tsm));
     if (err) {
         error = "failed to add module to JIT: " + llvm::toString(std::move(err));
+        // the module was not added: a detached compile has nothing to remove
+        bgBeginInstall();
+        return false;
+    }
+
+    if (bgCheckDetached()) {
+        bgDiscardModule(rt.get(), func_name);
+        error = "the compile of '" + func_name + "' was detached";
         return false;
     }
 
@@ -1317,16 +2006,33 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     auto sym = jit->lookup(func_name);
     if (!sym) {
         error = "failed to look up compiled function '" + func_name + "': " + llvm::toString(sym.takeError());
+        if (!bgBeginInstall()) {
+            bgDiscardModule(rt.get(), func_name);
+        } else {
+            // the module stays in the JIT: its owner removes it
+            addCodeUnitLocked(std::move(rt), linked, {}, {code_owner});
+        }
         return false;
     }
 
     auto fn_ptr = sym->toPtr<uint64_t(ExceptionSink*)>();
+
+    if (bg_compile_ctx) {
+        dbgBgHold(BgCompileHoldPoint::Commit);
+    }
+    // the result of a detached compile is discarded: its entry is neither cached nor installed
+    if (!bgBeginInstall()) {
+        bgDiscardModule(rt.get(), func_name);
+        error = "the compile of '" + func_name + "' was detached";
+        return false;
+    }
 
     // Cache the compiled function pointer
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions[func_name] = fn_ptr;
     }
+    addCodeUnitLocked(std::move(rt), linked, {func_name}, {code_owner});
 
     return true;
 }
@@ -1343,7 +2049,12 @@ bool QoreJIT::compileFunctionBatch(const QoreIRFunction& root_func, std::string&
     }
 
     // Serialize the entire compilation pipeline
-    std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    std::unique_lock<std::mutex> compile_lock;
+    if (!lockForSyncCompile(compile_lock, error)) {
+        return false;
+    }
+    // the code units released while the lock was held are removed before it is released
+    CompileLockScope lock_scope(*this, compile_lock);
     if (!initializeLocked(error)) {
         return false;
     }
@@ -1395,11 +2106,24 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Copy root_func.name before any LLVM operations (same heap-corruption workaround
     // as compileFunctionInternal — see comment there for details).
     const std::string root_func_name = root_func.name;
+    // the owners of the functions that the module defines, taken before the lowering ends: a background compile reads
+    // nothing of a Program afterwards
+    std::vector<const void*> code_owners;
+    code_owners.reserve(callees.size() + 1);
+    code_owners.push_back(getCodeOwner(root_func));
+    for (const auto& callee : callees) {
+        if (callee.ir_func) {
+            code_owners.push_back(getCodeOwner(*callee.ir_func));
+        }
+    }
+
+    // the units released while no compile held the lock are removed before the JIT is looked up or changed
+    processPendingCodeReleasesLocked();
 
     // Re-check under compile lock: another thread may have compiled the root function, or an earlier batch module
     // may have defined it
     {
-        int rc = adoptDefinedFunction(root_func_name, error);
+        int rc = adoptDefinedFunction(root_func_name, code_owners.front(), error);
         if (rc) {
             return rc > 0;
         }
@@ -1416,6 +2140,17 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
         }
         if (!jit_check_size_budget(root_func_name, batch_instruction_count, error)) {
+            return false;
+        }
+        size_t batch_handler_cost = rewrite_root
+            ? rewrite_root->getHandlerCostEstimate()
+            : root_func.getHandlerCostEstimate();
+        for (const auto& callee : callees) {
+            if (callee.ir_func) {
+                batch_handler_cost += callee.ir_func->getHandlerCostEstimate();
+            }
+        }
+        if (!jit_check_handler_budget(root_func_name, batch_handler_cost, error)) {
             return false;
         }
     }
@@ -1514,6 +2249,11 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 info_it->second.approach_b_eligible = false;
             }
         }
+    }
+    // a direct call of a callee whose body does not observe the object and class context it runs in does not switch
+    // to the callee's context
+    if (!q_env_is_set("QORE_DISABLE_JIT_CONTEXT_FREE_CALLS")) {
+        qore_ir_resolve_context_free_fast_entries(effect_functions, batch_callee_map);
     }
     if (rewrite_root
             && !q_env_is_set("QORE_DISABLE_JIT_AGGREGATE_RETURN_PROJECTION")) {
@@ -1687,6 +2427,10 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 // If a callee fails to lower, fall back to compiling root alone
                 printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lowering failed: %s\n",
                     callee.ir_func->name.c_str(), error.c_str());
+                if (q_env_is_set("QORE_JIT_TIMING")) {
+                    fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
+                        callee.ir_func->name.c_str(), error.c_str(), root_func_name.c_str());
+                }
                 error.clear();
                 return compileFunctionInternal(root_func, error, root_deopt_counter);
             }
@@ -1744,15 +2488,17 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
                 nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
             if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
-                // Fast entry failure is non-fatal: fall back to standard entry
+                // the fast entry was declared before the batch was lowered, and the code of the other members (and
+                // the callee's own standard entry) may call it already: the module is not compiled with an entry
+                // that has no body, and the root is compiled alone instead, as when a callee fails (qore#6313)
                 printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",
                     fast_name.c_str(), error.c_str());
-                error.clear();
-                // Remove the fast entry from the batch map so callers don't try to use it
-                auto map_it = batch_callee_map.find(callee.variant);
-                if (map_it != batch_callee_map.end()) {
-                    map_it->second.approach_b_eligible = false;
+                if (q_env_is_set("QORE_JIT_TIMING")) {
+                    fprintf(stderr, "[BG-JIT] batch member '%s' failed to lower (%s); compiling '%s' alone\n",
+                        fast_name.c_str(), error.c_str(), root_func_name.c_str());
                 }
+                error.clear();
+                return compileFunctionInternal(root_func, error, root_deopt_counter);
             } else {
                 // the ABI is recorded with the symbol only once the entry is actually defined: a later batch that
                 // finds the name skips lowering the body, so recording a failed entry would bind its callers to a
@@ -1779,8 +2525,21 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Finalize shared debug info after all functions are lowered
     di_builder.finalize();
 
+    // the optimization level is read from the Program while the lowering phase lasts
+    const int opt_level = getEffectiveJITOptLevel(root_func.pgm);
+
+    // From here on, the compile works on the self-contained module only, and a background compile can be detached by
+    // the teardown of a Program that it refers to (see bgEndLowering()): nothing below reads root_func, rewrite_root,
+    // the IR of the callees or any other data of a Program; callees is read only for the batch_only flags, which the
+    // work owns, and the names were copied above.
+    bgEndLowering();
+
     // Run LLVM optimization passes
-    optimizeModule(*module, getEffectiveJITOptLevel(root_func.pgm));
+    optimizeModule(*module, opt_level, bg_compile_ctx ? &bg_in_progress_detached : nullptr);
+    // the float to int conversions of an x86-64 host (issue #6181); the JIT emits code for the process's target
+    QoreIRToLLVM::expandFloatToIntForTarget(*module, llvm::Triple(llvm::sys::getProcessTriple()));
+    // the addresses of the slots of the cleanup frames in the blocks that use them (qore#6299)
+    QoreIRToLLVM::sinkFrameSlotAddresses(*module);
 
     // Dump LLVM IR if requested (after optimization)
     if (q_env_is_set("QORE_DUMP_LLVM_IR")) {
@@ -1790,14 +2549,37 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         llvm_dump << "=== END LLVM IR ===\n";
     }
 
-    // Add the module to the JIT
-    auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
-    auto err = jit->addIRModule(std::move(tsm));
-    if (err) {
-        error = "failed to add batch module to JIT: " + llvm::toString(std::move(err));
+    if (bgCheckDetached()) {
+        error = "the compile of '" + root_func_name + "' was detached";
         return false;
     }
-    {
+
+    // every module is added with a resource tracker of its own, so that it can be removed from the JIT again, with the
+    // symbols it defines and its code: by a detached compile, or when its owners are gone (qore#5772)
+    llvm::orc::ResourceTrackerSP rt = jit->getMainJITDylib().createResourceTracker();
+    // the functions of earlier units that the module only declares and links to, which must stay while it does
+    std::vector<std::string> linked = getLinkedSymbols(*module);
+
+    // Add the module to the JIT
+    auto tsm = llvm::orc::ThreadSafeModule(std::move(module), std::move(ctx));
+    auto err = jit->addIRModule(rt, std::move(tsm));
+    if (err) {
+        error = "failed to add batch module to JIT: " + llvm::toString(std::move(err));
+        // the module was not added: a detached compile has nothing to remove
+        bgBeginInstall();
+        return false;
+    }
+
+    // records the symbols that the module defines, once it is certain that it stays in the JIT: a later batch only
+    // declares them, as they cannot be defined a second time.  They are recorded even if the code cannot be looked up,
+    // as the module stays in the JIT then.  compile_mutex is held from the addition of the module to here, and the
+    // records are only read under it, so no other compile sees the module before its symbols are recorded.
+    // the symbols that the unit defines and records: those of the batch, and the entries cached below
+    std::vector<std::string> unit_symbols = new_batch_symbols;
+    for (const auto& fast_abi : new_fast_entry_abis) {
+        unit_symbols.push_back(fast_abi.first);
+    }
+    auto record_batch_symbols = [&]() {
         std::lock_guard<std::mutex> lock(cache_mutex);
         for (auto& name : new_batch_symbols) {
             defined_batch_symbols.insert(std::move(name));
@@ -1805,6 +2587,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         for (auto& fast_abi : new_fast_entry_abis) {
             defined_fast_entry_abi.emplace(std::move(fast_abi.first), std::move(fast_abi.second));
         }
+    };
+
+    if (bgCheckDetached()) {
+        bgDiscardModule(rt.get(), root_func_name);
+        error = "the compile of '" + root_func_name + "' was detached";
+        return false;
     }
 
     // Look up the root function (triggers materialization/code generation)
@@ -1812,19 +2600,27 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     if (!sym) {
         error = "failed to look up compiled function '" + root_func_name + "': "
             + llvm::toString(sym.takeError());
+        if (bgBeginInstall()) {
+            record_batch_symbols();
+            // the module stays in the JIT: its owners remove it
+            addCodeUnitLocked(std::move(rt), linked, std::move(unit_symbols), code_owners);
+        } else {
+            bgDiscardModule(rt.get(), root_func_name);
+        }
         return false;
     }
     auto root_fn_ptr = sym->toPtr<uint64_t(ExceptionSink*)>();
 
-    // Cache the root function
-    {
-        std::lock_guard<std::mutex> lock(cache_mutex);
-        compiled_functions[root_func_name] = root_fn_ptr;
+    if (bgCheckDetached()) {
+        bgDiscardModule(rt.get(), root_func_name);
+        error = "the compile of '" + root_func_name + "' was detached";
+        return false;
     }
 
-    // Look up and cache all callee functions.
-    // Use pre-copied callee_names (not callee.ir_func->name) as LLVM may have
+    // Look up all callee functions; they were generated with the root function, as the module is materialized as a
+    // whole.  Use pre-copied callee_names (not callee.ir_func->name) as LLVM may have
     // corrupted adjacent heap memory during addIRModule()/lookup() above.
+    std::vector<JitFunctionPtr> callee_fn_ptrs(callees.size(), nullptr);
     for (size_t i = 0; i < callees.size(); ++i) {
         if (callees[i].batch_only) {
             continue;
@@ -1832,16 +2628,41 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         auto callee_sym = jit->lookup(callee_names[i]);
         if (!callee_sym) {
             // Non-fatal: callees that fail lookup will fall back to runtime dispatch
-            printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lookup failed\n",
-                callee_names[i].c_str());
+            printd(2, "QoreJIT::compileFunctionBatch() callee '%s' lookup failed: %s\n",
+                callee_names[i].c_str(), llvm::toString(callee_sym.takeError()).c_str());
             continue;
         }
-        auto callee_fn_ptr = callee_sym->toPtr<uint64_t(ExceptionSink*)>();
-        {
-            std::lock_guard<std::mutex> lock(cache_mutex);
-            compiled_functions[callee_names[i]] = callee_fn_ptr;
+        callee_fn_ptrs[i] = callee_sym->toPtr<uint64_t(ExceptionSink*)>();
+    }
+
+    if (bg_compile_ctx) {
+        dbgBgHold(BgCompileHoldPoint::Commit);
+    }
+    // the result of a detached compile is discarded: no entry is cached or installed, and no symbol is recorded
+    if (!bgBeginInstall()) {
+        bgDiscardModule(rt.get(), root_func_name);
+        error = "the compile of '" + root_func_name + "' was detached";
+        return false;
+    }
+    record_batch_symbols();
+
+    // Cache the root function and the callees
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        compiled_functions[root_func_name] = root_fn_ptr;
+        for (size_t i = 0; i < callees.size(); ++i) {
+            if (callee_fn_ptrs[i]) {
+                compiled_functions[callee_names[i]] = callee_fn_ptrs[i];
+            }
         }
     }
+    unit_symbols.push_back(root_func_name);
+    for (size_t i = 0; i < callees.size(); ++i) {
+        if (callee_fn_ptrs[i]) {
+            unit_symbols.push_back(callee_names[i]);
+        }
+    }
+    addCodeUnitLocked(std::move(rt), linked, std::move(unit_symbols), code_owners);
 
     return true;
 }
@@ -1902,6 +2723,34 @@ uint64_t QoreJIT::getJITThreshold() {
 // compiler thread's stack on platforms with small thread stacks (musl), and even an unoptimized
 // native compile of such a function can stall Program teardown for minutes or exhaust the memory of
 // a constrained container.  Such functions therefore stay on the IR tier.
+uint64_t QoreJIT::getMaxJITHandlerCost() {
+    static constinit QoreLazyValue<uint64_t> cost_setting([]() -> uint64_t {
+        constexpr uint64_t default_max = 120000;
+        QoreEnvironmentValue env_holder("QORE_JIT_MAX_HANDLER_COST");
+        const char* env = env_holder.c_str();
+        if (!env || !*env) {
+            return default_max;
+        }
+        // only an unsigned decimal integer, as for QORE_JIT_MAX_IR_INSTRUCTIONS
+        const char* start = env;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r' || *start == '\v'
+                || *start == '\f') {
+            ++start;
+        }
+        if (*start < '0' || *start > '9') {
+            return default_max;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(start, &end, 10);
+        if (!end || end == start || *end) {
+            return default_max;
+        }
+        // 0 means "no limit"
+        return static_cast<uint64_t>(value);
+    });
+    return cost_setting.get();
+}
+
 uint64_t QoreJIT::getMaxJITIRInstructions() {
     // function-local so the value cannot be read before its initializer runs, and is computed once
     static constinit QoreLazyValue<uint64_t> budget_setting([]() -> uint64_t {
@@ -1953,6 +2802,7 @@ bool QoreJIT::startBackgroundThread() {
         return false;
     }
     if (!bg_thread_running.exchange(true, std::memory_order_acq_rel)) {
+        bg_thread_done.store(false, std::memory_order_relaxed);
         if (bg_compile_thread.start([this]() { bgCompileThreadLoop(); })) {
             // no thread could be created (ex: the process has reached its thread limit): the code keeps running in
             // the tier it is in, and a later promotion tries again
@@ -2001,6 +2851,7 @@ void QoreJIT::releaseBgCompileWorkRefs(BgCompileWork& work) {
 }
 
 void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
+    // the references of a detached item were taken (and released) by the waiter that detached it
     releaseBgCompileWorkRefs(work);
 
     bg_active_work.fetch_sub(1, std::memory_order_acq_rel);
@@ -2011,12 +2862,273 @@ void QoreJIT::finishBgCompileWork(BgCompileWork& work) {
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         bg_in_progress = nullptr;
         bg_in_progress_pgms.clear();
+        bg_in_progress_phase = BgCompilePhase::Lowering;
+        bg_in_progress_detached.store(false, std::memory_order_relaxed);
     }
     // Always notify: both the shutdown waiter (queue empty && active_work == 0)
     // and per-Program waiters (in-progress no longer references their Program)
     // re-evaluate their predicates here.
     bg_queue_empty_cv.notify_all();
 }
+
+void QoreJIT::cancelQueuedBgCompileWork(BgCompileWork& work) {
+    // Reset the root compile state so the function can be re-submitted later if its Program outlives the reason
+    // for the cancellation (a referenced callee belonging to a Program being deleted, for example)
+    if (work.uvb) {
+        const_cast<UserVariantBase*>(work.uvb)->jit_compile_state.store(0, std::memory_order_release);
+    }
+    releaseBgCompileWorkRefs(work);
+    int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    if (remaining == 0) {
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        bg_queue_empty_cv.notify_all();
+    }
+}
+
+void QoreJIT::bgEndLowering() {
+    if (!bg_compile_ctx) {
+        return;
+    }
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    assert(bg_in_progress && bg_in_progress_phase == BgCompilePhase::Lowering);
+    bg_in_progress_phase = BgCompilePhase::Llvm;
+    // a Program teardown waiting for the lowering of its code detaches the compile now
+    bg_queue_empty_cv.notify_all();
+#ifdef DEBUG
+    dbgBgHoldLocked(lock, BgCompileHoldPoint::Llvm);
+#endif
+}
+
+bool QoreJIT::bgBeginInstall() {
+    if (!bg_compile_ctx || bg_compile_ctx->installing) {
+        return true;
+    }
+    if (bg_compile_ctx->discarded) {
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    assert(bg_in_progress);
+    // the decision is made under bg_queue_mutex, under which a waiter detaches the compile: either the waiter
+    // detaches it before (and the result is discarded), or it finds the compile installing and waits until the
+    // result is published, as installing reads the variants
+    if (bg_in_progress_phase == BgCompilePhase::Detached) {
+        bg_compile_ctx->discarded = true;
+        return false;
+    }
+    bg_in_progress_phase = BgCompilePhase::Installing;
+    bg_compile_ctx->installing = true;
+    return true;
+}
+
+bool QoreJIT::bgCheckDetached() {
+    if (!bg_compile_ctx) {
+        return false;
+    }
+    if (!bg_compile_ctx->discarded && bg_in_progress_detached.load(std::memory_order_acquire)) {
+        // the detachment is final: the phase stays BgCompilePhase::Detached until the item is finished
+        bg_compile_ctx->discarded = true;
+    }
+    return bg_compile_ctx->discarded;
+}
+
+void QoreJIT::bgDiscardModule(llvm::orc::ResourceTracker* rt, const std::string& func_name) {
+    assert(bg_compile_ctx && bg_compile_ctx->discarded);
+    if (!rt) {
+        return;
+    }
+    // the module of a compile abandoned when the compiler stopped is left in place: it is removed with the engine (see
+    // releaseEngine(), after shutdown() has waited for this thread), or left to the operating system in a process that
+    // ends without qore_cleanup(); the tracker, when it is released, only moves the module to the default tracker of
+    // its JITDylib.
+    if (bg_thread_abandoned.load(std::memory_order_acquire)) {
+        return;
+    }
+    // removes the symbols that the module defines and frees its code, which never ran: no entry point of it was
+    // installed or cached, and none of its symbols was recorded, so no other code refers to it, and the functions can
+    // be compiled again under the same names
+    if (auto err = rt->remove()) {
+        // the module stays in the JIT, unused; a later compile that defines one of its symbols fails, and that
+        // function stays in the IR tier
+        std::string msg = llvm::toString(std::move(err));
+        printd(1, "QoreJIT::bgDiscardModule() failed to remove the module of '%s' from the JIT: %s\n",
+            func_name.c_str(), msg.c_str());
+    }
+}
+
+bool QoreJIT::detachInProgressLocked(BgDetachedRefs& refs) noexcept {
+    assert(bg_in_progress && bg_in_progress_phase == BgCompilePhase::Llvm);
+    // allocate first, so that nothing has changed if there is no memory
+    try {
+        refs.pgms = bg_in_progress_pgms;
+        bg_detach_releases.reserve(bg_detach_releases.size() + refs.pgms.size());
+    } catch (...) {
+        refs.pgms.clear();
+        return false;
+    }
+    // The compile thread does not read these members in the LLVM phase, and it reads them again only after it has
+    // seen the detachment under bg_queue_mutex or through bg_in_progress_detached (acquire), which is set below
+    refs.uvb = bg_in_progress->uvb;
+    refs.variant_refs = std::move(bg_in_progress->variant_refs);
+    bg_in_progress->variant_refs.clear();
+    refs.owned_ir_func = std::move(bg_in_progress->owned_ir_func);
+    bg_detach_releases.insert(bg_detach_releases.end(), refs.pgms.begin(), refs.pgms.end());
+    bg_in_progress_phase = BgCompilePhase::Detached;
+    bg_in_progress_detached.store(true, std::memory_order_release);
+    // the references are released by releaseDetachedRefs(), or by the destructor of refs
+    refs.jit = this;
+    return true;
+}
+
+void QoreJIT::releaseDetachedRefs(BgDetachedRefs& refs) noexcept {
+    if (!refs.jit) {
+        // not detached, or released already
+        return;
+    }
+    refs.jit = nullptr;
+    // the root function can be submitted again, as when queued work is cancelled: its Program can outlive the one
+    // whose teardown detached the compile.  The variant is alive: the references are released below
+    if (refs.uvb) {
+        const_cast<UserVariantBase*>(refs.uvb)->jit_compile_state.store(0, std::memory_order_release);
+    }
+    for (auto* v : refs.variant_refs) {
+        v->deref();
+    }
+    refs.variant_refs.clear();
+    refs.owned_ir_func.reset();
+    endRelease(refs.pgms);
+    refs.pgms.clear();
+}
+
+void QoreJIT::endRelease(const std::vector<const QoreProgram*>& pgms) noexcept {
+    {
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        for (const QoreProgram* p : pgms) {
+            auto i = std::find(bg_detach_releases.begin(), bg_detach_releases.end(), p);
+            assert(i != bg_detach_releases.end());
+            if (i != bg_detach_releases.end()) {
+                bg_detach_releases.erase(i);
+            }
+        }
+    }
+    // the teardowns of the other Programs of the items wait for the release
+    bg_queue_empty_cv.notify_all();
+}
+
+#ifdef DEBUG
+bool QoreJIT::lockForSyncCompileForTest() {
+    std::unique_lock<std::mutex> lock;
+    std::string error;
+    if (!lockForSyncCompile(lock, error)) {
+        return false;
+    }
+    // released with releaseCompileLock()
+    lock.release();
+    setHoldsCompileLock(true);
+    return true;
+}
+
+int QoreJIT::syncCompileWaitersForTest() {
+    std::lock_guard<std::mutex> g(bg_queue_mutex);
+    return sync_compile_waiters;
+}
+
+bool QoreJIT::dbgWaitSyncCompileWaiting(int64_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    return dbg_sync_compile_waiting_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
+        return sync_compile_waiters > 0;
+    });
+}
+#endif
+
+void QoreJIT::dbgBgHold(BgCompileHoldPoint point) {
+#ifdef DEBUG
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    dbgBgHoldLocked(lock, point);
+#else
+    (void)point;
+#endif
+}
+
+#ifdef DEBUG
+void QoreJIT::dbgBgHoldLocked(std::unique_lock<std::mutex>& lock, BgCompileHoldPoint point) {
+    const unsigned bit = 1u << static_cast<unsigned>(point);
+    if (!(dbg_bg_hold_armed & bit)) {
+        return;
+    }
+    const std::string& func = dbg_bg_hold_func[static_cast<unsigned>(point)];
+    if (!func.empty() && func != dbg_bg_in_progress_func) {
+        return;
+    }
+    dbg_bg_hold_armed &= ~bit;
+    dbg_bg_held = static_cast<int>(point);
+    dbg_bg_hold_release = false;
+    bg_queue_empty_cv.notify_all();
+    // a thread held at process exit stays here, and the process ends without it (see exitQuickly()), unless
+    // qore_cleanup() lets it go (see dbgReleaseBgCompileHolds())
+    bg_queue_empty_cv.wait(lock, [this]() { return dbg_bg_hold_release; });
+    dbg_bg_hold_release = false;
+    dbg_bg_held = -1;
+    ++dbg_bg_hold_exits;
+    bg_queue_empty_cv.notify_all();
+}
+
+bool QoreJIT::dbgHoldBgCompile(BgCompileHoldPoint point, const std::string& func) {
+    const unsigned bit = 1u << static_cast<unsigned>(point);
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    if (dbg_bg_hold_armed & bit) {
+        return false;
+    }
+    dbg_bg_hold_func[static_cast<unsigned>(point)] = func;
+    dbg_bg_hold_armed |= bit;
+    return true;
+}
+
+bool QoreJIT::dbgWaitBgCompileHeld(BgCompileHoldPoint point, int64_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    return bg_queue_empty_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, point]() {
+        return dbg_bg_held == static_cast<int>(point);
+    });
+}
+
+void QoreJIT::dbgReleaseBgCompileHolds() {
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    dbg_bg_hold_armed = 0;
+    if (dbg_bg_held >= 0) {
+        dbg_bg_hold_release = true;
+    }
+    bg_queue_empty_cv.notify_all();
+}
+
+bool QoreJIT::dbgBgCompileHeld() {
+    std::lock_guard<std::mutex> lock(bg_queue_mutex);
+    return dbg_bg_held >= 0;
+}
+
+int QoreJIT::dbgContinueBgCompile(int64_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    if (dbg_bg_held < 0) {
+        return -1;
+    }
+    // the exits are counted, as the thread can be held again at the next armed point before this thread runs
+    const unsigned exits = dbg_bg_hold_exits;
+    dbg_bg_hold_release = true;
+    bg_queue_empty_cv.notify_all();
+    return bg_queue_empty_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this, exits]() {
+        return dbg_bg_hold_exits != exits;
+    }) ? 1 : 0;
+}
+
+bool QoreJIT::dbgWaitBgCompileTeardownWaiting(int64_t timeout_ms) {
+    std::unique_lock<std::mutex> lock(bg_queue_mutex);
+    if (!bg_queue_empty_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this]() {
+            return dbg_bg_teardown_waits > 0;
+        })) {
+        return false;
+    }
+    dbg_bg_teardown_waits = 0;
+    return true;
+}
+#endif
 
 void QoreJIT::bgCompileThreadLoop() {
 #ifdef QORE_HAVE_GET_STACK_SIZE
@@ -2032,16 +3144,39 @@ void QoreJIT::bgCompileThreadLoop() {
         BgCompileWork work;
         {
             std::unique_lock<std::mutex> lock(bg_queue_mutex);
-            // Wait for work or shutdown signal
+            // Wait for work or shutdown signal; a synchronous compile, which a thread waits for, takes compile_mutex
+            // before more work of the queue is compiled (see sync_compile_waiters)
             bg_queue_cv.wait(lock, [this]() {
-                return !bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire);
+                return (!bg_compile_queue.empty() && !sync_compile_waiters)
+                    || !bg_thread_running.load(std::memory_order_acquire);
             });
-            if (bg_compile_queue.empty()) {
+            if (bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire)) {
                 // Check if all work is truly complete (queue empty AND no in-progress compilations)
-                if (bg_active_work.load(std::memory_order_acquire) == 0) {
+                if (bg_compile_queue.empty() && bg_active_work.load(std::memory_order_acquire) == 0) {
                     bg_queue_empty_cv.notify_all();
                 }
                 continue;  // Shutdown signal or spurious wakeup, check loop condition
+            }
+        }
+
+        // Acquire compile lock (blocking is OK here — this is a dedicated background thread).  It is taken before the
+        // work is claimed: a synchronous compile on another thread can hold it through a long LLVM run, and a claimed
+        // work item would make the teardown of its Programs wait for that run although nothing of them was read yet.
+        // Unclaimed work is still in the queue, where a teardown cancels it.
+        std::unique_lock<std::mutex> compile_lock(compile_mutex);
+        // the code units released while this thread holds the lock are removed before it releases it
+        CompileLockScope lock_scope(*this, compile_lock);
+        {
+            std::unique_lock<std::mutex> lock(bg_queue_mutex);
+            // once the compiler stops, the queued work is left to stopBackgroundCompiler(), which cancels it: it
+            // decides whether to join this thread from the work in progress when it stops the compiler, so this
+            // thread must not claim more work afterwards.  The queue can also have been emptied by a teardown while
+            // this thread waited for compile_mutex.
+            if (bg_compile_queue.empty() || !bg_thread_running.load(std::memory_order_acquire)) {
+                if (bg_compile_queue.empty() && bg_active_work.load(std::memory_order_acquire) == 0) {
+                    bg_queue_empty_cv.notify_all();
+                }
+                continue;
             }
             work = std::move(bg_compile_queue.front());
             bg_compile_queue.pop();
@@ -2051,10 +3186,18 @@ void QoreJIT::bgCompileThreadLoop() {
             // its Program.  Cleared in finishBgCompileWork() on every exit path.
             bg_in_progress = &work;
             bg_in_progress_pgms = work.pgms;
+            bg_in_progress_phase = BgCompilePhase::Lowering;
+            bg_in_progress_detached.store(false, std::memory_order_relaxed);
+#ifdef DEBUG
+            // for the holds of tests, which can stop the compile of one function only
+            try {
+                const std::string& name = work.ir_func->name;
+                dbg_bg_in_progress_func.assign(name, 0, name.find('@'));
+            } catch (...) {
+                dbg_bg_in_progress_func.clear();
+            }
+#endif
         }
-
-        // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
-        std::lock_guard<std::mutex> lock(compile_mutex);
 
         // Tiered execution can reach a hot function before any synchronous JIT
         // compilation has initialized LLVM.  Initialize it here so that the
@@ -2075,10 +3218,13 @@ void QoreJIT::bgCompileThreadLoop() {
             }
         }
 
+        dbgBgHold(BgCompileHoldPoint::Lowering);
+
         // Pre-copy function names before any LLVM operations.
         // LLVM 21's addIRModule()/lookup() corrupts adjacent heap memory
         // (std::string::_M_string_length) on Linux, making any post-compilation
         // access to ir_func->name crash with a multi-terabyte strlen.
+        // The copies are also what is left to report a detached compile with: its IR can be freed by then.
         const std::string saved_func_name = work.ir_func->name;
         std::vector<std::string> saved_callee_names;
         if (work.has_callees) {
@@ -2095,14 +3241,52 @@ void QoreJIT::bgCompileThreadLoop() {
             fprintf(stderr, "[BG-JIT] compiling '%s' on background thread\n", saved_func_name.c_str());
         }
 
-        if (work.has_callees) {
-            // Batch compile: root function + callees
-            success = compileFunctionBatchInternal(*work.ir_func, error,
-                work.deopt_ptr, work.callees, work.owned_ir_func.get());
-        } else {
-            // Single-function compilation
-            success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
+        // The compile lowers the IR first, reading the data of the Programs (BgCompilePhase::Lowering), and then works
+        // on the self-contained LLVM module (BgCompilePhase::Llvm), when the teardown of a Program that the work refers
+        // to detaches it instead of waiting; see waitForBgCompileQueue(QoreProgram*)
+        BgCompileContext ctx;
+        {
+            // sets the context while the compile runs, on every exit path
+            struct ContextHelper {
+                BgCompileContext*& ptr;
+                ContextHelper(BgCompileContext*& ptr, BgCompileContext& ctx) : ptr(ptr) {
+                    ptr = &ctx;
+                }
+                ~ContextHelper() {
+                    ptr = nullptr;
+                }
+            } ctx_helper(bg_compile_ctx, ctx);
+            if (work.has_callees) {
+                // Batch compile: root function + callees
+                success = compileFunctionBatchInternal(*work.ir_func, error,
+                    work.deopt_ptr, work.callees, work.owned_ir_func.get());
+            } else {
+                // Single-function compilation
+                success = compileFunctionInternal(*work.ir_func, error, work.deopt_ptr);
+            }
+            // a compile that ended before it published or discarded its result (a failure, or a function compiled
+            // already) publishes the outcome unless it was detached
+            if (!ctx.installing && !ctx.discarded) {
+                bgBeginInstall();
+            }
         }
+
+        if (ctx.discarded) {
+            // The work was detached by the teardown of a Program that it refers to, which took its references to the
+            // variants and its private IR: nothing but the members of the work that it owns is read from here on.
+            // Its module was removed from the JIT, and no entry point was installed or cached.
+#ifdef DEBUG
+            ++dbg_bg_compile_discarded;
+#endif
+            if (q_env_is_set("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] discarded the compile of '%s': a Program that it refers to was deleted\n",
+                    saved_func_name.c_str());
+            }
+            finishBgCompileWork(work);
+            continue;
+        }
+        // BgCompilePhase::Installing: a Program teardown waits until the work is finished
+        dbgBgHold(BgCompileHoldPoint::Install);
 
         if (!success) {
             if (q_env_is_set("QORE_JIT_TIMING")) {
@@ -2198,11 +3382,13 @@ void QoreJIT::bgCompileThreadLoop() {
 
         finishBgCompileWork(work);
     }
+    // the thread touches nothing of the JIT or LLVM from here on; see exitQuickly()
+    bg_thread_done.store(true, std::memory_order_release);
 }
 
 void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const QoreIRFunction* ir_func,
         void* deopt_counter, const std::vector<BatchCallee>* callees,
-        std::shared_ptr<QoreIRFunction> owned_ir_func) {
+        std::shared_ptr<QoreIRFunction> owned_ir_func, const std::function<void()>& queued) {
     // NOTE: callers (evalTiered) already guard with CAS 0→1 on jit_compile_state
     // so we do NOT re-check here — the state is already 1 when we're called.
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
@@ -2287,8 +3473,11 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
 
     // set if the work is refused because the compiler stops: the function can be submitted again then
     bool shutting_down = false;
+    // set if all the Programs of the work are registered (none is deleted)
+    [[maybe_unused]] bool registered = false;
     bool accepted = pgms_known
         && qore_program_private::runWithRegisteredPrograms(work_pgms, [&]() -> bool {
+        registered = true;
         std::lock_guard<std::mutex> lock(bg_queue_mutex);
         if (!bg_accept_work.load(std::memory_order_relaxed)) {
             shutting_down = true;
@@ -2306,12 +3495,19 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
         return true;
     });
     if (!accepted) {
-        // work with code whose Program is unknown is refused for good, as is work for a function whose own Program is
-        // deleted or being deleted: the function stays in its tier (state 2), as submitting it again on every call
-        // would be refused in the same way.  A function whose callee's Program is deleted can be submitted again, as
-        // its callees are collected again (see waitForBgCompileQueue(QoreProgram*)), as can one refused because the
+#ifdef DEBUG
+        if (pgms_known && !registered) {
+            // a Program of the work is deleted already
+            ++dbg_bg_compile_refused_closed;
+        }
+#endif
+        // work with code whose Program is unknown or deleted is refused for good, as is work for a function whose own
+        // Program is deleted or being deleted: the function stays in its tier (state 2), as submitting it again on
+        // every call would be refused in the same way (the callees of a function are collected from its IR, which
+        // still calls the function of the deleted Program, so each call would lower its batch again for nothing).  A
+        // function whose callee's Program is being deleted can be submitted again, as can one refused because the
         // compiler stops.
-        bool final = !pgms_known;
+        bool final = !pgms_known || (!registered && !shutting_down);
         if (!final && !shutting_down) {
             std::vector<std::pair<const QoreProgram*, qore_program_id_t>> root_pgm(work_pgms.begin(),
                 work_pgms.begin() + 1);
@@ -2332,6 +3528,11 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
 
     if (q_env_is_set("QORE_JIT_TIMING")) {
         fprintf(stderr, "[BG-JIT] enqueued compilation of '%s'\n", ir_func->name.c_str());
+    }
+
+    // the teardown of the work's Programs drains or detaches it from now on
+    if (queued) {
+        queued();
     }
 
     // The work stays on the dedicated compiler thread even in synchronous mode: it owns the LLVM
@@ -2373,13 +3574,15 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
     }
     // Cancel still-queued compiles that reference this Program's IR (the Program
     // is being destroyed; compiling its IR would be pointless and would read
-    // soon-to-be-freed program data), and wait only for an in-progress compile
-    // that references it.  Compiles belonging to other Programs stay queued and
-    // running, so Program teardown is no longer serialized behind the whole
-    // global queue.
+    // soon-to-be-freed program data), and wait for an in-progress compile that
+    // references it only while that compile reads Program data.  Compiles belonging
+    // to other Programs stay queued and running, so Program teardown is not
+    // serialized behind the whole global queue.
     std::vector<BgCompileWork> cancelled;
+    // the Programs of the cancelled items, listed in bg_detach_releases while their references are released
+    std::vector<const QoreProgram*> cancelled_pgms;
     {
-        std::unique_lock<std::mutex> lock(bg_queue_mutex);
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
         // no work referring to the Program is accepted from now on (see enqueueBgCompile())
         qore_program_private::get(*pgm)->bg_compile_closed = true;
         if (!bg_compile_queue.empty()) {
@@ -2388,6 +3591,7 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
                 BgCompileWork w = std::move(bg_compile_queue.front());
                 bg_compile_queue.pop();
                 if (workReferencesPgm(w, pgm)) {
+                    cancelled_pgms.insert(cancelled_pgms.end(), w.pgms.begin(), w.pgms.end());
                     cancelled.push_back(std::move(w));
                 } else {
                     kept.push(std::move(w));
@@ -2395,49 +3599,120 @@ void QoreJIT::waitForBgCompileQueue(QoreProgram* pgm) {
             }
             bg_compile_queue = std::move(kept);
         }
-        // Wait until the in-progress compile (if any) no longer touches pgm.  The
-        // bg thread clears bg_in_progress under bg_queue_mutex and notifies, and
-        // it does not hold bg_queue_mutex while compiling, so this cannot deadlock.
-        bg_queue_empty_cv.wait(lock, [this, pgm]() {
-            // the copy taken at the claim is used: the item itself can have been released already
-            return !bg_in_progress
-                || std::find(bg_in_progress_pgms.begin(), bg_in_progress_pgms.end(), pgm)
-                    == bg_in_progress_pgms.end();
-        });
+        // the release below can destroy variants of the other Programs of the cancelled items: their teardowns wait
+        // for it (see bg_detach_releases)
+        bg_detach_releases.insert(bg_detach_releases.end(), cancelled_pgms.begin(), cancelled_pgms.end());
     }
-    // Release refs (which may destroy the now-orphaned variants) outside the lock.
-    for (auto& w : cancelled) {
-        // Reset the root compile state so the function can be re-submitted later
-        // if its Program outlives this one (it was cancelled only because some
-        // referenced callee belonged to the dying Program).
-        if (w.uvb) {
-            const_cast<UserVariantBase*>(w.uvb)->jit_compile_state.store(0, std::memory_order_release);
+    // Release refs (which may destroy the now-orphaned variants) outside the lock; nothing is waited for here
+    if (!cancelled.empty()) {
+        for (auto& w : cancelled) {
+            cancelQueuedBgCompileWork(w);
         }
-        releaseBgCompileWorkRefs(w);
-        int remaining = bg_active_work.fetch_sub(1, std::memory_order_acq_rel) - 1;
-        if (remaining == 0) {
-            std::lock_guard<std::mutex> lock(bg_queue_mutex);
-            bg_queue_empty_cv.notify_all();
+        endRelease(cancelled_pgms);
+    }
+
+    BgDetachedRefs detached;
+    {
+        std::unique_lock<std::mutex> lock(bg_queue_mutex);
+        // The bg thread changes the phase of the in-progress compile and clears bg_in_progress under bg_queue_mutex
+        // and notifies, and it does not hold bg_queue_mutex while compiling, so this cannot deadlock.
+#ifdef DEBUG
+        bool noted_wait = false;
+#endif
+        while (true) {
+            // the copy taken at the claim is used: the item itself can have been released already
+            bool in_progress = bg_in_progress
+                && std::find(bg_in_progress_pgms.begin(), bg_in_progress_pgms.end(), pgm)
+                    != bg_in_progress_pgms.end();
+            // the references of an item detached or cancelled by the teardown of another Program can be released
+            // right now, which can destroy this Program's variants: they are released while this Program exists
+            bool releasing = std::find(bg_detach_releases.begin(), bg_detach_releases.end(), pgm)
+                != bg_detach_releases.end();
+            if (!releasing) {
+                // a compile detached by another teardown reads nothing of this Program any more
+                if (!in_progress || bg_in_progress_phase == BgCompilePhase::Detached) {
+                    break;
+                }
+                // a compile in the LLVM phase reads no Program data, and can take without bound: it is detached, and
+                // its result is discarded when that phase ends
+                if (bg_in_progress_phase == BgCompilePhase::Llvm && detachInProgressLocked(detached)) {
+                    break;
+                }
+            }
+            // the compile is lowering the IR (BgCompilePhase::Lowering) or publishing its result
+            // (BgCompilePhase::Installing), or another teardown releases the references of an item
+#ifdef DEBUG
+            if (!noted_wait) {
+                // notified once per call, as each waiter that notifies would wake the others again
+                noted_wait = true;
+                ++dbg_bg_teardown_waits;
+                bg_queue_empty_cv.notify_all();
+            }
+#endif
+            bg_queue_empty_cv.wait(lock);
         }
+    }
+    if (detached.jit) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] detached an in-progress compile from a Program being deleted\n");
+        }
+        // released here, while this Program exists, as the compile thread released them before it finished
+        releaseDetachedRefs(detached);
     }
 }
 
 void QoreJIT::stopBackgroundCompiler() {
     // Ensure background thread is stopped BEFORE Programs or functions are destroyed.
     bool was_running;
+    // true if the compile thread runs a detached compile in LLVM, and is not joined
+    bool abandon = false;
+    BgDetachedRefs detached;
     {
         // Serialize the shutdown transition with worker startup and queue insertion.
-        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        std::unique_lock<std::mutex> lock(bg_queue_mutex);
         bg_accept_work.store(false, std::memory_order_release);
         was_running = bg_thread_running.exchange(false, std::memory_order_acq_rel);
+        // The compile in progress is awaited while it reads Program data, as a Program teardown waits for it (see
+        // waitForBgCompileQueue(QoreProgram*)).  One in the LLVM phase, which can take without bound, is detached
+        // instead, and its thread is not joined: the process can exit while LLVM runs.  The thread claims no more
+        // work once bg_thread_running is false, so a thread that is not abandoned here ends after the compile that
+        // this waits for.
+        while (bg_in_progress) {
+            if (bg_in_progress_phase == BgCompilePhase::Detached) {
+                abandon = true;
+                break;
+            }
+            if (bg_in_progress_phase == BgCompilePhase::Llvm && detachInProgressLocked(detached)) {
+                abandon = true;
+                break;
+            }
+            bg_queue_empty_cv.wait(lock);
+        }
+        if (abandon) {
+            bg_thread_abandoned.store(true, std::memory_order_release);
+        }
     }
     if (was_running) {
         // Signal the thread to wake up and exit
         bg_queue_cv.notify_one();
-        // Join the background thread (it should exit quickly since bg_thread_running is false)
-        if (bg_compile_thread.joinable()) {
+        // The thread of an abandoned compile is in LLVM, which cannot be interrupted, for a compile whose result is
+        // discarded.  It is not joined here, so that the teardown of qore_cleanup() goes on while LLVM finishes: the
+        // detached compile skips the optional passes and ends before its code generation (see bgCheckDetached()), and
+        // the thread finishes the work without touching the JIT (see bgDiscardModule()) and ends.  shutdown(), at the
+        // end of qore_cleanup(), joins it before it releases the JIT (issue #6296).  A process that ends without
+        // qore_cleanup() must not destroy LLVM's static objects while it runs: it ends with _exit() if it still runs at
+        // the end (see exitQuickly()), or the atexit() handler of the library joins it (see
+        // joinAbandonedCompileThread()).
+        if (!abandon && bg_compile_thread.joinable()) {
+            // Join the background thread (it should exit quickly since bg_thread_running is false)
             bg_compile_thread.join();
         }
+    }
+    if (detached.jit) {
+        if (q_env_is_set("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] detached an in-progress compile at shutdown\n");
+        }
+        releaseDetachedRefs(detached);
     }
 
     // Pending tier promotions have no value once global shutdown begins.  Do not
@@ -2457,10 +3732,7 @@ void QoreJIT::stopBackgroundCompiler() {
             bg_compile_queue.pop();
         }
 
-        if (work.uvb) {
-            const_cast<UserVariantBase*>(work.uvb)->jit_compile_state.store(0, std::memory_order_release);
-        }
-        finishBgCompileWork(work);
+        cancelQueuedBgCompileWork(work);
         ++cancelled_count;
     }
     if (cancelled_count && q_env_is_set("QORE_JIT_TIMING")) {
@@ -2469,13 +3741,115 @@ void QoreJIT::stopBackgroundCompiler() {
     }
 }
 
+bool qore_jit_exit_quickly() {
+    return QoreJIT::exitQuickly();
+}
+
+bool QoreJIT::exitQuickly() {
+    // the singleton is created when the library is initialized; nothing is compiled without it
+    QoreJIT* jit = qore_jit_singleton;
+    if (!jit || !jit->bg_thread_abandoned.load(std::memory_order_acquire)) {
+        return false;
+    }
+    if (!jit->bg_thread_done.load(std::memory_order_acquire)) {
+        // the abandoned compile still runs in LLVM (in a process that did not call qore_cleanup(), whose shutdown()
+        // waits for it): exit() would destroy LLVM's static objects under it
+        return true;
+    }
+    // the thread has left its loop and only ends now; once it is joined, exit() can run as usual
+    jit->joinAbandonedCompileThread();
+    return false;
+}
+
+void QoreJIT::joinAbandonedCompileThread() {
+    // called by the exiting thread only, after stopBackgroundCompiler(), which no longer starts or joins the thread
+    if (bg_thread_abandoned.load(std::memory_order_acquire) && bg_compile_thread.joinable()) {
+#ifdef DEBUG
+        dbgExitIfAbandonedCompileHeld();
+#endif
+        bg_compile_thread.join();
+    }
+}
+
+#ifdef DEBUG
+void QoreJIT::dbgExitIfAbandonedCompileHeld() noexcept {
+    int held_at;
+    try {
+        std::lock_guard<std::mutex> lock(bg_queue_mutex);
+        // a thread that was let go (dbgReleaseBgCompileHolds(), dbgContinueBgCompile()) leaves the hold point
+        held_at = dbg_bg_hold_release ? -1 : dbg_bg_held;
+    } catch (...) {
+        // the state cannot be read: the join is made as without the test hook
+        return;
+    }
+    if (held_at < 0) {
+        return;
+    }
+    // the names of the hold points, as dbg_hold_bg_compile() takes them
+    static const char* const hold_point_names[] = {"lowering", "llvm", "commit", "install"};
+    static_assert(sizeof(hold_point_names) / sizeof(hold_point_names[0])
+        == static_cast<size_t>(BgCompileHoldPoint::Count), "a hold point has no name");
+    const char* point = static_cast<size_t>(held_at) < sizeof(hold_point_names) / sizeof(hold_point_names[0])
+        ? hold_point_names[held_at] : "unknown";
+    // the compile stays held, so the join would never return and the process would hang without a sign of why: a
+    // process that ends with exit() without qore_cleanup(), whose shutdown() lets a held compile go (issue #6296)
+    fprintf(stderr, "QORE-DEBUG: exit() with an abandoned compile held at debug hold point \"%s\": call "
+        "qore_cleanup() before the process exits\n", point);
+    fflush(nullptr);
+    _exit(QORE_JIT_DBG_HELD_AT_EXIT_STATUS);
+}
+#endif
+
 void QoreJIT::shutdown() {
     stopBackgroundCompiler();
 
+    // A detached compile can still be running in LLVM on the abandoned compile thread, which holds compile_mutex and
+    // uses the LLJIT's ExecutionSession, which cannot be destroyed under it: it is waited for first
+    bool waited = finishDetachedCompile();
+    releaseEngine();
+    if (waited && q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] released the JIT in shutdown() after the abandoned compile ended\n");
+    }
+}
+
+bool QoreJIT::finishDetachedCompile() {
+    if (!bg_thread_abandoned.load(std::memory_order_acquire)) {
+        return false;
+    }
+    // The compile skips the optional passes and ends before its code generation (see stopBackgroundCompiler()), so it
+    // is waited for: when qore_cleanup() returns, no compile is in LLVM, and the process can exit, also by returning
+    // from main(), without exit() destroying LLVM's static objects under a compile (issue #6296).
+#ifdef DEBUG
+    // stopping the compiler is a point where a compile ends: a compile held by a test is let go
+    dbgReleaseBgCompileHolds();
+#endif
+    joinAbandonedCompileThread();
+    if (q_env_is_set("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[BG-JIT] waited for the abandoned compile in qore_cleanup()\n");
+    }
+    return true;
+}
+
+void QoreJIT::releaseEngine() {
     // Release LLVM only after every function that can hold a published entry point is gone.
     // Acquiring compile_mutex also documents and enforces serialization with compilation even if
     // shutdown() is called independently of the normal two-phase qore_cleanup() path.
     std::lock_guard<std::mutex> compile_lock(compile_mutex);
+    {
+        // the code units go with the JIT: their trackers are released before the ExecutionSession that they belong to
+        // is destroyed, and are kept as the JIT is when its LLVM objects can be inconsistent
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        for (CodeUnit* unit : code_units) {
+            if (unusable_after_fork && unit->rt) {
+                unit->rt->Retain();
+            }
+            delete unit;
+        }
+        symbol_units.clear();
+        owner_units.clear();
+        pending_unit_unrefs.clear();
+        code_units.clear();
+    }
     if (unusable_after_fork) {
         // in a child process created with fork() while another thread of the parent was compiling, the LLVM
         // objects can be inconsistent, so they are not destroyed; the process is exiting
@@ -2516,14 +3890,38 @@ void QoreJIT::forkChild(bool compile_lock_acquired) noexcept {
     bg_compile_thread.abandonAfterFork();
     bg_in_progress = nullptr;
     bg_in_progress_pgms.clear();
+    bg_in_progress_phase = BgCompilePhase::Lowering;
+    bg_in_progress_detached.store(false, std::memory_order_relaxed);
+    // a thread that released the references of a detached compile does not exist in the child either
+    bg_detach_releases.clear();
+    // and neither does a thread that waited for compile_mutex for a synchronous compile
+    sync_compile_waiters = 0;
+    bg_thread_abandoned.store(false, std::memory_order_relaxed);
+    bg_thread_done.store(false, std::memory_order_relaxed);
+    // it pointed at the stack of the compile thread, which does not exist in the child
+    bg_compile_ctx = nullptr;
+#ifdef DEBUG
+    dbg_bg_hold_armed = 0;
+    dbg_bg_held = -1;
+    dbg_bg_hold_release = false;
+    dbg_bg_teardown_waits = 0;
+#endif
     // only the queued work is pending in the child
     bg_active_work.store(static_cast<int>(bg_compile_queue.size()), std::memory_order_relaxed);
 }
 
 bool QoreJIT::tryAcquireCompileLock() {
-    return compile_mutex.try_lock();
+    if (!compile_mutex.try_lock()) {
+        return false;
+    }
+    setHoldsCompileLock(true);
+    return true;
 }
 
 void QoreJIT::releaseCompileLock() {
+    // the code units released while the lock was held are removed before it is released
+    processPendingCodeReleasesLocked();
+    setHoldsCompileLock(false);
     compile_mutex.unlock();
+    processPendingCodeReleasesAfterUnlock();
 }

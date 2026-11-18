@@ -174,6 +174,9 @@ private:
 
     DLLLOCAL void evalIntern(QoreListNode* exp);
 
+    //! evalIntern() for the arguments of a named call bound at parse time, which have parameter positions
+    DLLLOCAL QORE_INTERN_NOINLINE void evalInternMapped(QoreListNode* exp);
+
     DLLLOCAL void editIntern() {
         if (!val) {
             val = new QoreListNode(autoTypeInfo);

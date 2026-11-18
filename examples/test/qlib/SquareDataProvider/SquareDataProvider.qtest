@@ -36,6 +36,11 @@
 
 %requires SquareRestClient
 %requires SquareDataProvider
+
+# a request with an idempotency key that the caller does not give generates it with the uuid module
+%try-module uuid
+%define NoUuid
+%endtry
 %requires HttpServerUtil
 %requires HttpServer
 
@@ -568,6 +573,9 @@ public class SquareDataProviderTest inherits QUnit::Test {
         fail at run time with RUNTIME-TYPE-ERROR before every request reached the API.
     */
     createInvoiceBodyTests() {
+%ifdef NoUuid
+        testSkip("no uuid module: the request generates an idempotency key");
+%endif
         checkJson();
         FakeSquareRestClient rest();
         SquareDataProvider::SquareCreateInvoiceDataProvider prov(rest);
@@ -900,7 +908,8 @@ public class SquareDataProviderTest inherits QUnit::Test {
         assertEq("v2/customers", handler.requests[0].path);
         assertEq("Bearer test-token", handler.requests[0].authorization);
 
-        # a POST request sends the body
+%ifndef NoUuid
+        # a POST request sends the body; the request generates an idempotency key, which needs the uuid module
         handler.requests = ();
         SquareDataProvider::SquareCreateInvoiceDataProvider create_invoice(provider.getRestClient());
         hash<auto> invoice = create_invoice.doRequest({
@@ -916,6 +925,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         assertEq("Bearer test-token", handler.requests[0].authorization);
         assertEq("loc_1", handler.requests[0].body.invoice.location_id);
         assertEq("ord_1", handler.requests[0].body.invoice.order_id);
+%endif
 
         # a rate-limited request is retried after the time given by the server
         handler.requests = ();

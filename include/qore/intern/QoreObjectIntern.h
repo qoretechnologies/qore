@@ -205,6 +205,24 @@ public:
 
 class VRMutex;
 
+//! scans the objects in a recursive set that a value removed from an object holds, directly or in its lists and hashes
+/** Called after a write that removed the value from an object in a recursive set, and after the scan of that object,
+    which does not reach them when the removed edge was its only path to them (#6335).
+*/
+DLLLOCAL void qore_scan_removed_value_objects(QoreValue v, RObject* root, ExceptionSink* xsink);
+
+//! Returns true if an object that a write removed from \a root needs a scan of its own after the root's (#6335)
+/** Not if it is in no recursive set, nor if the removed value holds its only reference (it is freed when the value is
+    released), nor if the root's scan reached it (it is in the root's valid set).
+*/
+DLLLOCAL inline bool qore_removed_object_needs_scan(RObject* o, RObject* root) {
+    RSet* rs = o->rset.load(std::memory_order_acquire);
+    if (!rs || o->refs() <= 1) {
+        return false;
+    }
+    return !(root && rs == root->rset.load(std::memory_order_acquire) && rs->active() && !rs->isStale());
+}
+
 class qore_object_private : public RObject {
 public:
     const QoreClass* theclass;
@@ -253,6 +271,27 @@ public:
 
     QoreObject* obj;
 
+#ifdef DEBUG
+    //! The weak references that the dereferences taking the count to zero may release
+    /** The object's base weak reference, plus one for each reference taken when the count was zero (a destructor
+        making its object reachable again, or the deletion's own reference when others released the count to zero
+        first; see takeDeleteReference()).  Each dereference that takes the count to zero once the object is being
+        destroyed releases one of them, and they must never run out: a release beyond them frees the object while
+        other weak references (the self reference of a poll operation's private data, for one) still use it.
+    */
+    std::atomic<int> dbg_zero_count_weak_refs{1};
+
+    //! Accounts for the release of a weak reference owed to a dereference that took the count to zero
+    DLLLOCAL void dbgReleaseZeroCountWeakRef() {
+        int rv = --dbg_zero_count_weak_refs;
+        if (rv < 0) {
+            printd(0, "qore_object_private::dbgReleaseZeroCountWeakRef() this: %p '%s': weak reference released "
+                "for a dereference to zero that had none\n", this, getName());
+            assert(false);
+        }
+    }
+#endif
+
     //! Unique hash computed lazily on first getUniqueHash() call — stable for
     //! the object's lifetime and globally unique even when malloc reuses
     //! addresses. Deferred to keep the constructor cheap (the SHA1+sprintf
@@ -285,7 +324,58 @@ public:
         }
     }
 
+    DLLLOCAL void plusEquals(const AbstractQoreNode* v, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) {
+        if (!v) {
+            return;
+        }
+        if (v->getType() == NT_OBJECT) {
+            merge(*const_cast<QoreObject*>(static_cast<const QoreObject*>(v))->priv, vl, sdh, xsink, policy);
+        } else if (v->getType() == NT_HASH) {
+            merge(static_cast<const QoreHashNode*>(v), vl, sdh, xsink, policy);
+        }
+    }
+
     DLLLOCAL void merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
+
+    DLLLOCAL void merge(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeImpl(qore_object_private& o, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeImpl(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL int mergeAccessorMembers(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL int mergeAccessorMembersImpl(const QoreHashNode* ext, const qore_class_private* class_ctx,
+        AutoVLock& vl, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void mergeIntern(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+            LexicalSemanticPolicy policy);
+
+    template <bool Lexical>
+    DLLLOCAL void mergeInternImpl(ExceptionSink* xsink, const QoreHashNode* h, bool& check_recursive,
+        const qore_class_private* class_ctx, SafeDerefHelper& sdh, const QoreHashNode* new_internal_data,
+            LexicalSemanticPolicy policy);
+
+    DLLLOCAL void mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
+
+    template <bool Lexical>
+    DLLLOCAL void mergeDataToHashImpl(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink,
+            LexicalSemanticPolicy policy) const;
 
     DLLLOCAL void merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefHelper& sdh, ExceptionSink* xsink);
 
@@ -461,7 +551,12 @@ public:
         return 0;
     }
 
-    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true, bool for_delete = false);
+    DLLLOCAL QoreValue takeMember(ExceptionSink* xsink, const char* mem, bool check_access = true,
+        bool for_delete = false, bool* exists = nullptr);
+
+    //! Removes a mixed native/ordinary member slice after detaching its parent lvalue
+    DLLLOCAL __attribute__((noinline)) void takeExternalMembers(QoreLValueGeneric& rv, LValueHelper& lvh,
+        const QoreListNode* l, bool for_delete);
 
     DLLLOCAL QoreValue takeMember(LValueHelper& lvh, const char* mem, bool for_delete = false, bool* exists = nullptr);
 
@@ -473,6 +568,11 @@ public:
     DLLLOCAL QoreValue getReferencedMemberNoMethod(const char* mem, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue getReferencedMemberNoMethodResolved(const char* mem,
+            const qore_class_private* member_class_ctx,
+            ExceptionSink* xsink) const;
+
+    //! as getReferencedMemberNoMethodResolved(), for a member that the caller found to have no accessors
+    DLLLOCAL QoreValue getReferencedMemberNoMethodResolvedNoAccessor(const char* mem,
             const qore_class_private* member_class_ctx,
             ExceptionSink* xsink) const;
 
@@ -506,8 +606,43 @@ public:
             const qore_class_private* member_class_ctx, QoreValue value,
             qore_type_t expected_type, ExceptionSink* xsink);
 
-    // lock not held on entry
-    DLLLOCAL void doDeleteIntern(ExceptionSink* xsink);
+    //! Runs the destructor and releases the object's data
+    /** Lock not held on entry.
+
+        @param ref_taken true if the reference that the deletion holds while the destructor runs has been taken
+        already (takeDeleteReference(), when a dereference decided to delete the object), false to take it here (an
+        explicit deletion, whose caller holds a reference of its own)
+    */
+    DLLLOCAL void doDeleteIntern(ExceptionSink* xsink, bool ref_taken = false);
+
+    //! Takes the reference that the deletion holds while the destructor runs
+    /** Called by the dereference that decided to delete the object, with the object's lock held exclusively, in
+        the critical section that marks the object as being destroyed: from then on, a dereference that takes the
+        count to zero finds the object being destroyed, and releases a weak reference of the object (see
+        robject_dereference_helper::finalDeref()).
+
+        When the deciding dereference released the last reference itself, that release is the deletion's: the count
+        is zero, and the release of the deletion's reference is the one that releases the object's base weak
+        reference.  When the dereference decided to collect the object with references remaining, which happens when
+        all of them are held by other members of its recursive set, they can be released before this, by threads
+        that reach the members through weak references; the dereference that took the count to zero then releases
+        the base weak reference, so the deletion's reference, taken when the count is zero, takes a weak reference of
+        its own for its release, as any reference taken when the count is zero does (customRefIntern()).  Taking the
+        reference after the object had been marked, and the deciding dereference had completed, let the count reach
+        zero twice: the base weak reference was released twice, which freed the object while weak references to it
+        were still held.
+
+        @param refs_remained true if references remained when the dereference decided to delete the object
+    */
+    DLLLOCAL void takeDeleteReference(bool refs_remained) {
+        // no rlck: the count is atomic, as in customRefIntern(); the object's lock is held exclusively
+        if (!references.fetch_add(1, std::memory_order_acq_rel) && refs_remained) {
+            tRef();
+#ifdef DEBUG
+            ++dbg_zero_count_weak_refs;
+#endif
+        }
+    }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink, QoreHashNode* td, cdmap_t* cdm);
 
@@ -536,6 +671,9 @@ public:
         }
 
         obliterateMembers(xsink);
+#ifdef DEBUG
+        dbgReleaseZeroCountWeakRef();
+#endif
         tDeref();
     }
 
@@ -722,12 +860,37 @@ public:
 
     //! Runs the destructor and releases the object's data; see RObject::deleteOrDefer()
     DLLLOCAL virtual void deleteNow(ExceptionSink* xsink) {
-        doDeleteIntern(xsink);
+        // only a dereference that decided to delete the object defers or makes its deletion, and it has taken the
+        // deletion's reference (takeDeleteReference())
+        doDeleteIntern(xsink, true);
     }
 
     DLLLOCAL void fastDeref();
 
-    DLLLOCAL int startCall(const char* mname, ExceptionSink* xsink);
+    //! starts a call of the method @a mname of the class @a cls on the object
+    /** raises "cannot call <class>::<method>() on an object that has already been deleted" if the object has been
+        deleted (issue #5824), naming @a cls, or the object's class if there is none
+    */
+    DLLLOCAL int startCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink);
+
+    //! checks a call of the method @a mname of the class @a cls on the current object, which takes no reference
+    /** raises the error of startCall() if the object has been deleted (by the arguments of the call: the call itself
+        checks it before them); the status changes to OS_DELETED only after the destructor has run, so the destructor's
+        calls on the object are not affected (issue #5824)
+
+        @return -1 if the error was raised, 0 if not
+    */
+    DLLLOCAL int checkCurrentObjectCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) {
+        if (status == OS_DELETED) {
+            raiseDeletedCall(cls, mname, xsink);
+            return -1;
+        }
+        return 0;
+    }
+
+    //! raises the error of a call of the method @a mname of the class @a cls on the object, which has been deleted
+    // the error path of startCall() and checkCurrentObjectCall(), kept out of the code that every call runs
+    DLLLOCAL QORE_INTERN_NOINLINE void raiseDeletedCall(const qore_class_private* cls, const char* mname, ExceptionSink* xsink) const;
 
     DLLLOCAL void endCall(ExceptionSink* xsink);
 
@@ -778,6 +941,57 @@ public:
     DLLLOCAL static int getLValue(const QoreObject& obj, const char* key, LValueHelper& lvh,
             const qore_class_private* class_ctx, bool for_remove, ExceptionSink* xsink) {
         return obj.priv->getLValue(key, lvh, class_ctx, for_remove, xsink);
+    }
+
+    //! Returns true if the object has not been deleted: QoreObject::isValid(), inline for the check of a call's target
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool isValidInline(const QoreObject* obj) {
+        return obj->priv->status.load(std::memory_order_relaxed) != OS_DELETED;
+    }
+
+    //! Returns the class of the object, inline (it does not change)
+    DLLLOCAL static const QoreClass* getClassInline(const QoreObject* obj) {
+        return obj->priv->theclass;
+    }
+
+    //! Returns true if the object has not been deleted and is of one of the classes given, which a method resolved at
+    //! parse time is called on without being looked up by name (AbstractMethodCallNode::exec(), issue #5824)
+    //! (always inlined: it is the inline part of every check of a call's target)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static bool isValidOfClass(const QoreObject* obj, const QoreClass* qc,
+            const QoreClass* method_qc, bool any_class = false) {
+        if (any_class) {
+            return isValidInline(obj);
+        }
+        if (!qc) {
+            return false;
+        }
+        const QoreClass* cls = obj->priv->theclass;
+        return (cls == qc || cls == method_qc) && isValidInline(obj);
+    }
+
+    //! The byte offset of the class pointer in an object's private data, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getClassOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        return static_cast<uint32_t>(offsetof(qore_object_private, theclass));
+#pragma GCC diagnostic pop
+    }
+
+    //! The byte offset of an object's private data pointer, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getPrivOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        // QoreObject has single, non-virtual inheritance: offsetof() gives the member's offset
+        return static_cast<uint32_t>(offsetof(QoreObject, priv));
+#pragma GCC diagnostic pop
+    }
+
+    //! The byte offset of the status in an object's private data, for JIT code (QoreJITObjectLayout)
+    DLLLOCAL static uint32_t getStatusOffset() {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+        // qore_object_private has single, non-virtual inheritance: offsetof() gives the member's offset
+        return static_cast<uint32_t>(offsetof(qore_object_private, status));
+#pragma GCC diagnostic pop
     }
 
     DLLLOCAL static QoreStringNode* firstKey(QoreObject* obj, ExceptionSink* xsink) {

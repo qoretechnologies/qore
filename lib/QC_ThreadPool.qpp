@@ -38,6 +38,8 @@ static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
    tpt->worker(xsink);
 }
 
+thread_local ThreadPoolThread* ThreadPoolThread::current = nullptr;
+
 ThreadPoolThread::ThreadPoolThread(ThreadPool& n_tp, ExceptionSink* xsink) : tp(n_tp) {
     // a worker runs the tasks of every submitter, each under the sandbox the task captured when it was submitted
     // (see ThreadTask), so it does not inherit the sandbox of the code that happens to start it
@@ -63,7 +65,15 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
 
         // the task's count was added when it was submitted; while it runs, it belongs to this thread
         ++qore_thread_counter_share;
+        // a task of the module cleanup can enter the Programs of the modules until the thread-local data that it
+        // created is cleared below (ThreadTask applies it to the task's own code)
+        QoreModuleCleanupDelegateHelper cleanup_delegate(task->isModuleCleanupDelegate());
         sl.unlock();
+        // the task can take this worker out of the pool while it runs (ThreadPool::detachCurrentThread()); the
+        // thread remains the pool's worker until the task's data and the thread-local data are released below, as
+        // they can hold the last reference to the pool, whose destructor must then leave stopping the pool to the
+        // manager thread (qore#6253)
+        current = this;
         task->run(xsink).discard(xsink);
         // Handle any exceptions from the task so they don't leak into the next task
         // on this thread.  Without this, a failed task leaves xsink dirty, and the
@@ -73,14 +83,19 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // the task has finished: end any cancellation aimed at it before running its destructors,
         // and so that the request cannot carry over to the next, unrelated task on this worker
         end_thread_cancellation();
-        sl.lock();
+        // the task's data is released without this thread's lock, as the task ran: it can run the pool's destructor,
+        // which takes the pool's lock, and the pool's lock must not be requested while this one is held (see below);
+        // the task stays assigned to this busy thread until then, so the pool does not hand it another one
         task->del(xsink);
-        task = 0;
         // Clear all thread-local data (program tld hash + thread_local vars + thread
         // resources) only after task cleanup/derefs complete so destructors still
         // have access to thread-local state if needed, while preventing leakage
         // between unrelated tasks on the same worker thread.
         clear_all_program_thread_local_data();
+        cleanup_delegate.reset();
+        current = nullptr;
+        sl.lock();
+        task = 0;
         // Task complete — decrement thread_counter that was incremented at submit time
         --qore_thread_counter_share;
         thread_counter.dec();
@@ -148,6 +163,32 @@ ThreadPool::ThreadPool(ExceptionSink* xsink, int n_max, int n_minidle, int n_max
     }
 }
 
+bool ThreadPool::detachCurrentThread() {
+    ThreadPoolThread* tpt = ThreadPoolThread::current;
+    if (!tpt || &tpt->getPool() != this) {
+        return false;
+    }
+    AutoLocker al(m);
+    if (tpt->isDetached()) {
+        return true;
+    }
+    // a stopping pool waits for its running workers as they are (ThreadPool::worker() goes through ah without the
+    // lock once stopflag is set, so ah must not change from then on)
+    if (stopflag) {
+        return false;
+    }
+    // the worker keeps its slot of the sandbox until it ends (done() releases it), and the pool waits for it when it
+    // stops; it no longer counts against max, so the pool can start another worker for the queued tasks
+    ah.erase(tpt->getPos());
+    dh.push_back(tpt);
+    tplist_t::iterator i = dh.end();
+    --i;
+    tpt->setPos(i);
+    tpt->setDetached();
+    cond.signal();
+    return true;
+}
+
 void ThreadPool::worker(ExceptionSink* xsink) {
     SafeLocker sl(m);
 
@@ -187,6 +228,14 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 
         if (stopflag)
             break;
+
+#ifdef DEBUG
+        // test hook (dbgHoldDispatch()): the queued tasks stay queued, so that they are cancelled when the pool stops
+        if (dbg_hold_dispatch && !shutdown) {
+            cond.wait(m);
+            continue;
+        }
+#endif
 
         while (!q.empty()) {
             ThreadPoolThread* tpt = getThreadUnlocked(sl, xsink);
@@ -231,6 +280,10 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     for (auto& i : ah) {
         i->stopWait();
     }
+    // the workers that their tasks took out of the pool are waited for as well
+    for (auto& i : dh) {
+        i->stopWait();
+    }
 
     // wait for all thread termination to prevent use-after-free when threads
     // hold a reference to the ThreadPool and call finalize() after destruction
@@ -240,12 +293,15 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     for (auto& i : ah) {
         i->stopConfirm(xsink);
     }
+    for (auto& i : dh) {
+        i->stopConfirm(xsink);
+    }
 
     sl.lock();
 
     // the workers have ended: release their slots, any slot reserved for a worker that was never started, and the slot
     // of this thread, which only runs the cancellation code of queued tasks from now on
-    for (size_t i = 0, e = fh.size() + ah.size() + reserved + 1; i < e; ++i) {
+    for (size_t i = 0, e = fh.size() + ah.size() + dh.size() + reserved + 1; i < e; ++i) {
         releaseWorkerSlotUnlocked();
     }
     reserved = 0;
@@ -261,7 +317,14 @@ void ThreadPool::worker(ExceptionSink* xsink) {
 #ifdef DEBUG
     ah.clear();
     fh.clear();
+    dh.clear();
 #endif
+
+    // the reference that the pool's destructor gave this thread when a task of the pool released the object
+    // (qore#6253): without it, the pool can be destroyed as soon as it is marked stopped and the lock is released, so
+    // it is read before
+    bool release_pool = manager_ref;
+    manager_ref = false;
 
     stopped = true;
     stopCond.broadcast();
@@ -281,9 +344,18 @@ void ThreadPool::worker(ExceptionSink* xsink) {
     // cancel tasks if any; decrement thread_counter for each cancelled task
     // (it was incremented at submit time)
     for (auto& i : q_copy) {
-        i->cancel(xsink);
-        i->del(xsink);
+        // each cancel callback runs with a sink of its own, so that one that raises an exception does not keep the
+        // cancel callbacks of the other tasks from running; its exceptions are added to the pool's
+        ExceptionSink cancel_xsink;
+        i->cancel(&cancel_xsink);
+        i->del(&cancel_xsink);
+        xsink->assimilate(cancel_xsink);
         thread_counter.dec();
+    }
+
+    // the last use of the pool by this thread
+    if (release_pool) {
+        deref(xsink);
     }
 }
 
@@ -400,9 +472,20 @@ ThreadPool::constructor(int max_threads = 0, int min_idle_threads = 0, int max_i
     @code{.py}
 delete tp;
     @endcode
+
+    @note when a task of the pool releases the last reference to the pool (also through the data of the task, such as
+    a closure that holds the pool, or a thread-local variable), the pool is stopped by its manager thread: the
+    destructor returns without waiting for the workers, including the one running the task
  */
 ThreadPool::destructor() {
-    tp->stop();
+    if (tp->isOwnWorker()) {
+        // a task of the pool released the last reference to the object: stopping the pool here would wait for the
+        // worker running that task, so the manager thread stops it, as it would for a stop from another thread
+        // (qore#6253)
+        tp->stopFromOwnWorker();
+    } else {
+        tp->stop();
+    }
     tp->deref();
 }
 
@@ -417,9 +500,22 @@ tp.stop();
 
     Queued tasks not yet processed by a worker thread are canceled.
 
+    @throw THREADPOOL-ERROR called from a task of the same pool: stopping the pool waits for all of its workers,
+    including the one that runs the calling task, so it would never return; a task can stop its pool from another
+    thread (for example with the @ref background "background" operator)
+
+    @note the pool is also stopped when its object is destroyed; see @ref Qore::Thread::ThreadPool::destructor() "the destructor"
+    for a pool that a task of its own releases
+
     @see ThreadPool::stopWait()
  */
 ThreadPool::stop() {
+    if (tp->isOwnWorker()) {
+        xsink->raiseException("THREADPOOL-ERROR", "ThreadPool::stop() cannot be called from a task of the same pool: "
+            "it waits for all of the pool's workers, including the one that runs the calling task; stop the pool from "
+            "another thread (for example with the background operator)");
+        return QoreValue();
+    }
     tp->stop();
 }
 
@@ -432,9 +528,19 @@ tp.stopWait();
     This method does not return until the ThreadPool has been stopped and all worker threads have also been stopped.
     After this method has been executed once no more tasks can be submitted to the ThreadPool.
 
+    @throw THREADPOOL-ERROR called from a task of the same pool: stopping the pool waits for all of its workers,
+    including the one that runs the calling task, so it would never return; a task can stop its pool from another
+    thread (for example with the @ref background "background" operator)
+
     @see ThreadPool::stop()
  */
 ThreadPool::stopWait() {
+    if (tp->isOwnWorker()) {
+        xsink->raiseException("THREADPOOL-ERROR", "ThreadPool::stopWait() cannot be called from a task of the same "
+            "pool: it waits for all of the pool's workers, including the one that runs the calling task; stop the pool "
+            "from another thread (for example with the background operator)");
+        return QoreValue();
+    }
     tp->stopWait(xsink);
 }
 
@@ -456,6 +562,35 @@ tp.submit(task: sub () { call_function(arg); });
  */
 ThreadPool::submit(code task, *code cancel_callback) [flags=NAMED_ARGS] {
     tp->submit(task->refRefSelf(), cancel_callback ? cancel_callback->refRefSelf() : 0, xsink);
+}
+
+//! takes the worker thread that runs the calling task out of the pool
+/** @par Example:
+    @code{.py}
+tp.submit(sub () {
+    # this task keeps its thread for a long time (a session with thread-bound resources, for example)
+    tp.detachCurrentThread();
+    runSession();
+});
+    @endcode
+
+    For a task that keeps its thread for a long time, and that must keep that thread (for example, because it holds
+    thread-bound resources such as a database transaction across the requests of a session), so that it does not
+    take one of the pool's threads for that time.  The worker that runs the calling task then leaves the pool:
+    - it no longer counts against the \a max_threads limit of the pool, so the pool starts another worker for the
+      tasks that are queued
+    - it ends when the task returns, instead of returning to the pool
+    - it keeps its thread slot of the sandbox of the pool (see @ref sandbox_resources) until it ends
+    - @ref Qore::Thread::ThreadPool::stop() "ThreadPool::stop()" and
+      @ref Qore::Thread::ThreadPool::stopWait() "ThreadPool::stopWait()" wait for it as for the other workers
+
+    @return @ref True if the calling thread is a worker of this pool running a task, which is now detached from the
+    pool (or already was); @ref False if the calling thread is not a worker of this pool, or if the pool is stopping
+
+    @since %Qore 3.0
+ */
+bool ThreadPool::detachCurrentThread() {
+    return tp->detachCurrentThread();
 }
 
 //! returns a description of the ThreadPool

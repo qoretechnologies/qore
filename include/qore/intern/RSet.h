@@ -47,6 +47,7 @@
 class RSet;
 class RSetHelper;
 class RSetDerefHelper;
+class QoreRemovedValueTracker;
 
 #ifdef DEBUG
 //! Returns the number of recursive sets that scans in the current thread have created
@@ -194,6 +195,11 @@ public:
         ref_inprogress = 0, // the number of dereference actions in progress
         ref_waiting = 0,    // the number of threads waiting on a dereference action to complete
         rref_waiting = 0;   // the number of threads waiting on an rset invalidation to complete
+
+#ifdef DEBUG
+    //! the number of deleting dereferences waiting for other dereferences to complete; see derefDone()
+    int dbg_del_waiting = 0;
+#endif
 
     //! Whether the last scan rooted at this object had to assign a recursive set
     /** Chooses the mode of the next scan started here.  A scan that changes nothing can share the rsection of
@@ -1073,7 +1079,7 @@ public:
         not rechecked as orphans, as the write's release of them is the dereference that follows (see commit())
     */
     DLLLOCAL RSetHelper(RObject& obj, ExceptionSink* xsink = nullptr,
-            const std::vector<const RObject*>* write_removed = nullptr);
+            const QoreRemovedValueTracker* write_removed = nullptr);
 
     DLLLOCAL ~RSetHelper();
 
@@ -1209,7 +1215,7 @@ private:
     // the object the scan started at; only its scan generation has to advance when nothing changed
     RObject* root_obj = nullptr;
     // the objects that the write whose scan this is removed and still holds; see the constructor
-    const std::vector<const RObject*>* write_removed = nullptr;
+    const QoreRemovedValueTracker* write_removed = nullptr;
     // the recursive set of the object the scan started at, which the scan always enters
     RSet* root_rset = nullptr;
     // RSet::untracked_edge_epoch as read before the current pass followed any edge

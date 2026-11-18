@@ -29,4 +29,7 @@ DLLLOCAL extern QoreClass* QC_MEMBERACCESSORPROBE;
 DLLLOCAL QoreClass* initMemberAccessorProbeClass(QoreNamespace& ns);
 //! adds the members of the class, including those held in external storage
 DLLLOCAL void init_member_accessor_probe_members(QoreClass& qc);
+//! adds members late0 .. late4 to the probe class after it has been committed into its namespace, during the module's
+//! initialization, as module-jni adds the fields of Java classes (#6272, #6422)
+DLLLOCAL void add_member_accessor_probe_init_late_members(QoreClass& qc);
 #endif

@@ -34,6 +34,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
+#include "qore/intern/qore_encoding_private.h"
 
 #include <cctype>
 #include <iconv.h>
@@ -161,32 +162,30 @@ static const QoreEncoding* get_bom_encoding(const unsigned char* p, size_t len, 
     return nullptr;
 }
 
-// returns the encoding for a charset name, or nullptr if the name is empty
+// returns the encoding for a charset name from a message (a Content-Type value), or nullptr if the name is empty or
+// selects no encoding: the name is untrusted data, which may select only encodings that Qore knows or a standard
+// character set, so that it never makes the registry of encodings grow without limit (qore#6460)
 static const QoreEncoding* get_named_encoding(const std::string& name) {
-    if (name.empty()) {
-        return nullptr;
+    return qore_find_untrusted_encoding(name.data(), name.size());
+}
+
+// returns true if iconv converts text to the encoding, by the name that Qore converts with
+static bool qore_iconv_converts_to(const QoreEncoding* enc) {
+    iconv_t cd = iconv_open(qore_encoding_private::get(*enc)->getIconvTargetCode(), "UTF-8");
+    if (cd == (iconv_t)-1) {
+        return false;
     }
-    return QEM.findCreate(name.c_str());
+    iconv_close(cd);
+    return true;
 }
 
 // returns the encoding for a name declared in the body (an XML declaration, a meta element, or an @charset rule), or
 // nullptr if the name is empty or not a supported encoding, in which case the declaration is ignored (WHATWG Encoding
-// "get an encoding"); names that are not known already are checked with iconv, which converts the text, so that
-// declarations in untrusted data do not register encodings that cannot be used
+// "get an encoding"): the name is untrusted data, looked up as in get_named_encoding() (qore#6460), and the encoding
+// must be one that iconv converts to
 static const QoreEncoding* get_supported_encoding(const std::string& name) {
-    if (name.empty()) {
-        return nullptr;
-    }
-    const QoreEncoding* enc = QoreEncodingManager::find(name.c_str());
-    if (enc) {
-        return enc;
-    }
-    iconv_t cd = iconv_open(name.c_str(), "UTF-8");
-    if (cd == (iconv_t)-1) {
-        return nullptr;
-    }
-    iconv_close(cd);
-    return QEM.findCreate(name.c_str());
+    const QoreEncoding* enc = qore_find_untrusted_encoding(name.data(), name.size());
+    return enc && qore_iconv_converts_to(enc) ? enc : nullptr;
 }
 
 // returns the value of the charset parameter of a Content-Type value, if any
@@ -535,4 +534,217 @@ const QoreEncoding* qore_get_http_header_charset(const char* content_type, const
         default:
             return assumed ? assumed : QCS_ISO_8859_1;
     }
+}
+
+QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type, const QoreEncoding* assumed) {
+    assert(content_type);
+    assert(assumed);
+    QoreHttpContentTypeInfo rv;
+    // the encoding of the body follows the rules shared by all HTTP clients and servers, as far as they can be
+    // applied before the body is read; see qore_get_http_header_charset()
+    const QoreEncoding* hdr_enc = qore_get_http_header_charset(content_type, assumed);
+    qore_http_media_type_param charset;
+    if (qore_find_http_media_type_param(content_type, "charset", charset) && !charset.value.empty()) {
+        // a type that is binary by definition: the charset is used if it selects an encoding (qore#6460)
+        if (!hdr_enc) {
+            hdr_enc = get_named_encoding(charset.value);
+        }
+        rv.enc = hdr_enc ? hdr_enc : assumed;
+        rv.charset = charset.value;
+        // the content type without the charset parameter
+        QoreString ct(content_type, charset.begin, QCS_DEFAULT);
+        ct.trim_trailing();
+        ct.concat(content_type + charset.end);
+        ct.trim();
+        if (!ct.empty()) {
+            rv.body_content_type.assign(ct.c_str(), ct.size());
+            rv.has_body_content_type = true;
+        }
+    } else {
+        // a type that is not text is read in the assumed encoding, as before
+        rv.enc = hdr_enc ? hdr_enc : assumed;
+        rv.charset = rv.enc->getCode();
+        rv.body_content_type = content_type;
+        rv.has_body_content_type = true;
+    }
+    return rv;
+}
+
+// skips optional whitespace (RFC 9110 section 5.6.3)
+static const char* skip_http_ows(const char* p) {
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+    return p;
+}
+
+// returns true if c is a token character (tchar, RFC 9110 section 5.6.2)
+static bool is_http_tchar(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+        || (c && strchr("!#$%&'*+-.^_`|~", c));
+}
+
+// returns the end of the token at p (p if there is none)
+static const char* skip_http_token(const char* p) {
+    while (is_http_tchar(*p)) {
+        ++p;
+    }
+    return p;
+}
+
+// returns the weight of a qvalue (RFC 9110 section 12.4.2: "0" [ "." 0*3DIGIT ] / "1" [ "." 0*3("0") ]) in
+// thousandths, or -1 if [p, end) is not a qvalue
+static int parse_http_qvalue(const char* p, const char* end) {
+    if (p == end || (*p != '0' && *p != '1')) {
+        return -1;
+    }
+    int rv = (*p++ - '0') * 1000;
+    if (p == end) {
+        return rv;
+    }
+    if (*p++ != '.') {
+        return -1;
+    }
+    int scale = 100;
+    if (end - p > 3) {
+        return -1;
+    }
+    for (; p < end; ++p, scale /= 10) {
+        if (!isdigit(static_cast<unsigned char>(*p))) {
+            return -1;
+        }
+        rv += (*p - '0') * scale;
+    }
+    return rv > 1000 ? -1 : rv;
+}
+
+// returns the encoding that the response can be sent in for a charset of Accept-Charset, or nullptr: an encoding that
+// an untrusted name may select (one that Qore knows, by its name or an alias, case-insensitive, or the encoding of a
+// label of a standard character set; see qore_find_untrusted_encoding()) and that iconv converts to, by the name that
+// Qore converts with; the server registers the encoding that it chooses, so any other name is never chosen (iconv
+// accepts an unbounded number of spellings of one encoding)
+static const QoreEncoding* get_supported_http_charset(const std::string& name) {
+    return get_supported_encoding(name);
+}
+
+std::string qore_get_http_accept_charset(const char* t) {
+    assert(t);
+    // RFC 9110 section 12.5.2: Accept-Charset = #( ( token / "*" ) weight ), weight = OWS ";" OWS "q=" qvalue
+    // (section 12.4.2), and the list syntax of section 5.6.1: elements separated by commas with optional whitespace,
+    // empty elements ignored
+    // the acceptable charset with the highest weight that is supported, and its weight; an equal weight keeps the
+    // earlier one
+    std::string best;
+    int best_q = 0;
+    // the weights of "*" and UTF-8, if given (the first occurrence), else -1
+    int star_q = -1;
+    int utf8_q = -1;
+    const char* p = t;
+    while (*p) {
+        p = skip_http_ows(p);
+        // the charset: a token or "*"; "*" is a token character
+        const char* name = p;
+        p = skip_http_token(p);
+        std::string cs(name, p - name);
+        // the parameters: only the weight ("q", case-insensitive; 1 without it) is defined; any other parameter is
+        // ignored, with a token or quoted-string value (section 5.6.6)
+        int q = 1000;
+        bool valid = true;
+        // the parameters are parsed to the end after an error too, so that a comma in a quoted string never ends the
+        // element
+        while (true) {
+            p = skip_http_ows(p);
+            if (*p != ';') {
+                break;
+            }
+            p = skip_http_ows(p + 1);
+            const char* pname = p;
+            p = skip_http_token(p);
+            bool is_q = p - pname == 1 && (*pname == 'q' || *pname == 'Q');
+            if (p == pname || *p != '=') {
+                // a parameter without a name or a value (a trailing ";" is allowed)
+                if (p != pname || (*p != ',' && *p && *p != ' ' && *p != '\t')) {
+                    valid = false;
+                    break;
+                }
+                continue;
+            }
+            ++p;
+            const char* val = p;
+            if (*p == '"') {
+                // a quoted-string: up to the closing quote, with backslash escapes
+                for (++p; *p && *p != '"'; ++p) {
+                    if (*p == '\\' && p[1]) {
+                        ++p;
+                    }
+                }
+                if (*p != '"') {
+                    valid = false;
+                    break;
+                }
+                ++p;
+                if (is_q) {
+                    valid = false;
+                }
+                continue;
+            }
+            p = skip_http_token(p);
+            if (is_q) {
+                int pq = parse_http_qvalue(val, p);
+                if (pq < 0) {
+                    valid = false;
+                } else {
+                    q = pq;
+                }
+            } else if (p == val) {
+                valid = false;
+            }
+        }
+        // anything else before the next comma outside a quoted string makes the element invalid
+        if (*p && *p != ',') {
+            valid = false;
+            bool quoted = false;
+            for (; *p && (quoted || *p != ','); ++p) {
+                if (*p == '"') {
+                    quoted = !quoted;
+                } else if (quoted && *p == '\\' && p[1]) {
+                    ++p;
+                }
+            }
+        }
+        if (*p == ',') {
+            ++p;
+        }
+        if (cs.empty() || !valid) {
+            continue;
+        }
+        if (cs == "*") {
+            if (star_q < 0) {
+                star_q = q;
+            }
+            continue;
+        }
+        if (!strcasecmp(cs.c_str(), "utf-8") || !strcasecmp(cs.c_str(), "utf8")) {
+            if (utf8_q < 0) {
+                utf8_q = q;
+            }
+            continue;
+        }
+        // q=0 means not acceptable
+        if (q > best_q) {
+            const QoreEncoding* enc = get_supported_http_charset(cs);
+            if (enc) {
+                // a name or an alias of an encoding that Qore knows is given as it is, a label of a character set
+                // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with
+                best = QoreEncodingManager::find(cs.c_str()) ? cs : std::string(enc->getCode());
+                best_q = q;
+            }
+        }
+    }
+    // UTF-8, given or matched by "*" when not given, is chosen over another charset with the same weight
+    int u = utf8_q >= 0 ? utf8_q : star_q;
+    if (u > 0 && u >= best_q) {
+        return "utf8";
+    }
+    return best;
 }

@@ -1,0 +1,251 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 connections, and the iconv encodings that charset names select
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the functions are called for what they register, which the test checks afterwards
+%disable-warning return-value-ignored
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires MailMessage
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+
+%exec-class HttpUntrustedCharsetNamesTest
+
+#! answers every request; the response names the charset that the request asks for in its "X-Charset" header
+class CharsetNamesHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> rhdr = {"Content-Type": MimeTypeText};
+        if (hdr."x-charset") {
+            rhdr."Content-Type" = MimeTypeText + ";charset=" + hdr."x-charset";
+            rhdr."Content-Encoding" = hdr."x-charset";
+            return makeResponse(200, binary("ok"), rhdr);
+        }
+        return makeResponse(200, "ok", rhdr);
+    }
+}
+
+#! Character set names from untrusted data never register encodings that Qore does not know (qore#6460)
+/** A character set name in an HTTP header or body, or in a MIME message, selects only an encoding that Qore knows (a
+    built-in encoding or alias, or one used before) or one of a fixed list of standard character sets
+    (get_known_encoding()); names that select no encoding were registered as new encodings for the life of the
+    process, so that untrusted data could make the registry of encodings grow without limit.
+
+    The test passes many distinct names that select no encoding through every path that reads a character set name
+    from such data, and checks that none of them selects an encoding afterwards (get_known_encoding() of a name that
+    was registered returns its encoding).  It also checks that known names and standard character sets still select
+    their encodings in these paths.
+*/
+class HttpUntrustedCharsetNamesTest inherits QUnit::Test {
+    public {
+        #! the number of names passed through the functions
+        const Count = 10000;
+        #! the number of names sent to and from a server
+        const ServerCount = 200;
+        #! labels of standard character sets that some platforms' iconv does not convert to: the label, the encoding
+        #! that it selects, and the charset that Accept-Charset gives for it
+        const StandardLabels = (
+            ("euc-kr", "EUC-KR", "euc-kr"),
+            ("gb2312", "GB2312", "gb2312"),
+            ("big5", "Big5", "big5"),
+            ("ks_c_5601-1987", "CP949", "CP949"),
+        );
+    }
+
+    constructor() : Test("HTTP untrusted charset names test", "1.0") {
+        addTestCase("get_known_encoding()", \knownTest());
+        addTestCase("HTTP body and header functions", \functionsTest());
+        addTestCase("MIME", \mimeTest());
+        addTestCase("HTTP server and client", \serverTest());
+        set_return_value(main());
+    }
+
+    #! returns distinct names that select no encoding, with the given prefix
+    private static list<string> getNames(string prefix, int count) {
+        list<string> rv = ();
+        for (int i = 0; i < count; ++i) {
+            rv += sprintf("%s-x%d", prefix, i);
+        }
+        return rv;
+    }
+
+    #! returns True if this platform's iconv converts text to the encoding, as the HTTP functions require
+    private static bool iconvConverts(string enc) {
+        try {
+            convert_encoding("x", enc);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "ENCODING-CONVERSION-ERROR") {
+                return False;
+            }
+            rethrow;
+        }
+    }
+
+    #! checks that none of the names selects an encoding
+    private checkUnknown(list<string> names, string what) {
+        list<string> known = select names, exists get_known_encoding($1);
+        assertEq((), known[0..4], sprintf("%s: no name selects an encoding (%d of %d do)", what, known.size(),
+            names.size()));
+    }
+
+    knownTest() {
+        assertEq("ISO-8859-2", get_known_encoding("latin2"));
+        assertEq("ISO-8859-2", get_known_encoding("iso-8859-2"));
+        assertEq("UTF-8", get_known_encoding("utf-8"));
+        assertEq("WINDOWS-1250", get_known_encoding("Windows-1250"));
+        # a standard character set without a built-in encoding, in any case, and common labels
+        assertEq("Shift_JIS", get_known_encoding("shift_jis"));
+        assertEq("Shift_JIS", get_known_encoding("x-sjis"));
+        assertEq("EUC-KR", get_known_encoding("euc-kr"));
+        assertEq("CP949", get_known_encoding("ks_c_5601-1987"));
+        assertEq("ISO-8859-2", get_known_encoding("csISOLatin2"));
+        assertEq("US-ASCII", get_known_encoding("ANSI_X3.4-1968"));
+        assertNothing(get_known_encoding());
+        assertNothing(get_known_encoding(""));
+        assertNothing(get_known_encoding("iso-8859-2-x"));
+        assertNothing(get_known_encoding("iso-8859-2!"));
+        assertNothing(get_known_encoding("iso-8859-2//x"));
+        assertNothing(get_known_encoding(binary_to_string(binary("UTF-8") + <00> + binary("x"))));
+    }
+
+    functionsTest() {
+        # names of both forms: ones that iconv rejects, and ones that it may accept as a spelling of an encoding
+        list<string> names = getNames("iso-8859-2", Count / 2);
+        for (int i = 0; i < Count / 2; ++i) {
+            names += sprintf("iso-8859-2//x%d", i);
+        }
+        checkUnknown(names, "before");
+        foreach string name in (names) {
+            # the charset parameter of a Content-Type value, and the declarations in bodies
+            get_http_body_encoding("text/plain;charset=" + name, binary("x"));
+            get_http_body_encoding("text/html", binary("<meta charset=\"" + name + "\">x"));
+            get_http_body_encoding("application/xml", binary("<?xml version=\"1.0\" encoding=\"" + name
+                + "\"?><a/>"));
+            get_http_body_encoding("text/css", binary("@charset \"" + name + "\";"));
+            get_http_content_type_info("text/plain;charset=" + name);
+            get_http_content_type_info("image/png;charset=" + name);
+            get_http_accept_charset(name);
+        }
+        checkUnknown(names, "HTTP body and header functions");
+
+        # a name that selects no encoding is ignored: the body is read as without one
+        assertEq("ISO-8859-1", get_http_body_encoding("text/plain;charset=" + names[0], binary("x")));
+        assertEq("UTF-8", get_http_body_encoding("application/xml", binary("<?xml version=\"1.0\" encoding=\""
+            + names[0] + "\"?><a/>")));
+        hash<HttpContentTypeInfo> info = get_http_content_type_info("text/plain;charset=" + names[0]);
+        assertEq(names[0], info.charset, "the charset is reported as given");
+        assertEq("utf8", get_http_accept_charset(names[0]));
+
+        # known names and standard character sets are used
+        string jp = "日本語";
+        binary sjis = convert_encoding(jp, "Shift_JIS").toBinary();
+        string str = decode_http_body("text/plain;charset=shift_jis", sjis);
+        assertEq("Shift_JIS", str.encoding());
+        assertEq(jp, convert_encoding(str, "UTF-8"));
+        binary latin2 = convert_encoding("Řeřicha", "ISO-8859-2").toBinary();
+        assertEq("Řeřicha", convert_encoding(decode_http_body("text/html", binary("<meta charset=\"latin2\">")
+            + latin2), "UTF-8").substr(-7));
+        # a standard character set declared in a body or accepted by a client is used if this platform's iconv
+        # converts to it, otherwise it is ignored like a name that selects no encoding (musl's iconv has no EUC-KR,
+        # GB2312, Big5 or CP949, for example): the body is then read with the default of its media type (UTF-8 for
+        # XML, ISO-8859-1 for HTML), and the client's other acceptable charset is chosen
+        foreach list<string> l in (StandardLabels) {
+            string label = l[0];
+            string enc = l[1];
+            bool supported = iconvConverts(enc);
+            string what = sprintf("%y (%s, %s by iconv)", label, enc, supported ? "converted" : "not converted");
+            assertEq(supported ? enc : "UTF-8", get_http_body_encoding("application/xml",
+                binary("<?xml version=\"1.0\" encoding=\"" + label + "\"?><a/>")), "XML declaration of " + what);
+            assertEq(supported ? enc : "ISO-8859-1", get_http_body_encoding("text/html",
+                binary("<meta charset=\"" + label + "\">x")), "meta element of " + what);
+            assertEq(supported ? l[2] : "utf8", get_http_accept_charset(label + ", utf-8;q=0.5"),
+                "Accept-Charset of " + what);
+        }
+        assertEq("windows-1250", get_http_accept_charset("windows-1250, utf-8;q=0.5"));
+        # a label of a standard character set gives the name of its encoding, which the server converts with
+        assertEq("Shift_JIS", get_http_accept_charset("x-sjis, utf-8;q=0.5"));
+    }
+
+    mimeTest() {
+        list<string> names = getNames("utf-8", Count / 10);
+        checkUnknown(names, "before");
+        foreach string name in (names) {
+            # an encoded word, and the charset of a header block and of a filename
+            mime_decode_header("=?" + name + "?Q?abc?=");
+            mime_decode_header("=?" + name + "?B?YWJj?=");
+            mime_get_header_block_charset("Content-Type: text/plain; charset=" + name);
+            decode_mime_filename(name + "''abc");
+            # an extended parameter (RFC 8187)
+            mime_decode_ext_value(name + "''abc");
+            mime_get_content_disposition_filename("attachment; filename*=" + name + "''abc");
+            # the charset of a part
+            string body = "--b\r\nContent-Type: text/plain; charset=" + name + "\r\n\r\nabc\r\n--b--\r\n";
+            MultiPartMessage::parseBody("b", binary(body));
+            body = "--b\r\nContent-Type: text/plain; charset=" + name
+                + "\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nab=3Dc\r\n--b--\r\n";
+            MultiPartMessage::parseBody("b", body);
+        }
+        checkUnknown(names, "MIME");
+
+        # an encoded word in a charset that selects no encoding is left as it is; known charsets are decoded
+        assertEq("=?" + names[0] + "?Q?abc?=", mime_decode_header("=?" + names[0] + "?Q?abc?="));
+        assertEq("Š", convert_encoding(mime_decode_header("=?ISO-8859-2?Q?=A9?="), "UTF-8"));
+        assertNothing(mime_get_header_block_charset("Content-Type: text/plain; charset=" + names[0]));
+        assertEq("ISO-8859-2", mime_get_header_block_charset("Content-Type: text/plain; charset=latin2"));
+        assertNothing(mime_decode_ext_value(names[0] + "''abc"));
+        assertEq("Š", mime_decode_ext_value("iso-8859-2''%A9"));
+        hash<MessageInfo> msg = MultiPartMessage::parseBody("b", binary("--b\r\nContent-Type: text/plain; "
+            "charset=iso-8859-2\r\n\r\n") + convert_encoding("Š", "ISO-8859-2").toBinary()
+            + binary("\r\n--b--\r\n"));
+        assertEq("Š", convert_encoding(msg.part[0].body, "UTF-8"));
+    }
+
+    serverTest() {
+        CharsetNamesHandler handler();
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("names", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", port)});
+        on_exit hc.disconnect();
+        RestClient rc({"url": sprintf("http://127.0.0.1:%d", port)});
+        on_exit rc.disconnect();
+
+        # names starting with "iso", which a client also takes as a charset given as the Content-Encoding
+        list<string> names = getNames("iso-8859-5", ServerCount);
+        checkUnknown(names, "before");
+        foreach string name in (names) {
+            # the Content-Type charset and Accept-Charset of a request
+            hash<auto> rv = hc.send(binary("x"), "POST", "/names", {"Content-Type": "text/plain;charset=" + name,
+                "Accept-Charset": name});
+            assertEq(200, rv.status_code);
+            # the Content-Type charset of a response, and a charset given as its Content-Encoding
+            rv = hc.send(NOTHING, "GET", "/names", {"X-Charset": name}, True);
+            assertEq(200, rv.status_code);
+            # the same response to a RestClient, which raises an exception for an error status, also with a limit
+            # on the response size, with which it reads the Content-Encoding itself
+            rc.get("/names", NOTHING, {"X-Charset": name});
+            rc.doRequestWithResponseLimit("GET", "/names", NOTHING, 1000, NOTHING, True, {"X-Charset": name});
+        }
+        checkUnknown(names, "HTTP server and client");
+
+        # a standard character set in a response is used
+        hash<auto> rv = hc.send(NOTHING, "GET", "/names", {"X-Charset": "EUC-JP"}, True);
+        assertEq(200, rv.status_code);
+        assertEq("EUC-JP", rv.body.encoding());
+        # a label of a standard character set in Accept-Charset gives a response in its encoding
+        rv = hc.send(NOTHING, "GET", "/names", {"Accept-Charset": "x-sjis"}, True);
+        assertEq(200, rv.status_code);
+        assertRegex("charset=shift_jis", rv."_qore_orig_content_type".lwr());
+        assertEq("ok", convert_encoding(rv.body, "UTF-8"));
+    }
+}

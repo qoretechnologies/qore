@@ -84,6 +84,81 @@ Other callers keep full access to every element through reflection, as debuggers
 tests rely on (D2, David 2026-11-08). Capabilities therefore cannot rely on `private:internal` alone against trusted
 code; see the storage rule in [module-sandboxing-audit-guide.md](module-sandboxing-audit-guide.md).
 
+### 2b. The export boundary of user modules (#5692)
+
+For the same callers as 2a (`QoreReflectionCaller::appliesMemberAccess()`), reflection on a user module Program
+(`PO_IN_MODULE`) other than the caller's own, and not one the caller created, reaches only what the module exports:
+`QoreReflectionCaller::appliesModuleExports()`. Without it, a sandboxed caller holding an object that module code
+created got the module's namespace tree from `Class::getClass(obj).getNamespace()` and could call non-exported
+functions, read non-exported constants and globals, and call the static methods of non-exported classes: the module
+Program passed `checkProgramAccess()`, because a user module Program has no sandbox manager of its own (see
+[Sandbox managers](#sandbox-managers)). The export list is the module's interface for every caller (qore#5664 relies
+on it), so reflection must not widen it.
+
+"Exported" is what an importing Program receives (`qore_ns_private::copyMergeCommittedNamespace()`): the declaration
+is `public` or builtin, and every namespace from its own to the root is the root, builtin, `public`, or imported by the
+module from another module (`QoreReflectionCaller::canSeeNamespace()` / `canSeeDeclaration()`). A declaration the
+module imported keeps its `public` flag: it is that other module's export, which any caller may use. A class is
+checked against its declaring Program and namespace (`QoreClass::getSourceProgram()`, shared by imported copies), so a
+handle of a non-exported class bound to any Program is refused (`canSeeClass()`).
+
+|!Operation|!Non-exported declaration
+|Lookup by name in a namespace (`Namespace::get*()`), by path (`*::forName()`, constructors) or by pattern (`*::findAllRegex()`)|Not found: the exception of a declaration that does not exist (`UNKNOWN-FUNCTION`, `UNKNOWN-CONSTANT`, ...)
+|Listing (`Namespace::get*s()`, `getVariants()`)|Left out
+|A user variant without `public` of a function that has public variants: listing (`Function::getVariants()`, `Namespace::getVariants()`), lookup by types (`getVariant*()`), call resolution (`Function::call()`)|Left out, not found (`VARIANT-MATCH-ERROR`), not selected (the call is resolved among the public variants, `RUNTIME-OVERLOAD-ERROR` if none matches; the error lists only the public variants)
+|A handle created otherwise (by the module itself, or `Class::getClass(obj)` for a non-exported class): function and function-variant calls, global reads and writes, constant reads, typed hash casts|`REFLECTION-ACCESS-ERROR`
+|Non-exported class: construction (`newObject*()`, `callConstructor()`, constructor methods and variants), static methods and variants, static members, class constants, member defaults|`REFLECTION-ACCESS-ERROR` (`reflection_check_class_export()`)
+|Non-exported class: normal methods and members, copy and destructor with an object|Allowed (member access applies), as `obj.m()` is in the language
+
+Function lookups by path and pattern need the namespace of the function: `QoreProgram::findFunction(path, pns)` and
+`QoreProgram::findAllFunctionsRegexNs()` return it, like the hashdecl, enum, global and constant lookups already do.
+The function check on a handle is in `QoreExternalFunction::evalFunction()` with a caller, which every reflection
+function call uses.
+
+A given variant can also be left by the fallback of CodeEvaluationHelper::init(): when its arguments do not match,
+the call selects another variant for them; that search takes the call's variant filter (`QoreFunction::evalFunction(...,
+variant_filter)`, `QRFV_EXPORTED_ONLY` from reflection when the boundary applies), and it keeps the arguments (it
+discarded them, so the other variant ran without arguments, on develop too).
+
+A call reference to a builtin method (`\\f.call()`) used to run with the object's Program as its Program context
+(RunTimeResolvedMethodReferenceNode passed `obj->getProgram()`), so a reflection handle, which belongs to the Program
+it describes, saw that Program as its caller and checked nothing, and any restricted Program could use a privileged
+Program's builtin object (a parent's `File`) past the checks of a direct call.  The reference now records the Program
+that created it (a weak reference) and runs as a direct call there; references to user methods are unchanged.
+A reference to a method that the object's class inherits (`\\o.m()` with `m()` inherited, `\\m()` in a base class's
+code for an object of a subclass) is resolved when it is called (RunTimeObjectMethodReferenceNode); it ran in the
+Program that called it, so a restricted Program's reference to a privileged Program's object (a parent's `File`
+subclass) ran with the caller's privileges, and a reference that a privileged Program handed out lost them.  It now
+also records the Program that created it (a weak reference unless that is the object's Program, which the object
+holds) and, called from another Program, runs there (`qore_class_private::evalMethod(..., pgm_ctx)`), as the direct
+call `o.m()` at the creation site would; user methods run in the Program that defines their class either way, and a
+sandbox still restricts every call that a sandboxed Program makes (sandbox provenance).
+
+Typed hash initializers and member defaults (`TypedHash::doCast()`, `AbstractMember::getDefaultValue()`, also through
+`Type::getType(value).getTypedHash()`) are decided on visibility, not on the handle's Program: allowed if the caller
+could name the typed hash in the language (system, or declared in, imported into or inherited by the caller's Program;
+`reflection_can_see_typed_hash()` looks it up in the caller's Program), and then run under the caller's restrictions
+(QoreReflectionCallCheckHelper) and sandbox, as a cast by the caller does; refused otherwise.
+
+Variants are exported one by one: a module function can have `public` and private variants, and an importer receives
+only the public ones (the `QoreFunction` copy constructor). A check of the function (`hasPublic()`) is not enough, and
+neither is a check of the variant after resolution: resolving among all variants can select a private variant where an
+importer's call selects a public one (an exact `string` match over a `softint` conversion). So
+`QoreFunction::runtimeFindVariant()` takes a variant filter (`QRFV_ONLY_USER`, the former `only_user` flag, and
+`QRFV_EXPORTED_ONLY`), which skips the private user variants in the search and in the "no variant matching" error;
+`evalFunction()` resolves with it when the boundary applies and no variant is given, and refuses a given private variant
+(`canSeeVariant()`). The type-vector lookup `QoreExternalFunction::findVariant(type_vec, pgm, caller, xsink)` and the
+module's listings (`append_variant_objects()`) use the same filter. A zero filter costs the runtime search nothing.
+
+A function handle records the namespace it was found in (`QoreReflectionFunction::ns`), and its calls pass it to
+`evalFunction(..., ns, caller, xsink)`, so a handed-out handle of a `public` function in a non-public namespace is
+refused, as the function is invisible to an importer. A typed hash handle is checked against the hashdecl's own Program
+and namespace (`reflection_can_see_typed_hash()`), as a class is: `Type::getTypedHash()` binds the handle to the type's
+source Program, else to the caller's own, where the boundary would not apply. Its member default values
+(`AbstractMember::getDefaultValue()`) are checked like its casts. Module code reflecting on its own Program, and callers to which 2a does not apply, are unchanged.
+A `PO_NO_*` caller is refused by `checkProgramAccess()` when the module Program has fewer restrictions; when the module
+Program inherited the caller's restrictions (the caller loaded it first), only this boundary refuses.
+
 ### 3. Access is classified per operation
 
 `QoreReflectionCaller::Access` distinguishes structural navigation, value access and member-default evaluation.
@@ -321,6 +396,9 @@ encode declaration paths and resolve them in the deserializing Program, without 
 | `QoreExternalFunction::evalFunction(…, const QoreReflectionCaller&, …)` | `qore/QoreReflection.h` | call a function checked against the caller and the function's Program
 | `qore_parse_options_allow_domain()` | `qore/QoreReflection.h` | the parser's domain rule, shared by all checks
 | `qore_program_find_namespace()` | `qore/QoreReflection.h` | map a namespace to the one with the same path in a Program's tree (N1)
+| `QoreReflectionCaller::appliesModuleExports()`, `canSeeNamespace()`, `canSeeDeclaration()`, `canSeeClass()`, `canSeeVariant()`, `checkModuleExport()` | `qore/QoreReflection.h` | the export boundary of user modules (2b)
+| `QoreExternalFunction::findVariant(type_vec, pgm, caller, xsink)`, `evalFunction(variant, args, pgm, ns, caller, xsink)` | `qore/QoreReflection.h` | variant lookup and calls within the export boundary (2b)
+| `QoreProgram::findFunction(path, pns)`, `QoreProgram::findAllFunctionsRegexNs()` | `qore/QoreProgram.h` | function lookups that return the namespace, for 2b
 | `QoreClass::runtimeCheckDomain()` | `qore/QoreClass.h` | the class-domain rule (also used by `create_object()`)
 | `qore_program_private_base::creator_ids` / `programCreatedBy()` | internal | the creator chain for `checkProgramAccess()`
 
@@ -339,6 +417,11 @@ entitled to. Trusted, equally- or more-privileged callers — including Qorus bu
 in an interface Program whose restrictions allow the class — are unaffected.
 
 ## Regression coverage
+
+`reflection-module-exports.qtest` (2b) runs every lookup, listing and handle operation above against exported and
+non-exported declarations of a fixture module, from a trusted, a sandboxed and a `PO_NO_PROCESS_CONTROL` caller, in
+each execution mode, with the module loaded from source and compiled with qcc; it also checks that refused writes
+leave the module's state unchanged and that object-level use and a handed-out call reference still work.
 
 `reflection-operation-access.qtest` checks each operation class with independent sibling Programs using injection,
 debugging and both capabilities. It asserts that structural inspection has no initializer side effects, full access

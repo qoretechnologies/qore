@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires QUnit
+%requires ../../../TestInterpreter.qm
 %requires FsUtil
 %requires SystemThreadWorker
 
@@ -40,7 +41,10 @@ class SystemThreadCallTest inherits QUnit::Test {
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*sandbox provenance", refusals.provenance);
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.bound);
         assertRegex("^SANDBOX-CAPABILITY-ERROR: .*must be a plain callback", refusals.capability);
-        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*a sandbox governs", refusals.governed);
+        # qore#5741: the default sandbox refuses sandboxed code the uncontrolled API itself at run time
+        assertRegex("^INVALID-FUNCTION-ACCESS: .*uncontrolled API.*createSystemThreadCall", refusals.governed);
+        # a sandbox that allows uncontrolled APIs: the creation itself refuses code that a sandbox governs
+        assertRegex("^SANDBOX-CAPABILITY-ERROR: .*a sandbox governs", refusals.governed_allowed);
     }
 
     outsideInitTest() {
@@ -171,7 +175,7 @@ class SystemThreadCallTest inherits QUnit::Test {
         string output = dir + "/output.txt";
         string command = sprintf("QORE_MODULE_DIR='%s' '%s' '%s' > '%s' 2>&1",
             get_script_dir() + PathSep + get_script_dir() + "/../../../../../qlib" + PathSep
-                + (ENV.QORE_MODULE_DIR ?? ""), QORE_ARGV[0], script, output);
+                + (ENV.QORE_MODULE_DIR ?? ""), TestInterpreter::qore_interpreter(), script, output);
         int rc = system(command);
         string out = ReadOnlyFile::readTextFile(output);
         return {"rc": rc, "output": out, "lines": (map $1, trim(out).split("\n"), $1 !~ /^\s/)};

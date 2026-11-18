@@ -80,6 +80,9 @@ std::atomic<bool> qore_initialized = {false};
 
 // shutdown flag
 std::atomic<bool> qore_shutdown = {false};
+std::atomic<bool> qore_thread_start_closed = {false};
+std::atomic<bool> qore_foreign_threads_in_module_code = {false};
+std::atomic<bool> qore_types_deleted = {false};
 
 // exiting flag
 std::atomic<bool> qore_exiting = {false};
@@ -385,6 +388,7 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 #endif
 
     // set initialized flag for external modules
+    qore_types_deleted.store(false, std::memory_order_relaxed);
     qore_initialized.store(true, std::memory_order_relaxed);
 }
 
@@ -417,6 +421,11 @@ void qore_cleanup() {
     // Stop JIT background compilation before destroying programs/functions: BgCompileWork holds
     // raw pointers to UserVariantBase members.  Keep the LLVM engine alive, however, because user
     // module delete callbacks below can still call functions through published native entry points.
+    // A compile still in LLVM is detached rather than awaited here, so that the teardown below goes on
+    // while it ends; its thread no longer reads those pointers, and it skips what it can of LLVM.
+    // QoreJIT::shutdown() below waits for it and releases the engine, so that no compile is in LLVM when
+    // this function returns and the process can return from main() (see
+    // QoreJIT::stopBackgroundCompiler(); qore#5842, qore#6296).
     QoreJIT::instance().stopBackgroundCompiler();
 
     // drop any user-module QoreObject references held by the async I/O
@@ -455,8 +464,41 @@ void qore_cleanup() {
     QSM.del();
 #endif
 
-    // delete all loadable modules
-    QMM.cleanup();
+    // no other thread of the library runs Qore code any more (the signal thread has stopped as well); a thread
+    // registered with q_register_foreign_thread() can be blocked in Qore code still, and the Programs it runs in are
+    // left as they are (see qore_program_private::leaveForeignThreads()).  The Programs of the modules no longer need
+    // module lifetime, and the Programs of the user modules, which delUser() deleted, are freed now, before the binary
+    // modules are deleted
+    // a foreign thread runs module code that nothing will end: the modules and their Programs are left as they are,
+    // reachable, until the process ends (see qore_program_private::leaveForeignThreads()); the other Programs are
+    // cleared as usual
+    const bool modules_left = qore_foreign_threads_in_module_code.load(std::memory_order_acquire);
+    if (!modules_left) {
+        qore_release_module_program_pins();
+
+        // delete all loadable modules
+        QMM.cleanup();
+    }
+
+    // the Programs that their owners keep beyond this point (ex: a module's Program with static storage duration,
+    // deleted by a static destructor after this function has freed the types) have their data cleared now, while
+    // Qore code that their objects run when they are destroyed can still run: the JIT engine, the types and the
+    // thread data are released below (qore#6045)
+    // no thread can be started by that code: the threads have been waited for and are not waited for again
+    qore_thread_start_closed.store(true, std::memory_order_release);
+    qore_program_private::clearRemainingPrograms();
+
+    // a Program that a foreign thread runs in was left as it is (see qore_program_private::leaveForeignThreads()): the
+    // thread can be blocked in Qore code for as long as the process lives and uses the library's data (the types, the
+    // system namespace, the thread data), so the library is not torn down any further; everything that remains is
+    // reachable and is released with the process
+    if (modules_left || qore_program_private::hasLeftPrograms()) {
+        printd(5, "qore_cleanup() leaving the library as it is: a Program was left for a foreign thread\n");
+        // a background compile still in LLVM is waited for, so that no compile is in LLVM when this function returns
+        // (issue #6296); the engine stays, as the foreign thread can still run compiled code
+        QoreJIT::instance().finishDetachedCompile();
+        return;
+    }
 
     // All module programs and their callable UserVariantBase objects are gone, so native entry
     // points can no longer be reached and the LLVM execution engine may now be released safely.
@@ -493,8 +535,44 @@ void qore_cleanup() {
     staticSystemNamespace = nullptr;
 #endif
 
+    // Module-owned Qore state has been released when the modules were deleted above (see QoreModuleInfo::ns and
+    // QoreNamespace::purge()); a module namespace with static storage duration that was not registered still holds
+    // its values, which its C++ static destructor releases after the types are freed (or never, if the process ends
+    // with _exit()).  Debug builds count them; QORE_TEARDOWN_REPORT names them on stderr.
+#ifdef DEBUG
+    {
+        bool report = q_env_is_set("QORE_TEARDOWN_REPORT");
+        unsigned late = qore_count_late_module_namespaces(report);
+        if (report) {
+            fprintf(stderr, "[TEARDOWN] module namespaces released after qore_cleanup(): %u\n", late);
+        }
+    }
+#endif
+
+    // the declarations and derived types retired and not freed yet, which the library cleanup frees (issue #6419)
+    if (q_env_is_set("QORE_DEBUG_TYPE_RETIREMENT")) {
+        QoreTypeRetirementInfo info;
+        qore_type_retirement_info(info);
+        fprintf(stderr, "[TYPE-RETIREMENT] epoch %llu: pending declarations: %zu (freeable: %zu), pending derived types: "
+            "%zu (freeable: %zu), oldest pending epoch: %llu, lowest epoch of the threads in Qore code: %llu\n",
+            (unsigned long long)info.epoch, info.pending_declarations, info.freeable_declarations,
+            info.pending_derived_types, info.freeable_derived_types, (unsigned long long)info.oldest_pending_epoch,
+            (unsigned long long)info.min_active_epoch);
+    }
+
     // delete default type values
     delete_qore_types();
+    // Qore values released from here on are released after their types (see qore_ns_private::~qore_ns_private())
+    qore_types_deleted.store(true, std::memory_order_release);
+
+    // the declarations of the Programs that were deleted have been freed (see delete_qore_types()), unless a value or
+    // a Program held at static scope still references them; debug builds count the others, which were leaked
+#ifdef DEBUG
+    if (q_env_is_set("QORE_TEARDOWN_REPORT")) {
+        fprintf(stderr, "[TEARDOWN] declarations of Programs left after qore_cleanup(): %zu\n",
+            qore_count_live_user_type_owners());
+    }
+#endif
 
     // delete threading infrastructure
     delete_qore_threads();

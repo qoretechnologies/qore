@@ -39,6 +39,11 @@ protected:
 
     DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalImplInternal(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL QoreValue evalLexical(bool& needs_deref, ExceptionSink* xsink) const;
+
 public:
     DLLLOCAL QorePlusEqualsOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
             : QoreBinaryLValueOperatorNode(loc, left, right) {
@@ -46,6 +51,24 @@ public:
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
         return copyBackgroundExplicit<QorePlusEqualsOperatorNode>(xsink);
+    }
+};
+
+class LexicalQorePlusEqualsOperatorNode : public QorePlusEqualsOperatorNode {
+public:
+    using QorePlusEqualsOperatorNode::QorePlusEqualsOperatorNode;
+
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        auto* copy = copyBackgroundExplicit<LexicalQorePlusEqualsOperatorNode>(xsink);
+        if (copy) {
+            copy->ti = ti;
+        }
+        return copy;
+    }
+
+protected:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalLexical(needs_deref, xsink);
     }
 };
 

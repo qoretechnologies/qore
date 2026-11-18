@@ -1,0 +1,64 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# ProviderIndexExternalIoFixture.qm registers apps with each combination of the external I/O declarations
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module ProviderIndexExternalIoFixture {
+    version = "1.0";
+    desc = "ProviderIndex external I/O declaration fixture";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        foreach hash<auto> i in (ProviderIndexExternalIoFixture::Declarations.pairIterator()) {
+            ProviderIndexExternalIoFixture::registerTestApp(i.key, i.value);
+        }
+    };
+}
+
+#! The fixture's apps and helpers
+public namespace ProviderIndexExternalIoFixture {
+#! The apps of the fixture and their declarations
+public const Declarations = {
+    # no declaration: I/O through Qore only
+    "QoreTestIndexIoNone": {},
+    # external I/O that is not checked
+    "QoreTestIndexIoExternal": {"external_io": True},
+    # external I/O that is checked against the caller's policy
+    "QoreTestIndexIoAware": {"external_io": True, "sandbox_aware": True},
+    # sandbox-aware without external I/O, which has no effect
+    "QoreTestIndexIoAwareOnly": {"sandbox_aware": True},
+    # both declared False
+    "QoreTestIndexIoFalse": {"external_io": False, "sandbox_aware": False},
+};
+
+#! Registers a test app with an action
+sub registerTestApp(string app, hash<auto> declarations) {
+    DataProviderActionCatalog::registerApp(cast<hash<DataProviderAppInfo>>({
+        "name": app,
+        "display_name": app,
+        "short_desc": "external I/O fixture",
+        "desc": "external I/O fixture",
+        "groups": (AppGroup::DataTransformation,),
+        "logo": "fixture",
+        "logo_mime_type": "image/svg+xml",
+        "logo_file_name": "fixture.svg",
+    } + declarations));
+    QoreDataField name({"name": "name", "type": StringType});
+    DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+        "app": app,
+        "action": "run",
+        "path": "/run",
+        "display_name": "run",
+        "short_desc": "external I/O fixture action",
+        "desc": "external I/O fixture action",
+        "action_code": DPAT_API,
+        "options": DataProviderActionCatalog::getActionOptionFromFields({"name": name}),
+        "output_type": AbstractDataProviderType::get(AutoHashType),
+    });
+}
+}

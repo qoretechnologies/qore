@@ -1,0 +1,33 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! module for module-code-program-barrier.qtest: module code that calls the code of another module
+/** module-code-program-barrier/barrier.q loads it first from a sandboxed Program, so it inherits that Program's
+    restrictions: a sandboxed caller's restrictions pass on through it to BarrierMod, whose own options do not have them
+*/
+
+%modern
+
+%requires BarrierMod
+
+module ChainMod {
+    version = "1.0";
+    desc = "module code Program barrier chain test module";
+    author = "Qore Technologies";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace ChainMod {
+#! creates an object of a class named by the caller through the other module
+public auto sub create_through(string name) {
+    return BarrierMod::func_create_by_name(name);
+}
+
+public class Chain {
+    static auto createThrough(string name) {
+        return BarrierMod::Probe::createByName(name);
+    }
+}
+}

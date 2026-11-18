@@ -36,6 +36,30 @@
 
 class QoreHashMapOperatorNode : public QoreNOperatorNodeBase<3> {
 public:
+    //! true if the operand of the given index is evaluated for each element as a statement of its own: it can create
+    //! a temporary besides its value whose release can be observed (qore#6288, qore_expr_may_create_observable_temp())
+    DLLLOCAL bool elementScope(unsigned i) const {
+        return element_scopes.get() & (1u << i);
+    }
+
+    //! returns the element scope flags: a bit for each operand, by index (see elementScope())
+    DLLLOCAL uint8_t elementScopes() const {
+        return element_scopes.get();
+    }
+
+private:
+    //! a bit for each operand, by index (see elementScope())
+    QoreElementScopeFlags element_scopes;
+
+    //! decides the element scope flags of the operator given (q_element_scope_decider_t)
+    DLLLOCAL static void decideElementScopes(AbstractQoreNode* op);
+
+    template <bool Lexical>
+    friend class QoreGenericHashMapOperatorNode;
+
+public:
+    DLLLOCAL static QoreHashMapOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue p0, QoreValue p1, QoreValue p2);
     DLLLOCAL QoreHashMapOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1, QoreValue p2) :
         QoreNOperatorNodeBase<3>(loc, p0, p1, p2) {
     }
@@ -59,7 +83,9 @@ public:
         ValueHolder n_e2(copy_value_and_resolve_lvar_refs(e[2], xsink), xsink);
         if (*xsink)
             return nullptr;
-        return new QoreHashMapOperatorNode(loc, n_e0.release(), n_e1.release(), n_e2.release());
+        auto* node = createBackgroundCopy(n_e0.release(), n_e1.release(), n_e2.release());
+        node->returnTypeInfo = returnTypeInfo;
+        return node;
     }
 
     //! Compute the map operator's return type.
@@ -81,6 +107,9 @@ public:
     }
 
 protected:
+    //! Evaluates the operator; \a Generic is true if its result type has a type parameter (issue #5988)
+    template <bool Lexical, bool Generic = false>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     const QoreTypeInfo* returnTypeInfo = nullptr;
 
     DLLLOCAL static QoreString map_str;
@@ -94,9 +123,41 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
+    template <bool Lexical, bool Generic = false>
     DLLLOCAL QoreValue mapIterator(AbstractIteratorHelper& h, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreHashNode* getNewHash() const;
+
+    //! Returns a new hash for the result with the type argument of the call in place of the type parameter
+    /** For an operator whose result type has a type parameter (issue #5988)
+    */
+    DLLLOCAL QoreHashNode* getNewGenericHash() const;
+
+    //! Returns a new operator of the class of this operator with the given operands for a background expression
+    DLLLOCAL virtual QoreHashMapOperatorNode* createBackgroundCopy(QoreValue p0, QoreValue p1, QoreValue p2) const {
+        return create(getSemanticPolicy(), loc, p0, p1, p2);
+    }
+};
+
+//! A hash map operator whose result type has a type parameter
+/** Its result has the type argument of the call in place of the type parameter; an operator is replaced by this
+    class when it is parsed, so the other operators keep their code path (issue #5988).  \a Lexical is the
+    lexical semantic policy of the operator, as for the other operators.
+*/
+template <bool Lexical>
+class QoreGenericHashMapOperatorNode : public QoreHashMapOperatorNode {
+public:
+    //! Takes over the operands and the parse state of the given operator
+    DLLLOCAL QoreGenericHashMapOperatorNode(QoreHashMapOperatorNode& old);
+
+    //! Creates an operator for a background expression
+    DLLLOCAL QoreGenericHashMapOperatorNode(const QoreProgramLocation* loc, QoreValue p0, QoreValue p1,
+            QoreValue p2);
+
+protected:
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual QoreHashMapOperatorNode* createBackgroundCopy(QoreValue p0, QoreValue p1, QoreValue p2) const;
 };
 
 #endif // QOREHASHMAPOPERATORNODE_H

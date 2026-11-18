@@ -151,6 +151,11 @@ DLLLOCAL int qore_fork_get_tid();
 */
 DLLLOCAL unsigned qore_fork_get_generation();
 
+//! returns true if the process must end without running exit-time handlers because a JIT compile still runs in LLVM
+/** Called by qore_fork_child_quick_exit() at the end of the process; see QoreJIT::exitQuickly()
+*/
+DLLLOCAL bool qore_jit_exit_quickly();
+
 //! a process-wide resource that is prepared before fork() and fixed up in the parent and the child after it
 /** Constructing the object registers it; destroying it unregisters it.  The handlers run with the registry lock
     held and must not throw, allocate memory in the child, or call anything that takes another registered lock.

@@ -65,7 +65,12 @@ public:
     DLLEXPORT void handleWarnings();
 
     //! returns true if at least one exception is present or thread_exit has been triggered
+#ifdef _QORE_LIB_INTERN
+    // inline in libqore (defined in qore/intern/QoreException.h, qore#6369); the library exports a copy for modules
+    DLLEXPORT inline bool isEvent() const;
+#else
     DLLEXPORT bool isEvent() const;
+#endif
 
     //! returns true if thread_exit has been triggered
     DLLEXPORT bool isThreadExit() const;
@@ -80,7 +85,12 @@ public:
         if (xsink) { .. }
         @endcode
     */
+#ifdef _QORE_LIB_INTERN
+    // inline in libqore (defined in qore/intern/QoreException.h, qore#6369); the library exports a copy for modules
+    DLLEXPORT inline operator bool () const;
+#else
     DLLEXPORT operator bool () const;
+#endif
 
     //! appends a Qore-language exception to the list
     /** The AbstractQoreNode pointer returned is always 0; used to simplify error handling code.
@@ -300,8 +310,9 @@ xsink->assimilate(bg_xsink);
     DLLLOCAL static void defaultExceptionHandler(QoreException* e);
     DLLLOCAL static void defaultWarningHandler(QoreException* e);
 
-    DLLLOCAL static void outputExceptionLocation(const char* fns, int start_line, int end_line, const char* srcs,
-        int offset, const char* langs, const char* types);
+    //! appends the location of an exception to the text of its report
+    DLLLOCAL static void outputExceptionLocation(QoreString& out, const char* fns, int start_line, int end_line,
+        const char* srcs, int offset, const char* langs, const char* types);
 
 private:
     //! private implementation of the class

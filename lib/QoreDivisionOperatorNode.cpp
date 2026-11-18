@@ -29,6 +29,8 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreArithmeticParseType.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QoreDivisionOperatorNode::op_str("/ operator expression");
 
@@ -53,10 +55,10 @@ QoreValue QoreDivisionOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
    if (pfunc)
       return (this->*pfunc)(xsink);
 
-   ValueEvalOptimizedRefHolder lh(left, xsink);
+   QoreOperandEvalHolder lh(left, xsink);
    if (*xsink)
       return QoreValue();
-   ValueEvalOptimizedRefHolder rh(right, xsink);
+   QoreOperandEvalHolder rh(right, xsink);
    if (*xsink)
       return QoreValue();
 
@@ -102,7 +104,7 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
             return **xsink ? -1 : 0;
         }
         // check for division by zero here
-        if (!right.getAsFloat()) {
+        if (qore_constant_divisor_is_zero(right)) {
             parse_error(*loc, "division by zero found in parse expression");
             return -1;
         }
@@ -123,24 +125,22 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
     // NOTE: the result type must be determined in a local variable and assigned unconditionally below; the parse
     // context's type is still set to the right-hand side's type here, so any path that does not assign it would
     // report the divisor's type as the type of the division expression (issue #5462)
+    // the result type is that of every combination of the values that the operand types allow, as doDivision() gives
+    // it (qore#5663): a float or a number on one side gave a float or a number whatever values the other side could
+    // have (ex: float for *int / int, which is an int); the float and int shortcuts are taken only when every
+    // combination gives that type, when they compute what doDivision() computes
     const QoreTypeInfo* returnTypeInfo = nullptr;
-    if ((QoreTypeInfo::isType(lti, NT_NUMBER)
-            && QoreTypeInfo::parseReturns(rti, NT_BUFFER) == QTI_NOT_EQUAL)
-        || (QoreTypeInfo::isType(rti, NT_NUMBER)
-            && QoreTypeInfo::parseReturns(lti, NT_BUFFER) == QTI_NOT_EQUAL)) {
-        // a number on either side gives a number result, as long as the other side cannot be a buffer, in which
-        // case the result is a buffer
-        returnTypeInfo = numberTypeInfo;
-    } else if (QoreTypeInfo::hasType(lti) && QoreTypeInfo::hasType(rti)) {
-        if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT)) {
-            pfunc = &QoreDivisionOperatorNode::floatDivision;
-            returnTypeInfo = floatTypeInfo;
-        } else if ((QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(lti, NT_CHAR))
-                && (QoreTypeInfo::isType(rti, NT_INT) || QoreTypeInfo::isType(rti, NT_CHAR))) {
-            pfunc = &QoreDivisionOperatorNode::bigIntDivision;
-            returnTypeInfo = bigIntTypeInfo;
-        } else {
-            returnTypeInfo = floatTypeInfo;
+    {
+        const QoreTypeInfo* arith_ti;
+        bool single;
+        if (qore_arith_parse_result_type(QoreArithParseOp::Divide, lti, rti, arith_ti, single)
+                == QoreArithParseResult::Scalar) {
+            returnTypeInfo = arith_ti;
+            if (arith_ti == floatTypeInfo) {
+                pfunc = &QoreDivisionOperatorNode::floatDivision;
+            } else if (arith_ti == bigIntTypeInfo) {
+                pfunc = &QoreDivisionOperatorNode::bigIntDivision;
+            }
         }
     }
     // if the type could not be determined above, then the result type is unknown; it depends on the runtime types
@@ -153,9 +153,9 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
 }
 
 QoreValue QoreDivisionOperatorNode::floatDivision(ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();
 
     double r = rh->getAsFloat();
@@ -169,9 +169,9 @@ QoreValue QoreDivisionOperatorNode::floatDivision(ExceptionSink* xsink) const {
 }
 
 QoreValue QoreDivisionOperatorNode::bigIntDivision(ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink) return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink) return QoreValue();
 
     int64 r = rh->getAsBigInt();

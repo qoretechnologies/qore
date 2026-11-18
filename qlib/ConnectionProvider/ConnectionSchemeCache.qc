@@ -460,7 +460,7 @@ public class ConnectionSchemeCache {
     /** @param scheme the scheme to register
         @param init the initialization code that will register the scheme
     */
-    static registerPendingScheme(string scheme, code init) {
+    static registerPendingScheme(string scheme, code init) [dom=PROCESS_CONTROL] {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -476,7 +476,14 @@ public class ConnectionSchemeCache {
             throw "SCHEMA-ERROR", sprintf("Scheme %y is already pending", scheme);
         }
 
-        initmap{scheme} = init;
+        # a closure that the initialization of its library module created runs as deferred module initialization when
+        # a lookup runs it, also for code restricted from the domains of what it registers (qore#6337); the
+        # qualification is tested now and again when it runs
+        # the wrapper is library code, so it can run the closure as deferred module initialization: it is kept only
+        # in the cache's private state and must never be returned to other code
+        initmap{scheme} = is_module_init_closure(init)
+            ? auto sub () { return call_module_init_closure(init); }
+            : init;
         load_all = False;
         ++registry_revision;
     }
@@ -488,7 +495,7 @@ public class ConnectionSchemeCache {
         @return True if the connection was reigstered, False if there is already a registered connection with this
         scheme
     */
-    static bool registerScheme(string scheme, hash<ConnectionSchemeInfo> entry) {
+    static bool registerScheme(string scheme, hash<ConnectionSchemeInfo> entry) [dom=PROCESS_CONTROL] {
         bool needs_lock = !lck.lockOwner();
         if (needs_lock) {
             lck.lock();
@@ -507,7 +514,9 @@ public class ConnectionSchemeCache {
 
         cache{scheme} = entry;
         # sort connection options when caching
-        cache{scheme}.options = cache{scheme}.options{sort(keys cache{scheme}.options)};
+        if (cache{scheme}.options) {
+            cache{scheme}.options = cache{scheme}.options{sort(keys cache{scheme}.options)};
+        }
         ++registry_revision;
 
         # deregister the scheme automatically if module initialization fails
@@ -866,7 +875,10 @@ public class ConnectionSchemeCache {
 
         @return Options after validation
 
-        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option; the exception names the options but
+        never contains their values, which can be credentials; the value of an option that is not marked
+        \c sensitive is given only where it is needed to explain the error (a value that is not one of the
+        option's allowed values)
 
         @since ConnectionProvider 2.0
     */
@@ -878,9 +890,10 @@ public class ConnectionSchemeCache {
             # check for unknown options
             *hash<auto> unknown_opts = options - (keys scheme_info.options);
             if (unknown_opts) {
+                # only the names of the options: their values can be credentials
                 throw "CONNECTION-OPTION-ERROR", sprintf("Connection %y (type %y) has unknown option%s %y (known "
                     "options: %y)", conn_name, scheme_info.display_name, unknown_opts.size() == 1 ? "" : "s",
-                    unknown_opts, keys scheme_info.options);
+                    keys unknown_opts, keys scheme_info.options);
             }
             foreach hash<auto> i in (options.pairIterator()) {
                 hash<ConnectionOptionInfo> info = scheme_info.options{i.key};
@@ -914,16 +927,25 @@ public class ConnectionSchemeCache {
                         continue;
                     }
                     if (type == "date" && vtype == "string") {
-                        options{i.key} = date(i.value);
+                        try {
+                            options{i.key} = date(i.value);
+                        } catch (hash<ExceptionInfo> ex) {
+                            # the value of a sensitive option is never given
+                            throw "CONNECTION-OPTION-ERROR",
+                                sprintf("Connection %y (type %y) option %y was passed with %s, which is not a date",
+                                    conn_name, scheme_info.display_name, i.key,
+                                    info.sensitive ? "a string" : sprintf("string %y", i.value));
+                        }
                         continue;
                     }
                     if (info.ignore_types{vtype}) {
                         delete options{i.key};
                         continue;
                     }
+                    # only the type of the value, which can be a credential
                     throw "CONNECTION-OPTION-ERROR",
-                        sprintf("Connection %y (type %y) option %y was passed with type %s (%y); expecting %y",
-                            conn_name, scheme_info.display_name, i.key, i.value.fullType(), i.value, type);
+                        sprintf("Connection %y (type %y) option %y was passed with type %s; expecting %y",
+                            conn_name, scheme_info.display_name, i.key, i.value.fullType(), type);
                 }
                 if (info.subst_env_vars) {
                     options{i.key} = substitute_env_vars(i.value);
@@ -938,9 +960,11 @@ public class ConnectionSchemeCache {
                         }
                     }
                     if (!ok) {
+                        # the value of a sensitive option is never given
                         throw "CONNECTION-OPTION-ERROR",
-                            sprintf("Connection %y (type %y) option %y was passed with value %y, but allowed "
-                                "values are: %y", conn_name, scheme_info.display_name, i.key, i.value,
+                            sprintf("Connection %y (type %y) option %y was passed with %s, but allowed values are: "
+                                "%y", conn_name, scheme_info.display_name, i.key,
+                                info.sensitive ? "a value that is not allowed" : sprintf("value %y", i.value),
                                 (map $1.value, info.allowed_values));
                     }
                 }
@@ -949,15 +973,18 @@ public class ConnectionSchemeCache {
                     foreach auto val in (i.value) {
                         bool ok;
                         foreach hash<AllowedValueInfo> v in (info.element_allowed_values) {
-                            if (v == val) {
+                            if (v.value == val) {
                                 ok = True;
                                 break;
                             }
                         }
                         if (!ok) {
+                            # the value of a sensitive option is never given
                             throw "CONNECTION-OPTION-ERROR",
-                                sprintf("Connection %y (type %y) option %y was passed with element value %y, but "
-                                    "allowed element values are: %y", conn_name, scheme_info.display_name, i.key, val,
+                                sprintf("Connection %y (type %y) option %y was passed with %s, but allowed element "
+                                    "values are: %y", conn_name, scheme_info.display_name, i.key,
+                                    info.sensitive ? "an element value that is not allowed"
+                                        : sprintf("element value %y", val),
                                     (map $1.value, info.element_allowed_values));
                         }
                     }
@@ -989,13 +1016,14 @@ public class ConnectionSchemeCache {
                 }
             }
             if (!ok) {
+                # only the names of the options provided: their values can be credentials
                 if (missing) {
                     throw "CONNECTION-OPTION-ERROR", sprintf("connection %y (type %y) missing required options %y; "
-                        "options provided: %y", conn_name, scheme_info.display_name, missing, orig_options);
+                        "options provided: %y", conn_name, scheme_info.display_name, missing, keys orig_options);
                 } else {
                     throw "CONNECTION-OPTION-ERROR", sprintf("connection %y (type %y) missing required options %s; "
                         "options provided: %y", conn_name, scheme_info.display_name,
-                        (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), orig_options);
+                        (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), keys orig_options);
                 }
             }
         }

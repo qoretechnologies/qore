@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The native code compiled for a Program, and for a generic specialization made for its types, is removed from the
+# JIT when the Program is deleted, also when another Program called it (issue #5772); see JitCodeRelease.qtest.
+# The objects of the code are also unregistered from the GDB JIT interface, which LLVM does not do by itself.  Needs a
+# debug libqore (dbg_get_jit_code_unit_count(), dbg_get_jit_compiled_function_count(),
+# dbg_get_jit_debugger_entry_count()).
+
+# a generic function of this Program that the user Programs inherit and specialize for their own classes
+public T sub identity<T>(T value) { return value; }
+
+const UserSrc = "
+class Foo {
+    int n(int x) { return x + 1; }
+}
+int sub leaf(int x) { int s = 0; for (int i = 0; i < x; ++i) { s += i % 7; } return s; }
+int sub mid(int x) { return leaf(x) + leaf(x + 1); }
+int sub run() {
+    int rv;
+    for (int i = 0; i < 3; ++i) {
+        rv += mid(20);
+        code c = int sub (int y) { return y * 2; };
+        rv += c(i);
+        rv += (new Foo()).n(i);
+        Foo f = identity<Foo>(new Foo());
+        rv += f.n(1);
+        rv += (map $1 * 2, (1, 2, 3)).size();
+    }
+    return rv;
+}
+int sub f(int x) { return leaf(x) * 2; }
+sub export_to(Program t) { t.importFunction(\"f\", \"f_a\"); }
+";
+
+const CallerSrc = "
+int sub callf(int x) { return f_a(x) + 1; }
+";
+
+ExecMode mode = EM_TIERED;
+foreach string a in (QORE_ARGV) {
+    switch (a) {
+        case "--exec-mode=ast": mode = EM_AST; break;
+        case "--exec-mode=ir": mode = EM_IR; break;
+        case "--exec-mode=jit": mode = EM_JIT; break;
+    }
+}
+# with the AST interpreter and the IR interpreter, nothing is compiled
+bool compiles = mode == EM_JIT || mode == EM_TIERED;
+
+sub check(string label, bool ok, auto info) {
+    printf("%s: %s\n", label, ok ? "ok" : sprintf("FAILED %y", info));
+}
+
+hash<string, int> sub counts() {
+    # the background compiles end first: the code that they install is counted, and the units that the teardown of a
+    # Program released while one held the compilation lock are removed
+    dbg_wait_bg_compile_idle();
+    return {
+        "units": dbg_get_jit_code_unit_count(),
+        "functions": dbg_get_jit_compiled_function_count(),
+        # the entries of the GDB JIT interface: each code unit registers its objects there for debuggers, which are
+        # unregistered when it is removed
+        "debugger entries": dbg_get_jit_debugger_entry_count(),
+    };
+}
+
+Program sub new_user() {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    p.setExecMode(mode);
+    p.parse(UserSrc, "user");
+    return p;
+}
+
+int sub run_user(Program p) {
+    int rv;
+    # enough calls to pass the tier thresholds that the test sets
+    for (int i = 0; i < 3; ++i) {
+        rv = p.callFunction("run");
+    }
+    return rv;
+}
+
+# the first generations compile this Program's own code, which stays
+for (int g = 0; g < 2; ++g) {
+    Program p = new_user();
+    run_user(p);
+    counts();
+}
+hash<string, int> base = counts();
+
+# Programs created and deleted: their code goes with them
+{
+    list<hash<string, int>> diffs;
+    bool grew;
+    bool registered;
+    for (int g = 0; g < 30; ++g) {
+        {
+            Program p = new_user();
+            int rv = run_user(p);
+            if (rv != 387) {
+                check("result " + g, False, rv);
+            }
+            hash<string, int> live = counts();
+            if (live.units > base.units) {
+                grew = True;
+            }
+            if (live."debugger entries" > base."debugger entries") {
+                registered = True;
+            }
+        }
+        hash<string, int> now = counts();
+        if (now != base) {
+            diffs += now;
+        }
+    }
+    check("deleted Programs leave no code", !diffs, {"base": base, "after": diffs});
+    if (compiles) {
+        check("the code of a live Program is compiled", grew, base);
+        # ELF objects are registered for debuggers (ELFDebugObjectPlugin); on macOS, LLVM registers only objects with
+        # debug sections
+        check("the code of a live Program is registered for debuggers", registered || PlatformOS != "Linux", base);
+    }
+}
+
+# another Program calls a function of the Program that defines it; the code stays while either needs it
+{
+    base = counts();
+    Program a = new_user();
+    Program b(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    b.setExecMode(mode);
+    a.callFunction("export_to", b);
+    b.parse(CallerSrc, "caller");
+    int expected;
+    for (int i = 0; i < 3; ++i) {
+        expected = b.callFunction("callf", 5);
+    }
+    run_user(a);
+    delete b;
+    # the code of the defining Program still runs
+    check("the caller deleted first: the callee runs", a.callFunction("f", 5) == expected - 1,
+        a.callFunction("f", 5));
+    delete a;
+    check("the caller deleted first: no code left", counts() == base, {"base": base, "now": counts()});
+}
+{
+    base = counts();
+    Program a = new_user();
+    Program b(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    b.setExecMode(mode);
+    a.callFunction("export_to", b);
+    b.parse(CallerSrc, "caller");
+    for (int i = 0; i < 3; ++i) {
+        b.callFunction("callf", 5);
+    }
+    delete a;
+    # a call into the deleted Program is refused before its code would run
+    string err;
+    try {
+        b.callFunction("callf", 5);
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    check("the callee deleted first: the call is refused", err == "PROGRAM-ERROR", err);
+    delete b;
+    check("the callee deleted first: no code left", counts() == base, {"base": base, "now": counts()});
+}

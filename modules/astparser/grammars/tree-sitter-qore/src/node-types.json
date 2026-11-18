@@ -409,6 +409,10 @@
             "named": true
           },
           {
+            "type": "generic_type",
+            "named": true
+          },
+          {
             "type": "identifier",
             "named": true
           },
@@ -445,6 +449,47 @@
       "types": [
         {
           "type": "argument_list",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "callable_attribute",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "callable_attributes",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "callable_attribute",
           "named": true
         }
       ]
@@ -1022,6 +1067,10 @@
         },
         {
           "type": "block",
+          "named": true
+        },
+        {
+          "type": "callable_attributes",
           "named": true
         },
         {
@@ -2635,6 +2684,10 @@
           "named": true
         },
         {
+          "type": "callable_attributes",
+          "named": true
+        },
+        {
           "type": "method_qualifier",
           "named": true
         },
@@ -3861,6 +3914,10 @@
       "types": [
         {
           "type": "block",
+          "named": true
+        },
+        {
+          "type": "callable_attributes",
           "named": true
         },
         {
@@ -7585,6 +7642,10 @@
     "named": false
   },
   {
+    "type": "%no-strict-parse-errors",
+    "named": false
+  },
+  {
     "type": "%no-string-index-char",
     "named": false
   },
@@ -7690,6 +7751,10 @@
   },
   {
     "type": "%strict-bool-eval",
+    "named": false
+  },
+  {
+    "type": "%strict-parse-errors",
     "named": false
   },
   {

@@ -45,12 +45,22 @@ enum class plus_equals_lvalue_e {
     KEEP,
     // the lvalue is assigned an integer value, which its type must accept
     INT,
+    // the lvalue holds a char, which is added to as a one-character string: the lvalue is assigned a string value,
+    // which its type must accept
+    STRING,
     // the type is not known well enough; the operation is decided at runtime
     GENERIC,
 };
 
 // returns how the += operator treats the given lvalue type and its dereferenced type
 plus_equals_lvalue_e get_plus_equals_lvalue_kind(const QoreTypeInfo* ti, const QoreTypeInfo* check_ti) {
+    // a value of a type parameter has its bound, or a type known only at run time (qore#5774)
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(ti)) {
+        ti = src;
+    }
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(check_ti)) {
+        check_ti = src;
+    }
     if (QoreTypeInfo::isType(check_ti, NT_LIST)
         || QoreTypeInfo::isType(check_ti, NT_HASH)
         || QoreTypeInfo::isType(check_ti, NT_OBJECT)
@@ -60,6 +70,9 @@ plus_equals_lvalue_e get_plus_equals_lvalue_kind(const QoreTypeInfo* ti, const Q
         || QoreTypeInfo::isType(check_ti, NT_DATE)
         || QoreTypeInfo::isType(check_ti, NT_BINARY)) {
         return plus_equals_lvalue_e::KEEP;
+    }
+    if (QoreTypeInfo::isType(check_ti, NT_CHAR)) {
+        return plus_equals_lvalue_e::STRING;
     }
     // if the lhs type is not one of the above types, there are 2 possibilities: the lvalue has no value, in which
     // case it takes the value of the right side, or if it's anything else it's converted to an integer, so we just
@@ -147,6 +160,9 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
         if (check_kind == plus_equals_lvalue_e::INT && check_lvalue_int(loc, ti, "+=") && !err) {
             err = -1;
         }
+        if (check_kind == plus_equals_lvalue_e::STRING && check_lvalue_string(loc, ti, "+=") && !err) {
+            err = -1;
+        }
         // the warning is only given for the plain type: on an or-nothing lvalue, an operand such as NOTHING is
         // valid and expected
         if (kind == plus_equals_lvalue_e::KEEP && QoreTypeInfo::isType(ti, NT_STRING)
@@ -157,6 +173,11 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 "INVALID-OPERATION", desc.c_str());
         }
 
+        // an lvalue that converts the integer (ex: softbool) is assigned the converted sum and gives the value it
+        // holds afterwards: the generic operator, with the lvalue's type as the result type (qore#6304)
+        if (kind == plus_equals_lvalue_e::INT && qore_lvalue_converts_result(ti, NT_INT)) {
+            kind = plus_equals_lvalue_e::KEEP;
+        }
         if (kind == plus_equals_lvalue_e::INT) {
             parse_context.typeInfo = ti = bigIntTypeInfo;
             // the analysis left by the right operand describes that operand, not the result
@@ -177,10 +198,28 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     parse_context.typeInfo = ti;
     // the analysis left by the right operand describes that operand, not the result
     qore_set_result_parse_analysis(parse_context, ti);
+    if (getSemanticPolicy().needsFilter()) {
+        const QoreTypeInfo* result_type = ti;
+        auto* replacement = static_cast<LexicalQorePlusEqualsOperatorNode*>(
+            makeSpecialization<LexicalQorePlusEqualsOperatorNode>());
+        replacement->ti = result_type;
+        replacement->setParseAnalysis(parse_context.analysis);
+        val = replacement;
+    }
     return err;
 }
 
 QoreValue QorePlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(needs_deref, xsink);
+}
+
+QoreValue QorePlusEqualsOperatorNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue QorePlusEqualsOperatorNode::evalImplInternal(bool& needs_deref,
+        ExceptionSink* xsink) const {
     // the operand is a statement of its own where the other execution modes evaluate it so
     QoreMutationOperandHolder new_right(left, right, false, xsink);
     if (*xsink) {
@@ -201,7 +240,12 @@ QoreValue QorePlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
     }
 
     // the implementation is shared with the other execution modes
-    ValueHolder rv(doPlusEqualsOnLValue(v, right_holder, xsink), xsink);
+    ValueHolder rv(xsink);
+    if constexpr (Lexical) {
+        rv = doPlusEqualsOnLValue(v, right_holder, xsink, getSemanticPolicy());
+    } else {
+        rv = doPlusEqualsOnLValue(v, right_holder, xsink);
+    }
     if (*xsink || !ref_rv) {
         return QoreValue();
     }

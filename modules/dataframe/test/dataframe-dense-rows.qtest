@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-dense-rows.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameDenseRowsTest
+
+#! The rows selected from a column with dense buffer storage keep every value of the column (qore#6092)
+class DataFrameDenseRowsTest inherits QUnit::Test {
+    constructor() : Test("DataFrameDenseRowsTest", "1.0", \ARGV) {
+        addTestCase("decimal scale", \decimalScaleTest());
+        addTestCase("float32 non-finite values", \float32NonFiniteTest());
+        addTestCase("sliced nullable column", \slicedNullableTest());
+        set_return_value(main());
+    }
+
+    #! the selected rows of a float32 column keep its NaN and infinite values, which a DataFrame cannot write
+    #! (data/gen-filter-fixtures.cpp)
+    float32NonFiniteTest() {
+        DataFrame::DataFrame df = DataFrame::DataFrame::readParquet(get_script_dir() + DirSep + "data" + DirSep
+            + "dense_float32.parquet");
+        assertEq("float32", df.toColumnarResult().schemaV2()[1].buffer_type, "the column is a float32 buffer");
+        checkFloats(df, (@nan@, 1.5, @inf@, NOTHING, -@inf@, -2.25), "all rows");
+        checkFloats(df.takeRows((4, 0, 3, 2)), (-@inf@, @nan@, NOTHING, @inf@), "takeRows()");
+        checkFloats(df.filter("v", "!=", 1.5), (@nan@, @inf@, -@inf@, -2.25), "filter()");
+        checkFloats(df.filter("id", "in", (0, 3)), (@nan@, NOTHING), "filter() with a null value");
+        checkFloats(df.sortBy(("id",), (False,)), (-2.25, -@inf@, NOTHING, @inf@, 1.5, @nan@), "sortBy()");
+    }
+
+    #! checks the values of the column \c v; a NaN value, which is not equal to itself, is checked as such
+    private checkFloats(DataFrame::DataFrame df, list<auto> expected, string label) {
+        list<auto> actual = df.getColumn("v");
+        assertEq(expected.size(), actual.size(), label + ": rows");
+        foreach auto value in (expected) {
+            auto cell = actual[$#];
+            if (value.typeCode() == NT_FLOAT && value != value) {
+                assertTrue(cell.typeCode() == NT_FLOAT && cell != cell, sprintf("%s: row %d is NaN", label, $#));
+            } else {
+                assertEq(value, cell, sprintf("%s: row %d", label, $#));
+            }
+        }
+    }
+
+    #! the selected rows of a decimal column keep its precision and scale, whatever value comes first
+    decimalScaleTest() {
+        list<auto> cells = (1.25n, -1n, 2.5n, NOTHING);
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(cells.size()),
+            "v": cells,
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}},
+        }));
+        checkDecimal(df.takeRows((1, 0)), (-1n, 1.25n), "takeRows() with an int first");
+        checkDecimal(df.takeRows((3, 1, 0, 2)), (NOTHING, -1n, 1.25n, 2.5n), "takeRows() with a null first");
+        checkDecimal(df.filter("id", "in", (1, 0, 3)), (1.25n, -1n, NOTHING), "filter()");
+        checkDecimal(df.filter("id", ">", 0), (-1n, 2.5n, NOTHING), "filter() with an int first");
+        checkDecimal(df.sortBy(("id",), (False,)), (NOTHING, 2.5n, -1n, 1.25n), "sortBy()");
+
+        # a decimal column read from a Parquet file
+        TmpDir tmp("dataframe-dense-rows");
+        string path = tmp.path + DirSep + "decimal.parquet";
+        df.writeParquet(path);
+        DataFrame::DataFrame read = DataFrame::DataFrame::readParquet(path);
+        checkDecimal(read.takeRows((1, 0, 3)), (-1n, 1.25n, NOTHING), "takeRows() of rows read from Parquet");
+    }
+
+    #! the rows selected from a view of a nullable column at an offset that is not a multiple of 8 keep their values
+    #! and null elements, whose validity bits are read at the offset of the view
+    slicedNullableTest() {
+        list<auto> cells = map $1 % 3 ? ($1 + 0.25n) : NOTHING, xrange(40);
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash({
+            "id": range(cells.size()),
+            "v": cells,
+        }, {
+            "v": {"schema": {"kind": "decimal128", "precision": 10, "scale": 2, "nullable": True}},
+        }));
+        DataFrame::DataFrame view = df.slice(5, 35);
+        list<int> rows = (29, 0, 1, 2, 3, 17, 16, 15, 4, 28);
+        checkDecimal(view.takeRows(rows), (map cells[$1 + 5], rows), "takeRows() of a slice");
+    }
+
+    private checkDecimal(DataFrame::DataFrame df, list<auto> expected, string label) {
+        assertEq(expected, df.getColumn("v"), label + ": values");
+        hash<auto> schema = df.toColumnarResult().schemaV2()[1];
+        assertEq(("decimal128", 10, 2), (schema.kind, schema.precision, schema.scale), label + ": decimal type");
+    }
+}

@@ -41,6 +41,8 @@ static void astparser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
 static void astparser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void astparser_module_delete();
 
+extern QoreNamespace AstParserNS;
+
 extern "C" DLLEXPORT void astparser_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "astparser";
     mod_info.version = PACKAGE_VERSION;
@@ -52,6 +54,8 @@ extern "C" DLLEXPORT void astparser_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.init = astparser_module_init;
     mod_info.ns_init = astparser_module_ns_init;
     mod_info.del = astparser_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &AstParserNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

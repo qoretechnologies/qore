@@ -17,6 +17,10 @@
 %requires ChromaRestClient
 %requires WeaviateRestClient
 
+%try-module pgsql
+%define NoPgsql
+%endtry
+
 # Conformance of AbstractVectorStore::countByFilter(), deleteByFilter() and summarizeBy() (issue #5576).
 #
 # One scenario runs against every store that has a backend available:
@@ -301,6 +305,9 @@ public class VectorStoreConformanceTest inherits QUnit::Test {
     }
 
     pgvectorTest() {
+%ifdef NoPgsql
+        testSkip("no pgsql module");
+%endif
         Datasource ds((ENV.PGVECTOR_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL));
         on_exit ds.close();
         try {

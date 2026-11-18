@@ -237,6 +237,21 @@ class ThirdPartySourcesTest inherits QUnit::Test {
         assertEq(0, r.rc, r.output);
         assertRegex("1 archives in the manifest; 1 download declarations in 2 files", r.output);
 
+        # the manifest is recognized when the tree is named by another path than the manifest (a symbolic link; on
+        # macOS, CMake names /private/tmp/... as /tmp/..., so a TMPDIR below /tmp named the same file twice)
+        {
+            string dir = makeTree({"manifest.cmake": manifest, "CMakeLists.txt": good});
+            string link = tmp.path + "/link-" + get_random_string();
+            symlink(dir, link);
+            r = run(("-DQORE_SOURCE_DIR=" + link, "-DQORE_THIRD_PARTY_SOURCES_FILE=" + dir + "/manifest.cmake",
+                "-P", cmake_dir + "/QoreCheckThirdPartySources.cmake"));
+            assertEq(0, r.rc, r.output);
+            assertRegex("1 archives in the manifest; 1 download declarations in 2 files", r.output);
+            r = run(("-DQORE_SOURCE_DIR=" + dir, "-DQORE_THIRD_PARTY_SOURCES_FILE=" + link + "/manifest.cmake",
+                "-P", cmake_dir + "/QoreCheckThirdPartySources.cmake"));
+            assertEq(0, r.rc, r.output);
+        }
+
         # a build tree is not checked, nor another checkout in the tree (a git worktree has a .git file)
         r = checkTree(makeTree({"manifest.cmake": manifest, "CMakeLists.txt": good,
             "build/CMakeCache.txt": "",

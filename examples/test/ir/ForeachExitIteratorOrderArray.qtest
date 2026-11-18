@@ -7,6 +7,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 %requires ../ExecModeHarness.qm
 
@@ -16,10 +17,10 @@
 
 #! Regression test: as ForeachExitIteratorOrder.qtest, with the array forms of native code's exit release
 /** QORE_JIT_CLEANUP_PHI_BUDGET=1 makes native code release the locals and the iterators of a function at its exits
-    with arrays (qore_rt_cleanup_run_allocas(), qore_rt_iterator_cleanup_allocas()); an exit emitted after the iterator
-    array was prepared released a running iterator with the statement temporaries, before the locals of the loop
-    body.  The iterators placed among the locals are left out of the iterator array of an exception exit and released
-    with the locals (see ForeachExitIteratorOrder.qtest)
+    with tables of the slots of the cleanup frame (qore_rt_cleanup_run_frame(), qore_rt_iterator_cleanup_frame()); an
+    exit emitted after the iterator table was prepared released a running iterator with the statement temporaries,
+    before the locals of the loop body.  The iterators placed among the locals are left out of the iterator table of an
+    exception exit and released with the locals (see ForeachExitIteratorOrder.qtest)
 */
 class ForeachExitIteratorOrderArrayTest inherits ExecModeOutputTest {
     private {

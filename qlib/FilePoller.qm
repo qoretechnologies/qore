@@ -26,6 +26,8 @@
 %modern
 
 module FilePoller {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "2.1";
     desc = "Filesystem polling solution";
     author = "Petr Vanek <petr@yarpen.cz>";
@@ -97,18 +99,33 @@ module FilePoller {
     - @ref FilePoller::FilePollerDataProviderBase "FilePollerDataProviderBase"
     - @ref FilePoller::FilePollerDataProviderFactory "FilePollerDataProviderFactory"
 
+    @section filepollererrors FilePoller Errors and Retries
+
+    An error raised while a polled file is handled, by
+    @ref FilePoller::FilePoller::singleFileEvent() "FilePoller::singleFileEvent()" or by an observer of a
+    @ref FilePoller::FilePollerDataProvider "FilePollerDataProvider" that refuses or fails to handle the file event,
+    is logged, and polling continues: the file is kept, so it is polled and handled again on the next poll, after the
+    poll interval, as are the other files of the poll that were not handled yet.  The files of a poll are handled in
+    order, so a file that is refused every time is retried on every poll and blocks the files after it in that order.
+    An error getting the list of files stops polling.
+
     @section filepollersandbox FilePoller Module in Sandboxed Programs
 
     The @ref FilePoller::FilePoller "FilePoller" class includes support for running in sandboxed Program objects with
     the following parse options set:
     - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
       @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
-    - \c PO_NO_PROCESS_CONTROL: in this case the \c "sleep" option is required in
-      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
+    - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
+      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
 
     @section file_poller_relnotes FilePoller Release Notes
 
     @subsection file_poller_2_1 FilePoller v2.1
+    - an error raised while a polled file is handled (ex: an observer that refuses the file event) is logged, and the
+      file is polled again on the next poll; previously polling stopped (see @ref filepollererrors;
+      <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
     - a FilePoller object that is destroyed in its own polling thread, for example because an event or log callback
       held its last reference, stops polling; its destructor raised \c THREAD-ERROR
     - @ref FilePoller::FilePoller::stop() "stop()" and @ref FilePoller::FilePoller::stopNoWait() "stopNoWait()" wake
@@ -268,6 +285,9 @@ public class FilePoller {
         #! internal fatal error flag
         bool fatal = False;
 
+        #! internal flag: True while fileEvent() handles the files of a poll (see @ref filepollererrors)
+        bool in_event;
+
         #! internal poll counter
         int pollcnt = 0;
 
@@ -331,7 +351,7 @@ public class FilePoller {
           \c poll_inteval is 10 seconds
         - \c "reopt": regular expression options; see @ref regex_constants for possible values (ex
           @ref Qore::RE_Caseless for case-insensitive matches)
-        - \c "sleep": (required when imported into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
+        - \c "sleep": (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
           set then @ref Qore::sleep() will be used)
         - \c "sort_order": an integer constant giving the sort order; valid options are:
@@ -596,13 +616,21 @@ public class FilePoller {
     }
 
     #! runs a single poll (useful for checking for errors inline before starting a background thread)
+    /** An error raised by an event handler is raised to the caller; only the polling thread logs it and continues
+        polling (see @ref filepollererrors)
+    */
     bool runOnce() {
         ++pollcnt;
+        in_event = False;
 
         list<hash<FilePollerFileEventInfo>> files = getFiles(sort_type, sort_order);
         if (files) {
             logDebug("got files in %y: %y", path, files);
+            # an error raised by an event handler (ex: an observer that refuses the event) leaves the file in place,
+            # and polling continues (issue #6400)
+            in_event = True;
             fileEvent(files);
+            in_event = False;
             return True;
         }
         return False;
@@ -645,7 +673,19 @@ public class FilePoller {
 
         while (runflag) {
             try {
-                runOnce();
+                in_event = False;
+                try {
+                    runOnce();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (!in_event) {
+                        rethrow;
+                    }
+                    # the event handler refused or failed to handle a file, which is left in place, as are the other
+                    # files of the poll that were not handled yet
+                    in_event = False;
+                    logInfo("an event handler for a file in %y failed: %s: %s; the file is kept and polled again in "
+                        "%ds", path, ex.err, ex.desc, poll_interval);
+                }
                 fileSleep(poll_interval);
             } catch (hash<ExceptionInfo> ex) {
                 logInfo("cannot get file list from %y: %s: %s", path, ex.desc, ex.err);
@@ -669,7 +709,8 @@ public class FilePoller {
     }
 
     #! called for each matching file individually when matching files are polled
-    /** If any error occurs here, the error is logged and the polling operation is retried
+    /** If any error occurs here, the error is logged, and the file and the other files of the poll that were not
+        handled yet are kept and polled again on the next poll (see @ref filepollererrors)
 
         @param event a hash of file data and information with the following keys:
         - \c name: the name of the file, link, or directory

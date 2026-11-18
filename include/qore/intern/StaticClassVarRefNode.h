@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -39,7 +39,8 @@ class QoreVarInfo;
 class LValueHelper;
 class LValueRemoveHelper;
 
-class StaticClassVarRefNode : public ParseNode {
+// final: qore_exact_node_cast() tests it by its exact type on the lvalue paths
+class StaticClassVarRefNode final : public ParseNode {
 public:
     const QoreClass& qc;
     QoreVarInfo& vi;
@@ -62,6 +63,12 @@ public:
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
+    //! evaluates the variable as an argument of a call: the read is not held by the statement, the argument list
+    //! holds its reference and releases it when the call returns (see VarRefNode::evalCallArg())
+    /** @return the value of the variable, referenced for the caller
+    */
+    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+
 protected:
     DLLLOCAL virtual QoreValue evalImpl(bool &needs_deref, ExceptionSink* xsink) const;
 
@@ -70,7 +77,8 @@ protected:
     DLLLOCAL const QoreTypeInfo* getTypeInfo() const;
 };
 
-class DeferredStaticClassMemberRefNode : public ParseNode {
+// final: qore_exact_node_cast() tests it by its exact type on the lvalue paths
+class DeferredStaticClassMemberRefNode final : public ParseNode {
 public:
     std::string class_path;
     std::string member_name;
@@ -88,9 +96,15 @@ public:
 
     DLLLOCAL void remove(LValueRemoveHelper& lvrh);
 
+    //! evaluates the variable as an argument of a call, as StaticClassVarRefNode::evalCallArg()
+    DLLLOCAL QoreValue evalCallArg(ExceptionSink* xsink) const;
+
 protected:
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    //! reads the variable without handing the value to the statement
+    DLLLOCAL QoreValue evalValue(bool& needs_deref, ExceptionSink* xsink) const;
 };
 
 //! Returns the variable info \a expr refers to, or nullptr if it refers to no resolved variable
@@ -101,7 +115,7 @@ protected:
     path alone.
 */
 static inline QoreVarInfo* qore_static_var_ref_info(const QoreValue& expr) {
-    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(expr.getInternalNode());
+    const auto* static_var = qore_exact_node_cast<StaticClassVarRefNode>(expr.getInternalNode());
     return static_var ? &static_var->vi : nullptr;
 }
 

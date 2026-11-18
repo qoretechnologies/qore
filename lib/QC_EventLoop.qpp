@@ -228,7 +228,7 @@ nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) [flags=NAMED
         xsink->raiseException("SOCKET-NOT-OPEN", "Cannot add closed socket to event loop");
         return QoreValue();
     }
-    int fd = socket->getSocket();
+    int fd = socket->getPollableDescriptor();
     // Convert SOCK_POLLIN/SOCK_POLLOUT to internal event flags
     int ev = 0;
     if (events & SOCK_POLLIN) {
@@ -283,7 +283,7 @@ nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) [flags=NA
         xsink->raiseException("SOCKET-NOT-OPEN", "Cannot modify closed socket in event loop");
         return QoreValue();
     }
-    int fd = socket->getSocket();
+    int fd = socket->getPollableDescriptor();
     int ev = 0;
     if (events & SOCK_POLLIN) {
         ev |= QORE_EV_READ;

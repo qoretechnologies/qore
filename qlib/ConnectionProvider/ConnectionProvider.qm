@@ -29,7 +29,7 @@
 
 %requires(reexport) Util
 %requires Logger
-%requires(reexport) DataProvider
+%requires(reexport) DataProvider >= 3.12
 %requires AsyncSocketIo
 %requires FtpClientIo
 %requires HttpClientIo
@@ -38,6 +38,9 @@
 %requires ProviderIndexUtil
 
 module ConnectionProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks) and waits
+    # before restarting I/O; its connection monitor keeps its state in thread data
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "3.1";
     desc    = "API for pluggable connection providers to Qore";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
@@ -181,6 +184,29 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - @ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions() "ConnectionSchemeCache::validateConnectionOptions()"
+      checks the elements of a list option against the values of its allowed element values; it refused every
+      non-empty list, its allowed elements too (issue #6490)
+    - the errors of the validation of connection options
+      (@ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions()
+      "ConnectionSchemeCache::validateConnectionOptions()") name the options; they no longer contain the options
+      provided, unknown options or a value of a wrong type, nor any value of an option marked \c sensitive, which can
+      be a credential; for an option that is not sensitive, a value that is not allowed or a string that is not a
+      date is still given, and a string that is not a date raises \c CONNECTION-OPTION-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
+      output of @ref ConnectionProvider::get_connections() "get_connections()" is left out when the module's code has no
+      terminal I/O (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+    - @ref ConnectionProvider::AbstractConnection::parseUrl() "AbstractConnection::parseUrl()" is declared to return
+      \c hash<auto>, as a connection with another URL scheme returns its own hash (see @ref override_return_types)
+    - a sandboxed caller is refused the I/O of a connection whose class belongs to a module that registers a data
+      provider app with external I/O that is not sandbox-aware (\c APP-SANDBOX-ACCESS-DENIED), also when trusted code
+      created the connection: @ref ConnectionProvider::AbstractConnection::get() "AbstractConnection::get()",
+      \c getAsync(), \c ping(), \c getFileLocationHandler() and \c getFileLocationRedirect() check it first, and a
+      refused ping does not change the connection's status; added
+      @ref ConnectionProvider::AbstractConnection::checkSandboxAccess() "AbstractConnection::checkSandboxAccess()" for
+      subclasses and for code that serves a sandboxed caller on a thread that no sandbox governs; the module requires
+      DataProvider 3.12
     - added @ref ConnectionProvider::PollingConnectionMonitor::startPollConnect() "PollingConnectionMonitor::startPollConnect()",
       which a subclass can override to decide how the monitor opens the connection of a ping
     - added source-owned connection presentation and catalogs for shared scheme options and setup messages;
@@ -802,7 +828,9 @@ public AbstractConnection sub get_connection(string conn) {
 *hash<string, AbstractConnection> h = get_connections();
     @endcode
 
-    @param verbose display connection provider module errors on stdout (otherwise errors are ignored)
+    @param verbose display connection provider module errors on stdout (otherwise errors are ignored); nothing is
+        displayed when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
+        when code without it loaded the module first, or a sandbox without it governs the call
 
     @return a hash keyed by connection identifier; values are AbstractConnection objects; @ref nothing is returned if no connections are known
 
@@ -821,8 +849,11 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
             try {
                 map h.($1.key) = $1.value, priv_try_get_connections(mod).pairIterator(), !exists h.($1.key);
             } catch (hash<ExceptionInfo> ex) {
-                if (verbose)
-                    printf("%s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
+                # the stdout constant needs terminal I/O only when it is written, so that the module can be loaded
+                # by code without it; such code gets no output (qore#6438)
+                if (verbose && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stdout.printf("%s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
+                }
             }
         }
     }
@@ -836,7 +867,8 @@ public *hash<string, AbstractConnection> sub get_connections(*bool verbose) {
 *hash<string, hash<ConnectionInfo>> h = get_connection_hash();
     @endcode
 
-    @param verbose display connection provider module errors on stdout (otherwise errors are silently ignored)
+    @param verbose display connection provider module errors on stdout (otherwise errors are silently ignored);
+        nothing is displayed when the module's code has no terminal I/O (see get_connections())
 
     @return a hash keyed by connection identifier; values are @ref ConnectionInfo hashes as returned by @ref AbstractConnection::getInfo() (with passwords included); @ref nothing is returned if no connections are known
 

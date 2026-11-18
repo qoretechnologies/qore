@@ -53,7 +53,8 @@ QoreReflectionNamespace::QoreReflectionNamespace(ExceptionSink* xsink, const Qor
 QoreReflectionNamespace::QoreReflectionNamespace(QoreProgram* pgm, const QoreNamespace* ns) : AbstractReflectionObject(pgm), ns(ns) {
 }
 
-static QoreValue find_all_namespaces(const QoreString& pattern, int re_opts, QoreProgram* pgm, ExceptionSink* xsink) {
+static QoreValue find_all_namespaces(const ReflectionLookupCaller& caller, const QoreString& pattern, int re_opts,
+        QoreProgram* pgm, ExceptionSink* xsink) {
     ns_vec_t ns_vec = pgm->findAllNamespacesRegex(pattern, re_opts, xsink);
     if (*xsink) {
         return QoreValue();
@@ -61,6 +62,10 @@ static QoreValue find_all_namespaces(const QoreString& pattern, int re_opts, Qor
 
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_NAMESPACE->getTypeInfo()), xsink);
     for (auto& i : ns_vec) {
+        // a namespace that a module does not export is not found by a caller its export boundary applies to
+        if (!caller.canSeeNamespace(pgm, i)) {
+            continue;
+        }
         l->push(new QoreObject(QC_NAMESPACE, pgm, new QoreReflectionNamespace(pgm, i)), xsink);
     }
 
@@ -96,8 +101,15 @@ Namespace::constructor(string path) {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionNamespace> ns(new QoreReflectionNamespace(xsink, **npath, lookup_pgm), xsink);
     if (*xsink) {
+        return;
+    }
+    // a namespace that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeNamespace(lookup_pgm, ns->ns)) {
+        xsink->raiseException("UNKNOWN-NAMESPACE", "cannot resolve namespace '%s'", npath->c_str());
         return;
     }
 
@@ -418,7 +430,8 @@ Constant Namespace::getConstant(string name) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const QoreExternalConstant* ce = n->ns->findLocalConstant(tname->c_str());
-    if (!ce) {
+    // a constant that a module does not export is not found by a caller its export boundary applies to
+    if (!ce || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(ce))) {
         xsink->raiseException("UNKNOWN-CONSTANT", "constant '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
@@ -452,8 +465,13 @@ list<Constant> Namespace::getConstants() [flags=RET_VALUE_ONLY] {
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_CONSTANT->getTypeInfo()), xsink);
 
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceConstantIterator i(*n->ns);
     while (i.next()) {
+        if (!filter.visible(reflection_exported(&i.get()))) {
+            continue;
+        }
         l->push(new QoreObject(QC_CONSTANT, n->pgm, new QoreReflectionNamespaceConstant(n->pgm, &i.get(), n->ns)), xsink);
     }
 
@@ -490,7 +508,8 @@ Namespace Namespace::getNamespace(string name) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const QoreNamespace* rv = n->ns->findLocalNamespace(tname->c_str());
-    if (!rv) {
+    // a namespace that a module does not export is not found by a caller its export boundary applies to
+    if (!rv || !ReflectionExportFilter(caller, n->pgm, n->ns).visibleNamespace(caller, n->pgm, rv)) {
         xsink->raiseException("UNKNOWN-NAMESPACE", "namespace '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
@@ -523,8 +542,13 @@ list<Namespace> Namespace::getNamespaces() [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_NAMESPACE->getTypeInfo()), xsink);
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceNamespaceIterator i(*n->ns);
     while (i.next()) {
+        if (!filter.visibleNamespace(caller, n->pgm, &i.get())) {
+            continue;
+        }
         l->push(new QoreObject(QC_NAMESPACE, n->pgm, new QoreReflectionNamespace(n->pgm, &i.get())), xsink);
     }
 
@@ -562,7 +586,8 @@ Class Namespace::getClass(string name) [flags=RET_VALUE_ONLY] {
     // the namespace ptr must be valid
 
     const QoreClass* rv = n->ns->findLocalClass(tname->c_str());
-    if (!rv) {
+    // a class that a module does not export is not found by a caller its export boundary applies to
+    if (!rv || !ReflectionExportFilter(caller, n->pgm, n->ns).visibleClass(caller, n->pgm, rv)) {
         xsink->raiseException("UNKNOWN-CLASS", "class '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
@@ -596,8 +621,13 @@ list<Class> Namespace::getClasses() [flags=RET_VALUE_ONLY] {
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_CLASS->getTypeInfo()), xsink);
 
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceClassIterator i(*n->ns);
     while (i.next()) {
+        if (!filter.visibleClass(caller, n->pgm, &i.get())) {
+            continue;
+        }
         l->push(new QoreObject(QC_CLASS, n->pgm, new QoreReflectionClass(n->pgm, &i.get())), xsink);
     }
 
@@ -642,12 +672,13 @@ Function Namespace::getFunction(string name) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const QoreExternalFunction* rv = n->ns->findLocalFunction(tname->c_str());
-    if (!rv) {
+    // a function that a module does not export is not found by a caller its export boundary applies to
+    if (!rv || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(rv))) {
         xsink->raiseException("UNKNOWN-FUNCTION", "function '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
 
-    return new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, rv));
+    return new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, rv, n->ns));
 }
 
 //! Returns a list of all declared functions in the namespace
@@ -676,9 +707,14 @@ list<Function> Namespace::getFunctions() [flags=RET_VALUE_ONLY] {
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_FUNCTION->getTypeInfo()), xsink);
 
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceFunctionIterator i(*n->ns);
     while (i.next()) {
-        l->push(new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, &i.get())), xsink);
+        if (!filter.visible(reflection_exported(&i.get()))) {
+            continue;
+        }
+        l->push(new QoreObject(QC_FUNCTION, n->pgm, new QoreReflectionFunction(n->pgm, &i.get(), n->ns)), xsink);
     }
 
     return l.release();
@@ -729,12 +765,13 @@ FunctionVariant Namespace::getVariant(string name, ...) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const QoreExternalFunction* func = n->ns->findLocalFunction(tname->c_str());
-    if (!func) {
+    // a function that a module does not export is not found by a caller its export boundary applies to
+    if (!func || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(func))) {
         xsink->raiseException("UNKNOWN-FUNCTION", "function '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
 
-    return find_function_variant(n->pgm, func, args, 1, MT_None, xsink);
+    return find_function_variant(n->pgm, func, args, 1, MT_None, xsink, &caller, n->ns);
 }
 
 //! Returns the given direct child function variant declared in this namespace or throws an exception if the function variant is not defined
@@ -782,12 +819,13 @@ FunctionVariant Namespace::getVariantArgs(string name, softlist<Type> argv) [fla
 
     // the namespace ptr must be valid
     const QoreExternalFunction* func = n->ns->findLocalFunction(tname->c_str());
-    if (!func) {
+    // a function that a module does not export is not found by a caller its export boundary applies to
+    if (!func || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(func))) {
         xsink->raiseException("UNKNOWN-FUNCTION", "function '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
 
-    return find_function_variant(n->pgm, func, argv, 0, MT_None, xsink);
+    return find_function_variant(n->pgm, func, argv, 0, MT_None, xsink, &caller, n->ns);
 }
 
 //! Returns a list of all declared function variants in the namespace
@@ -816,10 +854,15 @@ list<FunctionVariant> Namespace::getVariants() [flags=RET_VALUE_ONLY] {
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_FUNCTIONVARIANT->getTypeInfo()), xsink);
 
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceFunctionIterator i(*n->ns);
     while (i.next()) {
         const QoreExternalFunction& f = i.get();
-        append_variant_objects(**l, n->pgm, &f, MT_None, xsink);
+        if (!filter.visible(reflection_exported(&f))) {
+            continue;
+        }
+        append_variant_objects(**l, n->pgm, &f, MT_None, xsink, &caller, n->ns);
         if (*xsink) {
             return QoreValue();
         }
@@ -858,7 +901,8 @@ GlobalVar Namespace::getGlobalVar(string name) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const QoreExternalGlobalVar* rv = n->ns->findLocalGlobalVar(tname->c_str());
-    if (!rv) {
+    // a variable that a module does not export is not found by a caller its export boundary applies to
+    if (!rv || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(rv))) {
         xsink->raiseException("UNKNOWN-GLOBAL-VAR", "global variable '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
@@ -891,8 +935,13 @@ list<GlobalVar> Namespace::getGlobalVars() [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_GLOBALVAR->getTypeInfo()), xsink);
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceGlobalVarIterator i(*n->ns);
     while (i.next()) {
+        if (!filter.visible(reflection_exported(&i.get()))) {
+            continue;
+        }
         l->push(new QoreObject(QC_GLOBALVAR, n->pgm, new QoreReflectionGlobalVar(n->pgm, &i.get(), n->ns)), xsink);
     }
 
@@ -929,7 +978,8 @@ TypedHash Namespace::getTypedHash(string name) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const TypedHashDecl* rv = n->ns->findLocalTypedHash(tname->c_str());
-    if (!rv) {
+    // a typed hash that a module does not export is not found by a caller its export boundary applies to
+    if (!rv || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(rv))) {
         xsink->raiseException("UNKNOWN-TYPED-HASH", "typed hash (hashdecl) '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
@@ -962,8 +1012,13 @@ list<TypedHash> Namespace::getTypedHashes() [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_TYPEDHASH->getTypeInfo()), xsink);
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceTypedHashIterator i(*n->ns);
     while (i.next()) {
+        if (!filter.visible(reflection_exported(&i.get()))) {
+            continue;
+        }
         l->push(new QoreObject(QC_TYPEDHASH, n->pgm, new QoreReflectionTypedHash(n->pgm, &i.get(), n->ns)), xsink);
     }
 
@@ -1002,7 +1057,8 @@ Enum Namespace::getEnum(string name) [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     const QoreEnumDecl* rv = n->ns->findLocalEnum(tname->c_str());
-    if (!rv) {
+    // an enum that a module does not export is not found by a caller its export boundary applies to
+    if (!rv || !ReflectionExportFilter(caller, n->pgm, n->ns).visible(reflection_exported(rv))) {
         xsink->raiseException("UNKNOWN-ENUM", "enum '%s' is not defined in namespace '%s'", tname->c_str(), n->ns->getName());
         return QoreValue();
     }
@@ -1037,8 +1093,13 @@ list<Enum> Namespace::getEnums() [flags=RET_VALUE_ONLY] {
 
     // the namespace ptr must be valid
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ENUM->getTypeInfo()), xsink);
+    // a caller that a module's export boundary applies to lists only what the module exports
+    ReflectionExportFilter filter(caller, n->pgm, n->ns);
     QoreNamespaceEnumIterator i(*n->ns);
     while (i.next()) {
+        if (!filter.visible(reflection_exported(&i.get()))) {
+            continue;
+        }
         l->push(new QoreObject(QC_ENUM, n->pgm, new QoreReflectionEnum(n->pgm, &i.get(), n->ns)), xsink);
     }
 
@@ -1069,8 +1130,15 @@ static Namespace Namespace::forName(string path) [flags=RET_VALUE_ONLY] {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionNamespace> n(new QoreReflectionNamespace(xsink, **npath, lookup_pgm), xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a namespace that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeNamespace(lookup_pgm, n->ns)) {
+        xsink->raiseException("UNKNOWN-NAMESPACE", "cannot resolve namespace '%s'", npath->c_str());
         return QoreValue();
     }
 
@@ -1111,6 +1179,11 @@ static Namespace Namespace::forName(Program[QoreProgram] pgm, string path) [flag
     if (*xsink) {
         return QoreValue();
     }
+    // a namespace that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeNamespace(*pgm, n->ns)) {
+        xsink->raiseException("UNKNOWN-NAMESPACE", "cannot resolve namespace '%s'", npath->c_str());
+        return QoreValue();
+    }
 
     return new QoreObject(QC_NAMESPACE, *pgm, n.release());
 }
@@ -1129,7 +1202,9 @@ list<Namespace> l = Namespace::findAllRegex("^g");
 */
 static list<Namespace> Namespace::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
-    return find_all_namespaces(*pattern, re_opts, lookup_pgm, xsink);
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
+    return find_all_namespaces(caller, *pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of namespaces matching the regular expression pattern argument or an empty list if no namespaces match
@@ -1152,5 +1227,5 @@ static list<Namespace> Namespace::findAllRegex(Program[QoreProgram] pgm, string 
     if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
-    return find_all_namespaces(*pattern, re_opts, *pgm, xsink);
+    return find_all_namespaces(caller, *pattern, re_opts, *pgm, xsink);
 }

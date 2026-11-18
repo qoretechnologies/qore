@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class GenericTypeParamBoundsTest
+
+#! The type parameters in generic code at parse time (qore#5774)
+/** A value of a bounded type parameter (\c T: \c int, \c T: \c Base) has its bound, an upper bound: it is accepted
+    where its bound is (assignments, arguments, return values, the methods of a class bound) and refused where its
+    bound is.  A value of an unbounded type parameter can have any type: it is a may-match, checked at run time.  The
+    run-time results in every execution mode and in AOT executables are checked by
+    examples/test/ir/compiled-overload-errors/generic-bounds.q.
+*/
+class GenericTypeParamBoundsTest inherits QUnit::Test {
+    constructor() : Test("GenericTypeParamBoundsTest", "1.0") {
+        addTestCase("a bounded type parameter has its bound", \testBounded());
+        addTestCase("a bounded type parameter is refused where its bound is", \testBoundedRefused());
+        addTestCase("an unbounded type parameter is a may-match", \testUnbounded());
+        addTestCase("a soft bound is a may-match", \testSoftBound());
+        addTestCase("bounds and type parameters as type arguments", \testBoundDeclarations());
+        addTestCase("a missing method of a class bound", \testMissingBoundMethod());
+        set_return_value(main());
+    }
+
+    private Program parse(string code, string label) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(code, label);
+        return p;
+    }
+
+    testBounded() {
+        Program p = parse("class Num<T: int> {
+    int twice(T v) { int i = v; return i * 2; }
+    int arg(T v) { return takesInt(v); }
+    static int takesInt(int i) { return i + 1; }
+    int ret(T v) { return v; }
+}
+class Base { string name() { return 'base'; } }
+class Derived inherits Base { string name() { return 'derived'; } }
+class Box<T: Base> {
+    string who(T v) { return v.name(); }
+    Base up(T v) { return v; }
+}
+int sub b<V: int>(V v) { int i = v; return i; }
+int sub t1() { Num<int> n(); return n.twice(21) + n.arg(1) + n.ret(3); }
+string sub t2() { Box<Derived> b(); return b.who(new Derived()) + b.up(new Derived()).name(); }
+int sub t3() { return b<int>(4); }", "bounded");
+        assertEq(42 + 2 + 3, p.callFunction("t1"));
+        assertEq("derivedderived", p.callFunction("t2"));
+        assertEq(4, p.callFunction("t3"));
+    }
+
+    testBoundedRefused() {
+        # a value of T: int is refused where an int value is
+        assertThrows("PARSE-TYPE-ERROR", "expects type 'hash', but right-hand side is T", \parse(),
+            ("class Num<T: int> { hash bad(T v) { hash h = v; return h; } }", "bounded-refused-assign"));
+        assertThrows("PARSE-TYPE-ERROR", "expects hash", \parse(),
+            ("class Num<T: int> { nothing bad(T v) { takesHash(v); } static nothing takesHash(hash h) {} }",
+            "bounded-refused-arg"));
+        # a function's bounded type parameter
+        assertThrows("PARSE-TYPE-ERROR", "expects type 'hash'", \parse(),
+            ("nothing sub bad<V: int>(V v) { hash h = v; }", "bounded-refused-function"));
+    }
+
+    testUnbounded() {
+        Program p = parse("class Any<T> {
+    T id(auto h) { return h; }
+    int asInt(T v) { int i = v; return i; }
+}
+T sub f<T>(auto h) { return h; }
+U sub g<U>(int a) { return a; }
+int sub t1() { Any<int> a(); return a.id(1) + a.asInt(2) + f<int>(3) + g<int>(4); }
+auto sub t2() { Any<int> a(); return a.id('x'); }
+auto sub t3() { Any<string> a(); return a.asInt('x'); }
+auto sub t4() { return g<string>(1); }", "unbounded");
+        assertEq(10, p.callFunction("t1"));
+        assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t2");
+        assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t3");
+        assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t4");
+    }
+
+    testSoftBound() {
+        # a value bound to T: softint is not converted, so it is accepted where an int is at parse time and checked
+        # when the code runs
+        Program p = parse("class Soft<T: softint> {
+    int asInt(T v) { int i = v; return i; }
+}
+int sub t1() { Soft<int> s(); return s.asInt(3); }
+auto sub t2() { Soft<string> s(); return s.asInt('3'); }", "soft");
+        assertEq(3, p.callFunction("t1"));
+        assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t2");
+    }
+
+    testBoundDeclarations() {
+        # a bound that names its own class is checked once, not again while it is resolved (this crashed the parser
+        # with a stack overflow)
+        assertThrows("PARSE-TYPE-ERROR", "type argument 'int' for type parameter 'T' of generic class 'Self' does "
+            "not satisfy bound 'Self<int>'", \parse(), ("class Self<T: Self<int>> {}", "self-bound"));
+        assertThrows("PARSE-TYPE-ERROR", "does not satisfy bound 'Self<auto>'", \parse(),
+            ("class Self<T: Self<auto>> {}", "self-bound-auto"));
+        # a bound must be a type that exists
+        assertThrows("PARSE-EXCEPTION", "reference to undefined type 'Nope'", \parse(),
+            ("class X<T: Nope> {}", "unknown-bound"));
+        # a type parameter passed as a type argument satisfies a bound with its own bound
+        Program p = parse("class Num<T: int> { int twice(T v) { int i = v; return i * 2; } }
+class Forward<U: int> { int twice(U v) { Num<U> n(); return n.twice(v); } }
+class Sub<U: int> inherits Num<U> {}
+int sub t1() { Forward<int> f(); Sub<int> s(); return f.twice(2) + s.twice(3); }", "forward");
+        assertEq(10, p.callFunction("t1"));
+        assertThrows("PARSE-TYPE-ERROR", "type argument 'U' for type parameter 'T' of generic class 'Num' does not "
+            "satisfy bound 'int'", \parse(), ("class Num<T: int> {} class E<U> { nothing f() { Num<U> n(); } }",
+            "forward-unbounded"));
+        assertThrows("PARSE-TYPE-ERROR", "type argument 'U' for type parameter 'T' of generic class 'Num' does not "
+            "satisfy bound 'int'", \parse(), ("class Num<T: int> {} class F<U: string> { nothing f() { Num<U> n(); "
+            "} }", "forward-wrong-bound"));
+    }
+
+    testMissingBoundMethod() {
+        # a method that the class bound does not have is called at run time, as on a value of the bound class
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<auto> w = p.parse("class Base {}
+class B<T: Base> { auto f(T v) { return v.nope(); } }
+auto sub t1() { B<Base> b(); return b.f(new Base()); }", "missing-method", WARN_ALL);
+        assertEq("NON-EXISTENT-METHOD-CALL", w.err);
+        assertThrows("METHOD-DOES-NOT-EXIST", \p.callFunction(), "t1");
+    }
+}

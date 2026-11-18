@@ -37,6 +37,8 @@
 %requires json
 
 module KlaviyoDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "user module providing a data provider API for Klaviyo";
     author = "Qore Technologies <info@qoretechnologies.com>";

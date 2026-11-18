@@ -34,7 +34,30 @@
 
 QoreString QoreListAssignmentOperatorNode::op_str("list assignment operator expression");
 
+namespace {
+class LexicalListAssignmentOperatorNode : public QoreListAssignmentOperatorNode {
+public:
+    using QoreListAssignmentOperatorNode::QoreListAssignmentOperatorNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<LexicalListAssignmentOperatorNode>(xsink);
+    }
+};
+}
+
 int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+    int err = parseInitIntern(parse_context);
+    if (!err && getSemanticPolicy().needsFilter()) {
+        auto* replacement = makeSpecialization<LexicalListAssignmentOperatorNode>();
+        replacement->setParseAnalysis(parse_context.analysis);
+        val = replacement;
+    }
+    return err;
+}
+
+int QoreListAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context) {
     // turn off "return value ignored" flag
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -53,6 +76,12 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 
         QoreValue v = li.parseInit(parse_context);
         const QoreTypeInfo* prototypeInfo = parse_context.typeInfo;
+        // A failed parse (including a stack-limit error) can leave a declaration without its LocalVar. Only
+        // validate initialized lvalues; keep parsing the right-hand side to collect its errors as usual.
+        if (li.hasError()) {
+            ri.parseInit(parse_context);
+            continue;
+        }
         //printd(5, "QoreListAssignmentOperatorNode::parseInitImpl() paI: '%s' (%s)\n", QoreTypeInfo::getName(prototypeInfo),
         //    v.getFullTypeName());
         if (int lvalue_err = check_lvalue(v)) {
@@ -64,19 +93,15 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
             if (!err) {
                 err = -1;
             }
-        } else if ((parse_context.pflag & PF_BACKGROUND) && v.getType() == NT_VARREF
-            && v.get<const VarRefNode>()->getType() == VT_LOCAL) {
-            parse_error(*loc, "illegal local variable modification with the background operator in position %d " \
-                "of left-hand-side list in list assignment", li.index() + 1);
-            if (!err) {
-                err = -1;
-            }
-        } else if ((parse_context.pflag & PF_BACKGROUND) && v.getType() == NT_SELF_VARREF) {
-            // the expression takes the member's value when the thread starts, as it does for local variables
-            parse_error(*loc, "illegal member modification with the background operator in position %d of " \
-                "left-hand-side list in list assignment", li.index() + 1);
-            if (!err) {
-                err = -1;
+        } else if (parse_context.pflag & PF_BACKGROUND_EXPR) {
+            // a local, a member, or a value contained in one, which the thread copies (issue #5723)
+            qore_background_lvalue_e kind = parse_check_background_lvalue(v);
+            if (kind != qore_background_lvalue_e::SHARED) {
+                QoreStringMaker what("position %d of left-hand-side list in list assignment", li.index() + 1);
+                parse_raise_background_lvalue_error(loc, kind, what.c_str());
+                if (!err) {
+                    err = -1;
+                }
             }
         }
 
@@ -88,7 +113,8 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         ri.parseInit(parse_context);
         argInfo = parse_context.typeInfo;
 
-        if (QoreTypeInfo::hasType(prototypeInfo)) {
+        // a NOTHING element is not assigned, so any value is accepted for it (issue #6480)
+        if (QoreTypeInfo::hasType(prototypeInfo) && !v.isNothing()) {
             bool may_not_match = false;
             bool may_need_filter = false;
             qore_type_result_e max_result = QTI_NOT_EQUAL;
@@ -119,10 +145,19 @@ int QoreListAssignmentOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         ri.parseInit(parse_context);
     }
 
+    // the value of the expression is its right-hand side, not the last value assigned (issue #5704: a list
+    // assignment in a typed hash initializer gave the key the type of the last lvalue, and the hash was refused)
+    parse_context.typeInfo = ri.getTypeInfo();
+
     return li.hasError() || ri.hasError() || err ? -1 : 0;
 }
 
 QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical>
+QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(left.getType() == NT_PARSE_LIST);
     const QoreParseListNode* llv = left.get<const QoreParseListNode>();
 
@@ -140,21 +175,22 @@ QoreValue QoreListAssignmentOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     // get values and save
     for (unsigned i = 0; i < llv->size(); i++) {
         QoreValue lv = llv->get(i);
+        // NOTHING is an lvalue for check_lvalue(): its element is not assigned, and the elements after it are
+        // (issue #6480)
+        if (lv.isNothing()) {
+            continue;
+        }
 
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
         LValueHelper v(lv, xsink, false, true);
         if (!v)
             return QoreValue();
 
-        // if there's only one value, then save it
-        if (nv) { // assign to list position
-            v.assign(nv->getReferencedEntry(i));
+        QoreValue assigned = nv ? nv->getReferencedEntry(i) : (!i ? new_value->refSelf() : QoreValue());
+        if constexpr (Lexical) {
+            v.assign(assigned, "<lvalue>", getSemanticPolicy());
         } else {
-            if (!i) {
-                v.assign(new_value->refSelf());
-            } else {
-                v.assign(QoreValue());
-            }
+            v.assign(assigned);
         }
         if (*xsink) {
             return QoreValue();

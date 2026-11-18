@@ -75,6 +75,9 @@ class RestClientPoolPerfTest inherits QUnit::Test {
 
         #! True if podman is available and container started
         bool container_running = False;
+
+        #! True once a podman command was run, so teardown has something to clean up
+        bool podman_used = False;
     }
 
     constructor() : Test("RestClientPoolPerfTest", "1.0") {
@@ -107,7 +110,10 @@ class RestClientPoolPerfTest inherits QUnit::Test {
             testSkip("podman not installed");
             return;
         }
-        if (system("podman image exists docker.io/library/nginx:alpine")) {
+        # The image is looked up in the image store files, never with a podman command: any rootless podman command
+        # starts podman's per-user pause process (catatonit -P), which keeps the user's namespaces alive for all of
+        # the user's containers and outlives this test, so a host without the image must not run podman at all.
+        if (!podmanImageAvailable("docker.io/library/nginx:alpine")) {
             testSkip("nginx:alpine image not available locally "
                 "(run `podman pull docker.io/library/nginx:alpine` to enable this test)");
             return;
@@ -185,6 +191,7 @@ http {
             + " -p %d:8443/udp"
             + " docker.io/library/nginx:alpine 2>&1",
             container_name, nginx_conf, cert_path, key_path, nginx_port, nginx_port);
+        podman_used = True;
         try {
             string output = backquote(cmd);
             if (output == "") {
@@ -225,7 +232,40 @@ http {
         }
     }
 
+    #! Returns True if the image is in a local image store, read from its files (no podman command is run)
+    /** The stores are the rootless one of the user (XDG_DATA_HOME or ~/.local/share) and the system one.  A store that
+        cannot be read counts as not having the image.
+    */
+    static bool podmanImageAvailable(string image) {
+        # QORE_PODMAN_SYSTEM_STORE is for the tests of this test only (runner/test_leftover_processes.py): it
+        # replaces the system store so that the host's does not matter
+        list<string> stores = (ENV.QORE_PODMAN_SYSTEM_STORE ?? "/var/lib/containers/storage",);
+        *string data_home = ENV.XDG_DATA_HOME;
+        if (data_home && data_home[0] == "/") {
+            stores = (data_home + "/containers/storage",) + stores;
+        } else if (*string home = ENV.HOME) {
+            stores = (home + "/.local/share/containers/storage",) + stores;
+        }
+        foreach string store in (stores) {
+            try {
+                # one directory per storage driver (overlay-images, vfs-images, btrfs-images, ...)
+                foreach string file in (glob(store + "/*-images/images.json")) {
+                    if (ReadOnlyFile::readTextFile(file).find("\"" + image + "\"") >= 0) {
+                        return True;
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the store does not exist or cannot be read: it has no usable image
+            }
+        }
+        return False;
+    }
+
     globalTearDown() {
+        if (!podman_used) {
+            # podman was never run: nothing to remove, and a podman command would start its pause process
+            return;
+        }
         # Stop and remove container
         system(sprintf("podman rm -f %s >/dev/null 2>&1", container_name));
     }

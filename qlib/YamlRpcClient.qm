@@ -46,6 +46,8 @@ module YamlRpcClient {
         ConnectionSchemeCache::registerScheme("yamlrpc", YamlRpcConnection::ConnectionScheme);
         ConnectionSchemeCache::registerScheme("yamlrpcs", YamlRpcConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage YamlRpcClient Module
@@ -288,13 +290,25 @@ public class YamlRpcClient inherits Qore::HTTPClient {
     */
     auto callArgs(string method, auto args) {
         @assert(method);
-        @debug(printf("YamlRpcClient::callArgs() method=%y path=%y\n", method, path));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("YamlRpcClient::callArgs() method=%y path=%y\n", method, path);
+            }
+        }
         # create outgoing message in YamlRpc Call format
         string msg = YamlRpcClient::makeRequest(method, args, flags);
-        @debug(printf("YamlRpcClient::callArgs() request=%y\n", msg));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("YamlRpcClient::callArgs() request=%y\n", msg);
+            }
+        }
         # send the message to the server and get the response as an YAML string
         string ans = post(path, msg, headers);
-        @debug(printf("YamlRpcClient::callArgs() response=%y\n", ans));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("YamlRpcClient::callArgs() response=%y\n", ans);
+            }
+        }
         # parse the response and return a qore data structure
         return parse_yaml(ans);
     }

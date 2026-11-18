@@ -40,21 +40,22 @@ static void checkCancellation() {
         input->push(item->refSelf(), &xsink);
         assert(!xsink);
     }
-    // Request cancellation before directly entering the native loop: no Qore
-    // statement, thread scheduling race or polling can consume it first.
+    // Request cancellation before directly entering the native loop: a map expression is not a cancellation point,
+    // as in the AST interpreter (issue #5641), so the loop maps every value and leaves the request pending for the
+    // next cancellation point.
     assert(!qore_cancel_thread(q_gettid(), "map cancellation test"));
-    QoreValue cancelled = fromBits(qore_rt_map_hash_key_value(toBits(QoreValue(*input)), "identity", &xsink));
-    assert(cancelled.isNothing() && xsink);
+    QoreValue mapped = fromBits(qore_rt_map_hash_key_value(toBits(QoreValue(*input)), "identity", &xsink));
+    assert(!xsink && mapped.getType() == NT_LIST);
+    const QoreListNode* list = mapped.get<const QoreListNode>();
+    assert(list->size() == 205);
+    assert(list->retrieveEntry(204).get<const QoreStringNode>()->equal("decimal"));
+    mapped.discard(&xsink);
+    assert(!xsink);
+    // the request is still pending: the next cancellation point raises it
+    assert(qore_check_cancel(&xsink, "map test check"));
     assert(xsink.getExceptionErr().get<const QoreStringNode>()->equal("THREAD-CANCELLED"));
     qore_clear_thread_cancel();
     xsink.clear();
-    QoreValue restored = fromBits(qore_rt_map_hash_key_value(toBits(QoreValue(*input)), "identity", &xsink));
-    assert(!xsink && restored.getType() == NT_LIST);
-    const QoreListNode* list = restored.get<const QoreListNode>();
-    assert(list->size() == 205);
-    assert(list->retrieveEntry(204).get<const QoreStringNode>()->equal("decimal"));
-    restored.discard(&xsink);
-    assert(!xsink);
 }
 
 int main() {

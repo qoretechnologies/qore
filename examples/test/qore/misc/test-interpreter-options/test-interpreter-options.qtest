@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child interpreters started with options of their own
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class TestInterpreterOptionsTest
+
+#! Tests TestInterpreter::interpreter_options(), TestInterpreter::exec_mode() and TestInterpreter::running_compiled()
+/** A child interpreter runs a script that prints what these functions return in it: the interpreter options are the
+    arguments between the interpreter and the script, never the script's own arguments after it (such as the \c -v
+    that <tt>run_tests.sh -v</tt> gives a test), and an option and its value given as two arguments stay together
+    (issue #6250).
+
+    A second script empties \c ARGV, as QUnit removes the options that it takes from the \c ARGV that a test gives it,
+    before it prints what the functions return.  Interpreted, with interpreter options that are also options of the
+    runtime of a compiled executable, it is never taken for a compiled script.  Compiled with qcc, where the module is
+    compiled into the executable and reads the same \c ARGV as the script, it is never taken for an interpreted one,
+    with arguments and with the options of its runtime
+*/
+class TestInterpreterOptionsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TestInterpreterOptions", "1.0", \ARGV) {
+        addTestCase("the interpreter options are the arguments before the script", \optionsTest());
+        addTestCase("ARGV changed by the script does not change what the process is", \argvChangedTest());
+        addTestCase("a compiled script has no interpreter options", \compiledTest());
+        set_return_value(main());
+    }
+
+    optionsTest() {
+        TmpDir tmp("qore-test-interpreter-options-");
+        string script = tmp.path + "/probe.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%requires %s\n"
+            "printf(\"options: %%s\\n\", TestInterpreter::interpreter_options(get_script_path()).join(\"|\"));\n"
+            "printf(\"mode: %%s\\n\", TestInterpreter::exec_mode(get_script_path()) ?? \"none\");\n",
+            realpath(get_script_dir() + "../../../TestInterpreter.qm")));
+        f.close();
+
+        # the option and its value as two arguments, and the script's own arguments that look like options
+        assertEq("options: --exec-mode|ir\nmode: ir\n", run("--exec-mode ir", script, "-v --exec-mode=jit"));
+        # the option as one argument
+        assertEq("options: --exec-mode=ast\nmode: ast\n", run("--exec-mode=ast", script, "-v"));
+        # no interpreter option: the script's arguments are not interpreter options
+        assertEq("options: \nmode: none\n", run("", script, "--exec-mode=jit -v"));
+        # the script given by its name alone, in its directory
+        assertEq("options: --exec-mode|jit\nmode: jit\n", run("--exec-mode jit", "probe.q", "-v", tmp.path));
+    }
+
+    argvChangedTest() {
+        TmpDir tmp("qore-test-interpreter-options-");
+        string script = writeArgvProbe(tmp.path);
+
+        # an interpreted script is not compiled, also with an interpreter option that is a runtime option of a
+        # compiled executable (--enable-debug); the module loaded by the interpreter has its own copy of ARGV, which
+        # the script's change to ARGV does not reach (only compiledTest() checks a module that reads the changed ARGV)
+        assertEq("compiled: False\noptions: \nmode: none\n", run("", script, "-v"));
+        assertEq("compiled: False\noptions: --exec-mode|ir\nmode: ir\n", run("--exec-mode ir", script, "-v"));
+        assertEq("compiled: False\noptions: --enable-debug\nmode: none\n", run("--enable-debug", script, "-v"));
+        assertEq("compiled: False\noptions: \nmode: none\n", run("", script, ""));
+    }
+
+    compiledTest() {
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        TmpDir tmp("qore-test-interpreter-options-");
+        string script = writeArgvProbe(tmp.path);
+        string exe = tmp.path + "/probe";
+        int rc;
+        string out = backquote(sprintf("%s -o %s %s 2>&1", quote(qcc), quote(exe), quote(script)), \rc);
+        assertEq(0, rc, out);
+
+        # the test's own arguments, the options of the compiled executable's runtime, and both: always compiled, and
+        # an argument that looks like an interpreter option is not one; -d is left out, as it makes the runtime write
+        # debug output, which would be compared with the output of the script
+        foreach string args in ("", "-v", "--exec-mode=jit -v", "--enable-debug", "-b --enable-debug -v", "-G -v") {
+            out = backquote(sprintf("%s %s 2>&1", quote(exe), args), \rc);
+            assertEq(0, rc, out);
+            assertEq("compiled: True\noptions: \nmode: none\n", out, args);
+        }
+    }
+
+    #! writes a script that empties ARGV, as QUnit does, before it prints what the functions return
+    /** @return the path of the script
+    */
+    private static string writeArgvProbe(string dir) {
+        string script = dir + "/argv-probe.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n%%requires %s\n"
+            "splice ARGV, 0;\n"
+            "printf(\"compiled: %%y\\n\", TestInterpreter::running_compiled());\n"
+            "printf(\"options: %%s\\n\", TestInterpreter::interpreter_options(get_script_path()).join(\"|\"));\n"
+            "printf(\"mode: %%s\\n\", TestInterpreter::exec_mode(get_script_path()) ?? \"none\");\n",
+            realpath(get_script_dir() + "../../../TestInterpreter.qm")));
+        f.close();
+        return script;
+    }
+
+    #! runs the script with the interpreter options and the script arguments given; returns its output
+    /** @param dir the directory to run it in, if any
+    */
+    private string run(string opts, string script, string args, *string dir) {
+        int rc;
+        string out = backquote(sprintf("%s%s %s %s %s 2>&1", dir ? "cd " + quote(dir) + " && " : "",
+            quote(TestInterpreter::qore_interpreter()), opts, quote(script), args), \rc);
+        assertEq(0, rc, out);
+        return out;
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

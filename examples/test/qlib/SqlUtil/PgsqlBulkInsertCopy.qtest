@@ -11,6 +11,15 @@
 %requires SqlUtil
 %requires PgsqlSqlUtilBase
 
+# the datasources that do not connect use the pgsql and jdbc drivers
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class PgsqlBulkInsertCopyTest
 
 #! A PostgreSQL datasource of the given driver that does not connect: it records the statements it executes
@@ -77,7 +86,18 @@ class PgsqlBulkInsertCopyTest inherits QUnit::Test {
     }
 
     private copyDriver() {
-        foreach string driver in (("pgsql", "jdbc")) {
+        # the drivers whose module can be loaded
+        list<string> drivers = ();
+%ifndef NoPgsql
+        drivers += "pgsql";
+%endif
+%ifndef NoJni
+        drivers += "jdbc";
+%endif
+        if (!drivers) {
+            testSkip("no pgsql or jni module");
+        }
+        foreach string driver in (drivers) {
             RecordingDatasource ds(driver);
             PgsqlTable t(ds, "t");
             t.setupTable({"columns": {"id": {"qore_type": "integer"}, "name": {"qore_type": "string", "size": 20}}});

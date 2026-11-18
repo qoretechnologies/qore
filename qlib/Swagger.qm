@@ -144,6 +144,8 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): a debug print
+      of a list content type was removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - a value that a schema type refuses is reported with \c TYPE-VALUE-ERROR instead of \c RUNTIME-TYPE-ERROR, as by
       the types of the DataProvider module
     - a path that differs from another only by a trailing slash, such as Pipedrive's \c /oauth/token and
@@ -1579,7 +1581,6 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
         auto content = hdr."content-type" ?? hdr."Content-Type";
         if (content.typeCode() == NT_LIST) {
-            printf("content: %y\n", content);
             content = content[0];
         }
         # remove any qualifiers from the content type

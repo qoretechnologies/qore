@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 
 %exec-class StreamWriterTest
 
@@ -15,6 +16,7 @@ class StreamWriterTest inherits QUnit::Test {
         addTestCase("Basic write int tests", \basicWriteIntTests());
         addTestCase("Encoding tests", \encodingTests());
         addTestCase("thread handoff", \threadHandoff());
+        addTestCase("native integer writers and readers", \nativeIntegers());
 
         set_return_value(main());
     }
@@ -178,5 +180,19 @@ class StreamWriterTest inherits QUnit::Test {
         sw.printf("test");
         os.unassignThread();
         assertThrows("STREAM-THREAD-ERROR", \sw.printf(), "err");
+    }
+
+    #! the native integer writers write the whole value (issue #6324: writeu2() and writeu4() wrote the low byte only)
+    nativeIntegers() {
+        string qore = TestInterpreter::qore_interpreter();
+        string native = ENV.QORE_STREAM_WRITER_INTS_TEST ?? dirname(qore) + "/qore-stream-writer-ints-test";
+        if (!is_file(native)) {
+            testSkip("the native stream integer test executable is not available");
+            return;
+        }
+        int rc;
+        string output = backquote("'" + replace(native, "'", "'\\''") + "' 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertTrue(output.startsWith("PASS: "), output);
     }
 }

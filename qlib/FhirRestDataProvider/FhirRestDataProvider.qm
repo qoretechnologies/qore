@@ -34,6 +34,8 @@
 %modern
 
 module FhirRestDataProvider {
+    # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
+    domains = "PROCESS_CONTROL";
     version = "1.0";
     desc = "FHIR REST data provider module for JSON-based FHIR servers";
     author = "Qore Technologies <info@qoretechnologies.com>";

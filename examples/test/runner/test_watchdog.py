@@ -54,6 +54,73 @@ def no_core_dumps():
         signal.signal(sig, signal.SIG_DFL)
 
 
+def start_in_session(args, **kwargs):
+    """Starts a command of the harness (a runner, or a shell that runs the runner's functions) in a session of its own
+
+    end_session() then ends every process that the command started: a runner that is killed, or that a time limit of
+    the harness ends, runs no trap, and its watchdog's reader, which holds the write end of its event FIFO, would
+    otherwise run until its own time limit (issue #6298)
+    """
+    return subprocess.Popen(args, start_new_session=True, preexec_fn=no_core_dumps, **kwargs)
+
+
+def session_processes(sid):
+    """Returns the IDs of the processes of the session that have not ended (zombies are left out on Linux)"""
+    if os.path.isdir("/proc/self"):
+        pids = []
+        for entry in os.listdir("/proc"):
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/stat") as f:
+                    stat = f.read()
+            except OSError:
+                continue
+            # after the command's name in parentheses: state, ppid, pgrp, session
+            fields = stat[stat.rindex(")") + 2:].split()
+            if fields[0] != "Z" and int(fields[3]) == sid:
+                pids.append(int(entry))
+        return pids
+    result = subprocess.run(["pgrep", "-s", str(sid)], capture_output=True, text=True)
+    return [int(pid) for pid in result.stdout.split()]
+
+
+def end_session(process):
+    """Kills every process of the session of a command started with start_in_session() and waits for the command
+
+    The session, not the command's process group: the runner runs its tests and its watchdog's reader under timeout,
+    which puts each of them in a process group of its own.  The processes that a test of the run starts in a session of
+    their own are not in it; the runner ends them.
+    """
+    killed = None
+    while True:
+        pids = set(session_processes(process.pid)) - {os.getpid()}
+        # a list that the kills did not change has only processes that end (their kill is delivered) or zombies
+        if not pids or pids == killed:
+            break
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        killed = pids
+    process.wait()
+
+
+def run_in_session(args, timeout, capture_output=False, **kwargs):
+    """subprocess.run() for a command of the harness: when the time limit expires, or the harness fails while the
+    command runs, every process of the command's session is killed, not only the command (see start_in_session())"""
+    if capture_output:
+        kwargs["stdout"] = kwargs["stderr"] = subprocess.PIPE
+    with start_in_session(args, **kwargs) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except BaseException:
+            end_session(process)
+            raise
+    return subprocess.CompletedProcess(process.args, process.returncode, stdout, stderr)
+
+
 class RunnerTree:
     """A tree that run_tests.sh runs in, with Python scripts as its tests, or qore scripts with the qore of the build"""
 
@@ -128,8 +195,8 @@ class RunnerTree:
 
     def run_shell(self, script, timeout=120, **variables):
         """Runs a shell script in the tree; RUN_TESTS names the runner"""
-        return subprocess.run(["sh", "-c", script], cwd=self.root, env=self.env(RUN_TESTS=str(RUN_TESTS), **variables),
-                              capture_output=True, text=True, timeout=timeout, preexec_fn=no_core_dumps)
+        return run_in_session(["sh", "-c", script], timeout, cwd=self.root,
+                              env=self.env(RUN_TESTS=str(RUN_TESTS), **variables), capture_output=True, text=True)
 
     def run(self, timeout=120, **variables):
         """Runs the runner in the tree; returns its result, with its output in both streams in "output\""""
@@ -306,9 +373,8 @@ class InterruptedRunnerTest(unittest.TestCase):
                 # alive pipe reports it
                 output_path = tree.root / "runner.out"
                 with open(output_path, "wb") as output_file:
-                    runner = subprocess.Popen(["sh", str(RUN_TESTS)], cwd=tree.root, env=env, stdout=output_file,
-                                              stderr=subprocess.STDOUT, pass_fds=tuple(write_ends),
-                                              preexec_fn=no_core_dumps)
+                    runner = start_in_session(["sh", str(RUN_TESTS)], cwd=tree.root, env=env, stdout=output_file,
+                                              stderr=subprocess.STDOUT, pass_fds=tuple(write_ends))
                 for fd in write_ends:
                     os.close(fd)
                 write_ends = []
@@ -350,9 +416,10 @@ class InterruptedRunnerTest(unittest.TestCase):
                 self.assertEqual([alive_r], readable, "a process of the run is left after signal %d" % sig)
                 self.assertEqual(b"", os.read(alive_r, 1), "a process of the run is left after signal %d" % sig)
             finally:
-                if runner is not None and runner.poll() is None:
-                    runner.kill()
-                    runner.wait()
+                # a run that a failure left ends: the runner, and its watchdog's reader, which a runner that is killed
+                # does not end
+                if runner is not None:
+                    end_session(runner)
                 # a test that is left (after a failure) is released from its FIFO, if it waits there
                 try:
                     os.close(os.open(tree.root / "hold", os.O_WRONLY | os.O_NONBLOCK))
@@ -439,6 +506,62 @@ class InterruptedRunnerTest(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+@unittest.skipUnless(HAVE_TIMEOUT, "the runner reads its events without a watchdog without a timeout command")
+class KilledRunnerTest(unittest.TestCase):
+    """A runner that the harness kills, as at the time limit of a case, leaves no process of its run (issue #6298)
+
+    A killed runner runs no trap, so nothing tells its watchdog's reader to end, and the reader holds the write end of
+    the event FIFO, so it never reads its end: it ran until its own time limit (300 s), and the test until its limit.
+    """
+
+    def test_a_killed_runner_leaves_no_process_of_its_run(self):
+        with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
+            tree = RunnerTree(directory)
+            # every process of the run inherits the write ends of these pipes (see InterruptedRunnerTest.interrupt())
+            ready_r = alive_r = None
+            write_ends = []
+            runner = None
+            try:
+                ready_r, ready_w = os.pipe()
+                alive_r, alive_w = os.pipe()
+                for fd in (ready_w, alive_w):
+                    write_ends.append(fcntl.fcntl(fd, fcntl.F_DUPFD, 50))
+                    os.close(fd)
+                ready_fd = write_ends[0]
+                hold = tree.root / "hold"
+                os.mkfifo(hold)
+                tree.add_test("blocks.qtest", f"""\
+                    # test-timeout: 600
+                    import os
+                    os.write({ready_fd}, b"running\\n")
+                    open({str(hold)!r}).read()
+                    """)
+                with open(tree.root / "runner.out", "wb") as output_file:
+                    runner = start_in_session(["sh", str(RUN_TESTS)], cwd=tree.root, env=tree.env(),
+                                              stdout=output_file, stderr=subprocess.STDOUT,
+                                              pass_fds=tuple(write_ends))
+                for fd in write_ends:
+                    os.close(fd)
+                write_ends = []
+                # the test runs: the runner has started its watchdog's reader
+                readable, _, _ = select.select([ready_r], [], [], 120)
+                self.assertEqual([ready_r], readable, "the test did not start")
+                self.assertEqual(b"running\n", os.read(ready_r, 100))
+                # the harness ends the run, as at the time limit of a case or after a failure
+                end_session(runner)
+                # the pipe is at its end once no process of the run holds it; a process that is left keeps it open,
+                # which the time limit of the select ends as a failure
+                readable, _, _ = select.select([alive_r], [], [], 60)
+                self.assertEqual([alive_r], readable, "a process of the killed run is left")
+                self.assertEqual(b"", os.read(alive_r, 1), "a process of the killed run is left")
+            finally:
+                if runner is not None:
+                    end_session(runner)
+                for fd in write_ends + [ready_r, alive_r]:
+                    if fd is not None:
+                        os.close(fd)
+
+
 class FailedFifoTest(unittest.TestCase):
     """A watchdog whose event FIFO fails reports it; it does not take it for the time limit"""
 
@@ -543,9 +666,9 @@ class RunnerDescendantsTest(unittest.TestCase):
                 (proc / str(pid) / "status").write_text(f"Name:\tp{pid}\nPPid:\t{ppid}\n")
             (proc / "102").mkdir()
             (proc / "102" / "status").symlink_to(proc / "gone")
-            result = subprocess.run(["sh", "-c", runner_function("runner_descendants") + "runner_descendants 100"],
-                                    env=dict(os.environ, QORE_TEST_PROC=str(proc)), capture_output=True, text=True,
-                                    timeout=60)
+            result = run_in_session(["sh", "-c", runner_function("runner_descendants") + "runner_descendants 100"],
+                                    60, env=dict(os.environ, QORE_TEST_PROC=str(proc)), capture_output=True,
+                                    text=True)
             self.assertEqual(["101", "103"], sorted(result.stdout.split()), result.stdout + result.stderr)
 
 
@@ -585,8 +708,7 @@ class WatchdogReadTest(unittest.TestCase):
                 echo "run_with_watchdog: $? WATCHDOG_TEST_EXIT=$WATCHDOG_TEST_EXIT" \\
                     "WATCHDOG_TIMED_OUT=$WATCHDOG_TIMED_OUT WATCHDOG_ERROR=$WATCHDOG_ERROR"
                 """)
-            result = subprocess.run(["sh", "-c", script], cwd=directory, capture_output=True, text=True, timeout=120,
-                                    preexec_fn=no_core_dumps)
+            result = run_in_session(["sh", "-c", script], 120, cwd=directory, capture_output=True, text=True)
             result.output = result.stdout + result.stderr
             return result
 
@@ -624,7 +746,10 @@ class WatchdogReadTest(unittest.TestCase):
         self.assertIn("the test exceeded its 30s limit", result.output)
         self.assertIn("WATCHDOG ERROR: the watchdog's read of its event FIFO ended without an event", result.output)
         self.assertNotIn("test ran to its end", result.output)
-        self.assertRegex(result.output, r"run_with_watchdog: 124 WATCHDOG_TEST_EXIT=134 WATCHDOG_TIMED_OUT=1 "
+        # the failed read makes the watchdog send SIGKILL right after the timeout signal, so the test ends with
+        # whichever arrives first: SIGABRT (134) or, when its core dump has not finished, SIGKILL (137); either way it
+        # does not run to its end
+        self.assertRegex(result.output, r"run_with_watchdog: 124 WATCHDOG_TEST_EXIT=13[47] WATCHDOG_TIMED_OUT=1 "
                                         r"WATCHDOG_ERROR=1")
 
 
@@ -684,10 +809,30 @@ class SignalTest(unittest.TestCase):
     installed its handler.
     """
 
-    def run_tests(self, tests, proc=None, **variables):
-        """Runs the given tests ({file: (report, handle, masks)}); returns the output of each test and the result"""
+    def run_tests(self, tests, proc=None, awk_without_math=False, **variables):
+        """Runs the given tests ({file: (report, handle, masks)}); returns the output of each test and the result
+
+        With awk_without_math, the runner's awk is a stand-in for a BusyBox awk built without math support (as Ubuntu's
+        busybox package): it rejects a program that uses the "^" operator, with BusyBox's error, and runs the system's
+        awk otherwise.
+        """
         with tempfile.TemporaryDirectory(prefix="qore-runner-watchdog-") as directory:
             tree = RunnerTree(directory)
+            if awk_without_math:
+                real = shutil.which("awk")
+                self.assertIsNotNone(real, "no awk in PATH")
+                tree.write_script("awk", f"""\
+                    #!/bin/sh
+                    for arg in "$@"; do
+                        case "$arg" in
+                            *" ^ "*)
+                                echo "awk: cmd. line:1: Math support is not compiled in" >&2
+                                exit 1
+                                ;;
+                        esac
+                    done
+                    exec '{real}' "$@"
+                    """)
             for name, (report, handle, masks) in tests.items():
                 tree.add_test(name, HANGING_TEST.format(report=report, handle=handle, masks=masks))
             if proc is not None:
@@ -748,7 +893,7 @@ class SignalTest(unittest.TestCase):
             with self.subTest(test=name):
                 self.assert_aborted_at_once(sections[name])
 
-    def test_on_linux_a_test_that_catches_or_blocks_the_signal_in_every_thread_is_sent_it(self):
+    def check_masks(self, awk_without_math=False):
         # the masks in the /proc tree that each test makes for itself, which run_tests.sh reads wherever the test's
         # task directory exists in it; a test that ignores SIGUSR1 survives it, and is aborted after
         # QORE_TEST_STACK_DUMP_WAIT
@@ -757,13 +902,22 @@ class SignalTest(unittest.TestCase):
             "caught.qtest": ("", "ignore", [(NONE, USR1), (NONE, USR1)]),
             "one-blocks.qtest": ("", "ignore", [(USR1, NONE), (NONE, NONE)]),
             "no-threads.qtest": ("", "ignore", []),
-        }, proc="empty", QORE_TEST_STACK_DUMP_WAIT="1")
+        }, proc="empty", awk_without_math=awk_without_math, QORE_TEST_STACK_DUMP_WAIT="1")
         for name in ("all-block.qtest", "caught.qtest"):
             with self.subTest(test=name):
                 self.assert_usr1(sections[name], stacks=False)
         for name in ("one-blocks.qtest", "no-threads.qtest"):
             with self.subTest(test=name):
                 self.assert_aborted_at_once(sections[name])
+
+    def test_on_linux_a_test_that_catches_or_blocks_the_signal_in_every_thread_is_sent_it(self):
+        self.check_masks()
+
+    def test_the_masks_are_read_with_an_awk_without_math_support(self):
+        # the runner's awk programs use no math functions or "^": a BusyBox awk built without math support rejected the
+        # mask check's whole program, so a test that caught or blocked SIGUSR1 was aborted at once, without its call
+        # stacks
+        self.check_masks(awk_without_math=True)
 
     def test_signal_handling_disabled(self):
         sections, result = self.run_tests({"handler.qtest": ("self", "handler", [(USR1, USR1)])}, proc="empty",
@@ -773,6 +927,215 @@ class SignalTest(unittest.TestCase):
         self.assertNotIn("SIGUSR1 sent", output)
         self.assertNotIn("call stacks printed", output)
         self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
+
+
+# A test that hangs until it is ended, with a handler for SIGUSR1 that it reports, and the threads in a /proc tree of
+# its own (QORE_TEST_PROC) given by TASKS, {tid: (stat, wchan)} (None: no such file), with the pressure files given by
+# PRESSURE, {resource: content}; QORE_TEST_CGROUP, if set, is a directory where it writes CGROUP, {file: content};
+# PROC_CGROUP, if not None, is the content of its /proc/<pid>/cgroup
+THREADS_TEST = """\
+    # test-timeout: 3
+    import os
+    import signal
+    import time
+    TASKS = {tasks!r}
+    PRESSURE = {pressure!r}
+    CGROUP = {cgroup!r}
+    PROC_CGROUP = {proc_cgroup!r}
+    fifo = os.environ["QORE_TEST_EVENT_FIFO"]
+
+    def report(event):
+        fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+        os.write(fd, (event + "\\n").encode())
+        os.close(fd)
+
+    def stacks(sig, frame):
+        print("call stacks printed", flush=True)
+        report("dumped")
+
+    def write(path, content):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+
+    signal.signal(signal.SIGUSR1, stacks)
+    proc = os.environ["QORE_TEST_PROC"]
+    for tid, (stat, wchan) in TASKS.items():
+        task = os.path.join(proc, str(os.getpid()), "task", tid)
+        os.makedirs(task)
+        if stat is not None:
+            write(os.path.join(task, "stat"), stat)
+        if wchan is not None:
+            write(os.path.join(task, "wchan"), wchan)
+    for resource, content in PRESSURE.items():
+        write(os.path.join(proc, "pressure", resource), content)
+    if PROC_CGROUP is not None:
+        write(os.path.join(proc, str(os.getpid()), "cgroup"), PROC_CGROUP)
+    if "QORE_TEST_CGROUP" in os.environ:
+        for name, content in CGROUP.items():
+            write(os.path.join(os.environ["QORE_TEST_CGROUP"], name), content)
+    report("handler %d" % os.getpid())
+    print("test hangs", flush=True)
+    while True:
+        time.sleep(600)
+"""
+
+
+def proc_stat(tid, comm, state, utime, stime):
+    """Returns the content of a /proc/<pid>/task/<tid>/stat file with the given fields (3, 14 and 15)"""
+    fields = [state] + ["0"] * 10 + [str(utime), str(stime)] + ["0"] * 37
+    return "%s (%s) %s\n" % (tid, comm, " ".join(fields))
+
+
+@unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")
+class ThreadStatesTest(unittest.TestCase):
+    """A test that exceeds its time limit has the state of its threads printed at the limit and again before it is
+    aborted, with the machine's pressure stall information and the cgroup's CPU and memory events: the core of a test
+    that hung showed only where its threads were, not whether one was waiting to be scheduled or in the kernel
+    (qore#5744)"""
+
+    def run_test(self, tasks, pressure=None, cgroup=None, proc_cgroup=None, **variables):
+        """Runs THREADS_TEST; with proc_cgroup, QORE_TEST_CGROUP is not set, so the cgroup is the one it names"""
+        with tempfile.TemporaryDirectory(prefix="qore-runner-threads-") as directory:
+            tree = RunnerTree(directory)
+            tree.add_test("threads.qtest", THREADS_TEST.format(tasks=tasks, pressure=pressure or {},
+                                                               cgroup=cgroup or {}, proc_cgroup=proc_cgroup))
+            # a /proc tree of the test's own, which it fills
+            (tree.root / "proc").mkdir()
+            variables["QORE_TEST_PROC"] = str(tree.root / "proc")
+            if cgroup is not None:
+                variables["QORE_TEST_CGROUP"] = str(tree.root / "cgroup")
+            elif proc_cgroup is None:
+                # a cgroup directory with nothing in it, so that the machine's own is not read
+                (tree.root / "no-cgroup").mkdir()
+                variables["QORE_TEST_CGROUP"] = str(tree.root / "no-cgroup")
+            result = tree.run(QORE_TEST_STACK_DUMP_WAIT="60", **variables)
+            sections = RunnerTree.sections(result.output)
+            self.assertEqual(["threads.qtest"], sorted(sections), result.output)
+            output = sections["threads.qtest"]
+            # the test is ended as without the snapshots: its call stacks first, then SIGABRT
+            self.assertIn("call stacks printed", output)
+            self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
+            self.assertEqual(1, result.returncode, result.output)
+            return output
+
+    @staticmethod
+    def snapshots(output):
+        """Returns the lines of each snapshot, by when it was taken"""
+        rv = {}
+        current = None
+        for line in output.splitlines():
+            m = re.match(r"\*\*\* threads of process \d+ (.*) \(state, CPU time in 1/\d+ s, kernel wait channel\) \*\*\*$",
+                         line)
+            if m:
+                current = rv.setdefault(m.group(1), [])
+            elif current is not None and line.startswith("    "):
+                current.append(line.strip())
+            else:
+                current = None
+        return rv
+
+    def test_the_threads_their_states_and_cpu_times_are_printed_twice(self):
+        output = self.run_test({
+            "100": (proc_stat(100, "qore", "S", 250, 17), "futex_wait_queue"),
+            # the bg compile thread of qore#5744: runnable, at 87 ticks
+            "101": (proc_stat(101, "qore", "R", 87, 2), "0"),
+            # a command name with spaces and parentheses: the fields follow the last ")"
+            "102": (proc_stat(102, "a (b) c)", "D", 5, 9), "folio_wait_bit_common"),
+            # no wait channel: "?"
+            "103": (proc_stat(103, "qore", "S", 1, 0), None),
+        })
+        expected = [
+            "thread 100 (qore): state S, user 250, system 17, wchan futex_wait_queue",
+            "thread 101 (qore): state R, user 87, system 2, wchan 0",
+            "thread 102 (a (b) c)): state D, user 5, system 9, wchan folio_wait_bit_common",
+            "thread 103 (qore): state S, user 1, system 0, wchan ?",
+        ]
+        snapshots = self.snapshots(output)
+        self.assertEqual(["at its time limit", "before SIGABRT"], list(snapshots), output)
+        for when, lines in snapshots.items():
+            with self.subTest(when=when):
+                self.assertEqual(expected, lines, output)
+        # the first snapshot is printed before the test is sent SIGUSR1, the second after its call stacks
+        self.assertLess(output.index("threads of process"), output.index("SIGUSR1 sent"), output)
+        self.assertLess(output.index("call stacks printed"), output.rindex("threads of process"), output)
+
+    def test_pressure_and_cgroup_files_that_can_be_read_are_printed(self):
+        output = self.run_test({"100": (proc_stat(100, "qore", "R", 1, 0), "0")}, pressure={
+            "cpu": "some avg10=91.50 avg60=80.00 avg300=70.00 total=123\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
+            "memory": "some avg10=0.10 avg60=0.00 avg300=0.00 total=5\nfull avg10=0.05 avg60=0.00 avg300=0.00 total=2\n",
+            # no io file: not printed
+        }, cgroup={
+            "cpu.stat": "usage_usec 100\nnr_throttled 7\n",
+            # no memory.events: not printed
+        })
+        lines = self.snapshots(output)["at its time limit"]
+        self.assertEqual([
+            "thread 100 (qore): state R, user 1, system 0, wchan 0",
+            "pressure cpu: some avg10=91.50 avg60=80.00 avg300=70.00 total=123 full avg10=0.00 avg60=0.00 "
+            "avg300=0.00 total=0",
+            "pressure memory: some avg10=0.10 avg60=0.00 avg300=0.00 total=5 full avg10=0.05 avg60=0.00 "
+            "avg300=0.00 total=2",
+            "cgroup cpu.stat: usage_usec 100 nr_throttled 7",
+        ], lines, output)
+
+    @unittest.skipUnless(os.access("/sys/fs/cgroup/cpu.stat", os.R_OK), "no cgroup v2 cpu.stat in /sys/fs/cgroup")
+    def test_without_qore_test_cgroup_the_test_s_own_cgroup_is_read(self):
+        # the cgroup of the test's /proc/<pid>/cgroup ("0::<path>", cgroup v2), under /sys/fs/cgroup: the root here,
+        # as in a container's cgroup namespace; a cgroup that does not exist is not replaced by the root, which on a
+        # host is the whole machine
+        tasks = {"100": (proc_stat(100, "qore", "R", 1, 0), "0")}
+        lines = self.snapshots(self.run_test(tasks, proc_cgroup="0::/\n"))["at its time limit"]
+        self.assertEqual(1, len([line for line in lines if line.startswith("cgroup cpu.stat: usage_usec ")]), lines)
+        lines = self.snapshots(self.run_test(tasks, proc_cgroup="0::/qore-test-no-such-cgroup-%d\n" % os.getpid()))[
+            "at its time limit"]
+        self.assertEqual(["thread 100 (qore): state R, user 1, system 0, wchan 0"], lines)
+
+    def test_a_thread_whose_stat_cannot_be_read_or_parsed_is_skipped(self):
+        # a thread that ended before its stat was read, one whose stat is cut short, one with no command name
+        output = self.run_test({
+            "100": (None, None),
+            "101": ("101 (qore) R 0 0\n", "0"),
+            "102": ("102 qore R " + " ".join(["0"] * 50) + "\n", "0"),
+            "103": (proc_stat(103, "qore", "S", 4, 1), "do_epoll_wait"),
+        })
+        snapshots = self.snapshots(output)
+        self.assertEqual(["at its time limit", "before SIGABRT"], list(snapshots), output)
+        for when, lines in snapshots.items():
+            with self.subTest(when=when):
+                self.assertEqual(["thread 103 (qore): state S, user 4, system 1, wchan do_epoll_wait"], lines, output)
+
+    def test_nothing_is_printed_without_the_test_s_task_directory(self):
+        # where /proc/<pid>/task does not exist (not Linux), there is no snapshot, and the test is ended as before
+        with tempfile.TemporaryDirectory(prefix="qore-runner-threads-") as directory:
+            tree = RunnerTree(directory)
+            tree.add_test("hangs.qtest", HANGING_TEST.format(report="self", handle="handler", masks=None))
+            (tree.root / "proc").mkdir()
+            result = tree.run(QORE_TEST_PROC=str(tree.root / "proc"), QORE_TEST_STACK_DUMP_WAIT="60")
+            output = RunnerTree.sections(result.output)["hangs.qtest"]
+            self.assertIn("SIGUSR1 sent for the call stacks of its threads", output)
+            self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
+            self.assertNotIn("threads of process", output)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/task"), "the threads of a process are in /proc on Linux")
+    def test_the_threads_of_a_real_process_are_read_from_proc(self):
+        # QORE_TEST_PROC unset: the test's own threads in /proc; the test makes no /proc tree of its own (no tasks)
+        with tempfile.TemporaryDirectory(prefix="qore-runner-threads-") as directory:
+            tree = RunnerTree(directory)
+            tree.add_test("hangs.qtest", HANGING_TEST.format(report="self", handle="handler", masks=None))
+            result = tree.run(QORE_TEST_STACK_DUMP_WAIT="60")
+            output = RunnerTree.sections(result.output)["hangs.qtest"]
+            snapshots = self.snapshots(output)
+            self.assertEqual(["at its time limit", "before SIGABRT"], list(snapshots), output)
+            for when, lines in snapshots.items():
+                with self.subTest(when=when):
+                    # the test's one thread (Python), asleep in time.sleep(), or still returning to it from its
+                    # SIGUSR1 handler when the second snapshot is taken; its command name is that of the
+                    # interpreter, which the stand-in for qore execs
+                    threads = [line for line in lines if line.startswith("thread ")]
+                    self.assertEqual(1, len(threads), output)
+                    self.assertRegex(threads[0], r"^thread \d+ \(.+\): state [RS], user \d+, system \d+, wchan \S+$")
+            self.assertIn("TIMEOUT: test exceeded 3s limit (it was ended by signal 6)", output)
 
 
 @unittest.skipUnless(HAVE_TIMEOUT, "run_tests.sh runs a test without its watchdog without a timeout command")

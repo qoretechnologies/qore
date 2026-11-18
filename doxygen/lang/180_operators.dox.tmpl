@@ -112,7 +112,7 @@
     - @ref map "map" (non-hash version): allows the @ref expressions "map expression" to be evaluated in place when nested with other functional operators or used with a @ref foreach "foreach statement"
     - @ref select "select": allows the filtered result list to be created and iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list
     - @ref keys "keys": allows the @ref hash "hash" or @ref object "object" to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list of hash keys or accessible object members
-    - @ref range_operator ".. (range operator)" and @ref list_element_operator "[]" with a range or multiple values: allow the operand to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list/string/binary object
+    - @ref range_operator ".. (range operator)" and @ref list_element_operator "[]" with a range or multiple values: allow the operand to be iterated in place when nested with other functional operators or used with a @ref foreach "foreach statement" rather than returning a temporary list/string/binary object; a list of selectors is evaluated one selector at a time as its elements are used, and gives the same elements as the expression as a value, including ranges with negative or out-of-range endpoints
     - @ref streaming_take "take", @ref streaming_drop "drop", @ref streaming_takewhile "takewhile", and @ref streaming_takeuntil "takeuntil": allow a streaming prefix, skip, or boundary stage to be iterated in place when nested with another functional or streaming consumer
 
     The following operators and statements support lazy evaluation for iteration:
@@ -132,6 +132,37 @@
 # build a comma-separated string from an iterated expression
 string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == External);
     @endcode
+
+    @anchor undefined_arithmetic
+    @section undefined_arithmetic_section Undefined Arithmetic
+
+    An arithmetic operation whose result is not defined has one of two outcomes, the same for
+    @ref int_type "int", @ref float_type "float" and @ref number_type "number" values and in every
+    @ref execution_modes "execution mode", including qcc-compiled code:
+    - <b>a division by zero raises a \c DIVISION-BY-ZERO exception</b>: the @ref division_operator "/",
+      @ref divide_equals_operator "/=", @ref modulo_operator "%" and @ref modulo_equals_operator "%=" operators raise it
+      for a divisor of zero, whatever the dividend (also \c 0, infinity and NaN, as in <tt>0.0 / 0.0</tt> and
+      <tt>0n / 0n</tt>) and also for a negative zero divisor (\c -0.0, \c -0.0n), and pow() raises it for a base of
+      zero with a negative exponent, which is a division by zero (<tt>pow(0, -1)</tt> is <tt>1 / 0</tt>); the
+      \c % and \c %= operators compute with the @ref float_to_int_conversion "integer values" of their operands, so
+      a divisor that converts to \c 0 (ex: \c 0.5 or NaN) is a divisor of zero; a division with the \c / operator by
+      a constant zero is an error when the code is parsed
+    - <b>any other undefined result is NaN</b>: the floating-point and arbitrary-precision math functions return
+      NaN, with no exception, for an argument outside their domain (ex: <tt>sqrt(-1)</tt>, <tt>nlog(-1.0)</tt>,
+      <tt>log10(-1)</tt>, <tt>asin(-2)</tt>, <tt>acos(2)</tt>, <tt>log1p(-2.0)</tt>, <tt>sin(\@inf\@)</tt>, and
+      <tt>pow(-1.0, 0.5)</tt>, a negative base with an exponent that is not an integer), as a division by a divisor
+      that is not zero does for an undefined quotient (<tt>\@inf\@ / \@inf\@</tt>); a NaN argument gives NaN,
+      except where IEEE 754 defines another result (ex: <tt>pow(1.0, \@nan\@)</tt> is \c 1.0 and
+      <tt>hypot(\@inf\@, \@nan\@)</tt> is infinity)
+
+    The other results are those of IEEE 754 arithmetic: a result too large for a float gives infinity (ex:
+    <tt>exp(1000.0)</tt>), and the logarithm functions give negative infinity for zero (ex: <tt>nlog(0.0)</tt>).
+
+    These results are floats or numbers; when such a value is converted to an integer (ex: with int() or the integer
+    variants of round(), ceil() and floor()), infinity and a value out of the range of an integer give the largest or
+    the smallest integer and NaN gives \c 0, as described in @ref float_to_int_conversion.  The integer division of
+    the smallest integer by \c -1 is not undefined: integer arithmetic wraps, so it gives the smallest integer (see
+    @ref division_operator "/").
 
     @section op_details Operator Details
 
@@ -158,6 +189,8 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |unquoted @ref string "string" \a shell_command|@ref string_type "string"|The shell command will be executed and the \c stdout is returned as a string
 
     @throw BACKQUOTE-ERROR An error occurred in fork() or creating the output pipe
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "SandboxManager" governing the code does not allow
+    \c /bin/sh, which runs the command, to be executed (see @ref sandbox_fs_shell)
 
     <hr>
     @subsection hash_element_operator Hash Element or Object Member Expression Dereference Operator ({})
@@ -234,7 +267,9 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     Retrieves given list element(s), given character(s) of a string, the integer value of a byte for a binary object or a binary object composed of given bytes, or a typed element from a buffer.
     If the index value is neither a list nor an integer it is converted to an integer. If the index is an integer and out of range, @ref nothing is returned.
     If the index is a list and completely out of range, empty list/string/binary is returned. A single integer index on a string returns a @ref char value; string ranges and list indexes return strings.
+    A character of a string in a single-byte @ref character_encoding "character encoding" is found in constant time; in UTF-8, a character in the ASCII text at the start of the string is also found in constant time (the string remembers the length of that text, so a loop over the characters of an ASCII string is linear), and a character after that text in time linear in its distance from the end of that text; in other multi-byte encodings, a character is found in time linear in its offset.
     With @ref negative-offsets "%negative-offsets" (implied by @ref modern "%modern"), negative list, string, binary, and buffer indexes and range endpoints are interpreted from the end of the value, so \c value[-1] is the last element and \c value[-2..] is the last two elements.
+    A range is resolved against the elements of the value (the characters of a string, also when they are multi-byte characters) and gives only elements of the value, from the start to the end, or in reverse order when the start is after the end: its bounds are limited to the first and last elements, a range that has no element of the value gives an empty value of the same type, and so does every range of an empty value.
     Note that this operator is not supported with multiple values and/or ranges between the square brackets on the left-hand side of an assignment expression.
 
     @par Syntax
@@ -280,7 +315,7 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
 
     @note The @ref no-string-index-char "%no-string-index-char" parse directive preserves the historical single-index string behavior where \c string[i] returns \c *string instead of \c *char.
 
-    @note Use @ref no-negative-offsets "%no-negative-offsets" after @ref modern "%modern" when maintaining legacy code that depends on negative list, binary, or buffer indexes not addressing from the end.
+    @note Legacy code that depends on negative list, binary, or buffer indexes not addressing from the end uses @ref no-negative-offsets "%no-negative-offsets" without @ref modern "%modern" (in a <tt>.q</tt> file, or after @ref old-style "%old-style"); the directive cannot be used while @ref modern "%modern" is in effect (see @ref modern_option_consistency).
 
     @since %Qore 0.8.13 this operator accepts list expressions inside the square brackets
 
@@ -436,6 +471,19 @@ list<int> l1 = new list<int>(2);
     - it is illegal to make changes to a local variable anywhere in a background expression, or to assign or modify a member
       of the object of the code that starts the thread directly (such as <tt><b>background</b> (x = 1)</tt> in a method of a
       class with member \c x); a parse exception will be thrown
+    - the same holds for a value held by such a local variable (also a closure-bound or a thread-local variable) or
+      member, which the new thread takes when it starts: an element of a list or a key of a hash
+      (<tt><b>background</b> (l[0] = 9)</tt>,
+      <tt><b>background</b> (h.a = 2)</tt>) is refused at parse time; a member of an object that the path reaches through a
+      value statically typed as an object or class is the object's member, which the thread shares, and is allowed
+      (<tt><b>background</b> (o.x = 5)</tt> with <tt>C o</tt>, <tt><b>background</b> (l[0].x = 5)</tt> with
+      <tt>list&lt;C&gt; l</tt>), as a method call on the object is, with every modifying operator, also
+      @ref remove "remove" and @ref delete "delete", and also when the rest of the path is a container held by the object
+      (<tt><b>background</b> (o.h.k = 1)</tt>) or the root is a member of the object of the code that starts the thread
+      (<tt><b>background</b> (o.x = 1)</tt> in a method of a class with a member <tt>C o</tt>); a member of an object
+      variable that holds no value (<tt>*C o</tt>) raises the same exception as outside of a background expression; a path
+      through a value whose type is not known (\c auto, \c any or no type) is refused, as it could be either: declare the
+      variable with an object type, or call a method of the object
     - the whole expression is evaluated in the new thread, in every @ref exec_mode_intro "execution mode": the arguments of a
       call and its target (the object of a method call, such as the <tt><b>new</b> T()</tt> of
       <tt><b>background</b> (<b>new</b> T()).method()</tt>, or the expression that gives the call reference to call) are
@@ -450,7 +498,10 @@ list<int> l1 = new list<int>(2);
       by the code that starts the thread is not seen by the expression, and <tt>map <b>background</b> f($1), list</tt> starts a
       thread for each element of \a list with the element as the argument; an implicit argument of an operator in the background
       expression that iterates, such as the <tt>$1</tt> of <tt><b>background</b> f(map $1 * 2, list)</tt>, is that operator's
-    - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
+    - a reference to a local variable (<tt>\\l</tt>), or a @ref closure "closure" that captures it, shares the variable with the
+      new thread, as the variable becomes a closure-bound variable protected by a lock (see
+      @ref references_overview "references"); this is the only way a background expression can modify a local variable of the
+      code that starts the thread
     - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
       its scope is prolonged until the background expression has finished executing
     - an object named directly by the background expression is referenced before the new thread is started, so the object's
@@ -487,6 +538,7 @@ list<int> l1 = new list<int>(2);
     When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
     The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n<br>
     The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n<br>
+    @anchor remove_selector_list A list of selectors in square brackets (more than one selector, any of which can be an index range, ex: <tt>delete x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order and nothing is deleted; a single index on such a value deletes the value as a whole.\n<br>
     In the case the delete operator operates on an object, any exception can be thrown that is thrown by the class' destructor.\n<br>
     A @ref cast "cast" cannot be the \a lvalue of the delete operator, as a cast is a converted value and not storage that can be deleted; a cast can still be used in a part of the \a lvalue that refers to a container (ex: <tt>delete cast<MyClass>(obj).member</tt>).\n<br>
     For a similar operator that returns the value that is removed from the data structure, and does not delete objects, see the @ref remove "remove operator".
@@ -521,6 +573,7 @@ delete l[2,5..7,8];
     When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
     The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n<br>
     The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n<br>
+    A list of selectors in square brackets (ex: <tt>remove x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order, nothing is removed and the value returned is @ref nothing; a single index on such a value removes the value as a whole (see @ref remove_selector_list).\n<br>
     The remove operator does not call destructors when operating on objects, but if removing an object from an lvalue or from a data structure within the \a lvalue causes the object to go out of scope, it will be destroyed, and then its destructor could throw an exception.\n<br>
     A @ref cast "cast" cannot be the \a lvalue of the remove operator, as a cast is a converted value and not storage that can be removed; a cast can still be used in a part of the \a lvalue that refers to a container (ex: <tt>remove cast<MyClass>(obj).member</tt>).\n<br>
     For a similar operator that deletes the value that is removed from the data structure, see the @ref delete "delete operator".
@@ -561,6 +614,8 @@ list nlist = remove l[2,5..7,8];
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>
     - <tt><b>cast</b>&lt;@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;&gt;(</tt><em>list_elements, ...</em><tt>)</tt>
     - <tt><b>cast</b>&lt;@ref list_type "list"&gt;(</tt><em>list_elements, ...</em><tt>)</tt>
+    - <tt><b>cast</b>&lt;<b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "expression"</em><tt>)</tt>
+    - <tt><b>cast</b>&lt;<b>*enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "expression"</em><tt>)</tt>
 
     @par Return Type
     - If a @ref qore_classes "class name" is given as the target type, then this operator returns an object of the specific class given at runtime.
@@ -572,6 +627,8 @@ list nlist = remove l[2,5..7,8];
     at runtime if possible.
     - If @ref hash_type "hash" is given as the target type, the runtime type must be a valid hash or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped hash is returned
     - If @ref list_type "list" is given as the target type, the runtime type must be a valid list or a runtime exception will be raised, additionally, any type-safe information is removed and an untyped list is returned
+    - If an @ref enums "enum" type is given as the target type (<tt>enum&lt;</tt><em>enum_identifier</em><tt>&gt;</tt>), the value must have the enum's base type (or be the value of an enum with that base type) and be the value of one of its members, or a runtime exception will be raised; the enum value is returned (see @ref enum_cast); with the or-nothing form (<tt>*enum&lt;</tt><em>enum_identifier</em><tt>&gt;</tt>), \c NOTHING is also accepted and returned
+    - If an or-nothing type (ex: \c *enum<E>) is given as the target type, or if @ref broken-cast "%broken-cast" is in effect, @ref nothing is returned unchanged; the target type is still checked: an undefined or invalid type in the target type (ex: an undeclared class, @ref hashdecl "hashdecl" or @ref enums "enum" name, or the wrong number of type arguments), or a type that cannot be cast to, is a parse error for every operand, including a literal or constant @ref nothing
 
     @par Data Conversions with cast<>()
     - <tt><b>cast</b>&lt;@ref hash_type "hash"&lt;</tt><em>@ref hashdecl "hashdecl_identifier"</em><tt>&gt;&gt;(</tt><em>@ref expressions "hash_expression"</em><tt>)</tt>: performs initialization of @ref hashdecl "hashdecl" keys with initializer expressions for keys not present in the output evaluated hash expression
@@ -613,6 +670,8 @@ auto l = cast<list>(new list<int>(1));
     |<em>@ref hashdecl "hashdecl_identifier"</em>|This must be a literal unquoted string giving a @ref hashdecl "type-safe hash" name or a namespace-qualified path to a type-safe hash (ex: \c Namespace::MyHash); a runtime check for compatibility with the target @ref hashdecl "hashdecl" is performed on the evaluated expression; any keys missing from the expression that have default initializer expressions in the @ref hashdecl "hashdecl" are initialized accordingly
     |<tt>@ref hash_type "hash"&lt;string, </tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The second type in the type parameter list gives the hash value type; the values, including those of nested containers, are converted to it as an assignment converts them, and a value that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
     |<tt>@ref list_type "list"&lt;</tt><em>@ref data_type_declarations "data_type"</em><tt>&gt;</tt>|The single type in the type parameter list gives the list element type; the elements, including those of nested containers, are converted to it as an assignment converts them, and an element that an assignment refuses raises a \c RUNTIME-TYPE-ERROR exception
+    |<tt><b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>|The value of the enum's base type is returned as the enum member with that value; a value that is not a member raises a \c RUNTIME-CAST-ERROR exception; this is the only way to convert a value of the base type to the enum type (see @ref enum_cast)
+    |<tt><b>*enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>|As <tt><b>enum</b>&lt;</tt><em>@ref enums "enum_identifier"</em><tt>&gt;</tt>, but \c NOTHING is also accepted and returned
 
     @throw RUNTIME-CAST-ERROR The expression given does not evaluate to a value that can be converted to the given type
 
@@ -684,7 +743,8 @@ if (!exists error_code)
     |@ref date|Gives the negative of its argument as a @ref date, ex: <tt>-(-1s) = 1s, -(1s) = -1s</tt>
     |other|Returns 0
 
-    This operator does not throw any exceptions
+    @throw INVALID-DATE a component of a @ref relative_dates "relative date" is the smallest signed 32-bit integer,
+    whose negative a relative date cannot hold (ex: <tt>-hours(-2147483648)</tt>)
 
     <hr>
     @subsection unary_plus_operator Unary Plus Operator (+)
@@ -764,6 +824,20 @@ if (!exists error_code)
     Removes the end-of-line marker(s) (\c '\\n' or \c '\\r\\n') from a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the number of characters removed.\n<br>
     To perform this operation on a non-lvalue expression, see the chomp() function.
 
+    @anchor keyword_operator_or_function
+    @par The Operator or the Function
+    \c chomp, @ref trim "trim" and @ref splice "splice" are operators and also functions: directly followed by
+    \c "(", as in <tt>chomp(str)</tt>, the name is the function, which returns a new value.  With white space before
+    the parenthesis, as in <tt>chomp (str)</tt>, it is the operator, which changes its lvalue, when the expression in
+    the parentheses can be an lvalue by its form (a variable, a member or element of one, a cast of one, or a name
+    that can be a variable, such as a constant's); when it cannot be one (a literal, a call or an operator other
+    than those, as in <tt>trim (" a" + "b ")</tt> or, for \c splice, when the first argument cannot be), it is the
+    function.  So <tt>trim (x)</tt> trims \c x itself, while
+    <tt>trim (x + "")</tt> returns a trimmed copy and does not change \c x.  As \c splice binds less tightly than
+    the other operators, its expression in parentheses is only the operand when nothing but the end of the expression
+    follows it: <tt>splice ("abcd", 1) + "x"</tt> is the operator, which refuses its arguments, while
+    <tt>splice("abcd", 1) + "x"</tt> is the function.
+
     @par Syntax
     <tt><b>chomp</b></tt><i>lvalue</i>
 
@@ -786,7 +860,8 @@ if (!exists error_code)
 
     @par Synopsis
     Removes whitespace characters from the beginning and end of a string, or each string element in a list, or each hash key value in a hash (if the value is a string) and returns the value processed (string, list, or hash).\n<br>
-    To perform this operation on a non-lvalue expression, see the trim() function.\n<br>
+    To perform this operation on a non-lvalue expression, see the trim() function, and see
+    @ref keyword_operator_or_function "the operator or the function" for \c trim with white space before \c "(".\n<br>
     The following whitespace characters are removed from the beginning and end of strings: <tt>' '</tt> (blank spaces), \c '\\n', \c '\\r', \c '\\t', \c '\\v' (vertical tab, ASCII 11), and \c '\\0' (null character).
 
     @par Syntax
@@ -1324,19 +1399,45 @@ foreach string key in (keys hash)
     \a expression1 <tt>*</tt> \a expression2
 
     @par Return Type
-    @ref int_type "int", @ref float_type "float", or @ref number_type "number"
+    @ref int_type "int", @ref float_type "float", @ref number_type "number" or @ref date_type "date"
 
     @par Example
     @code{.py} value = x * y;@endcode
+    @code{.py} date period = months(1) * 3;@endcode
 
     <b>Arguments Processed by * (in order of precedence)</b>
     |!Argument|!Processing
+    |@ref date_type "date"|Gives a @ref relative_dates "relative date": the date multiplied by the other argument (see below)
     |@ref number_type "number"|Gives the result of multiplying its arguments; @ref integer "ints" and @ref float "floats" are converted to @ref number "numbers" if at least one of the arguments is a @ref number "number"
     |@ref float_type "float"|Gives the result of multiplying its arguments; @ref integer "ints" are converted to @ref float "floats" if at least one of the arguments is a @ref float "float"
     |@ref int_type "int"|Gives the result of multiplying its arguments
     |any other type|Converts argument to a @ref number "number" and performs the multiplication
 
-    This operator does not throw any exceptions.
+    @anchor relative_date_multiplication
+    @par Multiplying a Relative Date
+    @parblock
+    A @ref relative_dates "relative date" multiplied by a number (in either order) gives a relative date whose
+    components (years, months, days, hours, minutes, seconds and microseconds) are each multiplied by the number and
+    then normalized as in date arithmetic (ex: 60 seconds are 1 minute and 12 months are 1 year; days are never
+    converted to months, nor hours to days), so a calendar component stays a calendar component:
+    - <tt>months(1) * 2</tt> gives <tt>2 months</tt>, and <tt>2024-01-31 + months(1) * 2</tt> gives
+      \c 2024-03-31, as <tt>2024-01-31 + months(2)</tt> does
+    - <tt>(hours(1) + minutes(30)) * 3</tt> gives <tt>4 hours 30 minutes</tt>
+
+    With a @ref float_type "float" or a @ref number_type "number" factor (a number is converted to a float), the
+    fraction of each component's product is carried to the smaller units as @ref Qore::date(string) "date(string)"
+    carries the fraction of an ISO 8601 duration component written as the product in decimal (the shortest decimal
+    that gives the float): a year is 365 days, a month 30 days and a day 24 hours, and a fraction of a microsecond is
+    truncated.  So <tt>months(1) * 1.5</tt> gives <tt>1 month 15 days</tt>, as \c date("P1.5M") does,
+    <tt>months(1) * 2.3</tt> gives <tt>2 months 9 days</tt>, as \c date("P2.3M") does, and <tt>years(1) * 1.5</tt>
+    gives <tt>1 year 182 days 12 hours</tt>, as \c date("P1.5Y") does.
+
+    Any other factor is converted to an @ref int_type "int".  An @ref absolute_dates "absolute date" is first
+    converted to the time from now until the date (zero for a date in the past), as get_duration_microseconds() does.
+    @endparblock
+
+    @throw INVALID-DATE a component of the product does not fit a signed 32-bit integer, or the factor is a float that
+    is not a finite number (NaN or infinity)
 
     <hr>
     @subsection division_operator Divide Operator (/)
@@ -1360,7 +1461,17 @@ foreach string key in (keys hash)
     |@ref int_type "int"|Gives the result of dividing its arguments, rounded toward zero; as integer arithmetic wraps, the smallest integer divided by \c -1 gives the smallest integer
     |any other type|Converts argument to a @ref float_type "float" and performs the division
 
-    @throw DIVISION-BY-ZERO division by zero error
+    A division by a divisor that is not zero whose result is not defined gives NaN (ex: <tt>\@inf\@ / \@inf\@</tt>);
+    see @ref undefined_arithmetic.
+
+    A @ref number_type "number" division tests the divisor itself, or the number that it converts to, for zero: a
+    divisor that is not zero but converts to the float \c 0.0 (ex: \c 1e-400n) divides.  A constant divisor that is
+    zero is an error when the code is parsed; one that is zero only as a float (ex: the string \c "1e-400") is not,
+    as it divides a @ref number_type "number" dividend, and a @ref float_type "float" dividend then raises
+    \c DIVISION-BY-ZERO when the division is executed.
+
+    @throw DIVISION-BY-ZERO the divisor is zero, for an @ref int_type "int", a @ref float_type "float" (also
+    \c -0.0) and a @ref number_type "number" divisor alike, whatever the dividend (see @ref undefined_arithmetic)
 
     <hr>
     @subsection modulo_operator Modulo Operator (%)
@@ -1381,7 +1492,8 @@ foreach string key in (keys hash)
     |!Argument|!Processing
     |@ref int_type "int"|Gives \a expression1 modulo \a expression2 (ex: <tt>12 % 10</tt> result in \c 2), with the sign of \a expression1; the remainder of a division by \c -1 is \c 0. Arguments are converted to integers if necessary.
 
-    @throw DIVISION-BY-ZERO \a expression2 is zero
+    @throw DIVISION-BY-ZERO \a expression2 is zero after its conversion to an integer (ex: \c 0, \c 0.5 or NaN; see
+    @ref undefined_arithmetic)
 
     <hr>
     @subsection plus_operator Plus (Addition and Concatenation) Operator (+)
@@ -1401,18 +1513,72 @@ foreach string key in (keys hash)
     @code{.py} list = (1, 2) + ("three", "four", "five");@endcode
     @code{.py} hash = ( "key1" : 1, "key2" : 2) + ( "key3" : "three", "key4": "four");@endcode
     @code{.py} bin = bin1 + bin2;@endcode
+    @code{.py} string hex = rtf[i] + rtf[i + 1]; # two chars give a two-character string@endcode
 
     @par Arguments Processed by + (in order of precedence)
     |!Argument|!Processing
     |@ref list_type list|Gives the result of concatenating its arguments, i.e. <tt>(1, 2) + (3, 4) = (1, 2, 3, 4)</tt>
-    |@ref string_type "string"|Gives the result of concatenating its arguments
+    |@ref string_type "string" or @ref char "char"|Gives the result of concatenating its arguments; a @ref char "char" is added as a one-character string with any other argument, so that <tt>c'a' + c'b'</tt> gives \c "ab", <tt>c'a' + 1</tt> gives \c "a1" and <tt>c'a' + NOTHING</tt> gives \c "a" (see @ref char_plus)
     |@ref date_type "date"|Gives the result of adding date/time values (see @ref date_time_arithmetic)
     |@ref number_type "number"|Gives the result of adding its arguments
     |@ref float_type "float"|Gives the result of adding its arguments
     |@ref int_type "int"|Gives the result of adding its arguments
     |@ref hash_type "hash"|Gives the result of concatenating/merging its arguments. Any common keys will be overwritten by the values in the second hash (\a expression2)
 
-    This operator does not throw any exceptions.
+    With a @ref date_type "date" argument, a number added to the date is a number of seconds.
+
+    @par Lists
+    A list that \c + gives keeps the type of a typed list where it can:
+    - a value added at either end of a list gives a list of the common type of the list's element type and the type
+      of the value (ex: \c list&lt;int&gt; for <tt>l + 1</tt> and for <tt>1 + l</tt>, if \c l is a
+      \c list&lt;int&gt;; \c list&lt;*int&gt; for a \c list&lt;*int&gt;), or \c list&lt;auto&gt; if they have none;
+      an empty \c list&lt;auto&gt; takes the type of the value, and a plain list (with no element type) gives a
+      \c list&lt;auto&gt;
+    - two lists give a list of the common type of their element types, or \c list&lt;auto&gt; if they have none
+      (also for a plain list and a typed list); two plain lists give a plain list, and an empty \c list&lt;auto&gt; on
+      the left takes the type of the list on the right
+    @par
+    As these types are those of the values at runtime, the result has a type at parse time only when it does not
+    depend on them: when a value of type \c int, \c float, \c number, \c string, \c bool or \c binary is added to a
+    plain list or to a list whose element type is \c int, \c float, \c number, \c string, \c bool, \c binary,
+    \c *bool or \c *binary.  Otherwise the result has no parse-time type, and an error in its use is raised at
+    runtime, in every execution mode:
+    @code{.py}
+list<softint> l = (1, 2);
+# raises RUNTIME-TYPE-ERROR when executed: the result is a list
+int x = l + 1;
+    @endcode
+
+    @par Type-Safe Hashes
+    A hash that \c + gives from two @ref hashdecl "type-safe hashes" is a hash of the same
+    @ref hashdecl "hashdecl" if both have it, and if one hashdecl @ref hashdecl_inheritance "inherits" the other, a
+    hash of the child hashdecl, which declares every key of the result (ex: \c hash&lt;Child&gt; for
+    <tt>c + p</tt> and for <tt>p + c</tt>, if \c c is a \c hash&lt;Child&gt; and \c p a \c hash&lt;Parent&gt;);
+    hashes of hashdecls of which neither inherits the other (such as two children of the same parent), and a
+    type-safe hash with a hash that has no hashdecl, give a \c hash&lt;auto&gt;.  The parse-time type of the sum of
+    two values of the same hashdecl type is that type, which holds unless the two values are hashes of two different
+    children of the hashdecl: their sum is then a \c hash&lt;auto&gt;, and its assignment to the hashdecl type raises
+    a \c RUNTIME-TYPE-ERROR:
+    @code{.py}
+hashdecl Parent { int x = 1; }
+hashdecl Child inherits Parent { int y = 2; }
+hashdecl Other inherits Parent { int z = 3; }
+
+hash<Parent> sub add(hash<Parent> l, hash<Parent> r) {
+    return l + r;
+}
+
+# a hash<Child>
+hash<Parent> h = add(<Child>{}, <Parent>{"x": 2});
+# raises RUNTIME-TYPE-ERROR when executed: the result is a hash<auto> with keys x, y and z
+h = add(<Child>{}, <Other>{});
+    @endcode
+    The @ref plus_equals_operator "+=" operator merges a hash into the hash of its lvalue, which keeps its hashdecl.
+
+    @throw INVALID-DATE the sum of @ref date_type "dates" is out of range: a component of a
+    @ref relative_dates "relative date" does not fit a signed 32-bit integer (ex:
+    <tt>hours(2147483647) + hours(1)</tt>), or the year of an @ref absolute_dates "absolute date" is not from
+    -2147483647 to 2147483646; or a number added to a date gives a relative date out of range
 
     <hr>
     @subsection minus_operator Minus Operator (-)
@@ -1444,7 +1610,10 @@ foreach string key in (keys hash)
     |@ref hash_type "hash" - @ref list_type "list"|hash key deletion: \a expression1 - \a expression2; all elements of the list are converted to strings (if necessary) and any keys with those names are deleted from the hash.
     |@ref hash_type "hash" - @ref hash_type "hash"|no-op; silently returns @ref nothing
 
-    This operator does not throw any exceptions.
+    @throw INVALID-DATE the difference of @ref date_type "dates" is out of range: a component of a
+    @ref relative_dates "relative date" does not fit a signed 32-bit integer (ex: the hours between
+    \c 0001-01-01 and \c 9999999-01-01), or the year of an @ref absolute_dates "absolute date" is not from
+    -2147483647 to 2147483646; or a number subtracted from a date gives a relative date out of range
 
     <hr>
     @subsection shift_right_operator Shift Right Operator (>>)
@@ -1510,6 +1679,21 @@ if (obj instanceof Qore::Mutex)
     |!Argument|!Processing
     |\a expression|If expression is an instance of the named type, which is defined as the type is able to accept the value, then the operator returns @ref True "True", otherwise returns @ref False "False".
 
+    In generic code, a type parameter of the @ref generic_class_type "generic class", function or method in the type
+    is the type argument of the instantiation that runs, as for a variable or parameter declared with it, in every
+    execution mode:
+    @code{.py}
+class Holder<T> {
+    bool isT(auto v) {
+        return v instanceof T;
+    }
+}
+
+Holder<int> h();
+h.isT(1);      # True
+h.isT("x");    # False
+    @endcode
+
     This operator does not throw any exceptions.
 
     <hr>
@@ -1559,7 +1743,7 @@ if (x < y)
     |@ref number_type "number"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
     |@ref float_type "float"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
     |@ref int_type "int"|If \a expression1 is numerically less than \a expression2, returns @ref True "True", otherwise returns @ref False "False"
-    |@ref string_type "string"|If \a expression1 comes before \a expression2 in string sort order, returns @ref True "True", otherwise returns @ref False "False"
+    |@ref string_type "string"|If \a expression1 comes before \a expression2 in string sort order (an empty string comes before every other string), returns @ref True "True", otherwise returns @ref False "False"
     |@ref date_type "date"|If \a expression1 is before (or a shorter amount of time than of the arguments are @ref relative_dates) \a expression2, returns @ref True "True", otherwise returns @ref False "False"
 
     This operator does not throw any exceptions.
@@ -1616,6 +1800,7 @@ if (x == y)
     |@ref number_type "number"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'\\x01' == True</tt> is @ref True "True", <tt>c'a' == True</tt> is @ref False "False")
     |@ref date_type "date"|If \a expression1 is equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If each hash has the same keys and the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -1650,6 +1835,7 @@ if (x != y)
     |@ref number_type "number"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref float_type "float"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref int_type "int"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
+    |@ref char_type "char"|A char is compared as an @ref int_type "int" with its code point, also with a @ref bool_type "bool" (<tt>c'a' != True</tt> is @ref True "True")
     |@ref date_type "date"|If \a expression1 is not equal to \a expression2, returns @ref True "True", otherwise @ref False "False"
     |@ref list_type "list"|If each element in the each list where order is relevant satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
     |@ref hash_type "hash"|If the hashes have different keys or the value of each equal key in each hash satisfies this operator, the operator returns @ref True "True", otherwise it returns @ref False "False"
@@ -2192,7 +2378,8 @@ if (x || y)
     @par Synopsis
     Removes and optionally inserts elements in lists, strings, and binary objects and returns the \a lvalue after processing. For a similar operator that returns the values removed, see the @ref extract "extract operator".\n<br>
     Works on strings, lists, and binary data in a similar way; removes elements from a list, characters from a string, or bytes from binary data and optionally inserts new ones. If no \a length_expression is given, splice removes all elements/characters/bytes from the list, string, or binary data lvalue starting at \a offset_expression (offsets begin at 0). Otherwise, a number of elements/characters/bytes equal to \a length_expression is removed (or up to the end of the list/string/data if applicable). If \a substitution_expression is present, then the removed elements/characters/bytes are substituted with the elements/string/bytes given by this expression.\n<br>
-    Note that string splice takes character offsets, which may not be the same as byte offsets for multi-byte character encodings, such as \c UTF-8
+    Note that string splice takes character offsets, which may not be the same as byte offsets for multi-byte character encodings, such as \c UTF-8; see
+    @ref keyword_operator_or_function "the operator or the function" for \c splice with white space before \c "(".
 
     @par Syntax
     <tt><b>splice</b></tt> \a lvalue, \a offset_expression<em>, [length_expression, [substitution_expression]]</em>
@@ -2245,6 +2432,8 @@ if (x || y)
     @par Synopsis
     Assigns a value to an lvalue and returns the value assigned.
 
+    @anchor lvalue_evaluation_order The keys and indices of an lvalue path are evaluated from the root out, and the index of its last step after them, in every @ref execution_modes "execution mode", as when the path is read as a value: <tt>h.(k1()).(k2())[i()] = v()</tt> evaluates \c v(), \c k1(), \c k2() and \c i() in this order.  The same order applies to every operator that changes an lvalue (compound assignments, \c ++ and \c --, @ref remove "remove", @ref delete "delete", @ref splice "splice", @ref extract "extract", @ref push "push", @ref unshift "unshift", @ref pop "pop") and to a @ref lvalue_references "reference" to it; a key or an index of the path that raises an exception stops the evaluation, and the lvalue is not changed.
+
     @par Syntax
     \a lvalue <tt>=</tt> \a expression
 
@@ -2266,12 +2455,40 @@ if (x || y)
     raises \c RUNTIME-TYPE-ERROR as <tt>timeout t = x</tt> does).  An operation whose result is refused leaves no
     new hash key or list element behind.
 
+    @anchor native_member_callback_lvalue
+    @note When object \c += or \c -=, or member @ref remove "removal" or @ref delete "deletion", calls a native
+    member gate or accessor, the parent lvalue is released before the callback runs. The operation retains its
+    original target object: a callback can replace or remove the variable or container holding it, and that write
+    is preserved. A successful compound assignment returns the original target object. Pending parent member
+    notifications run after the operation, and exceptions from callbacks propagate to the caller.
+
     @anchor compound_assignment_parse_checks
     @note A compound assignment, \c ++ or \c -- whose result the declared type of its lvalue can never accept is
     refused at parse time with \c PARSE-TYPE-ERROR.  An lvalue declared with an or-nothing type (ex: \c *string,
     \c *date, <tt>*list&lt;auto&gt;</tt>) is checked as its plain type, so a statement refused for the plain type is
     refused for it as well (ex: <tt>*string s; s -= 1;</tt>, whose message is
     <tt>lvalue has type '*string', but the -= operator will assign it an integer value</tt>).
+
+    @note Whether the result can be accepted is decided from the types of the lvalue and of the operand that are
+    known at parse time, in every execution mode and with every set of parse options, as for the
+    @ref assignment_operator "assignment operator"; a result that the lvalue's type may accept (an lvalue of type
+    @ref auto_type "auto", a union type that includes it, a soft type that converts it, such as \c softint for a
+    date, or an operand whose type is not known or that may have no value) is checked at run time and refused with
+    \c RUNTIME-TYPE-ERROR; ex:
+    - <tt>int i = 1; i *= 2h;</tt>, <tt>float f = 1.0; f *= 2h;</tt>: \c *= with an operand of type \c date assigns
+      a @ref relative_dates "relative date" (see @ref multiply_equals_operator "*="): parse errors
+    - <tt>int i = 1; i -= 2h;</tt>: \c -= with an operand of type \c date on an \c int lvalue assigns a date (see
+      @ref minus_equals_operator "-="): a parse error
+    - <tt>date d = 2h; d /= 2;</tt>, <tt>union&lt;date, string&gt; u = 2h; u /= 2;</tt>: \c /= assigns an integer,
+      float or number value, never a date (see @ref divide_equals_operator "/="): parse errors
+    - <tt>softint i = 1; i *= 2h;</tt>, <tt>auto a; a *= 2h;</tt>, <tt>union&lt;int, date&gt; u = 1; u *= 2h;</tt>,
+      and <tt>int i = 1; i *= d;</tt> with <tt>*date d</tt> or a \c d of type @ref auto_type "auto": valid; the
+      result is checked at run time
+
+    @anchor list_assignment
+    @note A list assignment (<tt>(a, b) = (1, 2)</tt>) assigns the elements of its right-hand side to its lvalues in
+    order and returns its right-hand side, with the type of the right-hand side (ex: <tt>list&lt;int&gt;</tt> for
+    <tt>(c, d) = (7, 8)</tt>, which can initialize a key of type \c auto in <tt>new hash&lt;string, auto&gt;</tt>).
 
     <hr>
     @subsection weak_assignment_operator Weak Reference Assignment Operator (:=)
@@ -2289,6 +2506,11 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
+    or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
+    program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
+    variable's own value and shows the changes later made through the variable; this is the same in every
+    @ref exec_mode_overview "execution mode".\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.
@@ -2368,17 +2590,40 @@ if (x || y)
     @code{.py} hash += ("new-key" : 1, "other" : "two");@endcode
     @code{.py} object += hash;@endcode
 
+    @note Values replaced in a hash or object are released after the merge finishes and its lvalue locks are
+    released, including after a partial merge fails; their destructors can read or modify the target.
+
+    A @ref char "char" \a expression is added exactly as its one-character string is, whatever the type of the
+    \a lvalue: <tt>int i = 1; i += c'5';</tt> gives \c 6, as <tt>i += "5"</tt> does, a list \a lvalue is appended
+    the string, and an \a lvalue with no value is assigned it; code-point addition takes \c int()
+    (<tt>i += int(c'5')</tt> gives \c 54).  See @ref char_plus.
+
     <b>Arguments Processed by +=</b>
     |!Argument|!Processing
     |\a lvalue (@ref list_type "list")|the expression will be evaluated and concatenated to the \a lvalue. If \a expression is a list, the lists will be concatenated, to ensure adding a single element to a list, use the @ref push "push operator"
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object")|the \a expression will be evaluated, and, if it is a hash or object, then it's members will be added to the \a lvalue, any duplicate elements in the \a lvalue will be overridden by elements in the \a expression.
     |\a lvalue (@ref string_type "string")|the \a expression will be evaluated and converted to a string if necessary and concatenated to the \a lvalue.
+    |\a lvalue (@ref char "char")|the \a lvalue is processed as a one-character string: it is assigned the string that concatenates the \a lvalue and the \a expression converted to a string (see @ref char_plus); a \c char lvalue cannot hold the string, so the operator is a parse error with an lvalue declared as \c char
     |\a lvalue (@ref number_type "number")|the \a expression will be evaluated and converted to a number if necessary and added to the \a lvalue.
     |\a lvalue (@ref float_type "float")|the \a expression will be evaluated and converted to a float if necessary and added to the \a lvalue.
     |\a lvalue (@ref binary_type "binary")|the \a expression will be evaluated and converted to a binary if necessary and added to the \a lvalue.
-    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and added to the \a lvalue.
+    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and added to the \a lvalue; \c INVALID-DATE is raised if the result is out of range (see @ref plus_operator "+")
     |\a lvalue (@ref nothing)|if the \a lvalue's type has a default value (ex: @ref int_type "int", @ref string_type "string"), the \a lvalue first takes that value and is processed as above; an or-nothing lvalue (ex: \c *string) takes the default value of its plain type, unless \a expression has no value, which leaves it with no value; otherwise the \a lvalue will be assigned to the value of \a expression.
     |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer, and the \a expression will be evaluated and converted to an integer if necessary, and then the result will be added to the \a lvalue.
+
+    @note If a list rejects a temporary element because of its type, the temporary is released after the list's
+    lvalue lock is released, so its destructor can read or modify the target; a destructor exception is chained
+    after the type error.
+
+    @anchor compound_assignment_union_nothing
+    @note A union type (ex: <tt>union&lt;int, float&gt;</tt>, <tt>*union&lt;int, float&gt;</tt>) has no default value,
+    and its \a lvalue is not a list or a hash \a lvalue even if a member of the union is a list or a hash; an or-nothing
+    union with no value is therefore assigned the value of the \a expression, which the union must accept, or
+    \c RUNTIME-TYPE-ERROR is raised; ex:
+    - <tt>*union&lt;int, float&gt; u; u += 2.5;</tt> gives \c 2.5
+    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2.0
+    - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u += 2;</tt> gives \c 2
+    - <tt>*union&lt;int, float&gt; u; u += 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
 
     <hr>
     @subsection minus_equals_operator Minus Equals Operator (-=)
@@ -2400,15 +2645,25 @@ if (x || y)
     @code{.py} object -= "key";@endcode
     @code{.py} object -= list_of_keys;@endcode
 
+    @note Removed values are released after the removal finishes and its lvalue locks are released, including
+    after a partial removal fails; their destructors can read or modify the target.
+
     <b>Arguments Processed by -=</b>
     |!Argument|!Processing
     |\a lvalue (@ref number_type "number")|the \a expression will be evaluated and converted to a number if necessary and subtracted from the \a lvalue
     |\a lvalue (@ref float_type "float")|the \a expression will be evaluated and converted to a float if necessary and subtracted from the \a lvalue
-    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and subtracted from the \a lvalue
+    |\a lvalue (@ref date_type "date")|the \a expression will be evaluated and converted to a date if necessary and subtracted from the \a lvalue; \c INVALID-DATE is raised if the result is out of range (see @ref minus_operator "-")
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref string_type "string")|the hash key represented by \a expression will be removed from the \a lvalue
     |\a lvalue (@ref hash_type "hash" or (@ref object_type "object"), \a expression (@ref list_type "list")|each element in the list will be converted to a string (if necessary) and the key represented by each string will be removed from the hash or object
     |\a lvalue (@ref nothing), \a expression (any type)|a hash lvalue is left with no value; otherwise, if the \a lvalue's type, or for an or-nothing lvalue (ex: \c *int) its plain type, has a default value, the \a lvalue first takes that value and is processed as above (ex: <tt>int i; i -= 0;</tt> gives 0); otherwise the negated \a expression will be assigned to \a lvalue; an \a expression with no value leaves the \a lvalue unchanged
-    |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses with \c RUNTIME-TYPE-ERROR and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
+    |\a lvalue (all other types)|the \a lvalue's type will be converted to an integer (if necessary), and the \a expression will be evaluated and converted to an integer (if necessary), and then the result will be subtracted from the \a lvalue; for an lvalue of an int type and a date \a expression, the \a lvalue is assigned the result of <tt>lvalue - expression</tt>, a date, which an \c int or \c *int lvalue (including an int member of a typed hash) refuses (a parse error if the \a expression has type \c date, see @ref compound_assignment_parse_checks "parse-time checks", otherwise \c RUNTIME-TYPE-ERROR) and a \c softint lvalue converts to an int; a \c timeout lvalue subtracts the date in milliseconds
+
+    @note A union type has no default value (see @ref compound_assignment_union_nothing "+="): an or-nothing union with
+    no value is assigned the negated \a expression, which the union must accept, or \c RUNTIME-TYPE-ERROR is raised;
+    ex:
+    - <tt>*union&lt;int, float&gt; u; u -= 2.5;</tt> gives \c -2.5
+    - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u -= 2;</tt> gives \c -2
+    - <tt>*union&lt;int, float&gt; u; u -= 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)
@@ -2465,7 +2720,10 @@ if (x || y)
 
     <b>Arguments Processed by %=</b>
     |!Argument|!Processing
-    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue, as by the @ref modulo_operator "modulo operator"; if the \a expression is zero, \c 0 is saved to the \a lvalue and no exception is raised
+    |All|the \a lvalue's type will be converted to an integer if necessary, and the \a expression will be evaluated and converted to an integer as well if necessary, and then the result will be used to divide the \a lvalue's value and the remainder will be saved to the \a lvalue, as by the @ref modulo_operator "modulo operator"
+
+    @throw DIVISION-BY-ZERO the \a expression is zero after its conversion to an integer; the \a lvalue keeps its value
+    (see @ref undefined_arithmetic)
 
     <hr>
     @subsection multiply_equals_operator Multiply Equals Operator (*=)
@@ -2477,14 +2735,19 @@ if (x || y)
     \a lvalue <tt>*=</tt> \a expression
 
     @par Return Type
-    @ref int_type "int", @ref float_type "float", or @ref number_type "number"
+    @ref int_type "int", @ref float_type "float", @ref number_type "number" or @ref date_type "date"
 
     @par Example
     @code{.py} a *= 10;@endcode
+    @code{.py} period *= 2;@endcode
 
     <b>Arguments Processed by *=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
+    |@ref date_type "date"|If the \a lvalue or the \a expression is a @ref date_type "date", the \a lvalue is assigned <tt>lvalue * expression</tt>, a @ref relative_dates "relative date" (see @ref relative_date_multiplication), which the \a lvalue's type must accept; an \a expression of type \c date on an \a lvalue whose type never accepts a date (ex: \c int, \c *int, \c float) is a parse error (see @ref compound_assignment_parse_checks "parse-time checks")
+    |All other types|The type precedence from highest to lowest is @ref number "number", @ref float "float" float, and @ref integer "int", other types are converted to @ref integer "int". The \a expression will be evaluated and multiplied by the \a lvalue, and the result will be saved to the \a lvalue.
+
+    @throw INVALID-DATE a component of a @ref relative_dates "relative date" product does not fit a signed 32-bit
+    integer, or a date is multiplied by a float that is not a finite number
 
     <hr>
     @subsection divide_equals_operator Divide Equals Operator (/=)
@@ -2503,9 +2766,11 @@ if (x || y)
 
     <b>Arguments Processed by /=</b>
     |!Argument|!Processing
-    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator".
+    |All|The type precedence from highest to lowest is @ref number "number", @ref float "float", and @ref integer "int", other types are converted to @ref integer "int"; the \a expression will be evaluated and used to divide the \a lvalue, and the result will be saved to the \a lvalue, as by the @ref division_operator "divide operator"; a @ref date_type "date" \a lvalue is converted to an @ref integer "int" like the other types, so the result is never a date, and \c /= on an \a lvalue whose type accepts no integer, float or number value (ex: \c date, \c *date) is a parse error (see @ref compound_assignment_parse_checks "parse-time checks")
 
-    @throw DIVISION-BY-ZERO If the divisor expression evaluates to zero, this exception is thrown
+    @throw DIVISION-BY-ZERO the divisor expression is zero, as for the @ref division_operator "divide operator" (a
+    @ref number_type "number" division tests the divisor itself or the number that it converts to, so a divisor such
+    as \c 1e-400n divides); the \a lvalue keeps its value (see @ref undefined_arithmetic)
 
     <hr>
     @subsection xor_equals_operator Xor Equals Operator (^=)

@@ -3,8 +3,9 @@
 
 %modern
 %no-child-restrictions
+%requires ../TestInterpreter.qm
 
-string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
     ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
@@ -350,6 +351,8 @@ printf(\"%s\\n\", caller());
 
 string sub unassignedScriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub leaf(int x) {
     return x + 1;
@@ -382,6 +385,8 @@ printf(\"%s\\n\", caller());
 
 string sub selfRecursiveUnassignedScriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub rec(int x) {
     if (x <= 0) {
@@ -397,6 +402,8 @@ printf(\"%s\\n\", rec(1));
 
 string sub selfMethodUnassignedScriptCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 class SelfUnassigned {
     final int add(int x) {
@@ -609,6 +616,8 @@ nothing sub cross_bump(reference<int> value) {
 
 string sub crossFileMainCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 class CrossSpeculativeOverride inherits CrossSpeculativeLeaf {
     int affine(int value) {
@@ -712,6 +721,8 @@ int sub main() {
 
 string sub crossFileUnassignedMainCode() {
     return "%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 int sub main() {
     int value;
@@ -863,7 +874,7 @@ if (!is_file(cross_exe_path)) {
     exit(2);
 }
 string cross_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cross_exe_path));
-if (cross_out != "12:5:5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:1:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1:19:120:boxed:1\n13110:1\n") {
+if (cross_out != "12:5:5:6:-14:ok!:13:4:1:1125899906842624:6.0:3:4:5:13:9:1:7:5:1:1:1:4:éb:4:5:5:1:3:20:1:42:1:1:11:7:9:7:1:1:19:120:boxed:1\n13110:1\n") {
     printf("unexpected cross-file AOT output: %s", cross_out);
     exit(2);
 }

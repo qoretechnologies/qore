@@ -34,6 +34,8 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QorePluginRegistry.h"
+#include "qore/intern/QoreTypeSpec.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 
 QoreString QoreSquareBracketsOperatorNode::op_str("[] operator expression");
 
@@ -42,6 +44,7 @@ QoreOperatorNode* QoreSquareBracketsOperatorNode::copyBackground(ExceptionSink* 
     if (rv) {
         rv->typeInfo = typeInfo;
         rv->rhs_list_range = rhs_list_range;
+        rv->right_needs_eval = right_needs_eval;
         rv->string_index_char = string_index_char;
         rv->negative_offsets = negative_offsets;
     }
@@ -56,7 +59,7 @@ bool QoreSquareBracketsOperatorNode::normalizeIndex(int64& offset, int64 size, b
 }
 
 static bool qore_get_effective_selector_range(const QoreValue& seq, const QoreValue& range_value,
-        bool negative_offsets, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
+        bool negative_offsets, bool broken_list_range, int64& start, int64& stop, bool& empty, ExceptionSink* xsink) {
     empty = false;
 
     if (!negative_offsets || range_value.getType() != NT_LIST) {
@@ -78,7 +81,7 @@ static bool qore_get_effective_selector_range(const QoreValue& seq, const QoreVa
 
     int64 seq_size;
     empty = !QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size, start_index,
-        stop_index, static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE), negative_offsets, xsink);
+        stop_index, broken_list_range, negative_offsets, xsink);
     return true;
 }
 
@@ -107,12 +110,16 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
 
         parse_context.typeInfo = nullptr;
         QoreParseContextAnalysisHelper ah(parse_context);
+        // the key or index is read also when the lvalue operand of the reference, delete or remove operator is not
+        // (qore#5937)
+        QoreParseContextFlagScope key_read(parse_context, PF_LVALUE_NOT_READ, QoreParseContextFlagScope::Clear());
         if (parse_init_value(right, parse_context) && !err) {
             err = -1;
         }
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
+    right_needs_eval = right.needsEval();
 
     if (!(parse_context.pflag & PF_FOR_ASSIGNMENT)) {
         QorePluginResolvedOperationInfo plugin_op;
@@ -317,6 +324,21 @@ int QoreSquareBracketsOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
     return err;
 }
 
+void QoreSquareBracketsOperatorNode::setCompiledCodeOptions() {
+    string_index_char = true;
+    negative_offsets = true;
+    // an offset list with a range is evaluated as a list of ranges (see parseCheckValueTypes()); the value types of a
+    // list read from compiled code are not set, so its values are checked
+    if (right.getType() == NT_PARSE_LIST) {
+        for (const QoreValue& v : right.get<const QoreParseListNode>()->getValues()) {
+            if (v.getType() == NT_OPERATOR && dynamic_cast<const QoreRangeOperatorNode*>(v.getInternalNode())) {
+                rhs_list_range = true;
+                break;
+            }
+        }
+    }
+}
+
 int QoreSquareBracketsOperatorNode::parseCheckValueTypes(const QoreParseListNode* pln) {
     const type_vec_t& vtypes = pln->getValueTypes();
     const QoreParseListNode::nvec_t& vl = pln->getValues();
@@ -387,9 +409,10 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
     // do not evalute RHS if it's a list with ranges
     if (rhs_list_range)
         return doSquareBracketsListRange(*lh, right.get<const QoreParseListNode>(), string_index_char,
-            negative_offsets, xsink);
+            negative_offsets, semantic_policy.brokenListRange(), xsink);
 
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    // the index is a temporary of the statement, which lives until the statement ends (qore#5712)
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -406,7 +429,7 @@ QoreValue QoreSquareBracketsOperatorNode::evalImpl(bool& needs_deref, ExceptionS
 }
 
 QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreValue l, const QoreParseListNode* pln,
-        bool string_index_char, bool negative_offsets, ExceptionSink* xsink) {
+        bool string_index_char, bool negative_offsets, bool broken_list_range, ExceptionSink* xsink) {
     switch (l.getType()) {
         case NT_LIST: {
             // calculate the runtime element type if possible
@@ -426,7 +449,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                 int64 start;
                 int64 stop;
                 bool empty;
-                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, broken_list_range, start, stop, empty,
                         xsink)) {
                     if (*xsink) {
                         return QoreValue();
@@ -513,7 +536,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                 int64 start;
                 int64 stop;
                 bool empty;
-                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, broken_list_range, start, stop, empty,
                         xsink)) {
                     if (*xsink) {
                         return QoreValue();
@@ -555,7 +578,7 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBracketsListRange(const QoreVa
                 int64 start;
                 int64 stop;
                 bool empty;
-                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, start, stop, empty,
+                if (is_range && qore_get_effective_selector_range(l, *rh, negative_offsets, broken_list_range, start, stop, empty,
                         xsink)) {
                     if (*xsink) {
                         return QoreValue();
@@ -646,7 +669,8 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
                     if (*xsink)
                         return QoreValue();
 
-                    assert(entry->getType() != NT_LIST);
+                    // the entry is an element of the list, which can be a list itself: ll[0..1, 2] with
+                    // ll = ((1, 2), (3, 4), (5, 6)) selects lists
 
                     if (!it.index()) {
                         vtype = entry->getTypeInfo();
@@ -744,41 +768,59 @@ FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getFunctionalIterat
     ValueEvalOptimizedRefHolder lhs(left, xsink);
     if (*xsink)
         return nullptr;
-
-    ValueEvalOptimizedRefHolder rhs(xsink);
+    // a container read from a variable is borrowed; the index or the range bounds are evaluated after it and can
+    // assign the variable another value (l[(l = x) ? 0 : 0]), which releases the only reference to the container
+    // before it is read, so the operator holds a reference of its own to a borrowed container while the index needs
+    // evaluation, as evalImpl() does (qore#6204); the iterator takes it over
+    if (!lhs.isTemp() && right_needs_eval && lhs->needsRef()) {
+        lhs.ensureReferencedValue();
+    }
+    // the container and the index are temporaries of the statement, which live until the statement ends, as in
+    // evalImpl() and in the other execution modes (qore#5712); an iterator takes references of its own
+    QoreStatementTempScope::holdReceiver(left, lhs, xsink);
+    // the destructor of a value that the scope released for the same expression can raise an exception
+    if (*xsink)
+        return nullptr;
 
     // do not evaluate the RHS if the RHS is a list with ranges
     if (rhs_list_range) {
         if (lhs->getType() == NT_LIST) {
             value_type = list;
             return new QoreFunctionalSquareBracketsComplexOperator(lhs, right.get<const QoreParseListNode>(),
-                string_index_char, negative_offsets, xsink);
+                string_index_char, negative_offsets, semantic_policy.brokenListRange(), xsink);
         }
     } else {
-        if (rhs.eval(right))
+        QoreOperandEvalHolder rhs(right, xsink);
+        if (*xsink)
             return nullptr;
-
-        // we only support functional iteration when the lhd is a list and the rhs is a list
-        if (lhs->getType() == NT_LIST && rhs->getType() == NT_LIST) {
-            ValueEvalOptimizedRefHolder rhs(right, xsink);
-            if (*xsink)
-                return nullptr;
-
-            value_type = list;
-            return new QoreFunctionalSquareBracketsOperator(lhs, rhs, string_index_char, negative_offsets, xsink);
-        }
+        return getIndexesIterator(lhs, rhs, string_index_char, negative_offsets, value_type, xsink);
     }
 
-    ValueHolder res(xsink);
-
-    if (rhs_list_range)
-        res = doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), string_index_char,
-            negative_offsets, xsink);
-    else
-        res = doSquareBrackets(*lhs, *rhs, true, string_index_char, negative_offsets, xsink);
-
+    ValueHolder res(doSquareBracketsListRange(*lhs, right.get<const QoreParseListNode>(), string_index_char,
+        negative_offsets, semantic_policy.brokenListRange(), xsink), xsink);
     if (*xsink)
         return nullptr;
+    return getResultIterator(res, value_type, xsink);
+}
+
+FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getIndexesIterator(ValueEvalRefHolder& lhs,
+        ValueEvalRefHolder& rhs, bool string_index_char, bool negative_offsets, FunctionalValueType& value_type,
+        ExceptionSink* xsink) {
+    // we only support functional iteration when the lhd is a list and the rhs is a list; the rhs is evaluated
+    // once (qore#5684)
+    if (lhs->getType() == NT_LIST && rhs->getType() == NT_LIST) {
+        value_type = list;
+        return new QoreFunctionalSquareBracketsOperator(lhs, rhs, string_index_char, negative_offsets, xsink);
+    }
+
+    ValueHolder res(doSquareBrackets(*lhs, *rhs, true, string_index_char, negative_offsets, xsink), xsink);
+    if (*xsink)
+        return nullptr;
+    return getResultIterator(res, value_type, xsink);
+}
+
+FunctionalOperatorInterface* QoreSquareBracketsOperatorNode::getResultIterator(ValueHolder& res,
+        FunctionalValueType& value_type, ExceptionSink* xsink) {
     if (res->isNothing()) {
         value_type = nothing;
         return nullptr;
@@ -802,7 +844,8 @@ bool QoreFunctionalSquareBracketsOperator::getNextImpl(ValueOptionalRefHolder& v
 
 const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
-        case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
+        // an index outside the list gives NOTHING, as in the list that the selectors give as a value (qore#5688)
+        case NT_LIST: return get_or_nothing_type_check(leftValue->get<const QoreListNode>()->getValueTypeInfo());
         case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();
@@ -810,50 +853,108 @@ const QoreTypeInfo* QoreFunctionalSquareBracketsOperator::getValueTypeImpl() con
     return nothingTypeInfo;
 }
 
-bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
-    if (!rangeIter) {                               // the current position is not inside a subrange
-        if ((size_t)++offset == rightParseList->size())  // do a step in the top-level list
-            return true;
+int QoreFunctionalSquareBracketsComplexOperator::startRange(const QoreRangeOperatorNode* range,
+        ExceptionSink* xsink) {
+    // the bounds are evaluated as the range operator evaluates them for doSquareBracketsListRange(): a bound that is
+    // NOTHING raises RANGE-ERROR, the start before the end is evaluated
+    ValueEvalOptimizedRefHolder lh(range->getLeft(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (lh->isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
+        return -1;
+    }
+    int64 start = lh->getAsBigInt();
+    ValueEvalOptimizedRefHolder rh(range->getRight(), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (rh->isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
+        return -1;
+    }
+    int64 stop = rh->getAsBigInt();
+    // with negative offsets, a range with a negative bound selects the elements of its effective range in the
+    // sequence, as when the list of selectors is evaluated as a value (qore#5688); otherwise each index of the range,
+    // which includes both bounds, selects an element.  The indices are computed as they are used, without a list.
+    rangeCheckCancel = false;
+    if (negative_offsets && (start < 0 || stop < 0)) {
+        int64 effective_start;
+        int64 effective_stop;
+        int64 seq_size;
+        bool has_range = QoreSquareBracketsRangeOperatorNode::getEffectiveRange(*leftValue, effective_start,
+            effective_stop, seq_size, QoreValue(start), QoreValue(stop),
+            broken_list_range, negative_offsets, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (!has_range) {
+            return 0;
+        }
+        start = effective_start;
+        stop = effective_stop;
+        rangeCheckCancel = true;
+        cancelCheck = 0;
+    }
+    inRange = true;
+    rangeIndex = start;
+    rangeStop = stop;
+    rangeStep = start <= stop ? 1 : -1;
+    return 0;
+}
 
-        // if the element on the new current top-level position (offset) is a range then get its iterator
-        const QoreRangeOperatorNode* range;
-        QoreValue n = rightParseList->get(offset);
-        if (n.getType() == NT_OPERATOR && (range = dynamic_cast<const QoreRangeOperatorNode*>(n.getInternalNode()))) {
-            FunctionalOperator::FunctionalValueType value_type;
-            rangeIter = std::unique_ptr<QoreFunctionalRangeOperator>((QoreFunctionalRangeOperator*)(
-                range->getFunctionalIterator(value_type, xsink)
-            ));
+bool QoreFunctionalSquareBracketsComplexOperator::getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink) {
+    while (true) {
+        if (inRange) {
+            if (rangeCheckCancel && ++cancelCheck % 100 == 0
+                    && qore_check_cancel(xsink, "negative offset range selector")) {
+                inRange = false;
+                return false;
+            }
+            QoreValue index(rangeIndex);
+            if (rangeIndex == rangeStop) {
+                inRange = false;
+            } else {
+                rangeIndex += rangeStep;
+            }
+            val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, index, false,
+                string_index_char, negative_offsets, xsink), true);
+            return false;
         }
 
-        if (*xsink)
-            return false;
-    }
+        // do a step in the top-level list
+        if ((size_t)++offset == rightParseList->size()) {
+            return true;
+        }
 
-    if (rangeIter) {                                // the current position is inside a subrange
-        ValueOptionalRefHolder rangeVal(xsink);
-        if (rangeIter->getNext(rangeVal, xsink)) {  // use the inner range iterator to get next ...
-            rangeIter.reset();                      // ... if there's no next inner range element then reset the inner
-                                                    // iterator ...
-            return getNextImpl(val, xsink);         // ... and get the next top-level element
-        } else  // set the value using the index from the inner subrange
-            val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rangeVal, false,
-                string_index_char, negative_offsets, xsink), true);
-    } else {
-        ValueEvalOptimizedRefHolder rh(rightParseList->get(offset), xsink);
-        if (*xsink)
+        // a range is evaluated when its position is reached, and its indices are given one at a time
+        QoreValue n = rightParseList->get(offset);
+        if (n.getType() == NT_OPERATOR) {
+            if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(n.getInternalNode())) {
+                if (startRange(range, xsink)) {
+                    return false;
+                }
+                continue;
+            }
+        }
+
+        ValueEvalOptimizedRefHolder rh(n, xsink);
+        if (*xsink) {
             return false;
+        }
 
         // set the value using the top-level index
         val.setValue(QoreSquareBracketsOperatorNode::doSquareBrackets(*leftValue, *rh, false, string_index_char,
             negative_offsets, xsink), true);
+        return false;
     }
-
-    return false;
 }
 
 const QoreTypeInfo* QoreFunctionalSquareBracketsComplexOperator::getValueTypeImpl() const {
     switch (leftValue->getType()) {
-        case NT_LIST: return leftValue->get<const QoreListNode>()->getValueTypeInfo();
+        // an index outside the list gives NOTHING, as in the list that the selectors give as a value (qore#5688)
+        case NT_LIST: return get_or_nothing_type_check(leftValue->get<const QoreListNode>()->getValueTypeInfo());
         case NT_STRING: return string_index_char ? charTypeInfo : stringTypeInfo;
         case NT_BINARY: return binaryTypeInfo;
         case NT_BUFFER: return leftValue->get<const QoreBufferNode>()->getElementTypeInfo();

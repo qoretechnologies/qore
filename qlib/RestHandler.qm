@@ -1537,8 +1537,9 @@ public namespace RestHandler {
                     }
 
                     if (!c) {
+                        *hash<string, bool> subclasses = doGetPossibleSubClasses(rcx, args);
                         throw "REST-CLASS-ERROR", sprintf("unknown root REST class %y in path %y (valid classes: %y)",
-                            cls, rcx.url.path, sort(keys doGetPossibleSubClasses(rcx, args))), 404;
+                            cls, rcx.url.path, subclasses ? sort(keys subclasses) : NOTHING), 404;
                     }
                 }
                 rcls = c;
@@ -1567,6 +1568,9 @@ public namespace RestHandler {
             - \c path: the HTTP path given in the request after URL decoding the resource path; the query string
               remains percent-encoded until parsed
             - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
+            - \c content-type: the request \c Content-Type, without its \c charset parameter for an HTTP/1.x
+              request; \c _qore_orig_content_type gives the value as received (see
+              @ref httpserverutil_request_headers)
             @param b message body, if any
 
             @return a hash with the following keys:

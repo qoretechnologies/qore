@@ -31,7 +31,8 @@ class StepInTargetsTest inherits QUnit::Test {
             "r = g(g(1)) + (r ? f(1) : g(2));\n"                                          # 15
             "object o = c; r = o.m(1);\n"                                                 # 16
             "foreach int i in ((f(1), g(2))) { r += i; }\n"                               # 17
-            "hash<auto> h = {\"a\": f(1), \"b\": (g(1),)};\n";                            # 18
+            "hash<auto> h = {\"a\": f(1), \"b\": (g(1),)};\n"                             # 18
+            "C c2(f(1));\n";                                                              # 19
 
         #! the Program of the test source, which a ProgramControl does not keep
         Program pgm;
@@ -78,6 +79,8 @@ class StepInTargetsTest inherits QUnit::Test {
         assertEq(("f", "g"), getNames(17));
         # hashes and lists
         assertEq(("f", "g"), getNames(18));
+        # a declaration that creates an object calls its constructor after its arguments
+        assertEq(("f", "C::constructor"), getNames(19));
 
         # the statement of a target is the start of the called code, if it is known when the code is parsed
         hash<StepInTargetInfo> target = pc.getStepInTargets(pc.findStatementId("src", 9))[0];
@@ -98,6 +101,10 @@ class StepInTargetsTest inherits QUnit::Test {
         list<hash<StepInTargetInfo>> targets = pc.getStepInTargets(pc.findStatementId("src", 9));
         # "int r = f(g(1));": g(1) at columns 10-14, f(g(1)) at columns 8-15
         assertEq(((9, 9, 10, 14), (9, 9, 8, 15)), (map ($1.start_line, $1.end_line, $1.start_column, $1.end_column),
+            targets));
+        # "C c2(f(1));": the constructor of the declaration is located at the declaration, as its call stack frame is
+        targets = pc.getStepInTargets(pc.findStatementId("src", 19));
+        assertEq(((19, 19, 5, 9), (19, 19, 0, 4)), (map ($1.start_line, $1.end_line, $1.start_column, $1.end_column),
             targets));
     }
 

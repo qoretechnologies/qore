@@ -13,6 +13,11 @@
 # qlib-requires-by-path: the test runs the AOT-compiled modules; by name, a module not built would load its source
 %requires ../../../../qlib/QUnit.qmod
 
+# the datasources that do not connect use the jdbc driver
+%try-module jni
+%define NoJni
+%endtry
+
 %exec-class MigrationExecutorTest
 
 #! A datasource that does not connect: it has the given driver names and records the SQL it executes
@@ -337,6 +342,9 @@ class MigrationExecutorTest inherits QUnit::Test {
     #! a "sql" step runs the statements under the driver's own name, else under the key of the database's native
     #! driver, else its default statements; a jdbc connection to Oracle ran the default statements
     sqlDriverStatementsTests() {
+%ifdef NoJni
+        testSkip("no jni module");
+%endif
         hash<auto> step = {
             "action": "sql",
             "statements": ("default",),

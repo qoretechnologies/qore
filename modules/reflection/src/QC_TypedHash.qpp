@@ -49,6 +49,8 @@ QoreReflectionTypedHash::QoreReflectionTypedHash(ExceptionSink* xsink, const cha
         xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", path);
         return;
     }
+    // the handle keeps the hashdecl (see ~QoreReflectionTypedHash())
+    th->ref();
 }
 
 static QoreHashNode* TypedHash_serializer(const QoreObject& self, const QoreReflectionTypedHash& thd,
@@ -107,7 +109,8 @@ static void TypedHash_deserializer(QoreObject& self, const QoreHashNode* sdata, 
     self.setPrivate(CID_TYPEDHASH, th.release());
 }
 
-static QoreValue find_all_typedhashes(const QoreString& pattern, int re_opts, QoreProgram* pgm, ExceptionSink* xsink) {
+static QoreValue find_all_typedhashes(const ReflectionLookupCaller& caller, const QoreString& pattern, int re_opts,
+        QoreProgram* pgm, ExceptionSink* xsink) {
     hashdecl_vec_t hashdecl_vec = pgm->findAllHashDeclsRegex(pattern, re_opts, xsink);
     if (*xsink) {
         return QoreValue();
@@ -115,6 +118,10 @@ static QoreValue find_all_typedhashes(const QoreString& pattern, int re_opts, Qo
 
     ReferenceHolder<QoreListNode> l(new QoreListNode(QC_TYPEDHASH->getTypeInfo()), xsink);
     for (auto& i : hashdecl_vec) {
+        // a typed hash that a module does not export is not found by a caller its export boundary applies to
+        if (!caller.canSeeDeclaration(pgm, i.second, reflection_exported(i.first))) {
+            continue;
+        }
         l->push(new QoreObject(QC_TYPEDHASH, pgm, new QoreReflectionTypedHash(pgm, i.first, i.second)), xsink);
     }
 
@@ -126,6 +133,10 @@ static QoreValue find_all_typedhashes(const QoreString& pattern, int re_opts, Qo
     @ref hashdecl "typed hash", and deserialization resolves the path again in the deserializing
     @ref Qore::Program "Program".  If the typed hash is provided by a module, the module is recorded as a
     serialization dependency.
+
+    A TypedHash object keeps its typed hash (and a @ref Qore::Reflection::Type "Type" object the typed hashes,
+    classes and enums of its type), also after the last value of the type is gone and the
+    @ref Qore::Program "Program" that declared it has been deleted.
 
     @since
     - %Qore 0.9.0
@@ -164,9 +175,16 @@ TypedHash::constructor(string path) {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), lookup_pgm),
         xsink);
     if (*xsink) {
+        return;
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(lookup_pgm, th->ns, reflection_exported(th->th))) {
+        xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", npath->c_str());
         return;
     }
     self->setPrivate(CID_TYPEDHASH, th.release());
@@ -601,14 +619,18 @@ list<TypedHashMember> TypedHash::getMembers() [flags=RET_VALUE_ONLY] {
 */
 hash<auto> TypedHash::doCast(hash<auto> h) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     return thd->th->doRuntimeCast(h, xsink);
 }
 
@@ -636,14 +658,18 @@ hash<auto> info = th.doCastWithOverrides(serialized_info, {
 */
 hash<auto> TypedHash::doCastWithOverrides(hash<auto> h, hash<auto> overrides) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     return thd->th->doRuntimeCastWithOverrides(h, overrides, xsink);
 }
 
@@ -669,14 +695,18 @@ hash<auto> typed_values = th.doCastValues({
 */
 hash<auto> TypedHash::doCastValues(hash<auto> values) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ConstHashIterator i(values);
     size_t count = 0;
@@ -731,14 +761,18 @@ hash<auto> typed_values = th.doCastValuesWithOverrides({
 */
 hash<auto> TypedHash::doCastValuesWithOverrides(hash<auto> values, hash<auto> overrides) {
     QoreReflectionCaller caller;
-    if (caller.checkProgramAccess(thd->pgm, "evaluate typed hash initializers in",
-            QoreReflectionCaller::Access::MemberDefault, xsink)) {
+    // the initializers of a typed hash are evaluated if the caller could name the typed hash itself and so cast to it
+    // in the language, or the typed hash is exported by the user module that declares it: visibility decides, not the
+    // Program of the handle (see reflection_check_typed_hash_init())
+    if (reflection_check_typed_hash_init(caller, thd->pgm, thd->th, xsink)) {
         return QoreValue();
     }
     QoreExternalProgramContextHelper tch(xsink, thd->pgm);
     if (*xsink) {
         return QoreValue();
     }
+    // the initializers run under the calling code's restrictions, as in a cast by the caller itself
+    QoreReflectionCallCheckHelper call_check(caller, thd->pgm);
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     ConstHashIterator i(values);
     size_t count = 0;
@@ -855,9 +889,16 @@ static TypedHash TypedHash::forName(string path) [flags=RET_VALUE_ONLY] {
     }
 
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
     ReferenceHolder<QoreReflectionTypedHash> th(new QoreReflectionTypedHash(xsink, npath->c_str(), lookup_pgm),
         xsink);
     if (*xsink) {
+        return QoreValue();
+    }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(lookup_pgm, th->ns, reflection_exported(th->th))) {
+        xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", npath->c_str());
         return QoreValue();
     }
     assert(*th);
@@ -900,6 +941,11 @@ static TypedHash TypedHash::forName(Program[QoreProgram] pgm, string path) [flag
     if (*xsink) {
         return QoreValue();
     }
+    // a declaration that a module does not export is not found by a caller its export boundary applies to
+    if (!caller.canSeeDeclaration(*pgm, th->ns, reflection_exported(th->th))) {
+        xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'", npath->c_str());
+        return QoreValue();
+    }
 
     QoreProgram* hash_pgm = th->pgm;
     return new QoreObject(QC_TYPEDHASH, hash_pgm, th.release());
@@ -919,7 +965,9 @@ list<TypedHash> l = TypedHash::findAllRegex("^S");
 */
 static list<TypedHash> TypedHash::findAllRegex(string pattern, *int re_opts) [flags=RET_VALUE_ONLY] {
     QoreProgram* lookup_pgm = runtime_cfg.getProgram() ? runtime_cfg.getProgram() : getProgram();
-    return find_all_typedhashes(*pattern, re_opts, lookup_pgm, xsink);
+    // the export boundary of a user module applies only to a lookup in another module's Program
+    ReflectionLookupCaller caller(lookup_pgm);
+    return find_all_typedhashes(caller, *pattern, re_opts, lookup_pgm, xsink);
 }
 
 //! Returns a list of typed hashes (hashdecls) matching the regular expression pattern argument or an empty list if no typed hashes match
@@ -942,5 +990,5 @@ static list<TypedHash> TypedHash::findAllRegex(Program[QoreProgram] pgm, string 
     if (reflection_check_structural_access(caller, *pgm, "look up symbols in", xsink)) {
         return QoreValue();
     }
-    return find_all_typedhashes(*pattern, re_opts, *pgm, xsink);
+    return find_all_typedhashes(caller, *pattern, re_opts, *pgm, xsink);
 }

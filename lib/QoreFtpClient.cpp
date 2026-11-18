@@ -81,6 +81,12 @@ static void qore_ftp_raise_poll_result_exception(const QoreHashNode* ex, Excepti
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // an operation that ended with an error while the thread is cancelled reports the cancellation, whatever ended
+    // it: a close of its socket by the code that the cancellation ends, or the peer's reaction to that (see
+    // qore_socket_raise_pending_cancel(), issue #5793)
+    if (qore_socket_raise_pending_cancel("FTP socket operation", xsink)) {
+        return;
+    }
     // note: these values can be held in inline short string storage, which has no QoreStringNode;
     // the node value helper materializes such values so that a reference can be taken
     QoreStringNodeValueHelper err_str(err);
@@ -109,6 +115,10 @@ static int qore_ftp_check_controller_result(const QoreHashNode* result, const ch
 
     QoreValue canceled = result->getKeyValue("canceled");
     if (canceled.getAsBool()) {
+        // a cancellation of the thread that ended the operation first is reported as such
+        if (qore_socket_raise_pending_cancel(what, xsink)) {
+            return -1;
+        }
         xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s was canceled", what);
         return -1;
     }

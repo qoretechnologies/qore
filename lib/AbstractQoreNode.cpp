@@ -37,12 +37,22 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/AbstractStatement.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/BackgroundLValueRootNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/QoreCastOperatorNode.h"
+#include "qore/intern/SelfVarrefNode.h"
 
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
 #include <vector>
+#include <memory>
 
 #define TRACK_REFS 0
 
@@ -258,6 +268,44 @@ static inline int eval_check_stack(const AbstractQoreNode& node, ExceptionSink* 
 #endif
 }
 
+// Returns the value that a weak reference returned by an expression refers to
+/** Outlined from AbstractQoreNode::eval(): the frame of the evaluation of an expression is on the stack at every level
+    of a recursion through it (e.g. a method call evaluated from the IR interpreter), and this rarely taken path would
+    otherwise make it larger (issue #5852)
+*/
+static QORE_INTERN_NOINLINE QoreValue eval_resolve_weakref(QoreValue rv, bool needs_deref, ExceptionSink* xsink) {
+    switch (rv.getType()) {
+        case NT_WEAKREF: {
+            QoreObject* o = rv.get<WeakReferenceNode>()->get();
+            if (needs_deref) {
+                o->ref();
+                rv.discard(xsink);
+            }
+            return o;
+        }
+
+        case NT_WEAKREF_HASH: {
+            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
+            if (needs_deref) {
+                h->ref();
+                rv.discard(xsink);
+            }
+            return h;
+        }
+
+        case NT_WEAKREF_LIST: {
+            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
+            if (needs_deref) {
+                l->ref();
+                rv.discard(xsink);
+            }
+            return l;
+        }
+    }
+    assert(false);
+    return rv;
+}
+
 QoreValue AbstractQoreNode::eval(ExceptionSink* xsink) const {
     if (!needs_eval_flag) {
         return refSelf();
@@ -286,35 +334,10 @@ QoreValue AbstractQoreNode::eval(bool& needs_deref, ExceptionSink* xsink) const 
     needs_deref = true;
     QoreValue rv = evalImpl(needs_deref, xsink);
 
-    switch (rv.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* o = rv.get<WeakReferenceNode>()->get();
-            if (needs_deref) {
-                o->ref();
-                rv.discard(xsink);
-            }
-            return o;
-        }
-
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
-            if (needs_deref) {
-                h->ref();
-                rv.discard(xsink);
-            }
-            return h;
-        }
-
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
-            if (needs_deref) {
-                l->ref();
-                rv.discard(xsink);
-            }
-            return l;
-        }
+    qore_type_t t = rv.getType();
+    if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+        return eval_resolve_weakref(rv, needs_deref, xsink);
     }
-
     return rv;
 }
 
@@ -332,35 +355,10 @@ QoreValue AbstractQoreNode::eval(RuntimeConfig& rc, bool& needs_deref, Exception
     needs_deref = true;
     QoreValue rv = evalImpl(rc, needs_deref, xsink);
 
-    switch (rv.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* o = rv.get<WeakReferenceNode>()->get();
-            if (needs_deref) {
-                o->ref();
-                rv.discard(xsink);
-            }
-            return o;
-        }
-
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = rv.get<WeakHashReferenceNode>()->get();
-            if (needs_deref) {
-                h->ref();
-                rv.discard(xsink);
-            }
-            return h;
-        }
-
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = rv.get<WeakListReferenceNode>()->get();
-            if (needs_deref) {
-                l->ref();
-                rv.discard(xsink);
-            }
-            return l;
-        }
+    qore_type_t t = rv.getType();
+    if (t == NT_WEAKREF || t == NT_WEAKREF_HASH || t == NT_WEAKREF_LIST) {
+        return eval_resolve_weakref(rv, needs_deref, xsink);
     }
-
     return rv;
 }
 
@@ -519,6 +517,8 @@ static QoreListNode* crlr_list_copy(RuntimeConfig& rc, const QoreListNode* n, Ex
             return nullptr;
         }
     }
+    // the arguments of a named call bound at parse time keep their parameter positions
+    qore_list_private::get(**l)->copyCallArgEvalMap(*qore_list_private::get(*n));
     return l.release();
 }
 
@@ -543,7 +543,7 @@ static AbstractQoreNode* crlr_hash_copy(RuntimeConfig& rc, const QoreHashNode* n
 
 static AbstractQoreNode* crlr_hash_copy(RuntimeConfig& rc, const QoreParseHashNode* n, ExceptionSink* xsink) {
     assert(xsink);
-    ReferenceHolder<QoreParseHashNode> h(new QoreParseHashNode(*n, xsink), xsink);
+    ReferenceHolder<QoreParseHashNode> h(QoreParseHashNode::copyBackground(*n, xsink), xsink);
     return *xsink ? nullptr : h.release();
 }
 
@@ -564,16 +564,28 @@ static AbstractQoreNode* crlr_selfcall_copy(RuntimeConfig& rc, const SelfFunctio
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
-    return crlr_call_copy_done(new SetSelfFunctionCallNode(*n, na));
+    // the copy of a background copy of a self call, made by a background expression nested in another one in the
+    // thread of the outer one, keeps the object of the copied call: the thread has no object of its own (qore#5971)
+    if (const SetSelfFunctionCallNode* set_self = dynamic_cast<const SetSelfFunctionCallNode*>(n)) {
+        return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *set_self,
+            na));
+    }
+    return crlr_call_copy_done(qore_make_function_call<SetSelfFunctionCallNode>(n->getSemanticPolicy(), *n, na));
 }
 
 static AbstractQoreNode* crlr_fcall_copy(RuntimeConfig& rc, const FunctionCallNode* n, ExceptionSink* xsink) {
     QoreListNode* na = const_cast<QoreListNode*>(n->getArgs());
     if (na) {
         na = crlr_list_copy(rc, na, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
-    return crlr_call_copy_done(new FunctionCallNode(*n, na));
+    return crlr_call_copy_done(n->copyWithArgs(na));
 }
 
 static AbstractQoreNode* crlr_mcall_copy(RuntimeConfig& rc, const MethodCallNode* m, ExceptionSink* xsink) {
@@ -599,7 +611,7 @@ static AbstractQoreNode* crlr_smcall_copy(RuntimeConfig& rc, const StaticMethodC
         }
         args = args_holder.release();
     }
-    return crlr_call_copy_done(new StaticMethodCallNode(*m, args));
+    return crlr_call_copy_done(qore_make_function_call<StaticMethodCallNode>(m->getSemanticPolicy(), *m, args));
 }
 
 static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferenceCallNode* n, ExceptionSink* xsink) {
@@ -617,58 +629,160 @@ static AbstractQoreNode* call_ref_call_copy(RuntimeConfig& rc, const CallReferen
         }
         args = args_holder.release();
     }
-    return new CallReferenceCallNode(n->loc, exp.release(), args);
+    CallReferenceCallNode* call = qore_make_reference_call(n->getSemanticPolicy(), n->loc, exp.release(), args);
+    // a named call keeps the names of its arguments
+    call->setRuntimeArgNames(n->getRuntimeArgNames());
+    return call;
 }
 
-// Non-RuntimeConfig versions - delegate to RuntimeConfig versions
-static QoreListNode* crlr_list_copy(const QoreListNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_list_copy(rc, n, xsink);
+//! Copies a parse list of arguments with the values of the local variables of the starting code; nullptr if none
+static QoreParseListNode* crlr_parse_args_copy(RuntimeConfig& rc, const QoreParseListNode* args,
+        ExceptionSink* xsink) {
+    return args ? crlr_list_copy(rc, args, xsink) : nullptr;
 }
 
-static QoreParseListNode* crlr_list_copy(const QoreParseListNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_list_copy(rc, n, xsink);
+//! Copies a new expression (a NT_SCOPE_REF node); the new thread constructs the value with the arguments copied
+/** The arguments are taken when the thread starts, as those of a call are; a node of a type that takes none is
+    returned as it is
+*/
+static QoreValue crlr_new_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    const AbstractQoreNode* node = n.getInternalNode();
+    if (auto* soc = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+        QoreListNode* args = const_cast<QoreListNode*>(soc->getArgs());
+        if (args) {
+            ReferenceHolder<QoreListNode> args_holder(crlr_list_copy(rc, args, xsink), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            args = args_holder.release();
+        }
+        return qore_make_function_call<ScopedObjectCallNode>(soc->getSemanticPolicy(), *soc, args);
+    }
+    if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nhd->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(qore_make_new_complex<NewHashDeclNode>(nhd->getSemanticPolicy(), *nhd, args.release()));
+    }
+    if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+        ReferenceHolder<QoreParseListNode> args(crlr_parse_args_copy(rc, nch->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(qore_make_new_complex<NewComplexHashNode>(nch->getSemanticPolicy(), *nch, args.release()));
+    }
+    if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+        ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncl->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(qore_make_new_complex<NewComplexListNode>(ncl->getSemanticPolicy(), *ncl, args.release()));
+    }
+    if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
+        ValueHolder args(copy_value_and_resolve_lvar_refs(rc, ncb->args, xsink), xsink);
+        return *xsink ? QoreValue() : QoreValue(new NewComplexBufferNode(*ncb, args.release()));
+    }
+    return n.refSelf();
 }
 
-static AbstractQoreNode* crlr_hash_copy(const QoreHashNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_hash_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_hash_copy(const QoreParseHashNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_hash_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_selfcall_copy(const SelfFunctionCallNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_selfcall_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_fcall_copy(const FunctionCallNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_fcall_copy(rc, n, xsink);
-}
-
-static AbstractQoreNode* crlr_mcall_copy(const MethodCallNode* m, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_mcall_copy(rc, m, xsink);
-}
-
-static AbstractQoreNode* crlr_smcall_copy(const StaticMethodCallNode* m, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return crlr_smcall_copy(rc, m, xsink);
-}
-
-static AbstractQoreNode* call_ref_call_copy(const CallReferenceCallNode* n, ExceptionSink* xsink) {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return call_ref_call_copy(rc, n, xsink);
+//! Copies a reference to a method of an object given by an expression: the expression is taken when the thread starts
+/** A reference to a method of \c self is returned as it is: it is evaluated in the new thread, which has no object
+    context, as in every execution mode (OBJECT-ERROR, whose message says to take the reference before the
+    background operator)
+*/
+static QoreValue crlr_objmethref_copy(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(n.getInternalNode());
+    if (!omr) {
+        return n.refSelf();
+    }
+    ValueHolder exp(copy_value_and_resolve_lvar_refs(rc, omr->getExp(), xsink), xsink);
+    return *xsink ? QoreValue() : QoreValue(new ParseObjectMethodReferenceNode(*omr, exp.release()));
 }
 
 QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return copy_value_and_resolve_lvar_refs(rc, n, xsink);
+}
+
+namespace {
+//! Sets whether the copy in progress is copying the access path of an lvalue, for as long as it exists
+class BackgroundLValuePathHelper {
+public:
+    BackgroundLValuePathHelper(BackgroundClosureCaptureHelper* copy, bool path) : copy(copy),
+            prev(copy ? copy->setLValuePath(path) : false) {
+    }
+
+    ~BackgroundLValuePathHelper() {
+        if (copy) {
+            copy->setLValuePath(prev);
+        }
+    }
+
+    BackgroundLValuePathHelper(const BackgroundLValuePathHelper&) = delete;
+    BackgroundLValuePathHelper& operator=(const BackgroundLValuePathHelper&) = delete;
+
+private:
+    BackgroundClosureCaptureHelper* copy;
+    bool prev;
+};
+}
+
+QoreValue copy_lvalue_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink) {
+    BackgroundLValuePathHelper ph(background_closure_capture_helper, true);
+    return copy_value_and_resolve_lvar_refs(n, xsink);
+}
+
+QoreValue copy_value_and_resolve_lvar_refs_not_lvalue(const QoreValue& n, ExceptionSink* xsink) {
+    BackgroundLValuePathHelper ph(background_closure_capture_helper, false);
+    return copy_value_and_resolve_lvar_refs(n, xsink);
+}
+
+//! Returns true if the node is a step of an lvalue's access path, whose first operand is the next step
+static bool qore_background_lvalue_path_step(const AbstractQoreNode* node) {
+    return qore_exact_node_cast<QoreSquareBracketsOperatorNode>(node)
+        || dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)
+        || dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)
+        || dynamic_cast<const QoreCastOperatorNode*>(node);
+}
+
+//! Copies a node of an lvalue's access path (see copy_lvalue_and_resolve_lvar_refs())
+/** @return true if the node was copied (or an exception was raised), false if it is copied as any other value
+*/
+static bool qore_copy_background_lvalue_path(RuntimeConfig& rc, const QoreValue& n, QoreValue& rv,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    switch (n.getType()) {
+        case NT_VARREF: {
+            const VarRefNode* var_ref = n.get<const VarRefNode>();
+            // a global variable is shared with the thread; it is not taken
+            if (var_ref->getType() == VT_GLOBAL) {
+                return false;
+            }
+            type_info = var_ref->getParseTypeInfo();
+            break;
+        }
+        case NT_SELF_VARREF:
+            type_info = n.get<const SelfVarrefNode>()->getParseTypeInfo();
+            break;
+        case NT_PARSE_LIST:
+            // the lvalues of a list assignment
+            return false;
+        case NT_OPERATOR:
+            if (qore_background_lvalue_path_step(n.getInternalNode())) {
+                return false;
+            }
+            // fallthrough
+        default: {
+            // any other expression is a value: its operands are not steps of the path
+            BackgroundLValuePathHelper ph(background_closure_capture_helper, false);
+            rv = copy_value_and_resolve_lvar_refs(rc, n, xsink);
+            return true;
+        }
+    }
+    // the root of the path: the value that the thread takes, as an lvalue of the variable's declared type
+    ValueEvalRefHolder vh(rc, n, xsink);
+    if (*xsink) {
+        return true;
+    }
+    // the value is released by the check if it raises an exception
+    QoreValue v = check_background_closure_capture(vh.takeReferencedValue(), xsink);
+    if (*xsink) {
+        return true;
+    }
+    rv = new BackgroundLValueRootNode(n.get<const ParseNode>()->loc, v, type_info);
+    return true;
 }
 
 namespace {
@@ -705,9 +819,60 @@ QoreValue copy_value_and_resolve_lvar_refs_bound_implicit(const QoreValue& n, Ex
     return copy_value_and_resolve_lvar_refs(n, xsink);
 }
 
-QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+static thread_local LexicalParsePolicyHelper* current_lexical_parse_policy = nullptr;
+
+LexicalParsePolicyHelper::LexicalParsePolicyHelper(LexicalSemanticPolicy policy)
+        : owned_policy(policy), policy(&owned_policy), pgm(getProgram()), previous(current_lexical_parse_policy) {
+    current_lexical_parse_policy = this;
+}
+
+LexicalParsePolicyHelper::LexicalParsePolicyHelper(const LexicalSemanticPolicy* policy)
+        : policy(policy), pgm(getProgram()), previous(current_lexical_parse_policy) {
+    current_lexical_parse_policy = this;
+}
+
+LexicalParsePolicyHelper::~LexicalParsePolicyHelper() {
+    current_lexical_parse_policy = previous;
+}
+
+bool LexicalParsePolicyHelper::capture(LexicalSemanticPolicy& policy) {
+    if (!current_lexical_parse_policy || current_lexical_parse_policy->pgm != getProgram()) {
+        return false;
+    }
+    policy = current_lexical_parse_policy->policy ? *current_lexical_parse_policy->policy : LexicalSemanticPolicy();
+    return true;
+}
+
+void ParseNode::captureSemanticPolicy() {
+    if (!semantic_policy_bound) {
+        // Parser results are explicitly bound. Synthesized replacements inherit the owning operation;
+        // native-created code without a source descriptor keeps the canonical default.
+        LexicalParsePolicyHelper::capture(semantic_policy);
+        semantic_policy_bound = true;
+    }
+}
+
+void ParseNode::bindSemanticPolicy(QoreValue value, LexicalSemanticPolicy policy) {
+    if (value.hasNode()) {
+        auto* node = dynamic_cast<ParseNode*>(value.getInternalNode());
+        if (node && !node->semantic_policy_bound) {
+            node->semantic_policy = policy;
+            node->semantic_policy_bound = true;
+        }
+    }
+}
+
+static QoreValue copy_value_and_resolve_lvar_refs_impl(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
     if (!n.hasNode()) {
         return n.refSelf();
+    }
+
+    // the access path of the lvalue of an lvalue operator (issue #5723)
+    if (background_closure_capture_helper && background_closure_capture_helper->inLValuePath()) {
+        QoreValue rv;
+        if (qore_copy_background_lvalue_path(rc, n, rv, xsink)) {
+            return rv;
+        }
     }
 
     switch (n.getType()) {
@@ -771,6 +936,12 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
         case NT_METHOD_CALL:
             return crlr_mcall_copy(rc, n.get<const MethodCallNode>(), xsink);
 
+        case NT_SCOPE_REF:
+            return crlr_new_copy(rc, n, xsink);
+
+        case NT_OBJMETHREF:
+            return crlr_objmethref_copy(rc, n, xsink);
+
         case NT_STATIC_METHOD_CALL:
             return crlr_smcall_copy(rc, n.get<const StaticMethodCallNode>(), xsink);
 
@@ -787,6 +958,21 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
     }
 
     return n.refSelf();
+}
+
+// Preserve lexical policy when executable code is copied for a background thread.
+QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink) {
+    QoreValue copy = copy_value_and_resolve_lvar_refs_impl(rc, n, xsink);
+    // Background clones bypass parse initialization, including clones made while copying an lvalue path.
+    // Only newly created code is written here; shared original nodes remain immutable.
+    if (copy.hasNode() && n.hasNode() && copy.getInternalNode() != n.getInternalNode()) {
+        if (auto* target = dynamic_cast<ParseNode*>(copy.getInternalNode())) {
+            if (const auto* source = dynamic_cast<const ParseNode*>(n.getInternalNode())) {
+                target->copySemanticPolicy(*source);
+            }
+        }
+    }
+    return copy;
 }
 
 // Default implementation - forwards to non-RuntimeConfig version for backwards compatibility
@@ -820,6 +1006,10 @@ struct DeferredRelease {
         SimpleNode,
         //! a statement: it is deleted
         Statement,
+        //! a subclass's reference to a base class (a QoreClass handle): it is released
+        BaseClass,
+        //! a hashdecl's reference to its parent hashdecl: it is released
+        ParentHashDecl,
     };
 
     void* ptr;
@@ -827,14 +1017,21 @@ struct DeferredRelease {
 };
 
 //! The nested releases of a thread
+/** It has no destructor: a thread's thread-local objects are destroyed before the releases that the end of the
+    thread or of the process still makes (at exit(), the destructors of static objects run after those of the main
+    thread's thread-local objects, and release the code of the Programs that they hold), which would then use a
+    destroyed state.  The list of deferred releases exists only while the outermost release makes them.
+*/
 struct ReleaseState {
     //! the number of releases in progress on the thread's stack
-    unsigned depth = 0;
-    //! the releases nested too deeply to make on the stack, made by the outermost release
-    std::vector<DeferredRelease> deferred;
+    unsigned depth;
+    //! the releases nested too deeply to make on the stack, made by the outermost release; nullptr when there are none
+    std::vector<DeferredRelease>* deferred;
 };
+static_assert(std::is_trivially_destructible<ReleaseState>::value, "the release state of a thread is used until "
+    "the thread's last release, after its thread-local objects have been destroyed");
 
-thread_local ReleaseState t_release;
+thread_local ReleaseState t_release = {0, nullptr};
 }
 
 //! Makes releases; a friend of AbstractQoreNode, whose destructor is protected
@@ -855,6 +1052,12 @@ public:
                 break;
             case DeferredRelease::Kind::Statement:
                 delete static_cast<AbstractStatement*>(r.ptr);
+                break;
+            case DeferredRelease::Kind::BaseClass:
+                qore_class_private::derefClass(*static_cast<QoreClass*>(r.ptr), false, false, false);
+                break;
+            case DeferredRelease::Kind::ParentHashDecl:
+                static_cast<typed_hash_decl_private*>(r.ptr)->deref();
                 break;
         }
     }
@@ -888,26 +1091,40 @@ private:
 void release(const DeferredRelease& r, ExceptionSink* xsink) {
     ReleaseState& state = t_release;
     if (state.depth >= QORE_RELEASE_RECURSION_DEPTH) {
-        state.deferred.push_back(r);
+        if (!state.deferred) {
+            state.deferred = new std::vector<DeferredRelease>;
+        }
+        state.deferred->push_back(r);
         return;
     }
     {
         ReleaseDepthHelper rdh(state);
         QoreNodeReleaser::releaseNow(r, xsink);
     }
-    if (state.depth || state.deferred.empty()) {
+    if (state.depth || !state.deferred) {
         return;
     }
     // the outermost release makes the deferred releases; the depth counts one level, so that what each of them
     // releases in turn nests on the stack up to the same bound and defers the rest to this loop
     ReleaseDepthHelper rdh(state);
+    // the list is freed when the last deferred release has been made; if one throws, the rest stay for the next
+    // outermost release
+    struct DeferredListHelper {
+        ReleaseState& state;
+        ~DeferredListHelper() {
+            if (state.deferred->empty()) {
+                delete state.deferred;
+                state.deferred = nullptr;
+            }
+        }
+    } dlh{state};
     // a deferred release can have been requested with an exception sink by a nested release when the outermost
     // release has none, as a statement's has not: an exception it raises is then handled as an unhandled exception
     ExceptionSink local_xsink;
     ExceptionSink* drain_xsink = xsink ? xsink : &local_xsink;
-    while (!state.deferred.empty()) {
-        DeferredRelease next = state.deferred.back();
-        state.deferred.pop_back();
+    while (!state.deferred->empty()) {
+        DeferredRelease next = state.deferred->back();
+        state.deferred->pop_back();
         QoreNodeReleaser::releaseNow(next, drain_xsink);
     }
 }
@@ -925,6 +1142,14 @@ void qore_delete_statement(AbstractStatement* statement) {
     if (statement) {
         release(DeferredRelease{statement, DeferredRelease::Kind::Statement}, nullptr);
     }
+}
+
+void qore_release_base_class(QoreClass* qc) {
+    release(DeferredRelease{qc, DeferredRelease::Kind::BaseClass}, nullptr);
+}
+
+void qore_release_parent_hashdecl(typed_hash_decl_private* parent) {
+    release(DeferredRelease{parent, DeferredRelease::Kind::ParentHashDecl}, nullptr);
 }
 
 QoreValue SimpleValueQoreNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -959,8 +1184,9 @@ bool needs_scan(const AbstractQoreNode* n) {
         case NT_OBJECT: return true;
         case NT_RUNTIME_CLOSURE: return static_cast<const QoreClosureBase*>(n)->needsScan();
         case NT_FUNCREF: {
-            const auto* callback = qore_get_sandbox_bound_callback(n);
-            return callback && needs_scan(callback);
+            // a sandbox-bound callback, or the value of a reference to a pseudo-method (issue #995)
+            const AbstractQoreNode* held = qore_get_call_reference_scan_node(n);
+            return held && needs_scan(held);
         }
         case NT_REFERENCE: return lvalue_ref::get(static_cast<const ReferenceNode*>(n))->needsScan();
     }
@@ -1008,7 +1234,134 @@ bool has_complex_type(const AbstractQoreNode* n) {
     return false;
 }
 
-static QoreHashNode* do_copy_strip(const QoreHashNode* h) {
+//! the nesting depth from which a copy that strips complex types continues without recursion (qore#6117)
+/** The copy of a value nested below this depth uses an explicit work stack instead of the C++ stack, so that a value
+    of any depth can be copied; shallower values are copied recursively, which needs no allocation for the work stack.
+*/
+static constexpr unsigned QORE_COPY_STRIP_RECURSION_LIMIT = 64;
+
+//! returns true if a copy that strips complex types must build a new container for the given value
+static bool copy_strip_needs_container(const AbstractQoreNode* n) {
+    if (!n || !has_complex_type(n)) {
+        return false;
+    }
+    switch (get_node_type(n)) {
+        // issue #2791: do not strip types from a plain list or hash; no complex types can be stored there anyway
+        case NT_LIST:
+            return static_cast<const QoreListNode*>(n)->getTypeInfo() != listTypeInfo;
+        case NT_HASH:
+            return static_cast<const QoreHashNode*>(n)->getTypeInfo() != hashTypeInfo;
+        default:
+            break;
+    }
+    return false;
+}
+
+namespace {
+//! dereferences a node owned by the work stack of a copy that strips complex types
+struct CopyStripNodeDeref {
+    void operator()(AbstractQoreNode* n) const {
+        n->deref(nullptr);
+    }
+};
+
+using CopyStripNodeHolder = std::unique_ptr<AbstractQoreNode, CopyStripNodeDeref>;
+
+//! a container that a copy without recursion is copying: its source, its copy and the position in the source
+class CopyStripFrame {
+public:
+    explicit CopyStripFrame(const AbstractQoreNode* src) {
+        if (get_node_type(src) == NT_LIST) {
+            src_list = static_cast<const QoreListNode*>(src);
+            dst.reset(new QoreListNode);
+        } else {
+            assert(get_node_type(src) == NT_HASH);
+            hash_iter.reset(new ConstHashIterator(static_cast<const QoreHashNode*>(src)));
+            dst.reset(new QoreHashNode);
+        }
+    }
+
+    //! moves to the next element of the source; returns false if there are no more
+    bool next() {
+        if (src_list) {
+            if (list_pos == src_list->size()) {
+                return false;
+            }
+            ++list_pos;
+            return true;
+        }
+        return hash_iter->next();
+    }
+
+    //! returns the current element of the source
+    QoreValue current() const {
+        return src_list ? src_list->retrieveEntry(list_pos - 1) : hash_iter->get();
+    }
+
+    //! adds the copy of the current element of the source to the copy; takes over the reference of the value
+    void add(QoreValue v) {
+        if (src_list) {
+            static_cast<QoreListNode*>(dst.get())->push(v, nullptr);
+        } else {
+            qore_hash_private::get(*static_cast<QoreHashNode*>(dst.get()))->setKeyValueIntern(hash_iter->getKey(), v);
+        }
+    }
+
+    //! returns the copy of the container, which the caller then owns
+    AbstractQoreNode* release() {
+        return dst.release();
+    }
+
+private:
+    const QoreListNode* src_list = nullptr;
+    size_t list_pos = 0;
+    std::unique_ptr<ConstHashIterator> hash_iter;
+    CopyStripNodeHolder dst;
+};
+}
+
+//! copies a value that needs a new container, stripping complex types, without recursion (qore#6117)
+/** each container is added to the copy of the container it is in only once it is complete, as the container that it
+    is added to accounts for what it holds when it is added
+*/
+// cold and not inlined: it must not change how the recursive copy, which copies the values met in practice, is compiled
+__attribute__((cold, noinline)) static AbstractQoreNode* copy_strip_without_recursion(const AbstractQoreNode* n) {
+    assert(copy_strip_needs_container(n));
+    std::vector<CopyStripFrame> stack;
+    stack.emplace_back(n);
+    while (true) {
+        bool descended = false;
+        while (stack.back().next()) {
+            QoreValue v = stack.back().current();
+            if (v.hasNode() && copy_strip_needs_container(v.getInternalNode())) {
+                stack.emplace_back(v.getInternalNode());
+                descended = true;
+                break;
+            }
+            stack.back().add(v.refSelf());
+        }
+        if (descended) {
+            continue;
+        }
+        CopyStripNodeHolder done(stack.back().release());
+        stack.pop_back();
+        if (stack.empty()) {
+            return done.release();
+        }
+        stack.back().add(QoreValue(done.release()));
+    }
+}
+
+static AbstractQoreNode* copy_strip_intern(const AbstractQoreNode* n, unsigned depth);
+
+static QoreValue copy_strip_intern(const QoreValue& n, unsigned depth) {
+    if (!n.hasNode()) {
+        return n.refSelf();
+    }
+    return QoreValue(copy_strip_intern(n.getInternalNode(), depth));
+}
+
+static QoreHashNode* do_copy_strip(const QoreHashNode* h, unsigned depth) {
     // issue #2791: do not strip types from a plain hash; no complex types can be stored there anyway
     if (h->getTypeInfo() == hashTypeInfo) {
         return h->hashRefSelf();
@@ -1017,12 +1370,12 @@ static QoreHashNode* do_copy_strip(const QoreHashNode* h) {
     qore_hash_private* nhp = qore_hash_private::get(**nh);
     ConstHashIterator i(h);
     while (i.next()) {
-        nhp->setKeyValueIntern(i.getKey(), copy_strip_complex_types(i.get()));
+        nhp->setKeyValueIntern(i.getKey(), copy_strip_intern(i.get(), depth + 1));
     }
     return nh.release();
 }
 
-static QoreListNode* do_copy_strip(const QoreListNode* l) {
+static QoreListNode* do_copy_strip(const QoreListNode* l, unsigned depth) {
     // issue #2791: do not strip types from a plain list; no complex types can be stored there anyway
     if (l->getTypeInfo() == listTypeInfo) {
         return l->listRefSelf();
@@ -1030,25 +1383,36 @@ static QoreListNode* do_copy_strip(const QoreListNode* l) {
     ReferenceHolder<QoreListNode> nl(new QoreListNode, nullptr);
     ConstListIterator i(l);
     while (i.next()) {
-        nl->push(copy_strip_complex_types(i.getValue()), nullptr);
+        nl->push(copy_strip_intern(i.getValue(), depth + 1), nullptr);
     }
     return nl.release();
 }
 
-AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n) {
-    if (!n)
+static AbstractQoreNode* copy_strip_intern(const AbstractQoreNode* n, unsigned depth) {
+    if (!n) {
         return nullptr;
-    if (!has_complex_type(n))
+    }
+    if (!has_complex_type(n)) {
         return n->refSelf();
+    }
     switch (get_node_type(n)) {
         case NT_LIST:
-            return do_copy_strip(static_cast<const QoreListNode*>(n));
         case NT_HASH:
-            return do_copy_strip(static_cast<const QoreHashNode*>(n));
+            // a deeply nested value is copied without recursion, so that it cannot overflow the stack (qore#6117)
+            if (depth >= QORE_COPY_STRIP_RECURSION_LIMIT && copy_strip_needs_container(n)) {
+                return copy_strip_without_recursion(n);
+            }
+            return get_node_type(n) == NT_LIST
+                ? static_cast<AbstractQoreNode*>(do_copy_strip(static_cast<const QoreListNode*>(n), depth))
+                : static_cast<AbstractQoreNode*>(do_copy_strip(static_cast<const QoreHashNode*>(n), depth));
         default:
             break;
     }
     return n->refSelf();
+}
+
+AbstractQoreNode* copy_strip_complex_types(const AbstractQoreNode* n) {
+    return copy_strip_intern(n, 0);
 }
 
 DLLLOCAL QoreValue copy_strip_complex_types(const QoreValue& n) {

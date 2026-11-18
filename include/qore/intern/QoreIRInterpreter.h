@@ -64,6 +64,12 @@ class QoreIRInterpreter {
 public:
     static QoreValue evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
             ExceptionSink* xsink);
+    //! Evaluates a plugin comparison (QoreIROpcode::EqPlugin...GePlugin)
+    /** dispatches to the plugin operation for such a value, as the AST operator does, and evaluates the comparison
+        otherwise (qore#5911)
+    */
+    static QoreValue evalPluginComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
+            ExceptionSink* xsink);
     static QoreValue evalExpr(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink);
     static QoreValue evalUnary(QoreIROpcode op, const QoreValue& value, ExceptionSink* xsink);
     static QoreValue evalBinary(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
@@ -83,6 +89,12 @@ public:
     static bool simulateInvoke(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink);
     static int execStatement(QoreIROpcode op, const AbstractStatement* stmt, QoreValue& return_value,
             ExceptionSink* xsink);
+    //! Runs an IR function
+    /** @param statements the block of the function, which the debugger's events are given with; with \a pgm, the
+        frame makes the debugger's events while a debugger is attached
+        @param handler_frame true for the code of an on_exit, on_error or on_success handler, which makes the
+        debugger's events of its statements but not those of a function (enter and exit)
+    */
     static bool execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
             std::vector<std::string>* cleanup_log = nullptr, const std::vector<QoreValue>* args = nullptr,
             const std::vector<QoreValue>* closure = nullptr,
@@ -91,7 +103,7 @@ public:
             const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr,
             bool suppress_guard_deopt = false,
             const IRDirectParams* direct_params = nullptr,
-            std::vector<QoreValue>* parent_slot_cache = nullptr);
+            std::vector<QoreValue>* parent_slot_cache = nullptr, bool handler_frame = false);
 
     //! Emit a `[ir-silent-fail:<tag>]` line to stderr naming the last IR
     //! opcode + source location that ran before `execute()` returned
@@ -123,7 +135,17 @@ DLLLOCAL int64 q_get_ir_innermost_instantiated_local_entries();
     reference that += does not take is released after the lvalue's locks.
 */
 DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink);
+DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, ValueHolder& right, ExceptionSink* xsink,
+    LexicalSemanticPolicy policy);
 DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+
+//! Applies a step of a list of selectors for the IR interpreter (QoreIROpcode::ListSelectorStep)
+/** As qore_rt_list_selector_step(), but the selector values are read from the IR value slots \a slots, at the
+    \a count value IDs \a selector_ids, instead of from an array, which would be in the frame of
+    QoreIRInterpreter::execute() and so in the frame of every interpreted call
+*/
+DLLLOCAL uint64_t qore_ir_list_selector_step(uint64_t result_val, uint64_t seq_val, int64_t flags,
+        const QoreValue* slots, const QoreIRValue* selector_ids, int32_t count, ExceptionSink* xsink);
 
 //! Applies a compound assignment to an lvalue as the AST interpreter does
 /** The value holds a reference in \a rhs_holder, which += takes when it stores the value (see
@@ -133,6 +155,68 @@ DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right
 */
 DLLLOCAL QoreValue qore_rt_apply_lvalue_compound(LValueHelper& lvh, LVCompoundOp compound_op,
         ValueHolder& rhs_holder, ExceptionSink* xsink);
+
+//! Applies ++ or -- (LVUnaryOp::PreInc, PreDec, PostInc or PostDec) to an lvalue as the AST interpreter does
+/** The operation follows the type of the value, as QorePreIncrementOperatorNode::evalImpl() and the other operators
+    do, and an error that the lvalue's type raises names the operator as they do (ex: <tt><++ (pre) operator></tt>
+    for an enum lvalue, which refuses the plain value computed, qore#6197).  The operation is a template argument and
+    the function is inlined in a case of the caller's switch over the operations (the IR interpreter and the runtime
+    helpers of native code); it reads no exception sink, so that ++ and -- cost what they cost before they named the
+    operator.
+
+    @tparam Op the operation: LVUnaryOp::PreInc, PreDec, PostInc or PostDec
+
+    @param lvh the lvalue
+    @param ref_rv false if the value of a post operation is not used: the old value of a number is not copied
+    @param res set to the value of the operation (the new value, or the old value for a post operator), holding a
+    reference; after an exception, the caller must release it (it can be the value that the lvalue kept)
+*/
+template <LVUnaryOp Op>
+QORE_INTERN_ALWAYS_INLINE void qore_rt_apply_lvalue_incdec(LValueHelper& lvh, bool ref_rv, QoreValue& res) {
+    static_assert(Op == LVUnaryOp::PreInc || Op == LVUnaryOp::PreDec || Op == LVUnaryOp::PostInc
+        || Op == LVUnaryOp::PostDec, "not an increment or decrement");
+    // the descriptions are those of the AST operators (QorePreIncrementOperatorNode::evalImpl() and the others)
+    constexpr const char* desc = Op == LVUnaryOp::PreInc ? "<++ (pre) operator>"
+        : (Op == LVUnaryOp::PreDec ? "<-- (pre) operator>"
+        : (Op == LVUnaryOp::PostInc ? "<++ (post) operator>" : "<-- (post) operator>"));
+    qore_type_t t = lvh.getType();
+    if (t == NT_NUMBER) {
+        if constexpr (Op == LVUnaryOp::PreInc) {
+            lvh.preIncrementNumber(desc);
+            res = lvh.getReferencedValue();
+        } else if constexpr (Op == LVUnaryOp::PreDec) {
+            lvh.preDecrementNumber(desc);
+            res = lvh.getReferencedValue();
+        } else {
+            // no value if the lvalue's type refused the result
+            QoreNumberNode* n = Op == LVUnaryOp::PostInc ? lvh.postIncrementNumber(ref_rv, desc)
+                : lvh.postDecrementNumber(ref_rv, desc);
+            if (n) {
+                res = n;
+            }
+        }
+    } else if (t == NT_FLOAT) {
+        if constexpr (Op == LVUnaryOp::PreInc) {
+            res = lvh.preIncrementFloat(desc);
+        } else if constexpr (Op == LVUnaryOp::PreDec) {
+            res = lvh.preDecrementFloat(desc);
+        } else if constexpr (Op == LVUnaryOp::PostInc) {
+            res = lvh.postIncrementFloat(desc);
+        } else {
+            res = lvh.postDecrementFloat(desc);
+        }
+    } else {
+        if constexpr (Op == LVUnaryOp::PreInc) {
+            res = lvh.preIncrementBigInt(desc);
+        } else if constexpr (Op == LVUnaryOp::PreDec) {
+            res = lvh.preDecrementBigInt(desc);
+        } else if constexpr (Op == LVUnaryOp::PostInc) {
+            res = lvh.postIncrementBigInt(desc);
+        } else {
+            res = lvh.postDecrementBigInt(desc);
+        }
+    }
+}
 
 //! Returns true if the lvalue type is an int type (int, *int, softint), but not timeout
 DLLLOCAL bool qore_is_int_lvalue_type(const QoreTypeInfo* ti);
@@ -195,5 +279,10 @@ public:
         }
     }
 };
+
+#ifdef DEBUG
+//! the closure calls that found a cache entry made for a closure of a deleted Program at the same addresses
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_closure_call_cache_program_misses;
+#endif
 
 #endif

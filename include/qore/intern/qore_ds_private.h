@@ -42,15 +42,377 @@
 #include "qore/intern/DbiForkRegistry.h"
 #include "qore/intern/QoreForkHandlers.h"
 
+#include <qore/ModuleManager.h>
+
 #include <atomic>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
+class QoreSandboxManager;
+class HashMember;
+
 typedef std::set<QoreSQLStatement*> stmt_set_t;
 typedef std::vector<std::pair<std::string, const QoreTypeInfo*>> qore_dbi_typed_result_members_t;
+
+//! The code that set an option of a datasource: whoever configures a datasource decides what its options may do
+/** A driver applies the options of a datasource when a connection is opened (Datasource::getConnectOptions()), which
+    can happen much later than the options were set, on another thread and for other code: a DatasourcePool opens a
+    connection on the thread that first needs it, and trusted code can open a datasource that sandboxed code built.
+    The restrictions and the filesystem policy of the code that set an option are therefore recorded with the option
+    when it is set (Datasource::setOption(), the options of a Datasource constructor or of a connection string), and
+    a DatasourcePool records those of the code that created it for every connection that it creates.  Copies of a
+    datasource keep the records of the options that they copy.  A driver reads them with
+    Datasource::getOptionRestrictions() and Datasource::getOptionPolicyManagerRef() (qore#5741).
+
+    The same record is kept for the code that chose the connection of a datasource (qore#6142): its creators and the
+    setter of each connection value (the user name, password, database name, host name and port); a driver reads them
+    with Datasource::getConnectChoosers() and Datasource::addOptionChooser().  For that, it also records whether the
+    code could use uncontrolled APIs (allowsUncontrolledApis()).
+
+    The object is immutable after construction, so it is shared by the copies of a datasource and by the connections
+    of a pool, also across threads.
+*/
+class qore_ds_option_setter {
+public:
+    //! records the code running on the current thread
+    /** The restrictions are those that QoreModuleCommandRestrictions::getCallerRestrictions() gives the calling code,
+        and the policy manager is the one that a filesystem policy check of the calling code uses
+        (QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)).  On a thread without Qore thread data (C++ code
+        that creates or configures a datasource there), no Qore code is calling: the record is unrestricted, with no
+        policy manager
+    */
+    DLLLOCAL qore_ds_option_setter();
+
+    DLLLOCAL ~qore_ds_option_setter();
+
+    //! returns the restrictions of the code that set the option
+    DLLLOCAL const QoreModuleCommandRestrictions& getRestrictions() const {
+        return restrictions;
+    }
+
+    //! returns a new reference to the filesystem policy manager of the code that set the option, or nullptr
+    DLLLOCAL QoreSandboxManager* getPolicyManagerRef() const;
+
+    //! returns true if the code may use uncontrolled APIs now (qore#6142)
+    /** With a policy manager, its current QoreSandboxManager::getUncontrolledApiPolicy(), so that a host that changes
+        the policy later is honored in both directions; without one (no sandbox policy governed the code, or it ran
+        under a trusted barrier), the value captured when the record was made, which is always true then
+    */
+    DLLLOCAL bool allowsUncontrolledApis() const;
+
+    //! returns qore_sandbox_allows_uncontrolled_apis() with the \c Policy purpose as it was when the record was made
+    DLLLOCAL bool getCapturedAllowsUncontrolledApis() const {
+        return allows_uncontrolled;
+    }
+
+    //! returns true if this record and \a o always give the same results (qore#6142)
+    /** The same policy manager (the policy is read from it when a connection is made), the same captured bit and the
+        same restrictions: one of them can stand for both, so that the creators of copies of copies stay bounded by
+        the distinct code involved
+    */
+    DLLLOCAL bool isEquivalent(const qore_ds_option_setter& o) const {
+        return this == &o || (policy == o.policy && allows_uncontrolled == o.allows_uncontrolled
+            && restrictions.isSandboxed() == o.restrictions.isSandboxed()
+            && restrictions.getParseOptions() == o.restrictions.getParseOptions());
+    }
+
+    //! returns a record of the code running on the current thread
+    DLLLOCAL static std::shared_ptr<const qore_ds_option_setter> getCaller() {
+        return std::make_shared<const qore_ds_option_setter>();
+    }
+
+    qore_ds_option_setter(const qore_ds_option_setter&) = delete;
+    qore_ds_option_setter& operator=(const qore_ds_option_setter&) = delete;
+
+private:
+    //! the restrictions of the code that set the option
+    const QoreModuleCommandRestrictions restrictions;
+    //! qore_sandbox_allows_uncontrolled_apis() with the \c Policy purpose of the code when the record was made
+    /** Declared before \c policy: \c policy is a raw reference that only the destructor releases, which does not run
+        if a later member initializer throws, so no initializer that can fail follows it
+    */
+    const bool allows_uncontrolled;
+    //! the policy manager (referenced) of the code that set the option, or nullptr if no sandbox policy governed it
+    QoreSandboxManager* const policy;
+};
+
+//! a record of the code that chose a part of the connection of a datasource; see qore_ds_option_setter
+typedef std::shared_ptr<const qore_ds_option_setter> qore_ds_setter_t;
+
+//! the creators of a datasource (qore#6142)
+/** Copy-on-write: a vector is never changed once it is shared, so that a reader copies the pointer only; a change
+    builds a new vector and replaces the pointer.  It has at least one entry and no two equivalent entries
+    (qore_ds_option_setter::isEquivalent())
+*/
+typedef std::shared_ptr<const std::vector<qore_ds_setter_t>> qore_ds_creators_t;
+
+//! returns the creators with the single entry \a creator
+DLLLOCAL qore_ds_creators_t qore_ds_make_creators(const qore_ds_setter_t& creator);
+
+//! returns the union of \a a and the creators \a b, \a a first, without a record equivalent to one before it
+//! (qore_ds_option_setter::isEquivalent())
+DLLLOCAL qore_ds_creators_t qore_ds_merge_creators(const qore_ds_setter_t& a, const qore_ds_creators_t& b);
+
+//! returns the union of the creators \a a and \a b, \a a first, without a record equivalent to one before it; \a a
+//! itself if each entry of \a b is equivalent to one of \a a
+DLLLOCAL qore_ds_creators_t qore_ds_merge_creators(const qore_ds_creators_t& a, const qore_ds_creators_t& b);
+
+//! the connection parameters of a datasource, which choose the destination and the credentials of a connection
+/** The encoding is not one: it does not change the destination or the credentials
+*/
+enum qore_ds_conn_param {
+    QDCP_USER,
+    QDCP_PASS,
+    QDCP_DB,
+    QDCP_HOST,
+    QDCP_PORT,
+    QDCP_COUNT
+};
+
+//! the record of a DatasourcePool for a connection that it creates (qore#6142)
+struct qore_ds_pool_record {
+    //! the creators of the pool, which are the creators of each of its connections
+    qore_ds_creators_t creators;
+    //! the code that created the pool: the setter of every value and option of its connections
+    qore_ds_setter_t setter;
+};
+
+//! the setters of the options of a datasource: option name -> setter
+/** the comparator is transparent, so that an option is found by its C string without a copy
+*/
+typedef std::map<std::string, std::shared_ptr<const qore_ds_option_setter>, std::less<>>
+    qore_ds_option_setter_map_t;
+
+//! a consistent copy of the options of a datasource and of the code that set them, for a copy of the datasource
+/** Each value is the one that its recorded setter set (see qore_ds_private::getOptionSnapshot()); the object owns the
+    reference to the option hash until it is released to the copy
+*/
+class qore_ds_option_snapshot {
+public:
+    //! takes ownership of the reference to \a opt
+    DLLLOCAL qore_ds_option_snapshot(QoreHashNode* opt, qore_ds_option_setter_map_t&& setters) noexcept
+            : opt(opt), setters(std::move(setters)) {
+        assert(opt);
+    }
+
+    DLLLOCAL qore_ds_option_snapshot(qore_ds_option_snapshot&& old) noexcept
+            : opt(old.opt), setters(std::move(old.setters)) {
+        old.opt = nullptr;
+    }
+
+    DLLLOCAL ~qore_ds_option_snapshot();
+
+    //! releases the reference to the options to the caller
+    DLLLOCAL QoreHashNode* releaseOptions() noexcept {
+        QoreHashNode* rv = opt;
+        opt = nullptr;
+        return rv;
+    }
+
+    //! returns the setters of the options, for the caller to take
+    DLLLOCAL qore_ds_option_setter_map_t& getSetters() noexcept {
+        return setters;
+    }
+
+    qore_ds_option_snapshot(const qore_ds_option_snapshot&) = delete;
+    qore_ds_option_snapshot& operator=(const qore_ds_option_snapshot&) = delete;
+    qore_ds_option_snapshot& operator=(qore_ds_option_snapshot&&) = delete;
+
+private:
+    //! the options (referenced), or nullptr once released
+    QoreHashNode* opt;
+    //! the code that set each option in \c opt, if it is known
+    qore_ds_option_setter_map_t setters;
+};
+
+//! a lock of qore_ds_private::m; debug builds count the sections of the thread that hold one (qore#6142)
+/** \c m is not a leaf lock: the statement close and free paths (qore_ds_private::transactionDone(),
+    qore_ds_private::closeOrphans()) call the driver with it held.  The sections that guard the pending connection
+    values (qore_ds_pending_params) are leaves, and their entry points take \c m with the \c Leaf tag, which asserts in
+    a debug build that the thread holds no \c m already: \c QoreThreadLock is not recursive, so such a call would
+    deadlock (see the DBI driver rules in 70_qore_modules.doxygen)
+*/
+class QoreDsLock : public AutoLocker {
+public:
+    //! the tag of a leaf section of an entry point that must not be called with an \c m held
+    enum LeafTag { Leaf };
+
+    //! takes the lock
+    DLLLOCAL explicit QoreDsLock(QoreThreadLock& l) : AutoLocker(l) {
+        dbgEnter();
+    }
+
+    //! takes the lock for a leaf section; asserts in a debug build that the thread holds no qore_ds_private::m
+    DLLLOCAL QoreDsLock(QoreThreadLock& l, LeafTag) : AutoLocker(checkLeaf(l)) {
+        dbgEnter();
+    }
+
+    DLLLOCAL ~QoreDsLock() {
+        dbgLeave();
+    }
+
+    //! returns true if this object holds \a l
+    DLLLOCAL bool holds(const QoreThreadLock& l) const {
+        return lck == &l;
+    }
+
+#ifdef DEBUG
+    //! returns the number of sections on qore_ds_private::m that the current thread is in (debug builds only)
+    DLLLOCAL static int dbgDepth();
+#endif
+
+    QoreDsLock(const QoreDsLock&) = delete;
+    QoreDsLock& operator=(const QoreDsLock&) = delete;
+
+private:
+#ifdef DEBUG
+    DLLLOCAL static QoreThreadLock& checkLeaf(QoreThreadLock& l);
+    DLLLOCAL static void dbgEnter();
+    DLLLOCAL static void dbgLeave();
+#else
+    DLLLOCAL static QoreThreadLock& checkLeaf(QoreThreadLock& l) {
+        return l;
+    }
+    DLLLOCAL static void dbgEnter() {
+    }
+    DLLLOCAL static void dbgLeave() {
+    }
+#endif
+};
+
+//! the pending connection values of a datasource: the values that the next connection is opened with (qore#6142)
+/** They are set by any thread that configures the datasource and read by any thread that copies it or reports its
+    configuration, so they are guarded by qore_ds_private::m, which their owner passes to the constructor.  The values
+    are private and reachable only through a View or a ConstView, which is constructed from a QoreDsLock that holds
+    that lock, so a read or write without the lock does not compile, and a debug build asserts that the lock is the
+    right one.
+
+    Every critical section on them is a leaf: it only copies, moves or swaps values (see qore_ds_private).  In a debug
+    build, the constructor of a view calls the hook set by setDbgViewHook() with the lock held, so that a test can
+    observe every section that reads or writes the values.
+
+    The values in use, which the connection was opened with, are not kept here: they belong to the thread that holds
+    the connection (see qore_ds_private::setConnectionValues())
+*/
+class qore_ds_pending_params {
+public:
+    //! the pending connection values
+    struct Values {
+        std::string username,
+            password,
+            dbname,
+            //! the database-specific name of the encoding of the connection
+            db_encoding,
+            hostname;
+        //! the port number (0 = the default port)
+        int port = 0;
+        //! the code that set each connection parameter (see qore_ds_conn_param), if it is known (qore#6142)
+        /** A value and its setter are changed together, so that a reader pairs each value with the code that set it
+        */
+        qore_ds_setter_t setter[QDCP_COUNT];
+    };
+
+    //! creates the object with no values and the creators \a creators, which it takes, guarded by \a m
+    DLLLOCAL qore_ds_pending_params(QoreThreadLock& m, qore_ds_creators_t&& creators) noexcept : m(m),
+            creators(std::move(creators)) {
+    }
+
+    //! creates the object with the values \a v and the creators \a creators, which it takes, guarded by \a m
+    DLLLOCAL qore_ds_pending_params(QoreThreadLock& m, Values&& v, qore_ds_creators_t&& creators) noexcept : m(m),
+            v(std::move(v)), creators(std::move(creators)) {
+    }
+
+    //! read and write access to the values, while \a l holds the lock of the values
+    class View {
+    public:
+        DLLLOCAL View(qore_ds_pending_params& p, const QoreDsLock& l) : v(p.v), c(p.creators) {
+            p.dbgCheck(l);
+        }
+
+        DLLLOCAL Values& get() const {
+            return v;
+        }
+
+        //! the creators of the datasource
+        DLLLOCAL qore_ds_creators_t& creators() const {
+            return c;
+        }
+
+        View(const View&) = delete;
+        View& operator=(const View&) = delete;
+
+    private:
+        Values& v;
+        qore_ds_creators_t& c;
+    };
+
+    //! read access to the values, while \a l holds the lock of the values
+    class ConstView {
+    public:
+        DLLLOCAL ConstView(const qore_ds_pending_params& p, const QoreDsLock& l) : v(p.v), c(p.creators) {
+            p.dbgCheck(l);
+        }
+
+        DLLLOCAL const Values& get() const {
+            return v;
+        }
+
+        //! the creators of the datasource
+        DLLLOCAL const qore_ds_creators_t& creators() const {
+            return c;
+        }
+
+        ConstView(const ConstView&) = delete;
+        ConstView& operator=(const ConstView&) = delete;
+
+    private:
+        const Values& v;
+        const qore_ds_creators_t& c;
+    };
+
+#ifdef DEBUG
+    //! the hook that the constructor of a view calls with the lock held (unit tests)
+    typedef void (*dbg_view_hook_t)(QoreThreadLock& m, void* arg);
+
+    //! sets the hook for the calling thread (DEBUG builds only); nullptr removes it
+    DLLLOCAL static void setDbgViewHook(dbg_view_hook_t hook, void* arg);
+#endif
+
+    qore_ds_pending_params(const qore_ds_pending_params&) = delete;
+    qore_ds_pending_params& operator=(const qore_ds_pending_params&) = delete;
+
+private:
+    //! the lock that guards the values
+    QoreThreadLock& m;
+    //! the values; only reachable through a view
+    Values v;
+    //! the creators of the datasource (qore#6142); only reachable through a view
+    qore_ds_creators_t creators;
+
+#ifdef DEBUG
+    //! asserts that \a l holds \c m and calls the hook of the thread, if any
+    DLLLOCAL void dbgCheck(const QoreDsLock& l) const;
+#else
+    DLLLOCAL void dbgCheck(const QoreDsLock& l) const {
+    }
+#endif
+};
+
+//! what a copy of a datasource takes from the original: its options with their setters, and its pending values
+/** Read from the original in one critical section on its qore_ds_private::m (see qore_ds_private::getCopySnapshot())
+*/
+struct qore_ds_copy_snapshot {
+    //! the options and the code that set them
+    qore_ds_option_snapshot opts;
+    //! the pending connection values and their setters
+    qore_ds_pending_params::Values pending;
+    //! the creators of the copy: the code that copies the datasource and the creators of the original (qore#6142)
+    qore_ds_creators_t creators;
+};
 
 struct qore_ds_private : public QoreDbiForkObject {
     // mutex
@@ -89,24 +451,58 @@ struct qore_ds_private : public QoreDbiForkObject {
     const QoreEncoding* qorecharset = QCS_DEFAULT;
     void* private_data = nullptr;               // driver private data per connection
 
-    // for pending connection values
-    std::string p_username,
-        p_password,
-        p_dbname,
-        p_db_encoding, // database-specific name for the encoding for the connection
-        p_hostname;
-    int p_port = 0;       // pending port number (0 = default port)
+    //! the pending connection values, guarded by \c m (qore#6142)
+    /** Declared before \c opt: the copy constructor moves them out of its snapshot, which cannot fail, before the raw
+        reference to the options is taken
+    */
+    qore_ds_pending_params pending;
 
-    // actual connection values set by init() before the datasource is opened
+    // the connection values in use, copied from the pending values when the connection is opened
+    // (setConnectionValues()); written and read without a lock by the thread that holds the connection, which is the
+    // only writer; another thread reads them only with the lock that the writer holds (the ds_lock of a
+    // ManagedDatasource)
     std::string username,
         password,
         db_encoding,   // database-specific name for the encoding for the connection
         dbname,
         hostname;
     int port = 0; // port number (0 = default port)
+    //! the code that set each connection value in use (see qore_ds_conn_param), if it is known (qore#6142)
+    /** Copied from the pending setters with the values (setConnectionValues()), and written and read like the values
+        in use: by the thread that holds the connection
+    */
+    qore_ds_setter_t param_setter[QDCP_COUNT];
 
     // options per connection
     QoreHashNode* opt;
+    //! the code that set each option in \c opt, if it is known (qore#5741); see qore_ds_option_setter
+    /** Protected by \c m; an option's value in \c opt and its setter here are changed together with \c m held
+        (commitOption()), so that a copy of the datasource made by another thread pairs each value with the code that
+        set it (getOptionSnapshot())
+    */
+    qore_ds_option_setter_map_t opt_setters;
+    //! the option that setOption() is giving to the driver of an open connection, while the driver is called
+    /** Protected by \c m; meaningful only while \c pending_opt_setter is set.  An option is set by one thread at a
+        time (the thread that configures the datasource, or holds its locks)
+    */
+    std::string pending_opt_name;
+    //! the code that is setting \c pending_opt_name: the driver judges the value by it (getOptionSetter())
+    /** Protected by \c m.  It is not the setter of a value that the datasource keeps until the driver accepts the
+        value, so a copy of the datasource made meanwhile does not see it (getOptionSnapshot())
+    */
+    std::shared_ptr<const qore_ds_option_setter> pending_opt_setter;
+    //! the option whose entry in \c opt prepareOption() created and that has no value yet, while it is being set
+    /** Protected by \c m; meaningful only while \c placeholder_opt is set.  The entry is not an option value: a
+        connection opened meanwhile does not apply it (qore_ds_is_option_placeholder())
+    */
+    std::string placeholder_opt_name;
+    //! true while \c placeholder_opt_name names an entry that prepareOption() created
+    bool placeholder_opt = false;
+    //! the number of connections being opened with the stored options (QoreDsApplyStoredOptionsHelper)
+    /** Protected by \c m.  While it is not 0, getOptionSetter() reports the stored setters: the values given to the
+        connection are the stored ones, not the value that is being set
+    */
+    int applying_stored_options = 0;
     // DBI event queue
     Queue* event_queue = nullptr;
     // DBI Event queue argument
@@ -161,27 +557,50 @@ struct qore_ds_private : public QoreDbiForkObject {
         in_transaction.store(b, std::memory_order_relaxed);
     }
 
-    DLLLOCAL qore_ds_private(Datasource* n_ds, DBIDriver* ndsl, DatasourceStatementHelper* dsh) : ds(n_ds),
-            dsl(ndsl), opt(new QoreHashNode(autoTypeInfo)), dsh(dsh) {
+    //! creates a datasource with the creators \a creators, which it takes (qore#6142)
+    /** \c pending is initialized before \c opt, and it cannot fail; \a creators is allocated by the caller
+    */
+    DLLLOCAL qore_ds_private(Datasource* n_ds, DBIDriver* ndsl, DatasourceStatementHelper* dsh,
+            qore_ds_creators_t&& creators) : ds(n_ds), dsl(ndsl), pending(m, std::move(creators)),
+            opt(new QoreHashNode(autoTypeInfo)), dsh(dsh) {
         forkRegister();
     }
 
-    DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh) :
+    //! copies a datasource with the options, setters and pending values in \a snap, which it takes
+    /** The pending values are moved out of \a snap, which cannot fail; the options are released from \a snap by a
+        member initializer that cannot fail, and every later one cannot fail either, so that \a snap (a temporary of
+        the delegating constructor) frees them if a member before them cannot be created
+    */
+    DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh,
+            qore_ds_copy_snapshot&& snap) :
             ds(n_ds), autocommit(old.getAutoCommit()), dsl(old.dsl),
-            p_username(old.p_username), p_password(old.p_password),
-            p_dbname(old.p_dbname), p_db_encoding(old.p_db_encoding),
-            p_hostname(old.p_hostname), p_port(old.p_port),
-            //opt(old.opt->copy()) {
-            opt(old.getCurrentOptionHash(true)),
+            pending(m, std::move(snap.pending), std::move(snap.creators)),
+            opt(snap.opts.releaseOptions()),
+            opt_setters(std::move(snap.opts.getSetters())),
             event_queue(old.event_queue ? old.event_queue->queueRefSelf() : nullptr),
             event_arg(old.event_arg.refSelf()),
             mutation_ctx(old.getMutationCtx() ? old.getMutationCtx()->refSelf() : nullptr),
             dsh(dsh) {
+    }
+
+    //! copies a datasource; the copy keeps the setters of the options that it copies (qore#5741)
+    /** The code that configured the original decides what its options may do, not the code that copies it.  The
+        options and their setters are copied first, into an object that owns them until the copy takes them, and the
+        copy is registered once it is constructed, so that nothing leaks if a member cannot be created.
+
+        The copy also keeps the setters of the connection values that it copies, and its creators are the calling
+        code (the copier) and the creators of the original (qore#6142): a copy is never less restricted than the
+        original or the copier.  The copier is recorded before any lock is taken
+    */
+    DLLLOCAL qore_ds_private(const qore_ds_private& old, Datasource* n_ds, DatasourceStatementHelper* dsh) :
+            qore_ds_private(old, n_ds, dsh, old.getCopySnapshot(qore_ds_option_setter::getCaller())) {
+        // the object is constructed here, so the destructor (which unregisters it) runs if anything fails
         forkRegister();
     }
 
     DLLLOCAL ~qore_ds_private() {
         forkUnregister();
+        assert(!pending_opt_setter);
         assert(!private_data);
         assert(stmt_set.empty());
         // the driver data of destroyed statements is closed with the connection
@@ -281,23 +700,140 @@ struct qore_ds_private : public QoreDbiForkObject {
         return mutation_ctx.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL void setPendingConnectionValues(const qore_ds_private* other) {
-        p_username    = other->p_username;
-        p_password    = other->p_password;
-        p_dbname      = other->p_dbname;
-        p_hostname    = other->p_hostname;
-        p_db_encoding = other->p_db_encoding;
-        setAutoCommit(other->getAutoCommit());
-        p_port        = other->p_port;
+    //! returns a copy of the pending connection values
+    /** The values are copied in one leaf critical section on \c m: the one allocating step under it, bounded by the
+        five strings; must not be called with a qore_ds_private::m held (see QoreDsLock)
+    */
+    DLLLOCAL qore_ds_pending_params::Values getPendingValues() const {
+        qore_ds_pending_params::Values rv;
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        rv = v.get();
+        return rv;
     }
 
+    //! returns a copy of one pending string value; see getPendingValues()
+    DLLLOCAL std::string getPendingString(std::string qore_ds_pending_params::Values::* field) const {
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        return v.get().*field;
+    }
+
+    //! returns the pending port; see getPendingValues()
+    DLLLOCAL int getPendingPort() const {
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        return v.get().port;
+    }
+
+    //! sets one pending string value that has no setter (the encoding)
+    /** The value is created before the lock is taken and swapped in with it held, and the previous value is freed
+        after the lock is released, so nothing allocates or frees under \c m
+    */
+    DLLLOCAL void setPendingString(std::string qore_ds_pending_params::Values::* field, const char* val) {
+        // declared before the lock, so that the previous value is freed after it is released
+        std::string tmp(val);
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::View v(pending, al);
+        (v.get().*field).swap(tmp);
+    }
+
+    //! sets a pending connection parameter and the code that set it, together (qore#6142)
+    /** The value is created before the lock is taken and swapped in with it held.  \a setter is swapped with the
+        previous setter of the parameter, which the caller releases after the lock, as it can hold the last reference
+        to a policy manager; the previous value is freed after the lock as well
+
+        @param p the parameter, not QDCP_PORT
+        @param val the value
+        @param setter the code that set it; receives the previous setter
+    */
+    DLLLOCAL void setPendingParam(qore_ds_conn_param p, const char* val, qore_ds_setter_t& setter) {
+        assert(p != QDCP_PORT && p < QDCP_COUNT);
+        // declared before the lock, so that the previous value is freed after it is released
+        std::string tmp(val);
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::View v(pending, al);
+        (v.get().*getParamField(p)).swap(tmp);
+        v.get().setter[p].swap(setter);
+    }
+
+    //! sets the pending port and the code that set it, together; see setPendingParam()
+    DLLLOCAL void setPendingPort(int port, qore_ds_setter_t& setter) {
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::View v(pending, al);
+        v.get().port = port;
+        v.get().setter[QDCP_PORT].swap(setter);
+    }
+
+    //! returns the member of the pending values that holds the string parameter \a p
+    DLLLOCAL static std::string qore_ds_pending_params::Values::* getParamField(qore_ds_conn_param p) {
+        switch (p) {
+            case QDCP_USER: return &qore_ds_pending_params::Values::username;
+            case QDCP_PASS: return &qore_ds_pending_params::Values::password;
+            case QDCP_DB: return &qore_ds_pending_params::Values::dbname;
+            case QDCP_HOST: return &qore_ds_pending_params::Values::hostname;
+            default:
+                break;
+        }
+        assert(false);
+        return &qore_ds_pending_params::Values::dbname;
+    }
+
+    //! returns the creators of the datasource
+    /** One leaf section that copies a pointer: no allocation, no deref
+    */
+    DLLLOCAL qore_ds_creators_t getCreators() const {
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        return v.creators();
+    }
+
+    //! fills \a c with the creators and the setters of the connection values in use (qore#6142)
+    /** Called by the thread that holds the connection, which owns the values in use and their setters; see
+        Datasource::getConnectChoosers()
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int getConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const;
+
+    //! copies the pending connection values of \a other and their setters to this datasource
+    /** The values of \a other and its creators are copied with its lock held and then swapped into this datasource
+        with this lock held, so the two locks are never held together; the previous values are freed after the lock is
+        released.  The creators of this datasource become the union of its own and those of \a other, so that it is
+        never less restricted than it was (qore#6142)
+    */
+    DLLLOCAL void setPendingConnectionValues(const qore_ds_private* other);
+
+    //! copies the pending connection values to the values in use; called by the thread that holds the connection
+    /** The pending values and their setters are copied to the values in use in one leaf section on \c m: the strings
+        are assigned in place, which reuses their storage (the one bounded allocation that a section on \c m can make),
+        and a setter is replaced only if it changed, with the previous one released after the lock, so no record is
+        released under it.  Only the thread that holds the connection writes the values in use.  For a
+        ManagedDatasource, its \c ds_lock is held by the caller, so that another thread that reads the values in use
+        with \c ds_lock held does not race with the change (a debug build asserts it); this function does not take
+        \c ds_lock itself, as its callers hold it already
+    */
     DLLLOCAL void setConnectionValues() {
-        dbname      = p_dbname;
-        username    = p_username;
-        password    = p_password;
-        hostname    = p_hostname;
-        db_encoding = p_db_encoding;
-        port        = p_port;
+        assert(!dsh || dsh->helperHoldsConnectionValuesLock());
+        // the previous setters of the values in use, released after the lock
+        qore_ds_setter_t old_setters[QDCP_COUNT];
+        QoreDsLock al(m, QoreDsLock::Leaf);
+        qore_ds_pending_params::ConstView v(pending, al);
+        const qore_ds_pending_params::Values& p = v.get();
+        // a string assignment can fail (bad_alloc) after others succeeded: the open fails then, and the next open
+        // copies every value and setter again, so a value in use is never used with the setter of another value
+        dbname = p.dbname;
+        username = p.username;
+        password = p.password;
+        hostname = p.hostname;
+        db_encoding = p.db_encoding;
+        port = p.port;
+        for (unsigned i = 0; i < QDCP_COUNT; ++i) {
+            if (param_setter[i] != p.setter[i]) {
+                old_setters[i] = std::move(param_setter[i]);
+                param_setter[i] = p.setter[i];
+            }
+        }
     }
 
     DLLLOCAL void statementExecuted(int rc);
@@ -307,11 +843,109 @@ struct qore_ds_private : public QoreDbiForkObject {
     DLLLOCAL const TypedHashDecl* getTypedResultHashDecl(const char* driver_name, const std::string& signature,
             const qore_dbi_typed_result_members_t& members, ExceptionSink* xsink);
 
-    DLLLOCAL void copyOptions(const Datasource* ods);
+    //! sets an option for the datasource and records the code that set it
+    /** The option is validated, set on the connection if the datasource is open, and kept to be set on every new
+        connection with \a setter as the code that set it.  A value that is refused is not kept, and the previous
+        setter of the option stays recorded.
 
-    DLLLOCAL void setOption(const char* name, QoreValue v, ExceptionSink* xsink) {
-        opt->setKeyValue(name, v.refSelf(), xsink);
+        @param name the option
+        @param val the value
+        @param setter the code that set the option: the calling code for Datasource::setOption(), the code that
+        created a DatasourcePool for the connections of the pool
+        @param xsink for the errors of the option
+
+        @return 0 for OK, -1 for an error (exception raised)
+    */
+    DLLLOCAL int setOption(const char* name, const QoreValue val,
+            const std::shared_ptr<const qore_ds_option_setter>& setter, ExceptionSink* xsink);
+
+    //! returns true if \a name is the entry of a new option that is being set and has no value yet
+    DLLLOCAL bool isOptionPlaceholder(const char* name) const {
+        assert(name);
+        QoreDsLock al(m);
+        return placeholder_opt && placeholder_opt_name == name;
     }
+
+    //! returns the setter of an option, or an empty pointer if it is not known
+    /** While setOption() gives a value to the driver of an open connection, the driver judges it by the code that is
+        setting it, so that code is returned for that option, except while a connection is opened with the stored
+        options (\c applying_stored_options), which are judged by their stored setters
+    */
+    DLLLOCAL std::shared_ptr<const qore_ds_option_setter> getOptionSetter(const char* name) const {
+        assert(name);
+        QoreDsLock al(m);
+        // the pending setter is the setter of the value that the driver is being given, not of the stored values that
+        // a connection being opened meanwhile is given
+        if (pending_opt_setter && !applying_stored_options && pending_opt_name == name) {
+            return pending_opt_setter;
+        }
+        qore_ds_option_setter_map_t::const_iterator i = opt_setters.find(name);
+        return i == opt_setters.end() ? std::shared_ptr<const qore_ds_option_setter>() : i->second;
+    }
+
+    //! returns a copy of the options and of their setters in which each value is the one that its setter set
+    /** For a copy of the datasource, which can be made by another thread while an option is being set: the values
+        that the datasource keeps and their setters are read together with \c m held, as commitOption() changes them,
+        and they replace the values that the driver of an open connection reports for those options; an option that
+        the driver is being given (setOption()) and that has no kept value is not copied.  Options that the driver
+        reports and that were never set (its defaults) are copied without a setter.
+    */
+    DLLLOCAL qore_ds_option_snapshot getOptionSnapshot() const;
+
+    //! returns what a copy of the datasource takes from it: getOptionSnapshot() and the pending connection values
+    /** The pending values are copied in the same critical section on \c m as the options that the datasource keeps
+        (qore#6142); must not be called with a qore_ds_private::m held (see QoreDsLock)
+    */
+    DLLLOCAL qore_ds_copy_snapshot getCopySnapshot(const qore_ds_setter_t& copier) const;
+
+    //! returns getOptionSnapshot(); if \a pending is not nullptr, the pending connection values are copied into it in
+    //! the same critical section as the options, and the creators into \a creators
+    DLLLOCAL qore_ds_option_snapshot getOptionSnapshotIntern(qore_ds_pending_params::Values* pending,
+            qore_ds_creators_t* creators) const;
+
+    //! what keeping an option needs, allocated before the driver is given the value (see setOption())
+    /** Everything that can fail is allocated here, so that keeping a value that the driver accepted cannot fail: the
+        connection has the value from the moment that the driver accepts it, and it must then be kept with its setter
+    */
+    struct OptionCommitPrep {
+        //! the record of the setter if the option has none yet
+        qore_ds_option_setter_map_t::node_type node;
+        //! the member of the option in \c opt, created for it if the option had no value; nullptr until prepared
+        HashMember* member = nullptr;
+        //! true if \c member was created for this change
+        bool created_member = false;
+    };
+
+    //! allocates what keeping the option needs; can fail (bad_alloc) before anything is changed
+    /** The member of a new option is created with no value, which the copies of the datasource treat as an option
+        that is not set (getOptionSnapshot()); cancelOption() removes it again if the value is not kept
+    */
+    DLLLOCAL void prepareOption(const char* name, const std::shared_ptr<const qore_ds_option_setter>& setter,
+            OptionCommitPrep& prep);
+
+    //! undoes prepareOption() for a value that is not kept; allocates nothing
+    DLLLOCAL void cancelOption(const char* name, OptionCommitPrep& prep) noexcept;
+
+    //! keeps an option that the driver accepted, with the code that set it, as one change made with \c m held
+    /** @param name the option
+        @param val the value; the reference is taken
+        @param setter the code that set it
+        @param prep what prepareOption() allocated for the change
+        @param xsink for the errors of releasing the previous value
+
+        A setter that setOption() made pending for the driver (\c pending_opt_setter) is cleared in the same critical
+        section.  Allocates nothing, so it cannot fail
+    */
+    DLLLOCAL void commitOption(const char* name, QoreValue val,
+            const std::shared_ptr<const qore_ds_option_setter>& setter, OptionCommitPrep& prep, ExceptionSink* xsink);
+
+#ifdef DEBUG
+    //! a hook that setOption() calls after the driver accepted a value and before the value is kept (unit tests)
+    typedef void (*dbg_option_commit_hook_t)(qore_ds_private& ds, const char* name, void* arg);
+
+    //! sets the hook for the calling thread (DEBUG builds only); nullptr removes it
+    DLLLOCAL static void setDbgOptionCommitHook(dbg_option_commit_hook_t hook, void* arg);
+#endif
 
     DLLLOCAL QoreHashNode* getOptionHash() const {
         return private_data ? qore_dbi_private::get(*dsl)->getOptionHash(ds) : opt->hashRefSelf();
@@ -521,13 +1155,13 @@ struct qore_ds_private : public QoreDbiForkObject {
     }
 
     DLLLOCAL void addStatement(QoreSQLStatement* stmt) {
-        AutoLocker al(m);
+        QoreDsLock al(m);
         assert(stmt_set.find(stmt) == stmt_set.end());
         stmt_set.insert(stmt);
     }
 
     DLLLOCAL void removeStatement(QoreSQLStatement* stmt) {
-        AutoLocker al(m);
+        QoreDsLock al(m);
         stmt_set_t::iterator i = stmt_set.find(stmt);
         if (i != stmt_set.end())
             stmt_set.erase(i);
@@ -543,7 +1177,7 @@ struct qore_ds_private : public QoreDbiForkObject {
 
     //! closes the driver data of destroyed statements that the connection holds; called by the thread holding it
     DLLLOCAL void closeOrphans(ExceptionSink* xsink) {
-        AutoLocker al(m);
+        QoreDsLock al(m);
         orphansDone(true, xsink);
     }
 
@@ -586,7 +1220,7 @@ struct qore_ds_private : public QoreDbiForkObject {
 
     // @param clear if true then clears the statements' datasource ptrs and the stmt_set, if false, does not
     DLLLOCAL void transactionDone(bool clear, bool close, ExceptionSink* xsink) {
-        AutoLocker al(m);
+        QoreDsLock al(m);
         for (stmt_set_t::iterator i = stmt_set.begin(), e = stmt_set.end(); i != e; ++i) {
             //printd(5, "qore_ds_private::transactionDone() this: %p stmt: %p clear: %d close: %d\n", this, *i, clear, close);
             (*i)->transactionDone(clear, close, xsink);
@@ -736,6 +1370,18 @@ struct qore_ds_private : public QoreDbiForkObject {
     DLLLOCAL static qore_ds_private* get(Datasource& ds) {
         return ds.priv;
     }
+
+    //! creates a connection of a DatasourcePool with the creators of the pool (qore#6142)
+    /** The connection's creators are the creators of the pool, not the code that runs when the pool grows.
+
+        @param driver the DBIDriver object to use for the connection
+        @param dsh the interface of the real C++ parent object
+        @param rec the creators of the pool
+
+        @return the new object; the caller owns it
+    */
+    DLLLOCAL static Datasource* createPoolConnection(DBIDriver* driver, DatasourceStatementHelper* dsh,
+            const qore_ds_pool_record& rec);
 
 private:
     // set of active SQLStatements on this datasource

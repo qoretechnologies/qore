@@ -39,13 +39,11 @@ class RuntimeConfig;
 
 class WhileStatement : public AbstractStatement {
 public:
+    DLLLOCAL static WhileStatement* create(LexicalSemanticPolicy policy, int start_line, int end_line,
+            QoreValue c, StatementBlock* cd);
     DLLLOCAL WhileStatement(int start_line, int end_line, QoreValue c, StatementBlock* cd);
     DLLLOCAL virtual ~WhileStatement();
 
-    // faked here; checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
-    }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     DLLLOCAL QoreValue getCond() const {
@@ -66,6 +64,11 @@ public:
     }
 
 protected:
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(QoreValue& return_value, ExceptionSink* xsink);
+    template <bool StrictBoolean>
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE int execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink);
+
     QoreValue cond{};
     StatementBlock* code;
     LVList* lvars = nullptr;

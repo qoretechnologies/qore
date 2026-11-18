@@ -1256,7 +1256,31 @@ public:
     DLLEXPORT const QoreTypeInfo* getOrNothingTypeInfo() const;
 
     //! adds a member
+    /** @deprecated use addMember(const char*, ClassAccess, const QoreTypeInfo*, QoreValue, ExceptionSink*), which
+        reports a refused addition to the caller; this form reports it on the standard error output
+    */
     DLLEXPORT void addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeInfo, QoreValue initial_value = QoreValue());
+
+    //! adds a member, unless code in other threads can already reach the class
+    /** A member can be added until code in other threads can reach the class: until the class is committed into a
+        namespace (QoreNamespace::addSystemClass()), or, for a class that a module commits during its initialization,
+        until the initialization returns; from then on other threads can read the class's members without a lock, and
+        the addition is refused.
+
+        @param mem the name of the member; must not already be declared in the class
+        @param access the access of the member
+        @param n_typeInfo the type of the member
+        @param initial_value the initial value of the member
+        @param xsink for the exception if the member cannot be added
+
+        @return 0 if the member was added, -1 if not (an exception was raised)
+
+        @throw CLASS-MEMBER-ADD-ERROR code in other threads can already reach the class
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int addMember(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeInfo, QoreValue initial_value,
+            ExceptionSink* xsink);
 
     //! Adds a declared member whose value is read from and written to external storage owned by the module
     /** Use this instead of addMember() when the member mirrors a value owned by the module (such as a field of an
@@ -1287,8 +1311,14 @@ public:
         @param del called with \a ptr when the last class declaring or inheriting the member is destroyed, to release
         the module data
 
+        @deprecated use the form with an ExceptionSink* argument, which reports a refused addition to the caller; this
+        form reports it on the standard error output
+
         @note
-        - call before the class is initialized and published, like addMember()
+        - can be called until code in other threads can reach the class: before the class is committed into a
+          namespace, or, for a class that a module commits during its initialization, until the initialization
+          returns (as module-jni adds the fields of Java classes); from then on the addition is refused
+          (\c CLASS-MEMBER-ADD-ERROR), as other threads read the class's members without a lock
         - %Qore serializes neither the accessors nor a read-modify-write of the member (such as <tt>obj.m++</tt>),
           since the value is not held by the object; the module must make its own storage safe for concurrent access
         - since the object holds no value for the member, it is not part of the object's member data: it is not
@@ -1308,6 +1338,29 @@ cls->addBuiltinMemberWithAccessors("count", Public, bigIntOrNothingTypeInfo, jav
     */
     DLLEXPORT void addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
             q_member_get_t get, q_member_set_t set, const void* ptr = nullptr, q_member_del_t del = nullptr);
+
+    //! Adds a declared member held in external storage, unless code in other threads can already reach the class
+    /** As addBuiltinMemberWithAccessors(const char*, ClassAccess, const QoreTypeInfo*, q_member_get_t,
+        q_member_set_t, const void*, q_member_del_t), but a refused addition is raised in \a xsink
+
+        @param name the name of the member; must not already be declared in the class
+        @param access the access of the member
+        @param typeInfo the type of the member
+        @param get called to read the member's value; must return a new reference
+        @param set called with the value assigned
+        @param ptr module data passed to \a get and \a set; released with \a del also if the member is not added
+        @param del called with \a ptr when the last class declaring or inheriting the member is destroyed, or at once
+        if the member is not added
+        @param xsink for the exception if the member cannot be added
+
+        @return 0 if the member was added, -1 if not (an exception was raised)
+
+        @throw CLASS-MEMBER-ADD-ERROR code in other threads can already reach the class
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
+            q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del, ExceptionSink* xsink);
 
     //! sets a pointer to user-specific data in the class
     /** @deprecated use setManagedUserData(AbstractQoreClassUserData*) instead

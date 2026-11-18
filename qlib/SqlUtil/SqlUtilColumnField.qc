@@ -41,7 +41,9 @@ public class SqlUtilColumnField inherits QoreDataField {
     }
 
     #! sets the default value for the field
-    setDefaultValue(auto default_value) {
+    /** @return this object, as AbstractDataField::setDefaultValue(), which this overrides
+    */
+    AbstractDataField setDefaultValue(auto default_value) {
         # if an exception occurs, then we assume that the default value is an expression that is executed server side
         try {
             # check that the value can be assigned to the type
@@ -51,6 +53,7 @@ public class SqlUtilColumnField inherits QoreDataField {
                 rethrow;
             }
         }
+        return self;
     }
 }
 }

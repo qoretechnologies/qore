@@ -35,6 +35,7 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/WebSocketFrameCodec.h"
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
@@ -69,6 +70,9 @@ static bool http2DebugEnabled() {
 // nghttp2 1.60.0 introduced nghttp2_session_mem_send2 with nghttp2_ssize
 // Use the new API when available for better cross-platform compatibility
 #include <nghttp2/nghttp2ver.h>
+
+#include "qore/intern/ql_debug.h"
+#include "qore/intern/HttpStreamConsumeHook.h"
 #if NGHTTP2_VERSION_NUM >= 0x013c00  // 1.60.0
 #define QORE_USE_NGHTTP2_MEM_SEND2 1
 #endif
@@ -77,6 +81,12 @@ static void http2_raise_poll_result_exception(const QoreHashNode* ex, ExceptionS
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // an operation that ended with an error while the thread is cancelled reports the cancellation, whatever ended
+    // it: a close of its socket by the code that the cancellation ends, or the peer's reaction to that (see
+    // qore_socket_raise_pending_cancel(), issue #5793)
+    if (qore_socket_raise_pending_cancel("HTTP/2 socket operation", xsink)) {
+        return;
+    }
     // note: these values can be held in inline short string storage, which has no QoreStringNode;
     // the node value helper materializes such values so that a reference can be taken
     QoreStringNodeValueHelper err_str(err);
@@ -393,6 +403,12 @@ Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char
 }
 
 Http2Session::~Http2Session() {
+#ifdef DEBUG
+    // the credit deferred for streams still open when the session ends is settled with them (issue #5820)
+    for (auto& i : deferred_stream_credit) {
+        qore_dbg_stream_credit_stats.settled.fetch_add(i.second, std::memory_order_relaxed);
+    }
+#endif
     // No io_uring cleanup needed here — PendingRead holds a weak_ptr<Http2Session>,
     // which expires naturally when this destructor runs. processCompletions() will
     // skip delivery for expired sessions.
@@ -487,7 +503,14 @@ int Http2Session::init(ExceptionSink* xsink) {
     // testHttp2RstStreamDuringInputStreamStreaming (and Qorus issue-1704.qtest
     // which exposed this on conn_mgr via the H2 MultiplexPoll headers-first
     // dispatch fix).
-    nghttp2_option_set_no_auto_window_update(opts, is_server ? 1 : 0);
+    //
+    // The client grants credit in the same way (issue #5820): the connection credit of the data it receives at
+    // once, and the stream credit of a streaming response's data only when the application consumes it (see
+    // creditConsumedStreamData()), so that the data held for an application that does not read is bounded by the
+    // stream's window; the stream credit of a response returned whole is granted when it is received (its size is
+    // bounded by the maximum response body size).  As on the server, nghttp2 consumes DATA that arrives on a stream
+    // that was reset locally itself, through the same accounting, so the connection window does not pin.
+    nghttp2_option_set_no_auto_window_update(opts, 1);
     // RFC 8441: enable extended CONNECT support in nghttp2.
 
     if (is_server) {
@@ -534,6 +557,25 @@ int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
             xsink->raiseException("HTTP2-ERROR", "failed to submit SETTINGS: %s",
                 nghttp2_strerror(rv));
             return -1;
+        }
+        // the connection window bounds the data in flight on all the streams of the connection: at the RFC 9113
+        // default of 65535 bytes, every 64 KiB received needs a WINDOW_UPDATE round trip whatever the stream windows,
+        // and a loaded host that takes ~200 ms to schedule a round trip receives a few hundred KB/s; it is raised to
+        // ConnectionWindowStreams stream windows (nghttp2 sends the WINDOW_UPDATE for stream 0; the received data is
+        // credited as before, so the stream windows still bound the data buffered for each stream)
+#ifdef DEBUG
+        // tests that detect lost connection credit by watching the window shrink keep the default window
+        if (!qore_dbg_h2_default_connection_window.load())
+#endif
+        {
+            int64_t window = std::min<int64_t>(static_cast<int64_t>(local_settings.initial_window_size)
+                * ConnectionWindowStreams, NGHTTP2_MAX_WINDOW_SIZE);
+            rv = nghttp2_session_set_local_window_size(session, NGHTTP2_FLAG_NONE, 0, static_cast<int32_t>(window));
+            if (rv != 0) {
+                xsink->raiseException("HTTP2-ERROR", "failed to set the connection window: %s",
+                    nghttp2_strerror(rv));
+                return -1;
+            }
         }
         connection_preface_submitted = true;
     }
@@ -782,9 +824,11 @@ int32_t Http2Session::submitRequestImpl(const char* method, const char* path,
     // Lock only for nghttp2 API calls and session state access
     std::lock_guard<std::recursive_mutex> lg(m);
 
+    // a definitive answer of the server (its SETTINGS), with an error code of its own: HTTP2-CONNECT-ERROR is also the
+    // code of failures to connect, which callers retry on a fresh connection (issue #5672)
     if (is_extended_connect && remote_settings_received
             && !remote_settings.enable_connect_protocol) {
-        xsink->raiseException("HTTP2-CONNECT-ERROR",
+        xsink->raiseException("HTTP2-EXTENDED-CONNECT-UNSUPPORTED",
             "server does not support extended CONNECT protocol (RFC 8441); "
             "SETTINGS_ENABLE_CONNECT_PROTOCOL was not advertised");
         return -1;
@@ -1052,6 +1096,41 @@ int Http2Session::submitGoaway(uint32_t error_code, const char* opaque_data,
     return 0;
 }
 
+int Http2Session::submitShutdownGoaway(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // before the server's connection preface (SETTINGS) no other frame may be sent (RFC 9113 section 3.4)
+    if (goaway_sent || !connection_preface_submitted) {
+        return 0;
+    }
+    return submitGoaway(NGHTTP2_NO_ERROR, nullptr, 0, xsink) ? -1 : 0;
+}
+
+int Http2Session::startDrain(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    draining.store(true, std::memory_order_release);
+    return submitShutdownGoaway(xsink);
+}
+
+bool Http2Session::isDrainComplete() const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    return draining.load(std::memory_order_acquire) && streams.empty() && send_offset >= send_buffer.size()
+        && !nghttp2_session_want_write(session);
+}
+
+int Http2Session::sendShutdownGoaway(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (submitShutdownGoaway(xsink)) {
+        return -1;
+    }
+    // the server closes the connection after this frame: any error flushing it (the peer has closed or reset the
+    // connection already, for example) means that it cannot be delivered, and there is nothing more to do; the
+    // connection's own poll operation sees the same error on its next cycle and closes the connection
+    ExceptionSink send_xsink;
+    sendPendingData(0, &send_xsink);
+    send_xsink.clear();
+    return 0;
+}
+
 int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     int rv = nghttp2_submit_ping(session, NGHTTP2_FLAG_NONE, opaque_data);
@@ -1063,6 +1142,168 @@ int Http2Session::submitPing(const uint8_t* opaque_data, ExceptionSink* xsink) {
         return -1;
     }
     return 0;
+}
+
+size_t qore_http_stream_value_body_size(const QoreValue& v) {
+    if (v.getType() != NT_HASH) {
+        return 0;
+    }
+    QoreValue body = v.get<const QoreHashNode>()->getKeyValue("body");
+    switch (body.getType()) {
+        case NT_BINARY:
+            return body.get<const BinaryNode>()->size();
+        case NT_STRING:
+            return body.get<const QoreStringNode>()->size();
+        default:
+            return 0;
+    }
+}
+
+void qore_http_stream_wake_socket(const std::string& sock_hash) {
+    if (sock_hash.empty()) {
+        return;
+    }
+    // no controller is created here: without one, there is no I/O thread to wake
+    AsyncIoControllerPriv* ctl = qore_get_async_io_controller_if_exists();
+    if (!ctl) {
+        return;
+    }
+    ctl->wakeSocket(sock_hash);
+    ExceptionSink xsink;
+    ctl->deref(&xsink);
+    xsink.clear();
+}
+
+namespace {
+//! the item data that QueueItemConsumeHook::measure() took on this thread, to be reported by consumed()
+thread_local std::vector<std::pair<std::shared_ptr<QoreConsumeHook>, size_t>> queue_item_credit;
+}
+
+void QueueItemConsumeHook::record(const void* item, const std::shared_ptr<QoreConsumeHook>& stream_hook,
+        size_t bytes) {
+    if (!bytes) {
+        return;
+    }
+    std::lock_guard<std::mutex> lg(m);
+    auto& e = sizes[item];
+    e.first = stream_hook;
+    e.second += bytes;
+}
+
+void QueueItemConsumeHook::forget(const void* item) {
+    std::shared_ptr<QoreConsumeHook> hook;
+    size_t bytes = 0;
+    {
+        std::lock_guard<std::mutex> lg(m);
+        auto i = sizes.find(item);
+        if (i == sizes.end()) {
+            return;
+        }
+        hook = std::move(i->second.first);
+        bytes = i->second.second;
+        sizes.erase(i);
+    }
+    // the item's data is consumed with the item, which was dropped
+    if (hook && bytes) {
+        hook->consumed(bytes);
+    }
+}
+
+size_t QueueItemConsumeHook::measure(const QoreValue& v) const {
+    const AbstractQoreNode* node = v.getInternalNode();
+    if (!node) {
+        return 0;
+    }
+    std::lock_guard<std::mutex> lg(m);
+    auto i = sizes.find(node);
+    if (i == sizes.end()) {
+        return 0;
+    }
+    size_t rv = i->second.second;
+    // an item is reported once: taken, or dropped with the queue; reported to its stream by consumed()
+    queue_item_credit.emplace_back(std::move(i->second.first), rv);
+    sizes.erase(i);
+    return rv;
+}
+
+void QueueItemConsumeHook::consumed(size_t bytes) {
+    std::vector<std::pair<std::shared_ptr<QoreConsumeHook>, size_t>> items;
+    items.swap(queue_item_credit);
+    for (auto& i : items) {
+        if (i.first) {
+            i.first->consumed(i.second);
+        }
+    }
+}
+
+#ifdef DEBUG
+void qore_http_stream_credit_orphaned(size_t bytes) {
+    qore_dbg_stream_credit_stats.orphaned.fetch_add(bytes, std::memory_order_relaxed);
+}
+#endif
+
+void Http2Session::setStreamCreditOnConsume(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // a stream that has already ended is not recreated
+    Http2StreamInfo* stream = getStream(stream_id);
+    if (stream) {
+        stream->credit_on_consume = true;
+    }
+}
+
+bool Http2Session::failStream(int32_t stream_id, const char* err, const std::string& desc) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getStream(stream_id);
+    // a stream that has closed can no longer fail: its response is delivered already
+    if (!stream || !stream->fail_err.empty() || stream->state == Http2StreamState::Closed) {
+        return false;
+    }
+    stream->fail_err = err;
+    stream->fail_desc = desc;
+    // the data is discarded and credited as it arrives, as for a response that exceeds its maximum size
+    stream->body_too_large = true;
+    size_t held = stream->body.size();
+    std::vector<char>().swap(stream->body);
+    // the client credits the connection as data arrives; the stream credit of the data discarded is granted now if
+    // it was deferred (otherwise it was granted as the data arrived)
+    if (held && stream->credit_on_consume) {
+        creditConsumedStreamData(stream_id, held);
+    }
+    nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_CANCEL);
+    return true;
+}
+
+size_t Http2Session::creditConsumedStreamData(int32_t stream_id, size_t len) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto i = deferred_stream_credit.find(stream_id);
+    size_t take = (i == deferred_stream_credit.end()) ? 0 : std::min(len, i->second);
+#ifdef DEBUG
+    if (len > take) {
+        qore_dbg_stream_credit_stats.excess.fetch_add(len - take, std::memory_order_relaxed);
+    }
+#endif
+    if (!take) {
+        return 0;
+    }
+    if (!(i->second -= take)) {
+        deferred_stream_credit.erase(i);
+    }
+#ifdef DEBUG
+    qore_dbg_stream_credit_stats.credited.fetch_add(take, std::memory_order_relaxed);
+#endif
+    // a stream that has closed takes no stream credit; nghttp2 refuses it, which is not an error here
+    if (session) {
+        int rv = nghttp2_session_consume_stream(session, stream_id, take);
+        if (rv) {
+            printd(5, "creditConsumedStreamData() stream %d: %s\n", stream_id, nghttp2_strerror(rv));
+        }
+        // nghttp2 queues a WINDOW_UPDATE once half of the window has been consumed; the I/O thread is woken only if
+        // the session has something to send (that update, or any other frame that it queued meanwhile)
+        if (!nghttp2_session_want_write(session)) {
+            return 0;
+        }
+    }
+    return take;
 }
 
 int Http2Session::consumeReceivedData(int32_t stream_id, size_t len) {
@@ -1110,173 +1351,197 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
             h2.updateResponseSendWatches();
         }
     } response_send_watch_updater(*this);
-    size_t pending = send_buffer.size() - send_offset;
+    [[maybe_unused]] size_t pending = send_buffer.size() - send_offset;
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d pending=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, pending);
-    // First, collect data from nghttp2; drain until it reports no more data.
-    // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
-    // relying on nghttp2_session_want_write() as a loop condition.
-    size_t total_collected = 0;
+    // The output of nghttp2 is collected and written in rounds: a round stops collecting at the high-water mark,
+    // and the next one runs only if the socket took the whole buffer; when the socket would block, the rest stays in
+    // nghttp2 until the socket is writable again
     while (true) {
-        const uint8_t* data;
-#ifdef QORE_USE_NGHTTP2_MEM_SEND2
-        nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
-#else
-        ssize_t len = nghttp2_session_mem_send(session, &data);
-#endif
-        printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
-        if (len < 0) {
-#ifdef QORE_USE_NGHTTP2_MEM_SEND2
-            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
-#else
-            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
-#endif
-                nghttp2_strerror(static_cast<int>(len)));
-            return -1;
-        }
-        if (len == 0) {
-            break;
-        }
-        send_buffer.insert(send_buffer.end(), data, data + len);
-        total_collected += len;
-    }
-
-    // nghttp2 reports a frame as sent while returning its data, so each END_STREAM frame of a watched response
-    // serialized in this pass is in the buffer now
-    for (int32_t stream_id : response_end_streams_serialized) {
-        auto i = response_send_watches.find(stream_id);
-        if (i != response_send_watches.end()) {
-            i->second.end_pos = send_buffer_base + send_buffer.size();
-            i->second.end_pos_set = true;
-        }
-    }
-    response_end_streams_serialized.clear();
-
-    // Compact send buffer when consumed prefix exceeds threshold
-    if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
-        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
-        send_buffer_base += send_offset;
-        send_offset = 0;
-    }
-
-    pending = send_buffer.size() - send_offset;
-    printd(5, "sendPendingData() collected %zu bytes from nghttp2, pending=%zu\n",
-        total_collected, pending);
-
-    // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
-    if (send_offset < send_buffer.size()) {
-        printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending,
-            sock->ssl.load(std::memory_order_relaxed));
-        {
-            size_t off = send_offset;
-            int count = 0;
-            while (off + 9 <= send_buffer.size() && count < 32) {
-                const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
-                uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
-                uint8_t type = hdr[3];
-                uint8_t flags = hdr[4];
-                uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
-                    | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
-                printd(5, "sendPendingData() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
-                    count, length, type, flags, stream_id);
-                size_t frame_size = 9 + length;
-                if (off + frame_size > send_buffer.size()) {
-                    printd(5, "sendPendingData() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
-                        count, off, frame_size, send_buffer.size());
-                    break;
-                }
-                off += frame_size;
-                ++count;
-            }
-        }
-
-        // the descriptor and the TLS connection stay valid while another thread closes the socket
-        qore_socket_private::IoUseHelper io_use(*sock);
-        // Always use non-blocking mode for async I/O
-        OptionalNonBlockingHelper nbh(*sock, true, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        // Loop until buffer consumed or we need to poll
-        while (send_offset < send_buffer.size()) {
-            ssize_t rc;
-            size_t to_send = send_buffer.size() - send_offset;
-            if (SSLSocketHelper* ssl = io_use.getSsl()) {
-                // Use doNonBlockingIo for proper async SSL I/O
-                // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
-                size_t real_io = 0;
-                printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
-                rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
-                    const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
-                    to_send, SslAction::WRITE, real_io);
-                printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
-                if (*xsink) {
-                    return -1;
-                }
-
-                // Advance offset past sent data
-                if (real_io > 0) {
-                    send_offset += real_io;
-                    printd(5, "sendPendingData() sent %zu bytes, remaining=%zu\n",
-                        real_io, send_buffer.size() - send_offset);
-                }
-
-                if (!rc) {
-                    // Data was written successfully and SSL doesn't need to poll - continue loop
-                    continue;
-                }
-                if (rc == SOCK_POLLOUT || rc == SOCK_POLLIN) {
-                    // SSL needs to wait for socket - return the actual poll direction
-                    // Note: SOCK_POLLIN can happen during TLS renegotiation even when writing
-                    printd(5, "sendPendingData() SSL needs poll for %s, remaining=%zu\n",
-                        rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size() - send_offset);
-                    return rc;  // Return actual poll direction needed
-                }
-                // rc < 0 but no exception - shouldn't happen
-                printd(5, "sendPendingData() SSL unexpected: rc=%zd (breaking)\n", rc);
+        // First, collect data from nghttp2; drain until it reports no more data.
+        // We intentionally loop until nghttp2_session_mem_send* returns 0 to avoid
+        // relying on nghttp2_session_want_write() as a loop condition.
+        // only the debug log reads it
+        [[maybe_unused]] size_t total_collected = 0;
+        // set when collection stopped at the high-water mark with output left in nghttp2
+        bool capped = false;
+        while (true) {
+            // nghttp2 serializes DATA only when it is asked for output: the output is taken only while the unwritten
+            // part of the buffer is below the high-water mark, so that a peer that does not read (whatever window it
+            // grants) leaves the rest in the streams' pending data, where its limits apply (issue #5819)
+            if (send_buffer.size() - send_offset >= SEND_BUFFER_HIGH_WATER) {
+                capped = true;
                 break;
-            } else {
-                // Non-SSL: use regular send
-                rc = ::send(io_use.getDescriptor(), send_buffer.data() + send_offset, to_send, 0);
-                printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
-                if (rc >= 0) {
-                    // Advance offset past sent data
-                    if (rc > 0) {
-                        send_offset += rc;
-                    }
-                    continue;
-                }
-                sock_get_error();
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == EAGAIN
-#ifdef EWOULDBLOCK
-                    || errno == EWOULDBLOCK
+            }
+            const uint8_t* data;
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+            nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
+#else
+            ssize_t len = nghttp2_session_mem_send(session, &data);
 #endif
-                ) {
-                    // Would block - signal poll needed
-                    printd(5, "sendPendingData() socket would block, remaining=%zu\n",
-                        send_buffer.size() - send_offset);
-                    return SOCK_POLLOUT;  // Need to poll for POLLOUT and retry
-                }
-                xsink->raiseErrnoException("SOCKET-SEND-ERROR", errno, "error while sending HTTP/2 data");
+            printd(5, "sendPendingData() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
+            if (len < 0) {
+#ifdef QORE_USE_NGHTTP2_MEM_SEND2
+                xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
+#else
+                xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
+#endif
+                    nghttp2_strerror(static_cast<int>(len)));
                 return -1;
             }
+            if (len == 0) {
+                break;
+            }
+            send_buffer.insert(send_buffer.end(), data, data + len);
+            total_collected += len;
         }
 
-        printd(5, "sendPendingData() all data sent, buffer empty\n");
-    } else {
-        printd(5, "sendPendingData() no data to send\n");
+        // nghttp2 reports a frame as sent while returning its data, so each END_STREAM frame of a watched response
+        // serialized in this pass is in the buffer now
+        for (int32_t stream_id : response_end_streams_serialized) {
+            auto i = response_send_watches.find(stream_id);
+            if (i != response_send_watches.end()) {
+                i->second.end_pos = send_buffer_base + send_buffer.size();
+                i->second.end_pos_set = true;
+            }
+        }
+        response_end_streams_serialized.clear();
+
+        // Compact send buffer when consumed prefix exceeds threshold
+        if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
+            send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
+            send_buffer_base += send_offset;
+            send_offset = 0;
+        }
+
+        pending = send_buffer.size() - send_offset;
+        printd(5, "sendPendingData() collected %zu bytes from nghttp2, pending=%zu\n",
+            total_collected, pending);
+
+        // Send buffered data using proper async I/O pattern (like SocketSendPollState::continuePoll)
+        if (send_offset < send_buffer.size()) {
+            printd(5, "sendPendingData() sending %zu bytes to socket (ssl=%p)\n", pending,
+                sock->ssl.load(std::memory_order_relaxed));
+            {
+                size_t off = send_offset;
+                int count = 0;
+                while (off + 9 <= send_buffer.size() && count < 32) {
+                    const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
+                    uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
+                    [[maybe_unused]] uint8_t type = hdr[3];
+                    [[maybe_unused]] uint8_t flags = hdr[4];
+                    [[maybe_unused]] uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+                        | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
+                    printd(5, "sendPendingData() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
+                        count, length, type, flags, stream_id);
+                    size_t frame_size = 9 + length;
+                    if (off + frame_size > send_buffer.size()) {
+                        printd(5, "sendPendingData() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
+                            count, off, frame_size, send_buffer.size());
+                        break;
+                    }
+                    off += frame_size;
+                    ++count;
+                }
+            }
+
+            // the descriptor and the TLS connection stay valid while another thread closes the socket
+            qore_socket_private::IoUseHelper io_use(*sock);
+            // Always use non-blocking mode for async I/O
+            OptionalNonBlockingHelper nbh(*sock, true, xsink);
+            if (*xsink) {
+                return -1;
+            }
+
+            // Loop until buffer consumed or we need to poll
+            while (send_offset < send_buffer.size()) {
+                ssize_t rc;
+                size_t to_send = send_buffer.size() - send_offset;
+                if (SSLSocketHelper* ssl = io_use.getSsl()) {
+                    // Use doNonBlockingIo for proper async SSL I/O
+                    // Returns: SOCK_POLLIN/SOCK_POLLOUT if need to poll, 0 if done, < 0 on error
+                    size_t real_io = 0;
+                    printd(5, "sendPendingData() calling doNonBlockingIo to_send=%zu\n", to_send);
+                    rc = ssl->doNonBlockingIo(xsink, "sendPendingData",
+                        const_cast<char*>(reinterpret_cast<const char*>(send_buffer.data() + send_offset)),
+                        to_send, SslAction::WRITE, real_io);
+                    printd(5, "sendPendingData() doNonBlockingIo rc=%zd real_io=%zu xsink=%d\n", rc, real_io, (int)*xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+
+                    // Advance offset past sent data
+                    if (real_io > 0) {
+                        send_offset += real_io;
+                        printd(5, "sendPendingData() sent %zu bytes, remaining=%zu\n",
+                            real_io, send_buffer.size() - send_offset);
+                    }
+
+                    if (!rc) {
+                        // Data was written successfully and SSL doesn't need to poll - continue loop
+                        continue;
+                    }
+                    if (rc == SOCK_POLLOUT || rc == SOCK_POLLIN) {
+                        // SSL needs to wait for socket - return the actual poll direction
+                        // Note: SOCK_POLLIN can happen during TLS renegotiation even when writing
+                        printd(5, "sendPendingData() SSL needs poll for %s, remaining=%zu\n",
+                            rc == SOCK_POLLIN ? "POLLIN" : "POLLOUT", send_buffer.size() - send_offset);
+                        return rc;  // Return actual poll direction needed
+                    }
+                    // rc < 0 but no exception - shouldn't happen
+                    printd(5, "sendPendingData() SSL unexpected: rc=%zd (breaking)\n", rc);
+                    break;
+                } else {
+                    // Non-SSL: use regular send
+                    rc = ::send(io_use.getDescriptor(), send_buffer.data() + send_offset, to_send, 0);
+                    printd(5, "sendPendingData() send rc=%zd errno=%d\n", rc, errno);
+                    if (rc >= 0) {
+                        // Advance offset past sent data
+                        if (rc > 0) {
+                            send_offset += rc;
+                        }
+                        continue;
+                    }
+                    sock_get_error();
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+                        || errno == EWOULDBLOCK
+#endif
+                    ) {
+                        // Would block - signal poll needed
+                        printd(5, "sendPendingData() socket would block, remaining=%zu\n",
+                            send_buffer.size() - send_offset);
+                        return SOCK_POLLOUT;  // Need to poll for POLLOUT and retry
+                    }
+                    xsink->raiseErrnoException("SOCKET-SEND-ERROR", errno, "error while sending HTTP/2 data");
+                    return -1;
+                }
+            }
+
+            printd(5, "sendPendingData() all data sent, buffer empty\n");
+        } else {
+            printd(5, "sendPendingData() no data to send\n");
+        }
+        // another round only if collection stopped at the mark and the socket took the whole buffer
+        if (!capped || send_offset < send_buffer.size()) {
+            break;
+        }
     }
 
     // Release memory when fully drained to prevent long-lived idle connections
     // from holding onto large send buffer allocations
     if (send_offset == send_buffer.size()) {
+        bool had_data = !send_buffer.empty();
         send_buffer_base += send_buffer.size();
         send_buffer.clear();
         send_offset = 0;
+        // a waiter for a stream's data to be sent (streamSendFlushed()) waits for the send buffer as well
+        if (had_data) {
+            notifyStreamDrain();
+        }
     }
 
     printd(5, "sendPendingData() complete, want_write=%d pending=%zu\n",
@@ -1351,9 +1616,9 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     if (len >= 9) {
         uint8_t* hdr = reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr()));
         uint32_t flen = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
-        uint8_t ftype = hdr[3];
-        uint8_t fflags = hdr[4];
-        uint32_t fstream = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
+        [[maybe_unused]] uint8_t ftype = hdr[3];
+        [[maybe_unused]] uint8_t fflags = hdr[4];
+        [[maybe_unused]] uint32_t fstream = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
             | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
         if (local_settings.max_frame_size && flen > local_settings.max_frame_size) {
             printd(5, "receiveData() first frame header len=%u type=%u flags=0x%x stream_id=%u local_max=%u\n",
@@ -1416,7 +1681,11 @@ Http2StreamInfo* Http2Session::getStream(int32_t stream_id) {
     return nullptr;
 }
 
-BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink,
+        bool credit_deferred, bool* credit_due) {
+    if (credit_due) {
+        *credit_due = false;
+    }
     std::lock_guard<std::recursive_mutex> lg(m);
     (void)xsink;
     auto it = streams.find(stream_id);
@@ -1433,7 +1702,19 @@ BinaryNode* Http2Session::takeStreamData(int32_t stream_id, size_t max_bytes, Ex
     BinaryNode* rv = new BinaryNode();
     rv->append(it->second->body.data(), take);
     it->second->body.erase(it->second->body.begin(), it->second->body.begin() + take);
+    // a caller that hands the data to its consumer directly (not through a Channel or Queue with a consume hook)
+    // has it consumed now: its deferred stream credit is granted (issue #5820); the I/O thread sends the update
+    if (credit_deferred && it->second->credit_on_consume && creditConsumedStreamData(stream_id, take)
+            && credit_due) {
+        *credit_due = true;
+    }
     return rv;
+}
+
+void Http2Session::sendStreamCredit(const std::string& route_key) {
+    // only the thread that owns the socket writes to it: it is woken to send the update, and the wake-up runs its
+    // poll operation again, which writes what the session has to send
+    qore_http_stream_wake_socket(route_key);
 }
 
 Http2StreamInfo* Http2Session::getOrCreateStream(int32_t stream_id) {
@@ -1767,6 +2048,12 @@ bool Http2Session::isStreamEndStreamReceived(int32_t stream_id) const {
     return it != streams.end() && it->second->end_stream_received;
 }
 
+bool Http2Session::isStreamReset(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    return it != streams.end() && it->second->reset;
+}
+
 void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -1877,6 +2164,19 @@ bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
     return false;
 }
 
+#ifdef DEBUG
+size_t Http2Session::dbgStreamingDataCount() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    size_t count = 0;
+    for (auto& it : streams) {
+        if (it.second->streaming && it.second->headers_complete && !it.second->body.empty()) {
+            ++count;
+        }
+    }
+    return count;
+}
+#endif
+
 bool Http2Session::takeStreamingEndStream(int32_t& out_stream_id, QoreHashNode** trailers_out) {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [id, info] : streams) {
@@ -1919,9 +2219,9 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
         const nghttp2_frame* frame, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
     uint32_t remote_max = h2 ? h2->remote_settings.max_frame_size : 0;
-    uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
-    int is_server = h2 ? h2->is_server : 0;
-    int fd = h2 ? h2->sock->sock.load() : -1;
+    [[maybe_unused]] uint32_t local_max = h2 ? h2->local_settings.max_frame_size : 0;
+    [[maybe_unused]] int is_server = h2 ? h2->is_server : 0;
+    [[maybe_unused]] int fd = h2 ? h2->sock->sock.load() : -1;
     printd(5, "onFrameSendCallback type=%d stream_id=%d flags=%d len=%d remote_max_frame=%u local_max_frame=%u "
         "isServer=%d fd=%d\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length, remote_max, local_max,
@@ -1930,6 +2230,11 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
         printd(1, "HTTP2 WARN: outgoing frame length %d exceeds peer max_frame_size %u\n",
             (int)frame->hd.length, remote_max);
     }
+#ifdef DEBUG
+    if (frame->hd.type == NGHTTP2_WINDOW_UPDATE && !frame->hd.stream_id) {
+        qore_dbg_h2_connection_window_updates[is_server ? 1 : 0].fetch_add(1, std::memory_order_relaxed);
+    }
+#endif
     if (frame->hd.type == NGHTTP2_GOAWAY) {
         printd(5, "onFrameSendCallback GOAWAY: last_stream_id=%d error_code=%u\n",
             frame->goaway.last_stream_id, frame->goaway.error_code);
@@ -2291,8 +2596,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         }
     } else {
         stream = h2->getOrCreateStream(stream_id);
-        // the rest of a response body that exceeded the limit is discarded
+        // the rest of a response body that exceeded the limit is discarded; its credit is granted at once
         if (stream && stream->body_too_large) {
+            if (len) {
+                h2->consumeReceivedData(stream_id, len);
+            }
             return 0;
         }
     }
@@ -2314,6 +2622,8 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 stream->body_too_large = true;
                 std::vector<char>().swap(stream->body);
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_CANCEL);
+                // the discarded data is credited (in manual mode nghttp2 does not do it for data it handed over)
+                h2->consumeReceivedData(stream_id, len);
                 return 0;
             }
         }
@@ -2327,6 +2637,16 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
                     NGHTTP2_REFUSED_STREAM);
                 stream->body.clear();
+                // the discarded chunk is credited here on both sides: the server credits arriving data below, which
+                // this return skips, so its connection window lost the chunk with every oversized tunnel (issue
+                // #5841); data that the client credits on consumption is settled with the stream
+                if (len) {
+                    int rv = h2->consumeReceivedData(stream_id, len);
+                    if (rv) {
+                        printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len,
+                            stream_id, nghttp2_strerror(rv));
+                    }
+                }
                 return 0;
             }
             // A request stream is not reset here: a reset would discard the error response the server sends, and
@@ -2342,19 +2662,41 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
             }
         }
     }
-    // With auto-window-update enabled on the client (see init()), nghttp2 emits
-    // WINDOW_UPDATE automatically as the app consumes data via this callback —
-    // we must NOT credit data on the client branch or we double-credit.
+    // The client is in manual window mode (see init()): it credits data with nghttp2_session_consume() below;
+    // the stream credit of a response that a consume hook reports is deferred until it is consumed (issue #5820).
     // The server is in manual mode and credits the stream and the connection with nghttp2_session_consume(), which
     // keeps nghttp2's own accounting of the DATA it consumes itself (DATA on a stream the server has reset, such as
     // the rest of a body after the server's RST_STREAM(NO_ERROR), and padding): WINDOW_UPDATE frames submitted
     // directly reset that accounting, and the peer's connection window shrank by up to half a window with every
     // such stream until the next request could not send its body.
-    if (len && h2->is_server) {
+    // a server stream whose request body a bounded Queue receives has its stream credit deferred until the data is
+    // taken from it, as a client stream (issue #5859)
+    if (len && h2->is_server && !(stream && stream->credit_on_consume && !stream->body_too_large)) {
         int rv = h2->consumeReceivedData(stream_id, len);
         if (rv) {
             printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len, stream_id,
                 nghttp2_strerror(rv));
+        }
+    } else if (len) {
+        // client: the connection credit is granted now; the stream credit of a streaming response (and of a CONNECT
+        // tunnel) when the application consumes the data, and that of a response returned whole now (issue #5820);
+        // server: the same for a stream drained to a bounded Queue (issue #5859)
+        if (stream && stream->credit_on_consume && !stream->body_too_large) {
+            int rv = h2->consumeReceivedData(0, len);
+            if (rv) {
+                printd(5, "onDataChunkRecvCallback: consuming %zu bytes on the connection failed: %s\n", len,
+                    nghttp2_strerror(rv));
+            }
+            h2->deferred_stream_credit[stream_id] += len;
+#ifdef DEBUG
+            qore_dbg_stream_credit_deferred(len);
+#endif
+        } else {
+            int rv = h2->consumeReceivedData(stream_id, len);
+            if (rv) {
+                printd(5, "onDataChunkRecvCallback: consuming %zu bytes on stream %d failed: %s\n", len, stream_id,
+                    nghttp2_strerror(rv));
+            }
         }
     }
     return 0;
@@ -2376,6 +2718,17 @@ void Http2Session::raiseStreamReset(int32_t stream_id, uint32_t error_code, Exce
 int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream_id,
         uint32_t error_code, void* user_data) {
     Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    // a closed stream takes no more stream credit: the credit deferred until the data is consumed is settled
+    // (issue #5820); data consumed later is reported in vain
+    if (h2) {
+        auto dit = h2->deferred_stream_credit.find(stream_id);
+        if (dit != h2->deferred_stream_credit.end()) {
+#ifdef DEBUG
+            qore_dbg_stream_credit_stats.settled.fetch_add(dit->second, std::memory_order_relaxed);
+#endif
+            h2->deferred_stream_credit.erase(dit);
+        }
+    }
     if (h2 && http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: stream close stream=%d error_code=%u\n",
             stream_id, error_code);
@@ -2434,6 +2787,9 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
+    h2->pending_pongs.erase(stream_id);
+    h2->close_frame_streams.erase(stream_id);
+    h2->stream_send_limits.erase(stream_id);
     // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
@@ -2525,6 +2881,25 @@ ssize_t Http2Session::dataProviderReadCallback(nghttp2_session* session, int32_t
     if (to_copy > 0) {
         memcpy(buf, bd.data.data() + bd.offset, to_copy);
         bd.offset += to_copy;
+    }
+
+    // a WebSocket pong kept while the buffer was full is buffered once the buffered data is under the limit, before
+    // the end of the buffered data is handled, so that it is sent next (issue #5900)
+    // the room is checked as sendStreamData() admits data, so that the pong is buffered before any data that a
+    // sender waiting for room adds after it
+    {
+        auto pit = h2->pending_pongs.find(stream_id);
+        if (pit != h2->pending_pongs.end() && !bd.end_stream
+                && h2->hasSendRoomUnlocked(stream_id, bd.data.size() - bd.offset, pit->second.size())) {
+            // this callback is called from nghttp2's C code: no exception may leave it
+            try {
+                bd.data.insert(bd.data.end(), pit->second.begin(), pit->second.end());
+            } catch (const std::bad_alloc&) {
+                printd(0, "Http2Session::dataProviderReadCallback() stream %d: no memory for a pong of %zu "
+                    "bytes; dropped\n", stream_id, pit->second.size());
+            }
+            h2->pending_pongs.erase(pit);
+        }
     }
 
     if (bd.offset >= bd.data.size()) {
@@ -2679,7 +3054,7 @@ int Http2Session::onBeginHeadersCallback(nghttp2_session* session,
 int Http2Session::onInvalidFrameRecvCallback(nghttp2_session* session,
         const nghttp2_frame* frame, int lib_error_code, void* user_data) {
     // Log invalid frames for debugging but don't fail
-    Http2Session* h2 = static_cast<Http2Session*>(user_data);
+    [[maybe_unused]] Http2Session* h2 = static_cast<Http2Session*>(user_data);
     printd(1, "Http2Session::onInvalidFrameRecvCallback() type: %d stream_id: %d flags: 0x%x len=%d err=%s "
         "remote_max_frame=%u local_max_frame=%u\n",
         frame->hd.type, frame->hd.stream_id, frame->hd.flags, (int)frame->hd.length,
@@ -2718,8 +3093,26 @@ int Http2Session::onInvalidHeaderCallback(nghttp2_session* session,
     return 0;
 }
 
+int Http2Session::setStreamSendLimit(int32_t stream_id, int64_t limit, ExceptionSink* xsink) {
+    if (limit <= 0) {
+        xsink->raiseException("HTTP2-ERROR", "invalid send limit %lld for stream %d: must be > 0", (long long)limit,
+            stream_id);
+        return -1;
+    }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    Http2StreamInfo* stream = getStream(stream_id);
+    if ((!stream || stream->state == Http2StreamState::Closed)
+            && pending_data_providers.find(stream_id) == pending_data_providers.end()) {
+        xsink->raiseException("HTTP2-ERROR", "cannot set the send limit of stream %d: the stream is not open",
+            stream_id);
+        return -1;
+    }
+    stream_send_limits[stream_id] = (size_t)limit;
+    return 0;
+}
+
 int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len,
-        bool end_stream, ExceptionSink* xsink) {
+        bool end_stream, ExceptionSink* xsink, bool ignore_limit) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (http2DebugEnabled()) {
         fprintf(stderr, "HTTP2 DEBUG: sendStreamData stream=%d len=%zu end_stream=%d\n",
@@ -2776,13 +3169,38 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
         return -1;
     }
 
+    // a close frame was sent on the stream (by its WebSocket frame state or by the application): no data frame may
+    // follow it (RFC 6455 section 5.5.1), so a data frame (an opcode below the control frames') is refused under the
+    // lock the close was buffered with; a control frame (a ping) and an end of the stream without data are not
+    // (issue #6077)
+    if (!ignore_limit && data && len > 0 && !close_frame_streams.empty()
+            && (static_cast<const uint8_t*>(data)[0] & 0x0f) < WSOP_CLOSE
+            && close_frame_streams.find(stream_id) != close_frame_streams.end()) {
+        xsink->raiseException("WEBSOCKET-CLOSING-ERROR", "cannot send data on HTTP/2 stream %d: its WebSocket "
+            "connection sent a close frame; no data frame may follow a close frame (RFC 6455 section 5.5.1)",
+            stream_id);
+        return -1;
+    }
+
     // Check if there's already too much buffered data (flow control backpressure)
     // Limit to 1MB per stream to prevent unbounded memory growth
     // Allow zero-length end_stream sends through — they just set the flag without
     // adding data, so they must not be rejected by backpressure
-    constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
+    // A stream with its own limit (setStreamSendLimit()) refuses data that would take the buffer over it
     auto it = pending_body_data.find(stream_id);
-    if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
+    auto lit = stream_send_limits.find(stream_id);
+    // a WebSocket control frame of the frame state is buffered past the limit (sendStreamControlFrame())
+    if (ignore_limit) {
+    } else if (lit != stream_send_limits.end()) {
+        if (len > 0 && it != pending_body_data.end()) {
+            size_t pending = it->second.data.size() - it->second.offset;
+            if (pending > 0 && pending + len > lit->second) {
+                printd(2, "sendStreamData() stream %d over its send limit: %zu bytes pending + %zu > %zu, data "
+                    "dropped\n", stream_id, pending, len, lit->second);
+                return 1;
+            }
+        }
+    } else if (it != pending_body_data.end() && (len > 0 || !end_stream)) {
         size_t pending = it->second.data.size() - it->second.offset;
         if (pending > MAX_STREAM_BUFFER) {
             // Return 1 (buffer full, non-fatal) — caller decides how to handle
@@ -2809,7 +3227,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     }
     {
         auto it2 = pending_body_data.find(stream_id);
-        size_t pending = it2 == pending_body_data.end() ? 0 : (it2->second.data.size() - it2->second.offset);
+        [[maybe_unused]] size_t pending = it2 == pending_body_data.end() ? 0 : (it2->second.data.size() - it2->second.offset);
         printd(5, "sendStreamData() stream_id=%d pending_buffer=%zu\n", stream_id, pending);
     }
 
@@ -2834,6 +3252,94 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     return 0;
 }
 
+bool Http2Session::hasSendRoomUnlocked(int32_t stream_id, size_t pending, size_t len) const {
+    auto lit = stream_send_limits.find(stream_id);
+    if (lit != stream_send_limits.end()) {
+        return !pending || pending + len <= lit->second;
+    }
+    return pending <= MAX_STREAM_BUFFER;
+}
+
+int Http2Session::sendStreamControlFrame(int32_t stream_id, const void* data, size_t len, ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    uint8_t opcode = (data && len) ? (static_cast<const uint8_t*>(data)[0] & 0x0f) : 0;
+    // a close frame is buffered past the send limit once per stream: a close is never dropped (issue #5900); one
+    // sent before, also by the application (sendStreamCloseFrame()), is not followed by another (issue #6077)
+    if (opcode == WSOP_CLOSE) {
+        int rv = sendStreamCloseFrame(stream_id, data, len, false, xsink);
+        return rv == 2 ? 0 : rv;
+    }
+    int rv = sendStreamData(stream_id, data, len, false, xsink);
+    // no pong is kept to follow a close frame queued before it
+    if (rv == 1 && opcode == WSOP_PONG && close_frame_streams.find(stream_id) == close_frame_streams.end()) {
+        // the buffer is full: the pong is kept, replacing an older one (it answers the most recent ping, RFC 6455
+        // section 5.5.3), and buffered by dataProviderReadCallback() when the buffered data falls under the limit
+        const uint8_t* p = static_cast<const uint8_t*>(data);
+        pending_pongs[stream_id].assign(p, p + len);
+        printd(5, "Http2Session::sendStreamControlFrame() stream %d: buffer full; pong of %zu bytes kept\n",
+            stream_id, len);
+        return 0;
+    }
+    if (!rv && opcode == WSOP_PONG) {
+        // a pong kept before is answered by this newer one
+        pending_pongs.erase(stream_id);
+    }
+    return rv;
+}
+
+int Http2Session::sendStreamCloseFrame(int32_t stream_id, const void* data, size_t len, bool end_stream,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!close_frame_streams.insert(stream_id).second) {
+        // a close frame was sent on the stream before: no other follows it (RFC 6455 section 5.5.1)
+        if (end_stream && sendStreamData(stream_id, nullptr, 0, true, xsink) < 0) {
+            return -1;
+        }
+        return 2;
+    }
+    int rv = sendStreamData(stream_id, data, len, end_stream, xsink, true);
+    if (rv) {
+        close_frame_streams.erase(stream_id);
+    } else {
+        // a pong kept before is not sent after the close frame
+        pending_pongs.erase(stream_id);
+        // the connection's record outlives the stream and the session (#6077).  It is set here, under the
+        // session's mutex, because every close frame of the stream is recorded here and the callers hold the mutex
+        // already (the frame state's close frame comes through sendStreamControlFrame() under it); setting it is one
+        // atomic store, which calls nothing, so it cannot block or re-enter while the mutex is held
+        auto rit = ws_close_records.find(stream_id);
+        if (rit != ws_close_records.end()) {
+            rit->second->setCloseSent();
+        }
+    }
+    return rv;
+}
+
+WebSocketCloseRecordRef Http2Session::getWebSocketCloseRecord(int32_t stream_id, bool create) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = ws_close_records.find(stream_id);
+    if (it != ws_close_records.end()) {
+        return it->second;
+    }
+    if (!create) {
+        return WebSocketCloseRecordRef();
+    }
+    WebSocketCloseRecordRef rec = WebSocketCloseRecordRef::create();
+    // a close frame buffered on the stream before the record was made
+    if (close_frame_streams.find(stream_id) != close_frame_streams.end()) {
+        rec->setCloseSent();
+    }
+    ws_close_records.emplace(stream_id, rec);
+    return rec;
+}
+
+std::unordered_map<int32_t, WebSocketCloseRecordRef> Http2Session::takeWebSocketCloseRecords() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    std::unordered_map<int32_t, WebSocketCloseRecordRef> rv;
+    rv.swap(ws_close_records);
+    return rv;
+}
+
 #ifdef DEBUG
 QoreHashNode* Http2Session::dbgGetStreamRecordCounts() const {
     std::lock_guard<std::recursive_mutex> lg(m);
@@ -2849,6 +3355,8 @@ QoreHashNode* Http2Session::dbgGetStreamRecordCounts() const {
     set("pending_body_data", pending_body_data.size());
     set("pending_data_providers", pending_data_providers.size());
     set("stream_input_streams", stream_input_streams_.size());
+    set("pending_pongs", pending_pongs.size());
+    set("close_frame_streams", close_frame_streams.size());
     return h.release();
 }
 #endif
@@ -3108,6 +3616,20 @@ int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
     }
     size_t pending = it->second.data.size() - it->second.offset;
     return pending <= MAX_STREAM_BUFFER ? 0 : 1;
+}
+
+int Http2Session::streamSendFlushed(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // nothing more is sent on a closed session or a stream that nghttp2 no longer has
+    if (isSessionClosed() || !session || !nghttp2_session_find_stream(session, stream_id)) {
+        return 0;
+    }
+    auto it = pending_body_data.find(stream_id);
+    if (it != pending_body_data.end() && it->second.offset < it->second.data.size()) {
+        return 1;
+    }
+    // the data that nghttp2 took is written from the session's send buffer
+    return send_offset < send_buffer.size() ? 1 : 0;
 }
 
 void Http2Session::notifyStreamDrain() {

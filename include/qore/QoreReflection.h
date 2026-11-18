@@ -118,6 +118,28 @@ private:
     DLLLOCAL QoreExternalMethodVariant();
 };
 
+//! Keeps the declarations that a type refers to: the hashdecls, classes and enums in it and in its element types
+/** The type info of a hashdecl or class type (and of a type derived from one, such as \c list<hash<H>>) is freed
+    with the declaration, which the Program that declared it releases when it is deleted; a holder of the type that
+    can outlive the values of that type, such as a reflection handle, keeps the declarations with this object.
+
+    @since %Qore 3.0
+*/
+class QoreExternalTypeDeclRefs {
+public:
+    //! References the declarations that \a ti refers to
+    DLLEXPORT QoreExternalTypeDeclRefs(const QoreTypeInfo* ti);
+
+    //! Releases the references
+    DLLEXPORT ~QoreExternalTypeDeclRefs();
+
+    DLLLOCAL QoreExternalTypeDeclRefs(const QoreExternalTypeDeclRefs&) = delete;
+    DLLLOCAL QoreExternalTypeDeclRefs& operator=(const QoreExternalTypeDeclRefs&) = delete;
+
+private:
+    class qore_type_decl_refs_private* priv = nullptr;
+};
+
 //! external wrapper base class for class and hashdecl members
 /** @since %Qore 0.9
 */
@@ -127,7 +149,32 @@ public:
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! evaluates the initialization expression for the member and returns the referenced value
+    /** The expression is code of the Program that declared the member, which must not have been deleted; use the
+        variant that takes the class or hashdecl of the member to have that checked
+    */
     DLLEXPORT QoreValue getDefaultValue(ExceptionSink* xsink) const;
+
+    //! evaluates the initialization expression for a member of the given class and returns the referenced value
+    /** @param cls the class that declares the member
+        @param xsink Qore-language exception info is stored here; \c PROGRAM-ERROR is raised if the Program that
+        defined the class has been deleted
+
+        The Program that defined the class is kept while the expression is evaluated
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getDefaultValue(const QoreClass& cls, ExceptionSink* xsink) const;
+
+    //! evaluates the initialization expression for a member of the given hashdecl and returns the referenced value
+    /** @param hd the hashdecl that declares the member
+        @param xsink Qore-language exception info is stored here; \c PROGRAM-ERROR is raised if the Program that
+        declared the hashdecl has been deleted
+
+        The Program that declared the hashdecl is kept while the expression is evaluated
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue getDefaultValue(const TypedHashDecl& hd, ExceptionSink* xsink) const;
 
     //! returns the source location of the member's declaration
     DLLEXPORT const QoreExternalProgramLocation* getSourceLocation() const;
@@ -171,6 +218,23 @@ public:
         @return 0 = no error, -1 Qore-language exception raised
     */
     DLLEXPORT int setValue(const QoreValue val, ExceptionSink* xsink) const;
+
+    //! sets the value of the member for the code of a given Program
+    /** The write is refused with \c MODULE-VARIABLE-READ-ONLY when the member belongs to a class of a trusted module
+        and \a writer is another Program that may not change a module's state: one that is sandboxed or has
+        \c PO_NO_PROCESS_CONTROL set (see @ref module_public_variables).  Code that writes for another Program, such
+        as the reflection API, which runs in the Program that defines the class, passes the Program of the code that
+        asks for the write.
+
+        @param val the value to set
+        @param writer the Program of the code that asks for the write
+        @param xsink Qore-language exception info is stored here
+
+        @return 0 = no error, -1 Qore-language exception raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setValue(const QoreValue val, const QoreProgram* writer, ExceptionSink* xsink) const;
 
 private:
     //! not implemented
@@ -255,8 +319,30 @@ public:
     //! returns the class for the function if the function belongs to a class method or nullptr if not
     DLLEXPORT const QoreClass* getClass() const;
 
+    //! returns true if the function has a variant with the module public flag set
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT bool isModulePublic() const;
+
     //! returns a variant matching the arguments exactly or throws a Qore-language exception and returns nullptr
     DLLEXPORT const QoreExternalVariant* findVariant(const type_vec_t& type_vec, ExceptionSink* xsink) const;
+
+    //! returns a variant matching the arguments among the variants that a caller may see
+    /** As findVariant(const type_vec_t&, ExceptionSink*), but a user variant that a user module does not export
+        is not considered when the export boundary of \a pgm applies to \a caller (see
+        QoreReflectionCaller::canSeeVariant()).
+
+        @param type_vec the parameter types
+        @param pgm the Program where the function is defined
+        @param caller the code looking up the variant
+        @param xsink raises an exception if no visible variant matches
+
+        @note Do not use this function with class methods
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT const QoreExternalVariant* findVariant(const type_vec_t& type_vec, const QoreProgram* pgm,
+            const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
 
     //! returns true if the function is builtin
     DLLEXPORT bool isBuiltin() const;
@@ -291,6 +377,30 @@ public:
     */
     DLLEXPORT QoreValue evalFunction(const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm,
             const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
+
+    //! evaluates the function found in a namespace on behalf of a caller captured at a reflection entry point
+    /** As evalFunction(const QoreExternalVariant*, const QoreListNode*, QoreProgram*, const QoreReflectionCaller&,
+        ExceptionSink*), and when the export boundary of \a pgm applies to \a caller, the namespace that holds the
+        function must be visible (QoreReflectionCaller::canSeeNamespace()), as for an importer of the module, which
+        does not see a \c public function in a namespace that the module does not export.  Also when the export
+        boundary applies, \a variant must be visible (QoreReflectionCaller::canSeeVariant()), and a variant selected
+        for the arguments is selected among the visible variants only.
+
+        @param variant the variant to call, or nullptr to select it for the arguments
+        @param args the arguments
+        @param pgm the Program where the function is defined
+        @param ns the namespace that holds the function, or nullptr if it is not known
+        @param caller the code calling the function
+        @param xsink raises \c INVALID-FUNCTION-ACCESS if the caller or \a pgm does not allow the variant's
+        functional domain, or \c REFLECTION-ACCESS-ERROR if the caller may not execute code in \a pgm or the function
+        or variant is not exported to it
+
+        @note Do not use this function with class methods
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue evalFunction(const QoreExternalVariant* variant, const QoreListNode* args, QoreProgram* pgm,
+            const QoreNamespace* ns, const class QoreReflectionCaller& caller, ExceptionSink* xsink) const;
 
     //! returns the first declared variant in the variant list
     DLLEXPORT const QoreExternalVariant* getFirstVariant() const;
@@ -376,6 +486,25 @@ public:
         @return 0 = no error, -1 Qore-language exception raised
     */
     DLLEXPORT int setValue(const QoreValue val, ExceptionSink* xsink) const;
+
+    //! sets the value of the global variable for the code of a given Program
+    /** The write is refused with \c MODULE-VARIABLE-READ-ONLY when the variable is a trusted module's (a variable of
+        the module's Program, or an import of a module's public variable) and \a writer is another Program that may
+        not change a module's state: one that is sandboxed or has \c PO_NO_PROCESS_CONTROL set (see
+        @ref module_public_variables).  Code that writes for another Program, such as the reflection API, which runs
+        in the Program that holds the variable, passes the Program of the code that asks for the write.
+
+        @param val the value to set
+        @param writer the Program of the code that asks for the write
+        @param owner the Program that holds the variable
+        @param xsink Qore-language exception info is stored here
+
+        @return 0 = no error, -1 Qore-language exception raised
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setValue(const QoreValue val, const QoreProgram* writer, const QoreProgram* owner,
+            ExceptionSink* xsink) const;
 
 private:
     //! not implemented
@@ -732,6 +861,86 @@ public:
     */
     DLLEXPORT int checkClassElementAccess(const QoreClass* cls, ClassAccess access, const char* kind,
             const char* name, ExceptionSink* xsink) const;
+
+    //! Returns true if the export boundary of a user module limits the caller's reflection on a target Program
+    /** It applies to callers to which the language's member access applies (appliesMemberAccess()), for a target
+        that is a user module Program (\c PO_IN_MODULE) other than the caller's own Program: such a caller sees only
+        what the module exports to the Programs that import it.  Other callers see every declaration.
+
+        @param target the Program of the declarations; nullptr never limits the caller
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool appliesModuleExports(const QoreProgram* target) const;
+
+    //! Returns true if the caller may see a namespace of a target Program
+    /** When the export boundary applies (appliesModuleExports()), every namespace from \a ns to the root namespace
+        must be the root namespace, a builtin namespace, a \c public namespace, or a namespace that the target
+        imported from another module (which that module exported).
+
+        @param target the Program that \a ns belongs to
+        @param ns the namespace; nullptr is always visible
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeNamespace(const QoreProgram* target, const QoreNamespace* ns) const;
+
+    //! Returns true if the caller may see a declaration in a namespace of a target Program
+    /** When the export boundary applies (appliesModuleExports()), the declaration must be exported (\c public or
+        builtin; a public declaration that the target imported from another module is exported by that module), and
+        its namespace must be visible (canSeeNamespace()).
+
+        @par Example
+        A sandboxed Program that holds an object a module created looks up the module's functions through
+        \c Class::getClass(obj).getNamespace(): it sees the functions the module declares \c public, not the others.
+
+        @param target the Program that the declaration belongs to
+        @param ns the namespace that holds the declaration, or nullptr if it is not known (only the declaration
+        itself is checked then)
+        @param exported true if the declaration is \c public or builtin
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeDeclaration(const QoreProgram* target, const QoreNamespace* ns, bool exported) const;
+
+    //! Returns true if the caller may see a class
+    /** The class is checked against the Program that declares it (a class imported into another Program keeps
+        its declaring Program and namespace), or against \a target if it has none; builtin classes are always
+        visible.  See canSeeDeclaration().
+
+        @param target the Program of the reflection handle
+        @param cls the class; nullptr is always visible
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeClass(const QoreProgram* target, const QoreClass* cls) const;
+
+    //! Returns true if the caller may see a variant of a function of a target Program
+    /** When the export boundary applies (appliesModuleExports()), a user variant must be \c public: a function
+        that a module declares with \c public and private variants exports only its public ones, which are all that
+        an importer of the module sees and calls.  Builtin variants are always visible.
+
+        @param target the Program that the function belongs to
+        @param v the variant of a function (not of a class method)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT bool canSeeVariant(const QoreProgram* target, const QoreExternalVariant* v) const;
+
+    //! Raises \c REFLECTION-ACCESS-ERROR for a declaration that a module does not export to the caller
+    /** @param visible the result of canSeeDeclaration() or canSeeClass(); no exception is raised if true
+        @param kind the kind of declaration for the error message, e.g. \c "function" or \c "class"
+        @param name the name of the declaration
+        @param xsink raises \c REFLECTION-ACCESS-ERROR if \a visible is false
+
+        @return 0 if \a visible, -1 if an exception was raised
+
+        @throw REFLECTION-ACCESS-ERROR the declaration belongs to a user module that does not export it, and the
+        caller is a Program that a sandbox governs or whose functional domains are restricted
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int checkModuleExport(bool visible, const char* kind, const char* name, ExceptionSink* xsink) const;
 
 private:
     int checkProgramAccess(const QoreProgram* target, const char* what, Access access, ExceptionSink* xsink,

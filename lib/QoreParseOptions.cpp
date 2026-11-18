@@ -57,6 +57,8 @@ const QoreParseOptions QoreParseOptions::NO_STRING_INDEX_CHAR(0, 1LL << 21); // 
 const QoreParseOptions QoreParseOptions::NEGATIVE_OFFSETS(0, 1LL << 22);   // bit 86
 const QoreParseOptions QoreParseOptions::BROKEN_AUTO_CAST(0, 1LL << 23);   // bit 87
 const QoreParseOptions QoreParseOptions::ALLOW_OPAQUE_REFERENCES(0, 1LL << 24); // bit 88
+const QoreParseOptions QoreParseOptions::STRICT_PARSE_ERRORS(0, 1LL << 25); // bit 89
+const QoreParseOptions QoreParseOptions::NO_STRICT_PARSE_ERRORS(0, 1LL << 26); // bit 90
 const QoreParseOptions QoreParseOptions::NO_STREAMING_OPERATORS(
     0,
     (1LL << 8)  // NO_ITERATE
@@ -95,4 +97,6 @@ const QoreParseOptions QoreParseOptions::FREE_OPTIONS(
         | (1LL << 20)   // NO_CHAR_TYPE
         | (1LL << 21)   // NO_STRING_INDEX_CHAR
         | (1LL << 22)   // NEGATIVE_OFFSETS
-        | (1LL << 23)); // BROKEN_AUTO_CAST
+        | (1LL << 23)   // BROKEN_AUTO_CAST
+        | (1LL << 25)   // STRICT_PARSE_ERRORS
+        | (1LL << 26)); // NO_STRICT_PARSE_ERRORS

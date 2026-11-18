@@ -1,0 +1,523 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RecursionFrameBudgetTest
+
+/*  The stack that one level of a recursion of interpreted code uses (issue #5852).
+
+    Each level of a recursion of a function or method puts the frames of the whole call path on the thread's stack
+    (for IR execution: the IR interpreter, the call helpers, the variant's evaluation); a deep recursion on Alpine
+    (musl, 8 MB thread stacks) runs out of stack first, and any growth of a frame on that path costs its size at every
+    level.  This test measures the bytes per level of a recursion of a function, a method and a static method in the
+    AST and IR execution modes, and fails when it exceeds the budget of the build.
+
+    The bytes per level are measured as a difference: the recursion runs until STACK-LIMIT-EXCEEDED in a thread
+    created with a 4 MB stack and in one created with an 8 MB stack, and the difference of the stacks that the
+    threads have (which glibc can make larger than asked for, see getDepth()) over the difference of the depths is
+    the stack of one level, free of the stack guard, of the thread's start and of the frames below the recursion.
+    What remains depends on the compiler, its optimization level, its hardening options and the C library's headers
+    (a memcpy() that musl's fortify-headers check made the frame of the IR interpreter 2.4 KB larger on Alpine until
+    NaN-boxed values were converted with std::bit_cast): the budgets are for GCC on x86_64 and aarch64 Linux with
+    glibc (Ubuntu) and with musl (Alpine), each with a release build (-O3) and a debug build (-Og, as CI builds
+    Qore).  They are 6-7% over the measured values, but never more than 400 bytes, so that a frame of 528 bytes more
+    at each level (an array in a frame of the IR interpreter, as 13281fbbd7 added) fails here.  On any other
+    compiler, CPU, C library or flag set (see getCalibrationMismatch()) the values are reported but not checked, as
+    they are in sanitizer builds, whose stack redzones make every frame larger.
+
+    tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
+    -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
+*/
+
+public class RecursionFrameBudgetTest inherits QUnit::Test {
+    public {
+        #! the code of the recursions; each records its depth in maxdepth before it recurses
+        const Code = "%modern
+our int maxdepth;
+int sub frec(int n) { maxdepth = n; return frec(n + 1); }
+public class C {
+    public int m(int n) { maxdepth = n; return m(n + 1); }
+    public static int s(int n) { maxdepth = n; return C::s(n + 1); }
+}
+int sub method_rec(int n) { C c(); return c.m(n); }
+int sub static_rec(int n) { return C::s(n); }
+# returns the depth that the recursion reached when it ran out of stack
+int sub run(string f) {
+    maxdepth = 0;
+    try {
+        call_function(f, 0);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != \"STACK-LIMIT-EXCEEDED\") {
+            rethrow;
+        }
+    }
+    return maxdepth;
+}
+";
+
+        #! the recursions measured: the function that the recursion runs in the Program -> the label
+        const Recursions = {
+            "frec": "function",
+            "method_rec": "method",
+            "static_rec": "static method",
+        };
+
+        #! the execution modes measured
+        const Modes = {
+            "ast": EM_AST,
+            "ir": EM_IR,
+        };
+
+        #! the GCC major version that the budgets are calibrated for
+        const CalibratedGccMajor = "15";
+
+        #! the flags of the build types that the budgets are calibrated for (see Qore's CMakeLists.txt)
+        const CalibratedBuildTypeFlags = {
+            "release": "-O3 -DNDEBUG",
+            "debug": "-g -Og",
+        };
+
+        #! the only compiler flags (CFLAGS) besides those of the build type that the budgets are calibrated for
+        const CalibratedCFlags = ("-fno-strict-aliasing", "-std=c++20");
+
+        #! the targets that the budgets are calibrated for: target triple (which names the C library) -> the CPU and
+        #! the hardening options that the distribution's GCC enables by default (Ubuntu and Alpine, the images of CI)
+        const CalibratedTargets = {
+            "x86_64-linux-gnu": {
+                "cpu": "x86_64",
+                "hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 3, "glibcxx_assertions": False},
+            },
+            "x86_64-alpine-linux-musl": {
+                "cpu": "x86_64",
+                "hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
+            },
+            "aarch64-linux-gnu": {
+                "cpu": "aarch64",
+                "hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 0, "glibcxx_assertions": False},
+            },
+            "aarch64-alpine-linux-musl": {
+                "cpu": "aarch64",
+                "hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
+            },
+        };
+
+        #! the two stack sizes of the measurement
+        const SmallStack = 4 * 1024 * 1024;
+        const LargeStack = 8 * 1024 * 1024;
+
+        #! the budgets in bytes per level: target triple and build type -> execution mode -> recursion
+        /** measured with GCC 15.2 on x86_64 (glibc and musl alike) and on aarch64 (in CI's Ubuntu and Alpine arm64
+            images); see the comment at the top
+        */
+        const Budgets = {
+            # measured: ast 2656, 2464, 2511; ir 4804, 5714, 4750
+            "x86_64-linux-gnu release": {
+                "ast": {"function": 2840, "method": 2640, "static method": 2690},
+                "ir": {"function": 5140, "method": 6110, "static method": 5080},
+            },
+            # measured: ast 2639, 2608, 2511; ir 4848, 6223, 4798
+            "x86_64-linux-gnu debug": {
+                "ast": {"function": 2820, "method": 2790, "static method": 2690},
+                "ir": {"function": 5180, "method": 6650, "static method": 5130},
+            },
+            # measured: ast 2656, 2464, 2511; ir 4798, 5714, 4755
+            "x86_64-alpine-linux-musl release": {
+                "ast": {"function": 2840, "method": 2640, "static method": 2690},
+                "ir": {"function": 5130, "method": 6110, "static method": 5080},
+            },
+            # measured: ast 2639, 2608, 2511; ir 4843, 6223, 4798
+            "x86_64-alpine-linux-musl debug": {
+                "ast": {"function": 2820, "method": 2790, "static method": 2690},
+                "ir": {"function": 5180, "method": 6650, "static method": 5130},
+            },
+            # measured: ast 2750, 2606, 2608; ir 4670, 5599, 4639
+            "aarch64-linux-gnu release": {
+                "ast": {"function": 2940, "method": 2790, "static method": 2790},
+                "ir": {"function": 4990, "method": 5980, "static method": 4960},
+            },
+            # measured: ast 2641, 2641, 2526; ir 4495, 5991, 4447
+            "aarch64-linux-gnu debug": {
+                "ast": {"function": 2830, "method": 2830, "static method": 2700},
+                "ir": {"function": 4810, "method": 6400, "static method": 4750},
+            },
+            # measured: ast 2752, 2608, 2608; ir 4686, 5614, 4655
+            "aarch64-alpine-linux-musl release": {
+                "ast": {"function": 2940, "method": 2790, "static method": 2790},
+                "ir": {"function": 5010, "method": 6000, "static method": 4980},
+            },
+            # measured: ast 2639, 2641, 2526; ir 4495, 5983, 4447
+            "aarch64-alpine-linux-musl debug": {
+                "ast": {"function": 2820, "method": 2830, "static method": 2700},
+                "ir": {"function": 4810, "method": 6390, "static method": 4750},
+            },
+        };
+    }
+
+    constructor() : Test("RecursionFrameBudgetTest", "1.0") {
+        addTestCase("bytes per level of a recursion of interpreted code", \testBytesPerLevel());
+        addTestCase("measurement", \testMeasurement());
+        addTestCase("calibration of the budgets", \testCalibration());
+        set_return_value(main());
+    }
+
+    setUp() {
+        if (!Option::HAVE_STACK_GUARD) {
+            testSkip("Qore library was not built with stack protection support");
+        }
+        if (!Option::HAVE_MANAGE_STACK) {
+            testSkip("this platform cannot set the stack size of new threads");
+        }
+    }
+
+    #! returns the budgets of a library with the given build information: "<target triple> <build type>"
+    static string getBudgetKey(hash<auto> info, bool library_debugging) {
+        return sprintf("%s %s", info.Target ?? "unknown target", library_debugging ? "debug" : "release");
+    }
+
+    #! returns why the budgets do not apply to a library with the given build information, or nothing if they do
+    /** @param info the build information of the library, as get_qore_library_info() returns it
+        @param library_debugging if the library was built with debugging (Qore::Option::HAVE_LIBRARY_DEBUGGING)
+
+        The budgets are calibrated for one compiler and flag set: GCC 15 on x86_64 and aarch64 Linux with glibc
+        (Ubuntu) or musl (Alpine) and the hardening options of the distribution's GCC, a single compilation unit, no
+        link-time optimization, no flags beyond the defaults, and the release (-O3 -DNDEBUG) or debug (-g -Og) flags
+        of Qore's CMake build; frames differ with another GCC version or distribution, another optimization level (a
+        distribution's -O2 build, a debug build made without -Og), link-time optimization or other hardening flags, so
+        such a build is not checked
+    */
+    static *string getCalibrationMismatch(hash<auto> info, bool library_debugging) {
+        if (info.Compiler != "GNU") {
+            return sprintf("the budgets are for GCC, and this library was built with %y", info.Compiler);
+        }
+        foreach string key in (("CompilerVersion", "BuildType", "BuildTypeCFLAGS", "SingleCompilationUnit", "Target",
+            "InterproceduralOptimization", "Hardening")) {
+            if (!exists info{key}) {
+                return sprintf("this library does not report how it was built (%y)", key);
+            }
+        }
+        if ((info.CompilerVersion =~ x/^([0-9]+)/)[0] != CalibratedGccMajor) {
+            return sprintf("the budgets are for GCC %s, and this library was built with GCC %s", CalibratedGccMajor,
+                info.CompilerVersion);
+        }
+        *hash<auto> target = CalibratedTargets{info.Target};
+        if (!target) {
+            return sprintf("the budgets are for the targets %y, and this library was built for %y",
+                keys CalibratedTargets, info.Target);
+        }
+        if (info.PlatformCPU != target.cpu || info.PlatformOS != "Linux") {
+            return sprintf("the budgets for %s are for %s Linux, and this is %s %s", info.Target, target.cpu,
+                info.PlatformCPU, info.PlatformOS);
+        }
+        if (info.Hardening != target.hardening) {
+            return sprintf("the budgets are for the hardening options %y of %s, and this library was built with %y",
+                target.hardening, info.Target, info.Hardening);
+        }
+        if (!info.SingleCompilationUnit) {
+            return "the budgets are for a library built as a single compilation unit, as CI builds it";
+        }
+        if (info.InterproceduralOptimization) {
+            return "the budgets are for a library built without link-time optimization";
+        }
+        string build_type = library_debugging ? "debug" : "release";
+        if (info.BuildType.lwr() != build_type) {
+            return sprintf("the budgets are for the release and debug build types, and this library was built with "
+                "%y", info.BuildType);
+        }
+        string type_flags = CalibratedBuildTypeFlags{build_type};
+        if (info.BuildTypeCFLAGS != type_flags) {
+            return sprintf("the budgets are for a %s build with %y, and this library was built with %y", build_type,
+                type_flags, info.BuildTypeCFLAGS);
+        }
+        list<string> extra = select info.CFLAGS.split(" "), $1 && !inlist($1, CalibratedCFlags);
+        if (extra) {
+            return sprintf("the budgets are for a library built with no compiler flags beyond %y, and this library "
+                "was also built with %y", CalibratedCFlags, extra);
+        }
+    }
+
+    #! returns why the budgets do not apply to the library, or nothing if they do
+    /** @param info the build information of the library, as get_qore_library_info() returns it
+        @param library_debugging if the library was built with debugging (Qore::Option::HAVE_LIBRARY_DEBUGGING)
+        @param maps the memory map of the process (/proc/self/maps), if it can be read
+    */
+    static *string getUncalibratedReason(hash<auto> info, bool library_debugging, *string maps) {
+        *string reason = getCalibrationMismatch(info, library_debugging);
+        if (reason) {
+            return reason;
+        }
+        # a sanitizer's runtime is loaded into a sanitizer build, whose frames have redzones
+        *list<string> sanitizer = maps ? (maps =~ x/(lib[a-z]*san)\b/) : NOTHING;
+        if (sanitizer) {
+            return sprintf("a sanitizer runtime (%s) is loaded, and its stack redzones make frames larger",
+                sanitizer[0]);
+        }
+        return getMeasurementProblem(maps);
+    }
+
+    #! returns why the depth of a recursion does not measure the stack in this process, or nothing if it does
+    /** Valgrind manages the stacks of the threads itself and can give a new thread the stack of a thread that has
+        ended, of another size, so the depths that this test measures do not follow the stack size that it asks for
+    */
+    static *string getMeasurementProblem(*string maps) {
+        if (maps =~ /vgpreload_/) {
+            return "the process runs under valgrind, which can give a thread the stack of another thread";
+        }
+    }
+
+    #! returns the memory map of the process, or nothing if it cannot be read
+    static *string getMaps() {
+        if (is_readable("/proc/self/maps")) {
+            return File::readTextFile("/proc/self/maps");
+        }
+    }
+
+    #! returns the depth that a recursion reaches before it runs out of stack in a thread created with the given
+    #! stack size, and the size of the stack that the thread has
+    /** The thread can have a larger stack than it asks for: glibc gives a new thread the cached stack of a thread that
+        has ended if it is at least as large and at most four times as large as the stack asked for, so the depth is
+        measured against the size of the stack that the thread reports (get_stack_size())
+    */
+    hash<auto> getDepth(Program pgm, string func, int stack_size) {
+        int old_size = get_default_thread_stack_size();
+        on_exit set_default_thread_stack_size(old_size);
+        set_default_thread_stack_size(stack_size);
+        Queue q();
+        background sub () {
+            try {
+                int size = get_stack_size();
+                q.push({"depth": pgm.callFunction("run", func), "size": size});
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        auto rv = q.get();
+        if (rv instanceof hash<ExceptionInfo>) {
+            throw rv.err, rv.desc, rv.arg;
+        }
+        return rv;
+    }
+
+    #! measures a recursion in threads with two stack sizes: returns {"small": depth, "large": depth, "size": the
+    #! larger stack's size, "bpl": bytes per level}
+    /** The bytes per level are the difference of the stacks of the threads over the difference of the depths; if the
+        second thread was given the same stack as the first (see getDepth()), it is measured again with a stack twice
+        as large as the first thread's
+    */
+    hash<auto> measureRecursion(Program pgm, string func) {
+        hash<auto> small = getDepth(pgm, func, SmallStack);
+        hash<auto> large = getDepth(pgm, func, LargeStack);
+        for (int i = 0; large.size <= small.size && i < 3; ++i) {
+            large = getDepth(pgm, func, small.size * 2);
+        }
+        assertGt(small.size, large.size, func + ": the stack of the second thread is larger");
+        assertGt(small.depth, large.depth, sprintf("%s: depth with a %d byte stack > depth with a %d byte stack", func,
+            large.size, small.size));
+        int bpl = large.depth > small.depth ? (large.size - small.size) / (large.depth - small.depth) : 0;
+        return {"small": small.depth, "large": large.depth, "size": large.size, "bpl": bpl};
+    }
+
+    #! measures the recursions in an execution mode: recursion label -> see measureRecursion()
+    hash<string, hash<auto>> measure(ExecMode mode) {
+        Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+        pgm.setExecMode(mode);
+        pgm.parse(Code, "recursion-frame-budget");
+        pgm.run();
+        hash<string, hash<auto>> rv = {};
+        foreach hash<auto> i in (Recursions.pairIterator()) {
+            rv{i.value} = measureRecursion(pgm, i.key);
+        }
+        return rv;
+    }
+
+    testBytesPerLevel() {
+        hash<auto> info = get_qore_library_info();
+        *string reason = getUncalibratedReason(info, Option::HAVE_LIBRARY_DEBUGGING, getMaps());
+        string build_type = getBudgetKey(info, Option::HAVE_LIBRARY_DEBUGGING);
+        # every recursion is measured before the check, so that a failure reports all of them
+        list<string> over = ();
+        foreach hash<auto> m in (Modes.pairIterator()) {
+            hash<string, hash<auto>> r = measure(m.value);
+            foreach hash<auto> i in (r.pairIterator()) {
+                int budget = Budgets{build_type}{m.key}{i.key} ?? 0;
+                string msg = sprintf("%s %s recursion, %s build: %d bytes per level (budget %d; depth %d with a "
+                    "%d KB stack)", m.key, i.key, build_type, i.value.bpl, budget, i.value.large,
+                    i.value.size / 1024);
+                if (m_options.verbose || reason) {
+                    printf("%s\n", msg);
+                }
+                if (!reason && i.value.bpl > budget) {
+                    over += msg;
+                }
+            }
+        }
+        if (reason) {
+            testSkip("the bytes per level are reported, not checked: " + reason);
+        }
+        # a frame on the call path grew: see tools/stack-usage-budgets.txt for the frames and what to do
+        assertEq((), over, "recursions over their budget of bytes per level");
+    }
+
+    #! the budgets are checked only for a build like the one they are calibrated for
+    testCalibration() {
+        hash<auto> release = {
+            "Compiler": "GNU",
+            "CompilerVersion": "15.2.0",
+            "PlatformCPU": "x86_64",
+            "PlatformOS": "Linux",
+            "SingleCompilationUnit": True,
+            "BuildType": "Release",
+            "BuildTypeCFLAGS": "-O3 -DNDEBUG",
+            "CFLAGS": "-fno-strict-aliasing -std=c++20",
+            "Target": "x86_64-linux-gnu",
+            "InterproceduralOptimization": False,
+            "Hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 3, "glibcxx_assertions": False},
+        };
+        hash<auto> debug = release + {"BuildType": "debug", "BuildTypeCFLAGS": "-g -Og"};
+        hash<auto> musl = release + {
+            "Target": "x86_64-alpine-linux-musl",
+            "Hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
+        };
+        assertNothing(getCalibrationMismatch(release, False));
+        assertNothing(getCalibrationMismatch(debug, True));
+        assertNothing(getCalibrationMismatch(musl, False));
+        assertEq("x86_64-linux-gnu release", getBudgetKey(release, False));
+        assertEq("x86_64-linux-gnu debug", getBudgetKey(debug, True));
+        assertEq("x86_64-alpine-linux-musl release", getBudgetKey(musl, False));
+        # the aarch64 builds of CI's Ubuntu and Alpine arm64 images (get_qore_library_info() there)
+        hash<auto> arm = release + {
+            "PlatformCPU": "aarch64",
+            "Target": "aarch64-linux-gnu",
+            "Hardening": {"stack_protector": 2, "fortify_source": 3, "cet": 0, "glibcxx_assertions": False},
+        };
+        hash<auto> arm_musl = arm + {
+            "Target": "aarch64-alpine-linux-musl",
+            "Hardening": {"stack_protector": 2, "fortify_source": 2, "cet": 0, "glibcxx_assertions": False},
+        };
+        foreach hash<auto> b in ((arm, arm_musl)) {
+            assertNothing(getCalibrationMismatch(b, False), b.Target);
+            assertNothing(getCalibrationMismatch(b + {"BuildType": "debug", "BuildTypeCFLAGS": "-g -Og"}, True),
+                b.Target);
+        }
+        assertEq("aarch64-linux-gnu release", getBudgetKey(arm, False));
+        assertEq("aarch64-alpine-linux-musl debug", getBudgetKey(arm_musl, True));
+        # every calibrated target has budgets for both build types, with the same recursions
+        foreach string target in (keys CalibratedTargets) {
+            foreach string bt in (("release", "debug")) {
+                assertEq(keys Modes, keys Budgets{target + " " + bt}, target + " " + bt);
+            }
+        }
+
+        # each difference from the calibrated builds: the build information -> library debugging -> the reason
+        list<list<auto>> cases = (
+            (release + {"Compiler": "Clang"}, False, "built with \"Clang\""),
+            (release - "CompilerVersion", False, "does not report"),
+            (release + {"CompilerVersion": "14.2.0"}, False, "GCC 15, and this library was built with GCC 14.2.0"),
+            (release + {"CompilerVersion": "16.1.0"}, False, "GCC 16.1.0"),
+            (release + {"PlatformCPU": "aarch64"}, False, "are for x86_64 Linux, and this is aarch64 Linux"),
+            (release + {"SingleCompilationUnit": False}, False, "single compilation unit"),
+            # a distribution build: build type "None" with its own flags in CFLAGS
+            (release + {"BuildType": "None", "BuildTypeCFLAGS": "",
+                "CFLAGS": "-g -O2 -fstack-protector-strong -fno-strict-aliasing -std=c++20"}, False, "\"None\""),
+            (release + {"BuildType": "RelWithDebInfo", "BuildTypeCFLAGS": "-O2 -g -DNDEBUG"}, False,
+                "\"RelWithDebInfo\""),
+            # a debug build made without -Og (QORE_OPTIMIZE_DEBUG_BUILDS=OFF) is -O0
+            (debug + {"BuildTypeCFLAGS": "-g"}, True, "built with \"-g\""),
+            # a debug library with release flags, or the reverse
+            (debug, False, "\"debug\""),
+            (release, True, "\"Release\""),
+            (release + {"CFLAGS": "-fno-strict-aliasing -std=c++20 -flto"}, False, "also built with [\"-flto\"]"),
+            (release + {"CFLAGS": "-O2 -fno-strict-aliasing -std=c++20"}, False, "also built with [\"-O2\"]"),
+            # a multi-config generator reports no build type: the configuration is chosen when the library is built
+            (release + {"BuildType": "multi-config", "BuildTypeCFLAGS": ""}, False, "\"multi-config\""),
+            (release + {"Target": "powerpc64le-linux-gnu"}, False, "built for \"powerpc64le-linux-gnu\""),
+            # an aarch64 target on an x86_64 CPU, or with x86_64's hardening options (__CET__)
+            (release + {"Target": "aarch64-linux-gnu"}, False, "are for aarch64 Linux, and this is x86_64 Linux"),
+            (release + {"Target": "aarch64-linux-gnu", "PlatformCPU": "aarch64"}, False, "hardening options"),
+            (release + {"InterproceduralOptimization": True}, False, "link-time optimization"),
+            # another distribution's GCC with other hardening defaults
+            (release + {"Hardening": release.Hardening + {"cet": 0}}, False, "hardening options"),
+            (release + {"Hardening": release.Hardening + {"glibcxx_assertions": True}}, False, "hardening options"),
+            (musl + {"Hardening": release.Hardening}, False, "hardening options"),
+            (release - "Hardening", False, "does not report how it was built (\"Hardening\")"),
+        );
+        foreach list<auto> c in (cases) {
+            *string reason = getCalibrationMismatch(c[0], c[1]);
+            assertEq(True, reason.typeCode() == NT_STRING && reason.find(c[2]) >= 0,
+                sprintf("case %d: %y contains %y", $#, reason, c[2]));
+            # the check that decides whether the budgets are enforced finds the same reason
+            assertEq(reason, getUncalibratedReason(c[0], c[1], ""), sprintf("case %d", $#));
+        }
+
+        # a calibrated build is checked unless a sanitizer runtime is loaded or the process runs under valgrind
+        *string reason = getUncalibratedReason(release, False,
+            "4000-4001 r-xp 0 08:01 1 /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so\n");
+        assertEq(True, reason.typeCode() == NT_STRING && reason.find("valgrind") >= 0, reason);
+        assertNothing(getUncalibratedReason(release, False, "7f00-7f01 r-xp 0 08:01 1 /usr/lib/libc.so.6\n"));
+        assertNothing(getUncalibratedReason(release, False, NOTHING));
+        reason = getUncalibratedReason(release, False,
+            "7f00-7f01 r-xp 0 08:01 1 /usr/lib/x86_64-linux-gnu/libasan.so.8.0.0\n");
+        assertEq(True, reason.typeCode() == NT_STRING && reason.find("sanitizer runtime (libasan)") >= 0, reason);
+    }
+
+    #! the measurement itself: each recursion runs out of stack at a depth that grows with the stack
+    testMeasurement() {
+        *string problem = getMeasurementProblem(getMaps());
+        if (problem) {
+            testSkip(problem);
+        }
+        Program pgm(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_STRONG_ENCAPSULATION);
+        pgm.setExecMode(EM_IR);
+        pgm.parse(Code, "recursion-frame-budget");
+        pgm.run();
+        # a thread with a 4 MB stack that has ended leaves its stack in glibc's cache, from which the threads asking
+        # for 1 MB and 2 MB can get it (as testBytesPerLevel() leaves stacks of 4 MB and 8 MB, which made this case
+        # fail on aarch64 when the depths were compared with the stack sizes asked for)
+        getDepth(pgm, "frec", 4 * 1024 * 1024);
+        hash<auto> d1 = getDepth(pgm, "frec", 1024 * 1024);
+        hash<auto> d2 = getDepth(pgm, "frec", 2 * 1024 * 1024);
+        # a thread has at least the stack that it asks for (it can have a larger one: see getDepth())
+        assertGe(1024 * 1024, d1.size);
+        assertGe(2 * 1024 * 1024, d2.size);
+        # a level uses at least a few hundred bytes and no more than 64 KB in any build
+        assertGt(16, d1.depth);
+        assertLt(d1.size / 256, d1.depth);
+        if (d1.size == d2.size) {
+            # the same stack: the same depth
+            assertEq(d1.depth, d2.depth);
+        } else {
+            # the difference of the stacks holds the difference of the levels: the part below the recursion (the
+            # stack guard, the start of the thread) is the same in both threads
+            assertGt(0, (d2.depth - d1.depth) * (d2.size - d1.size));
+            int bpl = (d2.size - d1.size) / (d2.depth - d1.depth);
+            assertGt(256, bpl);
+            assertLt(65536, bpl);
+        }
+        # an error other than running out of stack is not taken for the end of the recursion
+        assertThrows("NO-FUNCTION", \pgm.callFunction(), ("run", "frec_missing"));
+    }
+}

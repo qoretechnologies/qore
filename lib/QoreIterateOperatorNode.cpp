@@ -48,6 +48,33 @@ static const QoreTypeInfo* get_abstract_iterator_type(const QoreTypeInfo* elemen
     return QC_ABSTRACTITERATOR->getTypeInfo(type_args);
 }
 
+//! which values of a type are hashes
+enum class TypeHashValues {
+    None,   //!< no value of the type is a hash, or the type is not known
+    Only,   //!< every value is a hash (a hashdecl, a typed hash or a union of them) or NOTHING
+    Some,   //!< some values are hashes, others are values of other types
+};
+
+static TypeHashValues get_type_hash_values(const QoreTypeInfo* ti) {
+    if (!ti || !QoreTypeInfo::hasType(ti)) {
+        return TypeHashValues::None;
+    }
+    bool hash = false;
+    bool other = false;
+    for (auto& i : ti->return_vec) {
+        qore_type_t t = i.spec.getType();
+        if (t == NT_HASH) {
+            hash = true;
+        } else if (t != NT_NOTHING) {
+            other = true;
+        }
+    }
+    if (!hash) {
+        return TypeHashValues::None;
+    }
+    return other ? TypeHashValues::Some : TypeHashValues::Only;
+}
+
 static bool is_abstract_iterator_object(const QoreObject* obj) {
     if (!obj || !QC_ABSTRACTITERATOR) {
         return false;
@@ -108,6 +135,17 @@ const QoreTypeInfo* QoreIterateOperatorNode::getElementTypeInfo(const QoreValue&
     }
     if (element_type || (sourceTypeInfo && QoreTypeInfo::parseReturns(sourceTypeInfo, NT_HASH) == QTI_IDENT)) {
         return QoreTypeInfo::getHashPairType(element_type ? element_type : autoTypeInfo);
+    }
+    // a hashdecl, a union of hashdecls or typed hashes: the iterator gives key/value pairs, and the members of a
+    // hashdecl have no single value type; a union of a hash type with other types gives key/value pairs for a hash
+    // and other elements for the other values (issue #5916)
+    switch (get_type_hash_values(sourceTypeInfo)) {
+        case TypeHashValues::Only:
+            return QoreTypeInfo::getHashPairType(autoTypeInfo);
+        case TypeHashValues::Some:
+            return autoTypeInfo;
+        case TypeHashValues::None:
+            break;
     }
 
     element_type = QoreTypeInfo::getUniqueReturnComplexBuffer(sourceTypeInfo);

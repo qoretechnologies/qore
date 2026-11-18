@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
@@ -43,6 +44,7 @@
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/PollStateCloseHook.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -50,11 +52,15 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
-// Returns epoch time in microseconds
-static inline int64 h1_epoch_us() {
-    int us;
-    int64 secs = q_epoch_us(us);
-    return secs * 1000000LL + us;
+// Returns the active streams of the operation \a op, for the idle check of its connection (#6184)
+static int h1_op_active_streams(const void* op) {
+    return static_cast<const Http1ClientPollOperationPriv*>(op)->getActiveStreamCount();
+}
+
+// Returns the monotonic clock in microseconds: the idle deadline is an interval, which a step of the system clock must
+// not end or stop (#6150)
+static inline int64 h1_monotonic_us() {
+    return q_get_monotonic_us();
 }
 
 // ============================================================
@@ -111,41 +117,57 @@ Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
 }
 
 void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
-    // Clean up single stream action - reject pending Promise so Future::get() doesn't hang
+    // the recorded error, the actions and the request data are taken under the lock that other threads hold to use
+    // them, and completed and released after it: completing or releasing an action can run code (the release of an
+    // object it holds) that uses this operation again
+    QoreHashNode* old_error_info;
+    AbstractAsyncAction* old_stream_action;
+    ChannelAction* old_completed_channel_action;
+    BinaryNode* old_pending_request_data;
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
     {
         AutoLocker al(stream_lock);
-        if (stream_action) {
-            stream_action->executeError("HTTP1-ABORT",
-                "poll operation cleaned up before response was received", xsink);
-            stream_action->deref(xsink);
-            stream_action = nullptr;
-        }
-        if (completed_channel_action) {
-            completed_channel_action->deref(xsink);
-            completed_channel_action = nullptr;
-            completed_sid = 0;
-        }
+        old_error_info = error_info;
+        error_info = nullptr;
+        has_error.store(false, std::memory_order_release);
+        old_stream_action = stream_action;
+        stream_action = nullptr;
+        old_completed_channel_action = completed_channel_action;
+        completed_channel_action = nullptr;
+        completed_sid = 0;
         active_stream_count = 0;
-        if (pending_request_data) {
-            pending_request_data->deref(xsink);
-            pending_request_data = nullptr;
-        }
-        // Clean up streaming send queue
-        for (auto* s : send_body_queue) {
-            if (s) {
-                s->deref(xsink);
-            }
-        }
-        send_body_queue.clear();
-        if (send_trailers) {
-            send_trailers->deref(xsink);
-            send_trailers = nullptr;
-        }
+        old_pending_request_data = pending_request_data;
+        pending_request_data = nullptr;
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
+        send_trailers = nullptr;
     }
 
-    if (error_info) {
-        error_info->deref(xsink);
-        error_info = nullptr;
+    // Clean up single stream action - reject pending Promise so Future::get() doesn't hang
+    if (old_stream_action) {
+        old_stream_action->executeError("HTTP1-ABORT",
+            "poll operation cleaned up before response was received", xsink);
+        old_stream_action->deref(xsink);
+    }
+    if (old_completed_channel_action) {
+        old_completed_channel_action->deref(xsink);
+    }
+    if (old_pending_request_data) {
+        old_pending_request_data->deref(xsink);
+    }
+    // Clean up streaming send queue
+    for (auto* s : old_send_body_queue) {
+        if (s) {
+            s->deref(xsink);
+        }
+    }
+    if (old_send_trailers) {
+        old_send_trailers->deref(xsink);
+    }
+
+    if (old_error_info) {
+        old_error_info->deref(xsink);
     }
     if (response_headers) {
         response_headers->deref(xsink);
@@ -550,7 +572,7 @@ void Http1ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
     if (proxy_tunnel) {
         // the socket is connected to the proxy: the TLS connection through the tunnel is made for the target server,
         // which is the name sent with SNI and verified in the server's certificate
-        sock_obj->setSslTargetHostForAsyncPoll(target_host.c_str());
+        qore_socket_object_private(sock_obj).setSslTargetHostForAsyncPoll(target_host.c_str());
     }
     sock_obj->ref();
     // through an HTTPS proxy, the TLS connection to the target server is carried by the TLS connection to the proxy
@@ -640,7 +662,10 @@ void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionS
     // req_state is set first, so the release store of h1_state publishes it
     if (protocol_switched) {
         req_state = ReqState::PROTOCOL_SWITCHED;
-        setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "ready-switched");
+        // the waiter woken below takes the socket over; an operation closed before does not hand it over
+        if (setStateUnlessClosed(H1State::PROTOCOL_SWITCHED, "ready-switched")) {
+            switched_protocol.store(true, std::memory_order_release);
+        }
     } else {
         req_state = ReqState::IDLE;
         setStateUnlessClosed(H1State::READING, "ready");
@@ -652,7 +677,7 @@ void Http1ClientPollOperationPriv::startReady(bool protocol_switched, ExceptionS
 
 QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
     ASYNC_IO_TRACE("H1 handleReading: req_state=%d send_state=%d fd=%d\n", (int)req_state.load(),
-        (int)send_state, sock_obj ? sock_obj->getSocket() : -1);
+        (int)send_state, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     // Full-duplex streaming send: drive the chunked request body send side
     // concurrently with the response-receive machine (req_state is a RECV_*
     // state here), so the server can reply while the request body is still
@@ -737,7 +762,7 @@ QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSin
     req_state = ReqState::RECV_HEADER;
 
     ASYNC_IO_TRACE("H1 handleSending: request headers sent, buffered body still going -> full-duplex "
-        "(RECV_HEADER + concurrent send) fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+        "(RECV_HEADER + concurrent send) fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
     printd(5, "Http1ClientPollOperationPriv::startBufferedFullDuplex() headers sent, reading the response "
         "while the buffered request body is still being sent\n");
     return handleFullDuplex(xsink);
@@ -830,7 +855,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                     poll_xsink.clear();
                     ASYNC_IO_TRACE("H1 driveSendSide: the request body send failed (%s: %s) - reading the response "
                         "the peer may have sent fd=%d\n", saved_err.c_str(), saved_desc.c_str(),
-                        sock_obj ? sock_obj->getSocket() : -1);
+                        sock_obj ? sock_obj->getPollableDescriptor() : -1);
 #ifdef DEBUG
                     if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
                         hook(QoreDbgHttp1SendEvent::RecoveryStart, dbgHookFd(), nullptr);
@@ -866,12 +891,12 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
                 // the operation carried the whole rest of the request, so the request body is complete
                 send_state = SendState::DONE;
                 ASYNC_IO_TRACE("H1 driveSendSide: buffered request body sent, request done fd=%d\n",
-                    sock_obj ? sock_obj->getSocket() : -1);
+                    sock_obj ? sock_obj->getPollableDescriptor() : -1);
             } else if (send_final_pending) {
                 send_final_pending = false;
                 send_state = SendState::DONE;
                 ASYNC_IO_TRACE("H1 driveSendSide: final chunk sent, request body done fd=%d\n",
-                    sock_obj ? sock_obj->getSocket() : -1);
+                    sock_obj ? sock_obj->getPollableDescriptor() : -1);
             }
         }
 
@@ -929,7 +954,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             }
             final_chunk->append("\r\n", 2);
             ASYNC_IO_TRACE("H1 driveSendSide: sending final chunk fd=%d\n",
-                sock_obj ? sock_obj->getSocket() : -1);
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
             sock_obj->ref();
             setSendOp(new SocketSendPollOperation(xsink, final_chunk.release(), sock_obj));
             if (*xsink) {
@@ -944,7 +969,7 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
 
         // Normal chunk: HTTP/1.1 chunked TE frame "<hexsize>\r\n<data>\r\n"
         ASYNC_IO_TRACE("H1 driveSendSide: sending chunk (%lu bytes) fd=%d\n",
-            (unsigned long)chunk->size(), sock_obj ? sock_obj->getSocket() : -1);
+            (unsigned long)chunk->size(), sock_obj ? sock_obj->getPollableDescriptor() : -1);
         SimpleRefHolder<BinaryNode> chunk_data(new BinaryNode());
         QoreString size_line;
         size_line.sprintf("%lx\r\n", (unsigned long)chunk->size());
@@ -1029,7 +1054,7 @@ QoreHashNode* Http1ClientPollOperationPriv::recoverResponseAfterSendFailure(cons
     read_op->setSelf(*self);
 
     ASYNC_IO_TRACE("H1 handleSending: the request send failed (%s: %s) - reading the response the peer may have "
-        "sent fd=%d\n", err.c_str(), desc.c_str(), sock_obj ? sock_obj->getSocket() : -1);
+        "sent fd=%d\n", err.c_str(), desc.c_str(), sock_obj ? sock_obj->getPollableDescriptor() : -1);
 
     // the failed send operation is released, and the request is abandoned (send_state is not DONE, so a response
     // closes the connection)
@@ -1108,7 +1133,7 @@ QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsi
             // so the rest of the request can never be delivered.  The response in hand is complete and
             // authoritative, so that is what the caller gets rather than the write error it caused.
             ASYNC_IO_TRACE("H1 awaitBufferedSend: peer refused the rest of the request body after "
-                "responding - delivering the response fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+                "responding - delivering the response fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
             poll_xsink.clear();
             return abandonBufferedSendAndDeliver(xsink);
         }
@@ -1125,7 +1150,7 @@ QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsi
         releaseSendOp(xsink);
         send_state = SendState::DONE;
         ASYNC_IO_TRACE("H1 awaitBufferedSend: buffered request body complete, delivering the response "
-            "fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            "fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
     return completeDeferredResponse(xsink);
 }
@@ -1157,22 +1182,35 @@ void Http1ClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
     }
 }
 
+// releases request body chunks and trailers taken out of an operation under its stream lock, after the lock: the
+// trailers hash can hold values whose release runs code that uses the operation again
+static void h1_release_send_data(std::deque<QoreStringNode*>& queue, QoreHashNode* trailers, ExceptionSink* xsink) {
+    for (auto* s : queue) {
+        if (s) {
+            s->deref(xsink);
+        }
+    }
+    queue.clear();
+    if (trailers) {
+        trailers->deref(xsink);
+    }
+}
+
 void Http1ClientPollOperationPriv::resetSendState(ExceptionSink* xsink) {
     releaseSendOp(xsink);
     send_state = SendState::INACTIVE;
     send_final_pending = false;
     send_buffered_body = false;
-    AutoLocker al(stream_lock);
-    for (auto* s : send_body_queue) {
-        if (s) {
-            s->deref(xsink);
-        }
-    }
-    send_body_queue.clear();
-    if (send_trailers) {
-        send_trailers->deref(xsink);
+    // taken under stream_lock and released after it
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
+    {
+        AutoLocker al(stream_lock);
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
         send_trailers = nullptr;
     }
+    h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
 }
 
 // --- Request sub-state handlers ---
@@ -1216,7 +1254,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         // to drain TLS post-handshake records (e.g., TLS 1.3 NewSessionTicket) instead
         // of raw recv(MSG_PEEK) which would see the TLS record header byte (0x17) and
         // never be able to consume it, causing a busy-loop.
-        int fd = sock_obj->getSocket();
+        int fd = sock_obj->getPollableDescriptor();
         if (fd >= 0) {
 #ifdef DEBUG
             if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
@@ -1224,7 +1262,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             }
 #endif
             ExceptionSink idle_xsink;
-            int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+            int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
             if (idle_rc < 0 || idle_xsink) {
                 // EOF or SSL error - preserve the underlying error category
                 // (e.g. SOCKET-SSL-ERROR when the TLS handshake or an
@@ -1292,7 +1330,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
 
         // Connection is alive - start sending the request
         ASYNC_IO_TRACE("H1 handleIdle: start send (%lu bytes) fd=%d streaming_send=%d\n",
-            (unsigned long)req_data->size(), sock_obj ? sock_obj->getSocket() : -1,
+            (unsigned long)req_data->size(), sock_obj ? sock_obj->getPollableDescriptor() : -1,
             (int)is_streaming_send);
         releaseCurrentOp(xsink);
         sock_obj->ref();
@@ -1324,10 +1362,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // If the event loop fires POLLIN on an idle connection (server FIN),
     // continuePoll() will be called and we'll reach this point again with
     // no pending request.  Use the async-poll idle-data helper, which is TLS-aware.
-    int fd = sock_obj->getSocket();
+    int fd = sock_obj->getPollableDescriptor();
     if (fd >= 0) {
         ExceptionSink idle_xsink;
-        int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+        int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
         if (idle_rc < 0 || idle_xsink) {
             ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d, closing fd=%d (no pending req)\n",
                 idle_rc, fd);
@@ -1363,12 +1401,20 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // On subsequent entries (after a previous handleIdle or dispatchResponse
     // has armed the deadline), close the connection if the deadline has
     // elapsed.  Defense-in-depth for peers that never close idle connections.
-    if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_epoch_us() >= idle_deadline_us) {
-        ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
-        sock_obj->closeIo(xsink);
-        setError("HTTP1-IDLE-TIMEOUT",
-            "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
-        return nullptr;
+    if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_monotonic_us() >= idle_deadline_us) {
+        // a request that has reserved the connection's stream and not yet submitted is not closed under: the
+        // connection then starts a new idle period (#6184)
+        if (!AbstractHttpPollConnectionPriv::idleCloseAllowed(stream_lock, connection_priv, h1_op_active_streams,
+            this, xsink)) {
+            ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached with a reserved stream fd=%d\n", fd);
+            idle_deadline_us = 0;
+        } else {
+            ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
+            sock_obj->closeIo(xsink);
+            setError("HTTP1-IDLE-TIMEOUT",
+                "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
+            return nullptr;
+        }
     }
 
     setStateUnlessClosed(H1State::WAIT_READ, "idle");
@@ -1433,11 +1479,11 @@ QoreHashNode* Http1ClientPollOperationPriv::armIdleDeadline(QoreHashNode* poll_i
     if (idle_timeout_us <= 0 || !poll_info) {
         return poll_info;
     }
-    int64_t now_us = h1_epoch_us();
+    int64_t now_us = h1_monotonic_us();
     if (idle_deadline_us == 0) {
         idle_deadline_us = now_us + idle_timeout_us;
         ASYNC_IO_TRACE("H1 armIdleDeadline: arming now+%lldus fd=%d\n",
-            (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
+            (long long)idle_timeout_us, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
     int64_t remaining_us = idle_deadline_us - now_us;
     int64_t timeout_ms = (remaining_us + 999) / 1000;
@@ -1536,7 +1582,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
             send_final_pending = false;
             ASYNC_IO_TRACE("H1 handleSending: headers sent -> full-duplex "
                 "(RECV_HEADER + concurrent send) fd=%d\n",
-                sock_obj ? sock_obj->getSocket() : -1);
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
             return handleFullDuplex(xsink);
         }
 
@@ -1548,7 +1594,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         // instead of a raw recv(MSG_PEEK), so TLS post-handshake records are
         // processed consistently with the pre-send idle checks above.
         if (next_stream_id > 1) {
-            int fd = sock_obj->getSocket();
+            int fd = sock_obj->getPollableDescriptor();
             if (fd >= 0) {
 #ifdef DEBUG
                 if (qore_dbg_http1_send_hook_t hook = qore_dbg_http1_send_hook.load()) {
@@ -1556,7 +1602,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
                 }
 #endif
                 ExceptionSink idle_xsink;
-                int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+                int idle_rc = qore_socket_object_private(sock_obj).checkIdleDataForAsyncPoll(&idle_xsink);
                 if (idle_rc < 0 || idle_xsink) {
                     // EOF or socket/TLS error before the response header.
                     ASYNC_IO_TRACE("H1 handleSending: stale connection detected "
@@ -1611,10 +1657,10 @@ void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, Exce
 }
 
 void Http1ClientPollOperationPriv::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    // the trailers replaced are released after stream_lock
+    ReferenceHolder<QoreHashNode> old_send_trailers(xsink);
     AutoLocker al(stream_lock);
-    if (send_trailers) {
-        send_trailers->deref(xsink);
-    }
+    old_send_trailers = send_trailers;
     send_trailers = trailers ? trailers->hashRefSelf() : nullptr;
 }
 
@@ -1651,7 +1697,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     ASYNC_IO_TRACE("H1 handleRecvHeader: poll_info=%p xsink=%d fd=%d\n",
-        poll_info, (int)(bool)poll_xsink, sock_obj ? sock_obj->getSocket() : -1);
+        poll_info, (int)(bool)poll_xsink, sock_obj ? sock_obj->getPollableDescriptor() : -1);
     if (poll_xsink) {
         QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
         QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
@@ -1860,7 +1906,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         ASYNC_IO_TRACE("H1 handleRecvHeader: status=%d chunked=%d content_length=%lld close=%d fd=%d\n",
             response_status_code, (int)response_chunked,
             (long long)response_content_length, (int)connection_close,
-            sock_obj ? sock_obj->getSocket() : -1);
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
 
         // Report the response header events on the event queue of the client that issued the
         // request.  Reported here, where the header is parsed, and not when the response is
@@ -1916,9 +1962,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             if (streaming_active_io) {
                 // Deliver the 101 response headers to the Channel so the
                 // stream handle caller can validate the upgrade.
-                dispatchStreamingHeaders(xsink);
+                bool delivered = dispatchStreamingHeaders(xsink);
                 if (*xsink) {
                     return nullptr;
+                }
+                // the caller takes the socket over with the 101 response, also if the operation is aborted or closed
+                // from now on; the completion of the operation, which follows on a worker, then leaves the socket
+                // alone (issue #5985); a response that no stream received (the request was canceled) hands nothing
+                // over
+                if (delivered) {
+                    switched_protocol.store(true, std::memory_order_release);
                 }
             } else {
                 // Non-streaming: dispatch as a normal response with no body
@@ -1961,7 +2014,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             ASYNC_IO_TRACE("H1 handleRecvHeader: 100 Continue (%d of max %d), reading the next header "
                 "fd=%d\n", interim_response_count, MAX_INTERIM_RESPONSES,
-                sock_obj ? sock_obj->getSocket() : -1);
+                sock_obj ? sock_obj->getPollableDescriptor() : -1);
             releaseCurrentOp(xsink);
             sock_obj->ref();
             // a read that cannot be started (the socket was closed) is reported with setError(), which notifies the
@@ -2583,7 +2636,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
         // conn.close() → poll_op.abort() → HTTP1-ABORT for the still-
         // active stream.  Dispatch the body end now while the response
         // state is intact.
-        if (!sock_obj || sock_obj->getSocket() < 0) {
+        if (!sock_obj || sock_obj->getPollableDescriptor() < 0) {
             return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
         }
 
@@ -2637,7 +2690,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // response anyway if the peer stops reading.
     if (send_buffered_body && send_state != SendState::DONE) {
         ASYNC_IO_TRACE("H1 dispatchResponse: response complete with the request body still going out "
-            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
         releaseCurrentOp(xsink);
         deferred_streaming_end = false;
         req_state = ReqState::AWAIT_SEND;
@@ -2756,7 +2809,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
-void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink) {
+bool Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
     int stream_id;
     {
@@ -2787,7 +2840,9 @@ void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink
         hdr_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);
         action->execute(hdr_resp.release(), xsink);
         action->deref(xsink);
+        return !*xsink;
     }
+    return false;
 }
 
 void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
@@ -2823,7 +2878,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     // response anyway if the peer stops reading.
     if (send_buffered_body && send_state != SendState::DONE) {
         ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response complete with the request body still going out "
-            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getPollableDescriptor() : -1);
         releaseCurrentOp(xsink);
         deferred_streaming_end = true;
         req_state = ReqState::AWAIT_SEND;
@@ -2834,6 +2889,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     AbstractAsyncAction* action = nullptr;
     bool close = connection_close;
     bool keep_completed_channel = false;
+    // a completed request's action that this one replaces is released after stream_lock, as releasing an action can
+    // run code that uses this operation again
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
 
     // Full-duplex streaming: if the response completed while the chunked
     // request body is still open (the server replied and closed its response
@@ -2842,7 +2900,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     if (send_state != SendState::INACTIVE && send_state != SendState::DONE) {
         ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response ended with request body still "
             "open (send_state=%d) - forcing close fd=%d\n", (int)send_state,
-            sock_obj ? sock_obj->getSocket() : -1);
+            sock_obj ? sock_obj->getPollableDescriptor() : -1);
         close = true;
     }
     // see dispatchResponse(): the connection that this response ends accepts no further request before its stream
@@ -2859,9 +2917,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
             action->ref();
             ChannelAction* ch_action = dynamic_cast<ChannelAction*>(action);
             if (ch_action && ch_action->isSseInstallEligible()) {
-                if (completed_channel_action) {
-                    completed_channel_action->deref(xsink);
-                }
+                old_completed_channel_action = completed_channel_action;
                 completed_channel_action = ch_action;
                 completed_sid = stream_id;
                 keep_completed_channel = true;
@@ -2875,6 +2931,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         active_sid = 0;
         active_method.clear();
     }
+    // the completed request's action that this one replaces is released first, as when it was released under the
+    // lock
+    old_completed_channel_action = nullptr;
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
@@ -2899,6 +2958,10 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         if (!keep_completed_channel) {
             action->deref(xsink);
         }
+#ifdef DEBUG
+        // reports that the dispatch of the end of the response is done with the request's action
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::StreamEndDispatched, *self);
+#endif
     }
 
     if (close) {
@@ -3079,18 +3142,25 @@ void Http1ClientPollOperationPriv::publishError(const char* err, const char* des
 #ifdef DEBUG
             published = true;
 #endif
-            error_info = new QoreHashNode(autoTypeInfo);
-            error_info->setKeyValue("err", new QoreStringNode(err), xsink);
-            error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+            // the hash is complete before it is recorded
+            ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+            info->setKeyValue("err", new QoreStringNode(err), xsink);
+            info->setKeyValue("desc", new QoreStringNode(desc), xsink);
             if (!arg.isNothing()) {
-                error_info->setKeyValue("arg", arg.refSelf(), xsink);
+                info->setKeyValue("arg", arg.refSelf(), xsink);
             }
             if (extra) {
                 ConstHashIterator hi(extra);
                 while (hi.next()) {
-                    error_info->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+                    info->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
                 }
             }
+#ifdef DEBUG
+            // a test holds the thread here, in the critical section, to read the error from another thread
+            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ErrorRecord, *self);
+#endif
+            error_info = info.release();
+            has_error.store(true, std::memory_order_release);
         }
     }
 #ifdef DEBUG
@@ -3105,7 +3175,7 @@ void Http1ClientPollOperationPriv::publishError(const char* err, const char* des
     // Without this, dead sockets accumulate when the remote closes the connection
     // and degrade I/O controller performance.  The epoll cleanup handles EBADF
     // gracefully when the controller unregisters the fd after this returns.
-    if (sock_obj && sock_obj->getSocket() >= 0) {
+    if (sock_obj && sock_obj->getPollableDescriptor() >= 0) {
         sock_obj->closeIo(xsink);
     }
     // Mark the connection closed BEFORE notifying the pending streams, for the
@@ -3162,6 +3232,15 @@ void Http1ClientPollOperationPriv::drainConnectionPriv(ExceptionSink* xsink) {
     conn->deref(xsink);
 }
 
+QoreHashNode* Http1ClientPollOperationPriv::getErrorInfo() const {
+    // a read that finds the lock taken releases a thread that a test holds while it records the error
+    QoreRecordedValueReadLocker al(stream_lock, *self);
+    if (error_info) {
+        error_info->ref();
+    }
+    return error_info;
+}
+
 bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string& desc) const {
     AutoLocker al(stream_lock);
     if (!error_info) {
@@ -3188,29 +3267,28 @@ bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string&
 void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
         ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
+    // released after stream_lock, as releasing an action can run code that uses this operation again
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
     {
         AutoLocker al(stream_lock);
         action = stream_action;
         stream_action = nullptr;
-        if (completed_channel_action) {
-            completed_channel_action->deref(xsink);
-            completed_channel_action = nullptr;
-            completed_sid = 0;
-        }
+        old_completed_channel_action = completed_channel_action;
+        completed_channel_action = nullptr;
+        completed_sid = 0;
         active_stream_count = 0;
-        // Clean up streaming send queue
-        for (auto* s : send_body_queue) {
-            if (s) {
-                s->deref(xsink);
-            }
-        }
-        send_body_queue.clear();
-        if (send_trailers) {
-            send_trailers->deref(xsink);
-            send_trailers = nullptr;
-        }
+        // the streaming send queue is released after the lock
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
+        send_trailers = nullptr;
     }
 
+    // released in the order of the release under the lock before: the completed request's action and the send data
+    // first, then the active request's action is completed
+    old_completed_channel_action = nullptr;
+    h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
     if (action) {
         action->executeError(err, desc, xsink);
         action->deref(xsink);
@@ -3220,7 +3298,7 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 void Http1ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     // where the connection leads, which a pool checks before it hands the connection to other code
     std::shared_ptr<const QoreConnectionDestinations> destinations
-        = sock_obj ? sock_obj->getConnectedDestinations() : nullptr;
+        = sock_obj ? qore_socket_object_private(sock_obj).getConnectedDestinations() : nullptr;
     // Read connection_priv under stream_lock to race-free disarm against
     // closeConnection's disarmConnectionPriv - matches the pattern used
     // by abort() / setError() above and by the H2 / H3 equivalents.
@@ -3378,7 +3456,17 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         bin->append(body, body_len);
     }
 
-    int64_t stream_id;
+    // the request data and the action of a refused request, and the action and the request data that this request
+    // replaces, are released after stream_lock: releasing an action can run code (the release of an object it holds)
+    // that uses this operation again
+    ReferenceHolder<BinaryNode> bin_holder(bin, xsink);
+    ReferenceHolder<AbstractAsyncAction> refused_action(action, xsink);
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
+    ReferenceHolder<BinaryNode> old_pending_request_data(xsink);
+    int64_t stream_id = -1;
+    // the error that refuses the request, raised after stream_lock
+    std::string refused_err;
+    std::string refused_desc;
     {
         // Under stream_lock: store and register
         AutoLocker al(stream_lock);
@@ -3394,67 +3482,65 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         // caller (mgr.request -> q_future_get_blocking).  Surface the closure
         // error eagerly instead.
         if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
-            bin->deref(xsink);
-            std::string err_str = "HTTP1-CONNECTION-CLOSED";
-            std::string desc_str = "connection closed before request could be submitted";
+            refused_err = "HTTP1-CONNECTION-CLOSED";
+            refused_desc = "connection closed before request could be submitted";
             if (error_info) {
                 QoreValue ev = error_info->getKeyValue("err");
                 QoreValue dv = error_info->getKeyValue("desc");
                 if (ev.getType() == NT_STRING) {
                     QoreStringValueHelper ev_str(ev);
-                    err_str = ev_str->c_str();
+                    refused_err = ev_str->c_str();
                 }
                 if (dv.getType() == NT_STRING) {
                     QoreStringValueHelper dv_str(dv);
-                    desc_str = dv_str->c_str();
+                    refused_desc = dv_str->c_str();
                 }
             }
-            action->deref(xsink);
-            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
-            return -1;
-        }
-
-        // Capacity check
-        if (max_streams && active_stream_count >= max_streams) {
-            bin->deref(xsink);
-            action->deref(xsink);
-            xsink->raiseException("HTTP1-CAPACITY-ERROR",
-                "connection at capacity: %d/%d streams",
-                active_stream_count, max_streams);
-            return -1;
-        }
-
-        stream_id = ++next_stream_id;
-        if (completed_channel_action) {
-            completed_channel_action->deref(xsink);
+        } else if (max_streams && active_stream_count >= max_streams) {
+            // Capacity check
+            refused_err = "HTTP1-CAPACITY-ERROR";
+            QoreString desc;
+            desc.sprintf("connection at capacity: %d/%d streams", active_stream_count, max_streams);
+            refused_desc = desc.c_str();
+        } else {
+            stream_id = ++next_stream_id;
+            old_completed_channel_action = completed_channel_action;
             completed_channel_action = nullptr;
             completed_sid = 0;
+            stream_action = refused_action.release();  // takes ownership
+            ++active_stream_count;
+            active_sid = (int)stream_id;
+            active_method = method;
+            streaming_active = streaming;
+            streaming_send = streaming_send_flag;
+            old_pending_request_data = pending_request_data;
+            pending_request_data = bin_holder.release();
+            pending_request_header_len = header_len;
         }
-        stream_action = action;  // takes ownership
-        ++active_stream_count;
-        active_sid = (int)stream_id;
-        active_method = method;
-        streaming_active = streaming;
-        streaming_send = streaming_send_flag;
-        if (pending_request_data) {
-            pending_request_data->deref(xsink);
-        }
-        pending_request_data = bin;
-        pending_request_header_len = header_len;
     }
 
+    if (stream_id < 0) {
+        xsink->raiseException(refused_err.c_str(), "%s", refused_desc.c_str());
+        return -1;
+    }
+    // released in the order of the release under the lock before: the completed request's action, then the request
+    // data replaced
+    old_completed_channel_action = nullptr;
+    old_pending_request_data = nullptr;
     return stream_id;
 }
 
 bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
     bool in_flight = false;
+    // released after stream_lock, as releasing an action can run code that uses this operation again
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
 
     {
         AutoLocker al(stream_lock);
         if (!stream_action || active_sid != (int)stream_id) {
             if (completed_channel_action && completed_sid == (int)stream_id) {
-                completed_channel_action->deref(xsink);
+                old_completed_channel_action = completed_channel_action;
                 completed_channel_action = nullptr;
                 completed_sid = 0;
             }
@@ -3506,6 +3592,9 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
         ExceptionSink* xsink) {
     ChannelAction* ch_action = nullptr;
     bool completed_action = false;
+    // a value that is not installed is released after stream_lock, as its release can run code that uses this
+    // operation again
+    ValueHolder initial_holder(initial, xsink);
     {
         AutoLocker al(stream_lock);
         if (stream_action && active_sid == (int)stream_id) {
@@ -3516,14 +3605,12 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
             completed_sid = 0;
             completed_action = true;
         } else {
-            initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
                 "cannot install SSE state: stream %lld not found or already complete",
                 (long long)stream_id);
             return;
         }
         if (!ch_action) {
-            initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STATE-ERROR",
                 "cannot install SSE state: stream %lld action is not a ChannelAction",
                 (long long)stream_id);
@@ -3532,7 +3619,7 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
         ch_action->ref();
     }
 
-    ch_action->installSseState(queue, notifier, notifier_obj, initial, xsink);
+    ch_action->installSseState(queue, notifier, notifier_obj, initial_holder.release(), xsink);
     ch_action->deref(xsink);
     if (completed_action) {
         ch_action->deref(xsink);
@@ -3645,7 +3732,9 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
 /** Releases all internal references.
 */
 Http1ClientPollOperationBase::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 
@@ -3812,8 +3901,12 @@ bool Http1ClientPollOperationBase::isReady() [flags=RET_VALUE_ONLY] {
     return priv->isReady();
 }
 
-//! Returns True if the connection is in protocol-switched state (after 101)
-/** @return True if the HTTP protocol has been switched (e.g., WebSocket upgrade)
+//! Returns True if the HTTP protocol was switched on the connection
+/** That is, after a 101 Switching Protocols response was delivered (e.g., WebSocket upgrade), or after HTTP/2 was
+    negotiated with ALPN in a proxy tunnel; the socket belongs to the new protocol from then on, so this stays True
+    when the operation is aborted or closed afterwards
+
+    @return True if the HTTP protocol was switched
     @since %Qore 3.0
 */
 bool Http1ClientPollOperationBase::isProtocolSwitched() [flags=RET_VALUE_ONLY] {

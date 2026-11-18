@@ -13,9 +13,13 @@ in its own process, its own options or mode given to a child process) declares
 
     # test-exec-mode: parent - <why>
 
-and runs in every job.  These tests fail when a harness test declares neither, when a test that declares "children"
-does what only a "parent" test may do, when the CI jobs set QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN in a job whose tests
-get no execution mode, and they check that run_tests.sh leaves out exactly the "children" tests.
+and runs in every job.  A test that does not use the harness may also declare "children" when it makes its checks in
+child processes of its own binary (QORE_ARGV[0]) that it starts without an execution mode: they run in the default
+mode in every job, so the default-mode jobs make the same checks.  These tests fail when a harness test declares
+neither, when a test that does not use the harness declares "parent" or declares "children" without starting such
+child processes, when a test that declares "children" does what only a "parent" test may do, when the CI jobs set
+QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN in a job whose tests get no execution mode, and they check that run_tests.sh
+leaves out exactly the "children" tests.
 
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
@@ -94,6 +98,21 @@ def sources(test):
     return seen
 
 
+# a child process of the test's own binary: QORE_ARGV[0] given to a command it runs (strings and comments do not count)
+# the test's own binary: QORE_ARGV[0], or the interpreter that examples/test/TestInterpreter.qm locates for it (which is
+# QORE_ARGV[0] in an interpreted test, and never the executable of a test compiled with qcc)
+CHILD_BINARY = re.compile(r"\bQORE_ARGV\[0\]|\bTestInterpreter::qore_interpreter\s*\(")
+
+
+def starts_children(test):
+    """Returns True if the code of a test or of the files it includes runs its own binary in a child process"""
+    for path in sources(test):
+        code = strip_code(path.read_text(errors="replace"))
+        if CHILD_BINARY.search(code) and re.search(r"\b(backquote|system|exec)\s*\(|\bProcess\b", code):
+            return True
+    return False
+
+
 def uses_harness(test):
     return any(HARNESS.search(path.read_text(errors="replace")) for path in sources(test))
 
@@ -119,6 +138,7 @@ class ExecModeMarkerTest(unittest.TestCase):
     def test_harness_tests_declare_marker(self):
         harness_tests = 0
         kinds = {"children": 0, "parent": 0}
+        non_harness_children = []
         for test in all_tests():
             text = test.read_text(errors="replace")
             name = test.relative_to(ROOT)
@@ -126,8 +146,13 @@ class ExecModeMarkerTest(unittest.TestCase):
             self.assertEqual(len(ANY_MARKER.findall(text)), len(markers),
                              "%s: a test-exec-mode declaration has the form '# test-exec-mode: <kind> - <why>'" % name)
             if not uses_harness(test):
-                self.assertEqual([], markers, "%s does not use ExecModeHarness.qm: it declares no test-exec-mode"
-                                 % name)
+                if markers:
+                    self.assertEqual([("children", markers[0][1])], markers, "%s does not use ExecModeHarness.qm: "
+                                     "it declares no test-exec-mode, or 'children' once" % name)
+                    self.assertTrue(starts_children(test), "%s does not use ExecModeHarness.qm: it declares "
+                                    "'children' only if it runs its own binary (QORE_ARGV[0]) in child processes"
+                                    % name)
+                    non_harness_children.append(str(name))
                 continue
             harness_tests += 1
             self.assertEqual(1, len(markers), "%s uses ExecModeHarness.qm: it declares '# test-exec-mode: children "
@@ -139,6 +164,249 @@ class ExecModeMarkerTest(unittest.TestCase):
         self.assertGreater(harness_tests, 200)
         self.assertGreater(kinds["children"], kinds["parent"])
         self.assertGreater(kinds["parent"], 0)
+        # the tests that run their checks in default-mode child processes without the harness:
+        # - AOTConstantImportStale (#5798) and AOTDumpInfoPendingConstants (#5799): their checks run qcc and the
+        #   programs and modules it compiles in child processes
+        # - AOTDumpInfoFindCallRef (#6235): its checks run qcc --dump-info in child processes
+        # - AOTInstanceOfTypePath (#5976): its checks run an AOT-compiled module and the same module's source in the
+        #   AST interpreter in child processes
+        # - AOTModuleDelClosure (#6015): its checks compile modules and scripts with qcc and run the interpreter and the
+        #   compiled programs in child processes
+        # - AOTNestedFind (#5974): its checks run the interpreter, qcc and the compiled programs in child processes
+        # - AOTNamedCallRefModules (M4 phase 3): its checks compile modules with qcc and run the interpreter and the
+        #   compiled programs in child processes
+        # - AOTRuntimeNamedCallReturnType: its checks run the interpreter, qcc and the compiled programs in child
+        #   processes
+        # - GenericCacheRelease: GenericCacheRelease.qr runs in child processes that set their own --exec-mode
+        # - nested-callable-types (#6022): its script runs in child processes that set their own --exec-mode, and
+        #   compiled with qcc
+        # - JitTeardownAtExit-<n> (#6390): JitTeardownAtExit.qr runs in child processes that set their own --exec-mode
+        # - index-writer-filesystem (#6500): each execution mode runs in a child process of its own, which loads the
+        #   modules once
+        # - qlib-module-domains: each module is loaded first by a restricted Program in a child process, as a loaded
+        #   module is not checked again for the next Program (#5803)
+        # - QlibAllModulesLoad-<n>: each qlib module is loaded by a restricted Program in a child process of its own,
+        #   as a loaded module is not checked again for the next Program (#5803, #6438)
+        # - qlib-restricted-callers: each case loads the modules in a restricted Program in a child process of its own
+        #   (#6337)
+        # - nested-module-parse: the module is loaded in a child process whose module path holds it (#5803, #5938)
+        # - RestSchemaModuleLazyTypes-<n>: the modules are loaded and compared in child processes
+        # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
+        #   WebSocket client in the test's own process only drives it
+        # - TerminalIoRestrictedLoad (#6438): the modules are loaded first in child processes that set their own
+        #   --exec-mode and in a qcc executable
+        # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
+        #   processes that set their own --exec-mode
+        # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
+        #   their own --exec-mode
+        # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
+        # - empty-string-order (#6090): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - AOTModuleForeignThread (#6045 follow-up): it compiles a module with qcc and runs its probes in child
+        #   processes that set their own --exec-mode
+        # - foreach-enum-element-release (#6091): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
+        # - dataframe-default-encoding (#6092): its checks run in a child process whose default character encoding is
+        #   ISO-8859-1
+        # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
+        #   encodings differ
+        # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - ParseStackBoundary-2 (#6047): the module loads that it checks in the primary thread run in child processes
+        # - ParseStackBoundary-5 (#6420): the AOT module loads that it checks run in child processes (the fixture)
+        # - parse-load-module-location (#6047): its module loads run in child processes, one for each stack size
+        # - dataframe-aot-plugin-helpers (#6130): its probes run in child processes that set their own --exec-mode,
+        #   in qcc executables and with a module compiled by qcc
+        # - relative-date-overflow (#6103) and relative-date-multiply (#6109): their probes run in child processes
+        #   that set their own --exec-mode and in qcc executables
+        # - dataframe-plugin-exception-handler (#6135): its probes run in child processes that set their own
+        #   --exec-mode
+        # - plugin-order-identity (#6136): its probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and with a module compiled by qcc
+        # - dataframe-inline-mask-subscript (#6141): its probes run in child processes that set their own --exec-mode
+        # - explicit-type-param-method-call (#5892): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - generic-call-parse-type (#5896, #6151): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - generic-method-hashdecl-paths (#5720, #5661): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - hashdecl-member-default-typeparam (#6240): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - hashdecl-default-closure-typeparam (#6269): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - declaration-initializer-scope (#6268): its scripts run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - AOTInitParseOptions (#6189): its checks run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - parquet-memory-pool (#6171): its checks run in child processes without an execution mode, natively and
+        #   under valgrind
+        # - float-int-conversion (#6181): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - broken-list-range-past-end (#5757): its check runs a legacy script, which only the AST interpreter runs,
+        #   in a child process with --exec-mode=ast
+        # - AOTModuleInitException (#6217): its checks run in child processes of the interpreter and of qcc
+        #   executables
+        # - closure-default-self-ref (#6417, #5949): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
+        # - deleted-object-generic-variant (#6152): its probes run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - deleted-object-overload (#6159): its probes run in child processes that set their own --exec-mode and in
+        #   qcc executables
+        # - background-runtime-parse-options (#6208): its checks run in child processes that set their own --exec-mode
+        #   and in qcc executables
+        # - deferred-callback-runtime-parse-options (#6208): its checks run in child processes that set their own
+        #   execution modes
+        # - thread-reaper (#6433): its checks run in child processes without an execution mode, whose native thread
+        #   reapers it inspects
+        # - unhandled-exception-report: its checks run in child processes without an execution mode, whose threads
+        #   raise unhandled exceptions at the same time
+        # - float-conversion-edges (#6212): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - or-nothing-container-casts (#6174, #5734): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - asyncio_callback_exception_stderr (#6275): its checks run in child processes without an execution mode,
+        #   whose standard output and error output it reads
+        # - AOTMemberInitNegativeOffsets (#6294): its checks run in child processes of the interpreter and of qcc
+        #   executables
+        # - QUnit result-counts (#2297): the test whose results it counts runs in child processes without an
+        #   execution mode
+        # - JITFinalizeCancellation (#6305): its checks run in child processes that set their own --exec-mode and arm
+        #   a debug hook in them
+        # - JITFinalizeCancellation (#6305, #6313): its checks run in child processes that set their own --exec-mode
+        #   and arm a debug hook in them
+        # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
+        #   their own --exec-mode, in qcc executables and in a qcc-compiled module
+        # - generic-static-intermediate (#6447, #6448): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
+        # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
+        #   executables and in a qcc-compiled module
+        # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
+        #   executables, which arm a debug hook
+        # - private-internal-redeclared-member (#6393): its probes run in child processes in the default mode and that
+        #   set their own --exec-mode, and in qcc
+        # - deleted-program-own-generic-cycle (#6419): its checks run in child processes that set their own
+        #   --exec-mode and in qcc executables
+        # - deleted-program-type-arg-holders (#6489): its checks run in child processes that set their own
+        #   --exec-mode and in qcc executables
+        # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
+        # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
+        #   processes and in qcc executables
+        # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
+        # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
+        #   qcc executables
+        # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
+        # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
+        # - expression-declarations-modes (#6524): its probes run in child processes that set their own --exec-mode and
+        #   in qcc executables
+        # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
+        # - AOTModuleDependencyRestrictions (#6406) and AOTModuleHeaderRequests (#6386): their checks run in child
+        #   processes that set their own --exec-mode and in qcc executables
+        # - include-failure-diagnostics (#6509): its checks run the command line in child processes started without an
+        #   execution mode
+        # - DeserializationSizes (#6502): each case is deserialized in a child process started without an execution mode
+        # - FtpPortAcceptUnreferenced (#6525): each case runs in a child process started without an execution mode
+        # - aot-dependency-domains (#6351): its checks load modules from source and compiled with qcc in child
+        #   processes, as a module is loaded once in a process
+        self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
+                                 "examples/test/ir/AOTModuleHeaderRequests.qtest",
+                                 "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
+                                 "examples/test/ir/JITFinalizeCancellation.qtest",
+                                 "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
+                                 "examples/test/ir/AOTInitParseOptions.qtest",
+                                 "examples/test/ir/AOTInstanceOfTypePath.qtest",
+                                 "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
+                                 "examples/test/ir/AOTModuleInitException.qtest",
+                                 "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",
+                                 "examples/test/qore/misc/callref-object-method-program.qtest",
+                                 "examples/test/qore/classes/deleted-program-types.qtest",
+                                 "examples/test/qore/classes/deleted-program-own-generic-cycle.qtest",
+                                 "examples/test/qore/classes/deleted-program-type-arg-holders.qtest",
+                                 "examples/test/qore/classes/method-reference-per-class.qtest",
+                                 "examples/test/qore/classes/explicit-type-param-method-call.qtest",
+                                 "examples/test/qore/classes/closure-default-self-ref.qtest",
+                                 "examples/test/qore/classes/Serializable/DeserializationSizes.qtest",
+                                 "examples/test/qore/classes/FtpClient/FtpPortAcceptUnreferenced.qtest",
+                                 "examples/test/qore/classes/deleted-object-generic-variant.qtest",
+                                 "examples/test/qore/classes/deleted-object-overload.qtest",
+                                 "examples/test/qore/operators/empty-string-order.qtest",
+                                 "examples/test/qore/operators/float-int-conversion.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-1.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-2.qtest",
+                                 "examples/test/qore/operators/UndefinedArithmetic-3.qtest",
+                                 "examples/test/qore/lists/broken-list-range-past-end.qtest",
+                                 "examples/test/qore/threads/thread-reaper/thread-reaper.qtest",
+                                 "examples/test/qore/threads/unhandled-exception-report.qtest",
+                                 "examples/test/qore/threads/frame-check-stack.qtest",
+                                 "examples/test/qore/functions/float-conversion-edges.qtest",
+                                 "examples/test/qore/functions/number-round-exact.qtest",
+                                 "examples/test/qore/classes/Program/expression-declarations-modes.qtest",
+                                 "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
+                                 "examples/test/ir/AOTModuleForeignThread.qtest",
+                                 "examples/test/qore/misc/foreach-enum-element-release.qtest",
+                                 "examples/test/qore/functions/relative-date-range.qtest",
+                                 "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-2.qtest",
+                                 "examples/test/qore/parser/parse-stack-boundary/ParseStackBoundary-5.qtest",
+                                 "examples/test/module-cpp-api/parse-load-module-location/"
+                                 "parse-load-module-location.qtest",
+                                 "examples/test/qore/operators/relative-date-overflow.qtest",
+                                 "examples/test/qore/misc/test-interpreter-options/test-interpreter-options.qtest",
+                                 "examples/test/qore/operators/relative-date-multiply.qtest",
+                                 "examples/test/qore/functions/generic-call-parse-type.qtest",
+                                 "examples/test/qore/classes/generic-method-hashdecl-paths.qtest",
+                                 "examples/test/qore/misc/hashdecl-member-default-typeparam.qtest",
+                                 "examples/test/qore/threads/background-runtime-parse-options.qtest",
+                                 "examples/test/qore/threads/deferred-callback-runtime-parse-options.qtest",
+                                 "examples/test/qore/misc/hashdecl-default-closure-typeparam.qtest",
+                                 "examples/test/qore/misc/declaration-initializer-scope.qtest",
+                                 "examples/test/qore/classes/or-nothing-container-casts.qtest",
+                                 "examples/test/qore/classes/generic-static-call-type-params.qtest",
+                                 "examples/test/qore/classes/generic-static-intermediate.qtest",
+                                 "examples/test/qore/classes/param-class-check-steps/param-class-check-steps.qtest",
+                                 "examples/test/qore/classes/private-internal-redeclared-member.qtest",
+                                 "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
+                                 "examples/test/ir/AOTModuleDelClosure.qtest",
+                                 "examples/test/ir/AOTNestedFind.qtest",
+                                 "examples/test/ir/AOTNamedCallRefModules.qtest",
+                                 "examples/test/ir/AOTRuntimeNamedCallReturnType.qtest",
+                                 "examples/test/module-cpp-api/plugin-order/plugin-order-identity.qtest",
+                                 "examples/test/ir/GenericCacheRelease.qtest",
+                                 "examples/test/qore/parser/nested-callable-types.qtest",
+                                 "examples/test/qore/parser/include-failure-diagnostics.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-1.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-2.qtest",
+                                 "examples/test/ir/jit-teardown-at-exit/JitTeardownAtExit-3.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/index-writer-filesystem.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-1.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-2.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/qlib-restricted-callers.qtest",
+                                 "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
+                                 "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-4.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-5.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-6.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
+                                 "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
+                                 "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest",
+                                 "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
+                                 "examples/test/qlib/QUnit/result-counts.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding.qtest",
+                                 "modules/dataframe/test/dataframe-default-encoding-names.qtest",
+                                 "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
+                                 "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
+                                 "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",
+                                 "modules/dataframe/test/parquet-memory-pool.qtest"]),
+                         sorted(non_harness_children))
 
     def test_children_tests_check_nothing_in_their_own_process(self):
         for test in all_tests():
@@ -175,6 +443,23 @@ class ExecModeMarkerTest(unittest.TestCase):
                     test = root / "case.qtest"
                     test.write_text("%modern\n" + code + "\n")
                     self.assertEqual(expected, parent_only_code(test))
+
+    def test_scan_finds_child_processes(self):
+        # a test that runs its own binary in a child process is found, and not the same text in a string or comment
+        with tempfile.TemporaryDirectory(prefix="qore-exec-mode-children-") as directory:
+            root = Path(directory)
+            cases = {
+                "string out = backquote(QORE_ARGV[0] + \" child.q\");": True,
+                "int rc = system(sprintf(\"%s child.q\", QORE_ARGV[0]));": True,
+                "string qore = QORE_ARGV[0];": False,
+                "string out = backquote(\"ls\");": False,
+                "# backquote(QORE_ARGV[0])\nstring s = \"system(QORE_ARGV[0])\";": False,
+            }
+            for code, expected in cases.items():
+                with self.subTest(code=code):
+                    test = root / "case.qtest"
+                    test.write_text("%modern\n" + code + "\n")
+                    self.assertEqual(expected, starts_children(test))
 
     def test_ci_excludes_only_in_explicit_mode_jobs(self):
         text = (ROOT / ".gitlab-ci.yml").read_text()

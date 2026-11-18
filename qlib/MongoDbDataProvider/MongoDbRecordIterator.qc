@@ -89,9 +89,11 @@ public class MongoDbRecordIterator inherits DataProvider::AbstractDataProviderRe
         return current_doc ?? {};
     }
 
-    #! Returns the record type
-    *AbstractDataProviderType getRecordType() {
-        return AbstractDataProviderTypeMap."hash<auto>";
+    #! Returns the record description, as AbstractDataProviderRecordIterator::getRecordType(), which this overrides
+    /** @return the fields of the record type, if any (the generic \c hash<auto> type of MongoDB documents has none)
+    */
+    *hash<string, AbstractDataField> getRecordType() {
+        return AbstractDataProviderTypeMap."hash<auto>".getFields();
     }
 }
 }

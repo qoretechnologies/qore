@@ -24,7 +24,7 @@ public class KatanaWatchNewStockAdjustmentsDataProvider inherits KatanaWatchData
     string getName() { return ProviderInfo.name; }
     string getEndpoint() { return "stock_adjustments"; }
     string getEventName() { return EVENT_NEW_STOCK_ADJ; }
-    *string getTimestampField() { return "created_at"; }
+    string getTimestampField() { return "created_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaStockAdjustmentDataType();

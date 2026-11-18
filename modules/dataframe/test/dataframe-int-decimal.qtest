@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-int-decimal.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+
+%requires dataframe
+
+%exec-class DataFrameIntDecimalTest
+
+#! An int64 column and a decimal column merged by melt(), concat() or the key columns of join() make a decimal
+#! column: an int64 column counts as decimal(19, 0), widened with the decimal's scale, up to 38 digits; beyond that,
+#! a column that holds the exact values with no schema (qore#6144)
+class DataFrameIntDecimalTest inherits QUnit::Test {
+    constructor() : Test("DataFrameIntDecimalTest", "1.0", \ARGV) {
+        addTestCase("melt()", \meltTest());
+        addTestCase("concat()", \concatTest());
+        addTestCase("join()", \joinTest());
+        addTestCase("concat() beyond 38 digits, and the nullability of melt()", \moreTest());
+        set_return_value(main());
+    }
+
+    #! melt() of an int64 and a decimal value column, in both orders
+    meltTest() {
+        DataFrame::DataFrame df = decimalFrame({"id": (1, 2), "d": (12345678901234567.89n, NOTHING),
+            "i": (9007199254740993, 2)}, ("d",), 20, 2);
+        foreach list<string> order in ((("d", "i"), ("i", "d"))) {
+            DataFrame::DataFrame m = df.melt(("id",), order);
+            assertEq(("decimal128", 21, 2), schema(m, "value"){"kind", "precision", "scale"}.values(),
+                sprintf("%y: schema", order));
+            list<auto> v = DataFrame::DataFrame::fromArrowIpc(m.toArrowIpc()).getColumn("value");
+            assertTrue((select v, $1 == 12345678901234567.89n).size() == 1
+                && (select v, $1 == 9007199254740993n).size() == 1, sprintf("%y: exact values %y", order, v));
+        }
+        # a decimal of 20 digits after the point and an int: 39 digits, a column of the exact values, no schema
+        DataFrame::DataFrame wide = decimalFrame({"id": (1,), "d": (0.12345678901234567891n,),
+            "i": (9223372036854775807,)}, ("d",), 38, 20);
+        DataFrame::DataFrame m = wide.melt(("id",));
+        assertEq("auto", schema(m, "value").kind, "more than 38 digits: no schema");
+        list<auto> v = m.getColumn("value");
+        assertTrue(v[0] == wide.getColumn("d")[0] && v[1] === 9223372036854775807, sprintf("exact values: %y", v));
+    }
+
+    #! concat() of an int64 and a decimal column, in both orders, and of decimal columns of different schemas
+    concatTest() {
+        DataFrame::DataFrame ints({"v": (9007199254740993, NOTHING)});
+        DataFrame::DataFrame dec = decimalFrame({"v": (12345678901234567.89n,)}, ("v",), 20, 2);
+        foreach list<DataFrame::DataFrame> pair in (((ints, dec), (dec, ints))) {
+            DataFrame::DataFrame c = DataFrame::DataFrame::concat(pair);
+            assertEq(("decimal128", 21, 2), schema(c, "v"){"kind", "precision", "scale"}.values(), "schema");
+            list<auto> v = DataFrame::DataFrame::fromArrowIpc(c.toArrowIpc()).getColumn("v");
+            assertTrue((select v, $1 == 12345678901234567.89n).size() == 1
+                && (select v, $1 == 9007199254740993n).size() == 1, sprintf("exact values: %y", v));
+        }
+        DataFrame::DataFrame dec3 = decimalFrame({"v": (1.125n,)}, ("v",), 10, 3);
+        DataFrame::DataFrame c = DataFrame::DataFrame::concat((dec, dec3));
+        assertEq(("decimal128", 21, 3), schema(c, "v"){"kind", "precision", "scale"}.values(), "two decimals");
+        list<auto> v = DataFrame::DataFrame::fromArrowIpc(c.toArrowIpc()).getColumn("v");
+        assertTrue(v[0] == 12345678901234567.89n && v[1] == 1.125n, sprintf("two decimals: %y", v));
+    }
+
+    #! an int64 and a decimal key column match by their values, and a right or outer join makes a decimal key column
+    joinTest() {
+        DataFrame::DataFrame ints({"k": (1, 9007199254740993, 3), "a": (10, 20, 30)});
+        DataFrame::DataFrame dec = decimalFrame({"k": (1.00n, 9007199254740993n, 4.5n), "b": (100, 200, 400)},
+            ("k",), 20, 2);
+        assertEq((100, 200), ints.join(dec, ("k",)).getColumn("b"), "inner join");
+        foreach string how in (("right", "outer")) {
+            DataFrame::DataFrame j = ints.join(dec, ("k",), how);
+            assertEq(("decimal128", 21, 2), schema(j, "k"){"kind", "precision", "scale"}.values(), how + ": schema");
+            list<auto> k = DataFrame::DataFrame::fromArrowIpc(j.toArrowIpc()).getColumn("k");
+            assertTrue((select k, $1.typeCode() == NT_NUMBER).size() == k.size()
+                && (select k, $1 == 9007199254740993n).size() == 1, sprintf("%s: keys %y", how, k));
+        }
+        assertEq(4, ints.join(dec, ("k",), "outer").numRows(), "outer join rows");
+        # null keys match null keys; two key columns; an int never matches a float or a string
+        DataFrame::DataFrame in2({"k": (1, NOTHING, 2), "s": ("a", "b", "c"), "a": (10, 20, 30)});
+        DataFrame::DataFrame dn2 = decimalFrame({"k": (1.00n, NOTHING, 2.5n), "s": ("a", "b", "c"),
+            "b": (100, 200, 300)}, ("k",), 20, 2);
+        foreach string how in (("inner", "left")) {
+            assertEq(how == "inner" ? (100, 200) : (100, 200, NOTHING), in2.join(dn2, ("k", "s"), how).getColumn("b"),
+                how + ": two key columns with a null key");
+        }
+        DataFrame::DataFrame fl({"k": (1.0, 2.0), "b": (1, 2)});
+        DataFrame::DataFrame st({"k": ("1", "2"), "b": (1, 2)});
+        assertEq(0, ints.join(fl, ("k",)).numRows(), "an int and a float key");
+        assertEq(0, ints.join(st, ("k",)).numRows(), "an int and a string key");
+        # beyond 38 digits: a key column of the exact values with no schema
+        DataFrame::DataFrame d38 = decimalFrame({"k": (1n, 0.5n), "b": (1, 2)}, ("k",), 38, 20);
+        DataFrame::DataFrame jw = ints.join(d38, ("k",), "outer");
+        assertEq("auto", schema(jw, "k").kind, "beyond 38 digits: no schema");
+        assertEq(4, jw.numRows(), "beyond 38 digits: rows");
+        # the keys of both sides, exact: the ints of the left side as they are (no number in a column with no
+        # schema), the numbers of the right side
+        list<auto> wk = jw.getColumn("k");
+        assertTrue((select wk, $1 === 9007199254740993).size() == 1 && (select wk, $1 === 3).size() == 1
+            && (select wk, $1.typeCode() == NT_NUMBER && $1 == 0.5n).size() == 1
+            && (select wk, $1 === 1).size() == 1, sprintf("beyond 38 digits: keys %y", wk));
+    }
+
+    #! concat() beyond 38 digits, and the nullability of the merged schema of melt()
+    moreTest() {
+        DataFrame::DataFrame ints({"v": (9223372036854775807,)});
+        DataFrame::DataFrame d38 = decimalFrame({"v": (0.12345678901234567891n,)}, ("v",), 38, 20);
+        DataFrame::DataFrame c = DataFrame::DataFrame::concat((ints, d38));
+        assertEq("auto", schema(c, "v").kind, "concat() beyond 38 digits: no schema");
+        list<auto> v = c.getColumn("v");
+        assertTrue(v[0] === 9223372036854775807 && v[1] == d38.getColumn("v")[0], sprintf("exact values: %y", v));
+        # nullable if a column is: a decimal(20,2) column that is not nullable, and an int64 column with or without a
+        # null value (an int64 column: a column of nulls only would be a float64 column)
+        DataFrame::DataFrame dec = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            {"d": (1.5n, 2.5n)}, {"d": {"schema": {"kind": "decimal128", "precision": 20, "scale": 2,
+                "nullable": False}}})).withColumn("id", (1, 2));
+        foreach list<auto> ints_values in ((((1, 2), False), ((1, NOTHING), True))) {
+            DataFrame::DataFrame df = dec.withColumn("i", ints_values[0]);
+            assertEq("int64", df.dtypes()[2], "an int64 column");
+            hash<auto> col = (map $1, df.melt(("id",)).toColumnarResult().schemaV2(), $1.name == "value")[0];
+            assertEq(("decimal128", 21, 2, ints_values[1]), (col.kind, col.precision, col.scale, col.nullable),
+                sprintf("the schema with %y", ints_values[0]));
+        }
+    }
+
+    #! returns a DataFrame of the given columns, of which the given ones are decimal columns
+    /** The decimal columns are made from a ColumnarResult, and the others added with withColumn(), as
+        ColumnarResult::fromColumnHash() does not release an int of more than 48 bits that it stores in an int64
+        buffer
+    */
+    private DataFrame::DataFrame decimalFrame(hash<auto> cols, list<string> decimals, int precision, int scale) {
+        hash<auto> schemas = map {$1: {"schema": {"kind": "decimal128", "precision": precision, "scale": scale,
+            "nullable": True}}}, decimals;
+        DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(ColumnarResult::fromColumnHash(
+            cols{decimals}, schemas));
+        foreach string name in (keys cols) {
+            if (!inlist(name, decimals)) {
+                df = df.withColumn(name, cols{name});
+            }
+        }
+        return df.select(keys cols);
+    }
+
+    #! returns the columnar schema of a column
+    private hash<auto> schema(DataFrame::DataFrame df, string name) {
+        foreach hash<auto> column in (df.toColumnarResult().schemaV2()) {
+            if (column.name == name) {
+                return column{"kind", "precision", "scale", "native_type"};
+            }
+        }
+        return {};
+    }
+}

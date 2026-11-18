@@ -35,6 +35,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QorePollCompat.h"
+#include "qore/intern/QoreThreadScratch.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -55,13 +56,11 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // Shared sendmmsg() batch helper for QUIC I/O
 #include "qore/intern/QuicCommon.h"
 
-//! Maximum poll timeout (ms) when no QUIC timer is pending.
-/** Fallback poll timeout (ms) when ngtcp2 reports no timer pending
-    (ngtcp2_conn_get_expiry2() == UINT64_MAX).  Per RFC 9002, ACK-only packets
-    are not loss-detected, so the peer's retransmission timer drives recovery.
-    1 second is a reasonable fallback for this rare edge case.
-*/
-static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
+// The poll timeout of an operation for the next timer of its connection (qore_quic_poll_timeout_ms()); with no timer
+// pending (ngtcp2_conn_get_expiry2() == UINT64_MAX), QORE_QUIC_NO_TIMER_POLL_MS.  Per RFC 9002, ACK-only packets are
+// not loss-detected, so the peer's retransmission timer drives recovery then.
+#include "qore/intern/QuicPollTimeout.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 //! Maximum packets to process per continuePoll() call for QUIC client connections.
 /** Prevents a single connection from monopolizing the shared I/O thread when
@@ -119,48 +118,18 @@ static int quic_input_stream_pollable_descriptor(InputStream* is, const char* er
 }
 
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
-/** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O
-    thread's poll() wakes when the QUIC retransmission/PTO timer fires.
+/** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O thread's poll() wakes when the
+    connection's earliest timer is due (qore_quic_poll_timeout_ms()).  Every timer is honoured, however close or
+    late: the earliest one is often ngtcp2's pacing timer, due some microseconds after a packet was sent, and the
+    delayed acknowledgement, probe timeout and keep-alive timers come after it, so replacing a near or due timer with
+    the 1 s fallback postponed all of them (a late acknowledgement put the next keep-alive PING at the idle
+    deadline).
     @param poll_info the poll info hash to update (must not be nullptr)
     @param expiry the next timer expiry (UINT64_MAX if no timer pending)
     @param xsink for exception handling
 */
-static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry,
-                                     ExceptionSink* xsink, bool nothing_to_send = false) {
-    int64_t timeout_ms;
-    if (expiry == UINT64_MAX) {
-        timeout_ms = QUIC_NO_TIMER_POLL_MS;
-    } else {
-        ngtcp2_tstamp now = QuicSession::timestamp();
-        if (expiry <= now) {
-            // Timer still in the past after processTimerAndWrite handled it.
-            // Don't set a sub-ms timeout — the timer work was already done
-            // and tight-polling won't help.  Use the default fallback so the
-            // poll blocks until the next packet arrives or the fallback fires.
-            // Matches curl's pattern: if expiry <= ts after handle+flush,
-            // no Curl_expire is set — the next I/O event wakes the loop.
-            timeout_ms = QUIC_NO_TIMER_POLL_MS;
-        } else {
-            ngtcp2_duration timeout_ns = expiry - now;
-            timeout_ms = static_cast<int64_t>(timeout_ns / 1000000);
-            // Round up sub-millisecond durations to 1ms (curl pattern: line 933-934)
-            if (timeout_ns % 1000000) {
-                ++timeout_ms;
-            }
-            // Anti-spin (issue #5351): if the timer-and-write pass produced
-            // nothing to send (e.g. a stream is flow-control-blocked and we are
-            // waiting for the peer's MAX_STREAM_DATA / an ACK to reopen the
-            // congestion window), a sub-millisecond timer wakeup just re-runs the
-            // same no-op write and busy-loops the I/O thread.  The event that
-            // actually unblocks progress is an INCOMING packet, which wakes the
-            // poll regardless of the timeout, so fall back to the long poll
-            // instead of tight-polling — same rationale as the expiry<=now branch.
-            if (nothing_to_send && timeout_ms <= 1) {
-                timeout_ms = QUIC_NO_TIMER_POLL_MS;
-            }
-        }
-    }
-    poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expiry, ExceptionSink* xsink) {
+    poll_info->setKeyValue("poll_timeout_ms", qore_quic_poll_timeout_ms(expiry, QuicSession::timestamp()), xsink);
 }
 
 //! Clamp poll_timeout_ms so the I/O thread wakes no later than deadline_ns.
@@ -200,7 +169,8 @@ static void clampPollTimeoutToDeadline(QoreHashNode* poll_info, int64_t deadline
     }
 }
 
-//! Log and clear a readPacketBatch exception (shared by batch recv helpers)
+#ifdef __linux__
+//! Log and clear a readPacketBatch exception (shared by the recvmmsg() batch recv helpers, which only Linux has)
 static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_count) {
     QoreStringValueHelper err_str(xsink->getExceptionErr());
     QoreStringValueHelper desc_str(xsink->getExceptionDesc());
@@ -213,6 +183,7 @@ static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_c
         *desc_str ? desc_str->c_str() : "unknown");
     xsink->clear();
 }
+#endif
 
 //! Batch-receive and dispatch QUIC packets via recvmmsg (Linux) or recvmsg (other).
 /** Receives all available packets from the socket and dispatches them to their
@@ -238,15 +209,31 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     ExceptionSink* xsink) {
 #ifdef __linux__
     // Batch receive with recvmmsg for reduced syscall overhead.
-    // All large arrays are thread-local to avoid ~8.5KB of stack pressure per call
-    // (mmsghdr + iovec + sockaddr_storage + cmsg + batch + pkt_locals).
-    static thread_local uint8_t bufs[QUIC_MAX_RECV_BATCH][QUIC_RECV_BUF_SIZE];
-    static thread_local struct mmsghdr msgs[QUIC_MAX_RECV_BATCH];
-    static thread_local struct iovec iovecs[QUIC_MAX_RECV_BATCH];
-    static thread_local struct sockaddr_storage addrs[QUIC_MAX_RECV_BATCH];
-    static thread_local uint8_t cmsg_bufs[QUIC_MAX_RECV_BATCH][QUIC_CMSG_BUF_SIZE];
-    static thread_local QuicReceivedPacket batch[QUIC_MAX_RECV_BATCH];
-    static thread_local struct sockaddr_storage pkt_locals[QUIC_MAX_RECV_BATCH];
+    // All large arrays are per-thread heap scratch to avoid ~41KB of stack pressure per call
+    // (receive buffers + mmsghdr + iovec + sockaddr_storage + cmsg + batch + pkt_locals); they are not
+    // static thread_local objects, which would take their size from the stack of every thread (see
+    // QoreThreadScratch)
+    struct RecvBatchScratch {
+        uint8_t bufs[QUIC_MAX_RECV_BATCH][QUIC_RECV_BUF_SIZE];
+        struct mmsghdr msgs[QUIC_MAX_RECV_BATCH];
+        struct iovec iovecs[QUIC_MAX_RECV_BATCH];
+        struct sockaddr_storage addrs[QUIC_MAX_RECV_BATCH];
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_bufs[QUIC_MAX_RECV_BATCH][QUIC_CMSG_BUF_SIZE];
+        QuicReceivedPacket batch[QUIC_MAX_RECV_BATCH];
+        struct sockaddr_storage pkt_locals[QUIC_MAX_RECV_BATCH];
+    };
+    QoreThreadScratch<RecvBatchScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& bufs = scratch->bufs;
+    auto& msgs = scratch->msgs;
+    auto& iovecs = scratch->iovecs;
+    auto& addrs = scratch->addrs;
+    auto& cmsg_bufs = scratch->cmsg_bufs;
+    auto& batch = scratch->batch;
+    auto& pkt_locals = scratch->pkt_locals;
     while (true) {
         memset(msgs, 0, sizeof(msgs));
 
@@ -384,9 +371,19 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     return 0;
 #else
     // Drain all available incoming packets one at a time
-    // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
-    static thread_local struct sockaddr_storage src_addr;
-    static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
+    struct RecvScratch {
+        struct sockaddr_storage src_addr;
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    };
+    QoreThreadScratch<RecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
     while (true) {
         socklen_t src_addrlen = sizeof(src_addr);
         size_t cmsg_len = sizeof(cmsg_buf);
@@ -439,7 +436,8 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
         path.remote.addrlen = src_addrlen;
 
-        int rv = target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
+        // an error is reported in xsink
+        target->readPacket(recv_buf, static_cast<size_t>(nread), path, xsink);
         if (*xsink) {
             // Log exception details and continue; a single session error should not
             // stop the server from receiving packets for other sessions
@@ -455,6 +453,17 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
     }
 #endif
 }
+
+#ifdef DEBUG
+int qore_quic_test_recv_dispatch(int fd, ExceptionSink* xsink) {
+    QoreDatagramDispatcher dispatcher;
+    struct sockaddr_storage local_addr = {};
+    std::vector<uint8_t> recv_buf(QUIC_RECV_BUF_SIZE);
+    // no session is used: the socket has no datagram to dispatch
+    return recvAndDispatchQuicPackets(fd, dispatcher, local_addr, sizeof(local_addr), recv_buf.data(),
+        recv_buf.size(), nullptr, xsink);
+}
+#endif
 
 // NOTE: sock->priv is accessible because these classes are friends of QoreSocketObject
 
@@ -575,7 +584,7 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     // local interface address (not wildcard). Required for correct ngtcp2
     // path validation. Connected sockets also filter incoming packets to
     // only those from the peer, which is desirable for QUIC clients.
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     if (::connect(fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "UDP connect() failed");
         return -1;
@@ -853,7 +862,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     }
 #endif
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_, nullptr, 0);
     if (sent < 0) {
@@ -883,12 +892,22 @@ int SocketQuicClientPollOperation::sendPendingPackets(
 }
 
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
-    // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
-    static thread_local struct sockaddr_storage src_addr;
-    static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
+    struct ClientRecvScratch {
+        struct sockaddr_storage src_addr;
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    };
+    QoreThreadScratch<ClientRecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
     socklen_t src_addrlen = sizeof(src_addr);
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     size_t cmsg_len = sizeof(cmsg_buf);
 #ifdef DEBUG
     qore_quic_test_note_receive_fd(fd);
@@ -951,7 +970,7 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     path.remote.addrlen = src_addrlen;
 
     printd(5, "SocketQuicClientPollOperation::recvAndProcessPacket() received %d bytes\n", (int)nread);
-    int rv = quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
+    quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
     if (*xsink) {
         return -1;
     }
@@ -1045,9 +1064,9 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
     }
     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, events);
     if (poll_info) {
-        // nothing_to_send: the flush produced no packet send (srv==0) yet data may
-        // still be pending (flow-control-blocked) — avoid sub-ms tight-polling.
-        setPollTimeoutFromExpiry(poll_info, expiry, xsink, srv == 0);
+        // data still pending here is flow-control-blocked; the timers are honoured all the same, as running them
+        // never loops (see qore_quic_poll_timeout_ms())
+        setPollTimeoutFromExpiry(poll_info, expiry, xsink);
     }
     return poll_info;
 }
@@ -1168,6 +1187,13 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     return nullptr;
                 }
 
+                // the server was reached once the handshake has completed: recorded before HTTP/3 is set up, also
+                // early for 0-RTT below, so that an error raised while it is set up is known to follow the handshake
+                // (issue #5944)
+                if (quic_session->isHandshakeComplete()) {
+                    handshake_completed_.store(true, std::memory_order_release);
+                }
+
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
                 {
@@ -1189,7 +1215,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     // then yield to poll for the next round of datagrams
                     ngtcp2_tstamp next_expiry;
                     {
-                        int rv = sendPendingPackets(next_expiry, xsink);
+                        sendPendingPackets(next_expiry, xsink);
                         if (*xsink) {
                             return nullptr;
                         }
@@ -1422,7 +1448,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                             // request immediate re-poll for fair scheduling
                             poll_info->setKeyValue("poll_timeout_ms", 0, xsink);
                         } else {
-                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, srv == 0);
+                            setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                         }
                     }
                     return poll_info;
@@ -1472,7 +1498,7 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink, bool*
         return -1;
     }
 
-    int old_fd = sock->priv->socket->getSocket();
+    int old_fd = sock->priv->socket->getDescriptor();
     if (old_fd < 0) {
         xsink->raiseException("QUIC-MIGRATION-ERROR", "socket is not open");
         return -1;
@@ -1633,7 +1659,7 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
 
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPacket()
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
     // QUIC servers may receive bursts of client traffic (handshake retries,
@@ -1837,7 +1863,7 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
 
 int SocketQuicServerPollOperation::processTimersAndSendAll(
     ngtcp2_tstamp& min_expiry, ExceptionSink* xsink) {
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     min_expiry = UINT64_MAX;
     int result = 0;
 
@@ -1908,12 +1934,22 @@ int SocketQuicServerPollOperation::processTimersAndSendAll(
 }
 
 int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, QuicSession** target_out) {
-    // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
-    static thread_local struct sockaddr_storage src_addr;
-    static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    // Per-thread heap scratch to reduce stack pressure (see QuicCommon.h for rationale); not static
+    // thread_local objects, which would take their size from the stack of every thread (see QoreThreadScratch)
+    struct ServerRecvScratch {
+        struct sockaddr_storage src_addr;
+        alignas(alignof(struct cmsghdr)) uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
+    };
+    QoreThreadScratch<ServerRecvScratch> scratch;
+    if (!scratch) {
+        xsink->raiseErrnoException("QUIC-RECV-ERROR", ENOMEM, "cannot allocate the receive buffers of this thread");
+        return -1;
+    }
+    auto& src_addr = scratch->src_addr;
+    auto& cmsg_buf = scratch->cmsg_buf;
     socklen_t src_addrlen = sizeof(src_addr);
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     size_t cmsg_len = sizeof(cmsg_buf);
 #ifdef DEBUG
     qore_quic_test_note_receive_fd(fd);
@@ -1985,6 +2021,12 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
                 "server certificate and private key must be set on the socket "
                 "before accepting QUIC connections");
             return -1;
+        }
+
+        // a draining server takes no new connection; the client's handshake fails when the listener closes
+        // (qore#5899)
+        if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+            return 0;
         }
 
         // Enforce maximum session count to prevent memory exhaustion from
@@ -2075,7 +2117,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
     path.remote.addrlen = src_addrlen;
 
-    int rv = target_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
+    target_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
     if (*xsink && target_session->isDropped()) {
         // The client's first Initial datagram was lost or reordered (see QuicSession::dropped_):
         // drop the session silently — no CONNECTION_CLOSE, which the client would take as a failed
@@ -2098,7 +2140,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             ssize_t retry_len = QuicSession::writeRetry(retry_buf, sizeof(retry_buf), new_hdr,
                 reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
             if (retry_len > 0) {
-                int fd = sock->priv->socket->getSocket();
+                int fd = sock->priv->socket->getDescriptor();
                 (void)sendto(fd, retry_buf, static_cast<size_t>(retry_len), 0,
                     reinterpret_cast<const struct sockaddr*>(&src_addr), src_addrlen);
             }
@@ -2133,7 +2175,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
                 struct sockaddr_storage remote_addr;
                 socklen_t remote_addrlen;
                 target_session->getRemoteAddrCopy(remote_addr, remote_addrlen);
-                int fd = sock->priv->socket->getSocket();
+                int fd = sock->priv->socket->getDescriptor();
                 (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
                     reinterpret_cast<const struct sockaddr*>(&remote_addr),
                     remote_addrlen);
@@ -2219,6 +2261,53 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
     }
 }
 
+bool SocketQuicServerPollOperation::drainSessions() {
+    int fd = sock->priv->socket->getDescriptor();
+    uint8_t close_buf[1280];
+    // set if a session is still open after this pass
+    bool open = false;
+    for (auto& entry : sessions_) {
+        QuicSession& session = *entry.second;
+        if (session.isClosed()) {
+            continue;
+        }
+        // the client opens no new request stream (RFC 9114 section 5.2)
+        {
+            ExceptionSink notice_xsink;
+            session.submitDrainNotice(&notice_xsink);
+            notice_xsink.clear();
+        }
+        if (session.hasActiveApplicationStreams() || session.hasCompletedStreams()
+                || session.hasDispatchedStreams()) {
+            open = true;
+            continue;
+        }
+        // the session has no request left: the final GOAWAY, then CONNECTION_CLOSE (RFC 9000 section 10.2), as
+        // abort() does; best effort, as the peer may be gone
+        {
+            ExceptionSink shutdown_xsink;
+            session.submitShutdown(&shutdown_xsink);
+            shutdown_xsink.clear();
+        }
+        if (fd >= 0) {
+            ssize_t close_len = session.writeConnectionClose(close_buf, sizeof(close_buf));
+            if (close_len > 0) {
+                struct sockaddr_storage remote_addr;
+                socklen_t remote_addrlen;
+                session.getRemoteAddrCopy(remote_addr, remote_addrlen);
+                (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
+                    reinterpret_cast<const struct sockaddr*>(&remote_addr), remote_addrlen);
+            }
+        }
+        session.markClosed();
+    }
+    // the closed sessions are reaped and their close reported
+    cleanupClosedSessions();
+    // the drain is done when every session is closed: a closed session can do no more I/O, so a handler that still
+    // holds one of its streams (until it sees the close) has nothing left that the drain could wait for
+    return !open;
+}
+
 void SocketQuicServerPollOperation::collectResponseSendResults(int64_t session_id, QuicSession& session) {
     for (auto& r : session.takeResponseSendResults()) {
         lifecycle_send_results_.push_back({session_id, r.first, r.second});
@@ -2268,6 +2357,13 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 }
 
                 if (sessions_.empty()) {
+                    // a draining server with no session left is done (qore#5899)
+                    if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                        qcs_state = QCS::CLOSED;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
                     // Didn't get a valid Initial packet yet
                     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
@@ -2275,7 +2371,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 // We have at least one session; coalesced timer + write + send
                 {
                     ngtcp2_tstamp min_expiry;
-                    int rv = processTimersAndSendAll(min_expiry, xsink);
+                    processTimersAndSendAll(min_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }
@@ -2316,6 +2412,17 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                 // on a multiplexed connection.  Done before the early-return
                 // completed-stream checks so it runs on every READING poll.
                 collectSessionLifecycleEvents();
+
+                // a draining server closes each session that has no request left, and is done when none is left
+                // (qore#5899)
+                if (sock->priv->http_draining.load(std::memory_order_acquire)) {
+                    if (drainSessions()) {
+                        qcs_state = QCS::CLOSED;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
+                }
 
                 // Headers-only mode: check for streams with HEADERS complete
                 // (either from this drain or a previous cycle)
@@ -2573,7 +2680,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
 
     // Cache local address (family + port); per-packet destination IP is
     // extracted from pktinfo control messages in recvAndProcessPackets()
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed in send-response setup");
@@ -2642,7 +2749,7 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
         quic_session->clearPathMigrated();
     }
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
         reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
@@ -2671,7 +2778,7 @@ int SocketQuicSendResponsePollOperation::sendPendingPackets(
 
 int SocketQuicSendResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
     return recvAndDispatchQuicPackets(
-        sock->priv->socket->getSocket(),
+        sock->priv->socket->getDescriptor(),
         sock->priv->socket->priv->getQuicDispatcher(),
         local_addr_, local_addrlen_,
         recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
@@ -2783,9 +2890,9 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        // flow-control-blocked pending data: don't sub-ms tight-poll
-                        // on the PTO timer; wait for the unblocking ACK / MAX_STREAM_DATA
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, true);
+                        // flow-control-blocked pending data: the unblocking ACK / MAX_STREAM_DATA wakes the
+                        // operation, and the connection's timers are honoured meanwhile
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -2902,7 +3009,7 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     quic_session->getLocalAddrCopy(send_local_addr_, send_local_addrlen_);
 
     // Cache local address
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno,
@@ -2964,7 +3071,7 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
         quic_session->clearPathMigrated();
     }
 
-    int fd = sock->priv->socket->getSocket();
+    int fd = sock->priv->socket->getDescriptor();
 
     int sent = sendQuicPacketsBatch(fd, pkt_batch_,
         reinterpret_cast<const struct sockaddr*>(&peer_addr_), peer_addrlen_,
@@ -2990,7 +3097,7 @@ int SocketQuicSendStreamingResponsePollOperation::sendPendingPackets(
 
 int SocketQuicSendStreamingResponsePollOperation::recvAndProcessPackets(ExceptionSink* xsink) {
     return recvAndDispatchQuicPackets(
-        sock->priv->socket->getSocket(),
+        sock->priv->socket->getDescriptor(),
         sock->priv->socket->priv->getQuicDispatcher(),
         local_addr_, local_addrlen_,
         recv_buf_, sizeof(recv_buf_), sock->priv->socket->priv, xsink);
@@ -3038,7 +3145,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
     auto cancel_stream = [&]() {
         sock->priv->m.unlock();
         ExceptionSink cancel_xsink;
-        sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+        qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
         cancel_xsink.clear();
         sock->priv->m.lock();
     };
@@ -3202,9 +3309,9 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                 if (quic_session->hasPendingWrite()) {
                     QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
                     if (poll_info) {
-                        // flow-control-blocked pending data: don't sub-ms tight-poll
-                        // on the PTO timer; wait for the unblocking ACK / MAX_STREAM_DATA
-                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink, true);
+                        // flow-control-blocked pending data: the unblocking ACK / MAX_STREAM_DATA wakes the
+                        // operation, and the connection's timers are honoured meanwhile
+                        setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                     }
                     return poll_info;
                 }
@@ -3234,7 +3341,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePollIntern(E
                 // Coalesced: timer check + packet generation + send
                 ngtcp2_tstamp next_expiry;
                 {
-                    int rv = sendPendingPackets(next_expiry, xsink);
+                    sendPendingPackets(next_expiry, xsink);
                     if (*xsink) {
                         return nullptr;
                     }

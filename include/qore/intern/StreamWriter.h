@@ -143,12 +143,13 @@ public:
         return writei1((signed char)i, xsink);
     }
 
+    // the unsigned value is written with the bits of the signed integer of the same width (not of one byte)
     DLLLOCAL int writeu2(uint16_t i, ExceptionSink* xsink) {
-        return writei2((signed char)i, xsink);
+        return writei2(static_cast<int16_t>(i), xsink);
     }
 
     DLLLOCAL int writeu4(uint32_t i, ExceptionSink* xsink) {
-        return writei4((signed char)i, xsink);
+        return writei4(static_cast<int32_t>(i), xsink);
     }
 
     DLLLOCAL virtual const char* getName() const { return "StreamWriter"; }

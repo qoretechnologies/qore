@@ -52,7 +52,22 @@ class DescriptorsCloexecTest inherits QUnit::Test {
         assertEq((), openInChild((fd,)));
     }
 
+    #! Returns the descriptors that the process has open
+    private hash<string, bool> openDescriptors() {
+        if (PlatformOS == "Windows") {
+            testSkip("POSIX descriptors are required");
+        }
+        hash<string, bool> rv;
+        foreach string path in (glob("/dev/fd/*")) {
+            rv{basename(path)} = True;
+        }
+        return rv;
+    }
+
     socketTest() {
+        # the descriptor of a Socket is not available to Qore code: the descriptors opened for the sockets are found
+        # in the list of the process's open descriptors
+        hash<string, bool> before = openDescriptors();
         Socket listener();
         listener.bind("127.0.0.1:0");
         listener.listen();
@@ -61,7 +76,12 @@ class DescriptorsCloexecTest inherits QUnit::Test {
         client.connect("127.0.0.1:" + port);
         *Socket accepted = listener.accept(10s);
         assertTrue(exists accepted);
-        list<int> fds = (listener.getSocket(), client.getSocket(), accepted.getSocket());
+        assertThrows("SOCKET-DESCRIPTOR-ERROR", \client.getPollableDescriptor());
+        hash<string, bool> after = openDescriptors();
+        # the descriptors of the three sockets, and any other that the process opened meanwhile (those of the async I/O
+        # controller's I/O thread, for example), none of which a child may inherit
+        list<int> fds = map $1.toInt(), keys after, !before{$1};
+        assertGe(3, fds.size(), "the sockets' descriptors are found");
         map assertGt(2, $1), fds;
         assertEq((), openInChild(fds));
     }

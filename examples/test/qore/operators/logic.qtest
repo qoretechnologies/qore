@@ -2,6 +2,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 %modern
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
@@ -88,16 +89,18 @@ public class LogicTest inherits QUnit::Test {
         assertTrue(True || False && x());
         assertTrue(True || True && x());
         assertTrue(True || x() && x());
-%broken-logic-precedence
-%disable-warning broken-logic-precedence
-        assertEq(0, True | False & False);
-        assertEq(0, True | True & False);
-        assertEq(0, True | False ^ True);
-        assertEq(0, True | True ^ True);
-        assertEq(0, True ^ False & False);
-        assertEq(0, True ^ True & False);
-        assertFalse(True || x() && False);
-        assertTrue(True || x() && True);
+        {
+            # the legacy precedence in code without %modern, which does not allow %broken-logic-precedence (issue
+            # #5682)
+            Program legacy(PO_NEW_STYLE | PO_BROKEN_LOGIC_PRECEDENCE);
+            legacy.parse("%disable-warning broken-logic-precedence\n"
+                "list sub ints() { return (True | False & False, True | True & False, True | False ^ True, "
+                "True | True ^ True, True ^ False & False, True ^ True & False, 1 | 2 ^ 3 & 5); }\n"
+                "list sub bools(code x) { return (True || x() && False, True || x() && True, "
+                "True || False && False); }\n", "legacy");
+            assertEq((0, 0, 0, 0, 0, 0, 0), legacy.callFunction("ints"));
+            assertEq((False, True, False), legacy.callFunction("bools", x));
+        }
 
         {
             Program pgm(PO_BROKEN_LOGIC_PRECEDENCE);
@@ -105,9 +108,6 @@ public class LogicTest inherits QUnit::Test {
             assertEq(1, pgm.callFunction("get"));
         }
 
-%broken-logic-precedence
-        assertFalse(True || False && False);
-        assertEq(0, 1 | 2 ^ 3 & 5);
         {
             Program a(PO_BROKEN_LOGIC_PRECEDENCE|PO_NEW_STYLE);
             a.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);

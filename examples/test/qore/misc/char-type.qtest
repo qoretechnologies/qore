@@ -129,7 +129,9 @@ class CharTypeTest inherits QUnit::Test {
         assertEq("A", s, "implicit char to string assignment");
         assertEq(90, z.ord(), "string to char cast");
         assertEq(120, x.ord(), "integer to char cast");
-        assertEq(66, a + 1, "char plus int");
+        assertEq("A1", a + 1, "char plus int concatenates");
+        assertEq("AB", a + c'B', "char plus char concatenates");
+        assertEq(66, int(a) + 1, "codepoint arithmetic with int()");
         assertEq(1, c'b' - c'a', "char minus char");
         assertEq(130, c'A' * 2, "char multiplication");
         assertEq(2, c'd' / 50, "char division");
@@ -147,6 +149,25 @@ class CharTypeTest inherits QUnit::Test {
         Program p(PO_NEW_STYLE);
         assertThrows("PARSE-TYPE-ERROR", \p.parse(),
             ("char sub t(string s) { return s; }", "implicit-string-to-char"));
+
+        # + with a char gives a string at parse time
+        Program p1(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "right-hand side is type 'string'", \p1.parse(),
+            ("int sub t(char a, char b) { int x = a + b; return x; }", "char-plus-char-int"));
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "right-hand side is type 'string'", \p2.parse(),
+            ("int sub t(char a) { int x = a + 1; return x; }", "char-plus-int-int"));
+        Program p3(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "will assign it a string value", \p3.parse(),
+            ("sub t(char a) { a += c'b'; }", "char-lvalue-plus-equals"));
+        Program p5(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "lvalue has type '\\*char', but the \\+= operator will assign it a string value",
+            \p5.parse(), ("sub t(*char a) { a += c'b'; }", "or-nothing-char-lvalue-plus-equals"));
+        Program p4(PO_NEW_STYLE);
+        p4.parse("string sub t(char a, char b) { string x = a + b; return x; } "
+            "softchar sub u(softchar a) { a += \"\"; return a; }", "char-plus-string");
+        assertEq("ab", p4.callFunction("t", c'a', c'b'));
+        assertEq(c'a', p4.callFunction("u", c'a'));
     }
 
     testStringIndex() {

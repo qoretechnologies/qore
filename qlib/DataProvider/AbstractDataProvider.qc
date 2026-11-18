@@ -2940,18 +2940,19 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
         for possible values
 
         @throw INVALID-OPERATION the data provider does not support upsert operations
+        @throw UPSERT-RECORD-ERROR an element of \a recs is not a hash
     */
     *list<string> upsertRecordsBulk(list<auto> recs, *hash<auto> upsert_options) {
-        on_error {
-            if ($1.err != "DUPLICATE-RECORD" && $1.err != "CREATE-RECORD-ERROR") {
-                rethrow "CREATE-RECORD-ERROR", sprintf("%s: %s", $1.err, $1.desc), getWrappedExceptionArg($1);
-            }
-        }
+        # a failed upsert raises the error the provider raised, as for every other record shape: it is not a create
+        # error (an on_error block copied from createRecordsBulk() wrapped it as CREATE-RECORD-ERROR, so the same
+        # upsert raised another code by the shape of its records)
         # an empty list is no records, not a single record with no value
         hash<auto> h = {};
         foreach auto rec in (recs) {
             if (rec.typeCode() != NT_HASH) {
-                throw "CREATE-RECORD-ERROR", sprintf("Each record must be a hash; got type %y instead", rec.fullType());
+                # an upsert's input error, not a create's
+                throw "UPSERT-RECORD-ERROR", sprintf("Each record to upsert must be a hash; got type %y instead",
+                    rec.fullType());
             }
             if (!h) {
                 h = map {$1: ()}, keys rec;
@@ -4966,7 +4967,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.5
     */
-    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) {
+    static bool setGenericApiCallChildBuilder(code<*AbstractDataProvider(object)> builder) [dom=PROCESS_CONTROL] {
         # a process-wide callback runs on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the generic API call child builder");
         if (cb_build_generic_api_call_child) {
@@ -4983,7 +4984,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @since DataProvider 3.5
     */
-    static clearGenericApiCallChildBuilder() {
+    static clearGenericApiCallChildBuilder() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("clear the generic API call child builder");
         delete cb_build_generic_api_call_child;
     }
@@ -6193,7 +6194,7 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
 
         @note after this call, callbacks cannot be changed
     */
-    static bool setDynamicValueCallbacks() {
+    static bool setDynamicValueCallbacks() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("lock the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
             return !exists cb_resolve_value;
@@ -6787,7 +6788,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @note after this call, callbacks cannot be changed
     */
-    static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) {
+    static bool setDynamicValueCallbacks(code value_needs_resolution, code resolve_value) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the dynamic value callbacks");
         if (!AbstractDataProvider::checkCallbacks()) {
@@ -6822,7 +6823,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             code<auto(string, string, *hash<auto>)> expand,
             *code<*AbstractDataProviderType(string, string, *hash<auto>)> resolve_type,
             *code<auto(*hash<auto>)> list_contexts,
-            *code<auto(string, string, *hash<auto>)> list_values) {
+            *code<auto(string, string, *hash<auto>)> list_values) [dom=PROCESS_CONTROL] {
         # process-wide callbacks run on the threads of every caller, of other tenants and of trusted code
         AbstractDataProvider::checkNotSandboxed("set the template callbacks");
         if (template_callbacks_locked) {
@@ -6842,7 +6843,7 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
 
         @since DataProvider 3.3
     */
-    static clearTemplateCallbacks() {
+    static clearTemplateCallbacks() [dom=PROCESS_CONTROL] {
         AbstractDataProvider::checkNotSandboxed("clear the template callbacks");
         template_callbacks_locked = False;
         delete cb_expand_template;
@@ -7381,6 +7382,51 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         self += checkOptions("CONSTRUCTOR-OPTION-ERROR", option_desc, options, required_options);
     }
 
+    #! Returns True if an option value, or the option's type, is a hash, list or object, which can hold credentials
+    /** @param type the option's type; @ref nothing if the option has no type
+        @param value the option value
+
+        @return @ref True if the value is not given in an error of an option that is not sensitive
+    */
+    private static bool mayHoldCredentials(*AbstractDataProviderType type, auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+            case NT_LIST:
+            case NT_OBJECT:
+                return True;
+        }
+        if (!type) {
+            return False;
+        }
+        string base = type.getBaseTypeName();
+        return exists type.getFields() || base == "hash" || base == "list" || base == "object";
+    }
+
+    #! Returns the path of the field of a hash type that refuses its value, or @ref nothing
+    /** Called only after the type has refused the value, to name the field in an error without giving the value,
+        which can hold credentials
+
+        @param type the type that refused the value
+        @param value the value refused
+
+        @return the names of the fields, from the outermost, of the field that refuses its value; @ref nothing if the
+        value is not a hash, the type has no fields, or no field refuses its value
+    */
+    private static *list<string> getRefusedFieldPath(AbstractDataProviderType type, auto value) {
+        if (value.typeCode() != NT_HASH) {
+            return;
+        }
+        *hash<string, AbstractDataField> fields = type.getFields();
+        foreach hash<auto> i in (fields.pairIterator()) {
+            AbstractDataField field = i.value;
+            try {
+                field.acceptsValue(value{i.key});
+            } catch (hash<ExceptionInfo> ex) {
+                return (i.key,) + (AbstractDataProvider::getRefusedFieldPath(field.getType(), value{i.key}) ?? ());
+            }
+        }
+    }
+
     #! Verifies options according to the option
     /**
         @param err The error code in case of any errors; this is the exception code (\c err) that will be raised
@@ -7431,8 +7477,23 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                 } catch (hash<ExceptionInfo> ex) {
                     # a type that is not part of this module may still refuse a value with RUNTIME-TYPE-ERROR
                     if (ex.err == "TYPE-VALUE-ERROR" || ex.err == "RUNTIME-TYPE-ERROR") {
-                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
-                            "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
+                        # the value, and the type's own error, which describes the value too, are given only for an
+                        # option that is not marked sensitive and whose value or type is not a hash, list or object,
+                        # which can hold credentials (ex: headers); the field of a hash that refused its value is
+                        # named instead
+                        string detail = "";
+                        if (!i.value.sensitive) {
+                            if (AbstractDataProvider::mayHoldCredentials(type, options{i.key})) {
+                                *list<string> path = AbstractDataProvider::getRefusedFieldPath(type, options{i.key});
+                                if (path) {
+                                    detail = sprintf(": field %y refused its value", path.join("."));
+                                }
+                            } else {
+                                detail = sprintf(" (value %y): %s: %s", options{i.key}, ex.err, ex.desc);
+                            }
+                        }
+                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y%s",
+                            i.key, type.getName(), options{i.key}.type(), detail);
                         continue;
                     }
                     rethrow;
@@ -7454,8 +7515,12 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     }
                 }
                 if (!allowed) {
-                    error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
-                        i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
+                    # the value of a sensitive option, or a value that can hold credentials, is never given
+                    error("OPTION-VALUE-ERROR", "option %y does not accept %s; possible values: %y",
+                        i.key, (i.value.sensitive || AbstractDataProvider::mayHoldCredentials(NOTHING, options{i.key}))
+                            ? "the value given"
+                            : sprintf("value %y", options{i.key}),
+                        (map $1.value, i.value.allowed_values));
                 }
             }
             if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
@@ -7468,8 +7533,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                         }
                     }
                     if (!allowed) {
-                        error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
-                            "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
+                        # the value of a sensitive option is never given
+                        error("OPTION-VALUE-ERROR", "Option %y does not accept %s; possible element values: %y",
+                            i.key, i.value.sensitive ? "an element value given" : sprintf("element value %y", opt),
+                            (map $1.value, i.value.element_allowed_values));
                     }
                 }
             }
@@ -7507,11 +7574,12 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             }
         }
         if (!ok) {
+            # only the names of the options provided: their values can be credentials
             if (missing) {
-                throw err, sprintf("missing required options %y; options provided: %y", missing, options);
+                throw err, sprintf("missing required options %y; options provided: %y", missing, keys options);
             } else {
                 throw err, sprintf("missing required options %s; options provided: %y",
-                    (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), options);
+                    (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), keys options);
             }
         }
     }

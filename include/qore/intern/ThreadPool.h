@@ -48,10 +48,19 @@ typedef qlist<ThreadPoolThread*> tplist_t;
 /** The task captures the sandbox that governs the thread that submits it, so that the task is governed by the same
     sandbox on the worker thread: a task submitted by module code (for example, an HTTP server listener created by a
     Qore-language module) runs in the module's Program, whose Program context does not include the sandboxed caller.
+
+    The captured context also records whether the submitting thread runs the module cleanup at the end of the process,
+    or work that the cleanup handed over (QoreSandboxContext::module_cleanup_delegate): the task is then part of the
+    cleanup, and can enter the Programs of the modules, which the cleanup closes to other threads (see
+    qore_close_module_programs()).
+
+    It also captures the run-time parse options of the submitting code, which the task's code runs with on the worker
+    thread, so that a task that is a call reference to builtin code, which sets no options of its own, runs with the
+    restrictions of the code that submitted it (qore#6208).
 */
 class ThreadTask {
 public:
-    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox
+    //! Creates the task; must be called in the submitting thread, as it captures the thread's sandbox and options
     DLLLOCAL ThreadTask(ResolvedCallReferenceNode* c, ResolvedCallReferenceNode* cc) : code(c), cancelCode(cc) {
     }
 
@@ -61,6 +70,8 @@ public:
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
+        // releasing the code can run destructors in the Programs of the modules
+        QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
         code->deref(xsink);
         if (cancelCode)
             cancelCode->deref(xsink);
@@ -74,9 +85,15 @@ public:
     DLLLOCAL QoreValue run(ExceptionSink* xsink) {
         // Get the program from the call reference and set up program context
         // This ensures tlpd is set up for thread pool threads
+        // a call reference to builtin code has no Program: it runs in the context of the worker
         QoreProgram* pgm = code->getProgram();
-        assert(pgm);
-        QoreExternalProgramContextHelper pch(xsink, pgm);
+        // declared before the Program is entered, which can be the Program of a module
+        QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
+        // the submitter's options, installed before the Program is entered, whose thread entry handler and
+        // initialization run then (qore#6208)
+        QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
+        // an internal entry: a C++ exception of the entry is raised in xsink (issue #6255)
+        ProgramThreadCountContextHelper pch(xsink, pgm, true);
         if (*xsink) {
             return QoreValue();
         }
@@ -84,8 +101,15 @@ public:
         return code->invoke(0, xsink);
     }
 
+    //! Returns true if the task is part of the module cleanup; see qore_module_cleanup_delegation()
+    DLLLOCAL bool isModuleCleanupDelegate() const {
+        return sandbox_context.module_cleanup_delegate;
+    }
+
     DLLLOCAL void cancel(ExceptionSink* xsink) {
         if (cancelCode) {
+            QoreModuleCleanupDelegateHelper delegate(sandbox_context.module_cleanup_delegate);
+            QoreThreadRuntimeParseOptionsHelper po_helper(&runtime_po);
             SandboxScope sandbox_scope(sandbox_context);
             cancelCode->invoke(0, xsink).discard(xsink);
         }
@@ -94,8 +118,10 @@ public:
 protected:
     ResolvedCallReferenceNode* code;
     ResolvedCallReferenceNode* cancelCode;
-    //! The sandbox of the submitting thread
+    //! The sandbox of the submitting thread, and whether the task is part of the module cleanup
     const QoreSandboxContext sandbox_context;
+    //! The run-time parse options of the submitting code (qore#6208)
+    const QoreThreadRuntimeParseOptions runtime_po = QoreThreadRuntimeParseOptions::capture();
 
     //! Applies the sandbox of the submitting thread while the object exists, if a sandbox governed it
     /** Without one, the sandbox lookups of the worker resolve normally, so a task created by sandboxed code (a
@@ -149,10 +175,16 @@ protected:
     tplist_t::iterator pos;
     bool stopflag = false,
         stopped = false;
+    //! True once the task running on this worker took it out of the pool (ThreadPool::detachCurrentThread());
+    //! read and written with the pool's lock held
+    bool detached = false;
 
     DLLLOCAL void finalize(ExceptionSink* xsink);
 
 public:
+    //! The worker whose task runs in the current thread, or nullptr
+    DLLLOCAL static thread_local ThreadPoolThread* current;
+
     DLLLOCAL ThreadPoolThread(ThreadPool& n_tp, ExceptionSink* xsink);
 
     DLLLOCAL ~ThreadPoolThread() {
@@ -218,10 +250,29 @@ public:
     DLLLOCAL tplist_t::iterator getPos() const {
         return pos;
     }
+
+    DLLLOCAL ThreadPool& getPool() const {
+        return tp;
+    }
+
+    //! Returns true if the worker left the pool; must be called with the pool's lock held
+    DLLLOCAL bool isDetached() const {
+        return detached;
+    }
+
+    //! Marks the worker as out of the pool; must be called with the pool's lock held
+    DLLLOCAL void setDetached() {
+        detached = true;
+    }
 };
 
 class ThreadPool : public AbstractPrivateData {
 protected:
+    //! true if the manager thread holds a reference to the pool, which it releases at the end of worker() (qore#6253)
+    bool manager_ref = false;
+    //! see dbgHoldDispatch()
+    bool dbg_hold_dispatch = false;
+
     int max,        // maximum number of threads in pool (if <= 0 then unlimited)
         minidle,     // minimum number of idle threads
         maxidle,     // maximum number of idle threads
@@ -237,7 +288,8 @@ protected:
     QoreCondition stopCond;
 
     tplist_t ah,  // allocated thread list
-        fh;        // free thread list
+        fh,        // free thread list
+        dh;        // detached thread list: workers whose task took them out of the pool (detachCurrentThread())
 
     // quit flag
     bool quit = false;
@@ -254,11 +306,11 @@ protected:
         detach = false;        // detach flag
 
     //! The sandbox manager of the Program that created the pool, or nullptr if it has none
-    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah), and
-        the pool's own thread holds one until the pool has stopped, so the pool's threads count against the thread
-        limit of the sandbox of the Program that created the pool.  Slots are acquired and released only with \a m
-        held (or in the constructor), so the number of slots held is always the number of workers plus \a reserved
-        plus one for the pool's own thread.
+    /** Each worker of the pool holds a thread slot of this manager while it is in the pool (in \a fh or \a ah) or
+        detached from it (in \a dh, until it ends), and the pool's own thread holds one until the pool has stopped, so
+        the pool's threads count against the thread limit of the sandbox of the Program that created the pool.  Slots
+        are acquired and released only with \a m held (or in the constructor), so the number of slots held is always
+        the number of workers plus \a reserved plus one for the pool's own thread.
     */
     QoreSandboxManager* sbx;
 
@@ -477,6 +529,7 @@ public:
         assert(q.empty());
         assert(ah.empty());
         assert(fh.empty());
+        assert(dh.empty());
         assert(!reserved);
         if (sbx) {
             sbx->deref(nullptr);
@@ -502,7 +555,50 @@ public:
             str.sprintf("%d", (*i)->getId());
         }
 
+        str.concat("] detached: [");
+
+        for (tplist_t::iterator i = dh.begin(), e = dh.end(); i != e; ++i) {
+            if (i != dh.begin())
+                str.concat(", ");
+            str.sprintf("%d", (*i)->getId());
+        }
+
         str.concat(']');
+    }
+
+    //! returns true if the calling thread is a worker of this pool, also a detached one (qore#6242)
+    /** Stopping the pool waits for all of its workers, so a worker of the pool cannot stop it
+    */
+    DLLLOCAL bool isOwnWorker() const {
+        ThreadPoolThread* tpt = ThreadPoolThread::current;
+        return tpt && &tpt->getPool() == this;
+    }
+
+    //! stops the pool from a worker of its own without waiting for its workers (qore#6253)
+    /** Called by the destructor of the pool's object when a task of the pool releases the last reference to it: the
+        manager thread, which stops the workers, takes a reference to the pool, which it releases at the end of
+        worker(), as it uses the pool until then
+    */
+    DLLLOCAL void stopFromOwnWorker() {
+        AutoLocker al(m);
+        // the manager is still running: it waits for the calling worker before it ends
+        assert(!stopped);
+        ref();
+        manager_ref = true;
+        if (!stopflag) {
+            detach = true;
+            shutdown = true;
+            stopflag = true;
+            cond.signal();
+        }
+    }
+
+    //! test support (qore_test_thread_pool_hold_dispatch()): in a debug build, the pool does not give its queued tasks
+    //! to workers while \a hold is set, so that they stay queued until it stops and their cancel callbacks run
+    DLLLOCAL void dbgHoldDispatch(bool hold) {
+        AutoLocker al(m);
+        dbg_hold_dispatch = hold;
+        cond.signal();
     }
 
     // does not return until the thread pool has been stopped
@@ -598,10 +694,16 @@ public:
             }
 
             tplist_t::iterator i = tpt->getPos();
-            ah.erase(i);
+            if (tpt->isDetached()) {
+                // a worker that its task took out of the pool ends after the task, and releases its slot below
+                dh.erase(i);
+            } else {
+                ah.erase(i);
+            }
 
             // requeue thread if possible
-            if ((!maxidle && release_ms) || ((int)fh.size() < maxidle) || q.size() > fh.size()) {
+            if (!tpt->isDetached()
+                    && ((!maxidle && release_ms) || ((int)fh.size() < maxidle) || q.size() > fh.size())) {
                 fh.push_back(tpt);
                 if (waiting || (release_ms && (int)fh.size() > minidle))
                     cond.signal();
@@ -621,6 +723,12 @@ public:
     }
 
     DLLLOCAL void worker(ExceptionSink* xsink);
+
+    //! Takes the worker running the current task out of the pool; see ThreadPool::detachCurrentThread()
+    /** @return true if the current thread is a worker of this pool and is detached from it (or already was), false
+        if it is not a worker of this pool, or if the pool is stopping
+    */
+    DLLLOCAL bool detachCurrentThread();
 
     //! Wakes the pools waiting for a slot of the given sandbox manager after a slot of it was released
     /** Must be called without any pool lock held, as it takes the lock of each waiting pool; called by

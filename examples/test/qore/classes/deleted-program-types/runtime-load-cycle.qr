@@ -1,0 +1,13 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Uses RuntimeLoadCycleA and RuntimeLoadCycleB (compiled by deleted-program-types.qtest into a directory of the module
+# path), which load each other and a native module from their own Programs at run time, and ends; see
+# deleted-program-types.qtest.
+
+%modern
+
+%requires RuntimeLoadCycleA
+%requires RuntimeLoadCycleB
+
+print((runtime_load_cycle_a() + runtime_load_cycle_b()) + "\n");

@@ -40,6 +40,8 @@ protected:
 
     DLLLOCAL static QoreString extract_str;
 
+    template <bool Lexical>
+    DLLLOCAL QoreValue evalCommon(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
     DLLLOCAL ~QoreExtractOperatorNode() {
@@ -70,6 +72,9 @@ protected:
     }
 
 public:
+    DLLLOCAL static QoreExtractOperatorNode* create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue lvalue, QoreValue offset, QoreValue length, QoreValue replacement);
+
     DLLLOCAL QoreExtractOperatorNode(const QoreProgramLocation* loc,
                                      QoreValue n_lvalue_exp, QoreValue n_offset_exp,
                                      QoreValue n_length_exp, QoreValue n_new_exp) :
@@ -92,7 +97,8 @@ public:
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink *xsink) const {
-        ValueHolder n_lv(copy_value_and_resolve_lvar_refs(lvalue_exp, xsink), xsink);
+        // the lvalue operand keeps its access path (issue #5723)
+        ValueHolder n_lv(copy_lvalue_and_resolve_lvar_refs(lvalue_exp, xsink), xsink);
         if (*xsink)
             return nullptr;
         ValueHolder n_of(copy_value_and_resolve_lvar_refs(offset_exp, xsink), xsink);
@@ -104,7 +110,7 @@ public:
         ValueHolder n_nw(copy_value_and_resolve_lvar_refs(new_exp, xsink), xsink);
         if (*xsink)
             return nullptr;
-        return new QoreExtractOperatorNode(get_runtime_location(), n_lv.release(), n_of.release(), n_ln.release(), n_nw.release());
+        return create(getSemanticPolicy(), get_runtime_location(), n_lv.release(), n_of.release(), n_ln.release(), n_nw.release());
     }
 
     DLLLOCAL QoreValue getLValue() const {

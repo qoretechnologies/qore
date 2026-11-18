@@ -37,8 +37,18 @@
 #include "qore/intern/QoreSandboxMemory.h"
 #include "qore/intern/qore_encoding_private.h"
 
+#include <atomic>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
+
+//! frees memory allocated with malloc() (a deleter of std::unique_ptr with no state)
+struct QoreFreeDeleter {
+    DLLLOCAL void operator()(void* p) const {
+        free(p);
+    }
+};
 
 class QoreRegexBase;
 class QoreRegexSubst;
@@ -77,20 +87,44 @@ struct qore_char_boundary {
     }
 };
 
+#ifdef DEBUG
+//! the number of bytes that the character offset functions of UTF-8 strings have walked or scanned in this thread
+//! (debug builds)
+/** For tests that check that a character offset in the ASCII text at the start of a string is O(1) (issue #6138); see
+    dbg_get_string_scan_bytes(); counted per thread, so that the walks of other threads do not change a measurement
+*/
+DLLLOCAL extern thread_local int64 qore_dbg_string_scan_bytes;
+//! disables the ASCII prefix cache of UTF-8 strings: every character offset is walked from the start (debug builds)
+/** see dbg_set_ascii_prefix_cache()
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_ascii_prefix_disabled;
+//! adds to qore_dbg_string_scan_bytes
+#define QORE_DBG_STRING_SCAN(n) (qore_dbg_string_scan_bytes += static_cast<int64>(n))
+#else
+#define QORE_DBG_STRING_SCAN(n)
+#endif
+
 struct qore_string_private {
 public:
     size_t len = 0;
+    //! the capacity of the owned buffer; in a view, the ASCII prefix cache (see asciiPrefixStorage())
     size_t allocated = 0;
-    char* buf = nullptr;
+private:
+    char* buffer = nullptr;
+
+public:
     const QoreEncoding* encoding = nullptr;
 
     // View support: when `view_parent` is non-null, this string is a read-only
-    // view onto `view_parent`'s buffer starting at byte `view_offset`. The `len`
-    // field is still authoritative for the view's byte length; `buf` and
-    // `allocated` are unused in the view state (set to nullptr/0). On any
+    // view onto `view_parent`'s buffer starting at byte `view_offset` and
+    // reaching the end of that buffer. The `len`
+    // field is still authoritative for the view's byte length; `buffer` is
+    // unused in the view state (nullptr), and `allocated` holds the ASCII prefix
+    // cache instead of a capacity (see asciiPrefixStorage()). On any
     // mutation the view is materialised (bytes copied out, parent deref'd,
-    // view_parent/view_offset cleared) before writing.
+    // view_parent cleared) before writing.
     QoreStringNode* view_parent = nullptr;
+    //! the offset of a view in its parent; in a string that owns its storage, the ASCII prefix cache
     size_t view_offset = 0;
 
     // Back-pointer to the embedding QoreStringNode, if any.  Populated by
@@ -99,8 +133,220 @@ public:
     // the CoW convention (ref>1 strings must not be mutated in place).
     const AbstractQoreNode* owning_node = nullptr;
 
-    //! the sandbox memory charge of buf (see design/sandbox-resource-limits.md); synced with allocated
+    //! the sandbox memory charge of the buffer (see design/sandbox-resource-limits.md); synced with allocated
     QoreSandboxChargeRecord sb;
+
+    //! Provides a writable buffer before accessing owned storage or changing its length/capacity metadata.
+    /** Views materialize; empty storage left by clear()/giveBuffer() gains a terminator. */
+    DLLLOCAL char*& mutableBuffer() {
+        if (!buffer) {
+            prepareMutableBuffer();
+        }
+        return buffer;
+    }
+
+    DLLLOCAL QORE_INTERN_NOINLINE void prepareMutableBuffer();
+
+    //! Access after construction, materialization, check_char() or allocate() has established owned storage.
+    /** This explicit precondition keeps the already-checked append paths free of a second view check. Read-only
+        callers that can receive a view must use effective_buf(); other mutators must first use mutableBuffer().
+        Keeping the raw pointer private makes an unchecked access outside the storage implementation a compile error.
+    */
+    DLLLOCAL char*& ownedBuffer() {
+        assert(!view_parent);
+        return buffer;
+    }
+
+    DLLLOCAL char* const& ownedBuffer() const {
+        assert(!view_parent);
+        return buffer;
+    }
+
+    // ASCII prefix cache (issue #6138)
+    //
+    // A character offset in UTF-8 is found by walking the characters before it, so indexing every character of a
+    // string costs O(n^2).  The cache holds the byte length of a known ASCII prefix of the string, under the invariant
+    // that it is not greater than len and that all bytes before it are < 0x80.  In UTF-8 such a byte is always a whole
+    // and valid character, so a character offset in the prefix is its byte offset, and a walk can start at the end of
+    // the prefix with the same result and the same validation of the bytes that follow.  The value depends only on the
+    // bytes, not on the encoding: it is used only in UTF-8 (in other multi-byte encodings, such as Shift_JIS, a byte
+    // < 0x80 can be the second byte of a character), but is kept, like the bytes, when the encoding changes.
+    //
+    // There is no field of its own, so the size of the private data is unchanged: an owned string keeps it in
+    // view_offset, a view in allocated, the field that is not used in each state.  Readers extend it (an ASCII prefix
+    // can only grow while the bytes do not change) and publish it with relaxed atomic stores, as a string that is
+    // shared read-only between threads is read concurrently; all threads compute the same value from the same bytes.
+    // A mutation only happens on a string that no other thread reads (see QORE_ASSERT_MUTABLE), and must lower or
+    // reset the cache if it changes a byte in the prefix or makes the string shorter than it; appending bytes needs
+    // nothing, so appends do no work for it.
+
+    //! Returns the storage of the ASCII prefix cache: allocated in a view, view_offset otherwise
+    DLLLOCAL size_t& asciiPrefixStorage() const {
+        return const_cast<size_t&>(view_parent ? allocated : view_offset);
+    }
+
+    //! Returns the cached ASCII prefix length
+    DLLLOCAL size_t getAsciiPrefix() const {
+        size_t prefix = std::atomic_ref<size_t>(asciiPrefixStorage()).load(std::memory_order_relaxed);
+        assert(prefix <= len);
+        return prefix;
+    }
+
+    //! Resets the ASCII prefix cache of a string that owns its storage, for a mutation that can change any byte
+    DLLLOCAL void resetOwnedAsciiPrefix() {
+        assert(!view_parent);
+        view_offset = 0;
+    }
+
+    //! Lowers the ASCII prefix cache of a string that owns its storage to at most the given byte offset
+    /** For a mutation that keeps the bytes before \a offset
+    */
+    DLLLOCAL void lowerOwnedAsciiPrefix(size_t offset) {
+        assert(!view_parent);
+        if (view_offset > offset) {
+            view_offset = offset;
+        }
+    }
+
+    //! Returns the length of an ASCII prefix of the string that is at least \a need bytes long unless the string has
+    //! a byte >= 0x80 before it or is shorter
+    /** @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+
+        The result is the first offset with a byte >= 0x80, the length of the string, or a value >= \a need
+    */
+    DLLLOCAL size_t getAsciiPrefix(const char* b, size_t need) const {
+#ifdef DEBUG
+        if (qore_dbg_ascii_prefix_disabled.load(std::memory_order_relaxed)) {
+            return 0;
+        }
+#endif
+        size_t prefix = getAsciiPrefix();
+#ifndef NDEBUG
+        checkAsciiPrefix(b, prefix);
+#endif
+        if (prefix >= need || prefix == len) {
+            return prefix;
+        }
+        return extendAsciiPrefix(b, prefix, need);
+    }
+
+    //! Scans the bytes after the cached ASCII prefix and publishes the longer prefix found
+    DLLLOCAL QORE_INTERN_NOINLINE size_t extendAsciiPrefix(const char* b, size_t prefix, size_t need) const;
+
+#ifndef NDEBUG
+    //! Asserts the invariant of the ASCII prefix cache
+    /** The whole prefix is checked if it is short, its start and end otherwise, so that a debug build stays O(1) per
+        character offset
+    */
+    DLLLOCAL void checkAsciiPrefix(const char* b, size_t prefix) const;
+#endif
+
+    //! Returns the number of bytes of \a chars characters from byte offset \a start
+    /** As getEncoding()->getByteLen(b + start, b + len, chars, invalid); \a start must be the offset of a character
+
+        @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+    */
+    DLLLOCAL size_t getByteLenFrom(const char* b, size_t start, size_t chars, bool& invalid) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getByteLen(b + start, b + len, chars, invalid);
+        }
+        assert(start <= len);
+        // the first byte that does not have to be scanned; the character count can exceed the byte count
+        size_t need = chars < len - start ? start + chars : len;
+        size_t prefix = getAsciiPrefix(b, need);
+        if (start > prefix) {
+            size_t rc = QCS_UTF8->getByteLen(b + start, b + len, chars, invalid);
+            QORE_DBG_STRING_SCAN(rc);
+            return rc;
+        }
+        // the characters from start to the end of the prefix are single bytes
+        size_t ascii = prefix - start;
+        if (chars <= ascii) {
+            invalid = false;
+            return chars;
+        }
+        size_t rc = QCS_UTF8->getByteLen(b + prefix, b + len, chars - ascii, invalid);
+        QORE_DBG_STRING_SCAN(rc);
+        return ascii + rc;
+    }
+
+    //! As getByteLenFrom(), raising an \c INVALID-ENCODING exception and returning 0 if the string is not valid
+    DLLLOCAL size_t getByteLenFrom(const char* b, size_t start, size_t chars, ExceptionSink* xsink) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getByteLen(b + start, b + len, chars, xsink);
+        }
+        bool invalid;
+        size_t rc = getByteLenFrom(b, start, chars, invalid);
+        if (invalid) {
+            raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return rc;
+    }
+
+    //! Returns the number of characters from byte offset \a start to the end of the string
+    /** As getEncoding()->getLength(b + start, b + len, invalid); \a start must be the offset of a character
+
+        @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+    */
+    DLLLOCAL size_t getLengthFrom(const char* b, size_t start, bool& invalid) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getLength(b + start, b + len, invalid);
+        }
+        assert(start <= len);
+        size_t prefix = getAsciiPrefix(b, len);
+        if (start > prefix) {
+            QORE_DBG_STRING_SCAN(len - start);
+            return QCS_UTF8->getLength(b + start, b + len, invalid);
+        }
+        if (prefix == len) {
+            invalid = false;
+            return len - start;
+        }
+        QORE_DBG_STRING_SCAN(len - prefix);
+        return (prefix - start) + QCS_UTF8->getLength(b + prefix, b + len, invalid);
+    }
+
+    //! As getLengthFrom(), raising an \c INVALID-ENCODING exception and returning 0 if the string is not valid
+    DLLLOCAL size_t getLengthFrom(const char* b, size_t start, ExceptionSink* xsink) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getLength(b + start, b + len, xsink);
+        }
+        bool invalid;
+        size_t rc = getLengthFrom(b, start, invalid);
+        if (invalid) {
+            raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return rc;
+    }
+
+    //! Returns the character offset of byte offset \a end
+    /** As getEncoding()->getCharPos(b, b + end, xsink)
+
+        @param b the bytes of the string: effective_buf(), or ownedBuffer() in a mutator
+    */
+    DLLLOCAL size_t getCharPosTo(const char* b, size_t end, ExceptionSink* xsink) const {
+        if (getEncoding() != QCS_UTF8) {
+            return getEncoding()->getCharPos(b, b + end, xsink);
+        }
+        assert(end <= len);
+        size_t prefix = getAsciiPrefix(b, end);
+        if (end <= prefix) {
+            return end;
+        }
+        bool invalid;
+        QORE_DBG_STRING_SCAN(end - prefix);
+        size_t rc = QCS_UTF8->getCharPos(b + prefix, b + end, invalid);
+        if (invalid) {
+            raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return prefix + rc;
+    }
+
+    //! Raises the exception that QoreEncoding raises for text that is not valid in the encoding of the string
+    DLLLOCAL void raiseInvalidEncoding(ExceptionSink* xsink) const;
 
     DLLLOCAL qore_string_private() {
     }
@@ -108,19 +354,19 @@ public:
     DLLLOCAL qore_string_private(const qore_string_private &p) {
         allocated = p.len + STR_CLASS_EXTRA;
         allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-        buf = (char*)malloc(sizeof(char) * allocated);
+        ownedBuffer() = (char*)malloc(sizeof(char) * allocated);
         sb.sync(allocated);
         len = p.len;
         if (len)
-            memcpy(buf, p.effective_buf(), len);
-        buf[len] = '\0';
+            memcpy(ownedBuffer(), p.effective_buf(), len);
+        ownedBuffer()[len] = '\0';
         encoding = p.getEncoding();
     }
 
     DLLLOCAL ~qore_string_private() {
         sb.release();
-        if (buf) {
-            free(buf);
+        if (buffer) {
+            free(buffer);
         }
         if (view_parent) {
             dec_view_parent();
@@ -132,13 +378,15 @@ public:
     // is inlined here; the view path is out-of-line below (uses the complete
     // type of QoreStringNode to reach its priv).
     DLLLOCAL const char* effective_buf() const {
-        return view_parent ? effective_buf_view_path() : buf;
+        return view_parent ? effective_buf_view_path() : buffer;
     }
 
-    // Out-of-line slow path for views. Guaranteed to return a null-terminated
-    // buffer: end-slice views return parent->buf + offset (terminator is the
-    // parent's own); mid-slice views materialise lazily and return buf.
-    DLLLOCAL const char* effective_buf_view_path() const;
+    // Out-of-line slow path for views: returns the parent's buffer + offset, terminated by the parent's own
+    // terminator, as a view always reaches the end of its parent (QoreStringNode::makeView()); a read never copies,
+    // so reads of a view shared between threads are safe (issue #6239).
+    // Never inlined: the view path is cold, and a reader that inlines it needs a register for view_parent on its
+    // hot path for strings that are not views as well.
+    DLLLOCAL QORE_INTERN_NOINLINE const char* effective_buf_view_path() const;
 
     // Drops the strong reference held on view_parent. Out-of-line because
     // QoreStringNode::deref() is a complete-type call.
@@ -146,11 +394,16 @@ public:
 
     // Copy-on-write: if a view, copy the viewed bytes into a fresh owned
     // buffer and release the parent. No-op on a non-view. Must be called
-    // before any in-place mutation of buf/len/allocated.
+    // before any in-place mutation of buffer/len/allocated.
     DLLLOCAL void materialize();
 
+    //! Makes this empty string own a copy of \a n bytes at \a src, with the given known ASCII prefix
+    /** Allocates as materialize() does: the exact size, without the growth of an append (issue #6239)
+    */
+    DLLLOCAL void adoptCopy(const char* src, size_t n, size_t ascii_prefix);
+
     // Drop the view without copying bytes. Used by mutations that fully
-    // replace content (set/take/clear). After return: buf=nullptr,
+    // replace content (set/take/clear). After return: buffer=nullptr,
     // allocated=0, len=0, view_parent=nullptr. No-op on a non-view.
     DLLLOCAL void abandon_view();
 
@@ -165,6 +418,34 @@ public:
     DLLLOCAL int compute_substr_range(qore_offset_t offset, qore_offset_t length, size_t& byte_offset,
             size_t& byte_len, ExceptionSink* xsink) const;
 
+    //! returns the byte offset of \a p in the string's text, or -1 if it does not point into it
+    /** The text can move when the string changes; a source that is part of the target's text (including a view) is
+        located again at its offset after the buffer changes, or copied first
+    */
+    DLLLOCAL qore_offset_t ownDataOffset(const char* p) const {
+        if (view_parent) {
+            return ownDataOffsetViewPath(p);
+        }
+        // one unsigned comparison: a pointer before the buffer gives a difference larger than any length
+        uintptr_t d = reinterpret_cast<uintptr_t>(p) - reinterpret_cast<uintptr_t>(buffer);
+        return d < len ? static_cast<qore_offset_t>(d) : -1;
+    }
+
+    //! returns true if \a src is \a target or its text is part of the text of \a target
+    DLLLOCAL static bool isOwnSource(const qore_string_private& target, const qore_string_private& src) {
+        return &target == &src || (src.len && target.ownDataOffset(src.effective_buf()) >= 0);
+    }
+
+    //! appends a null-terminated source that is part of the string's text
+    DLLLOCAL void concatOwnText(const char* str);
+
+    //! the view path of ownDataOffset(): the text is in the parent's buffer
+    DLLLOCAL qore_offset_t ownDataOffsetViewPath(const char* p) const;
+
+    //! grows the string to hold \a i bytes (check_char()) and returns where \a src is then: in the moved text if it
+    //! was part of it, else \a src (out of line: the slow path of the operations that append a source)
+    DLLLOCAL const char* growKeepingSource(size_t i, const char* src);
+
     DLLLOCAL void check_char(size_t i) {
         if (view_parent) {
             materialize();
@@ -173,7 +454,7 @@ public:
             size_t d = i >> 2;
             allocated = i + (d < STR_CLASS_BLOCK ? STR_CLASS_BLOCK : d);
             allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            buf = (char*)realloc(buf, allocated * sizeof(char));
+            ownedBuffer() = (char*)realloc(ownedBuffer(), allocated * sizeof(char));
             sb.sync(allocated);
         }
     }
@@ -223,7 +504,11 @@ public:
             if (pos < 0) {
                 return -1;
             }
-        } else if (pos > 0 && pos > (qore_offset_t)len) {
+        } else if (pos >= (qore_offset_t)len) {
+            // a position at or past the end is the last byte; the terminator is not part of the string
+            if (!len) {
+                return -1;
+            }
             pos = len - 1;
         }
 
@@ -239,21 +524,26 @@ public:
     }
 
     // NOTE: this is purely byte oriented - no character semantics here
+    // returns the first byte position at or after pos of any of the bytes in str, like rfindAny() searching forwards
     DLLLOCAL qore_offset_t findAny(const char* str, qore_offset_t pos = 0) {
         if (pos < 0) {
             pos = len + pos;
             if (pos < 0) {
                 pos = 0;
             }
-        } else if (pos > 0 && pos > (qore_offset_t)len) {
+        } else if (pos >= (qore_offset_t)len) {
             return -1;
         }
         const char* b = effective_buf();
-        const char* p;
-        if (!(p = strstr(b + pos, str))) {
-            return -1;
+        // the search covers the string's bytes only (it can contain null bytes), not its terminator
+        for (const char* p = b + pos, * e = b + len; p < e; ++p) {
+            for (const char* t = str; *t; ++t) {
+                if (*p == *t) {
+                    return (qore_offset_t)(p - b);
+                }
+            }
         }
-        return (qore_offset_t)(p - b);
+        return -1;
     }
 
     // NOTE: this is purely byte oriented - no character semantics here
@@ -263,7 +553,11 @@ public:
             if (pos < 0) {
                 return -1;
             }
-        } else if (pos > 0 && pos > (qore_offset_t)len) {
+        } else if (pos >= (qore_offset_t)len) {
+            // a position at or past the end is the last byte; the terminator is not part of the string
+            if (!len) {
+                return -1;
+            }
             pos = len - 1;
         }
 
@@ -539,9 +833,10 @@ public:
         if (view_parent) {
             materialize();
         }
-        memmove(buf, buf + prefix.size(), len - prefix.size());
+        memmove(ownedBuffer(), ownedBuffer() + prefix.size(), len - prefix.size());
         len -= prefix.size();
-        buf[len] = '\0';
+        ownedBuffer()[len] = '\0';
+        resetOwnedAsciiPrefix();
     }
 
     //! returns true if the string contains the given text, which must be in the encoding of the string
@@ -592,9 +887,11 @@ public:
         if (other.view_parent) {
             other.materialize();
         }
-        std::swap(buf, other.buf);
+        std::swap(ownedBuffer(), other.ownedBuffer());
         std::swap(len, other.len);
         std::swap(allocated, other.allocated);
+        // the ASCII prefix caches of owned strings go with their bytes
+        std::swap(view_offset, other.view_offset);
         sb.swap(other.sb);
     }
 
@@ -612,7 +909,7 @@ public:
             return 0;
         }
         const char* b = effective_buf();
-        clen = getEncoding()->getLength(b, b + len, xsink);
+        clen = getLengthFrom(b, 0, xsink);
         return *xsink ? -1 : 0;
     }
 
@@ -664,7 +961,7 @@ public:
         qore_offset_t ind = index_simple(b + pos, len - pos, needle->c_str(), needle->size(), 0,
             getCharAlignment(), pos);
         if (ind != -1) {
-            ind = getEncoding()->getCharPos(b, b + pos + ind, xsink);
+            ind = getCharPosTo(b, pos + ind, xsink);
             if (*xsink)
                 return -1;
         }
@@ -676,7 +973,8 @@ public:
         if (!needle.strlen()) {
             return emptyNeedleIndex(pos, len);
         }
-        if (needle.strlen() + pos > len)
+        // a negative position is an offset from the end, which bindex(const char*, ...) resolves
+        if (pos >= 0 && needle.strlen() + pos > len)
             return -1;
 
         return bindex(needle.c_str(), pos, needle.size());
@@ -686,7 +984,8 @@ public:
         if (needle.empty()) {
             return emptyNeedleIndex(pos, len);
         }
-        if (needle.size() + pos > len)
+        // a negative position is an offset from the end, which bindex(const char*, ...) resolves
+        if (pos >= 0 && needle.size() + pos > len)
             return -1;
 
         return bindex(needle.c_str(), pos, needle.size());
@@ -742,13 +1041,17 @@ public:
         // get positive character offset if negative
         if (pos < 0) {
             // get the length of the string in characters
-            size_t clen = getEncoding()->getLength(b + start, b + len, xsink);
+            size_t clen = getLengthFrom(b, start, xsink);
             if (*xsink)
                 return -1;
             pos = clen + pos;
+            // a position before the start stays negative: the caller handles it as with a single-byte encoding
+            if (pos <= 0) {
+                return 0;
+            }
         }
         // now get the byte position from this character offset
-        pos = getEncoding()->getByteLen(b + start, b + len, pos, xsink);
+        pos = getByteLenFrom(b, start, pos, xsink);
         return *xsink ? -1 : 0;
     }
 
@@ -785,18 +1088,36 @@ public:
             return rindex_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
         }
 
-        // do multi-byte rindex
-        if (findByteOffset(pos, xsink))
+        // do multi-byte rindex: as with a single-byte encoding, the search covers the characters from the start up
+        // to and including the character at pos, so the byte range ends after that character, not at its first byte
+        size_t clen = 0;
+        if (pos < 0) {
+            if (getCharLength(clen, xsink)) {
+                return -1;
+            }
+            pos += clen;
+            if (pos < 0) {
+                return -1;
+            }
+        }
+        // the number of bytes in the characters up to and including the one at pos; the default position (-1, the
+        // last character) needs no second scan
+        size_t blen = (clen && (size_t)pos + 1 == clen)
+            ? len
+            : getEncoding()->getByteLen(b, b + len, (size_t)pos + 1, xsink);
+        if (*xsink) {
             return -1;
-        if (pos < 0)
+        }
+        if (!blen) {
             return -1;
+        }
 
         // get byte rindex position
-        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
+        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), blen - 1, getCharAlignment());
 
         // calculate character position from byte position
         if (ind && ind != -1) {
-            ind = getEncoding()->getCharPos(b, b + ind, xsink);
+            ind = getCharPosTo(b, ind, xsink);
             if (*xsink)
                 return 0;
         }
@@ -829,7 +1150,8 @@ public:
             return -1;
         }
 
-        if (needle_len + (len - pos) > len) {
+        // the match lies in the bytes up to and including pos, as with rindex()
+        if (needle_len > (size_t)pos + 1) {
             return -1;
         }
 
@@ -873,10 +1195,13 @@ public:
     DLLLOCAL void concat_intern(const char* p, size_t plen) {
         assert(p);
         assert(plen);
-        check_char(len + plen);
-        memcpy(buf + len, p, plen);
+        // only growth or a view moves the text (the test is the one that check_char() makes)
+        if (view_parent || len + plen >= allocated) {
+            p = growKeepingSource(len + plen, p);
+        }
+        memcpy(ownedBuffer() + len, p, plen);
         len += plen;
-        buf[len] = '\0';
+        ownedBuffer()[len] = '\0';
     }
 
     DLLLOCAL void concat_simple(const qore_string_private& str, qore_offset_t pos) {
@@ -885,7 +1210,8 @@ public:
             if (pos < 0)
                 pos = 0;
         }
-        else if (pos >= (qore_offset_t)str.len)
+        // nothing is concatenated from the end of str (or from an empty str)
+        if (pos >= (qore_offset_t)str.len)
             return;
 
         concat_intern(str.effective_buf() + pos, str.len - pos);
@@ -908,28 +1234,35 @@ public:
                 return -1;
             if (pos < 0)
                 pos = 0;
-            else if (pos > (qore_offset_t)str.len)
-                return 0;
         }
+        // nothing is concatenated from the end of str (or from an empty str)
+        if (pos >= (qore_offset_t)str.len)
+            return 0;
 
         concat_intern(str.effective_buf() + pos, str.len - pos);
         return 0;
     }
 
+    // concatenates plen bytes of str from pos; a negative plen leaves that many bytes off the end of str; the range
+    // is clamped to str
     DLLLOCAL void concat_simple(const qore_string_private& str, qore_offset_t pos, qore_offset_t plen) {
         if (pos < 0) {
             pos = str.len + pos;
             if (pos < 0)
                 pos = 0;
-        } else if (pos >= (qore_offset_t)str.len)
+        }
+        // nothing is concatenated from the end of str (or from an empty str)
+        if (pos >= (qore_offset_t)str.len)
             return;
 
+        // the number of bytes after pos
+        qore_offset_t rest = str.len - pos;
         if (plen < 0) {
-            plen = str.len + plen;
+            plen = rest + plen;
             if (plen <= 0)
                 return;
-        } else if (plen > (qore_offset_t)str.len)
-            plen = str.len;
+        } else if (plen > rest)
+            plen = rest;
 
         concat_intern(str.effective_buf() + pos, plen);
     }
@@ -942,7 +1275,7 @@ public:
             return concatStateful(str, pos, &plen, xsink);
         }
         if (!getEncoding()->isMultiByte()) {
-            concat_simple(str, pos);
+            concat_simple(str, pos, plen);
             return 0;
         }
 
@@ -961,8 +1294,9 @@ public:
             return -1;
         if (plen <= 0)
             return 0;
-        if (plen > (qore_offset_t)str.len)
-            plen = str.len;
+        // the bytes after pos
+        if (plen > (qore_offset_t)str.len - pos)
+            plen = str.len - pos;
 
         concat_intern(str.effective_buf() + pos, plen);
         return 0;
@@ -978,7 +1312,7 @@ public:
         size_t rc;
         if (i) {
             const char* b = effective_buf();
-            rc = getEncoding()->getByteLen(b, b + len, i, xsink);
+            rc = getByteLenFrom(b, 0, i, xsink);
             if (*xsink)
                 return -1;
         } else
@@ -994,8 +1328,9 @@ public:
         if (view_parent) {
             materialize();
         }
-        memmove(buf, buf + num, len - num);
+        memmove(ownedBuffer(), ownedBuffer() + num, len - num);
         len -= num;
+        resetOwnedAsciiPrefix();
         return num;
     }
 
@@ -1006,7 +1341,8 @@ public:
         }
         if (allocated) {
             len = 0;
-            buf[0] = '\0';
+            ownedBuffer()[0] = '\0';
+            resetOwnedAsciiPrefix();
         }
     }
 
@@ -1015,18 +1351,18 @@ public:
             materialize();
         }
         if (allocated) {
-            buf[len] = c;
+            ownedBuffer()[len] = c;
             check_char(++len);
-            buf[len] = '\0';
+            ownedBuffer()[len] = '\0';
             return;
         }
         // allocate new string buffer
         allocated = STR_CLASS_BLOCK;
         len = 1;
-        buf = (char*)malloc(sizeof(char) * allocated);
+        ownedBuffer() = (char*)malloc(sizeof(char) * allocated);
         sb.sync(allocated);
-        buf[0] = c;
-        buf[1] = '\0';
+        ownedBuffer()[0] = c;
+        ownedBuffer()[1] = '\0';
     }
 
     DLLLOCAL void concat(const qore_string_private* str) {
@@ -1037,9 +1373,9 @@ public:
             // if priv->buffer needs to be resized
             check_char(str->len + len + STR_CLASS_EXTRA);
             // concatenate new string (source may be a view)
-            memcpy(buf + len, str->effective_buf(), str->len);
+            memcpy(ownedBuffer() + len, str->effective_buf(), str->len);
             len += str->len;
-            buf[len] = '\0';
+            ownedBuffer()[len] = '\0';
         }
     }
 
@@ -1051,6 +1387,12 @@ public:
     }
 
     DLLLOCAL void concat(const char *str) {
+        // a source that is part of the string is appended with its size, as the string grows while it is read (out
+        // of line, so that this function stays small enough to be inlined)
+        if (str && ownDataOffset(str) >= 0) {
+            concatOwnText(str);
+            return;
+        }
         // if it's not a null string
         if (str) {
             size_t i = 0;
@@ -1059,12 +1401,12 @@ public:
                 // if priv->buffer needs to be resized
                 check_char(len);
                 // concatenate one character at a time
-                buf[len++] = str[i++];
+                ownedBuffer()[len++] = str[i++];
             }
             // see if priv->buffer needs to be resized for '\0'
             check_char(len);
             // terminate string
-            buf[len] = '\0';
+            ownedBuffer()[len] = '\0';
         }
     }
 
@@ -1080,57 +1422,53 @@ public:
         nothing is appended if the output cannot be formatted, such as an output longer than INT_MAX characters
     */
     DLLLOCAL int vsprintf(const char *fmt, va_list args, bool* failed = nullptr) {
-        size_t fmtlen = ::strlen(fmt);
-        // ensure minimum space is free
-        if ((allocated - len - fmtlen) < MIN_SPRINTF_BUFSIZE) {
-            allocated += fmtlen + MIN_SPRINTF_BUFSIZE;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            // resize buffer
-            buf = (char*)realloc(buf, allocated * sizeof(char));
-            sb.sync(allocated);
-        }
-        // set free buffer size
-        qore_offset_t free = allocated - len;
-
-        // copy formatted string to buffer
-        int i = ::vsnprintf(buf + len, free, fmt, args);
-
+        // the arguments may be part of the string's text: it is formatted separately before the string is changed
+        char sbuf[256];
+        va_list args2;
+        va_copy(args2, args);
+        int i = ::vsnprintf(sbuf, sizeof(sbuf), fmt, args);
+        std::unique_ptr<char, QoreFreeDeleter> big;
+        const char* out = sbuf;
 #ifdef HPUX
-        // vsnprintf failed but didn't tell us how big the buffer should be
-        if (i < 0) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " buf=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, buf, fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
-            // resize buffer
-            allocated += STR_CLASS_EXTRA;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            buf = (char*)realloc(buf, sizeof(char) * allocated);
-            sb.sync(allocated);
-            *(buf + len) = '\0';
-            return -1;
+        // vsnprintf() fails without giving the size needed: the buffer is doubled until it is large enough
+        size_t big_size = sizeof(sbuf);
+        while (i < 0 && big_size < (static_cast<size_t>(1) << 30)) {
+            big_size *= 2;
+            big.reset(static_cast<char*>(malloc(big_size)));
+            if (!big) {
+                i = -1;
+                break;
+            }
+            va_list args3;
+            va_copy(args3, args2);
+            i = ::vsnprintf(big.get(), big_size, fmt, args3);
+            va_end(args3);
+            out = big.get();
         }
 #else
+        if (i >= static_cast<int>(sizeof(sbuf))) {
+            big.reset(static_cast<char*>(malloc(static_cast<size_t>(i) + 1)));
+            // a buffer that cannot be allocated fails the call as an output that cannot be formatted
+            i = big ? ::vsnprintf(big.get(), static_cast<size_t>(i) + 1, fmt, args2) : -1;
+            out = big.get();
+        }
+#endif
+        va_end(args2);
         if (i < 0) {
             // the output cannot be formatted: nothing is appended, and repeating the call cannot change that
-            *(buf + len) = '\0';
+            mutableBuffer();
+            if (ownedBuffer()) {
+                *(ownedBuffer() + len) = '\0';
+            }
             if (failed) {
                 *failed = true;
             }
             return 0;
         }
-        if (i >= free) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " buf=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, buf, fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
-            // resize buffer
-            allocated = len + i + STR_CLASS_EXTRA;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            buf = (char*)realloc(buf, sizeof(char) * allocated);
-            sb.sync(allocated);
-            *(buf + len) = '\0';
-            return -1;
-        }
-#endif
-
+        check_char(len + i);
+        memcpy(ownedBuffer() + len, out, i);
         len += i;
+        ownedBuffer()[len] = '\0';
         return 0;
     }
 
@@ -1184,7 +1522,7 @@ public:
         const char* src = effective_buf();
         if (getEncoding()->isMultiByte()) {
             const char* p = src;
-            char* targ_end = targ.buf + len;
+            char* targ_end = targ.ownedBuffer() + len;
             const char* end = src + len;
             while (p < end) {
                 bool invalid;
@@ -1193,7 +1531,7 @@ public:
                     bl = 1;
                 }
                 targ_end -= bl;
-                if (targ_end < targ.buf) {
+                if (targ_end < targ.ownedBuffer()) {
                     break;
                 }
                 // memcpy() and not strncpy(): multi-byte encodings such as UTF-16* have characters
@@ -1204,11 +1542,11 @@ public:
             }
         } else {
             for (size_t i = 0; i < len; ++i) {
-                targ.buf[i] = src[len - i - 1];
+                targ.ownedBuffer()[i] = src[len - i - 1];
             }
         }
 
-        targ.buf[len] = '\0';
+        targ.ownedBuffer()[len] = '\0';
         targ.len = len;
     }
 
@@ -1292,13 +1630,13 @@ public:
         if ((unsigned)allocated >= requested_size)
             return 0;
         requested_size = (requested_size / 0x10 + 1) * 0x10; // fill complete cache line
-        char* aux = (char*)realloc(buf, requested_size * sizeof(char));
+        char* aux = (char*)realloc(ownedBuffer(), requested_size * sizeof(char));
         if (!aux) {
             assert(false);
             // FIXME: std::bad_alloc() should be thrown here;
             return -1;
         }
-        buf = aux;
+        ownedBuffer() = aux;
         allocated = requested_size;
         sb.sync(allocated);
         return 0;
@@ -1411,17 +1749,17 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
 
     qore_string_private *p = new qore_string_private;
     p->len = b->size() - 1;
-    p->buf = (char*)b->giveBuffer();
+    p->ownedBuffer() = (char*)b->giveBuffer();
     p->encoding = qe;
 
     // free binary object
     b = 0;
 
     // check for null termination
-    if (p->buf[p->len]) {
+    if (p->ownedBuffer()[p->len]) {
         ++p->len;
-        p->buf = (char*)realloc(p->buf, p->len + 1);
-        p->buf[p->len] = '\0';
+        p->ownedBuffer() = (char*)realloc(p->ownedBuffer(), p->len + 1);
+        p->ownedBuffer()[p->len] = '\0';
     }
 
     p->allocated = p->len + 1;
@@ -1440,5 +1778,51 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     @param len the length of the string in bytes
 */
 DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
+
+
+//! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves
+class QoreStringOwnSource {
+public:
+    //! a source of \a n bytes
+    DLLLOCAL QoreStringOwnSource(const qore_string_private& str, const char* p, size_t n) : ptr(p) {
+        if (p && n && str.ownDataOffset(p) >= 0) {
+            copyIntern(p, n);
+        }
+    }
+
+    //! a null-terminated source
+    DLLLOCAL QoreStringOwnSource(const qore_string_private& str, const char* p) : ptr(p) {
+        if (p && str.ownDataOffset(p) >= 0) {
+            copyIntern(p, ::strlen(p));
+        }
+    }
+
+    DLLLOCAL const char* get() const {
+        return ptr;
+    }
+
+    //! returns false if the source had to be copied and the copy could not be made (the operation then fails)
+    DLLLOCAL bool ok() const {
+        return !failed;
+    }
+
+private:
+    std::unique_ptr<char, QoreFreeDeleter> copy;
+    const char* ptr;
+    bool failed = false;
+
+    //! copies the source with a terminator
+    DLLLOCAL void copyIntern(const char* p, size_t n) {
+        copy.reset(static_cast<char*>(malloc(n + 1)));
+        if (!copy) {
+            ptr = nullptr;
+            failed = true;
+            return;
+        }
+        memcpy(copy.get(), p, n);
+        copy.get()[n] = '\0';
+        ptr = copy.get();
+    }
+};
 
 #endif

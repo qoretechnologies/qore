@@ -61,6 +61,30 @@ barrier waits for or discards it; it is released on the calling thread only when
 the I/O threads have exited) or the objects' program is shutting down.  Builtin objects whose destruction is pure
 C++ (e.g. `Promise`, `EventNotifier`) may still be released on the I/O thread.
 
+The controller's references to an operation whose result goes to a result `Queue` are handed over before the result
+is pushed: `PollInfo::cleanup()` runs before `deliverResult()` on the completion paths, and `deliverResult()` releases
+its own reference to the operation (which the push does not use; the result holds one) before the push.  A thread
+that receives the result, drops its own references to the operation and calls `flushCallbacks()` (which waits for
+the `DT_RELEASE` items dispatched before it) therefore sees the operation destroyed, whatever the I/O thread does
+after the push; before, the reference of `deliverResult()` was released after the push, and such a thread could see
+the operation still alive (module-code-cleanup.qtest, rarely, under load).  Only the references to the result
+`Queue`'s object, which the push uses, are released after it; the receiving thread holds the `Queue` itself.
+The callback worker that runs a `continuePoll()` step releases its own reference to the operation before it sends
+the step's result to the I/O thread (`enqueueContinuePollResult()`): `flushCallbacks()` does not wait for
+`continuePoll()` items (`QoreCallDispatcher::waitForIdle()`), so a reference the worker released after sending the
+result could still be held when the receiving thread checks.  While the operation is in the controller's cache this
+release is not the last one; when a cancellation has removed it, the destructor runs there as it would at the end of
+the item (in the item's Program, with the module cleanup delegation, as a callback worker).
+`asyncio_result_release_order.qtest` checks these with the `dbg_async_io_pause_after_delivery()` and
+`dbg_async_io_pause_after_step_result()` debug hooks, which make the I/O thread wait after the push, or the worker
+wait after it sent the step's result.
+
+Likewise, the controller's reference to the user data of a fired timer (its callback) is handed over before the
+callback is dispatched, after the dispatched callback has taken its own: a thread that sees the callback's work done
+and then flushes the callbacks sees the reference released.  Before, it was handed over after the dispatch, and with
+`dbg_async_io_hold_releases()` it could land among the references held for the next operation of a test (the
+module-code-cleanup.qtest case waited for the wrong releases then).
+
 The controller's lock `m` is not recursive, and the cleanup of a command that will not be processed
 (`cleanupAbandonedCommand()`: the commands after a Quit in an I/O thread's batch, those drained when a thread stops
 for good, a submission refused while the controller shuts down) delivers a canceled result, logs, releases
@@ -1302,18 +1326,17 @@ client closed), because a client cannot distinguish the two closes deterministic
 
 ## Platform-Specific Fixes
 
-### macOS accept() O_NONBLOCK Inheritance
+### Accepted sockets are non-blocking
 
 File: `include/qore/intern/qore_socket_private.h`
 
-On macOS/Darwin, `accept()` inherits `O_NONBLOCK` from the listening socket. In async I/O
-mode, listener sockets are set non-blocking for `poll()` / `kqueue()`. Without clearing the
-flag, accepted sockets perform non-blocking reads during SSL handshake, causing partial TLS
-record reads that manifest as `SSL_R_PACKET_LENGTH_TOO_LONG`.
-
-The fix clears `O_NONBLOCK` via `fcntl(F_SETFL)` on every accepted fd immediately after
-`accept()` returns. The second `fcntl` return value is unchecked — failure is essentially
-impossible on a just-accepted fd and non-critical.
+On macOS/Darwin, `accept()` makes the accepted socket non-blocking when the listening socket is.  When TLS
+handshakes still ran on the calling thread with blocking reads, that made a handshake read part of a TLS record and
+fail with `SSL_R_PACKET_LENGTH_TOO_LONG`, so `O_NONBLOCK` was cleared on every accepted descriptor, and the first
+operation on the I/O thread set it again.  Every handshake is now a non-blocking poll operation step that handles
+`SSL_ERROR_WANT_READ` / `SSL_ERROR_WANT_WRITE`, so an accepted socket is non-blocking from the start, as every socket
+of the library is: `qore_accept_nonblock()` uses `accept4(SOCK_CLOEXEC | SOCK_NONBLOCK)` on Linux and sets the flag
+where the platform does not; see "Sync I/O on Born-Non-Blocking Sockets".
 
 ### Closing a Socket While It Is Polled
 
@@ -1516,9 +1539,15 @@ on such a socket — `::recv`, `::send`, `::accept`, `SSL_read`, `SSL_write`, `S
   `doSSLUpgradeNonBlockingIO()` for handshake paths) and retry.
 
 Both `isDataAvailable()` and `isSocketDataAvailable()` accept `timeout_ms < 0` as "wait forever",
-which preserves the historical "no explicit timeout" semantics.  `OptionalNonBlockingHelper` is a
-no-op when the socket is already non-blocking, so RAII flipping is harmless on the new-style
-controller-owned sockets but still correct on legacy blocking sockets.
+which preserves the historical "no explicit timeout" semantics.
+
+A socket of the library is non-blocking from its creation (`qore_socket_cloexec_nonblock()`,
+`qore_accept_nonblock()`: `SOCK_NONBLOCK` where the platform has it) and stays so on every thread;
+`qore_socket_private::fd_nonblocking` records it, so `OptionalNonBlockingHelper` and
+`set_non_blocking(true)` make no system call for it.  A descriptor that came from elsewhere is made
+non-blocking once, at its first operation.  No path makes a socket blocking again: it used to be
+restored on threads other than the I/O threads, which cost two `fcntl()` calls per operation and left
+the I/O thread a blocking descriptor until its next operation.
 
 `SSL_MODE_AUTO_RETRY` does **not** make a non-blocking socket behave like a blocking one — it only
 covers internal TLS bookkeeping (NewSessionTicket, post-handshake renegotiation).  Sync SSL code
@@ -1692,7 +1721,8 @@ follows at once fail with `SOCKET-NON-BLOCK-ERROR`, depending on that worker's t
   Phase 3 for an operation ended by the descriptor check.  It cannot release its claim in
   `handleCompletion()`, which is called for every completion: its `abort()` decides whether the
   socket is closed, and an `abort()` dispatched to a callback worker (a %Qore subclass that
-  overrides it) runs after `handleCompletion()`
+  overrides it) runs after `handleCompletion()` (the result is delivered after that `abort()`; see
+  "The result of an aborted operation follows its abort()")
 - the operations whose `abort()` only releases their claim (the readiness wait of
   `Socket::isWriteFinished()` and its C++ counterpart in `QoreSocketObject.cpp`, and the accept
   operations) release it in `handleCompletion()`
@@ -1819,6 +1849,10 @@ the idle period and does a `recv(MSG_PEEK)` to confirm silence, then closes.  Qo
   is in the middle of a WebSocket hijack (HTTP/1.1 → WS via `101 Switching Protocols`).
   Without this guard, `handleConnectionResult` would call `continueReading()` which throws
   `HTTPCLIENT-STATE-ERROR` and closes the socket that the WebSocket layer is now using.
+  `isProtocolSwitched()` is sticky: it stays true when the H1 operation is aborted or closed after the 101 was
+  delivered (`switched_protocol`), as the completion is delivered on a worker at any time and, for a closed
+  operation, `handleConnectionResult` would call `conn.close()` → `cancelAndClose()` on the WebSocket's socket
+  (issue #5985).
 
 The end state: H1/H2 idle connections are closed proactively by the poll op, invisibly to
 callers, with a deterministic upper bound (`idle_timeout`) on how long a stale pooled connection
@@ -1879,15 +1913,17 @@ Layers, in firing order:
    `HTTP1-CONNECTION-CLOSED` so the conn-mgr retries on a fresh connection
    without waiting for the I/O thread to observe the same event.
 
-5. **Application-level `request_timeout` + retry** (curl `Curl_retry_request`
+5. **Application-level `io_timeout` + retry** (curl `Curl_retry_request`
    analog).  For the genuine half-open case (server's TCP stack alive,
-   application silent — not caught by any of the layers above), the request
-   eventually exceeds `opts.request_timeout` (default 60s).
-   `HTTPCLIENT-TIMEOUT` is treated as a retryable connection error by
-   `HttpClientConnectionManager.qc:isConnectionErrorStatic`, so the conn-mgr
-   transparently replays on a fresh connection.  Slower than an in-band
-   stale-detect timer would be, but correct: it can't mistake a slow
-   legitimate response for a dead connection.
+   application silent — not caught by any of the layers above), a request on
+   a reused connection that receives no data for `opts.io_timeout` fails with
+   `HTTPCLIENT-TIMEOUT`, and the conn-mgr replays it once on a fresh
+   connection within the request's remaining time.  The request's timeout
+   (`request_timeout` or the caller's) is a hard deadline for the whole
+   request (#6429): nothing is replayed once it has run out, so without
+   `io_timeout` the half-open case ends the request with `HTTPCLIENT-TIMEOUT`.
+   It can't mistake a slow legitimate response that keeps sending data for a
+   dead connection.
 
    **Why no in-band timer.**  A fixed no-response timer in `handleRecvHeader`
    would be an application-layer latency check masquerading as a connection
@@ -1967,6 +2003,37 @@ hook fires exactly once.  The Qore-side `onComplete` dispatch is still triggered
 controller's own cache cleanup independently of the hook, so there is no duplicate
 notification — the Qore manager sees `onComplete`, the C++ manager (when present) sees
 `onClosedHook`, and a connection is owned by exactly one of them at a time.
+
+### The result of an aborted operation follows its abort()
+
+A canceled operation, and one that times out, is aborted before its result is delivered, so that the receiver of the
+result (the waiter on its result queue, or its `onComplete()`) sees it aborted: an HTTP/2 SSE stream's
+`SseStreamCloseNotifier` acts on the end of the connection only when `Http2PollOperation::isStreamPeerClosed()` is
+true, which `abort()` makes it.  An `abort()` that runs on a callback worker (one implemented in %Qore, or a C++
+operation's that `needsWorkerDispatch()`) was dispatched as a work item of its own, and the result was delivered on
+the I/O thread at the same time (pushed to the result queue, or `onComplete()` dispatched as another work item), so
+the result could be handled before, or while, `abort()` ran: a removal of a listener then left the SSE stream of an
+HTTP/2 connection running, as its notifier saw the connection open.
+
+The result is now delivered by `AsyncIoControllerPriv::AbortThenDeliverTask`, which `doCancelIntern()` and Phase 3
+(for a timeout, after the operation's last state event and its removal from the cache) hand to the `DT_ABORT` item:
+
+- the worker runs the task after `abort()` returns, in the same item, after ending a cancellation aimed at `abort()`
+  and clearing the thread-local data that it set, as between two items: the task pushes the result to the result
+  queue and calls `onComplete()` itself, so a stop of the dispatcher, which waits for the item, waits for it too
+- unless the operation's Program or owner has begun to shut down while `abort()` ran: the task is then discarded, as
+  an `onComplete()` queued as an item of its own would have been
+- a discarded task (the item is discarded at `enqueue()`, drained by `markOwnerShuttingDown()`, skipped by the worker,
+  or left at a stop of the dispatcher) pushes the result to the result queue only; at `enqueue()` on the I/O thread
+  it is discarded there, so the result does not wait for a worker
+
+So an `abort()` that runs on a worker must not wait for the receiver of its result, and a synchronous `exec()` of a
+C++ operation whose abort `needsWorkerDispatch()` gets its timeout result only when a worker has run the abort.  The
+ordering is checked by `qore/classes/AsyncIoController/asyncio_abort_before_result.qtest` (with the debug hook
+`dbg_async_io_on_complete_dispatched()`), and the discarded deliveries by `asyncio_abort_discard.qtest` there, which
+runs the dispatcher with a single worker held by a blocked `abort()` and marks an owner as shutting down with the debug
+hook `dbg_async_io_mark_owner_shutting_down()`.  The discard at a program shutdown has no test of its own: it takes the
+same path as an owner's, from a check of `shutting_down_programs` beside that of `shutting_down_owners`.
 
 ### QoreCallDispatcher Worker Loop Ordering Contract
 

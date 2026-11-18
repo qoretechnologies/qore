@@ -9,6 +9,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %requires FsUtil
 %requires MemberAccessorChecks
 %requires ../../ExecModeHarness.qm
@@ -20,7 +21,8 @@ class MemberAccessorTest inherits QUnit::Test {
     public {
         #! every check passes
         const Checks = ("typed", "object", "auto", "subclass", "cpp-created", "type-error", "private", "self",
-            "declaration", "cpp-api", "slice-merge", "reference", "static");
+            "declaration", "cpp-api", "slice-merge", "reference", "static",
+            "fold");
 
         #! the execution modes that the worker is run in
         const ExecModes = ("ast", "ir", "jit", "tiered");
@@ -32,7 +34,7 @@ class MemberAccessorTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("MemberAccessorTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("checks in this program", \testInProgram());

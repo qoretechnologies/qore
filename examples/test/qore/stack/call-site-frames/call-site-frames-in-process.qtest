@@ -1,0 +1,33 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%include CallSiteFrames.qc
+
+%exec-class CallSiteFramesInProcessTest
+
+#! Tests that the call stack frames of calls are located at their call expressions in the test's execution mode
+/** call-site-frames.qtest runs the script in every execution mode and as an AOT-compiled executable in child
+    processes; this test runs it in a Program of its own process, so each CI job checks its execution mode
+*/
+class CallSiteFramesInProcessTest inherits QUnit::Test {
+    constructor() : QUnit::Test("CallSiteFramesInProcess", "1.0", \ARGV) {
+        addTestCase("frames are located at their calls", \frameTest());
+        set_return_value(main());
+    }
+
+    frameTest() {
+        string path = get_script_dir() + CallSiteFrames::Script;
+        Program pgm(PO_NEW_STYLE);
+        pgm.define("NO_OUTPUT", True);
+        pgm.parse(ReadOnlyFile::readTextFile(path), CallSiteFrames::Script);
+        pgm.run();
+        assertEq(CallSiteFrames::Expected, pgm.getGlobalVariable("out"));
+    }
+}

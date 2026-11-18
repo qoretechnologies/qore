@@ -46,7 +46,11 @@ public:
         QoreReflectionConstant(pgm, ce), ns(ns) {
     }
 
-    DLLLOCAL virtual const QoreClass* getClass() const {
+    DLLLOCAL virtual const QoreNamespace* getConstantNamespace() const override {
+        return ns;
+    }
+
+    DLLLOCAL virtual const QoreClass* getClass() const override {
         return nullptr;
     }
 };

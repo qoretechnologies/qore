@@ -51,6 +51,9 @@ module RestClientIo {
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
     license = "MIT";
+    # the module's own code waits between request retries with usleep()
+    # and defers thread cancellation while it completes a request (defer_thread_cancel())
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
 }
 
 /** @mainpage RestClientIo Module
@@ -1084,7 +1087,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
             /** Other keys are ignored, so that a subclass or a connection can pass options of its own in the same
                 hash; this set includes the options of @ref RestClient::RestConnection "RestConnection", so that
-                @ref RestClient::RestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
+                @ref RestClient::AbstractRestConnection::getAsyncImpl() "getAsyncImpl()" can pass its full options hash
                 verbatim.
             */
             const hash<string, bool> KnownOptions = {
@@ -2194,12 +2197,12 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                 throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be greater than zero";
             }
             return restSseReaderIntern(method, path, hdr, body,
-                now_us() + milliseconds(timeout_ms), on_stream);
+                clock_get_monotonic_us() + timeout_ms * 1000, on_stream);
         }
 
         private HttpClientStreamingIo::SseStreamReader restSseReaderIntern(
                 string method, string path, *hash<auto> hdr, *data body,
-                *date deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream,
+                *int deadline, *code<nothing(HttpClientIo::HttpClientStreamHandle)> on_stream,
                 *hash<RestClient::RestRequestContext> request_context) {
             ensureToken();
             # the caller's headers may be narrowed to one value type (e.g. hash<string, int> for {"X-Count": 1}),
@@ -2354,7 +2357,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         HttpClientIo::HttpCancellableFuture restDoRequestCancellableAsync(string method,
                 string path, auto body, *hash<auto> hdr) {
-            log(LoggerLevel::DEBUG, "restDoRequestCancellableAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestCancellableAsync() %s %s%s", method, get_masked_url(url), path);
 
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
                 False, False, NOTHING, NOTHING, NOTHING);
@@ -2472,7 +2475,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be positive";
             }
             return restSseReaderIntern(method, target.path, hdr, body,
-                exists timeout_ms ? now_us() + milliseconds(timeout_ms) : NOTHING, on_stream,
+                exists timeout_ms ? clock_get_monotonic_us() + timeout_ms * 1000 : NOTHING, on_stream,
                 resolveRequestTarget(target, method));
         }
 
@@ -2553,8 +2556,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         private RestFuture restDoRequestAsyncWithTimeout(string method, string path, auto body, *hash<auto> hdr,
                 int timeout_ms, *hash<RestClient::RestRequestContext> request_context) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithTimeout() %s %s%s (timeout: %dms)", method, url, path,
-                timeout_ms);
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithTimeout() %s %s%s (timeout: %dms)", method,
+                get_masked_url(url), path, timeout_ms);
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr, False, False, NOTHING,
                 NOTHING, NOTHING, timeout_ms, request_context);
             RestClientIoAsyncRequestOperation op = async_info.operation;
@@ -2648,7 +2651,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             bool negotiate_retry = True;
 
             log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
-                method, url, path);
+                method, get_masked_url(url), path);
 
             # Snapshot the per-instance request-timeout override — passed to every
             # mgr.request() call below so setTimeout() state is honored
@@ -3025,7 +3028,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         hash<auto> submitPreparedAsyncRequestAttemptWithNotifier(string method, string path,
                 *hash<auto> hdr, hash<auto> prepared, EventNotifier notifier) {
             log(LoggerLevel::DEBUG, "submitAsyncRequestAttemptWithNotifier() %s %s%s",
-                method, url, path);
+                method, get_masked_url(url), path);
 
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             # the body is received as octets for response_body_raw; buildResponse() decodes text
@@ -3056,7 +3059,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         hash<auto> submitRedirectAttemptWithNotifier(string origin, string method, string path,
                 *hash<auto> hdr, *data body, EventNotifier notifier) {
-            log(LoggerLevel::DEBUG, "following redirect: %s %s%s", method, origin, path);
+            log(LoggerLevel::DEBUG, "following redirect: %s %s%s", method, get_masked_url(origin), path);
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(origin);
             stream.setDecodeText(False);
             return stream.submitAsyncWithNotifier(method, path,
@@ -3084,7 +3087,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             @return a RestFuture that resolves to a @ref RestClient::RestResponseInfo hash
         */
         RestFuture restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, get_masked_url(url), path);
 
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
                 False, False, NOTHING, NOTHING, NOTHING);
@@ -3118,7 +3121,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, get_masked_url(url), path);
 
             return startAsyncRequestOperation(method, path, body, hdr, False,
                 skip_ensure_token, NOTHING, NOTHING, NOTHING).future;
@@ -3209,7 +3212,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         private RestClientIoAsyncRequestOperation startPollRequestIntern(string method, string path,
                 auto body, *hash<auto> hdr, bool raw, bool skip_ensure_token,
                 *hash<RestClient::RestRequestContext> request_context) {
-            log(LoggerLevel::DEBUG, "startPollRequest() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "startPollRequest() %s %s%s", method, get_masked_url(url), path);
 
             if (!skip_ensure_token) {
                 ensureToken();
@@ -3244,7 +3247,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
                 *hash<auto> hdr, EventNotifier notifier) {
-            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, get_masked_url(url), path);
 
             return startAsyncRequestOperation(method, path, body, hdr, False,
                 False, notifier, NOTHING, NOTHING);
@@ -3296,7 +3299,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
             }
 
             log(LoggerLevel::DEBUG, "submitPingRequestWithNotifier() %s %s%s",
-                method, url, path);
+                method, get_masked_url(url), path);
 
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             return stream.submitAsyncWithNotifier(method, path, request_headers,
@@ -3528,7 +3531,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
                 "hdr": hdr - shdr});
             hdr{shdr} = sig;
 
-            log(LoggerLevel::DEBUG, "doSignedRequest() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "doSignedRequest() %s %s%s", method, get_masked_url(url), path);
 
             # 3. Make HTTP request
             hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body, NOTHING, False,
@@ -3611,7 +3614,7 @@ hash<RestClient::RestResponseInfo> resp = client.restDoRequestWithResponseLimit(
         */
         RestFuture doSignedRequestAsync(string shdr, code signer, string method,
                 string path, auto body, *hash<auto> hdr) {
-            log(LoggerLevel::DEBUG, "doSignedRequestAsync() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "doSignedRequestAsync() %s %s%s", method, get_masked_url(url), path);
 
             hash<auto> async_info = startAsyncRequestOperation(method, path, body, hdr,
                 False, False, NOTHING, shdr, signer);
@@ -4055,7 +4058,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             the stream and retry before handing it to the SSE reader.
         */
         private hash<auto> readSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
-                string method, string path, *date deadline = NOTHING) {
+                string method, string path, *int deadline = NOTHING) {
             # a request timeout of 0 means no deadline
             int to = getTimeout();
             *timeout response_timeout = remainingSseTimeout(deadline, to > 0 ? milliseconds(to) : NOTHING);
@@ -4087,7 +4090,7 @@ rest.addSensitiveHeaders("Qorus-Token");
         private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers,
                 *data request_body, auto first_data, *hash<auto> response,
-                *timeout response_timeout, *date deadline = NOTHING,
+                *timeout response_timeout, *int deadline = NOTHING,
                 *hash<RestClient::RestRequestContext> request_context) {
             # the response headers of an error, and any credential of the request echoed in it, are redacted
             hash<string, bool> extra = getSensitiveHeaderSet();
@@ -4161,7 +4164,7 @@ rest.addSensitiveHeaders("Qorus-Token");
 
         #! Drains a non-SSE HTTP error body before throwing REST-RESPONSE-ERROR.
         private *data drainSseErrorBody(HttpClientIo::HttpClientStreamHandle stream,
-                auto first_data, *timeout read_timeout, *date deadline = NOTHING) {
+                auto first_data, *timeout read_timeout, *int deadline = NOTHING) {
             string error_body = "";
             bool got_body = False;
             bool done = False;
@@ -4215,13 +4218,19 @@ rest.addSensitiveHeaders("Qorus-Token");
         #! Resolves a call-local opening deadline without changing shared state
         #! Returns the time to wait for SSE data: the time left until the deadline, if any, else the fallback, where
         #! @ref nothing means no limit
-        private static *timeout remainingSseTimeout(*date deadline, *timeout fallback) {
+        /** @param deadline the deadline on the monotonic clock in microseconds
+            (@ref Qore::clock_get_monotonic_us() "clock_get_monotonic_us()"), so that a change of the system clock
+            does not end the wait early or late (#6455)
+            @param fallback the time to wait without a deadline
+        */
+        private static *timeout remainingSseTimeout(*int deadline, *timeout fallback) {
             if (!deadline) { return fallback; }
-            int remaining = (deadline - now_us()).durationMilliseconds();
-            if (remaining <= 0) {
+            int remaining_us = deadline - clock_get_monotonic_us();
+            if (remaining_us <= 0) {
                 throw "HTTPCLIENT-TIMEOUT", "SSE response deadline exhausted";
             }
-            return milliseconds(remaining);
+            # rounded up, so that the wait does not end before the deadline
+            return (remaining_us + 999) / 1000;
         }
 
         #! Appends one stream chunk to a bounded text error body buffer.
@@ -4760,7 +4769,7 @@ rest.addSensitiveHeaders("Qorus-Token");
             # Serialize body as form-urlencoded
             string body = mime_get_form_urlencoded_string(login);
 
-            log(LoggerLevel::DEBUG, "doOAuth2TokenRequest() POST %s%s", base_url, req_path);
+            log(LoggerLevel::DEBUG, "doOAuth2TokenRequest() POST %s%s", get_masked_url(base_url), req_path);
 
             # Make the token request — no locks held during network I/O
             hash<auto> raw = mgr.request(base_url, "POST", req_path, hdr, body, NOTHING, True,
@@ -5055,7 +5064,7 @@ rest.addSensitiveHeaders("Qorus-Token");
 
             # Direct HTTP request via connection manager — no restDoRequest recursion,
             # no OAuth2 auth injection, no REST schema validation
-            log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, url, c_path);
+            log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, get_masked_url(url), c_path);
             hash<auto> raw = mgr.request(url, c_method, c_path, req_hdr, body_str, NOTHING, True,
                 getCookieRequestOptions());
             if (raw.status_code < 200 || raw.status_code >= 300) {
@@ -5115,8 +5124,10 @@ rest.addSensitiveHeaders("Qorus-Token");
                 h = h.OAuth;
             }
             if (h.token_type.typeCode() != NT_STRING || h.access_token.typeCode() != NT_STRING) {
+                # only the types and keys: the response holds the tokens
                 throw "OAUTH2-ERROR", sprintf("OAuth2 response is invalid, needs both token_type "
-                    "(%y) and access_token (%y): %y", h.token_type, h.access_token, h);
+                    "(type %y) and access_token (type %y); keys in the response: %y", h.token_type.type(),
+                    h.access_token.type(), keys h);
             }
             *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h) : NOTHING;
             setOAuth2LoginInfo(h);
@@ -5177,9 +5188,9 @@ rest.addSensitiveHeaders("Qorus-Token");
             }
             setToken(h.token_type, h.access_token, h.refresh_token,
                 h.expires_in ? (now_us() + seconds(h.expires_in)) : NOTHING);
-            log(LoggerLevel::DEBUG, "set OAuth2 auth: %s %s; refresh_token: %s; expires_in: %s",
-                h.token_type, h.access_token, h.refresh_token ?? "n/a",
-                h.expires_in ?? "n/a");
+            # the tokens are credentials and are not logged
+            log(LoggerLevel::DEBUG, "set OAuth2 auth: %s <redacted>; refresh_token: %s; expires_in: %s",
+                h.token_type, h.refresh_token ? "<redacted>" : "n/a", h.expires_in ?? "n/a");
         }
 
         #! Builds a HttpClientConnectionManager from RestClientIo client options
@@ -5487,6 +5498,16 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
             saved_client_opts = client_opts;
         }
 
+        #! Returns the statistics of the connection pool
+        /** @return the statistics of the connection pool, as
+            @ref Qore::Thread::AbstractConnectionPool::getStats() "AbstractConnectionPool::getStats()" returns them;
+            this overrides both @ref RestClientIo::getStats() "RestClientIo::getStats()" and the pool's method, so
+            a call typed against either class gets the same statistics (issue #5838)
+        */
+        hash<ConnectionPoolStats> getStats() {
+            return AbstractConnectionPool::getStats();
+        }
+
         #! Shuts down the pool and closes the connection
         shutdown() {
             AbstractConnectionPool::shutdown();
@@ -5724,8 +5745,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         #! Follows redirects; created with the first request as it was sent
         *HttpRedirectFollower rf;
 
-        #! The time the current request attempt was sent, for the inactivity timeout
-        *date sent;
+        #! The time the current request attempt was sent, for the inactivity timeout, on the monotonic clock in
+        #! microseconds (#6455)
+        *int sent;
 
         #! Current operation state
         string state;
@@ -6140,7 +6162,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             connector.submitted();
             pending_future = result.future;
             pending_stream = result.stream;
-            sent = now_us();
+            sent = clock_get_monotonic_us();
             return;
         }
         if (!prepared_attempt) {
@@ -6152,7 +6174,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         delete prepared_attempt;
         pending_future = result.future;
         pending_stream = result.stream;
-        sent = now_us();
+        sent = clock_get_monotonic_us();
         request_body = result.request_body;
         request_error_passthru = result.error_passthru;
         request_allow_any_response = result.allow_any_response;
@@ -6167,7 +6189,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     #! connection manager; the stream is canceled
     private checkInactivity() {
         timeout io_timeout = rcio.getConnectionManager().getIoTimeout();
-        if (io_timeout > 0 && pending_stream && sent && pending_stream.getInactiveTime(sent) >= io_timeout * 1000) {
+        if (io_timeout > 0 && pending_stream && sent && pending_stream.getInactiveTimeSince(sent) >= io_timeout * 1000) {
             cancelPendingStream();
             throw "HTTPCLIENT-TIMEOUT", sprintf("no data received for REST %s %s for %d ms (io_timeout)", method, path,
                 io_timeout);
@@ -6724,7 +6746,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
 
     private {
         #! Strong reference to the connection for the lifetime of this polling operation
-        RestClient::RestConnection conn;
+        RestClient::AbstractRestConnection conn;
 
         #! Ping options
         hash<auto> ping_opts;
@@ -6854,7 +6876,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
             openapi3, swagger, oauth2_auto_refresh, etc.)
         @param logger optional logger
     */
-    constructor(RestClient::RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
+    constructor(RestClient::AbstractRestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
         self.conn = conn;
         self.ping_opts = ping_opts;
         self.logger = logger;
@@ -7110,7 +7132,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                         }
                         on_error {
                             conn.authFailure();
-                            rethrow $1.err, sprintf("%s: url: %y %s %y", $1.desc, conn.real_url,
+                            # the URL is given without its password
+                            rethrow $1.err, sprintf("%s: url: %y %s %y", $1.desc, get_masked_url(conn.real_url),
                                 ping_method, ping_path);
                         }
                         schema_validator.parseResponse(ping_method, ping_path, status_code,

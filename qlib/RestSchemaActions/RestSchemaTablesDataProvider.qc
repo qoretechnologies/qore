@@ -330,7 +330,7 @@ public class RestSchemaTablesDataProvider inherits DataProvider::AbstractDataPro
     */
     static registerRecordActions(string app, string path, softlist<RestSchemaActionSet> action_sets,
             list<hash<RestSchemaRecordTableInfo>> tables, hash<RestSchemaRecordActionIds> ids,
-            *hash<auto> common, *hash<string, hash<auto>> overrides) {
+            *hash<auto> common, *hash<string, hash<auto>> overrides) [dom=PROCESS_CONTROL] {
         hash<DataProviderInfo> dpinfo = RestSchemaTablesDataProvider::getRecordActionProviderInfo(
             action_sets, tables);
         hash<auto> base = {

@@ -32,6 +32,67 @@
 #include "qore/intern/AssertStatement.h"
 #include "qore/intern/QoreParseListNode.h"
 
+namespace {
+class StrictBooleanAssertStatement : public AssertStatement {
+public:
+    using AssertStatement::AssertStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+AssertStatement* AssertStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line, QoreValue exp) {
+    AssertStatement* rv = policy.strictBoolean() ? new StrictBooleanAssertStatement(start_line, end_line, exp)
+        : new AssertStatement(start_line, end_line, exp);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
+// documented in AssertStatement.h
+QoreStringNode* AssertStatement::makeMessage(const QoreValue& msg_val, ExceptionSink* xsink) {
+    if (msg_val.getType() == NT_LIST) {
+        // Variadic case: use sprintf with the list (format, args...)
+        QoreStringNode* rv = q_sprintf(msg_val.get<const QoreListNode>(), 0, 0, xsink);
+        if (*xsink) {
+            if (rv) {
+                rv->deref();
+            }
+            return nullptr;
+        }
+        return rv;
+    }
+    if (msg_val.getType() == NT_STRING) {
+        QoreStringNodeValueHelper msg(msg_val);
+        return msg.getReferencedValue();
+    }
+    bool del;
+    QoreString* tmp = msg_val.getAsString(del, 0, xsink);
+    // owns tmp exactly when getAsString() created it
+    TempString tmp_holder(del ? tmp : nullptr);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (!tmp) {
+        return new QoreStringNode("assertion failed");
+    }
+    QoreStringNode* rv = new QoreStringNode(*tmp);
+    return rv;
+}
+
+int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+
 AssertStatement::AssertStatement(int start_line, int end_line, QoreValue exp)
         : AbstractStatement(start_line, end_line) {
     // If exp is a parse list, split it into condition and message args
@@ -69,7 +130,8 @@ AssertStatement::~AssertStatement() {
     message.discard(nullptr);
 }
 
-int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) {
     // Evaluate the condition
     ValueEvalOptimizedRefHolder cond_val(condition, xsink);
     if (*xsink) {
@@ -77,7 +139,7 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     }
 
     // Check if condition is true
-    if (!cond_val->getAsBool()) {
+    if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*cond_val)) {
         // Assertion failed - get the message if provided
         QoreStringNode* msg_str = nullptr;
         if (message) {
@@ -85,32 +147,9 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
             if (*xsink) {
                 return 0;
             }
-            if (msg_val->getType() == NT_LIST) {
-                // Variadic case: use sprintf with the list (format, args...)
-                const QoreListNode* args = msg_val->get<const QoreListNode>();
-                msg_str = q_sprintf(args, 0, 0, xsink);
-                if (*xsink) {
-                    return 0;
-                }
-            } else if (msg_val->getType() == NT_STRING) {
-                QoreValue msg_value = msg_val.takeReferencedValue();
-                QoreStringNodeValueHelper msg(msg_value);
-                msg_str = msg.getReferencedValue();
-                msg_value.discard(xsink);
-            } else {
-                bool del;
-                QoreString* tmp = msg_val->getAsString(del, 0, xsink);
-                if (*xsink) {
-                    return 0;
-                }
-                if (tmp) {
-                    msg_str = new QoreStringNode(*tmp);
-                    if (del) {
-                        delete tmp;
-                    }
-                } else {
-                    msg_str = new QoreStringNode("assertion failed");
-                }
+            msg_str = makeMessage(*msg_val, xsink);
+            if (!msg_str) {
+                return 0;
             }
         } else {
             msg_str = new QoreStringNode("assertion failed");
@@ -122,7 +161,9 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return 0;
 }
 
-int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int AssertStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value,
+        ExceptionSink* xsink) {
     // Evaluate the condition
     ValueEvalRefHolder cond_val(rc, condition, xsink);
     if (*xsink) {
@@ -130,7 +171,7 @@ int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
     }
 
     // Check if condition is true
-    if (!cond_val->getAsBool()) {
+    if (!LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*cond_val)) {
         // Assertion failed - get the message if provided
         QoreStringNode* msg_str = nullptr;
         if (message) {
@@ -138,32 +179,9 @@ int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
             if (*xsink) {
                 return 0;
             }
-            if (msg_val->getType() == NT_LIST) {
-                // Variadic case: use sprintf with the list (format, args...)
-                const QoreListNode* args = msg_val->get<const QoreListNode>();
-                msg_str = q_sprintf(args, 0, 0, xsink);
-                if (*xsink) {
-                    return 0;
-                }
-            } else if (msg_val->getType() == NT_STRING) {
-                QoreValue msg_value = msg_val.takeReferencedValue();
-                QoreStringNodeValueHelper msg(msg_value);
-                msg_str = msg.getReferencedValue();
-                msg_value.discard(xsink);
-            } else {
-                bool del;
-                QoreString* tmp = msg_val->getAsString(del, 0, xsink);
-                if (*xsink) {
-                    return 0;
-                }
-                if (tmp) {
-                    msg_str = new QoreStringNode(*tmp);
-                    if (del) {
-                        delete tmp;
-                    }
-                } else {
-                    msg_str = new QoreStringNode("assertion failed");
-                }
+            msg_str = makeMessage(*msg_val, xsink);
+            if (!msg_str) {
+                return 0;
             }
         } else {
             msg_str = new QoreStringNode("assertion failed");

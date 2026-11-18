@@ -99,6 +99,7 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include "qore/intern/ql_string.h"
 #include "qore/intern/ql_pwd.h"
 #include "qore/intern/ql_misc.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/ql_websocket.h"
 #include "qore/intern/ql_list.h"
 #include "qore/intern/ql_thread.h"
@@ -115,13 +116,15 @@ DLLLOCAL void init_alloc_tracking_functions(QoreNamespace& ns);
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
+#include <set>
 
 namespace {
 class ParseCommitRuntimeInitFlagHelper {
 public:
     ParseCommitRuntimeInitFlagHelper(QoreProgram* pgm)
             : p(pgm ? qore_program_private::get(*pgm) : nullptr),
-            old(p ? p->parse_commit_runtime_init : false) {
+            old(p ? p->parse_commit_runtime_init.load() : false) {
         if (p) {
             p->parse_commit_runtime_init = true;
         }
@@ -192,6 +195,7 @@ DLLLOCAL QoreClass* initStringOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initFileOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamPipeClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initDigestClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initWebSocketCloseRecordClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPipeInputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPipeOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStreamWriterClass(QoreNamespace& ns);
@@ -283,6 +287,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclHashSerializationInfo,
     * hashdeclListSerializationInfo,
     * hashdeclUrlInfo,
+    * hashdeclHttpContentTypeInfo,
     * hashdeclModuleParseOptionMaskInfo,
     * hashdeclFtpResponseInfo,
     * hashdeclExtraPollFdInfo,
@@ -339,7 +344,34 @@ void GVEntryBase::clear() {
     }
 }
 
+#ifdef DEBUG
+namespace {
+//! the namespaces created with QoreNamespace(const char*) that exist; see qore_count_late_module_namespaces()
+/** The registry is never destroyed: the C++ static destructors of module namespaces can run after those of this
+    library
+*/
+struct NamedNamespaceRegistry {
+    std::mutex m;
+    std::set<const QoreNamespace*> set;
+};
+
+NamedNamespaceRegistry& named_ns_registry() {
+    static NamedNamespaceRegistry* reg = new NamedNamespaceRegistry;
+    return *reg;
+}
+}
+#endif
+
 QoreNamespace::QoreNamespace(const char* n) : priv(new qore_ns_private(this, n)) {
+#ifdef DEBUG
+    try {
+        NamedNamespaceRegistry& reg = named_ns_registry();
+        std::lock_guard<std::mutex> lock(reg.m);
+        reg.set.insert(this);
+    } catch (...) {
+        // the namespace is only left out of the debug count
+    }
+#endif
 }
 
 QoreNamespace::QoreNamespace(const QoreNamespace& old, const QoreParseOptions& po) : priv(new qore_ns_private(*old.priv, po, this)) {
@@ -352,7 +384,45 @@ QoreNamespace::QoreNamespace(qore_ns_private* p) : priv(p) {
 }
 
 QoreNamespace::~QoreNamespace() {
+#ifdef DEBUG
+    try {
+        NamedNamespaceRegistry& reg = named_ns_registry();
+        std::lock_guard<std::mutex> lock(reg.m);
+        reg.set.erase(this);
+    } catch (...) {
+        // locking failed; a destructor cannot throw, and the registry only serves the debug count
+        assert(false);
+    }
+#endif
     delete priv;
+}
+
+unsigned qore_count_late_module_namespaces(bool report) {
+    unsigned count = 0;
+#ifdef DEBUG
+    NamedNamespaceRegistry& reg = named_ns_registry();
+    std::unique_lock<std::mutex> lock(reg.m, std::try_to_lock);
+    if (!lock) {
+        // qore_cleanup() runs in the last thread; another thread holding the lock now is a bug
+        assert(false);
+        return count;
+    }
+    for (const QoreNamespace* ns : reg.set) {
+        const qore_ns_private* p = qore_ns_private::get(*ns);
+        // an attached namespace is released with its parent, and a registered one when its module is deleted
+        if (p->parent || p->root || p->module_owned || p->isReleased()) {
+            continue;
+        }
+        ++count;
+        if (report) {
+            fprintf(stderr, "[TEARDOWN] namespace '%s' is not registered with QoreModuleInfo::ns; its C++ static "
+                "destructor releases it after qore_cleanup()\n", p->path.c_str());
+        }
+    }
+#else
+    (void)report;
+#endif
+    return count;
 }
 
 QoreProgram* QoreNamespace::getProgram() const {
@@ -480,6 +550,9 @@ void QoreNamespace::addSystemClass(QoreClass* oc) {
 #else
     priv->classList.add(oc);
 #endif
+    // code in other threads can reach the class from now on, or when the module being initialized returns from its
+    // initialization (issue #6422)
+    qore_class_private::get(*oc)->systemClassCommitted();
 
     // see if namespace is attached to the root
     qore_root_ns_private* rns = priv->getRoot();
@@ -516,6 +589,9 @@ qore_ns_private::qore_ns_private(const QoreProgramLocation* loc) : loc(loc), con
 }
 
 qore_ns_private::~qore_ns_private() {
+    // the namespace of a module is purged when the module is deleted, before the types are freed; one destroyed
+    // afterwards with content (by its C++ static destructor) would release Qore values after their types
+    assert(!module_owned || !qore_types_deleted.load(std::memory_order_acquire) || isReleased());
     purge();
 
     // Clean up typedef entries
@@ -702,10 +778,20 @@ FunctionEntry* qore_ns_private::addPendingVariantIntern(const char* fname, Abstr
     FunctionEntry* fe = func_list.findNode(fname);
 
     if (!fe) {
+        // the location of the declaration, for the warning below (the variant is owned by the function afterwards)
+        const QoreProgramLocation* decl_loc = !imported && v->getUserVariantBase()
+            ? v->getUserVariantBase()->getUserSignature()->getParseLocation() : nullptr;
         QoreFunction* u = new QoreFunction(fname);
         u->addPendingVariant(vh.release());
         fe = func_list.add(u, this);
         new_func = true;
+        // qore#6034: a function that unqualified calls cannot reach, as the Qore namespace has one of its name
+        // (the namespace of the declaration need not be attached to the root yet: the root of the Program is used)
+        if (decl_loc) {
+            if (RootQoreNamespace* root = getRootNS()) {
+                root->rpriv->parseWarnShadowedByQoreFunction(decl_loc, fname, this, fe);
+            }
+        }
         return fe;
     }
 
@@ -948,6 +1034,42 @@ void QoreNamespace::clear(ExceptionSink* xsink) {
     priv->clearConstants(**l);
     priv->clearData(xsink);
     priv->deleteData(xsink);
+}
+
+void qore_ns_set_module_owned(QoreNamespace& ns) {
+    qore_ns_private::get(ns)->module_owned = true;
+}
+
+void QoreNamespace::purge(ExceptionSink* xsink) {
+    // a namespace in a tree (a subnamespace or a root namespace) is indexed by its root, whose indexes would refer to
+    // what is released here; only an unattached namespace, such as a module's namespace, can be purged
+    if (priv->parent || priv->root) {
+        assert(false);
+        if (xsink) {
+            xsink->raiseException("NAMESPACE-PURGE-ERROR", "cannot purge namespace '%s': it is attached to a "
+                "namespace tree; only an unattached namespace can be purged", priv->path.c_str());
+        }
+        return;
+    }
+    priv->purgeAll(xsink);
+}
+
+void qore_ns_private::purgeAll(ExceptionSink* xsink) {
+    {
+        // the values of the constants are released when the list goes out of scope, while the classes still exist
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+        clearConstants(**l);
+        clearData(xsink);
+        deleteData(xsink);
+    }
+    // the classes, hashdecls, enums and subnamespaces
+    purge();
+    for (auto& i : typedefMap) {
+        delete i.second;
+    }
+    typedefMap.clear();
+    class_handler = nullptr;
+    assert(isReleased());
 }
 
 QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {
@@ -1477,12 +1599,17 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclParseDiagnosticFixInfo = init_hashdecl_ParseDiagnosticFixInfo(qns);
     hashdeclParseDiagnosticInfo = init_hashdecl_ParseDiagnosticInfo(qns);
     hashdeclRuntimeDiagnosticInfo = init_hashdecl_RuntimeDiagnosticInfo(qns);
+    hashdeclProgramThreadEventOptions = init_hashdecl_ProgramThreadEventOptions(qns);
+    hashdeclProgramThreadInfo = init_hashdecl_ProgramThreadInfo(qns);
+    hashdeclProgramThreadSubscription = init_hashdecl_ProgramThreadSubscription(qns);
+    hashdeclProgramThreadEvent = init_hashdecl_ProgramThreadEvent(qns);
     hashdeclObjectSerializationInfo = init_hashdecl_ObjectSerializationInfo(qns);
     hashdeclSerializationInfo = init_hashdecl_SerializationInfo(qns);
     hashdeclIndexedObjectSerializationInfo = init_hashdecl_IndexedObjectSerializationInfo(qns);
     hashdeclHashSerializationInfo = init_hashdecl_HashSerializationInfo(qns);
     hashdeclListSerializationInfo = init_hashdecl_ListSerializationInfo(qns);
     hashdeclUrlInfo = init_hashdecl_UrlInfo(qns);
+    hashdeclHttpContentTypeInfo = init_hashdecl_HttpContentTypeInfo(qns);
     hashdeclModuleParseOptionMaskInfo = init_hashdecl_ModuleParseOptionMaskInfo(qns);
     hashdeclFtpResponseInfo = init_hashdecl_FtpResponseInfo(qns);
     preinitAbstractPollableIoObjectClass();
@@ -1546,6 +1673,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initStderrOutputStreamClass(qns));
     qns.addSystemClass(initStreamPipeClass(qns));
     qns.addSystemClass(initDigestClass(qns));
+    qns.addSystemClass(initWebSocketCloseRecordClass(qns));
     qns.addSystemClass(initStreamWriterClass(qns));
     qns.addSystemClass(initStreamReaderClass(qns));
     qns.addSystemClass(initBufferedStreamReaderClass(qns));
@@ -2717,6 +2845,28 @@ func_vec_t qore_root_ns_private::runtimeFindAllFunctionsRegex(const QoreString& 
     return func_vec;
 }
 
+func_ns_vec_t qore_root_ns_private::runtimeFindAllFunctionsRegexNs(const QoreString& pattern, int re_opts,
+        ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
+    func_ns_vec_t func_vec;
+
+    QoreRegex re(pattern, re_opts, xsink);
+    if (*xsink) {
+        return func_vec;
+    }
+
+    for (auto& i : fmap) {
+        const char* name = i.second.obj->getName();
+        size_t len = strlen(name);
+        if (re.exec(name, len)) {
+            func_vec.push_back(std::make_pair(reinterpret_cast<const QoreExternalFunction*>(
+                i.second.obj->getFunction()), i.second.obj->getNamespace()->ns));
+        }
+    }
+
+    return func_vec;
+}
+
 ns_vec_t qore_root_ns_private::runtimeFindAllNamespacesRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
     RuntimeNamespaceReadLocker rnl(*this);
     ns_vec_t ns_vec;
@@ -2927,6 +3077,124 @@ void qore_root_ns_private::parseWarnAmbiguousFunctionCall(const QoreProgramLocat
         "AMBIGUOUS-CALL-RESOLUTION", desc);
 }
 
+bool qore_root_ns_private::parseShadowWarningEnabled(const qore_ns_private* declaring_ns) {
+    // the check searches the Qore namespace: it is made only if the warning will be raised
+    if (!declaring_ns || !(qore_program_private::getParseWarningMask(*getProgram()) & QP_WARN_LANGUAGE_TRAPS)
+            || parse_check_parse_option(PO_IN_MODULE) || useBrokenNamespaceResolutionParse()) {
+        return false;
+    }
+    const qore_ns_private* qore_ns = getQore();
+    if (!qore_ns) {
+        return false;
+    }
+    // a namespace block that is parsed is not attached to the root: it is the Qore namespace's own if it has its name
+    // and is declared at the top level, as are the namespaces inside it
+    for (const qore_ns_private* cur = declaring_ns; cur; cur = cur->parent) {
+        if (cur == qore_ns || (cur->name == "Qore" && (!cur->parent || cur->parent == this))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void qore_root_ns_private::parseWarnShadowedByQoreSymbol(const QoreProgramLocation* loc, const char* kind,
+        const char* name, const qore_ns_private* declaring_ns, const qore_ns_private* qore_symbol_ns) {
+    assert(loc);
+    assert(kind);
+    assert(name);
+    assert(declaring_ns);
+
+    const bool is_function = !strcmp(kind, "function");
+    const char* suffix = is_function ? "()" : "";
+
+    std::string declared_path;
+    declaring_ns->getPath(declared_path, false, true);
+    std::string qore_path;
+    if (qore_symbol_ns) {
+        qore_symbol_ns->getPath(qore_path, false, true);
+    } else {
+        qore_path = "Qore::";
+    }
+    // the paths end with '::' or are empty for the root namespace
+    std::string declared_name = (declared_path.empty() ? std::string("::") : declared_path) + name + suffix;
+    std::string qore_name = qore_path + name + suffix;
+
+    QoreDiagnosticMetadata metadata("USER-SYMBOL-SHADOWED-BY-QORE",
+        "unqualified resolution of a name selects the symbol of the Qore namespace first, so the symbol that the "
+        "program declares with the same name is reached only through a namespace path");
+    metadata.addFact("kind", kind);
+    metadata.addFact("name", name);
+    metadata.addFact("declared", declared_name.c_str());
+    metadata.addFact("shadowedBy", qore_name.c_str());
+    metadata.addSuggestion(declared_name.c_str());
+    metadata.addFix("use the symbol with its namespace path, or rename it", "review-required");
+
+    QoreStringNode* desc = new QoreStringNodeMaker("%s '%s' declared in namespace '%s' is not reachable by an "
+        "unqualified %s: unqualified resolution selects '%s' first; %s '%s' or rename it", kind, name,
+        declared_path.empty() ? "::" : declared_path.c_str(), is_function ? "call" : "reference", qore_name.c_str(),
+        is_function ? "call it as" : "use", declared_name.c_str());
+    qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc,
+        metadata);
+}
+
+void qore_root_ns_private::parseWarnShadowedByQoreFunction(const QoreProgramLocation* loc, const char* fname,
+        const qore_ns_private* declaring_ns, const FunctionEntry* declared) {
+    assert(loc);
+    assert(fname);
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    const FunctionEntry* qore_fe = parseFindQoreFunctionEntryIntern(fname);
+    if (!qore_fe || qore_fe == declared) {
+        return;
+    }
+    parseWarnShadowedByQoreSymbol(loc, "function", fname, declaring_ns, qore_fe->getNamespace());
+}
+
+void qore_root_ns_private::parseCheckClassShadowedByQore(const QoreProgramLocation* loc, const QoreClass* oc,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    const QoreClass* qc = parseFindQoreClassIntern(oc->getName());
+    if (qc && qc != oc) {
+        parseWarnShadowedByQoreSymbol(loc, "class", oc->getName(), declaring_ns, qore_class_private::get(*qc)->ns);
+    }
+}
+
+void qore_root_ns_private::parseCheckConstantShadowedByQore(const QoreProgramLocation* loc, const char* cname,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    qore_ns_private* qns = nullptr;
+    if (parseFindQoreConstantEntryIntern(cname, qns)) {
+        parseWarnShadowedByQoreSymbol(loc, "constant", cname, declaring_ns, qns);
+    }
+}
+
+void qore_root_ns_private::parseCheckHashDeclShadowedByQore(const QoreProgramLocation* loc, const TypedHashDecl* hd,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    const TypedHashDecl* qhd = parseFindQoreHashDeclIntern(hd->getName());
+    if (qhd && qhd != hd) {
+        parseWarnShadowedByQoreSymbol(loc, "hashdecl", hd->getName(), declaring_ns,
+            typed_hash_decl_private::get(*qhd)->getNamespace());
+    }
+}
+
+void qore_root_ns_private::parseCheckGlobalVarShadowedByQore(const QoreProgramLocation* loc, const char* vname,
+        const qore_ns_private* declaring_ns) {
+    if (!parseShadowWarningEnabled(declaring_ns)) {
+        return;
+    }
+    if (parseFindQoreGlobalVarIntern(vname)) {
+        parseWarnShadowedByQoreSymbol(loc, "global variable", vname, declaring_ns, nullptr);
+    }
+}
+
 AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern(
         UnresolvedProgramCallReferenceNode* fr) {
     std::unique_ptr<UnresolvedProgramCallReferenceNode> fr_holder(fr);
@@ -2938,9 +3206,23 @@ AbstractCallReferenceNode* qore_root_ns_private::parseResolveCallReferenceIntern
             parseWarnAmbiguousFunctionCall(fr->loc, fname, fe);
         }
         // check parse options to see if access is allowed
-        if (!qore_program_private::parseAddDomain(getProgram(), fe->getFunction()->parseGetUniqueFunctionality()))
-            return fe->makeCallReference(fr->loc);
-        parse_error(*fr->loc, "parse options do not allow access to function '%s'", fname);
+        QoreParseOptions denied = qore_program_private::parseDeniedDomains(getProgram(),
+            fe->getFunction()->parseGetUniqueFunctionality(), fe->getFunction()->parseGetUniqueDeclaredDomain());
+        if (!denied) {
+            ResolvedCallReferenceNode* ref = fe->makeCallReference(fr->loc);
+            // the explicit type arguments of \f<T>() instantiate the function when the reference is called
+            if (!fr->explicit_parse_type_args.empty()) {
+                std::vector<const QoreTypeInfo*> type_args;
+                if (!qore_resolve_call_reference_type_args(fr->explicit_parse_type_args, fr->loc, type_args)) {
+                    if (LocalFunctionCallReferenceNode* lfr = dynamic_cast<LocalFunctionCallReferenceNode*>(ref)) {
+                        lfr->setExplicitTypeArgs(std::move(type_args));
+                    }
+                }
+            }
+            return ref;
+        }
+        parse_error(*fr->loc, "parse options do not allow access to function '%s'; functional domain: %s", fname,
+            qore_describe_source_domains(denied.getLo()).c_str());
     } else { // cannot find function, throw exception
         parse_error(*fr->loc, "reference to function '%s()' cannot be resolved", fname);
     }
@@ -3180,8 +3462,9 @@ int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
         err = -1;
     }
     // thread-local storage in a user module is not thread control: a module that keeps per-thread state can be
-    // loaded by code that may not control threads, and its source and AOT forms are treated the same way (an AOT
-    // image records no thread-local declarations)
+    // loaded by code that may not control threads, and its source and AOT forms are treated the same way: an AOT
+    // module image records its thread_local declarations (in its GLOBALS section), and loading it does not apply
+    // this restriction either
     if ((po & PO_NO_THREAD_CONTROL) && v->isThreadLocal() && !(po & PO_IN_MODULE)) {
         parse_error(*v->getParseLocation(), "illegal reference to new thread_local variable '%s' (conflicts with parse " \
             "option NO_THREAD_CONTROL)", vname.ostr);
@@ -3208,11 +3491,49 @@ int qore_ns_private::checkGlobalVarDecl(Var* v, const NamedScope& vname) {
     return err;
 }
 
+// static
+int qore_ns_private::checkPublicThreadLocalDecl(const Var& v) {
+    assert(v.isThreadLocal());
+    assert(v.isPublic());
+    if (!parse_check_parse_option(PO_IN_MODULE)) {
+        return 0;
+    }
+    parseException(*v.getParseLocation(), "MODULE-PUBLIC-THREAD-LOCAL", "public thread_local variable '%s' cannot " \
+        "be declared in a module: " QORE_MODULE_PUBLIC_THREAD_LOCAL_HELP, v.getName());
+    return -1;
+}
+
+// static
+void qore_ns_private::scanExportedThreadLocals(const qore_ns_private& mns, const std::string& path,
+        std::string& list) {
+    for (const auto& i : mns.var_list.vmap) {
+        if (i.second->isPublic() && i.second->isThreadLocal()) {
+            if (!list.empty()) {
+                list += ", ";
+            }
+            list += "'" + path + i.first + "'";
+        }
+    }
+    for (const auto& i : mns.nsl.nsmap) {
+        if (isExportedNamespace(*i.second)) {
+            scanExportedThreadLocals(*i.second->priv, path + i.first + "::", list);
+        }
+    }
+}
+
 void qore_ns_private::parseAddGlobalVarDecl(const QoreProgramLocation* loc, char* name, const QoreTypeInfo* typeInfo,
         QoreParseTypeInfo* parseTypeInfo, bool pub, qore_var_t type) {
     GVEntryBase e(loc, name, typeInfo, parseTypeInfo, type);
-    if (pub)
+    if (RootQoreNamespace* root = getRootNS()) {
+        // (the entry owns the name)
+        root->rpriv->parseCheckGlobalVarShadowedByQore(loc, e.var->getName(), this);
+    }
+    if (pub) {
         e.var->setPublic();
+        if (type == VT_THREAD_LOCAL) {
+            checkPublicThreadLocalDecl(*e.var);
+        }
+    }
     pend_gvblist.push_back(e);
     //printd(5, "qore_ns_private::parseAddGlobalVarDecl() this: %p var: %p '%s' %d-%d\n", this, e.var, e.var->getName(), loc.start_line, loc.end_line);
 
@@ -3287,6 +3608,10 @@ Var* qore_root_ns_private::parseAddResolvedGlobalVarDefIntern(const QoreProgramL
         const QoreTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, false, type == VT_THREAD_LOCAL);
     v->assignModule();
+    // a variable declared with a plain name is in the root namespace
+    if (vname.size() == 1) {
+        parseCheckGlobalVarShadowedByQore(loc, vname.getIdentifier(), this);
+    }
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -3297,6 +3622,10 @@ Var* qore_root_ns_private::parseAddGlobalVarDefIntern(const QoreProgramLocation*
         QoreParseTypeInfo* typeInfo, qore_var_t type) {
     Var* v = new Var(loc, vname.getIdentifier(), typeInfo, type == VT_THREAD_LOCAL);
     v->assignModule();
+    // a variable declared with a plain name is in the root namespace
+    if (vname.size() == 1) {
+        parseCheckGlobalVarShadowedByQore(loc, vname.getIdentifier(), this);
+    }
     pend_gvlist.push_back(GVEntry(this, vname, v));
 
     checkGlobalVarDecl(v, vname);
@@ -3341,6 +3670,12 @@ Var* qore_root_ns_private::parseCheckImplicitGlobalVarIntern(const QoreProgramLo
         assert(!tns->var_list.parseFindVar(vname.getIdentifier()));
         rv = tns->var_list.parseCreatePendingVar(loc, vname.getIdentifier(), typeInfo);
         varmap.update(rv->getName(), this, rv);
+        // an expression adds no code to its Program: an implicit global variable in it is a parse error, and the
+        // variable is removed when the expression's parse is rolled back (issue #6524)
+        if (qore_program_private::get(*getProgram())->expression_mode) {
+            parse_error(*loc, "global variable '%s' cannot be declared in the code of an expression", vname.ostr);
+            tns->pending_var_names.push_back(rv->getName());
+        }
     } else
         rv->checkAssignType(loc, typeInfo);
 
@@ -3697,6 +4032,12 @@ cnemap_t::iterator qore_ns_private::parseAddConstant(const QoreProgramLocation* 
     // track the new constant for rollback support
     if (rv != constant.end()) {
         pending_const_names.push_back(cname);
+        // qore#6034: a constant that unqualified references cannot reach, as the Qore namespace has one of its name
+        if (!imported) {
+            if (RootQoreNamespace* root = getRootNS()) {
+                root->rpriv->parseCheckConstantShadowedByQore(loc, cname, this);
+            }
+        }
     }
     return rv;
 }
@@ -3878,6 +4219,13 @@ int qore_ns_private::parseAddPendingClass(const QoreProgramLocation* loc, QoreCl
 
     qore_class_private::get(*oc)->setNamespace(this);
 
+    // qore#6034: a class that unqualified references cannot reach, as the Qore namespace has one of its name
+    if (!imported) {
+        if (RootQoreNamespace* root = getRootNS()) {
+            root->rpriv->parseCheckClassShadowedByQore(loc, oc, this);
+        }
+    }
+
     //printd(5, "qore_ns_private::parseAddPendingClass() added class %p '%s' ns: %p '%s' parent: %p\n", oc,
     //    oc->getName(), this, name.c_str(), parent);
 
@@ -3916,6 +4264,13 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, Typ
     thd.release();
     // track the new hashdecl for rollback support
     pending_hashdecl_names.push_back(hashdecl->getName());
+
+    // qore#6034: a hashdecl that unqualified references cannot reach, as the Qore namespace has one of its name
+    if (!imported) {
+        if (RootQoreNamespace* root = getRootNS()) {
+            root->rpriv->parseCheckHashDeclShadowedByQore(loc, hashdecl, this);
+        }
+    }
 
     return 0;
 }
@@ -4033,17 +4388,50 @@ int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, const N
 
 int qore_ns_private::parseAddMethodToClass(const QoreProgramLocation* loc, const NamedScope& mname,
         MethodVariantBase* qcmethod, bool static_flag) {
-   std::unique_ptr<MethodVariantBase> v(qcmethod);
+    std::unique_ptr<MethodVariantBase> v(qcmethod);
+    assert(mname.size() > 1);
 
-   unsigned m = 0;
-   QoreClass* oc = mname.size() > 2 ? parseMatchScopedClassWithMethod(mname, m) : parseFindLocalClass(mname[0]);
-   if (!oc) {
-      parse_error(*loc, "cannot find class for to add method '%s' in namespace '%s'", mname.ostr, name.c_str());
-      return -1;
-   }
+    // a root-anchored path ("::NS::C::m") would name a class outside of this namespace, which is not part of the
+    // namespace tree yet
+    if (!*mname[0]) {
+        parse_error(*loc, "out-of-line method '%s()' in namespace '%s::' cannot have a class path anchored at the root "
+            "namespace; give the class path relative to the namespace or define the method outside of it",
+            mname.ostr, name.c_str());
+        return -1;
+    }
 
-   qore_class_private::addUserMethod(*oc, mname.getIdentifier(), v.release(), static_flag);
-   return 0;
+    // the class path is relative to this namespace, as with the scoped functions and constants declared in a
+    // namespace: "C::m" is a method of class C of this namespace, "I::C::m" one of class C of its child namespace I
+    // (issue #6340)
+    QoreNamespace* fns = ns;
+    unsigned i = 0;
+    for (; i < (mname.size() - 2); ++i) {
+        if (!(fns = fns->priv->parseFindLocalNamespace(mname[i]))) {
+            break;
+        }
+    }
+    QoreClass* oc = fns ? fns->priv->findLoadClass(mname[mname.size() - 2]) : nullptr;
+
+    // a path that starts with the name of this namespace is also accepted, for compatibility
+    if (!oc && mname.size() > 2 && name == mname[0]) {
+        unsigned m = 0;
+        oc = parseMatchScopedClassWithMethod(mname, m);
+    }
+
+    if (!oc) {
+        if (!fns) {
+            parse_error(*loc, "cannot find namespace '%s::' in '%s()' as a child of namespace '%s::'", mname[i],
+                mname.ostr, name.c_str());
+        } else {
+            std::string cpath(mname.ostr, strlen(mname.ostr) - strlen(mname.getIdentifier()) - 2);
+            parse_error(*loc, "cannot find class '%s' for method '%s()' in namespace '%s::'", cpath.c_str(),
+                mname.ostr, name.c_str());
+        }
+        return -1;
+    }
+
+    qore_class_private::addUserMethod(*oc, mname.getIdentifier(), v.release(), static_flag);
+    return 0;
 }
 
 void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, QoreModuleContext& qmc) const {
@@ -4284,7 +4672,103 @@ bool qore_ns_private::hasUserExports() const {
     return false;
 }
 
-void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
+//! Returns the name of the module whose namespace is merged, for the declarations that do not record it
+/** A module compiled with qcc does not record its name in its variables; nullptr if unknown
+*/
+static const char* get_merged_module_name(const qore_ns_private& mns) {
+    const char* rv = get_module_context_name();
+    if (rv) {
+        return rv;
+    }
+    const std::vector<std::string>& mods = mns.getModuleNames();
+    return mods.size() == 1 ? mods[0].c_str() : nullptr;
+}
+
+//! Returns the name of the module that declares a public variable of a module namespace, or nullptr if unknown
+static const char* get_module_var_module_name(const Var& v, const qore_ns_private& mns) {
+    const char* rv = v.getModuleName();
+    return rv ? rv : get_merged_module_name(mns);
+}
+
+//! Records the static variables of the classes of a trusted module's Program as the module's (qore#5664)
+/** A class that a module exports is the same class in every Program that imports it, with the same static
+    variables, which restricted code may then read but not change; see QoreVarInfo::checkTrustedModuleWrite()
+*/
+static void mark_trusted_module_statics(const qore_root_ns_private& mod_root) {
+    assert(mod_root.pgm);
+    qore_program_id_t pgm_id = mod_root.pgm->getProgramId();
+    QorePrivateNamespaceIterator qpni(const_cast<qore_root_ns_private*>(&mod_root));
+    while (qpni.next()) {
+        const qore_ns_private* ns = qpni.get();
+        ConstClassListIterator cli(ns->classList);
+        while (cli.next()) {
+            qore_class_private* qc = qore_class_private::get(*const_cast<QoreClass*>(cli.get()));
+            // only the classes that the module declares in Qore: not the system classes, which every Program has,
+            // nor the classes of other modules that the module imported (their own module records them), nor the
+            // classes of binary modules, which hold their static state in C++ and decide themselves who may change
+            // it (an accessor-backed static calls the module's code for every read and write)
+            if (qc->vars.empty() || qc->sys || qc->spgm.load(std::memory_order_acquire) != mod_root.pgm) {
+                continue;
+            }
+            const char* module_name = qc->getModuleName();
+            if (!module_name) {
+                module_name = get_merged_module_name(*ns);
+            }
+            // the class path without the root namespace's "::" prefix
+            std::string class_path = qc->path.compare(0, 2, "::") ? qc->path : qc->path.substr(2);
+            for (auto& v : qc->vars.member_list) {
+                if (v.second) {
+                    v.second->setTrustedModule(pgm_id, module_name, class_path, v.first);
+                }
+            }
+        }
+    }
+}
+
+void qore_root_ns_private::copyMergeCommittedModuleNamespace(const qore_root_ns_private& mns) {
+    // the public variables of a trusted module are shared by all its importers, which may not change them when they
+    // are restricted (qore#5664); a module whose Program has a sandbox manager is a tenant's own module
+    QoreProgram* module_var_importer = pgm && mns.pgm && qore_program_private::isTrustedModuleProgram(*mns.pgm)
+        ? pgm : nullptr;
+    if (module_var_importer) {
+        // and so are the static variables of its classes
+        mark_trusted_module_statics(mns);
+    }
+    qore_ns_private::copyMergeCommittedNamespace(mns, module_var_importer);
+}
+
+void qore_ns_private::markCopiedModuleVarImports(QoreProgram* importer, bool src_trusted_module) {
+    for (auto& i : var_list.vmap) {
+        Var* v = i.second;
+        if (!v->isRef() || v->isTrustedModuleVarImport()) {
+            continue;
+        }
+        const Var* target = v->getRefTarget();
+        if (target->isTrustedModuleVarImport()) {
+            // the same module variable that the source Program imported
+            v->setTrustedModuleVarImport(importer, *target, path);
+        } else if (src_trusted_module && !target->isRef() && target->isPublic()) {
+            // a public variable of the trusted module whose Program created the new Program
+            v->setTrustedModuleVarImport(importer, get_module_var_module_name(*target, *this), path);
+        }
+    }
+}
+
+void qore_root_ns_private::markCopiedModuleVarImportsFrom(const qore_root_ns_private& src) {
+    assert(pgm);
+    const QoreProgram* src_pgm = src.pgm;
+    bool src_trusted_module = src_pgm && qore_program_private::isTrustedModuleProgram(*src_pgm);
+    if (src_trusted_module) {
+        // the new Program shares the classes of the trusted module that created it, with their static variables
+        mark_trusted_module_statics(src);
+    }
+    QorePrivateNamespaceIterator qpni(this);
+    while (qpni.next()) {
+        qpni.get()->markCopiedModuleVarImports(pgm, src_trusted_module);
+    }
+}
+
+void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns, QoreProgram* module_var_importer) {
     printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s'\n", this, name.c_str());
 
     const size_t old_constant_size = constant.size();
@@ -4307,8 +4791,10 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
     // merge in source functions
     func_list.mergeUserPublic(mns.func_list, this);
 
-    // merge in global variables
-    var_list.mergePublic(mns.var_list);
+    // merge in global variables; a trusted module's public variables are read-only in the importer when it is
+    // restricted (qore#5664)
+    var_list.mergePublic(mns.var_list, module_var_importer,
+        module_var_importer ? get_merged_module_name(mns) : nullptr, path);
 
     // merge in source enums
     enumList.mergeUserPublic(mns.enumList, this);
@@ -4462,7 +4948,7 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             nns->priv->addModuleName(m);
         }
 
-        nns->priv->copyMergeCommittedNamespace(*i->second->priv);
+        nns->priv->copyMergeCommittedNamespace(*i->second->priv, module_var_importer);
         //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s::' merged %p '%s::'\n", this,
         //    name.c_str(), nns, nns->getName());
     }
@@ -5427,4 +5913,37 @@ bool QoreNamespaceEnumIterator::next() {
 
 const QoreEnumDecl& QoreNamespaceEnumIterator::get() const {
     return *priv->get();
+}
+
+void qore_ns_private::getTypeOwners(std::vector<QoreTypeOwner*>& owners) {
+    {
+        ClassListIterator i(classList);
+        while (i.next()) {
+            qore_class_private* priv = qore_class_private::get(*i.get());
+            if (priv && !priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    {
+        HashDeclListIterator i(hashDeclList);
+        while (i.next()) {
+            typed_hash_decl_private* priv = typed_hash_decl_private::get(*i.get());
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    {
+        EnumListIterator i(enumList);
+        while (i.next()) {
+            qore_enum_decl_private* priv = qore_enum_decl_private::get(*i.get());
+            if (!priv->type_owner.isTypeOwnerSystem()) {
+                owners.push_back(&priv->type_owner);
+            }
+        }
+    }
+    for (auto& i : nsl.nsmap) {
+        qore_ns_private::get(*i.second)->getTypeOwners(owners);
+    }
 }

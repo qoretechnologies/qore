@@ -47,12 +47,15 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <qore/QoreEncoding.h>
+#include <qore/QoreStringNode.h>
 #include <qore/QoreValue.h>
 #include <qore/QoreEnumDecl.h>
 #include <qore/QoreParseOptions.h>
 #include <qore/SystemEnvironment.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/SyncParseOptions.h"
 
 class AbstractQoreNode;
 class QoreValue;
@@ -66,6 +69,8 @@ class Var;
 class UserVariantBase;
 class UserSignature;
 class QoreFunction;
+class FunctionCallNode;
+class FunctionCallBase;
 class AbstractQoreFunctionVariant;
 class QoreParseListNode;
 struct QoreTypeParamInstantiation;
@@ -245,12 +250,32 @@ std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_
 //! Marker for method-ref payloads that carry deferred call argument type metadata.
 constexpr const char* QORE_AOT_STATIC_CALL_ARG_TYPES_MARKER = "@qore-aot-static-call-arg-types-v1";
 constexpr const char* QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER = "@qore-aot-explicit-type-args-v1";
+//! Marker for the method-ref payload of a self call to an abstract method (SelfFunctionCallNode::isAbstractCall()),
+//! which is looked up by name at run time and has no variant (issue #5824)
+constexpr const char* QORE_AOT_ABSTRACT_SELF_CALL_MARKER = "@qore-aot-abstract-self-call-v1";
+
+//! returns the signature whose type parameters the code of the function whose AOT context is being built names
+/** (see QoreAOTTypeParamOwnerHelper); a closure read in that context names them (qore#5733)
+*/
+DLLLOCAL const UserSignature* qore_aot_get_type_param_owner();
+
+//! sets the signature returned by qore_aot_get_type_param_owner() for its scope
+class QoreAOTTypeParamOwnerHelper {
+public:
+    DLLLOCAL QoreAOTTypeParamOwnerHelper(const UserSignature* owner);
+    DLLLOCAL ~QoreAOTTypeParamOwnerHelper();
+
+private:
+    const UserSignature* old_owner;
+};
 
 struct QoreAOTStaticMethodRef {
     const char* method_name = nullptr;
     const char* variant_class_path = nullptr;
     const char* sig_text = nullptr;
     const char* arg_type_sig = nullptr;
+    //! a self call to an abstract method (QORE_AOT_ABSTRACT_SELF_CALL_MARKER)
+    bool abstract_self_call = false;
     bool explicit_type_args_present = false;
     bool explicit_type_args_valid = true;
     std::vector<std::string> explicit_type_arg_paths;
@@ -261,11 +286,68 @@ struct QoreAOTStaticMethodRef {
     QoreAOTStaticMethodRef(const char* encoded);
 };
 
+//! Returns the variant of @a method (or of the method of the same name of the variant's class, which @a method is then
+//! set to) given by @a variant_ref ("<variant class>\n<signature text>"), or nullptr if it is not found
+/** The variant of the method call of an EN_DOT_EVAL expression node (issue #5823).
+*/
+const AbstractQoreFunctionVariant* qore_aot_find_method_variant(QoreProgram* pgm, const QoreMethod*& method,
+        const char* method_name, const char* variant_ref, bool pseudo);
+
+class SelfFunctionCallNode;
+
+//! Encodes the method reference of a self call: a call to an abstract method is marked as such and has no variant
+//! (QORE_AOT_ABSTRACT_SELF_CALL_MARKER), as parsing marks it (SelfFunctionCallNode::parseInitCall()); otherwise as
+//! qore_aot_encode_static_method_ref(), with the call's argument types if @a arg_types and it has no variant
+std::string qore_aot_encode_self_method_ref(const SelfFunctionCallNode* call, bool arg_types);
+
 //! Encodes a static method reference, optionally with an exact variant or deferred argument type signature.
 std::string qore_aot_encode_static_method_ref(const char* method_name,
     const AbstractQoreFunctionVariant* variant = nullptr,
     const type_vec_t* arg_types = nullptr,
     const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
+
+//! Marker of the explicit type arguments of a function or method call in a call reference (FUNC_CALL signature
+//! references, method references of method call slots and of serialized method calls): the marker and the count,
+//! followed by "\n<type path>" for each argument
+/** The signature text that precedes it has the default values of the parameters, whose strings can hold anything,
+    also the marker: the type arguments are found by the last marker in the reference (qore_aot_find_call_type_args()),
+    as they come last and a type path has no marker
+*/
+constexpr const char* QORE_AOT_CALL_TYPE_ARGS_MARKER = "\n@qore-aot-call-type-args-v1:";
+
+//! Returns the explicit type arguments of an encoded call reference (its last QORE_AOT_CALL_TYPE_ARGS_MARKER) or 0
+DLLLOCAL const char* qore_aot_find_call_type_args(const char* ref);
+
+//! Appends the explicit type arguments of a call to its encoded reference (see QORE_AOT_CALL_TYPE_ARGS_MARKER)
+DLLLOCAL void qore_aot_append_call_type_args(std::string& ref, const QoreTypeParamInstantiation* inst);
+
+//! Returns the signature reference of a serialized FUNC_CALL expression: "sig:<signature text>" of its variant, if
+//! resolved, and its explicit type arguments (see qore_aot_append_call_type_args())
+DLLLOCAL std::string qore_aot_get_function_call_signature_ref(const FunctionCallNode* call);
+
+//! Decodes the explicit type arguments of a call encoded by qore_aot_append_call_type_args()
+/** @param encoded the encoded type arguments, starting with QORE_AOT_CALL_TYPE_ARGS_MARKER
+    @param callee_signature the signature of the variant called, if known: the owner of the type arguments, whose
+    number of type parameters they must match; a call whose variant is chosen at run time has none, and its type
+    arguments are checked against the variant chosen then, as for the parsed call (qore#5791)
+    @param containing_signature the signature of the code that makes the call, whose type parameters the type
+    arguments can name, or nullptr
+
+    @return true if the type arguments were decoded into \a inst, which has none for a marker without type arguments
+    (see qore_aot_append_call_type_args()), false if they cannot be decoded or resolved
+*/
+DLLLOCAL bool qore_aot_decode_call_type_args(QoreProgram* pgm, const char* encoded,
+    const UserSignature* callee_signature, const UserSignature* containing_signature,
+    QoreTypeParamInstantiation& inst);
+
+//! Sets the explicit type arguments of a method reference on a call (QORE_AOT_EXPLICIT_TYPE_ARGS_MARKER)
+/** @param containing_signature the signature of the code that makes the call, whose type parameters the type
+    arguments can name, or nullptr
+
+    @return true if the reference has no type arguments or they were set, false if they cannot be resolved
+*/
+DLLLOCAL bool qore_aot_apply_explicit_type_args(FunctionCallBase& call, const QoreAOTStaticMethodRef& method_ref,
+    QoreProgram* pgm, const UserSignature* containing_signature);
 
 //! Resolves a static-call argument type signature and uses it to find a method variant.
 const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signature(QoreProgram* pgm,
@@ -275,6 +357,38 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
 
 //! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
 const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
+
+//! Returns the path written for the hashdecl of a construction or a cast in an expression tree, an expression slot or
+//! a default value
+/** The namespace path of the hashdecl, or for a hashdecl with type parameters (HD<U> in generic code), whose
+    namespace path names no hashdecl that can be found, its serializable type path (hash<NS::HD<typeparam<, 0, U>>>),
+    whose type parameters the reader resolves with the signature or the receiver that owns them (qore#6173)
+*/
+DLLLOCAL std::string qore_aot_encode_expr_hashdecl_path(const TypedHashDecl* hd);
+
+//! Resolves a path written by qore_aot_encode_expr_hashdecl_path() when the expression is read
+/** A path with type parameters is resolved with the signature whose default value is being read (see
+    QoreAOTDefaultTypeParamSignatureHelper) or the class that owns them; the hashdecl has type parameters, which are
+    substituted with the types of the running instantiation when the expression is evaluated (qore#5720).
+
+    @return the hashdecl, or nullptr if it cannot be resolved when read: the caller then resolves the path when the
+    expression is evaluated, with qore_aot_resolve_call_hashdecl_path()
+*/
+DLLLOCAL const TypedHashDecl* qore_aot_decode_expr_hashdecl_path(QoreProgram* pgm, const char* path);
+
+//! Resolves a serialized hashdecl path in the current call
+/** The type parameters of the receiver's class and of the generic function or method running are substituted with
+    their types in the current call (hash<HD<U>> is hash<HD<int>> in a call of m<int>(), qore#5661); a type parameter
+    of a signature is resolved with the signature of the type parameter instantiation of the call.
+
+    @param pgm the Program
+    @param path the hashdecl type path
+    @param receiver_type_info the receiver's type, whose class's type parameters are substituted
+
+    @return the hashdecl, or nullptr if it cannot be resolved
+*/
+DLLLOCAL const TypedHashDecl* qore_aot_resolve_call_hashdecl_path(QoreProgram* pgm, const char* path,
+    const QoreTypeInfo* receiver_type_info);
 
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
@@ -333,8 +447,226 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      (members, static variables, constants or nothing), so that the class refuses undeclared members as it does
 //!      when parsed.  A v9-v21 record has no such byte: the class gets the flag only from its public members, as
 //!      before.
+//! v23: a serialized IR function has, after its local slot table, the number of its handler-own local slots and
+//!      their slot ids (u32 each): the locals that an on_block_exit handler declares itself (closure-bound ones;
+//!      since #6002 all of them), which the lowering does not mark pre-instantiated in the handler (zero for a
+//!      function that is not a handler).  A handler
+//!      read from serialized IR marks its other parent slots pre-instantiated, as its lowering does.  A v9-v22 IR
+//!      function has no such list; its handler-own locals are derived from its IR (an approximation: see
+//!      QoreIRFunction::deriveHandlerOwnClosureLocalsFromIR()).
+//! v24: a string value that is not in UTF-8 is serialized with its encoding (QoreAOTValueTag::VT_STRING_ENC), and a
+//!      string constant in an expression that is not in UTF-8 or that has a null byte is a CONST_VALUE and not a
+//!      CONST_STRING, whose text ends at the first null byte and which is rebuilt in the default encoding.
+//! v25: the variant flags byte of a FUNCTIONS record has QORE_AOT_VARIANT_FLAG_PUBLIC for a variant that its user
+//!      module exports (a function can have public and private variants); an older function record has only the
+//!      function's public flag, which applies to all of its variants.
+//! v26: source locations (#5745): an inline expression of a call (a function, method, static method, self method,
+//!      constructor or call reference call) that has a source location is preceded by AOTExprKind::SOURCE_LOCATION
+//!      and its location (qore_aot_write_source_location()), which the call node that is read gets, so that the
+//!      frame of the call and its exceptions have the lines of the call; a class member record ends with the
+//!      location of its declaration; a call form of a default argument (has_default 2, 4 or 6) ends with the
+//!      location of the call; a closure record (CLOSURE_CREATE) has the location of the closure's block after its
+//!      native body key (#5816).  The locations are kept out of the aggregate digests
+//!      (QoreAOTBinaryWriter::omit_source_locations).  A DebugStatement or DebugBlock instruction of the debug IR has
+//!      the nesting of its statement (QoreIRDebugStatementInstruction::nest_depth and nest_flags: u16 + u8), and the
+//!      debug IR marks the end of each statement (QORE_IR_DEBUG_NEST_END), so that the debugger's exception events
+//!      of the statements that contain the one that raised an exception are those of the AST interpreter (#5816).
+//! v27: a ListIndexSlice step of an lvalue path (in a function record and in serialized IR) has, after its operand ids,
+//!      one byte per selector: 1 if the selector is a range (LVPathStep::slice_ranges).  A v9-v24 step has no such
+//!      bytes; each of its selectors is taken as a range, which selects every index of a list value, as before.
+//! v28: an IteratorNext record of serialized IR has a u16 count and that many u32 value ids after its targets: the
+//!      values that the instruction releases after the previous element (QoreIRIteratorNextInstruction::
+//!      release_values).  A v9-v27 record has none.
+//! v29: the flags of a local slot record of a function record mark the parameters and local variables of the function
+//!      whose values its native code keeps in native storage (QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE and
+//!      QORE_AOT_LOCAL_SLOT_NATIVE_WRITES), which get_local_vars() and set_local_var_value() refuse (issue #5890).  A
+//!      v9-v28 record has no such flags: every parameter and local variable of the function that is neither
+//!      closure-bound nor a reference is taken to have both.
+//! v30: a ScopeEnter instruction ends with the locals of its block that an exception leaving the scope releases
+//!      (QoreIRScopeEnterInstruction::locals: u32 count + N x (name stringref + slot u32)), so that the debug IR
+//!      releases them before the debugger's exception events of the statements that contain the block (#5867).
+//! v31: a DebugBlock instruction of the debug IR ends with the locals of its block (QoreIRDebugStatementInstruction::
+//!      block_locals: u32 count + N x (name stringref + slot u32)), so that an exception that leaves a block without
+//!      an exception path of its own releases them before the debugger's exception event of the statement that
+//!      contains the block (#5921).
+//! v32: the pending flag byte of a namespace or class constant (QORE_AOT_FEAT_CONST_PENDING) has the bit
+//!      QORE_AOT_CONST_FLAG_EXPLICIT_TYPE (0x02) if the constant has an explicit declared type
+//!      (ConstantEntry::explicit_type); the pending flag is bit 0x01.  The value of a constant that its init function
+//!      computes is retyped to the declared type only when the constant has one, as with the AST interpreter
+//!      (#5925); a v9-v31 constant is taken to have one, as before.
+//! v33: a user variant's signature flags have bit 4 (0x0010) when the variant declares functional domains in Qore
+//!      source (\c [dom=...]); the declared QDOM_* bits follow the variant's parse options as an i64.  A v9-v32
+//!      variant declares none (#5803).
+//! v34: the string of a LOCAL_VARREF expression in the default argument of a parameter is "top:<index>:<name>" for a
+//!      local variable of the top level of the Program (a %modern script's `K k();` at the top level), where <index>
+//!      is the index in the Program's top-level local list and <name> the name of the variable; every other
+//!      LOCAL_VARREF string is the decimal index of a local slot.  A reader that does not know it reads the string as
+//!      the slot 0 (#5868).
+//!      An expression that is a find expression is written natively (AOTExprKind::FIND, with its node form EN_FIND),
+//!      so that a find expression can be nested in the expressions of another one (#5974); the earlier formats have no
+//!      such expression, and a reader of them refuses the kind.
+//!      An init function descriptor can have the target type MODULE_DEL (7): the compiled body of the module's \c del
+//!      closure, which is loaded with the module but run when the module is unloaded (#6015), or, for a local source
+//!      module that a compiled script embeds, when the script's Program is cleared; a reader of the earlier
+//!      formats refuses the type, and a module has none without a \c del closure.
+//! v35: a call through a call reference or closure with named arguments is written natively with the names of its
+//!      arguments (AOTExprKind::CALLREF_CALL_NAMED, 128: the CALLREF_CALL layout followed by a name string ref per
+//!      argument; its node form EN_CALLREF_CALL_NAMED, 27), so that the names are bound when the call is made (M4
+//!      phase 3); the earlier formats have no such expression, and a reader of them refuses the kind.
+//! v36: the name of a capture of a closure that is the default argument of a function, and whose variable is a
+//!      top-level local of the Program, is "top:<index>:<name>" (the index in the Program's top-level local list), as
+//!      the reference of a default argument expression to one is (v34); the reader binds the capture to that variable
+//!      and reads the closure again when the Program has its top-level locals.  An earlier reader takes the text as
+//!      the name of a variable that does not exist (#5998).
+//! v37: a recorded `%module-cmd` directive (MODULE_COMMANDS section) has the restricting parse options that were in
+//!      force at the directive after its command (two u64: the low and the high 64 bits), so that the command is
+//!      replayed with the restrictions that the interpreted program had when it issued it (QoreModuleCommandContext).
+//!      A v9-v36 directive has none: its command is replayed with the parse options that the program is declared
+//!      with, which are a superset.
+//! v38: the flags of an AOTExprKind::DOT_EVAL_TARGET slot have the bit QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH (0x02)
+//!      for a call dispatched by name, whose slot records the class, method and variant resolved at parse time for the
+//!      check of the call's target; and the method-ref payload of a self call to an abstract method is
+//!      QORE_AOT_ABSTRACT_SELF_CALL_MARKER (#5824).  A v9-v37 image has neither.
+//! v39 (batch S; one format version for the format changes of the batch, one line each):
+//!      - a return statement of a handler compiled as a function of its own (an out-of-line on_exit, on_success or
+//!        on_error handler) is followed by a HandlerReturn instruction (QoreIROpcode::HandlerReturn, 438), with the
+//!        value of the return as its operand, or none for a return without a value, which hands the value to the
+//!        function that the handler runs for; native code calls qore_rt_handler_return(), and
+//!        qore_rt_exec_on_block_exit_hold() takes the values of the interrupted return that the first hand-over
+//!        releases (two more arguments).  A handler of an earlier format returned its value, which the runtime no
+//!        longer reads; the AOT runtime identity changes with the runtime entry, so a module compiled for an earlier
+//!        format is refused and must be rebuilt (#6074).
+//! v40 (batch T; one format version for the format changes of the batch, one line each):
+//!      - the hashdecl path of HASHDECL_NEW/CAST_HASHDECL expressions, slots and member defaults is written as the
+//!        serializable type path when the hashdecl has type parameters (qore#6173, qore#6241)
+//! v41 (batch V; one format version for the format changes of the batch, one line each):
+//!      - the IR of an OnBlockExit instruction whose handler function an earlier one of the same function or of its
+//!        handlers has is written as handler flag 2 and the u32 index of that function (QoreAOTSharedHandlerTable),
+//!        and the slot map entry of a function has a u32 count of its LValuePath instructions (qore#6087, qore#6127)
+//!      - an expression that is a unary plus (AOTExprKind::UNARY_PLUS, 129: the operand), a binary not (~, BIT_NOT,
+//!        130: the operand), a comparison (<=>, LOG_CMP, 131: the left and the right operand), a list assignment
+//!        (LIST_ASSIGN, 132: the lvalue list as a LIST_LITERAL and the value) or a backquote (BACKQUOTE, 133: the
+//!        command as a string ref) is written natively, so that a default argument with one that is not folded at
+//!        parse time can be written (qore#6229, qore#6302); the earlier formats have no such expressions, and a reader
+//!        of them refuses the kinds
+//!      - an optional TIME_ZONE section (34) records the time zone that the code sets with %set-time-zone and whether
+//!        its directive follows the header of a module (qore#6270)
+//! v42 (batch AA; one format version for the format changes of the batch, one line each):
+//!      - the serialized IR of an LValuePath instruction has a u8 after its ternary operator: 1 if the value of the
+//!        operation is used (ref_rv), 0 if not, so that an unused post increment or decrement copies no old value and
+//!        an unused remove or delete releases its value in the operation in the IR rebuilt from the image (debug IR,
+//!        closure bodies without native code); an earlier image has none, and its instructions use their values, as
+//!        before (qore#6328)
+//!      - top-level code whose statements have different parse options sets the options of each statement where they
+//!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
+//!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
+//!        changes with the runtime entry (qore#6293)
+//! v43 (batch AC; one format version for the format changes of the batch, one line each):
+//!      - the encoded metadata is followed by the XXH64 checksum (seed 0, u64 little-endian) of all of its bytes,
+//!        and the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM; the reader checks it before it reads anything
+//!        else, so that metadata corrupted after it was written is refused (qore#6451)
+//! v44 (batch AE; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 3) has the restrictions that its
+//!        code gives the modules it requires, each with QMDR_* flags, which the loader applies before the module's
+//!        initialization (qore#6406, qore#6386)
+//! v45 (batch AF; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 4) has the functional domains
+//!        that the module declares in its header, the dependencies that it requires only after its header and the
+//!        functional domains that its own code restricts, with which the module loader removes the declared domains
+//!        from the restrictions that those dependencies inherit when the module is loaded as library code (qore#6351)
+//!      - the flags byte of the TIME_ZONE section has bit 2 set for a directive that applies only to a load of the
+//!        module as library code: one after the header of a module that declares the locale control domain, which
+//!        the module's own restriction disallowed when it was compiled (qore#6352)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 22;
+//! First format version whose function variant flags record each variant's public flag (see v25 above).
+constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
+//! Variant-flags bit of FUNCTIONS and METHODS records (QORE_AOT_FEAT_METHOD_SYNC): the variant is synchronized
+constexpr uint8_t QORE_AOT_VARIANT_FLAG_SYNCHRONIZED = 0x01;
+//! Variant-flags bit of FUNCTIONS records (QORE_AOT_VARIANT_PUBLIC_VERSION): the variant is module-public
+constexpr uint8_t QORE_AOT_VARIANT_FLAG_PUBLIC = 0x02;
+//! First format version with source locations of calls, members and default arguments (see v26 above).
+constexpr uint16_t QORE_AOT_SOURCE_LOCATIONS_VERSION = 26;
+//! First format version whose ListIndexSlice steps record which selectors are ranges (see v27 above).
+constexpr uint16_t QORE_AOT_SLICE_RANGES_VERSION = 27;
+//! First format version whose IteratorNext records have release values (see v28 above).
+constexpr uint16_t QORE_AOT_ITERATOR_RELEASES_VERSION = 28;
+//! First format version whose local slot records flag the variables kept in native storage (see v29 above).
+constexpr uint16_t QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION = 29;
+//! First format version whose ScopeEnter instructions record the locals of their block (see v30 above).
+constexpr uint16_t QORE_AOT_SCOPE_LOCALS_VERSION = 30;
+//! First format version whose DebugBlock instructions record the locals of their block (see v31 above).
+constexpr uint16_t QORE_AOT_DEBUG_BLOCK_LOCALS_VERSION = 31;
+//! First format version whose constant flag bytes record an explicit declared type (see v32 above).
+constexpr uint16_t QORE_AOT_CONST_EXPLICIT_TYPE_VERSION = 32;
+//! Bit of the pending flag byte of a constant: the constant has an init expression (QORE_AOT_FEAT_CONST_PENDING)
+constexpr uint8_t QORE_AOT_CONST_FLAG_PENDING = 0x01;
+//! Bit of the pending flag byte of a constant: the constant has an explicit declared type (see v32 above)
+constexpr uint8_t QORE_AOT_CONST_FLAG_EXPLICIT_TYPE = 0x02;
+//! First format version whose user variant signatures can carry declared functional domains (see v33 above).
+constexpr uint16_t QORE_AOT_DECLARED_DOMAIN_VERSION = 33;
+//! First format version whose LOCAL_VARREF expressions of parameter defaults can name a top-level local (see v34 above).
+constexpr uint16_t QORE_AOT_TOP_LEVEL_LOCAL_DEFAULT_VERSION = 34;
+//! First format version with native find expressions (see v34 above).
+constexpr uint16_t QORE_AOT_NATIVE_FIND_VERSION = 34;
+//! First format version with named call reference calls (see v35 above).
+constexpr uint16_t QORE_AOT_NAMED_CALLREF_VERSION = 35;
+//! First format version whose closure captures can name a top-level local by its index (see v36 above).
+constexpr uint16_t QORE_AOT_CLOSURE_TOP_LEVEL_CAPTURE_VERSION = 36;
+//! First format version whose recorded `%module-cmd` directives have the parse options in force at them (see v37
+//! above).
+constexpr uint16_t QORE_AOT_MODULE_CMD_OPTIONS_VERSION = 37;
+//! First format version whose call targets can be dispatched by name and self calls marked abstract (see v38 above).
+constexpr uint16_t QORE_AOT_CALL_TARGET_NAME_DISPATCH_VERSION = 38;
+//! First format version whose out-of-line handlers hand their return values over with HandlerReturn (see v39 above).
+constexpr uint16_t QORE_AOT_HANDLER_RETURN_VERSION = 39;
+//! First format version with shared handler functions and wide LValuePath instruction counts (see v41 above)
+/** The IR of an OnBlockExit instruction whose handler function an earlier OnBlockExit instruction of the same function
+    or of its handlers has (a handler nested in other handlers, whose function the copies of its statement share) is
+    written as the handler flag 2 followed by the u32 index of that function in the order in which the handler
+    functions of the function are written (see QoreAOTSharedHandlerTable); flag 1 is followed by the function itself,
+    as before.  A reader of an earlier format would read flag 2 as flag 1, so it is the header's format version, which
+    such a reader refuses, that keeps it from reading these images (#6087).
+
+    The slot map entry of a function has the u32 count of its LValuePath instructions after the u8 one (its low byte,
+    which readers of this format ignore), which a function with more than 255 of them overflowed (#6127).
+*/
+constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
+//! First format version whose serialized LValuePath instructions record whether their value is used (see v42 above)
+constexpr uint16_t QORE_AOT_LVPATH_REF_RV_VERSION = 42;
+//! First format version whose top-level code can set the parse options of its statements (see v42 above)
+constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
+static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_CODE_PARSE_OPTIONS_VERSION,
+    "the format changes of batch AA share one format version (v42)");
+//! First format version whose encoded metadata is followed by its checksum (see v43 above)
+/** The checksum is the XXH64 (seed 0) of all the bytes of the encoded metadata (compressed, if it is compressed),
+    written as a u64 little-endian after them; the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM.  The reader checks
+    it before it reads anything else (QoreAOTBinaryReader::open()), so that metadata corrupted after qcc wrote it is
+    refused as a whole: a module whose metadata does not match is not loaded, as a module whose metadata cannot be
+    read, and its source module is loaded instead when there is one (qore#6451)
+*/
+constexpr uint16_t QORE_AOT_METADATA_CHECKSUM_VERSION = 43;
+//! The size of the checksum that follows the encoded metadata (see QORE_AOT_METADATA_CHECKSUM_VERSION)
+constexpr uint32_t QORE_AOT_METADATA_CHECKSUM_SIZE = 8;
+//! First format version whose modules have the module metadata record with dependency restrictions (see v44 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION) gives its readers its
+    layout; the format version of the artifacts that carry it changes with it, so that the format that a module
+    reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has (qore#6406,
+    qore#6386)
+*/
+constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
+//! First format version whose modules have the module metadata record with the declared domains (see v45 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION, 4 from this format) gives
+    its readers its layout; the format version of the artifacts that carry it changes with it, so that the format that
+    a module reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has; a
+    record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
+*/
+constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! The current format version: the newest version of the history above, which is the newest feature version above
+//! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
+//! in the history above)
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_INFO_DOMAINS_VERSION;
+//! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
+constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
 constexpr uint16_t QORE_AOT_CLASS_FLAGS_VERSION = 22;
 //! Class-flags bit: the class has a public member declaration in its hierarchy (has_public_memdecl)
@@ -360,8 +692,18 @@ constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZSTD = 2;
 constexpr uint8_t QORE_AOT_COMPRESSION_SECTIONED_ZSTD = 3;
 
+//! The maximum size of compressed AOT metadata once decompressed: of the metadata after the header, of a section or
+//! of the string pool, and of all metadata together with sectioned compression; the reader refuses more, so the
+//! writer must not compress more (qore#6127)
+constexpr size_t QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE = 100 * 1024 * 1024;
+
 //! NEW_OBJECT expression-slot ref2 marker for constructors that must resolve their class at runtime.
 constexpr const char* QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT = "deferred-create-object";
+
+//! FUNC_CALL variant reference (expression slot ref2, inline call signature) of a call that the compiler left to
+//! another source object (FunctionCallNode::getAOTDeferredSourceFunction()): its function is resolved with
+//! qore_aot_resolve_deferred_source_function_entry(), every other with qore_aot_resolve_function_entry_for_slot()
+constexpr const char* QORE_AOT_DEFERRED_SOURCE_CALL_SLOT = "deferred-source-call";
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -369,6 +711,35 @@ constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
 //! Binary header flags
 constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
 constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
+//! The encoded metadata is followed by its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
+constexpr uint16_t QORE_AOT_FLAG_METADATA_CHECKSUM = 0x0004;
+
+//! Returns the length of the encoded AOT metadata at \a data without its checksum, from its header
+/** The data can be longer than the metadata (\a avail): a symbol of an object file, whose size is taken up to the next
+    symbol in a format without symbol sizes; compressed metadata is decompressed to find its end.  Used by the reader to
+    find the checksum after the metadata in such data, and by the library and qcc to cut a symbol's data to its
+    metadata and checksum (qore#6451); exported for qcc
+
+    @param data the data
+    @param avail the size of \a data
+    @param len receives the length of the encoded metadata without its checksum
+    @param cancelled if not null, set to true if the scan was ended by a cancellation of the thread (qore_check_cancel())
+
+    @return true if \a data has the header of encoded AOT metadata that fits in \a avail bytes, with its length set
+*/
+bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len, bool* cancelled = nullptr);
+
+//! Returns the checksum of encoded AOT metadata: the XXH64 (seed 0) of its bytes (QORE_AOT_METADATA_CHECKSUM_VERSION)
+DLLLOCAL uint64_t qore_aot_metadata_checksum(const uint8_t* data, size_t size);
+
+//! Seals encoded AOT metadata whose format has a checksum: sets QORE_AOT_FLAG_METADATA_CHECKSUM in its header and
+//! appends its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION); metadata of an earlier format is left as it is
+DLLLOCAL void qore_aot_seal_metadata(std::vector<uint8_t>& metadata);
+
+//! Removes the checksum of sealed AOT metadata, so that its encoding can be changed (it is sealed again after)
+/** @return true if the metadata was sealed
+*/
+DLLLOCAL bool qore_aot_unseal_metadata(std::vector<uint8_t>& metadata);
 
 //! Feature flags for binary compatibility (64-bit bitmask in header.feature_flags)
 constexpr uint64_t QORE_AOT_FEAT_FOREACH_REF    = 1ULL << 0;  //!< RefForeach* opcodes (323-328)
@@ -472,6 +843,10 @@ enum class QoreAOTSectionType : uint16_t {
     SOURCE_STAT_FINGERPRINT = 30,  //!< Source size and nanosecond mtime; written by earlier qcc versions only
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
     FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
+    MODULE_DOMAINS       = 33,  //!< The functional domains a user module declares in its header (u64); absent if none
+    TIME_ZONE            = 34,  //!< The time zone set with `%set-time-zone` (StringRef, then u8 flags: 1 if the
+                                //!< directive follows the header of a module, 2 if it applies only to a load of the
+                                //!< module as library code); absent if none (qore#6270, qore#6352)
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -838,7 +1213,33 @@ enum class QoreAOTValueTag : uint8_t {
     //! Unicode char value.
     //! Encoded as codepoint(u32).
     VT_CHAR = 21,
+    //! String in an encoding other than UTF-8 (from format version 24).
+    //! Encoded as byte length(u32) + string offset(u32) + encoding name offset(u32).
+    VT_STRING_ENC = 22,
 };
+
+//! Returns true if a string constant cannot be an AOTExprKind::CONST_STRING (see format version 24)
+/** which is text in the default encoding up to its first null byte; such a string is a CONST_VALUE
+*/
+inline bool qore_aot_string_needs_value(const char* str, size_t len, const QoreEncoding* enc) {
+    return enc != QCS_UTF8 || memchr(str, '\0', len);
+}
+
+//! Returns true if a string value cannot be an AOTExprKind::CONST_STRING; \a v must be a string
+inline bool qore_aot_string_needs_value(const QoreValue& v) {
+    QoreStringDataHelper str(v);
+    return qore_aot_string_needs_value(str.c_str(), str.size(), str.getEncoding());
+}
+
+//! Returns true if a hash or list value has a type that a literal of it does not give (#5895); false for a container
+//! that needs evaluation, which is an expression, and for one that holds anything but plain data (such as an object)
+/** a hash of a hashdecl or of a complex type, or a list of a complex type, such as the hash<ExceptionInfo> of a
+    %try-module error variable and the lists and hashes in it; such a value is an AOTExprKind::CONST_VALUE, whose value
+    keeps the type and exactly the keys and their order: a HASH_LITERAL or LIST_LITERAL is untyped, and a construction
+    of the hashdecl from the members would order the keys as the hashdecl does and give a member that the value does
+    not have its default value
+*/
+DLLLOCAL bool qore_aot_value_container_is_typed(const AbstractQoreNode* node);
 
 //! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
 //! payloads when QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS is set.
@@ -973,10 +1374,23 @@ public:
     //! as VT_CONST_REF entries. Set before calling section writers that serialize
     //! user constant values.
     const AOTConstantReverseMap* const_reverse_map = nullptr;
+    //! true while a payload is written for a digest (aotRecordAggregateDeclarationDigest()): the source locations of
+    //! expressions (AOTExprKind::SOURCE_LOCATION), of members and of default arguments are left out, so that a
+    //! digest does not depend on lines or on the path of a source file
+    bool omit_source_locations = false;
+    //! true while the default argument of a parameter is written: a top-level local that the expression reads is then
+    //! written by its index in the Program's top-level local list ("top:<index>:<name>"), which the loader binds
+    //! once the top-level locals exist (qore#5868)
+    bool allow_top_level_local_ref = false;
 
     //! Header feature flags used by payload-level compatibility choices while
     //! section writers serialize values.
     uint64_t feature_flags = 0;
+
+    //! The function with the most slot map and debug IR metadata written by serializeSlotMaps() and the size of
+    //! that metadata, to name it when the metadata exceeds QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE (qore#6127)
+    std::string largest_func_metadata_name;
+    size_t largest_func_metadata_size = 0;
 
     //! Keep evaluated pending constants for incremental object declaration preloads.
     //! Final executables/modules run their native initializers and must not retain
@@ -1028,6 +1442,9 @@ public:
     //! Program and module ownership context for distinguishing constants
     //! provided by dependencies from constants emitted by this artifact.
     QoreProgram* serialization_program = nullptr;
+    //! The Program in which the types of typed container values that are written must be resolvable, as the reader
+    //! resolves them in the Program that loads the image; set while the slot maps are written (serializeSlotMaps())
+    QoreProgram* value_type_program = nullptr;
     const char* serialization_module_name = nullptr;
     const std::unordered_set<std::string>* serialization_keep_modules = nullptr;
 
@@ -1230,13 +1647,87 @@ public:
     bool finalize(const QoreAOTBinaryHeader& header, std::vector<uint8_t>& output);
 };
 
+//! The end of the section that the code of the thread reads, and whether a read went past it (qore#6265)
+/** See QoreAOTSectionBounds
+*/
+struct QoreAOTReadBounds {
+    //! the start of the section that is read, or nullptr if no section is read
+    const uint8_t* start = nullptr;
+    //! the end of the section that is read, or nullptr if no section is read
+    const uint8_t* end = nullptr;
+    //! true if a read of the section went past its end
+    bool overrun = false;
+};
+
+//! The bounds of the section that the code of the current thread reads (see QoreAOTSectionBounds)
+/** An inline variable, as the readers are used by libqore and by the tools that include this header (qcc)
+*/
+DLLLOCAL inline thread_local QoreAOTReadBounds qore_aot_read_bounds;
+
+//! Bounds the reads of a section of an AOT binary while it exists (qore#6265)
+/** While an object of this class exists, the reads of QoreAOTBinaryReader (readU8() ... readF64(), readStringRef())
+    in the current thread are checked against the end of the section: a read that does not fit returns 0, leaves the
+    read pointer at the end of the section and marks the read as overrun (overrun()), which the reader of the section
+    reports as an error.  A malformed or truncated binary is therefore never read out of the section.  The bounds of
+    the enclosing section are restored when the object is destroyed, so a reader can bound a part of its section.
+
+    A reader also checks a count that it reads against the bytes that are left (fits()) before it allocates for it.
+*/
+class QoreAOTSectionBounds {
+public:
+    //! Bounds the reads to the \a size bytes at \a ptr
+    DLLLOCAL QoreAOTSectionBounds(const uint8_t* ptr, uint32_t size) : saved(qore_aot_read_bounds) {
+        qore_aot_read_bounds.start = ptr;
+        qore_aot_read_bounds.end = ptr + size;
+        qore_aot_read_bounds.overrun = false;
+    }
+
+    //! Restores the bounds of the enclosing section
+    DLLLOCAL ~QoreAOTSectionBounds() {
+        qore_aot_read_bounds = saved;
+    }
+
+    QoreAOTSectionBounds(const QoreAOTSectionBounds&) = delete;
+    QoreAOTSectionBounds& operator=(const QoreAOTSectionBounds&) = delete;
+
+    //! Returns true if a read went past the end of the section
+    DLLLOCAL bool overrun() const {
+        return qore_aot_read_bounds.overrun;
+    }
+
+    //! Returns the end of the section
+    DLLLOCAL const uint8_t* end() const {
+        return qore_aot_read_bounds.end;
+    }
+
+    //! Returns the number of bytes that are left in the section from \a ptr
+    DLLLOCAL size_t remaining(const uint8_t* ptr) const {
+        const uint8_t* e = qore_aot_read_bounds.end;
+        return ptr < e ? static_cast<size_t>(e - ptr) : 0;
+    }
+
+    //! Returns true if \a count records of at least \a min_size bytes each fit in the rest of the section
+    /** A reader checks a count read from the binary with it before it allocates for the count
+    */
+    DLLLOCAL bool fits(uint64_t count, size_t min_size, const uint8_t* ptr) const {
+        return count <= remaining(ptr) / (min_size ? min_size : 1);
+    }
+
+private:
+    QoreAOTReadBounds saved;
+};
+
 //! Binary format reader for AOT metadata
 /** Reader instances are confined to one metadata deserialization session and
     are not thread-safe. Sectioned metadata populates lazy decompression buffers
     from getSectionData().
+
+    The reads of a section are bounded by QoreAOTSectionBounds (qore#6265).
 */
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
+    //! true if the last open() refused the metadata because it does not match its checksum
+    bool checksum_mismatch = false;
     uint32_t total_size = 0;
     const uint8_t* input_data = nullptr;
     uint32_t input_size = 0;
@@ -1335,9 +1826,13 @@ public:
     /** @param data pointer to the binary data
         @param size size of the binary data
         @param error receives error message on failure
+        @param verify_checksum false for metadata that a reader of the same load has already checked against its
+        checksum (QORE_AOT_METADATA_CHECKSUM_VERSION): the metadata that QoreAOTDebugMetadata keeps from the reader of
+        the module, or a copy of it that it makes; the checksum is then not computed again, but the metadata must
+        still have one (qore#6451)
         @return true on success, false on failure
     */
-    bool open(const uint8_t* data, uint32_t size, std::string& error);
+    bool open(const uint8_t* data, uint32_t size, std::string& error, bool verify_checksum = true);
 
     //! Get the parsed binary header
     const QoreAOTBinaryHeader& getHeader() const { return header; }
@@ -1345,6 +1840,21 @@ public:
     //! Original encoded metadata passed to open(); valid until the caller releases it.
     const uint8_t* getInputData() const { return input_data; }
     uint32_t getInputSize() const { return input_size; }
+
+    //! Returns true if the last open() refused the metadata because its checksum does not match or is missing
+    /** The metadata has the magic number and a supported version of a format with a checksum
+        (QORE_AOT_METADATA_CHECKSUM_VERSION), so it is most likely metadata that was changed after it was written
+        rather than other bytes (qore#6451)
+    */
+    bool checksumMismatch() const { return checksum_mismatch; }
+
+    //! Returns the offset of a pointer into the (decompressed) metadata, or SIZE_MAX if it points elsewhere
+    /** For metadata written uncompressed, it is the offset in the encoded metadata (QORE_AOT_TRACE_IR_DESER prints it
+        for each IR instruction, which tests use to find the instructions in a module)
+    */
+    size_t getDataOffset(const uint8_t* p) const {
+        return (data && p >= data && p < data + total_size) ? static_cast<size_t>(p - data) : SIZE_MAX;
+    }
 
     //! Get the number of sections
     uint32_t getSectionCount() const { return static_cast<uint32_t>(sections.size()); }
@@ -1387,6 +1897,14 @@ public:
         return string_pool + offset;
     }
 
+    //! Get a string of the given length from the string pool, or nullptr if it does not fit in the pool (qore#5848)
+    const char* getString(uint32_t offset, uint32_t len) const {
+        if (!string_pool || offset >= string_pool_size || len > string_pool_size - offset) {
+            return nullptr;
+        }
+        return string_pool + offset;
+    }
+
     //! Get the decoded string-pool bytes.
     const uint8_t* getStringPoolData() const {
         return reinterpret_cast<const uint8_t*>(string_pool);
@@ -1402,13 +1920,34 @@ public:
         return getString(header.label_offset);
     }
 
+    //! Returns true if \a n bytes at \a ptr are in the section that is read, if any (see QoreAOTSectionBounds)
+    /** If they are not, the read pointer is set to the end of the section and the read is marked as overrun
+    */
+    static bool readFits(const uint8_t*& ptr, size_t n) {
+        const uint8_t* end = qore_aot_read_bounds.end;
+        // a read of another buffer while a section is bounded is a reader that sets no bounds of its own
+        assert(!end || ptr >= qore_aot_read_bounds.start);
+        if (end && (ptr > end || static_cast<size_t>(end - ptr) < n)) {
+            qore_aot_read_bounds.overrun = true;
+            ptr = end;
+            return false;
+        }
+        return true;
+    }
+
     //! Read an unsigned 8-bit integer from a data pointer
     static uint8_t readU8(const uint8_t*& ptr) {
+        if (!readFits(ptr, 1)) {
+            return 0;
+        }
         return *ptr++;
     }
 
     //! Read an unsigned 16-bit integer (little-endian) from a data pointer
     static uint16_t readU16(const uint8_t*& ptr) {
+        if (!readFits(ptr, 2)) {
+            return 0;
+        }
         uint16_t v = static_cast<uint16_t>(ptr[0])
                    | (static_cast<uint16_t>(ptr[1]) << 8);
         ptr += 2;
@@ -1417,6 +1956,9 @@ public:
 
     //! Read an unsigned 32-bit integer (little-endian) from a data pointer
     static uint32_t readU32(const uint8_t*& ptr) {
+        if (!readFits(ptr, 4)) {
+            return 0;
+        }
         uint32_t v = static_cast<uint32_t>(ptr[0])
                    | (static_cast<uint32_t>(ptr[1]) << 8)
                    | (static_cast<uint32_t>(ptr[2]) << 16)
@@ -1427,6 +1969,9 @@ public:
 
     //! Read an unsigned 64-bit integer (little-endian) from a data pointer
     static uint64_t readU64(const uint8_t*& ptr) {
+        if (!readFits(ptr, 8)) {
+            return 0;
+        }
         uint64_t v = 0;
         for (int i = 0; i < 8; ++i) {
             v |= static_cast<uint64_t>(ptr[i]) << (i * 8);
@@ -1437,6 +1982,9 @@ public:
 
     //! Read a signed 64-bit integer (little-endian) from a data pointer
     static int64_t readI64(const uint8_t*& ptr) {
+        if (!readFits(ptr, 8)) {
+            return 0;
+        }
         uint64_t uv = 0;
         for (int i = 0; i < 8; ++i) {
             uv |= static_cast<uint64_t>(ptr[i]) << (i * 8);
@@ -1449,6 +1997,9 @@ public:
 
     //! Read a 64-bit float (little-endian, IEEE 754) from a data pointer
     static double readF64(const uint8_t*& ptr) {
+        if (!readFits(ptr, 8)) {
+            return 0;
+        }
         uint64_t bits = 0;
         for (int i = 0; i < 8; ++i) {
             bits |= static_cast<uint64_t>(ptr[i]) << (i * 8);
@@ -1470,14 +2021,24 @@ public:
         @param end pointer past the end of valid data
         @param error receives error message on failure
         @return the deserialized value, or NOTHING on failure
+
+        @note After an error, the read pointer is past the value, or at \a end if the value is malformed: a reader
+        that reads on after the error must check it against \a end (qore#5848)
     */
     QoreValue readValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
+
+    //! Skip a serialized QoreValue without reading it; returns false if it is malformed
+    bool skipValue(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
 
     //! Check if a data pointer range is valid
     bool checkRange(const uint8_t* ptr, uint32_t needed) const {
         return ptr && data_area && ptr >= data_area
             && (ptr + needed) <= (data_area + data_area_size);
     }
+
+private:
+    //! Reads a value for readValue(), which places the read pointer after an error
+    QoreValue readValueIntern(const uint8_t*& ptr, const uint8_t* end, std::string& error) const;
 };
 
 //! Serializes a source line number in the current wire format.
@@ -1515,12 +2076,54 @@ static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const ui
     return static_cast<int>(v);
 }
 
+//! Serializes a source location: start and end line, offset, file and source label
+/** As the entries of the statement-location table; a missing location is written with lines 0 (see
+    qore_aot_read_source_location())
+*/
+DLLLOCAL void qore_aot_write_source_location(QoreAOTBinaryWriter& writer, const QoreProgramLocation* loc);
+
+//! Returns true if a node has a source location that AOT serializes (qore_aot_write_source_location())
+DLLLOCAL bool qore_aot_has_source_location(const QoreProgramLocation* loc);
+
+class UserClosureFunction;
+//! Returns the source location of a closure, which its record carries from format version 26 (#5816)
+/** the location of the block of its code, which the debugger's events of the closure are given with; its signature
+    when read from an AOT image gets it
+*/
+DLLLOCAL const QoreProgramLocation* qore_aot_closure_location(const UserClosureFunction* ucf);
+
+//! Deserializes a source location written by qore_aot_write_source_location()
+/** @return the location, interned in the Program, or nullptr if none was written (lines 0) or there is no Program
+*/
+DLLLOCAL const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, QoreProgram* pgm);
+
 //! Clamps a deserialized source line number to a value that is legal for QoreProgramLineLocation
 /** Any line below -1 is impossible in a well-formed blob; a corrupt or hand-edited artifact must not be able to
     abort the process on the QoreProgramLineLocation assertions, so such values are reported as "unknown" (0).
 */
 static inline int qore_aot_valid_line(int line) {
     return line >= -1 ? line : 0;
+}
+
+//! Returns a source line offset read from a blob, or 0 if it is out of the range of a program location (qore#6265)
+static inline int qore_aot_valid_source_offset(int64_t offset) {
+    return offset >= 0 && offset <= 0xffff ? static_cast<int>(offset) : 0;
+}
+
+//! Returns true and the constructor argument of a QoreImplicitArgumentNode for an implicit argument offset read from a
+//! blob (-1 for all the arguments, otherwise the index of the argument), false if it is invalid (qore#6265)
+static inline bool qore_aot_implicit_arg_ctor_offset(int64_t offset, int& ctor_offset) {
+    if (offset < -1 || offset >= INT_MAX) {
+        return false;
+    }
+    ctor_offset = offset >= 0 ? static_cast<int>(offset + 1) : -1;
+    return true;
+}
+
+//! Returns true if a context stack offset read from a blob is valid (qore#6265)
+static inline bool qore_aot_valid_context_stack_offset(int64_t offset) {
+    return offset >= 0 && offset <= INT_MAX;
 }
 
 //! Returns the serialized size in bytes of a single source line number in the given blob
@@ -1534,6 +2137,37 @@ static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
 */
 static inline bool qore_aot_type_path_has_signature_type_param(const char* type_path) {
     return type_path && strstr(type_path, "typeparam<,") != nullptr;
+}
+
+//! Sets the signature whose type parameters the type paths of a default value of its parameter use (issue #5928)
+/** A default value is read as an expression tree (VT_EXPR_NATIVE), whose readers resolve type paths without the
+    callable that owns them; while one is set, QoreAOTTypeResolver::resolve() resolves a path with a signature type
+    parameter with it
+*/
+class QoreAOTDefaultTypeParamSignatureHelper {
+public:
+    DLLLOCAL QoreAOTDefaultTypeParamSignatureHelper(const UserSignature* sig);
+    DLLLOCAL ~QoreAOTDefaultTypeParamSignatureHelper();
+
+    QoreAOTDefaultTypeParamSignatureHelper(const QoreAOTDefaultTypeParamSignatureHelper&) = delete;
+    QoreAOTDefaultTypeParamSignatureHelper& operator=(const QoreAOTDefaultTypeParamSignatureHelper&) = delete;
+
+private:
+    const UserSignature* old;
+};
+
+//! Returns a regex substitution operator node read from an AOT image (issue #5947), or NOTHING with an error
+DLLLOCAL QoreValue qore_aot_make_regex_subst(const char* pattern, const char* replacement, int64_t options,
+        bool global, QoreValue operand, std::string& error);
+
+//! Returns a transliteration operator node read from an AOT image (issue #5947)
+DLLLOCAL QoreValue qore_aot_make_transliteration(const char* source, const char* target, QoreValue operand);
+
+//! Returns true if a string of a regex substitution or transliteration can be written as a string reference
+/** a string reference is read as a C string, which ends at a NUL character
+*/
+static inline bool qore_aot_regex_string_ok(const QoreString* str) {
+    return !str || strlen(str->c_str()) == str->size();
 }
 
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
@@ -1766,10 +2400,17 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
 struct AOTModuleCommand {
     std::string module;
     std::string command;
+    //! true if the restricting parse options in force at the directive are recorded (v37 and later)
+    bool has_options = false;
+    //! the low 64 bits of the restricting parse options in force at the directive
+    int64_t options_lo = 0;
+    //! the high 64 bits of the restricting parse options in force at the directive
+    int64_t options_hi = 0;
 };
 
 //! Serialize `%module-cmd` directives into the MODULE_COMMANDS section.
-/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef)`.
+/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef, u64 options_lo, u64 options_hi)`
+    (the two options words are v37; before it an entry was the two string references only).
     `feature_flags` is ORed with `QORE_AOT_FEAT_MODULE_COMMANDS` when commands are emitted.
 */
 void serializeModuleCommands(QoreAOTBinaryWriter& writer,
@@ -1858,6 +2499,27 @@ struct QoreModuleParseOptionMask;
 //! applied; see QoreModuleParseOptionMask
 /** \a p may be nullptr; \a exclude names the options the module does not inherit
 */
+//! Names the functional domains that the module metadata record of an AOT module declares while the module's
+//! initialization runs in this thread (qore#6351)
+/** The module loader relieves the dependencies of a module loaded as library code with the domains of its record
+    (QoreAOTModuleFileInfo::declared_domains), which it reads before the module is mapped; the initialization of the
+    module named \a module refuses the module if its MODULE_DOMAINS section declares other domains: the record is
+    damaged.  Only the first initialization of that module in the scope checks them.
+*/
+class QoreAOTModuleExpectedDomainsHelper {
+public:
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains);
+    DLLLOCAL ~QoreAOTModuleExpectedDomainsHelper();
+
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper& operator=(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+
+private:
+    std::string old_module;
+    int64 old_domains;
+    bool old_set;
+};
+
 DLLLOCAL QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
         const QoreModuleParseOptionMask& mask);
 
@@ -1869,6 +2531,25 @@ void serializeFunctionalDomain(QoreAOTBinaryWriter& writer, const QoreParseOptio
 
 //! Read the functional domains recorded in the FUNCTIONAL_DOMAIN section; empty if there is no such section
 bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& dom, std::string& error);
+
+//! Serialize the functional domains that a user module declares in its module header (\c domains) into the
+//! MODULE_DOMAINS section; nothing is written if \a dom is QDOM_DEFAULT
+void serializeModuleDomains(QoreAOTBinaryWriter& writer, int64 dom);
+
+//! Read the functional domains recorded in the MODULE_DOMAINS section; QDOM_DEFAULT if there is no such section
+bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::string& error);
+
+//! Serialize the time zone that the code sets with `%set-time-zone` (the directive's argument: a region name or a UTC
+//! offset) into the TIME_ZONE section, with \a after_module_header true if the directive follows the header of a
+//! module, whose \c domains can have removed the restriction the loader checks it against; nothing is written if
+//! \a zone is empty (qore#6270)
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header,
+        bool trusted_only = false);
+
+//! Read the time zone recorded in the TIME_ZONE section and whether its directive follows the header of a module;
+//! an empty zone if there is no such section
+bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
+        bool& trusted_only, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).
@@ -1958,6 +2639,12 @@ bool readEmbeddedSource(const uint8_t* data, uint32_t size, const char*& source,
 // ---- Slot Map Serialization (Phase 5) ----
 
 //! Expression identity kinds for serialized slot maps
+//! AOTExprKind::DOT_EVAL_TARGET flag: a pseudo-method call
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_PSEUDO = (1 << 0);
+//! AOTExprKind::DOT_EVAL_TARGET flag: the call is dispatched by name; the class, method and variant recorded are those
+//! resolved at parse time, used only by the check of the call's target (issue #5824)
+constexpr uint8_t QORE_AOT_DOT_EVAL_TARGET_NAME_DISPATCH = (1 << 1);
+
 enum class AOTExprKind : uint8_t {
     UNSUPPORTED        = 0,   //!< Compile-time-only invalid marker; never serialized in new AOT output
     FUNC_CALL          = 1,   //!< Regular function call: ref1=function_name
@@ -1995,7 +2682,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
-    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=is_pseudo
+    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=QORE_AOT_DOT_EVAL_TARGET_*
     FUNC_CALL_REF      = 36,  //!< Function call reference (\func): ref1=function_name
     BOUND_METHOD_REF   = 37,  //!< Bound method reference (\method): ref1=class_path, ref2=method_name
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
@@ -2063,7 +2750,9 @@ enum class AOTExprKind : uint8_t {
     SHIFT_LEFT         = 100, //!< Left shift operator: left(AOTExprKind) + right(AOTExprKind)
     SHIFT_RIGHT        = 101, //!< Right shift operator: left(AOTExprKind) + right(AOTExprKind)
     SQUARE_BRACKET_RANGE = 102, //!< Range subscript operator: source + start + stop
-    DOT_EVAL_EXPR      = 103, //!< Slot wrapper for a full dot-eval expression payload
+    AST_EXPR           = 103, //!< Slot wrapper for a full inline expression that the runtime evaluates as an AST
+                              //!< (a dot-eval expression; the expressions of find and context): the expression
+                              //!< (AOTExprKind), with the arguments of a call at its root
     UNARY_MINUS        = 104, //!< Unary minus operator: operand(AOTExprKind)
     LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
     LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
@@ -2084,6 +2773,28 @@ enum class AOTExprKind : uint8_t {
     XOR_EQ             = 119, //!< ^= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     SHL_EQ             = 120, //!< <<= operator: lvalue(AOTExprKind) + value(AOTExprKind)
     SHR_EQ             = 121, //!< >>= operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    //! the source location of the expression that follows (from format version 26): the location
+    //! (qore_aot_write_source_location()) + the expression (AOTExprKind), which gets the location
+    SOURCE_LOCATION    = 122,
+    //! splice operator: lvalue + offset + length + new value (AOTExprKind each; NOTHING if absent)
+    SPLICE             = 123,
+    //! extract operator: lvalue + offset + length + new value (AOTExprKind each; NOTHING if absent)
+    EXTRACT            = 124,
+    //! regex substitution (=~ s///): pattern(stringref) + replacement(stringref) + options(i64) + global(u8)
+    //! + lvalue(AOTExprKind)
+    REGEX_SUBST        = 125,
+    //! transliteration (=~ tr///): source(stringref) + target(stringref) + lvalue(AOTExprKind)
+    TRANSLIT           = 126,
+    //! Find expression (v34): mode byte (FindNode::Mode) + result expression + find-in expression + where expression
+    FIND               = 127,
+    CALLREF_CALL_NAMED = 128, //!< named call reference call (M4 phase 3): as CALLREF_CALL, then u8 name count + a
+                              //!< string ref per argument name ("" for a positional argument)
+    UNARY_PLUS         = 129, //!< Unary plus operator: operand(AOTExprKind) (qore#6229)
+    BIT_NOT            = 130, //!< Binary not (~) operator: operand(AOTExprKind) (qore#6229)
+    LOG_CMP            = 131, //!< Comparison (<=>) operator: left(AOTExprKind) + right(AOTExprKind) (qore#6229)
+    //! list assignment operator: lvalue list (LIST_LITERAL; read as a parse list) + value(AOTExprKind) (qore#6229)
+    LIST_ASSIGN        = 132,
+    BACKQUOTE          = 133, //!< Backquote (shell command) expression: command(stringref) (qore#6302)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
@@ -2121,6 +2832,8 @@ enum class AOTExprNodeKind : uint8_t {
     EN_NEW           = 24,  //!< u16 class_len + bytes; children = args
     EN_CALLREF_CALL  = 25,  //!< no metadata; children[0] = callref, [1..] = args
     EN_SCOPED_NEW    = 26,  //!< u16 class_len + bytes; children = args
+    EN_CALLREF_CALL_NAMED = 27, //!< named call reference call (M4 phase 3): u16 name count + (u16 len + bytes) per
+                                //!< argument name ("" for a positional argument); children as EN_CALLREF_CALL
 
     // Access operators (children = operands)
     EN_HASH_DEREF    = 30,  //!< children = [target, key_expr]
@@ -2243,6 +2956,7 @@ enum class AOTExprNodeKind : uint8_t {
     EN_FOLDR         = 165, //!< 2 children: [accumulator_expr, source]
     EN_ITERATE       = 166, //!< 1 child: [source]
     EN_STREAMING     = 167, //!< u8 kind; 2 children: [predicate_or_count, source]
+    EN_FIND          = 168, //!< u8 mode; 3 children: [result_expr, find_expr, where_expr]
 };
 
 //! AOT context local slot flag: the slot is a Program top-level local (from QORE_AOT_LOCAL_BINDING_VERSION)
@@ -2253,12 +2967,32 @@ enum class AOTExprNodeKind : uint8_t {
 */
 constexpr uint8_t QORE_AOT_LOCAL_SLOT_TOP_LEVEL = 0x20;
 
+//! AOT context local slot flag: the native code keeps the variable in native storage (from
+//! QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION)
+/** Set for a parameter or a local variable of the function whose value the native code of the function's standard
+    entry keeps in its own storage and does not read again from the stack of local variables, where a call with a
+    frame has the variable too: a value set there, as by set_local_var_value(), is not seen by the code, which
+    set_local_var_value() therefore refuses (issue #5890).  Never set for a closure-bound variable, \c self or
+    \c argv.
+*/
+constexpr uint8_t QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE = 0x40;
+//! AOT context local slot flag: the value of the variable on the stack of local variables is not known to be its
+//! value (from QORE_AOT_NATIVE_LOCAL_FLAGS_VERSION)
+/** Set with QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE for every such variable but a parameter that the code never writes
+    (before or after the IR is optimized), and for a variable whose writes the IR optimizations removed: the native
+    code assigns it in native storage only, or the optimizations replace its stores by its values, so that
+    get_local_vars() does not give the value on the stack.  A parameter that has only
+    QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE keeps the value that the call gave it on the stack.
+*/
+constexpr uint8_t QORE_AOT_LOCAL_SLOT_NATIVE_WRITES = 0x80;
+
 //! Identity for a local variable slot
 struct AOTLocalSlotId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
     //! bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv, bit 4: read-only,
-    //! bit 5: top-level local (QORE_AOT_LOCAL_SLOT_TOP_LEVEL)
+    //! bit 5: top-level local (QORE_AOT_LOCAL_SLOT_TOP_LEVEL), bit 6: native storage
+    //! (QORE_AOT_LOCAL_SLOT_NATIVE_STORAGE), bit 7: native writes (QORE_AOT_LOCAL_SLOT_NATIVE_WRITES)
     uint8_t flags = 0;
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
     uint32_t body_ordinal = UINT32_MAX; //!< index in all_body_locals when this slot is a body local
@@ -2301,13 +3035,14 @@ struct AOTExprSlotId {
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
     std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
-    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
+    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: QORE_AOT_DOT_EVAL_TARGET_*)
     QoreAOTCallRelocationTargetKind call_relocation_kind = QoreAOTCallRelocationTargetKind::NONE;
     std::string reloc_qore_path; //!< canonical symbol-index path for safe direct-call relocation
     QoreValue child_expr;   //!< kind-specific child expression (e.g., OBJ_METHOD_REF_EXPR target)
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
+    const name_vec_t* arg_names = nullptr; //!< For CALLREF_CALL_NAMED: the names of the arguments (interned)
 };
 
 //! Identity for a body local variable (needed for instantiation management)
@@ -2392,6 +3127,9 @@ struct AOTLVPathSlotId {
     int64_t pattern_options = 0;//!< PCRE2 options bitmask (regex only)
     uint8_t pattern_global = 0;//!< global (/g) flag (regex only)
     std::vector<AOTLVPathStepId> steps;
+    //! For a path ending with a ListIndexSlice step: its selectors that are ranges
+    //! (QoreIRLValuePathInstruction::slice_ranges), written after the step's operand ids
+    std::vector<bool> slice_ranges;
 };
 
 //! Complete slot identity set for a single compiled function
@@ -2476,7 +3214,11 @@ DLLLOCAL FILE* qore_open_regular_file(const char* path);
     - uint32 magic ('QAMI'), uint32 version, uint32 payload_size (the bytes that follow)
     - the payload: the module name, then uint32 num_dependencies and the dependencies, then uint32 num_optional and
       the optional modules, each string as uint32 length followed by its bytes; every string is nonempty and
-      contains no NUL
+      contains no NUL; then the lists \c compiled_with, \c prepended_module_paths and \c appended_module_paths
+      (version 2), then (version 3) uint32 num_dependency_restrictions and for each the module name and its
+      restrictions as four uint32 (low 64 bits then high 64 bits, each low word first), then its uint32 QMDR_* flags
+      (any other bit makes the record invalid); then (version 4) uint64 declared_domains (two uint32, low word
+      first), the list \c post_header_dependencies and uint64 restricted_domains (likewise)
 
     The loader reads the metadata before it maps the qmod: it loads the dependencies first so the qmod can be
     mapped once with RTLD_NOW, and it checks the optional modules that were unavailable when the module was compiled
@@ -2502,14 +3244,50 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> prepended_module_paths;
     //! the module's own %append-module-path directories, in the order its initialization searches them
     std::vector<std::string> appended_module_paths;
+    //! the options that the module's directives gave the modules that they loaded, in directive order (version 3)
+    /** The parse options that the module's Program gave each module that a directive loaded, which it inherits from
+        it (not those that relieve restrictions); the loader loads the module's dependencies with them, as the module's
+        source would (qore#6406; see qore_program_private::parse_module_restrictions); each entry has QMDR_* flags: the
+        modules that a module declaring functional domains requested before its header, and every module of a record
+        whose requests before the header could not be recorded exactly, are loaded before the module's
+        initialization with the restrictions of the loading code (qore#6386)
+    */
+    std::vector<QoreModuleDependencyRestriction> dependency_restrictions;
+    //! the functional domains that the module declares in its header (\c domains), as in the MODULE_DOMAINS
+    //! section of the image (version 4)
+    /** The module loader loads the module's dependencies before the module's initialization (see
+        QoreModuleManager::loadBinaryModuleFromPath()); for a module loaded as library code, they inherit the
+        restrictions of the Program loading the module without these domains, as the dependencies of the module's
+        source do, which its Program loads after its header has removed them (qore#6351)
+    */
+    int64 declared_domains = 0;
+    //! the dependencies that the module's parse requested only after its header (version 4), which inherit the
+    //! restrictions without the declared domains, as those of its source do, which its Program loads after its header
+    //! has removed them; the others (requested before the header, or not requested by the parse: in code that a
+    //! conditional excludes) inherit them with the domains
+    /** Never a module that dependency_restrictions lists with QMDR_BEFORE_HEADER, and empty if an entry of
+        dependency_restrictions has QMDR_INEXACT; the loader enforces both for any record (qore#6386)
+    */
+    std::vector<std::string> post_header_dependencies;
+    //! the functional domains that the module's code restricts with its own parse directives (version 4): the
+    //! dependencies do not inherit a relief of them from a module loading this one (qore#6351)
+    /** QDOM_ALL if an entry of dependency_restrictions has QMDR_INEXACT (qore#6386)
+    */
+    int64 restricted_domains = 0;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-/** version 2 added the names of the modules the module was compiled with and its own module path directories
+/** version 2 added the names of the modules the module was compiled with and its own module path directories;
+    version 3 the restrictions that its code gives the modules it requires (qore#6406), each with QMDR_* flags
+    (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION); version 4 the
+    functional domains that the module declares in its header, the dependencies it requires only after its header and
+    the functional domains its own code restricts (qore#6351), from AOT format version 45
+    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION).  A record of another version is refused, asking for the module to be
+    rebuilt.
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 4u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata
@@ -2615,6 +3393,9 @@ struct AOTCompiledInitFunc {
                               //!< resolve globals / constants it references.
         GLOBAL_VAR = 5,       //!< namespace-level global or thread-local variable
         GLOBAL_VAR_CONSTRUCT = 6, //!< initializer expression constructs and stores the value
+        MODULE_DEL = 7,       //!< module del closure body (side-effects only): loaded with the module's own Program
+                              //!< like MODULE_INIT but NOT run at load; qore_aot_module_delete() runs it when the
+                              //!< module is unloaded, as the source module runs its del closure
     };
     TargetType target_type = NS_CONSTANT;
     std::string ns_path;            //!< namespace path or class path
@@ -2629,8 +3410,11 @@ struct AOTCompiledInitFunc {
     @param funcs vector of compiled function descriptors with slot identities
     @param const_reverse_map optional reverse map for constant node → FQN resolution
 */
+/** @param pgm the Program that is serialized, in which the types of typed container values in the slots must be
+    resolvable as they are when the image is loaded (#5895); null if it is not known
+*/
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
-    const AOTConstantReverseMap* const_reverse_map, std::string& error);
+    const AOTConstantReverseMap* const_reverse_map, std::string& error, QoreProgram* pgm = nullptr);
 
 //! Serialize embedded source into the FUNC_SOURCES binary section
 /** Current AOT compilation rejects functions that would require source fallback.
@@ -2727,6 +3511,24 @@ struct QoreAOTStringRef {
     const char* c_str() const { return ptr; }
 };
 
+//! the error that the reader of an expression sets for a reference to a top-level local that does not exist yet
+/** The reader of a default argument keeps the expression and reads it again when the top-level locals exist (see
+    QoreAOTBinaryDeserializer::resolveTopLevelNativeExprDefaults())
+*/
+#define QORE_AOT_DEFER_TOP_LEVEL_LOCAL "AOT-DEFER-TOP-LEVEL-LOCAL"
+
+class VarRefNode;
+
+//! writes the reference of an expression to a top-level local of the Program being serialized as "top:<index>:<name>"
+/** @return true if the variable is a top-level local that is in the top-level local list of the serialization Program
+    and the writer allows it (a default argument); \a ref then holds the reference
+*/
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const VarRefNode* varref, std::string& ref);
+
+//! As above for a local variable: the reference "top:<index>:<name>" of a top-level local of the Program that is
+//! serialized, written while a default argument is (see QoreAOTBinaryWriter::allow_top_level_local_ref)
+bool qore_aot_top_level_local_ref(const QoreAOTBinaryWriter& writer, const LocalVar* lv, std::string& ref);
+
 class QoreAOTBinaryDeserializer {
     QoreAOTBinaryReader reader;
     QoreAOTTypeResolver* type_resolver = nullptr;
@@ -2791,6 +3593,8 @@ class QoreAOTBinaryDeserializer {
     const char* embedded_source = nullptr;       //!< embedded source text
     size_t embedded_source_len = 0;              //!< length of embedded source text
     std::vector<std::string> fallback_func_names; //!< legacy names of functions needing source fallback
+    //! deserialization failed as it ran short of the stack of this thread; see threadStackExceeded()
+    bool thread_stack_exceeded = false;
 
     // Classes that already existed in the program (from module loading)
     // — skip methods/members for these since they're already committed
@@ -2815,6 +3619,8 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef type_path;
         uint8_t access;
         uint8_t flags = 0;  // bit 0 = transient
+        //! the location of the member's declaration (see v26), or nullptr
+        const QoreProgramLocation* loc = nullptr;
         QoreValue default_val;
         //! When set, the member init is a `Class(args)` call whose target
         //! class is a forward reference to a class that has not yet been
@@ -2860,6 +3666,8 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef name;
         QoreAOTStringRef type_path;
         uint8_t access;
+        //! the location of the static variable's declaration (see v26), or nullptr
+        const QoreProgramLocation* loc = nullptr;
         QoreValue default_val;
         //! Same deferred-new-object channel as PendingInstanceMember.
         std::string pending_new_class_path;
@@ -2889,6 +3697,7 @@ class QoreAOTBinaryDeserializer {
         QoreAOTStringRef type_path;
         uint8_t access;
         bool pending_init = false;  //!< init-func has not yet populated the value
+        bool explicit_type = true;  //!< the constant has an explicit declared type (format v32, #5925)
         //! Serialized value payload. Class constants are registered as shells
         //! before this blob is deserialized so nested VT_CONST_REF entries can
         //! resolve against same-class or same-module constants.
@@ -3012,6 +3821,8 @@ public:
         std::string method_name;
         UserVariantBase* uvb = nullptr;
         uint32_t param_index = 0;
+        //! the location of the call (see v26)
+        const QoreProgramLocation* loc = nullptr;
     };
 
     //! Native-expression default-arg fixups for params whose default is a general
@@ -3046,11 +3857,15 @@ public:
         std::string func_name;
         UserVariantBase* uvb = nullptr;
         uint32_t param_index = 0;
+        //! the location of the call (see v26)
+        const QoreProgramLocation* loc = nullptr;
     };
 
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
     std::vector<PendingNativeExprDefault> pending_ned;
+    //! the default arguments that read a top-level local, which are read again when the top-level locals exist
+    std::vector<PendingNativeExprDefault> pending_top_level_ned;
     std::vector<PendingFunctionDefault> pending_fd;
 
     //! Legacy owned copies used only for deterministic borrowed-blob A/B tests.
@@ -3301,6 +4116,12 @@ public:
         sml. */
     bool rebuildBaseClassSmlPhase(std::string& error);
 
+    //! marks the list of all ancestors of \a qc complete if it is (issue #6106)
+    /** @param resolved the classes of this binary whose base classes have been resolved; a base class that is not
+        there must be builtin or initialized; null if the base classes of every class have been resolved
+    */
+    void markSmlComplete(QoreClass* qc, const std::unordered_set<const QoreClass*>* resolved);
+
     //! Phase-split 2a-import — copy base-class members into derived
     //! classes.  Batch mode: must wait until every session has
     //! finished resolveMembers() so base classes' member maps are
@@ -3378,6 +4199,12 @@ public:
     //! the single cross-session index rebuild.
     bool finalizePostIndex(std::string& error);
 
+    //! reads the default arguments that read a top-level local, once the top-level locals of the Program exist
+    /** The top-level locals of an AOT executable are set when its top-level code is registered
+        (TopLevelStatementBlock::setLVarsFromAOTContext()), after the default arguments were first read (qore#5868)
+    */
+    bool resolveTopLevelNativeExprDefaults(std::string& error);
+
     //! Install lazy executable IR on source-stripped variants for qcc parse-time calls.
     bool installSourceParseIRFallbacks(std::string& error);
 
@@ -3447,6 +4274,9 @@ public:
 
     //! Check if this legacy object names functions that require disabled source fallback.
     bool hasLegacyFallbackFunctions() const { return !fallback_func_names.empty(); }
+
+    //! Returns true if deserialization failed as it ran short of the stack of this thread (QORE_PARSE_STACK_ERR)
+    bool threadStackExceeded() const { return thread_stack_exceeded; }
 
     //! Get the legacy list of function names that need source fallback.
     const std::vector<std::string>& getFallbackFuncNames() const { return fallback_func_names; }
@@ -4172,7 +5002,7 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
     - Function header: name, max_value_id, max_local_slot_id, num_guards, return_type, block/local counts
     - Local variable slot table: name, type_path, slot_id for each local
     - Body locals list: name, type_path for each body local
-    - Blocks: for each block, name, is_loop_header, instructions
+    - Blocks: for each block, name, a flag byte (bit 0: is_loop_header, bits 1-3: loop_cancel), instructions
     - Instructions: opcode, group_tag, result, operands, exception_target, group-specific fields
 
     @param writer binary writer (uses string pool and buffer)
@@ -4182,6 +5012,47 @@ typedef std::function<QoreValue(const QoreAOTBinaryReader& reader, const uint8_t
 */
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
     const AOTExprWriteFunc& writeExpr);
+
+//! The handler functions written or read in the IR of a function (see QORE_AOT_SHARED_HANDLER_VERSION, #6087)
+/** A handler function shared by several handlers (QoreIROnBlockExitInstruction::handler_ir) is written in full once,
+    where the IR of the function and of its handlers first has it, and as the index of that copy at each other
+    handler that has it; the reader shares the function in the same way.  The functions are numbered in the order in
+    which their writing starts.  The IR of a function that is not a handler (a function, a closure, a background
+    helper) has a table of its own.
+*/
+struct QoreAOTSharedHandlerTable {
+    //! the index of each handler function written
+    std::unordered_map<const QoreIRFunction*, uint32_t> written;
+    //! the handler functions read, by index (null while one is read)
+    std::vector<std::shared_ptr<QoreIRFunction>> read;
+
+    //! Returns the table of the IR function being written or read by this thread, or null if there is none
+    DLLLOCAL static QoreAOTSharedHandlerTable*& current();
+    //! Set while a handler's IR function is written or read: its IR continues the table of the function containing
+    //! it (see QoreAOTSharedHandlerScope)
+    DLLLOCAL static bool& nested();
+};
+
+//! Gives the IR function written or read by serializeIRFunction() or deserializeIRFunction() its table of the handler
+//! functions (see QoreAOTSharedHandlerTable)
+class QoreAOTSharedHandlerScope {
+public:
+    DLLLOCAL QoreAOTSharedHandlerScope() : saved(QoreAOTSharedHandlerTable::current()) {
+        if (!QoreAOTSharedHandlerTable::nested()) {
+            QoreAOTSharedHandlerTable::current() = &own;
+        }
+        // the IR functions in this one that are not its handlers, such as closures, have tables of their own
+        QoreAOTSharedHandlerTable::nested() = false;
+    }
+
+    DLLLOCAL ~QoreAOTSharedHandlerScope() {
+        QoreAOTSharedHandlerTable::current() = saved;
+    }
+
+private:
+    QoreAOTSharedHandlerTable own;
+    QoreAOTSharedHandlerTable* saved;
+};
 
 //! Deserialize a QoreIRFunction from binary data
 /** Reads binary data written by serializeIRFunction() and reconstructs a
@@ -4328,6 +5199,24 @@ QoreValue readOneExpr(
         LocalVar** locals, int num_locals,
         Var** globals, int num_globals,
         QoreProgram* local_owner_pgm = nullptr);
+
+//! Sets the variables that the expressions in values read by QoreAOTBinaryReader::readValue() bind to, for its scope
+/** The default value of a closure's parameter can be a closure that captures a variable of the code that creates the
+    closure: it binds to the variables of that code's context, as the closure's own captures do (issue #5903)
+*/
+class QoreAOTValueLocalsHelper {
+public:
+    DLLLOCAL QoreAOTValueLocalsHelper(LocalVar** locals, int num_locals, Var** globals, int num_globals,
+            QoreProgram* local_owner_pgm);
+    DLLLOCAL ~QoreAOTValueLocalsHelper();
+
+private:
+    LocalVar** old_locals;
+    int old_num_locals;
+    Var** old_globals;
+    int old_num_globals;
+    QoreProgram* old_local_owner_pgm;
+};
 
 //! Read one top-level serialized IR instruction expression field.
 //!

@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class AOTParallelCodegenTest
@@ -24,7 +25,7 @@ class AOTParallelCodegenTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTParallelCodegenTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
             ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
@@ -99,7 +100,7 @@ class AOTParallelCodegenTest inherits QUnit::Test {
     # Sorted set of an object's defined global symbol names (via nm; "" = nm unavailable).
     private list<string> globalSyms(string obj) {
         string out = run(sprintf("nm -g --defined-only %s", obj));
-        hash<string, bool> seen;
+        hash<string, bool> seen = {};
         foreach string line in (out.split("\n")) {
             # "<value> <type> <name>" for a defined symbol
             *list<*string> m = (line =~ x/^\s*\S+\s+\S+\s+(.+?)\s*$/);

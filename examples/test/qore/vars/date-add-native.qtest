@@ -4,17 +4,18 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../TestInterpreter.qm
 %exec-class DateAddNativeTest
 
 class DateAddNativeTest inherits QUnit::Test {
     constructor() : Test("DateTime C++ addition", "1.0") {
-        addTestCase("native pointer and reference addition APIs", \nativeAddition());
+        addTestCase("native addition API with and without an exception sink", \nativeAddition());
         addTestCase("elapsed components normalize across zero units", \relativeSigns());
         set_return_value(main());
     }
 
     private nativeAddition() {
-        string qore = ENV.QORE_BINARY ?? QORE_ARGV[0];
+        string qore = TestInterpreter::qore_interpreter();
         string native = ENV.QORE_DATE_ADD_TEST ?? dirname(qore) + "/qore-date-add-test";
         if (!is_file(native)) {
             testSkip("the native date addition test executable is not available");

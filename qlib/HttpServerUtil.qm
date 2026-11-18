@@ -39,6 +39,8 @@ module HttpServerUtil {
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    # the module's own code starts the background thread of a streamed response producer
+    domains = "THREAD_CONTROL";
 }
 
 /** @mainpage HttpServerUtil Module
@@ -106,10 +108,10 @@ module HttpServerUtil {
     |\c compression-levels|hash<string, int>|the compression level of each content encoding for response bodies compressed on the fly (see @ref HttpServer::HttpServerOptionInfo::compression_levels "compression_levels"); a handler that compresses its own response uses the level of the encoding it selects
     |\c debug|*bool|@ref True "True" if the debug flag is enabled on the HTTP server
     |\c handler_name|string|the name of the handler serving the request
-    |\c hdr|hash|the header information as returned by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"
+    |\c hdr|hash|the request headers, as returned by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" for an HTTP/1.x request, except for the \c content-type key; see @ref httpserverutil_request_headers
     |\c id|int|the ID for this socket connection; note that socket connections may be reused by proxies, so this ID cannot be used to identify the peer
     |\c handler_name|string|the name of the handler serving the request
-    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them
+    |\c header-info|hash|a hash of information as returned from the output \a info argument to @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"; its \c accept-encoding key is a hash of the supported content encodings that the client accepts in the order of preference of the server (by weight, then by the cost of compression), and its \c accept-encoding-weights key gives the weight (\c q value) of each of them; for an HTTP/1.x request, its \c charset key gives the \c charset parameter of the request \c Content-Type, if any (see @ref httpserverutil_request_headers)
     |\c listener-id|int|a unique ID for the listener serving the request
     |\c listener-name|string|a unique name for the listener serving the request
     |\c logger|@ref Qore::Logger::LoggerInterface "LoggerInterface"|a @ref Qore::Logger::LoggerInterface "LoggerInterface" object for the HTTP server
@@ -118,7 +120,7 @@ module HttpServerUtil {
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
     |\c peer-info-future|*@ref Qore::Thread::Future "Future"|Future resolving to peer information with reverse DNS hostname fields; set only if the server has the \c peer_hostname_lookup option; handlers may wait on it if hostname resolution is required
     |\c raw_path|string|the raw URI request path in the request
-    |\c response-encoding|*string|any value given by any \c "Accept-Charset" in the request
+    |\c response-encoding|*string|the response encoding chosen from any \c "Accept-Charset" in the request (see @ref Qore::get_http_accept_charset() "get_http_accept_charset()")
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
     |\c socket|string|the bind address used to bind the listener (\c "socket-info" provides more detailed information)
     |\c socket-info|hash|information about the listening socket as returned by @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()"
@@ -128,12 +130,42 @@ module HttpServerUtil {
     |\c user|*string|set by the authenticator if the request was authenticated to a specific user
     |\c uctx|*hash|any user thread context for the listener (see @ref HttpServer::HttpListenerInterface::addUserThreadContext() "HttpListenerInterface::addUserThreadContext()")
 
+    @subsection httpserverutil_request_headers HttpServerUtil Request Headers
+
+    The request headers given to a handler (the \c hdr argument of its methods and the \c hdr key of the
+    @ref httpserverutil_request_context "request context") have lower-case names, and the server sets the following
+    keys in them:
+
+    |!Key|!Type|!Description
+    |\c content-type|*string|the request \c Content-Type: for an HTTP/1.x request, the value without its \c charset parameter (the \c body-content-type value of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()"), so that the media type can be compared without it, with its other parameters (such as \c boundary); for an HTTP/2 or HTTP/3 request, the value as received
+    |\c _qore_orig_content_type|*string|the request \c Content-Type as received, with any \c charset parameter; set if the request has a \c Content-Type
+    |\c http_version|string|the HTTP version of the request
+    |\c method|string|the HTTP method of the request (ex: \c "GET" or \c "POST")
+    |\c path|string|the URI path of the request after URL decoding the resource path; the query string remains percent-encoded until parsed
+
+    The \c charset parameter of the \c Content-Type of an HTTP/1.x request is also given by the \c charset key of the
+    \c header-info key of the request context, and the server decodes request text with it; use the
+    \c _qore_orig_content_type value to read the parameter for a request of any HTTP version.
+
     See @subpage httpserverutil_relnotes "HttpServerUtil Module Release Notes" for the changes in each version.
 */
 /** @page httpserverutil_relnotes HttpServerUtil Module Release Notes
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "AbstractHttpRequestHandler::handleRequest()" is
+      declared to return <tt>union<hash<auto>, data></tt> and
+      @ref HttpServer::AbstractStreamRequest::getResponseHeaderMessageImpl() "AbstractStreamRequest::getResponseHeaderMessageImpl()"
+      \c hash<auto>, as the subclasses return (a child class method must return a type that the method it overrides
+      accepts: see @ref override_return_types); an inline request answered by
+      @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()" accepts a string or binary
+      response as the full path does (@ref HttpServer::AbstractHttpRequestHandler::makeResponseFromResult() "makeResponseFromResult()")
+    - added the \c sse_max_buffer_size listener option
+      (@ref HttpServer::HttpListenerOptionInfo::sse_max_buffer_size "HttpListenerOptionInfo::sse_max_buffer_size"),
+      the bound of the data held for the client of each Server-Sent Events stream
+    - added \c sse_source to @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
+      @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" for Server-Sent Events responses whose
+      events are pushed when they occur, so that open streams do not hold the threads of the handler pool
     - added @ref HttpServer::http_parse_content_length() "http_parse_content_length()", a strict parser of the
       \c Content-Length header (RFC 9110 section 8.6)
     - fixed logging sensitive data: @ref HttpServer::http_mask_data() "http_mask_data()" masked only the first
@@ -190,7 +222,8 @@ module HttpServerUtil {
       @ref HttpServer::HttpServerManagedHeaderNames "HttpServerManagedHeaderNames";
       @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" now recognizes the header fields that it
       checks, sets, and removes in any case, so it no longer adds a second \c Connection, \c Date, or \c Server
-      field for a response with a field such as \c "date"
+      field for a response with a field such as \c "date"; its \c canonical_names argument skips the conversion for
+      headers whose names are already canonical
     - fixed listener lifecycle accounting for dedicated socket handlers so normally managed connections release their
       listener reference when \c startImpl() returns; previously only exceptions and externally managed completion
       callbacks released the reference, so normal WebSocket connection closures leaked the count and could leave the
@@ -576,6 +609,23 @@ public hashdecl HttpResponseInfo {
     */
     *timeout send_timeout;
 
+    #! the source of the events of a Server-Sent Events response, which pushes them when they occur
+    /** An @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource" object; with an event stream
+        \c Content-Type (\c text/event-stream), the HTTP server sets up the stream on the async I/O controller for
+        every HTTP version, from any request handler, and the source queues each event on it when it occurs.  No
+        thread waits for the events of the stream, so open streams do not hold the threads of the server's handler
+        pool, whose size \c max_handler_threads limits.  A \c send_callback given as well is not called then; it is
+        used only by a server that cannot set up such a stream.
+
+        Declared as @ref object "object" as this module does not depend on the async I/O modules; other objects
+        are an error (\c SSE-HANDLER-ERROR).
+
+        @since HttpServerUtil 1.6
+
+        @see @ref ServerSentEventHandler::sseObservableResponse() "sseObservableResponse()"
+    */
+    *object sse_source;
+
     #! a callback called exactly once after the response has been completely sent, or has failed to be sent
     /** Lets a handler run code that must happen after the client has been sent the response, for example a
         WS-Addressing server that answers a request with an empty \c 202 response and then sends the reply as a
@@ -707,6 +757,23 @@ public hashdecl HttpHandlerResponseInfo {
         @see send_callback
     */
     *timeout send_timeout;
+
+    #! the source of the events of a Server-Sent Events response, which pushes them when they occur
+    /** An @ref HttpServerAsyncIo::AbstractSseEventSource "AbstractSseEventSource" object; with an event stream
+        \c Content-Type (\c text/event-stream), the HTTP server sets up the stream on the async I/O controller for
+        every HTTP version, from any request handler, and the source queues each event on it when it occurs.  No
+        thread waits for the events of the stream, so open streams do not hold the threads of the server's handler
+        pool, whose size \c max_handler_threads limits.  A \c send_callback given as well is not called then; it is
+        used only by a server that cannot set up such a stream.
+
+        Declared as @ref object "object" as this module does not depend on the async I/O modules; other objects
+        are an error (\c SSE-HANDLER-ERROR).
+
+        @since HttpServerUtil 1.6
+
+        @see @ref ServerSentEventHandler::sseObservableResponse() "sseObservableResponse()"
+    */
+    *object sse_source;
 
     #! a callback called exactly once after the response has been completely sent, or has failed to be sent
     /** Lets a handler run code that must happen after the client has been sent the response, for example a
@@ -898,6 +965,19 @@ public hashdecl HttpListenerOptionInfo {
         @since HttpServerUtil 1.6
     */
     int max_decoded_body_size = 0;
+
+    #! The bound in bytes of the data held for the client of each Server-Sent Events stream of the listener
+    /** The data held for a client is the data queued but not yet written to the socket (HTTP/1.x), or buffered for
+        the stream beyond what the client's flow-control window has accepted (HTTP/2 and HTTP/3; the data within the
+        window is held by the transport, up to the window that the client grants).  Queueing an event
+        never waits for the client; an event that would take the data held over the bound, when it is not the only
+        data held, drops the client (see @ref httpserverasyncio_sse_buffer).  Must be > 0; the default is 1 MiB
+        (@ref HttpServerAsyncIo::DefaultSseMaxBufferSize "DefaultSseMaxBufferSize").  A \c ServerSentEventHandler
+        can override it for its streams with its option of the same name.
+
+        @since HttpServerUtil 1.6
+    */
+    int sse_max_buffer_size = 1048576;
 
     #! If True, skip bind/listen (for QUIC listeners that use a separate UDP socket)
     /** @since HttpServer 1.6
@@ -1159,6 +1239,14 @@ public string sub mask_sensitive_url_query_values(string path) {
     return rv.join("");
 }
 
+# the labels of the canonical names of the usual encodings, as http_get_charset_label() computes them
+const hash<string, string> HttpCharsetLabels = {
+    "UTF-8": "utf-8",
+    "utf-8": "utf-8",
+    "ISO-8859-1": "iso-8859-1",
+    "iso-8859-1": "iso-8859-1",
+};
+
 #! Returns response headers where the names of the fields managed by the HTTP server have their canonical case
 /** Header field names are case-insensitive, but hash keys are not.  The HTTP server checks, sets, and removes the
     header fields in @ref HttpServerManagedHeaderNames by name; without this conversion a handler that returns one
@@ -1215,21 +1303,35 @@ string content_type = MimeTypeXml + ";charset=" + http_get_charset_label(cx."res
     @since HttpServerUtil 1.6
 */
 public string sub http_get_charset_label(string encoding) {
-    return force_encoding("", encoding).encoding().lwr();
+    # this is called for every response with a string body: the canonical names of the usual encodings are looked up
+    # without converting a string
+    return HttpCharsetLabels{encoding} ?? force_encoding("", encoding).encoding().lwr();
 }
 
 #! helper function for setting HTTP response headers
 /** The names of the response header fields in @ref HttpServerManagedHeaderNames are converted to their canonical
-    case with http_canonicalize_reply_header_names() before they are checked
+    case with http_canonicalize_reply_header_names() before they are checked, unless \a canonical_names is
+    @ref True
 
     Unless \a rv already has a \c Connection header, a \c "Connection: close" header is set if either \a rv or
     \a cx has a true \c close key, and \c "Connection: Keep-Alive" otherwise; \c cx.close is set for requests that
     require the connection to be closed after the response (see @ref httpserverutil_request_context)
+
+    @param s the socket of the connection
+    @param cx the request context
+    @param rv the response, whose \c hdr key is set to the response headers
+    @param server_string the value of the \c Server header, if the response has none; if not given,
+    @ref HttpServerString is used
+    @param canonical_names @ref True if the names of the fields in @ref HttpServerManagedHeaderNames in the headers
+    of \a rv already have their canonical case, for example because they were returned by
+    http_canonicalize_reply_header_names(), so that they are not converted again; with a name in another case, the
+    field is not recognized, and a second field of the same name can be added
 */
-public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
+public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string,
+        bool canonical_names = False) {
     # the headers are set in an "auto!" local, since a caller's header hash may be narrowed (e.g. hash<string, int>
     # for {"X-Api-Version": 2}) and would reject the string headers added here
-    *hash<auto!> hdr = http_canonicalize_reply_header_names(rv.hdr);
+    *hash<auto!> hdr = canonical_names ? rv.hdr : http_canonicalize_reply_header_names(rv.hdr);
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
         if (!hdr.Connection) {
@@ -1292,8 +1394,9 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
     }
 
     # a caller's literal response may be narrowed too (e.g. hash<string, int> for {"code": 204}) and would reject the
-    # "hdr" key; the response hashdecls declare the key, and keep their type
-    if (rv instanceof hash<HttpHandlerResponseInfo> || rv instanceof hash<HttpResponseInfo>) {
+    # "hdr" key; the response hashdecls declare the key, and keep their type; the response of the HTTP server, the
+    # most frequent caller, is a hash<HttpResponseInfo>, so it is checked first
+    if (rv instanceof hash<HttpResponseInfo> || rv instanceof hash<HttpHandlerResponseInfo>) {
         rv.hdr = hdr;
     } else {
         *hash<auto!> response = rv;
@@ -2250,6 +2353,8 @@ public class AbstractStreamRequest {
         - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
           percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
+        - \c content-type: the request \c Content-Type, without its \c charset parameter for an HTTP/1.x request;
+          \c _qore_orig_content_type gives the value as received (see @ref httpserverutil_request_headers)
         @param body any message body in the request already received from the incoming socket
     */
     constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
@@ -2585,7 +2690,7 @@ public class AbstractStreamRequest {
         # for HTTP/2
         rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
         bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
-        http_set_reply_headers(s, cx, \rv);
+        http_set_reply_headers(s, cx, \rv, NOTHING, True);
 
         # issue #4109: do not start async I/O with a HEAD request
         if (!chunked || hdr.method == "HEAD") {
@@ -2934,7 +3039,9 @@ private logChunk(bool send, int size) {
 
         @note this method is called after the message body has been received
     */
-    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+    # returns hash<auto>: a subclass returns a hash<HttpResponseInfo> or a hash<HttpHandlerResponseInfo> (RestHandler),
+    # which getResponseHeaderMessage() converts (issue #5838: a child class method's return type must be compatible)
+    private hash<auto> getResponseHeaderMessageImpl() {
         return <HttpResponseInfo>{
             "code": 501,
             "body": sprintf("default handler (%s) has no implementation", self.className()),
@@ -3829,6 +3936,8 @@ public class AbstractHttpRequestHandler {
         - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
           percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
+        - \c content-type: the request \c Content-Type, without its \c charset parameter for an HTTP/1.x request;
+          \c _qore_orig_content_type gives the value as received (see @ref httpserverutil_request_headers)
 
         @return a hash with the following keys:
         - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes)
@@ -3855,6 +3964,8 @@ public class AbstractHttpRequestHandler {
         - \c path: the HTTP path given in the request after URL decoding the resource path; the query string remains
           percent-encoded until parsed
         - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
+        - \c content-type: the request \c Content-Type, without its \c charset parameter for an HTTP/1.x request;
+          \c _qore_orig_content_type gives the value as received (see @ref httpserverutil_request_headers)
         @param body message body, if any
 
         @return a hash with the following keys:
@@ -3864,10 +3975,14 @@ public class AbstractHttpRequestHandler {
           when the handler returns
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
 
-        @note the default implementation simply returns a 501 error code for all requests; reimplement this method in
-        a subclass to provide the required functionality
+        @note
+        - the default implementation simply returns a 501 error code for all requests; reimplement this method in
+          a subclass to provide the required functionality
+        - the return type is \c union<hash<auto>, data>: a subclass can return a @ref HttpResponseInfo hash or any
+          other hash with the keys above, or a string or binary value, which is sent as the message body of a \c 200
+          response (issue #5838: an overriding method must return a type that this one accepts)
     */
-    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+    union<hash<auto>, data> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return <HttpResponseInfo>{
             "code": 501,
             "body": sprintf("default handler (%s) has no implementation", self.className()),
@@ -3946,7 +4061,32 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @since HttpServerUtil 1.4
     */
     hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        return handleRequest(cx, hdr, body);
+        return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, body));
+    }
+
+    #! Returns the response for the value that handleRequest() returned
+    /** @param rv the value that handleRequest() returned: a response hash, or a string or binary message body for a
+        \c 200 response
+
+        @return the response hash; a \c "raw_response" key is removed
+
+        @throw HANDLER-ERROR the value is not a hash, string or binary value
+
+        @since HttpServerUtil 1.6
+    */
+    static hash<HttpResponseInfo> makeResponseFromResult(auto rv) {
+        switch (rv.typeCode()) {
+            case NT_HASH: {
+                hash<auto!> hrv = rv;
+                if (hrv.hasKey("raw_response")) {
+                    delete hrv."raw_response";
+                }
+                return cast<hash<HttpResponseInfo>>(hrv);
+            }
+            case NT_STRING:
+            case NT_BINARY: return <HttpResponseInfo>{"code": 200, "body": rv};
+        }
+        throw "HANDLER-ERROR", sprintf("handler returned type %s; expecting \"hash\"; value: %y", rv.type(), rv);
     }
 
     #! top-level request handling method
@@ -3962,20 +4102,7 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             if (trailers) {
                 cx.trailers = trailers;
             }
-            auto rv = handleRequest(cx, hdr, msg_body);
-            switch (rv.typeCode()) {
-                case NT_HASH: {
-                    hash<auto!> hrv = rv;
-                    if (hrv.hasKey("raw_response")) {
-                        delete hrv."raw_response";
-                    }
-                    return cast<hash<HttpResponseInfo>>(hrv);
-                }
-                case NT_STRING:
-                case NT_BINARY: return cast<hash<HttpResponseInfo>>(("code": 200, "body": rv));
-                default:
-                throw "HANDLER-ERROR", sprintf("handler returned type %s; expecting \"hash\"; value: %y", rv.type(), rv);
-            }
+            return AbstractHttpRequestHandler::makeResponseFromResult(handleRequest(cx, hdr, msg_body));
         }
 
         AbstractStreamRequest req = getStreamRequestImpl(listener, s, cx, hdr, body);

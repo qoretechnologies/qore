@@ -1,0 +1,44 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A Program whose top-level code creates closures is destroyed after it is deleted, in every execution mode: the code
+# compiled from its top-level statements refers to its closures, whose variants keep the Program allocated, so that
+# code is freed with the Program's code (issue #5822).  Needs a debug libqore (dbg_get_live_program_count()); see
+# ProgramClosureRelease.qtest.
+
+# top-level code that creates and calls a closure, and a closure that a function returns
+const Src = "
+int x = 1;
+code c = int sub (int y) { return x + y; };
+our int top = c(2);
+code sub make() { return int sub () { return 5; }; }
+int sub run() { code f = make(); return f() + top + (map $1 + 1, (1, 2)).size(); }
+";
+
+ExecMode mode = EM_TIERED;
+foreach string a in (QORE_ARGV) {
+    switch (a) {
+        case "--exec-mode=ast": mode = EM_AST; break;
+        case "--exec-mode=ir": mode = EM_IR; break;
+        case "--exec-mode=jit": mode = EM_JIT; break;
+    }
+}
+
+sub gen() {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+    p.setExecMode(mode);
+    p.parse(Src, "gen");
+    p.run();
+    for (int i = 0; i < 3; ++i) {
+        p.callFunction("run");
+    }
+}
+
+# the first generation compiles this Program's own code
+gen();
+int base = dbg_get_live_program_count();
+for (int g = 0; g < 10; ++g) {
+    gen();
+}
+int live = dbg_get_live_program_count() - base;
+printf("Programs left after 10 generations: %d\n", live);

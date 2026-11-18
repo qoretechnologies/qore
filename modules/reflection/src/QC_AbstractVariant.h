@@ -42,8 +42,9 @@ class QoreReflectionVariant : public QoreReflectionFunction {
 public:
     const QoreExternalVariant* variant;
 
-    DLLLOCAL QoreReflectionVariant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreExternalVariant* variant) :
-        QoreReflectionFunction(pgm, func), variant(variant) {
+    //! \a ns: the namespace of the function, if known (see QoreReflectionFunction::ns)
+    DLLLOCAL QoreReflectionVariant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreExternalVariant* variant,
+            const QoreNamespace* ns = nullptr) : QoreReflectionFunction(pgm, func, ns), variant(variant) {
     }
 };
 

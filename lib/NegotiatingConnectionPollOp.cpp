@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include "qore/intern/NegotiatingConnectionPollOp.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -39,6 +40,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
 
@@ -54,8 +56,8 @@ NegotiatingConnectionPollOpPriv::NegotiatingConnectionPollOpPriv(QoreObject* sel
       target_host(std::move(target_host)), target_port(target_port),
       owner_conn(owner_conn) {
     // sock and connect_op refs are transferred from the caller.
-    int us;
-    submit_time_us = q_epoch_us(us) * 1000000LL + us;
+    // on the monotonic clock, as the elapsed times logged from it are intervals (#6150)
+    submit_time_us = q_get_monotonic_us();
     ASYNC_IO_TRACE("negotiate-create target='%s:%d' priv=%p\n",
         this->target_host.c_str(), this->target_port, (void*)this);
     qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
@@ -126,9 +128,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::continuePoll(ExceptionSink* xsink
 }
 
 QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* xsink) {
-    int us;
-    int64_t now_us = q_epoch_us(us) * 1000000LL + us;
-    int64_t elapsed_us = now_us - submit_time_us;
+    int64_t elapsed_us = q_get_monotonic_us() - submit_time_us;
     ASYNC_IO_TRACE("handleConnecting begin target='%s:%d' priv=%p elapsed_us=%lld\n",
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
@@ -178,7 +178,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
     // TCP + SSL handshake done.  Read the negotiated ALPN protocol.
-    SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocolForAsyncPoll());
+    SimpleRefHolder<QoreStringNode> alpn(qore_socket_object_private(sock_obj).getAlpnProtocolForAsyncPoll());
     std::string alpn_id;
     if (alpn && !alpn->empty()) {
         alpn_id = alpn->c_str();
@@ -276,8 +276,7 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
         return;  // preserve the first error
     }
 
-    int us;
-    int64_t elapsed_us = (q_epoch_us(us) * 1000000LL + us) - submit_time_us;
+    int64_t elapsed_us = q_get_monotonic_us() - submit_time_us;
     ASYNC_IO_TRACE("negotiate-setError err='%s' desc='%s' target='%s:%d' priv=%p elapsed_us=%lld\n",
         err, desc, target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
     qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
@@ -305,8 +304,7 @@ void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc
 }
 
 void NegotiatingConnectionPollOpPriv::abort(ExceptionSink* xsink) {
-    int us;
-    int64_t elapsed_us = (q_epoch_us(us) * 1000000LL + us) - submit_time_us;
+    int64_t elapsed_us = q_get_monotonic_us() - submit_time_us;
     ASYNC_IO_TRACE("negotiate-abort target='%s:%d' priv=%p elapsed_us=%lld\n",
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
     qore_async_io_log(QORE_LOG_LEVEL_DEBUG,
@@ -404,7 +402,7 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
     }
     if (!ssl_config.ca_file.empty() || !ssl_config.ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
-        sock_priv_raw->setSslCaLocationsForAsyncPoll(
+        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(
             ssl_config.ca_file.empty() ? nullptr : ssl_config.ca_file.c_str(),
             ssl_config.ca_path.empty() ? nullptr : ssl_config.ca_path.c_str(), xsink);
         if (*xsink) {
@@ -547,9 +545,27 @@ void NegotiatingHttpClientConnection::onAlpnDecided(std::string alpn) {
 HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
         int max_concurrent_streams, HttpClientConnectionManagerBase* mgr,
         ExceptionSink* xsink) {
+    // the hand-over is a call on the connection: a close waits for it (drainInFlight()) and then finds it taken over,
+    // or, once it has invalidated the connection, refuses it; without the guard a close that began after the checks
+    // below cancelled the socket while it was handed over (qore#6303)
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot hand over the negotiating connection: it has been closed");
+        return nullptr;
+    }
     if (taken_over) {
         xsink->raiseException("HTTPCLIENT-NEGOTIATE-ERROR",
             "negotiating connection has already been taken over");
+        return nullptr;
+    }
+    // a connection that was closed after it was found ready, or that another thread is closing (closeConnection()
+    // invalidated it; it still reports ready until the close ends), is refused as a closed connection refuses a
+    // submit, so that the caller reports it like one: its socket must not be handed over to a concrete connection while
+    // the close cancels it (qore#6301, qore#6303)
+    if (isClosed() || isInvalidated()) {
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot hand over the negotiating connection: it has been closed");
         return nullptr;
     }
     if (!isReady()) {
@@ -562,6 +578,10 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
             "negotiating connection has no socket to hand off");
         return nullptr;
     }
+#ifdef DEBUG
+    // tests hold the hand-over here, with the method guard held, to order it with a close of the connection
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::Takeover);
+#endif
 
     // The I/O controller has finalized the neg poll op (DECIDED →
     // goalReached returns true, needsCloseOnComplete returns false).
@@ -641,8 +661,16 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
 }
 
 void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
+#ifdef DEBUG
+    // tests check that no two closes of the connection run at the same time
+    QoreDbgHttpCloseScope dbg_close_scope(this);
+#endif
     markInvalidated();
     drainInFlight();
+#ifdef DEBUG
+    // tests hold the close here, after new calls are refused and before the connection is closed
+    qore_dbg_http_hold(QoreDbgHttpHoldPoint::CloseAfterInvalidate);
+#endif
 
     if (neg_priv) {
         neg_priv->clearOwner();

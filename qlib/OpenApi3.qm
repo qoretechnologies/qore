@@ -8769,7 +8769,7 @@ public class OpenApi3SchemaGenerator {
         }
 
         # Add tags
-        hash<string, bool> tag_set;
+        hash<string, bool> tag_set = {};
         foreach hash<auto> path_ops in (paths.iterator()) {
             foreach hash<auto> op in (path_ops.iterator()) {
                 foreach string tag in (op.tags) {

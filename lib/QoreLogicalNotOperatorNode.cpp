@@ -30,6 +30,34 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreStatementTemps.h"
+
+namespace {
+class StrictBooleanLogicalNotOperatorNode : public QoreLogicalNotOperatorNode {
+public:
+    using QoreLogicalNotOperatorNode::QoreLogicalNotOperatorNode;
+    QoreOperatorNode* copyBackground(ExceptionSink* xsink) const override {
+        return copyBackgroundExplicit<StrictBooleanLogicalNotOperatorNode>(xsink);
+    }
+private:
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreLogicalNotOperatorNode* QoreLogicalNotOperatorNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        QoreValue exp) {
+    QoreLogicalNotOperatorNode* rv = policy.strictBoolean() ? new StrictBooleanLogicalNotOperatorNode(loc, exp)
+        : new QoreLogicalNotOperatorNode(loc, exp);
+    ParseNode::bindSemanticPolicy(QoreValue(rv), policy);
+    return rv;
+}
+
+QoreValue QoreLogicalNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
 
 QoreString QoreLogicalNotOperatorNode::LogicalNot_str("logical not operator expression");
 
@@ -55,10 +83,11 @@ int QoreLogicalNotOperatorNode::getAsString(QoreString& str, int foff, Exception
     return 0;
 }
 
-QoreValue QoreLogicalNotOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE QoreValue QoreLogicalNotOperatorNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(exp);
-    ValueEvalOptimizedRefHolder v(exp, xsink);
-    return !v->getAsBool();
+    QoreOperandEvalHolder v(exp, xsink);
+    return !LexicalSemanticPolicy::getAsBoolFor<StrictBoolean>(*v);
 }
 
 int QoreLogicalNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -75,7 +104,7 @@ int QoreLogicalNotOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     // evaluate immediately if possible
     if (!err && exp.isValue()) {
         SimpleRefHolder<QoreLogicalNotOperatorNode> th(this);
-        val = !exp.getAsBool();
+        val = !semantic_policy.getAsBool(exp);
     }
 
     set_unary_analysis(parse_context, operand_analysis);

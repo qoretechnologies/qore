@@ -82,6 +82,8 @@ AbstractDataProviderType event = GoogleDataProviderBase::getResponseTypeForSchem
     @section googledataprovider_relnotes Release Notes
 
     @subsection googledataprovider_v2_2 GoogleDataProvider v2.2
+    - \c GoogleApiParentDataProvider::getChildProviderImpl() is declared to return any data provider, as the
+      subclasses do (see @ref override_return_types)
     - compose origin-absolute request targets for Discovery APIs with an empty base path, including Gmail;
       the supplied REST client's API root is not prepended to schema-generated paths
     - ship complete Calendar v3 and Gmail v1 Discovery documents for deterministic offline metadata resolution;

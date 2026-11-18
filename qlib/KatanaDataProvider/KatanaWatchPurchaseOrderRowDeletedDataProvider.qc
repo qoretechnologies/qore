@@ -29,7 +29,7 @@ public class KatanaWatchPurchaseOrderRowDeletedDataProvider
     string getEndpoint() { return "purchase_order_rows"; }
     string getEventName() { return EVENT_POR_DELETED; }
     *string getTargetStatus() { return NOTHING; }
-    *string getTimestampField() { return "deleted_at"; }
+    string getTimestampField() { return "deleted_at"; }
 
     AbstractDataProviderType getRecordDataType() {
         return new KatanaPurchaseOrderRowRecordDataType();

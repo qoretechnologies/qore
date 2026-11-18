@@ -1,0 +1,116 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! the module that calls the functions of XfcProvider (qore#6035)
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires XfcProvider
+
+module XfcConsumer {
+    version = "1.0";
+    desc = "qore#6035 cross-module native call test: consumer";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace XfcConsumer {
+    #! only calls that can be made natively: native int, float and bool values and boxed values
+    public int sub hot(int n) {
+        int c = 0;
+        for (int i = 0; i < n; ++i) {
+            c = XfcProvider::addInt(c, i);
+            if (XfcProvider::isPositive(i)) {
+                c += XfcProvider::mulFloat(1.0, 2.0).toInt();
+            }
+            c += XfcProvider::label("utf8").size();
+        }
+        return c;
+    }
+
+    #! the values of calls of every kind
+    public hash<auto> sub values() {
+        int r = 1;
+        XfcProvider::increment(\r);
+        return {
+            "addInt": XfcProvider::addInt(40, 2),
+            "scale-default": XfcProvider::scale(2.0),
+            "scale": XfcProvider::scale(2.0, 4.0),
+            "mulFloat": XfcProvider::mulFloat(2.0, 4.0),
+            "isPositive": (XfcProvider::isPositive(1), XfcProvider::isPositive(-1)),
+            "label": (XfcProvider::label("utf8"), XfcProvider::label("latin1")),
+            "maybe": (XfcProvider::maybe(1), XfcProvider::maybe(2)),
+            "doubled": XfcProvider::doubled((1, 2, 3)),
+            "kind": (XfcProvider::kind(1), XfcProvider::kind("a")),
+            "countArgs": (XfcProvider::countArgs(), XfcProvider::countArgs(1, "two", 3.0)),
+            "increment": r,
+            "identity": (XfcProvider::identity(7), XfcProvider::identity("seven")),
+            "map": (map XfcProvider::addInt($1, 100), (1, 2, 3)),
+            "map-label": (map XfcProvider::label($1), ("utf8", "x")),
+            "nested": XfcProvider::addInt(XfcProvider::addInt(1, 2), XfcProvider::check(3)),
+            "hot": hot(10),
+            "method": (new Holder()).next(41),
+            "closure": (int sub (int i) { return XfcProvider::addInt(i, 2); })(40),
+            "callback": countDown(5),
+        };
+    }
+
+    #! the exception raised by another module's function, as caught here
+    public hash<auto> sub error(int i) {
+        try {
+            return {"value": XfcProvider::checkTwice(i)};
+        } catch (hash<ExceptionInfo> ex) {
+            return {
+                "err": ex.err,
+                "desc": ex.desc,
+                "file": basename(ex.file),
+                "line": ex.line,
+                "stack": map $1.function, ex.callstack, $1.type == "user",
+            };
+        }
+    }
+
+    #! the user functions of the call stack as seen in another module's function
+    public list<string> sub stack() {
+        return XfcProvider::stackNames();
+    }
+
+    #! counts down through another module's function that calls this one back
+    public int sub countDown(int n) {
+        return n <= 0 ? 0 : XfcProvider::apply(\countDown(), n - 1) + XfcProvider::addInt(0, 1);
+    }
+
+    #! calls another module's function from a method
+    public class Holder {
+        int next(int i) {
+            return XfcProvider::addInt(i, 1);
+        }
+    }
+
+    #! a call of another module's function that uses the file system
+    public auto sub rootIsDir() {
+        try {
+            return XfcProvider::rootIsDir();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}

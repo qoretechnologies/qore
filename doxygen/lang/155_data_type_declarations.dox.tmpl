@@ -204,6 +204,38 @@ date<absolute> abs = 2017-07-10;
 date<relative> rel = 2h + 30m;
     @endcode
 
+    @anchor date_literal_subtypes
+    @par Date Literal Subtypes
+    @parblock
+    A date literal and a constant whose value is a date have the type of their subtype: an
+    @ref absolute_dates "absolute" date/time literal such as \c 2017-07-10 is \c date&lt;absolute&gt;, and a
+    @ref relative_dates "relative" one such as \c 1s or \c P1D is \c date&lt;relative&gt;.  A literal of one subtype
+    given where the other is required (an argument, an assignment, a return value, the default value of a parameter,
+    or a value of a list or hash literal assigned to a container whose value type is the other subtype) is therefore
+    a parse error (\c PARSE-TYPE-ERROR); a date of the other subtype from any other expression is checked when the
+    code runs (\c RUNTIME-TYPE-ERROR).  A container whose value type is \c date&lt;absolute&gt; or
+    \c date&lt;relative&gt; checks each value of a container of plain \c date values that it is given, as a
+    constant, a variable or an argument, and then has its declared type.
+
+    A type that is inferred from a literal for the code that follows (the value type of a list or hash built from
+    literals, the type of a @ref conditional_operator "conditional" expression, the type that a local variable
+    declared as \c auto takes) is \c date, as a date value has no subtype at run time; such a container or variable
+    can take a date of either subtype.  The variant of a function or method with several variants is chosen as at run
+    time, where a date of either subtype matches a parameter of either subtype; if the parameter of the variant chosen
+    requires the other subtype, the call is a parse error.
+    @endparblock
+
+    @par Example (date literal subtypes)
+    @code{.py}
+sub wait_until(date<absolute> d) {}
+
+wait_until(2026-01-01T00:00:00Z);   # OK
+wait_until(1s);                     # PARSE-TYPE-ERROR: a relative date literal for a date<absolute> parameter
+
+auto l = (1s, 2s);
+push l, now();                      # OK: the list holds dates
+    @endcode
+
     <hr>
     @section binary_type binary
 
@@ -656,6 +688,42 @@ class IntBox<T: int = int> {
 IntBox<> default_box();        # same type as IntBox<int>
 IntBox<int> explicit_box(2);
 # IntBox<string> bad("x");     # PARSE-TYPE-ERROR: string violates T: int
+    @endcode
+
+    In generic code, a value of a bounded type parameter has its bound: it is accepted wherever a value of the bound
+    is, and refused where one is refused (an assignment, an argument, a return value), and a type parameter whose bound is a
+    class has that class's methods, which are called as on any value of that class (an override in the type argument's
+    class is called).  A value of type <tt>*T</tt> has the bound or no value.  A value of an unbounded type parameter
+    can have any type: it is accepted, and checked when the code runs.  The same holds for a bound that converts the
+    values that it accepts, such as \c softint or \c number: a value bound to the type parameter is not converted, so
+    its type is only known when the code runs:
+
+    @code{.py}
+class Base {
+    string name() { return "base"; }
+}
+
+class Named<T: Base> {
+    string describe(T v) {
+        # T: Base: v has the methods of Base
+        return v.name();
+    }
+}
+
+class Adder<T: int> {
+    int add(T v, int n) {
+        # T: int: v is an int value
+        int i = v;
+        return i + n;
+    }
+}
+
+class Holder<T> {
+    T take(auto value) {
+        # unbounded: checked when the code runs (RUNTIME-TYPE-ERROR if value is not a T)
+        return value;
+    }
+}
     @endcode
 
     Source-defined generic classes can inherit generic base classes and pass
@@ -1747,6 +1815,7 @@ printf("%s\n", l.fullType());
     @note
     - The \c any type restriction is the same as using no type restriction
     - Assignment to \c any strips complex runtime type information for backward compatibility; this can have a large performance cost for large data structures
+    - A value passed to a parameter of type \c any is stripped in the same way: a \c list&lt;int&gt; or a \c hash&lt;string, int&gt; argument is a plain \c list or \c hash in the function, in every @ref execution_modes "execution mode" and in compiled code; the caller's value keeps its type
     - To assign any type without stripping complex types, use the @ref auto_type "auto" type restriction instead
     - In @ref modern "%modern" code, use @ref auto_type "auto" instead of \c any for unrestricted declarations unless complex type stripping is specifically required
     - In @ref modern "%modern" mode, \c any is also the @ref streaming_any "any streaming operator" in expression contexts; legacy declarations such as \c "any value = expr;", function and method parameters, return types, and class members still parse \c any as a type name for compatibility
@@ -1857,6 +1926,10 @@ global_config = {"setting": "value"};
       parameter) drops the narrowed type: it holds a \c hash<auto> or \c list<auto>, and later writes of any
       value type succeed; a value that is also referenced elsewhere is copied, so the original value, such as the
       caller's hash, keeps its type and its contents
+    - a plain \c auto! lvalue (a local variable, a global variable, a class member or a parameter) drops the
+      complex type of a hash or list assigned to it, as an \c any lvalue does: it holds a plain \c hash or \c list,
+      and later writes of any value type succeed; a hash or list returned through the return type \c auto! loses
+      its complex type in the same way, while a plain \c auto lvalue or return type keeps it
 
     Dropping the type is shallow: only the hash or list assigned loses its narrowed type, while the hashes and lists
     it holds keep theirs.  To write values of another type into a nested container, assign that container to a

@@ -40,9 +40,13 @@
 #include "qore/intern/NewComplexTypeNode.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QorePseudoMethods.h"
 
 #include <string>
 #include <vector>
+#include <mutex>
+#include <set>
 
 static int raise_missing_new_constructor(QoreProgram* pgm, const QoreProgramLocation* loc,
         const QoreClass& qclass, const char* written_name) {
@@ -120,6 +124,21 @@ static void record_source_parse_reflection_class_for_name_import(QoreProgram* pg
     const QoreProgramLocation* arg_loc = parse_args->getLocation(0);
     qore_program_private::recordSourceParseTypeImport(pgm, arg_loc ? arg_loc : loc, class_name.c_str(),
         type_path.c_str(), false, false);
+}
+
+//! Returns the receiver of an implicit call in a method of \a class_ctx to \a m, or nullptr if it needs none
+/** The receiver of a call to a method of a generic base class from a class that inherits a specialization of it is that
+    class, as for an explicit self.method() call: the type parameters of the base class are then substituted with the
+    type arguments of the specialization at parse time and when the variant is resolved at run time (ex: T is Foo in a
+    method of class FooBox inherits Box<Foo>).  In a generic class, the type parameters of the base class stay those of
+    the class (issue #5769).
+*/
+static const QoreTypeInfo* implicit_self_call_receiver(const QoreMethod* m, const qore_class_private* class_ctx) {
+    if (!m || !class_ctx || class_ctx->hasTypeParams()) {
+        return nullptr;
+    }
+    const QoreClass* mcls = m->getClass();
+    return mcls && mcls != class_ctx->cls && mcls->hasTypeParameters() ? class_ctx->cls->getTypeInfo() : nullptr;
 }
 
 static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramLocation* loc, const NamedScope& scope,
@@ -390,8 +409,38 @@ static int parse_init_complex_buffer_factory(const QoreProgramLocation* loc, con
     return parse_init_value(val, parse_context);
 }
 
+// raises the exception for a method call on a deleted object
+/** Outlined from AbstractMethodCallNode::exec(), whose frame is on the stack at every level of a recursion of a
+    method (issue #5852)
+*/
+static QORE_INTERN_NOINLINE void raise_method_call_deleted_object(ExceptionSink* xsink, const QoreClass* qc,
+        const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    if (variant) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has already been deleted",
+            qc->getName(), method->getName(), variant->getSignature()->getSignatureText());
+    } else {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            qc->getName(), method->getName());
+    }
+}
+
+// Only a reusable background call needs to own an argument-list copy.  Outlining its lifetime keeps the holder
+// and its exception-cleanup state out of every ordinary recursive call, including calls with a lexical policy.
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue AbstractMethodCallNode::execReusableTmpArgs(LexicalSemanticPolicy policy,
+        const QoreMethod& target, RuntimeConfig& rc, QoreObject* o, const qore_class_private* ctx,
+        const AbstractQoreFunctionVariant* call_variant, ExceptionSink* xsink) const {
+    assert(tmp_args && reusable_tmp_args && args);
+    // the copy keeps the parameter positions of the arguments of a named call bound at parse time
+    ReferenceHolder<QoreListNode> args_copy(xsink);
+    copyEvalTmpArgs(args_copy);
+    return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, target, xsink, rc, o, *args_copy, ctx,
+        call_variant, nullptr, getExplicitTypeParamInstantiation());
+}
+
 // eval method against an object where the assumed qoreclass and method were saved at parse time
-QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execImpl(LexicalSemanticPolicy policy, QoreObject* o, const char* c_str, const qore_class_private* ctx,
         ExceptionSink* xsink) const {
     // Assert: if parse_args is set but args is null, resolveParseArgs() was not called.
     // This catches AOT deserialization bugs where parse_init was skipped.
@@ -399,6 +448,9 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         || !"AbstractMethodCallNode::exec(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
     //QORE_TRACE("AbstractMethodCallNode::exec()");
+    RuntimeConfig& rc = rc_get_current_ref();
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
 
     /* the class and method saved at parse time are used here for this run-time
         optimization: the method pointer saved at parse time is used to execute the
@@ -408,73 +460,227 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         check and make sure that search would be quicker than the quick check
         implemented below on average
     */
-    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass())) {
+    // a static method called through an object is bound to the receiver's declared class, whatever the class of the
+    // object, as Class::method() is (qore#5990)
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass() || method->isStatic())) {
         //printd(5, "AbstractMethodCallNode::exec() using parse info for %s::%s() qc: %s (o: %s) v: %p\n",
         //    method->getClassName(), method->getName(), qc->getName(), o->getClass()->getName(), variant);
         assert(method);
         if (!o->isValid()) {
-            if (variant) {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
-                    "already been deleted", qc->getName(), method->getName(),
-                    variant->getSignature()->getSignatureText());
-            } else {
-                qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
-                    "already been deleted", qc->getName(), method->getName());
-            }
+            raise_method_call_deleted_object(xsink, qc, method, variant);
             return QoreValue();
         }
 
-        RuntimeConfig& rc = rc_get_current_ref();
         const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
         // When tmp_args is true (clone from IR interpreter), use evalTmpArgs to preserve
         // ReferenceNode values in the arg list. The eval() path goes through
         // CodeEvaluationHelper with const args, which calls evalList() and dereferences
         // ReferenceNodes.
         if (tmp_args) {
-            ReferenceHolder<QoreListNode> args_copy(xsink);
-            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, variant,
+            // a named call resolved at run time by parameter name has no variant; a call with a variant pays nothing
+            // for it
+            if (!variant && runtime_arg_names) {
+                return execNamed(policy, o, method, c_str, ctx, rc, xsink);
+            }
+            if (reusable_tmp_args && args) {
+                return execReusableTmpArgs<Lexical>(policy, *method, rc, o, ctx, variant, xsink);
+            }
+            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, variant,
                 nullptr, explicit_inst);
         }
-        return variant
-            ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
-                reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst)
-            : qore_method_private::eval(*method, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
+        if (variant) {
+            return qore_method_private::evalNormalVariantWithPolicy<Lexical>(policy, *method, xsink, rc, o,
+                reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst);
+        }
+        if (runtime_arg_names) {
+            return execNamed(policy, o, method, c_str, ctx, rc, xsink);
+        }
+        // a static method called through an object (not through self in a method: s()) checks the object after the
+        // arguments, as the call of a variant resolved at parse time does above (issue #6056)
+        if (qore_method_private::get(*method)->static_flag && getType() != NT_SELF_CALL) {
+            return qore_method_private::evalStaticOnObject<Lexical>(policy, *method, xsink, rc, o, args, ctx,
+                nullptr, explicit_inst);
+        }
+        return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, o, args, ctx, nullptr,
+            nullptr, explicit_inst);
+    }
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue AbstractMethodCallNode::execByNameImpl(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the method is looked up by name in the class of the object
+    if (runtime_arg_names) {
+        // resolved on the method of the class of the object, as a call with positional arguments (see execNamed())
+        return execNamed(policy, o, nullptr, c_str, ctx, rc, xsink);
     }
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
-    RuntimeConfig& rc = rc_get_current_ref();
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
-    if (tmp_args) {
+    // issue #5917: a copy() call (which takes no arguments; see QoreDotEvalOperatorNode::parseInitImpl()) is
+    // dispatched by qore_class_private::evalMethod() below to the copy constructor of the class, also when the call is
+    // the background copy of a call with pre-evaluated arguments: its variant is a copy variant, which cannot be called
+    // as a normal method
+    if (tmp_args && strcmp(c_str, "copy")) {
         // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
         // and use evalTmpArgs to preserve ReferenceNode values
+        // an object that has been deleted raises the error of qore_class_private::evalMethod(), which names the class
+        // of the object, before the method is looked up (issue #6168)
+        if (!o->isValid()) {
+            qore_raise_deleted_method_call(xsink, o, c_str, nullptr, nullptr, nullptr);
+            return QoreValue();
+        }
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
         const QoreMethod* w = priv->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
         if (*xsink) {
             return QoreValue();
         }
         if (w) {
-            ReferenceHolder<QoreListNode> args_copy(xsink);
-            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, getEvalTmpArgs(args_copy), ctx, nullptr,
+            if (reusable_tmp_args && args) {
+                return execReusableTmpArgs<Lexical>(policy, *w, rc, o, ctx, nullptr, xsink);
+            }
+            return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *w, xsink, rc, o, args, ctx, nullptr,
                 nullptr, explicit_inst);
         }
     }
-    return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink, explicit_inst);
+    return qore_class_private::get(*o->getClass())->evalMethodWithPolicy<Lexical>(policy, o, c_str, args, ctx, rc, xsink, explicit_inst);
 }
 
-const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
+QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
+        ExceptionSink* xsink) const {
+    return execImpl<false>({}, o, c_str, ctx, xsink);
+}
+
+QoreValue AbstractMethodCallNode::exec(LexicalSemanticPolicy policy, QoreObject* o, const char* c_str, const qore_class_private* ctx,
+        ExceptionSink* xsink) const {
+    return execImpl<true>(policy, o, c_str, ctx, xsink);
+}
+
+// a named call resolved at run time by parameter name; outside of exec(), whose calls with positional arguments are
+// hot
+/* qore#5990: a named call is resolved as the call with positional arguments that it spells out: on the method of the
+   class of the object (unless the call names the class of the method, as Base::m() does), whose classes are searched
+   from the class of the object, and the first class with a variant that accepts the names and the arguments is used;
+   a variant whose parameters do not have the names of the arguments is not a candidate
+*/
+__attribute__((noinline, cold)) QoreValue AbstractMethodCallNode::execNamed(LexicalSemanticPolicy policy,
+        QoreObject* o, const QoreMethod* m, const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc,
+        ExceptionSink* xsink) const {
+    assert(runtime_arg_names);
+    assert(!variant);
+    if (!o->isValid()) {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has already been deleted",
+            o->getClassName(), c_str);
+        return QoreValue();
+    }
+    if (!m) {
+        // the method of the class of the object, which inherits or overrides the method that the call was parsed with
+        const qore_class_private* cls = qore_class_private::get(*o->getClass());
+        m = cls->getMethodForEval(c_str, o->getProgram(), ctx, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (!m) {
+            // a member of the name that holds code: the names bind the arguments to the parameters of the code
+            // (qore#6361), as for a named call of a call reference or closure
+            {
+                ValueHolder code(cls->getMemberCode(o, c_str, ctx, xsink), xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+                if (code) {
+                    const ResolvedCallReferenceNode* ref =
+                        static_cast<const ResolvedCallReferenceNode*>(code->getInternalNode());
+                    if (tmp_args) {
+                        ReferenceHolder<QoreListNode> args_copy(xsink);
+                        return qore_call_ref_invoke_named(ref, getEvalTmpArgs(args_copy), *runtime_arg_names,
+                            policy, xsink);
+                    }
+                    // the object is checked again after the arguments (issue #6056)
+                    QoreListNodeEvalOptionalRefHolder call_args(xsink);
+                    if (evalArgsCheckObject(o, c_str, ctx, call_args, xsink)) {
+                        return QoreValue();
+                    }
+                    return qore_call_ref_invoke_named(ref, *call_args, *runtime_arg_names, policy, xsink);
+                }
+            }
+            // otherwise the pseudo-method of the name, with the names bound to its parameters (as
+            // MethodCallNode::execPseudoNamed() calls it)
+            QoreClass* pseudo_class = nullptr;
+            if (const QoreMethod* pm = pseudo_classes_find_method(NT_OBJECT, c_str, pseudo_class)) {
+                ReferenceHolder<QoreListNode> args_copy(xsink);
+                if (tmp_args) {
+                    return NMETHF(qore_method_private::get(*pm)->func)->evalPseudoMethodNamed(xsink, rc,
+                        QoreValue(o), getEvalTmpArgs(args_copy), true, ctx, *runtime_arg_names, policy);
+                }
+                // the object is checked again after the arguments (issue #6056)
+                QoreListNodeEvalOptionalRefHolder call_args(xsink);
+                if (evalArgsCheckObject(o, c_str, ctx, call_args, xsink)) {
+                    return QoreValue();
+                }
+                return NMETHF(qore_method_private::get(*pm)->func)->evalPseudoMethodNamed(xsink, rc, QoreValue(o),
+                    *call_args, false, ctx, *runtime_arg_names, policy);
+            }
+            // a method of the name is handled by the class's methodGate() method, which takes its arguments by
+            // position: a named call of it is refused, as at parse time
+            if (cls->methodGate) {
+                xsink->raiseException("NAMED-CALL-NOT-SUPPORTED", "cannot call %s::%s() with named arguments: the "
+                    "class has no method of the name, and its methodGate() method takes the arguments of the call by "
+                    "position", o->getClassName(), c_str);
+                return QoreValue();
+            }
+            xsink->raiseException("METHOD-DOES-NOT-EXIST", "no method %s::%s() has been defined",
+                o->getClassName(), c_str);
+            return QoreValue();
+        }
+    }
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    // a static method called through an object (not through self in a method: s()) checks the object after the
+    // arguments (issue #6056)
+    bool check_receiver = getType() != NT_SELF_CALL;
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalNamed(*m, xsink, rc, o, getEvalTmpArgs(args_copy), true, ctx, nullptr,
+            explicit_inst, *runtime_arg_names, policy, nullptr, check_receiver);
+    }
+    return qore_method_private::evalNamed(*m, xsink, rc, o, args, false, ctx, nullptr, explicit_inst,
+        *runtime_arg_names, policy, nullptr, check_receiver);
+}
+
+int AbstractMethodCallNode::evalArgsCheckObject(QoreObject* o, const char* c_str, const qore_class_private* ctx,
+        QoreListNodeEvalOptionalRefHolder& call_args, ExceptionSink* xsink) const {
+    call_args.assignEval(args);
+    if (*xsink) {
+        return -1;
+    }
+    if (!o->isValid()) {
+        qore_raise_deleted_missing_method_call_after_args(o, c_str, ctx, xsink);
+        return -1;
+    }
+    return 0;
+}
+
+const QoreTypeInfo* FunctionCallBase::getCallReturnTypeInfo(QoreFunction* func) const {
     const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
-        : (method
-            ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
+        : (func
+            ? func->parseRuntimeCallReturnType(nullptr, receiver_type_info,
+                has_explicit_type_args ? &explicit_runtime_type_param_instantiation.type_args : nullptr, true)
             : nullptr);
     return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
 }
 
-static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func) {
-   // func will always be non-zero with builtin functions
-   const char* class_name = func->className();
-   parse_error(*loc, "parse options do not allow access to builtin %s '%s%s%s()'", class_name ? "method" : "function",
-        class_name ? class_name : "", class_name ? "::" : "", func->getName());
+const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
+    return getCallReturnTypeInfo(method ? qore_method_private::get(*method)->getFunction() : nullptr);
+}
+
+static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func, const QoreParseOptions& denied,
+        bool user) {
+    const char* class_name = func->className();
+    parse_error(*loc, "parse options do not allow access to %s%s '%s%s%s()'; functional domain: %s",
+        user ? "" : "builtin ", class_name ? "method" : "function", class_name ? class_name : "",
+        class_name ? "::" : "", func->getName(), qore_describe_source_domains(denied.getLo()).c_str());
 }
 
 static void warn_retval_ignored(const QoreProgramLocation* loc, QoreFunction* func, bool is_bg_call = false) {
@@ -518,7 +724,11 @@ static void warn_deprecated(const QoreProgramLocation* loc, QoreFunction* func) 
 }
 
 static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int64 flags, int64 pflag) {
-    if (pflag & (PF_RETURN_VALUE_IGNORED | PF_BACKGROUND)) {
+    // the background operator sets both flags for its expression; an operator that uses the value of an operand
+    // turns off PF_RETURN_VALUE_IGNORED for it, but PF_BACKGROUND stays set in the whole expression, so only the
+    // former decides whether the value of the call is ignored, and the latter only names it a background call
+    // (qore#6143)
+    if (pflag & PF_RETURN_VALUE_IGNORED) {
         bool is_bg_call = (pflag & PF_BACKGROUND);
         // the stronger diagnostic is warranted when the call neither has side effects nor can raise
         // a domain exception.  QCF_CONSTANT is the legacy, unchecked spelling of that pair;
@@ -584,6 +794,74 @@ int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
     return err;
 }
 
+//! Raises a parse error for each argument that is a read of a local variable proven unassigned whose parameter does
+//! not accept NOTHING and has no default value, with %strict-parse-errors (qore#5937)
+/** @return -1 if an error was raised, 0 if not
+*/
+static int qore_parse_check_unassigned_args(QoreProgram* pgm, const QoreProgramLocation* loc, const QoreListNode& args,
+        const AbstractFunctionSignature& sig) {
+    int err = 0;
+    unsigned num_params = sig.numParams();
+    for (unsigned i = 0, e = args.size(); i < e && i < num_params; ++i) {
+        // a parameter with a default value takes the default value for NOTHING
+        if (sig.hasDefaultArg(i)) {
+            continue;
+        }
+        const name_vec_t& names = sig.getParamNames();
+        QoreStringMaker desc("argument %d%s%s%s", i + 1, names.size() > i ? " ('" : "",
+            names.size() > i ? names[i].c_str() : "", names.size() > i ? "')" : "");
+        if (qore_parse_check_unassigned_read(pgm, loc, args.retrieveEntry(i), sig.getParamTypeInfo(i),
+                desc.c_str())) {
+            err = -1;
+        }
+    }
+    return err;
+}
+
+const name_vec_t* qore_intern_call_arg_names(name_vec_t&& names) {
+    // a set does not move its elements, so the pointer to an interned list stays valid; the set is never destroyed,
+    // so that a list stays valid also for code that runs while static objects are destroyed at exit
+    static std::mutex m;
+    static std::set<name_vec_t>* lists = new std::set<name_vec_t>;
+    std::lock_guard<std::mutex> lock(m);
+    return &*lists->insert(std::move(names)).first;
+}
+
+void FunctionCallBase::setCallArgEvalMap(std::vector<size_t>&& source_to_param, size_t result_size) {
+    assert(args);
+    qore_list_private::setNeedsEval(*args);
+    qore_list_private::get(args)->setCallArgEvalMap(std::move(source_to_param), result_size);
+}
+
+//! returns true if a child class can have a variant of the method \a func that a named call whose names select the
+//! variant \a v in the receiver's static type would select instead (an override or an overload of it), so the call is
+//! resolved at run time on the class of the object (qore#5990)
+static bool named_call_may_call_override(const QoreFunction* func, const AbstractQoreFunctionVariant* v) {
+    if (!v) {
+        return false;
+    }
+    // a static method called through an object is dispatched on the class of the object too
+    const MethodFunctionBase* mf = dynamic_cast<const MethodFunctionBase*>(func);
+    if (!mf) {
+        return false;
+    }
+    const QoreClass* cls = mf->getClass();
+    if (cls && cls->isFinal()) {
+        return false;
+    }
+    return !static_cast<const MethodVariantBase*>(v)->isFinal();
+}
+
+int FunctionCallBase::parseCommitVirtualNamedCall() {
+    if (!named_bound_variant || runtime_arg_names) {
+        return 0;
+    }
+    runtime_arg_names = qore_intern_call_arg_names(std::move(virtual_named_names));
+    virtual_named_names.clear();
+    type_param_instantiation.clear();
+    return 1;
+}
+
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
         QoreFunction* func, qore_ns_private* ns, bool infer_class_receiver_from_args,
         const char* receiver_inference_call_desc) {
@@ -601,10 +879,14 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // argument type list
     type_vec_t argTypeInfo;
+    // for each argument, true if it always has a value of its type
+    arg_value_vec_t args_with_value;
 
     // initialize arguments and setup argument type list (argTypeInfo)
     if (num_args) {
-        // issue #2993: do not initialize args with the "return value ignored" parse flag set
+        // issue #2993: do not initialize args with the "return value ignored" parse flag set; an argument is not the
+        // expression that a background operator runs (PF_BACKGROUND), but it is part of it: PF_BACKGROUND_EXPR stays
+        // set, as an argument may not modify the local variables of the code that starts the thread either (#5698)
         QoreParseContextFlagHelper fh(parse_context);
         fh.unsetFlags(PF_RETURN_VALUE_IGNORED | PF_BACKGROUND);
         {
@@ -614,6 +896,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         }
         parsed_arg_type_info = argTypeInfo;
         parse_args = nullptr;
+        if (args) {
+            args_with_value.reserve(args->size());
+            for (size_t i = 0, e = args->size(); i < e; ++i) {
+                args_with_value.push_back(parse_arg_always_has_value(args->retrieveEntry(i)));
+            }
+        }
 
     }
     parse_context.typeInfo = nullptr;
@@ -627,7 +915,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // resolves pending signatures unconditionally
     if (func) {
-        func->resolvePendingSignatures();
+        func->resolvePendingSignatures(func->getClass() ? nullptr : ns);
 
         // initialize function or class immediately for possible error messages later (also in case of constant
         // expressions for immediate evaluation)
@@ -680,19 +968,47 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         // find variant
         QoreNamedArgBinding named_binding;
         type_param_instantiation.clear();
+        // the return type of a call whose variant is resolved at run time only because another variant could match
+        const QoreTypeInfo* deferred_rt = nullptr;
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
-                receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr)
+                receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
+                &args_with_value, &deferred_rt, allow_runtime_arg_names)
             : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
-                &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr);
+                &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr,
+                &args_with_value, &deferred_rt);
 
         if (named_args) {
-            if (!variant) {
+            // a call whose variant is resolved at run time keeps the binding of its arguments (see
+            // QoreFunction::parseFindVariantNamed())
+            // qore#5990: a named call of a method that a child class can override or overload is resolved at run
+            // time on the class of the object, as the call with positional arguments that it spells out
+            // (AbstractMethodCallNode::execNamed()); the variant of the receiver's static type that the names select
+            // gives the call its checks and its return type, which the variants of a child class that a call of it can
+            // select must be accepted by (#5838); the checks of the variant below are made, and the call is made
+            // resolved at run time after them (see virtual_named_names)
+            if (!named_binding.runtime_names && virtual_named_dispatch && allow_runtime_arg_names
+                    && named_call_may_call_override(func, variant ? variant : named_binding.variant)) {
+                named_bound_variant = variant ? variant : named_binding.variant;
+                virtual_named_names = std::move(arg_names);
+            } else if (named_binding.runtime_names) {
+                // the variant is resolved at run time by binding the arguments by name to each candidate variant
+                // (see QoreFunction::runtimeFindVariant()): the arguments are kept in source order with their names;
+                // the return type is that of the variants that the names can be bound to (deferred_rt)
+                assert(allow_runtime_arg_names);
+                assert(!variant);
+                runtime_arg_names = qore_intern_call_arg_names(std::move(arg_names));
+                type_param_instantiation.clear();
+            } else if (!variant && !named_binding.variant) {
                 if (!err) {
                     qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
-                        new QoreStringNode("named arguments require a parse-time-resolved signature in this version; "
-                            "this call to an overloaded target is ambiguous or depends on runtime argument types, so "
-                            "use positional arguments or give the arguments explicit types"));
+                        new QoreStringNode(allow_runtime_arg_names
+                            ? "this named call to an overloaded target is ambiguous: its arguments, whose types are "
+                                "known, match more than one variant equally well; give the arguments types that only "
+                                "one of the variants accepts, or use positional arguments"
+                            : "named arguments require a parse-time-resolved signature in this version; "
+                                "this call to an overloaded target is ambiguous or depends on runtime argument types, "
+                                "so use positional arguments or give the arguments explicit types"));
                     err = -1;
                 }
             } else if (args) {
@@ -725,6 +1041,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                         receiver_type_info, &type_param_instantiation);
                     variant = nullptr;
                     func = nullptr;
+                    parseCommitVirtualNamedCall();
                     return err;
                 } else if (mv->isPrivate() && !qore_class_private::parseCheckPrivateClassAccess(*qc)) {
                     parse_error(*loc, "illegal call to private method variant %s::%s(%s)", qc->getName(),
@@ -739,14 +1056,26 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 //printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s variant: %p dflags: " QLLD
                 //    " fdflags: " QLLD "\n", this, func->className() ? func->className() : "", func->getName(),
                 //    variant, dflags, func->parseGetUniqueFunctionality());
-                if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
-                    invalid_access(loc, func);
-                    if (!err) {
-                        err = -1;
+                if (dflags) {
+                    if (QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dflags,
+                            variant->isUser() ? variant->getUserVariantBase()->getDeclaredDomain() : QDOM_DEFAULT)) {
+                        invalid_access(loc, func, denied, variant->isUser());
+                        if (!err) {
+                            err = -1;
+                        }
                     }
                 }
                 int64 flags = variant->getFlags();
                 check_flags(loc, func, flags, parse_context.pflag);
+                // a local variable that cannot have been assigned gives NOTHING to its parameter (qore#5937): only
+                // checked for a call of a function written in Qore that can resolve to this variant only, as another
+                // variant (an overload with fewer parameters, varargs, a builtin's) or a method of a subclass can
+                // take NOTHING at run time; named arguments are bound to parameters in another order
+                if (args && !named_args && !qc && variant->isUser() && func->hasSingleCallVariant()
+                        && qore_parse_check_unassigned_args(parse_context.pgm, loc, *args, *variant->getSignature())
+                        && !err) {
+                    err = -1;
+                }
             }
         } else {
             //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %p f: %lld (%lld) c: %lld (%lld)\n",
@@ -755,26 +1084,43 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             //    func->parseGetUniqueFlags() & QCF_RET_VALUE_ONLY);
 
             int64 dflags = func->parseGetUniqueFunctionality();
-            if (dflags && qore_program_private::parseAddDomain(parse_context.pgm, dflags)) {
-                invalid_access(loc, func);
-                if (!err) {
-                    err = -1;
+            if (dflags) {
+                if (QoreParseOptions denied = qore_program_private::parseDeniedDomains(parse_context.pgm, dflags,
+                        func->parseGetUniqueDeclaredDomain())) {
+                    invalid_access(loc, func, denied, !func->hasBuiltin());
+                    if (!err) {
+                        err = -1;
+                    }
                 }
             }
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
+        // a call resolved at run time has a type that does not name the callee's type parameters (qore#5896,
+        // qore#6151)
         parse_context.typeInfo = qore_substitute_type_params_if_needed(
-            variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
+            variant ? variant->parseGetReturnTypeInfo()
+                : (deferred_rt ? deferred_rt : func->parseRuntimeCallReturnType(class_ctx, receiver_type_info,
+                    has_explicit_type_args ? &explicit_type_args : nullptr)),
             receiver_type_info, &type_param_instantiation);
+        // a named call of a method that a class can override is resolved at run time, after the checks of its variant
+        // and with its type (qore#5990)
+        if (parseCommitVirtualNamedCall()) {
+            variant = nullptr;
+        }
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
     } else {
         parse_context.typeInfo = nullptr;
-        // named arguments are bound to parameters with the signature resolved at parse time; without one, they
-        // would be passed positionally
-        if (named_args && !err) {
+        // a call of a member's code binds its names at run time to the parameters of the code that the member holds
+        // (qore#6361)
+        if (named_args && runtime_named_member_call) {
+            runtime_arg_names = qore_intern_call_arg_names(std::move(arg_names));
+            type_param_instantiation.clear();
+        } else if (named_args && !err) {
+            // named arguments are bound to parameters with the signature resolved at parse time; without one, they
+            // would be passed positionally
             qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
                 new QoreStringNode("named arguments require a parse-time-resolved signature; the target of this "
                     "call is only resolved at runtime (for example, a method call through a receiver without a "
@@ -800,19 +1146,31 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
     return err;
 }
 
+template <bool Lexical>
+QORE_INTERN_NOINLINE QoreValue AbstractMethodCallNode::execByName(LexicalSemanticPolicy policy, QoreObject* o,
+        const char* c_str, const qore_class_private* ctx, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return execByNameImpl<Lexical>(policy, o, c_str, ctx, rc, xsink);
+}
+
 QoreValue SelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue SelfFunctionCallNode::evalCommon(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     QoreObject* self = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
     assert(self);
 
     const qore_class_private* runtime_cls = rc.getClass() ? rc.getClass() : runtime_get_class();
 
     if (is_copy) {
-        return self->getClass()->execCopy(self, xsink);
+        // the location of this call is the location of the call stack frame of the called code
+        QoreRcCallSiteHelper call_site(rc, loc);
+        if constexpr (Lexical) return qore_class_private::get(*self->getClass())->execCopy(policy, self, xsink);
+        else return self->getClass()->execCopy(self, xsink);
     }
 
     if (ns.size() == 1) {
@@ -823,25 +1181,148 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
         // list.  Binding to the parse-time variant instead silently skipped such overrides.
         // must have a class context here
         assert(class_ctx || runtime_cls);
-        return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
+        // exec() sets the call site; a call of an abstract method has no parse-time class (see parseInitCall()), so
+        // the method is looked up by name (issue #3070)
+        return execImpl<Lexical>(policy, self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);
     }
 
     if (is_abstract) {
-        return qore_class_private::get(*self->getClass())->evalMethod(self, ns.ostr, args,
-            class_ctx ? class_ctx : runtime_cls, rc, xsink);
+        // issue #5933: a qualified call of an abstract method is dispatched by the name of the method (not the
+        // qualified name) on the class of the object, which implements it, also for an object of the class of the
+        // call (issue #3070)
+        return execByName<Lexical>(policy, self, ns.getIdentifier(), class_ctx ? class_ctx : runtime_cls, rc, xsink);
     }
 
-    assert(method);
+    if (!method) {
+        // issue #5933: a qualified call that the AOT runtime dispatches by name
+        return evalUnresolvedQualified<Lexical>(policy, self, class_ctx ? class_ctx : runtime_cls, rc, xsink);
+    }
 
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+
+    // the explicit type arguments of the call (qore#5818)
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+
+    // a named call resolved at run time by parameter name: an explicit call of the method of a class (Base::m())
+    // binds its arguments by name to the variants of the method
+    if (runtime_arg_names) {
+        // an explicit call of the method of a class (Base::m()) is not dispatched on the class of the object
+        return execNamed(policy, self, method, method->getName(), nullptr, rc, xsink);
+    }
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
-        return qore_method_private::evalTmpArgs(*method, xsink, rc, self, getEvalTmpArgs(args_copy));
+        return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, self, getEvalTmpArgs(args_copy), nullptr,
+            nullptr, nullptr, explicit_inst);
     }
-    return qore_method_private::eval(*method, xsink, rc, self, args);
+    return qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>({}, rc, needs_deref, xsink);
+}
+
+QoreValue SelfFunctionCallNode::evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<true>(policy, rc, needs_deref, xsink);
+}
+
+SelfFunctionCallNode::SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
+        const QoreMethod* m, const QoreClass* n_qc, const qore_class_private* class_ctx) :
+        AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc, m), ns(n), class_ctx(class_ctx), is_copy(false),
+        is_abstract(m && qore_method_private::get(*m)->isAbstract()) {
+    // an unqualified call of an abstract method has no parse-time class, as in parseInitCall() (issue #3070), so that
+    // the method is looked up by name in the class of the object, with the class context of the call
+    if (is_abstract && ns.size() == 1) {
+        qc = nullptr;
+    }
+}
+
+const QoreClass* SelfFunctionCallNode::getRecordedClass() const {
+    if (qc) {
+        return qc;
+    }
+    if (class_ctx) {
+        return class_ctx->cls;
+    }
+    return method ? method->getClass() : nullptr;
+}
+
+template <bool Lexical>
+QoreValue SelfFunctionCallNode::evalUnresolvedQualified(LexicalSemanticPolicy policy, QoreObject* self,
+        const qore_class_private* ctx,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    // the call is non-virtual: it calls the method of the class that it names (qc; see the deferred self calls in
+    // QoreAOTRuntime.cpp), or of a class that the named class inherits
+    const char* name = ns.getIdentifier();
+    bool priv;
+    if (!qc || !self->getClass()->getClass(*qc, priv)) {
+        xsink->raiseException("METHOD-DOES-NOT-EXIST", "cannot call %s() on an object of class '%s', which does "
+            "not inherit the class of the call", ns.ostr, self->getClassName());
+        return QoreValue();
+    }
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    const QoreMethod* m = qcp->getMethodForEval(name, self->getProgram(), ctx, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    // the explicit type arguments of the call (qore#5818)
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (!m) {
+        // raises the exception for a method that does not exist, or calls a pseudo-method
+        return qcp->evalMethodWithPolicy<Lexical>(policy, self, name, args, ctx, rc, xsink, explicit_inst);
+    }
+    if (qore_method_private::get(*m)->isAbstract()) {
+        // exec() sets the call site
+        return execImpl<Lexical>(policy, self, name, ctx, xsink);
+    }
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
+    // a named call resolved at run time by parameter name binds its arguments by name to the variants of the method
+    if (runtime_arg_names) {
+        return execNamed(policy, self, m, name, nullptr, rc, xsink);
+    }
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *m, xsink, rc, self, getEvalTmpArgs(args_copy), nullptr, nullptr,
+            nullptr, explicit_inst);
+    }
+    return qore_method_private::evalWithPolicy<Lexical>(policy, *m, xsink, rc, self, args, nullptr, nullptr, nullptr, explicit_inst);
+}
+
+bool SelfFunctionCallNode::backgroundCallIsStatic(const QoreObject* obj) const {
+    if (method) {
+        return method->isStatic();
+    }
+    if (is_copy) {
+        return false;
+    }
+    // an unqualified call is resolved on the class of the object, a qualified one on the class that it names
+    const QoreClass* c = (ns.size() == 1 && obj) ? obj->getClass() : qc;
+    if (!c && obj) {
+        c = obj->getClass();
+    }
+    if (!c) {
+        return false;
+    }
+    ClassAccess access;
+    const char* name = ns.getIdentifier();
+    return !c->findMethod(name, access) && c->findStaticMethod(name, access);
 }
 
 int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_context) {
     assert(!parse_context.typeInfo);
+    // issue #5769: the receiver of an implicit call to a method of a generic base class
+    if (!receiver_type_info) {
+        receiver_type_info = implicit_self_call_receiver(method, class_ctx);
+    }
+    // the arguments are bound by name at run time when the variants that could be selected name their parameters
+    // differently (see AbstractMethodCallNode::execNamed())
+    allow_runtime_arg_names = true;
+    // an unqualified call of a normal method of the object is resolved on the class of the object, as a call with
+    // positional arguments; a call of a static method is resolved on the class of the call (qore#5990)
+    if (ns.size() == 1 && !is_copy && method && !method->isStatic()) {
+        virtual_named_dispatch = true;
+    }
     // issue #3637: qc might be non-null while method is null in case of calls to implicit copy() methods, for example
     int err = parseArgs(parse_context, method ? qore_method_private::get(*method)->getFunction() : nullptr, nullptr);
     if (parse_context.pflag & PF_CONST_METHOD) {
@@ -850,11 +1331,12 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
             if (!err) {
                 err = -1;
             }
-        } else if (variant
-            && check_readonly_receiver_method_call(loc, getName(), static_cast<const MethodVariantBase*>(variant))
+        } else if (getParseCheckVariant()
+            && check_readonly_receiver_method_call(loc, getName(),
+                static_cast<const MethodVariantBase*>(getParseCheckVariant()))
             && !err) {
             err = -1;
-        } else if (!variant && method
+        } else if (!getParseCheckVariant() && method
             && check_readonly_receiver_method_call(loc, getName(), nullptr,
                 qore_method_private::get(*method)->getFunction())
             && !err) {
@@ -872,6 +1354,13 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
         if (qore_method_private::get(*method)->isAbstract()) {
             assert(!variant);
             is_abstract = true;
+            // the class of the object implements the method, also when it inherits the implementation from another
+            // parent class than the one that declares the method, so an unqualified call has no parse-time class:
+            // AbstractMethodCallNode::exec() then looks the method up by name also for an object of the class of
+            // the call, and the call costs nothing more at run time than other virtual self calls
+            if (ns.size() == 1) {
+                qc = nullptr;
+            }
         }
     }
     return err;
@@ -970,6 +1459,15 @@ SetSelfFunctionCallNode::SetSelfFunctionCallNode(const SelfFunctionCallNode& old
     self->ref();
 }
 
+SetSelfFunctionCallNode::SetSelfFunctionCallNode(const SetSelfFunctionCallNode& old, QoreListNode* args)
+        : SelfFunctionCallNode(old, args), self(old.self), cls(old.cls) {
+    // a copy is made before the copied call is evaluated, while it holds its reference to the object: a nested
+    // background operator copies its operand instead of evaluating it, and a copy evaluated more than once
+    // (reusable_tmp_args) keeps the reference until it is released
+    assert(old.deref_self);
+    self->ref();
+}
+
 QoreValue SetSelfFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
@@ -979,6 +1477,18 @@ QoreValue SetSelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref
     RuntimeConfigObjectHelper rc_obj_helper(rc, self, cls);
     ObjectSubstitutionHelper osh(self, cls);
     QoreValue rv = SelfFunctionCallNode::evalImpl(rc, needs_deref, xsink);
+    // a copy evaluated more than once keeps the object until it is released (derefImpl())
+    if (!reusable_tmp_args) {
+        self->deref(xsink);
+        deref_self = false;
+    }
+    return rv;
+}
+
+QoreValue SetSelfFunctionCallNode::evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfigObjectHelper rc_obj_helper(rc, self, cls);
+    ObjectSubstitutionHelper osh(self, cls);
+    QoreValue rv = SelfFunctionCallNode::evalLexical(rc, needs_deref, xsink);
     // a copy evaluated more than once keeps the object until it is released (derefImpl())
     if (!reusable_tmp_args) {
         self->deref(xsink);
@@ -1015,13 +1525,80 @@ QoreString* FunctionCallNode::getAsString(bool& del, int foff, ExceptionSink* xs
     return rv;
 }
 
+FunctionCallNode* FunctionCallNode::makeRuntimeNamed(FunctionCallNode* call) {
+    assert(call->getRuntimeArgNames());
+    // the arguments as parsed (not temporary) are taken over by the new call
+    FunctionCallNode* rv = new RuntimeNamedFunctionCallNode(*call, call->takeArgs(), call->tmp_args);
+    rv->parse_args = call->takeParseArgs();
+    call->deref();
+    return rv;
+}
+
+QoreValue RuntimeNamedFunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return evalImpl(rc, needs_deref, xsink);
+}
+
+QoreValue RuntimeNamedFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    // see FunctionCallNode::evalImpl()
+    QoreRcCallSiteHelper call_site(rc, loc);
+    // see FunctionCallNode::evalImpl() for the call flags
+    return evalNamed(fe->getFunction(), getCallProgram(rc), rc, pgm ? QCEF_DEFER_DOMAIN_PO : 0, xsink);
+}
+
+QoreListNode* AbstractFunctionCallNode::copyEvalTmpArgs(ReferenceHolder<QoreListNode>& holder) const {
+    holder = args->copy();
+    // the arguments of a named call bound at parse time keep their parameter positions
+    qore_list_private::get(**holder)->copyCallArgEvalMap(*qore_list_private::get(*args));
+    return *holder;
+}
+
+FunctionCallNode* FunctionCallNode::copyWithArgs(QoreListNode* n_args) const {
+    return qore_make_function_call(getSemanticPolicy(), *this, n_args);
+}
+
+// a named call resolved at run time by parameter name
+QoreValue FunctionCallNode::evalNamed(QoreFunction* func, QoreProgram* call_pgm,
+        RuntimeConfig& rc, unsigned call_flags, ExceptionSink* xsink) const {
+    assert(!variant);
+    if (tmp_args) {
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return func->evalFunctionTmpArgsNamed(getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), call_flags, *runtime_arg_names, getSemanticPolicy());
+    }
+    // a legacy AST call resolves and calls the variant with its own semantic policy (compiled code has the default)
+    return func->evalFunctionNamed(args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(), call_flags,
+        *runtime_arg_names, getSemanticPolicy());
+}
+
 // eval(): return value requires a deref(xsink)
 QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+// Keep the owned copy and its exception cleanup on the reusable background-call path only.
+template <bool LexicalInvocation>
+QORE_INTERN_NOINLINE QoreValue FunctionCallNode::evalReusableTmpArgs(QoreFunction* func, QoreProgram* call_pgm,
+        unsigned call_flags, RuntimeConfig& rc, ExceptionSink* xsink) const {
+    assert(tmp_args && reusable_tmp_args && args);
+    // the copy keeps the parameter positions of the arguments of a named call bound at parse time
+    ReferenceHolder<QoreListNode> args_copy(xsink);
+    copyEvalTmpArgs(args_copy);
+    if constexpr (LexicalInvocation) {
+        return func->evalFunctionTmpArgs(variant, *args_copy, call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), call_flags, getSemanticPolicy());
+    } else {
+        return func->evalFunctionTmpArgs(variant, *args_copy, call_pgm, rc, xsink,
+            getExplicitTypeParamInstantiation(), call_flags);
+    }
+}
+
+template <bool LexicalInvocation>
+QORE_INTERN_ALWAYS_INLINE QoreValue FunctionCallNode::evalImplInternal(RuntimeConfig& rc, bool& needs_deref,
+        ExceptionSink* xsink) const {
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
     assert(!parse_args || args || tmp_args
         || !"FunctionCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
@@ -1043,14 +1620,40 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
     // functional-domain (dom=...) check is evaluated against the CALLER's parse options (the
     // cross-Program privilege model).  A normal call (no explicit Program) keeps the default, so the
     // dom check is evaluated against the function's own Program.
-    const bool defer_domain_po = (pgm != nullptr);
+    const unsigned call_flags = pgm ? QCEF_DEFER_DOMAIN_PO : 0;
+    // a named call resolved at run time by parameter name is a RuntimeNamedFunctionCallNode
+    assert(!runtime_arg_names);
     if (tmp_args) {
-        ReferenceHolder<QoreListNode> args_copy(xsink);
-        return func->evalFunctionTmpArgs(variant, getEvalTmpArgs(args_copy), call_pgm, rc, xsink,
-            getExplicitTypeParamInstantiation(), defer_domain_po);
+        if (reusable_tmp_args && args) {
+            return evalReusableTmpArgs<LexicalInvocation>(func, call_pgm, call_flags, rc, xsink);
+        }
+        if constexpr (LexicalInvocation) {
+            return func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink,
+                getExplicitTypeParamInstantiation(), call_flags, getSemanticPolicy());
+        } else {
+            return func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink,
+                getExplicitTypeParamInstantiation(), call_flags);
+        }
     }
-    return func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
-        defer_domain_po);
+    if constexpr (LexicalInvocation) {
+        return func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
+            call_flags, getSemanticPolicy());
+    } else {
+        return func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation(),
+            call_flags);
+    }
+}
+
+QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<false>(rc, needs_deref, xsink);
+}
+
+QoreValue FunctionCallNode::evalLexical(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(rc, needs_deref, xsink);
+}
+
+QoreValue FunctionCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImplInternal<true>(rc_get_current_ref(), needs_deref, xsink);
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -1074,7 +1677,7 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             return false;
         }
         VarRefNode* vrn = new VarRefNode(loc, takeName(), id, in_closure);
-        val = new CallReferenceCallNode(loc, vrn, takeParseArgs());
+        val = qore_make_reference_call(getSemanticPolicy(), loc, vrn, takeParseArgs());
         deref();
         rc = parse_init_value(val, parse_context);
         return true;
@@ -1118,7 +1721,7 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
         }
 
         if (!n.isNothing()) {
-            val = new CallReferenceCallNode(loc, n, takeParseArgs());
+            val = qore_make_reference_call(getSemanticPolicy(), loc, n, takeParseArgs());
             deref();
             return parse_init_value(val, parse_context);
         }
@@ -1136,15 +1739,22 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
                 // parseInitImpl(), which normally recognizes implicit copy.
                 // Preserve that identity here so IR/JIT calls with evaluated
                 // arguments never dispatch the copy variant as a normal method.
-                sfcn = new SelfFunctionCallNode(loc, takeName(), nullptr, qc, true);
+                sfcn = qore_make_function_call<SelfFunctionCallNode>(getSemanticPolicy(), loc, takeName(), nullptr, qc, true);
             } else {
                 const QoreMethod* m = qore_class_private::parseFindSelfMethod(const_cast<QoreClass*>(qc), c_str);
                 if (m) {
                     if (!m->isStatic()) {
-                        sfcn = new SelfFunctionCallNode(loc, takeName(), takeParseArgs(), m, qc,
+                        sfcn = qore_make_function_call<SelfFunctionCallNode>(getSemanticPolicy(), loc, takeName(), takeParseArgs(), m, qc,
                             qore_class_private::get(*qc));
+                        // the explicit type arguments of the call go to the method call (qore#5818)
+                        sfcn->moveExplicitTypeArgsFrom(*this);
                     } else {
-                        val = new StaticMethodCallNode(loc, m, takeParseArgs());
+                        StaticMethodCallNode* smcn = qore_make_function_call<StaticMethodCallNode>(getSemanticPolicy(), loc, m, takeParseArgs());
+                        // the explicit type arguments of the call go to the method call (qore#5818)
+                        smcn->moveExplicitTypeArgsFrom(*this);
+                        // the receiver of an implicit call to a static method of a generic class is set by
+                        // parseInitImpl() (issue #5769, qore#6186)
+                        val = smcn;
                         deref();
                         return parse_init_value(val, parse_context);
                     }
@@ -1153,7 +1763,11 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
             if (sfcn) {
                 val = sfcn;
                 deref();
-                return sfcn->parseInitCall(val, parse_context);
+                // parse-initialized here, not through ParseNode::parseInit(), so its analysis is recorded here
+                // (qore#5977)
+                int rc = sfcn->parseInitCall(val, parse_context);
+                sfcn->setParseAnalysis(parse_context.analysis);
+                return rc;
             }
         }
     } else {
@@ -1162,7 +1776,12 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
         if (class_ctx) {
             const QoreMethod* m = class_ctx->parseFindStaticMethod(c_str, class_ctx);
             if (m) {
-                val = new StaticMethodCallNode(loc, m, takeParseArgs());
+                StaticMethodCallNode* smcn = qore_make_function_call<StaticMethodCallNode>(getSemanticPolicy(), loc, m, takeParseArgs());
+                // the explicit type arguments of the call go to the method call (qore#5818)
+                smcn->moveExplicitTypeArgsFrom(*this);
+                // the receiver of an implicit call to a static method of a generic class is set by
+                // parseInitImpl() (issue #5769, qore#6186)
+                val = smcn;
                 deref();
                 return parse_init_value(val, parse_context);
             }
@@ -1211,7 +1830,7 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     }
 
     if (found) {
-        val = new CallReferenceCallNode(loc, n, takeParseArgs());
+        val = qore_make_reference_call(getSemanticPolicy(), loc, n, takeParseArgs());
         deref();
         return parse_init_value(val, parse_context);
     }
@@ -1249,13 +1868,13 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
             old_args->deref();
         }
 
-        FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+        FunctionCallNode* dynamic_call = qore_make_function_call(getSemanticPolicy(), loc, call_function_fe, dynamic_args);
         dynamic_call->setAOTDeferredSourceFunction(deferred_function_name);
         val = dynamic_call;
         free(c_str);
         c_str = nullptr;
         deref();
-        return dynamic_call->parseInitFinalizedCall(val, parse_context);
+        return dynamic_call->parseInitReplacementCall(val, parse_context);
     }
 
     if (!fe && !defer_source_function) {
@@ -1282,11 +1901,31 @@ int FunctionCallNode::parseInitFinalizedCall(QoreValue& val, QoreParseContext& p
     assert(!parse_context.typeInfo);
     assert(fe);
     QoreFunction* func = fe->getFunction();
-    return parseArgs(parse_context, func, fe->getNamespace());
+    // a function call binds named arguments at run time when the variants that could be selected name their
+    // parameters differently (see FunctionCallNode::evalImpl())
+    allow_runtime_arg_names = true;
+    int err = parseArgs(parse_context, func, fe->getNamespace());
+    if (runtime_arg_names) {
+        // the call is replaced with one of the class of named calls resolved at run time; this node is released
+        assert(val.getInternalNode() == this);
+        FunctionCallNode* call = makeRuntimeNamed(this);
+        val = call;
+        // the replacement is parse-initialized with this call's analysis (its known type, for one), which
+        // ParseNode::parseInit() records only on the node that it was called on: code generation reads it from the
+        // node that it compiles, and the replacement is never parse-initialized again
+        call->setParseAnalysis(parse_context.analysis);
+    }
+    return err;
 }
 
 AbstractQoreNode* FunctionCallNode::makeReferenceNodeAndDerefImpl() {
-    return new UnresolvedCallReferenceNode(loc, takeName());
+    UnresolvedCallReferenceNode* rv = new UnresolvedCallReferenceNode(loc, takeName());
+    // the explicit type arguments of \f<T>() go to the reference
+    if (has_explicit_type_args) {
+        rv->explicit_parse_type_args = std::move(explicit_parse_type_args);
+        explicit_parse_type_args.clear();
+    }
+    return rv;
 }
 
 AbstractQoreNode* ProgramFunctionCallNode::makeReferenceNodeAndDerefImpl() {
@@ -1450,12 +2089,17 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     return err;
 }
 
+QoreValue ScopedObjectCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalImpl(getSemanticPolicy(), rc_get_current_ref(), needs_deref, xsink);
+}
+
 QoreValue ScopedObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue ScopedObjectCallNode::evalCommon(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(!parse_args || args || tmp_args
         || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
@@ -1478,13 +2122,27 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             return QoreValue();
         }
         const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
-        return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, oti);
+        // the location of this call is the location of the call stack frame of the constructor; set after the class
+        // is resolved, so that no code runs between the call site and the frame that takes it
+        QoreRcCallSiteHelper call_site(rc, loc);
+        return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *qc, rc, variant, args, xsink, oti);
     }
     const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);
-    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, oti);
+    // the location of this call is the location of the call stack frame of the constructor
+    QoreRcCallSiteHelper call_site(rc, loc);
+    return qore_class_private::execConstructorWithPolicy<Lexical>(policy, *oc, rc, variant, args, xsink, oti);
 }
 
-QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
+QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>({}, rc, needs_deref, xsink);
+}
+
+QoreValue ScopedObjectCallNode::evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<true>(policy, rc, needs_deref, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execImpl(LexicalSemanticPolicy policy, QoreObject* o, ExceptionSink* xsink) const {
     // issue #3596: do not use the context class if it's not compatible with "o"; checked against the committed
     // class hierarchy: the parse-time check resolves the hierarchy of the class context, which is parse state that
     // other threads read while the class runs
@@ -1492,17 +2150,85 @@ QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
     if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx)) {
         class_ctx = nullptr;
     }
-    return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);
+    if constexpr (Lexical) {
+        return AbstractMethodCallNode::exec(policy, o, c_str, class_ctx, xsink);
+    } else {
+        return AbstractMethodCallNode::exec(o, c_str, class_ctx, xsink);
+    }
 }
 
-QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
+void qore_raise_deleted_method_call(ExceptionSink* xsink, const QoreObject* o, const char* name,
+        const QoreClass* qc, const QoreMethod* method, const AbstractQoreFunctionVariant* variant) {
+    // the exception that AbstractMethodCallNode::exec() raises: through the method saved at parse time, or through
+    // the dynamic dispatch of qore_class_private::evalMethod()
+    if (qc && method && (o->getClass() == qc || o->getClass() == method->getClass() || method->isStatic())) {
+        if (variant) {
+            qore_raise_deleted_object(xsink, "cannot call %s::%s(%s) on an object that has " \
+                "already been deleted", qc->getName(), method->getName(),
+                variant->getSignature()->getSignatureText());
+        } else {
+            qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
+                "already been deleted", qc->getName(), method->getName());
+        }
+    } else {
+        qore_raise_deleted_object(xsink, "cannot call %s::%s() on an object that has " \
+            "already been deleted", o->getClassName(), name);
+    }
+}
+
+int AbstractMethodCallNode::checkObject(QoreObject* o, const char* c_str, ExceptionSink* xsink) const {
+    if (o->isValid()) {
+        return 0;
+    }
+    qore_raise_deleted_method_call(xsink, o, c_str, qc, method, variant);
+    return -1;
+}
+
+__attribute__((noinline, cold)) QoreValue MethodCallNode::execPseudoNamed(LexicalSemanticPolicy policy,
+        const QoreValue n, ExceptionSink* xsink) const {
+    assert(runtime_arg_names);
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreRcCallSiteHelper call_site(rc, loc);
+    // the pseudo-method that a call with positional arguments would call (see pseudo_classes_eval()), with its
+    // variants bound to the arguments by name
+    const qore_class_private* pseudo_cls = qore_class_private::get(*qore_pseudo_get_class(n.getType()));
+    const QoreMethod* w = pseudo_cls->runtimeFindPseudoMethod(n, c_str, xsink);
+    if (!w) {
+        assert(*xsink);
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> args_copy(xsink);
+    const QoreListNode* call_args = tmp_args ? getEvalTmpArgs(args_copy) : args;
+    return NMETHF(qore_method_private::get(*w)->func)->evalPseudoMethodNamed(xsink, rc, n, call_args, tmp_args,
+        runtime_get_class(), *runtime_arg_names, policy);
+}
+
+QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
+    return execImpl<false>({}, o, xsink);
+}
+
+QoreValue MethodCallNode::exec(LexicalSemanticPolicy policy, QoreObject* o, ExceptionSink* xsink) const {
+    return execImpl<true>(policy, o, xsink);
+}
+
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue MethodCallNode::execPseudoImpl(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
    //printd(5, "MethodCallNode::execPseudo() %s::%s() variant: %p\n", qc->getName(), method->getName(), variant);
    // if n is nothing make sure and use the "<nothing>" class with a dynamic method lookup
    RuntimeConfig& rc = rc_get_current_ref();
+   QoreRcCallSiteHelper call_site(rc, loc);
    if (n.isNothing() && qc != QC_PSEUDONOTHING)
-      return qore_class_private::evalPseudoMethod(QC_PSEUDONOTHING, n, method->getName(), args, rc, xsink);
+      return qore_class_private::get(*QC_PSEUDONOTHING)->evalPseudoMethodWithPolicy<Lexical>(policy, n, method->getName(), args, rc, xsink);
    else
-      return qore_class_private::evalPseudoMethod(qc, method, variant, n, args, rc, xsink);
+      return qore_class_private::get(*qc)->evalPseudoMethodWithPolicy<Lexical>(policy, method, variant, n, args, rc, xsink);
+}
+
+QoreValue MethodCallNode::execPseudo(const QoreValue n, ExceptionSink* xsink) const {
+    return execPseudoImpl<false>({}, n, xsink);
+}
+
+QoreValue MethodCallNode::execPseudo(LexicalSemanticPolicy policy, const QoreValue n, ExceptionSink* xsink) const {
+    return execPseudoImpl<true>(policy, n, xsink);
 }
 
 AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {
@@ -1512,6 +2238,11 @@ AbstractQoreNode* StaticMethodCallNode::makeReferenceNodeAndDeref() {
    }
 
    UnresolvedStaticMethodCallReferenceNode* rv = new UnresolvedStaticMethodCallReferenceNode(loc, takeScope());
+   // the explicit type arguments of \NS::f<T>() go to the reference
+   if (has_explicit_type_args) {
+       rv->explicit_parse_type_args = std::move(explicit_parse_type_args);
+       explicit_parse_type_args.clear();
+   }
    deref();
    return rv;
 }
@@ -1525,6 +2256,8 @@ std::string StaticMethodCallNode::getClassPath() const {
 
 int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     int err = 0;
+    // the class that the call names (C::m()), if it has no type arguments
+    const QoreClass* scope_cls = nullptr;
     if (!method) {
         assert(!parse_context.typeInfo);
         bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
@@ -1658,10 +2391,12 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 // see if this is a function call to a function defined in a namespace
                 const FunctionEntry* f = qore_root_ns_private::parseResolveFunctionEntry(*scope);
                 if (f) {
-                    FunctionCallNode* fcn = new FunctionCallNode(loc, f, takeParseArgs());
+                    FunctionCallNode* fcn = qore_make_function_call(getSemanticPolicy(), loc, f, takeParseArgs());
+                    // the explicit type arguments of the call (NS::f<T>()) belong to the function call
+                    fcn->moveExplicitTypeArgsFrom(*this);
                     val = fcn;
                     deref();
-                    return fcn->parseInitFinalizedCall(val, parse_context);
+                    return fcn->parseInitReplacementCall(val, parse_context);
                 }
             }
 
@@ -1687,7 +2422,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     found, false);
 
             if (found) {
-                val = new CallReferenceCallNode(loc, n, takeParseArgs());
+                val = qore_make_reference_call(getSemanticPolicy(), loc, n, takeParseArgs());
                 deref();
                 return parse_init_value(val, parse_context);
             } else {
@@ -1725,13 +2460,13 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                         old_args->deref();
                     }
 
-                    FunctionCallNode* dynamic_call = new FunctionCallNode(loc, call_function_fe, dynamic_args);
+                    FunctionCallNode* dynamic_call = qore_make_function_call(getSemanticPolicy(), loc, call_function_fe, dynamic_args);
                     dynamic_call->setAOTDeferredSourceFunction(function_path);
                     val = dynamic_call;
                     delete scope;
                     scope = nullptr;
                     deref();
-                    return dynamic_call->parseInitFinalizedCall(val, parse_context);
+                    return dynamic_call->parseInitReplacementCall(val, parse_context);
                 }
 
                 {
@@ -1789,13 +2524,18 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         if (!method->isStatic()) {
             assert(!parameterized_receiver);
-            SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(loc, scope->takeName(), takeParseArgs(), method, qc,
+            SelfFunctionCallNode* sfcn = qore_make_function_call<SelfFunctionCallNode>(getSemanticPolicy(), loc, scope->takeName(), takeParseArgs(), method, qc,
                 class_ctx);
+            // the explicit type arguments of the call go to the method call (qore#5818)
+            sfcn->moveExplicitTypeArgsFrom(*this);
             val = sfcn;
             deref();
             return parse_init_value(val, parse_context);
         }
 
+        if (!parameterized_receiver) {
+            scope_cls = qc;
+        }
         delete scope;
         scope = nullptr;
     } else {
@@ -1810,13 +2550,23 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
     assert(method->isStatic());
 
+    // the receiver of a call that names no type arguments of the method's generic class (qore#6186)
+    bool current_receiver = false;
+    if (!receiver_type_info) {
+        receiver_type_info = qore_class_private::parseGetStaticCallReceiverTypeInfo(*method, scope_cls,
+            parse_get_class_priv(), current_receiver);
+    }
+
     std::string receiver_inference_call_desc = "static method call '";
     receiver_inference_call_desc += method->getClass()->getNamespacePath(false);
     receiver_inference_call_desc += "::";
     receiver_inference_call_desc += method->getName();
     receiver_inference_call_desc += "()'";
     record_source_parse_reflection_class_for_name_import(parse_context.pgm, loc, method, parse_args);
-    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, true,
+    // the arguments are bound by name at run time when the variants that could be selected name their parameters
+    // differently (see StaticMethodCallNode::evalNamed())
+    allow_runtime_arg_names = true;
+    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, !current_receiver,
             receiver_inference_call_desc.c_str()) && !err) {
         err = -1;
     }
@@ -1833,41 +2583,94 @@ QoreValue StaticMethodCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     return evalImpl(rc, needs_deref, xsink);
 }
 
-QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+template <bool Lexical>
+QORE_INTERN_ALWAYS_INLINE QoreValue StaticMethodCallNode::evalCommon(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    // the location of this call is the location of the call stack frame of the called code
+    QoreRcCallSiteHelper call_site(rc, loc);
     assert(!parse_args || args || tmp_args
         || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
     if (!method) {
-        if (qore_aot_source_parse_active() && scope && scope->size() >= 2) {
-            xsink->raiseException("AOT-PENDING-FUNCTION",
-                "static method call '%s::%s()' is pending AOT source linking",
-                getClassPath().c_str(), getName());
-            return QoreValue();
+        return evalUnresolved(xsink);
+    }
+    // the class context of the variant resolved at run time is that of the caller (see
+    // CodeEvaluationHelper::findVariant()): a private variant is visible only in the class and the classes with private
+    // access to it, not to a call from outside (issue #5717)
+    const qore_class_private* cctx = nullptr;
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
+    if (tmp_args) {
+        // a named call resolved at run time by parameter name has no variant; a call with a variant pays nothing for
+        // it
+        if (!variant && runtime_arg_names) {
+            return evalNamed(policy, rc, xsink);
         }
-        xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
+        ReferenceHolder<QoreListNode> args_copy(xsink);
+        return qore_method_private::evalTmpArgsWithPolicy<Lexical>(policy, *method, xsink, rc, nullptr, getEvalTmpArgs(args_copy), cctx, variant,
+            receiver_type_info, explicit_inst);
+    }
+    if (variant) {
+        return qore_method_private::evalNormalVariantWithPolicy<Lexical>(policy, *method, xsink, rc, nullptr,
+            reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst, receiver_type_info);
+    }
+    return runtime_arg_names
+        ? evalNamed(policy, rc, xsink)
+        : qore_method_private::evalWithPolicy<Lexical>(policy, *method, xsink, rc, nullptr, args, cctx, nullptr,
+            receiver_type_info, explicit_inst);
+}
+
+QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>({}, rc, needs_deref, xsink);
+}
+
+QoreValue StaticMethodCallNode::evalImpl(LexicalSemanticPolicy policy, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<true>(policy, rc, needs_deref, xsink);
+}
+
+// Error formatting owns temporary class-path strings.  Keep their storage and exception cleanup off every
+// resolved call, including reusable background calls whose argument holder must remain addressable.
+__attribute__((noinline, cold)) QoreValue StaticMethodCallNode::evalUnresolved(ExceptionSink* xsink) const {
+    assert(!method);
+    if (qore_aot_source_parse_active() && scope && scope->size() >= 2) {
+        xsink->raiseException("AOT-PENDING-FUNCTION",
+            "static method call '%s::%s()' is pending AOT source linking",
             getClassPath().c_str(), getName());
         return QoreValue();
     }
-    // Pass the class context so that private static methods called from within the same class are visible
-    const qore_class_private* cctx = qore_class_private::get(*qore_method_private::get(*method)->parent_class);
+    xsink->raiseException("METHOD-CALL-ERROR", "cannot evaluate unresolved static method call '%s::%s()'",
+        getClassPath().c_str(), getName());
+    return QoreValue();
+}
+
+// a named call resolved at run time by parameter name; outside of evalImpl(), whose calls with positional arguments
+// are hot
+__attribute__((noinline, cold)) QoreValue StaticMethodCallNode::evalNamed(LexicalSemanticPolicy policy,
+        RuntimeConfig& rc, ExceptionSink* xsink) const {
+    assert(runtime_arg_names);
+    assert(method);
+    assert(!variant);
+    // the class context of the variant is that of the caller (see evalImpl())
     const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (tmp_args) {
         ReferenceHolder<QoreListNode> args_copy(xsink);
-        return qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, getEvalTmpArgs(args_copy), cctx, variant,
-            receiver_type_info, explicit_inst);
+        return qore_method_private::evalNamed(*method, xsink, rc, nullptr, getEvalTmpArgs(args_copy), true, nullptr,
+            receiver_type_info, explicit_inst, *runtime_arg_names, policy);
     }
-    return variant
-        ? qore_method_private::evalNormalVariant(*method, xsink, rc, nullptr,
-            reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst, receiver_type_info)
-        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info,
-            explicit_inst);
+    return qore_method_private::evalNamed(*method, xsink, rc, nullptr, args, false, nullptr, receiver_type_info,
+        explicit_inst, *runtime_arg_names, policy);
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
-    const QoreTypeInfo* rv = variant
-        ? variant->parseGetReturnTypeInfo()
-        : (method
-            ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
-            : 0);
-    return qore_substitute_type_params_if_needed(rv, receiver_type_info, getTypeParamInstantiation());
+    return getCallReturnTypeInfo(method ? qore_method_private::get(*method)->getFunction() : nullptr);
 }
+
+QoreValue SelfFunctionCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalImpl(getSemanticPolicy(), rc_get_current_ref(), needs_deref, xsink);
+    }
+
+QoreValue SetSelfFunctionCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalLexical(rc_get_current_ref(), needs_deref, xsink);
+    }
+
+QoreValue StaticMethodCallNode::evalLexical(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalImpl(getSemanticPolicy(), rc_get_current_ref(), needs_deref, xsink);
+    }

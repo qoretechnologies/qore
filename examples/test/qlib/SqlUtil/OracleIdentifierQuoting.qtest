@@ -208,6 +208,9 @@ class OracleIdentifierQuotingTest inherits QUnit::Test {
     #! the direction of an order by entry was looked up by the SQL that names its column, so it was lost for a quoted
     #! column, also in the ROWNUM page of Oracle before 12c and in a locked page
     orderByDirection() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%endif
         foreach string version in ("Oracle Database 19c Enterprise Edition Release 19.0.0.0.0",
                 "Oracle Database 11g Enterprise Edition Release 11.2.0.4.0") {
             OfflineDatasource ds("oracle:qore/pass@db", version, "oracle");

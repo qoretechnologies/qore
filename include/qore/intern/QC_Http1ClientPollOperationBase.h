@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <atomic>
 #include <deque>
@@ -279,8 +280,11 @@ public:
     */
     DLLLOCAL bool setStateUnlessClosed(H1State s, const char* site);
 
+    //! Returns true once the protocol was switched, also after the operation was closed or aborted
+    /** The socket belongs to the new protocol from then on (issue #5985); see switched_protocol
+    */
     DLLLOCAL bool isProtocolSwitched() const {
-        return h1_state.load(std::memory_order_acquire) == H1State::PROTOCOL_SWITCHED;
+        return switched_protocol.load(std::memory_order_acquire);
     }
 
     DLLLOCAL void setProtocolSwitchedListener(QoreObject* listener, ExceptionSink* xsink) {
@@ -293,18 +297,16 @@ public:
         protocol_switched_listener = listener;
     }
 
-    //! Can be called from any thread: the error is set by the I/O thread under the stream lock
+    //! Can be called from any thread: reads @ref has_error, which is set when the error is stored under the stream lock
     DLLLOCAL bool hasError() const {
-        AutoLocker al(stream_lock);
-        return error_info != nullptr;
+        return has_error.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL QoreHashNode* getErrorInfo() const {
-        if (error_info) {
-            error_info->ref();
-        }
-        return error_info;
-    }
+    //! Returns the recorded error with a new reference, or nullptr if none was recorded; can be called from any thread
+    /** Read under @c stream_lock, which the writer (publishError()) holds while it records the error, so the hash is
+        returned complete and safely published to the calling thread
+    */
+    DLLLOCAL QoreHashNode* getErrorInfo() const;
 
     DLLLOCAL std::string getNegotiatedProtocol() const {
         AutoLocker al(stream_lock);
@@ -318,8 +320,8 @@ public:
         That is not academic — the connection manager's checkout decides whether a
         pooled connection may be reused from two separate reads of this value:
         isConnectionAlive() skips its idle-age and max-age eviction checks when the
-        count is non-zero, and tryReserveStream() then re-reads it under the Qore
-        connection Mutex (whose acquire ordering yields the true value).  A stale
+        count is non-zero, and tryReserveStream() then re-reads it under the
+        reservation lock of the connection (whose acquire ordering yields the true value).  A stale
         non-zero read followed by a true zero read makes an idle-timeout- or
         max-age-expired connection look busy to the eviction check and free to the
         capacity check, so it is handed back out instead of evicted.
@@ -361,7 +363,7 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int64_t getDataIdleUs() const {
-        return sock_obj ? sock_obj->getDataIdleUs() : -1;
+        return sock_obj ? qore_socket_object_private(sock_obj).getDataIdleUs() : -1;
     }
 
     //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
@@ -431,6 +433,26 @@ public:
 
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -465,6 +487,14 @@ private:
 
     //! Connection state (atomic for lock-free reads from app threads)
     std::atomic<H1State> h1_state{H1State::CONNECTING};
+    //! Set once the protocol was switched and never cleared: when a 101 response was delivered to the stream, or
+    //! when the connection became ready in H1State::PROTOCOL_SWITCHED (HTTP/2 negotiated with ALPN in a proxy tunnel)
+    /** The socket is taken over by the new protocol (a WebSocket, or an HTTP/2 connection negotiated with ALPN) from
+        then on; h1_state is set to H1State::CLOSED when the operation is aborted or closed afterwards, and the
+        completion of the operation, delivered on a worker at any time after the switch, must still leave the socket
+        alone (issue #5985)
+    */
+    std::atomic<bool> switched_protocol{false};
 
     //! Whether SSL/TLS is required
     bool ssl_required;
@@ -735,6 +765,9 @@ private:
 
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
+    //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
+    //! by hasError()
+    std::atomic<bool> has_error{false};
 
     //! ALPN protocol captured from the async SSL upgrade output.
     std::string negotiated_protocol;
@@ -881,7 +914,7 @@ private:
     */
     DLLLOCAL int dbgHookFd() const {
         int fd = dbg_hook_fd.load(std::memory_order_acquire);
-        return fd >= 0 ? fd : (sock_obj ? sock_obj->getSocket() : -1);
+        return fd >= 0 ? fd : (sock_obj ? sock_obj->getPollableDescriptor() : -1);
     }
 #endif
 
@@ -973,7 +1006,9 @@ private:
 
     // Response dispatch
     DLLLOCAL QoreHashNode* dispatchResponse(ExceptionSink* xsink);
-    DLLLOCAL void dispatchStreamingHeaders(ExceptionSink* xsink);
+    //! Delivers the response headers to the stream; returns true if they were delivered (a stream is active, and no
+    //! exception was raised)
+    DLLLOCAL bool dispatchStreamingHeaders(ExceptionSink* xsink);
     DLLLOCAL void dispatchStreamingData(const BinaryNode* data, ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* dispatchStreamingEnd(ExceptionSink* xsink);
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);

@@ -1,0 +1,177 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# A splice or extract that replaces a range of a list with fewer elements moves only the elements after the removed
+# range down: the removed range may be much longer than the spare capacity of the list's entry array, and the
+# elements moved never extend past the end of the list.  The results are checked here for lists of every kind of
+# element; a move that reads past the end of the list is shown by a memory checker (valgrind) when the removed range
+# is longer than the spare capacity, which the long lists here make sure of (issue #6192).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ListSpliceShrinkTest
+
+class ListSpliceShrinkTest inherits QUnit::Test {
+    constructor() : Test("ListSpliceShrinkTest", "1.0", \ARGV) {
+        addTestCase("untyped list of ints", \testUntypedInts());
+        addTestCase("typed list<int>", \testTypedInts());
+        addTestCase("list<string>", \testStrings());
+        addTestCase("list of containers", \testContainers());
+        addTestCase("growing and same-size replacements", \testGrowAndSame());
+        set_return_value(main());
+    }
+
+    #! the cases checked for a list of the given length: offset, removed length and replacement
+    private static list<hash<auto>> cases(int n, auto r1, auto r2) {
+        return (
+            # removed range much longer than a single replacement element, from the start
+            {"offset": 0, "num": n / 2, "repl": r1},
+            # removing all but the last element
+            {"offset": 0, "num": n - 1, "repl": r1},
+            # removing a range in the middle, replaced by a list
+            {"offset": n / 4, "num": n / 2, "repl": (r1, r2)},
+            # a range that ends at the end of the list
+            {"offset": n / 2, "num": n / 2, "repl": r2},
+            # a range that would extend past the end of the list
+            {"offset": n / 2, "num": n * 2, "repl": r2},
+            # a negative offset from the end
+            {"offset": -(n / 2), "num": n / 4, "repl": r1},
+            # a removed range one element longer than the replacement list
+            {"offset": 1, "num": 3, "repl": (r1, r2)},
+            # a negative length: up to the given number of elements before the end
+            {"offset": n / 4, "num": -(n / 4), "repl": r1},
+            # the whole list
+            {"offset": 0, "num": n, "repl": (r2, r1)},
+        );
+    }
+
+    #! returns the expected result of a splice with a replacement, computed from slices
+    private static list<auto> expected(list<auto> l, int offset, int num, auto repl) {
+        int len = l.size();
+        if (offset < 0) {
+            offset = len + offset;
+            if (offset < 0) {
+                offset = 0;
+            }
+        } else if (offset > len) {
+            offset = len;
+        }
+        if (num < 0) {
+            num = len + num - offset;
+            if (num < 0) {
+                num = 0;
+            }
+        } else if (num > len - offset) {
+            num = len - offset;
+        }
+        list<auto> rv = offset ? l[0..offset - 1] : ();
+        rv += repl;
+        if (offset + num < len) {
+            rv += l[offset + num..];
+        }
+        return rv;
+    }
+
+    #! returns the removed elements of a splice
+    private static list<auto> removed(list<auto> l, int offset, int num) {
+        int len = l.size();
+        if (offset < 0) {
+            offset = len + offset;
+            if (offset < 0) {
+                offset = 0;
+            }
+        }
+        if (num < 0) {
+            num = len + num - offset;
+        } else if (num > len - offset) {
+            num = len - offset;
+        }
+        return num > 0 ? l[offset..offset + num - 1] : ();
+    }
+
+    #! checks every case on the given list, which may be typed, with the given replacement elements
+    private checkAll(list<auto> base, auto r1, auto r2, string label) {
+        int n = base.size();
+        foreach hash<auto> c in (ListSpliceShrinkTest::cases(n, r1, r2)) {
+            list<auto> exp = ListSpliceShrinkTest::expected(base, c.offset, c.num, c.repl);
+            string lbl = sprintf("%s offset %d num %d", label, c.offset, c.num);
+
+            # splice operator; the copy is separate from the base list
+            list<auto> l = base;
+            splice l, c.offset, c.num, c.repl;
+            assertEq(exp.size(), l.size(), lbl + " splice size");
+            assertEq(exp, l, lbl + " splice result");
+            # the list remains usable after the splice
+            l += r1;
+            assertEq(exp + r1, l, lbl + " append after splice");
+
+            # extract operator: returns the removed elements
+            l = base;
+            list<auto> ex = extract l, c.offset, c.num, c.repl;
+            assertEq(exp, l, lbl + " extract result");
+            assertEq(ListSpliceShrinkTest::removed(base, c.offset, c.num), ex, lbl + " extracted elements");
+        }
+        # the base list is unchanged
+        assertEq(n, base.size(), label + " base size");
+    }
+
+    testUntypedInts() {
+        list<auto> l = ();
+        map l += $1, xrange(8192);
+        checkAll(l, -1, -2, "untyped int");
+    }
+
+    testTypedInts() {
+        list<int> l = range(8191);
+        int n = l.size();
+        checkAll(l, -1, -2, "list<int>");
+        # the splice operator on a typed lvalue keeps the type
+        splice l, 0, n / 2, -1;
+        assertEq("list<int>", l.fullType());
+        assertEq(n - n / 2 + 1, l.size());
+        assertEq(-1, l[0]);
+        assertEq(n / 2, l[1]);
+        assertEq(n - 1, l.last());
+    }
+
+    testStrings() {
+        list<string> l = map sprintf("s%d", $1), xrange(8192);
+        checkAll(l, "x", "y", "list<string>");
+    }
+
+    testContainers() {
+        # hashes and lists of their own, and objects, which the collector scans
+        list<auto> l = ();
+        foreach int i in (xrange(4096)) {
+            l += i % 3 == 0
+                ? {"i": i}
+                : i % 3 == 1
+                    ? (i, (i,))
+                    : new Mutex();
+        }
+        checkAll(l, {"r": 1}, new Mutex(), "containers");
+    }
+
+    testGrowAndSame() {
+        # the other branches are unchanged by the shrinking fix; check them on the same long lists
+        list<int> base = range(8191);
+        list<int> repl = range(1000, 3999);
+        # grow
+        list<int> l = base;
+        splice l, 100, 10, repl;
+        assertEq(ListSpliceShrinkTest::expected(base, 100, 10, repl), l, "grow");
+        # same size
+        l = base;
+        splice l, 100, repl.size(), repl;
+        assertEq(ListSpliceShrinkTest::expected(base, 100, repl.size(), repl), l, "same size");
+        # no replacement
+        l = base;
+        splice l, 100, 5000;
+        assertEq(base[0..99] + base[5100..], l, "no replacement");
+    }
+}

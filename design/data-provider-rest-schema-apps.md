@@ -162,6 +162,10 @@ These properties of the pinned schema are load-bearing:
   and changes only what the fix changes. Taking an upstream update is a deliberate step: move the source to a
   newer revision, re-import with `--drift`, review the diff and the drift report, and run the application's
   tests. Do this periodically, so the application stays aligned with the vendor's API.
+  Where the host has no fixed revision (Mistral's `https://docs.mistral.ai/openapi.yaml`), the downloaded document is
+  vendored beside the import spec, which names it as a local `source` (read relative to the spec, as all of its paths
+  are) and gives the URL it was downloaded from as `source_url`; the provenance records that URL with the digest and
+  size of the vendored document, which only the module's source tree carries.
 
 - **A vendored schema is never edited by hand, and house style does not apply to it.** It is generated
   output: the next import rewrites the file, so an edit is silently temporary and shows up as drift in
@@ -306,10 +310,11 @@ output type opened then takes about 11 s, because it builds most of that graph.
   as well (`StabilityAiDataProvider` does this for media responses).
 - **A test reading `output_type` from a generated definition reads the callback instead**, or the operation's
   `getResponseType()`; the catalog resolves the callback for everything else.
-- `examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes.qtest` finds every module in the tree that
-  constructs an action set or registers another module's, fails if one does not opt in, and compares the output
-  types, options and metadata of every action built eagerly (`RestSchemaActionSet::setEagerResponseTypes()`) and
-  on first use. A new application is covered without being listed.
+- `examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-<n>.qtest` (`RestSchemaModuleLazyTypes.qc`)
+  finds every module in the tree that constructs an action set or registers another module's, fails if one does
+  not opt in, and compares the output types, options and metadata of every action built eagerly
+  (`RestSchemaActionSet::setEagerResponseTypes()`) and on first use, an eighth of the modules in each part. A new
+  application is covered without being listed.
 
 Building a type on first use is only correct because a schema's types do not depend on the order in which they
 are built. Types and fields are cached per requiredness variant (mandatory and "or nothing"), and each variant is
@@ -1549,6 +1554,10 @@ parameter on its `/v1` path, so it must not be offered as an action option or in
 Empty conversation item lists omit `first_id` and `last_id`; the checked import makes only these
 pagination IDs optional, preserving their string types and the required `object`, `data`, and
 `has_more` envelope. Published and serialized response types are tested against this live response.
+Image generation and edit responses carry `safety_identifier`, the request's effective safety identifier
+or null, which the generated Azure document omits from `ImagesResponse`; the checked import adds the
+OpenAI API's nullable string declaration, and the response types are tested against a live image edit
+response.
 
 The checked import spec repairs specific generated contract errors: multipart files and media fields,
 optional file expiration with Azure's three-to-thirty-day bounds, video reference images, evaluation

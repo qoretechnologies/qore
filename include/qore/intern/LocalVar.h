@@ -46,23 +46,17 @@
 #include <atomic>
 #include <memory>
 
-// defined in lib/QoreTypeInfo.cpp; declared in "qore/intern/QoreTypeInfo.h"
-DLLLOCAL void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink);
+// defined inline in "qore/intern/QoreTypeInfo.h"
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE void q_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
+        ExceptionSink* xsink);
 
 template <class T>
 class LocalRefHelper : public RuntimeReferenceHelper {
-protected:
-    // used to skip the var entry in case it's a recursive reference
-    bool valid;
-
 public:
+    //! the helper is valid unless the reference cannot be resolved (see RuntimeReferenceHelperBase), which raises an
+    //! exception
     DLLLOCAL LocalRefHelper(const T* val, ReferenceNode& ref, ExceptionSink* xsink)
-        : RuntimeReferenceHelper(ref, xsink),
-            valid(!*xsink) {
-    }
-
-    DLLLOCAL operator bool() const {
-        return valid;
+        : RuntimeReferenceHelper(ref, xsink) {
     }
 };
 
@@ -179,6 +173,13 @@ public:
 
         finalized = true;
 
+        // a borrowed value (the self of a method frame, see instantiateSelf()) is released as uninstantiateSelf()
+        // releases it, without a dereference: a frame is finalized without being unwound when its thread does not
+        // exist any more, as a thread of the parent in a child process created with fork() (issue #6443)
+        if (val.static_assignment) {
+            val.unassignIgnore();
+            return QoreValue();
+        }
         return val.removeValue(true);
     }
 };
@@ -348,8 +349,14 @@ public:
     bool read_only = false;
 
     DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue& nval, bool assign,
-            bool n_read_only = false) : VarValueBase(n_id, varTypeInfo), RObject(references), typeInfo(varTypeInfo),
-            refTypeInfo(QoreTypeInfo::getReferenceTarget(varTypeInfo)), references(1), read_only(n_read_only) {
+            bool n_read_only = false) : ClosureVarValue(n_id, varTypeInfo,
+                QoreTypeInfo::getReferenceTarget(varTypeInfo), nval, assign, n_read_only) {
+    }
+
+    //! The LocalVar already records the reference target; do not look it up again for every invocation.
+    DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, const QoreTypeInfo* refTypeInfo,
+            QoreValue& nval, bool assign, bool n_read_only) : VarValueBase(n_id, varTypeInfo), RObject(references),
+            typeInfo(varTypeInfo), refTypeInfo(refTypeInfo), references(1), read_only(n_read_only) {
         //printd(5, "ClosureVarValue::ClosureVarValue() this: %p refs: 0 -> 1 val: %s\n", this, val.getTypeName());
         val.setClosure();
 
@@ -627,10 +634,73 @@ enum class LocalVarLValueLookup {
     Error,
 };
 
+//! Returns the number of parse scopes on the current thread whose code can run more than once or later than the code
+//! after it: loop bodies, the iterated expressions of map, select and fold operators, and on_exit blocks
+/** A read of a local variable declared outside such a scope cannot be proven to precede every assignment of the
+    variable: the code that assigns it can run before the read, in an earlier iteration or before the block exits,
+    although it is parsed after the read (qore#5937).
+*/
+DLLLOCAL int parse_get_deferred_depth();
+
+//! Returns the next number of the sequence of changes of the assignment state of local variables on the current
+//! thread at parse time; see AssignedStateHelper::applyChangesSinceSave()
+DLLLOCAL uint64_t parse_next_assignment_seq();
+
+//! Returns the last number of the sequence of changes of the assignment state of local variables on the current
+//! thread at parse time
+DLLLOCAL uint64_t parse_get_assignment_seq();
+
+//! Returns true if the code being parsed is directly in a deferred scope (see parse_get_deferred_depth()), not in a
+//! statement block in it
+/** A local variable declared there (in the expression of a map operator, or in the initialization of a for statement,
+    for example) is not created anew when the code of the scope runs again: it keeps its value, as one declared before
+    the scope does, unlike one declared in a statement block in the scope, which the block instantiates each time.
+*/
+DLLLOCAL bool parse_in_deferred_expression();
+
+//! Returns the deferred depth of a local variable declared in the code being parsed; see LocalVar::getDeclDeferredDepth()
+DLLLOCAL int parse_get_decl_deferred_depth();
+
+//! Enters a parse scope that counts in parse_get_deferred_depth() while it is in scope
+class ParseDeferredScopeHelper {
+public:
+    DLLLOCAL ParseDeferredScopeHelper();
+    DLLLOCAL ~ParseDeferredScopeHelper();
+
+    ParseDeferredScopeHelper(const ParseDeferredScopeHelper&) = delete;
+    ParseDeferredScopeHelper& operator=(const ParseDeferredScopeHelper&) = delete;
+
+private:
+    bool old_in_expression;
+};
+
+//! Parses a statement block: the local variables declared in it are created anew each time it runs, and the effects of
+//! its on_exit, on_success and on_error blocks are applied to the assignment state when its parse ends (qore#5937)
+class ParseStatementBlockScopeHelper {
+public:
+    DLLLOCAL ParseStatementBlockScopeHelper();
+    DLLLOCAL ~ParseStatementBlockScopeHelper();
+
+    ParseStatementBlockScopeHelper(const ParseStatementBlockScopeHelper&) = delete;
+    ParseStatementBlockScopeHelper& operator=(const ParseStatementBlockScopeHelper&) = delete;
+
+private:
+    bool old_in_expression;
+};
+
+//! Records the effect of an on_exit, on_success or on_error block on a local variable, which applies when the block
+//! that contains the statement exits; see ParseStatementBlockScopeHelper
+/** @param lvar the variable
+    @param assigned true if the block may assign the variable
+    @param cleared true if the block may clear the variable with \c delete or \c remove
+*/
+DLLLOCAL void parse_add_block_exit_effect(LocalVar* lvar, bool assigned, bool cleared);
+
 // now shared between parent and child Program objects for top-level local variables with global scope
 class LocalVar {
 public:
-    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name), decl_seq(getNextDeclarationSeq()) {
+    DLLLOCAL LocalVar(const char* n_name, const QoreTypeInfo* ti) : name(n_name), decl_seq(getNextDeclarationSeq()),
+            decl_deferred_depth(parse_get_decl_deferred_depth()) {
         const QoreTypeInfo* base_ti;
         no_narrowing = isNoNarrowMarkerType(ti, base_ti);
         is_auto_type = isAutoTypeInfo(base_ti);
@@ -639,22 +709,106 @@ public:
         updateTypeSubstitutionFlags();
     }
 
-    DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq), closure_use(old.closure_use),
-            parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
+    DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), decl_seq(old.decl_seq),
+            decl_deferred_depth(old.decl_deferred_depth), parse_assign_seq(old.parse_assign_seq),
+            parse_clear_seq(old.parse_clear_seq), closure_use(old.closure_use),
+            parse_assigned(old.parse_assigned), parse_may_be_assigned(old.parse_may_be_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
+            top_level_committed(old.top_level_committed),
             is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing), read_only(old.read_only),
-            weak_assigned(old.weak_assigned),
+            weak_assigned(old.weak_assigned), ever_deleted(old.ever_deleted),
             typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
             narrowedTypeInfo(old.narrowedTypeInfo), type_info_needs_substitution(old.type_info_needs_substitution),
-            ref_type_info_needs_substitution(old.ref_type_info_needs_substitution) {
+            ref_type_info_needs_substitution(old.ref_type_info_needs_substitution),
+            aot_native_storage(old.aot_native_storage.load(std::memory_order_relaxed)) {
     }
 
     DLLLOCAL ~LocalVar() {
+    }
+
+    //! LocalVar::getAOTNativeStorage() flag: the AOT-compiled function that declares the variable keeps it in native
+    //! storage and does not read it again from the stack of local variables, so a value set there is not seen
+    static constexpr uint8_t AOT_NATIVE_STORAGE = 1;
+    //! LocalVar::getAOTNativeStorage() flag: that function also assigns the variable in native storage only, so the
+    //! value on the stack of local variables is not the value of the variable
+    static constexpr uint8_t AOT_NATIVE_WRITES = 2;
+
+    //! Records how the AOT-compiled function that declares the variable keeps it in native storage (issue #5890)
+    /** Set when the AOT context of the function is built, from the flags of its local slot record, before the
+        function runs; read by get_local_vars() and set_local_var_value() only (see
+        ThreadLocalVariableData::getLocalVars()), so that a call costs nothing for it
+
+        @param flags a combination of AOT_NATIVE_STORAGE and AOT_NATIVE_WRITES
+    */
+    DLLLOCAL void setAOTNativeStorage(uint8_t flags) {
+        aot_native_storage.fetch_or(flags, std::memory_order_relaxed);
+    }
+
+    //! Returns how the AOT-compiled function that declares the variable keeps it in native storage; see
+    //! setAOTNativeStorage()
+    DLLLOCAL uint8_t getAOTNativeStorage() const {
+        return aot_native_storage.load(std::memory_order_relaxed);
     }
 
     DLLLOCAL void parseAssigned() {
         if (!parse_assigned) {
             parse_assigned = true;
         }
+        parseMayBeAssigned();
+    }
+
+    //! Records that the variable may have a value from here on: it is the root of an lvalue that code changes, or
+    //! the state of a branch in which it may have been assigned is merged
+    DLLLOCAL void parseMayBeAssigned() {
+        if (!parse_may_be_assigned) {
+            parse_may_be_assigned = true;
+        }
+        parse_assign_seq = parse_next_assignment_seq();
+    }
+
+    //! Records that the variable has no value on any path from here on: it is the operand of \c delete or
+    //! \c remove
+    DLLLOCAL void parseCleared() {
+        parseUnassigned();
+        if (parse_may_be_assigned) {
+            parse_may_be_assigned = false;
+        }
+        parse_clear_seq = parse_next_assignment_seq();
+    }
+
+    //! Returns true if the variable may have been assigned after the given point of the sequence of changes of the
+    //! assignment state; see parse_get_assignment_seq()
+    DLLLOCAL bool parseAssignedSince(uint64_t seq) const {
+        return parse_assign_seq > seq;
+    }
+
+    //! Returns true if the variable was the operand of \c delete or \c remove after the given point of the sequence
+    //! of changes of the assignment state; see parse_get_assignment_seq()
+    DLLLOCAL bool parseClearedSince(uint64_t seq) const {
+        return parse_clear_seq > seq;
+    }
+
+    //! Sets the flow-sensitive assignment state; used to restore and merge the state of branches
+    DLLLOCAL void parseSetAssignedState(bool assigned, bool may_be_assigned) {
+        if (parse_assigned != assigned) {
+            parse_assigned = assigned;
+        }
+        if (parse_may_be_assigned != may_be_assigned) {
+            parse_may_be_assigned = may_be_assigned;
+        }
+    }
+
+    //! Returns true if an assignment of the variable can have run on some path to the code being parsed
+    /** Unlike isAssigned(), which is true when the variable is assigned on every path, this is false only when no
+        path assigns it: from its declaration, or from a \c delete or \c remove of the variable that every path
+        passes.
+    */
+    DLLLOCAL bool mayBeAssigned() const {
+        return parse_may_be_assigned;
+    }
+
+    //! Returns the value of parse_get_deferred_depth() when the variable was declared
+    DLLLOCAL int getDeclDeferredDepth() const {
+        return decl_deferred_depth;
     }
 
     DLLLOCAL void parseUnassigned() {
@@ -665,6 +819,20 @@ public:
 
     DLLLOCAL bool isAssigned() const {
         return parse_assigned;
+    }
+
+    //! Records that the variable itself is the operand of \c delete or \c remove, which leaves it without a value
+    /** Unlike the flow-sensitive \c parse_assigned, this is never reset: the parse is a single forward pass, so a
+        \c delete or \c remove later in a loop body leaves the variable without a value at a read earlier in the
+        body, in the next iteration, while the read is parsed as definitely assigned (qore#5665)
+    */
+    DLLLOCAL void parseDeleted() {
+        ever_deleted = true;
+    }
+
+    //! Returns true if the variable itself is the operand of a \c delete or \c remove anywhere in its scope
+    DLLLOCAL bool everDeleted() const {
+        return ever_deleted;
     }
 
     //! Records that the variable is assigned with the weak (:=) or the opaque (@=) assignment operator
@@ -681,6 +849,23 @@ public:
     //! parseWeakAssigned()
     DLLLOCAL bool isWeakAssigned() const {
         return weak_assigned;
+    }
+
+    //! Records that a weak assignment takes a weak reference to the variable's container (\c w := variable)
+    /** An operator that changes such a variable must change the container the variable holds, as the AST interpreter
+        does (+= appends to the list in place), not give it a new one: the weak reference designates the container the
+        variable held, so a new one leaves it with a container that nothing owns (it reads as empty).  IR lowering
+        therefore changes such a variable through its lvalue, as for a variable assigned with := or @= (see
+        parseWeakAssigned()); the parse of the assignment anywhere in the code records it, so lowering knows it before
+        it lowers the code that changes the variable (qore#5846).
+    */
+    DLLLOCAL void parseWeakSource() {
+        weak_source = true;
+    }
+
+    //! Returns whether a weak assignment takes a weak reference to the variable's container; see parseWeakSource()
+    DLLLOCAL bool isWeakSource() const {
+        return weak_source;
     }
 
     //! Preserves the definite-assignment state the variable had when it left the parse stack.
@@ -732,17 +917,27 @@ public:
     }
 
     DLLLOCAL void instantiateIntern(QoreValue nval, bool assign, const QoreTypeInfo* runtimeTypeInfo = nullptr) {
-        const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
         if (!closure_use) {
+            const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
             LocalVarValue* val = thread_instantiate_lvar();
             val->set(name.c_str(), this, ti, nval, assign, false);
         } else {
             // Closure/thread-safe storage must retain the lvalue-only auto! marker. Without it,
             // merely creating a reference to a hash<auto!>/list<auto!> local changes the storage
             // path and lets its initializer keep a narrowed runtime container type.
-            const QoreTypeInfo* lvalue_ti = runtimeTypeInfo ? runtimeTypeInfo : getTypeInfoForLValue();
-            thread_instantiate_closure_var(name.c_str(), lvalue_ti, nval, assign, read_only);
+            thread_instantiate_closure_var(this, runtimeTypeInfo, nval, assign);
         }
+    }
+
+    //! Creates storage whose constraint belongs to this invocation, before publishing it on the thread stack.
+    DLLLOCAL ClosureVarValue* createClosureValue(const QoreTypeInfo* runtimeTypeInfo, QoreValue& nval,
+            bool assign) const {
+        const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : getTypeInfoForLValue();
+        if (type_info_needs_substitution) {
+            return createGenericClosureValue(ti, nval, assign);
+        }
+        return new ClosureVarValue(name.c_str(), ti,
+            runtimeTypeInfo ? QoreTypeInfo::getReferenceTarget(ti) : refTypeInfo, nval, assign, read_only);
     }
 
     DLLLOCAL void instantiateSelf(QoreObject* value) const {
@@ -1063,6 +1258,16 @@ public:
         is_top_level = true;
     }
 
+    //! marks a top-level local variable of a parse that is being committed (issue #6462)
+    DLLLOCAL void setTopLevelCommitted() {
+        top_level_committed = true;
+    }
+
+    //! returns true if the variable is a top-level local variable of a committed parse, whose storage cannot change
+    DLLLOCAL bool isTopLevelCommitted() const {
+        return top_level_committed;
+    }
+
     DLLLOCAL bool isTopLevel() const {
         return is_top_level;
     }
@@ -1195,24 +1400,45 @@ private:
     bool parse_scope_set = false;
     //! the order of the variable's creation at parse time
     uint64_t decl_seq;
+    //! the value of parse_get_deferred_depth() when the variable was declared; see getDeclDeferredDepth()
+    int decl_deferred_depth;
+    //! the number of the last change of the assignment state that may have assigned the variable; see
+    //! parseAssignedSince()
+    uint64_t parse_assign_seq = 0;
+    //! the number of the last change of the assignment state that cleared the variable; see parseClearedSince()
+    uint64_t parse_clear_seq = 0;
     bool closure_use = false,
         parse_assigned = false,
+        //! true if some path to the code being parsed may have assigned the variable; see mayBeAssigned()
+        parse_may_be_assigned = false,
         //! \c parse_assigned as it stood when the variable left the parse stack; see
         //! parseFinalizeAssigned()
         parse_assigned_final = false,
         is_self = false,
         is_top_level = false,
+        //! a top-level local variable of a parse that has been committed: threads may have instantiated it, so its
+        //! storage (closure_use) cannot change any more (issue #6462)
+        top_level_committed = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
         no_narrowing = false,       // true if declared with auto! to disable type narrowing
         read_only = false,
         //! assigned with := or @=; see parseWeakAssigned()
-        weak_assigned = false;
+        weak_assigned = false,
+        //! the source of a weak assignment (w := variable); see parseWeakSource()
+        weak_source = false,
+        //! the operand of delete or remove; see parseDeleted()
+        ever_deleted = false;
     const QoreTypeInfo* typeInfo = nullptr;
     const QoreTypeInfo* refTypeInfo = nullptr;
     const QoreTypeInfo* narrowedTypeInfo = nullptr;  // narrowed type from assignment (parse-time only)
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
     bool type_info_needs_substitution = false;
     bool ref_type_info_needs_substitution = false;
+    //! Binds generic storage and retains any declarations named by the resulting constraint.
+    DLLLOCAL QORE_INTERN_NOINLINE ClosureVarValue* createGenericClosureValue(const QoreTypeInfo* ti,
+        QoreValue& nval, bool assign) const;
+    //! how the AOT-compiled function that declares the variable keeps it in native storage; see setAOTNativeStorage()
+    std::atomic<uint8_t> aot_native_storage{0};
 
     DLLLOCAL LocalVarValue* get_var() const {
         return thread_try_find_lvar(this);

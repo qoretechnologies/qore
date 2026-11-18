@@ -372,6 +372,7 @@ sub test() {
         addTestCase("Basic parsing", \testBasicParsing());
         addTestCase("Indirect reference syntax", \testIndirectReferenceSyntax());
         addTestCase("Named argument calls", \testNamedArgumentCalls());
+        addTestCase("Explicit generic call type arguments", \testExplicitGenericCallTypeArguments());
         addTestCase("Parse file", \testParseFile());
         addTestCase("Diagnostics", \testDiagnostics());
         addTestCase("Modern module parsing", \testModernModuleParsing());
@@ -686,6 +687,79 @@ sub test() {
             }
         }
         assertTrue(found, "invalid named call diagnostic explains positional-after-named rule");
+    }
+
+    #! the nodes of the tree as the tree printer writes them (qore#6024)
+    private string treeText(AstTree tree) {
+        string file = tmp_location() + "/astparser_tree_" + getpid() + "_" + gettid() + ".txt";
+        on_exit unlink(file);
+        tree.printTree(file);
+        return File::readTextFile(file);
+    }
+
+    #! the explicit type arguments of a generic function call, which the core parser accepts (qore#6024)
+    testExplicitGenericCallTypeArguments() {
+        # type arguments with an or-nothing type or a nested callable type, as well as the ones that parsed before
+        list<string> calls = (
+            "id<code<*hash<auto>(int)>>(c);",
+            "id<code<int(code<int()>)>>(c);",
+            "id<*int>(i);",
+            "id<list<*int>>(i);",
+            "id<hash<string, *int>>(i);",
+            "id<*hash<auto>>(i);",
+            "id<code<*string(*int, string)>>(c);",
+            "id<code<int(code<*int()>, *string)>>(c);",
+            "id<int>(i);",
+            "id<int, string>(i);",
+            "id<code<int(int)>>(c);",
+            "id<>(i);",
+            "ns::id<*int>(i);",
+            # whitespace after the '<' and before the '>' belongs to the type arguments
+            "id< *int >(i);",
+            "id<  code<*int(int)> >(c);",
+            # a call whose type arguments are simple names
+            "a<b>(c);",
+        );
+        foreach string call in (calls) {
+            string code = "%modern\nauto sub t(auto c, auto i) {\n    " + call + "\n}\n";
+            AstParser parser();
+            *AstTree tree = parser.parseString(code);
+            assertTrue(exists tree, "tree for " + call);
+            assertEq(0, parser.getErrorCount(), "no syntax error in " + call);
+            string text = treeText(tree);
+            assertRegex("call_expression function: \\(generic_type", text, "the call has generic type arguments: " + call);
+            assertTrue(text !~ /binary_expression/, "not a comparison chain: " + call);
+        }
+
+        # a generic declaration, a new expression and a scoped call at the start of a statement: the immediate '<' of
+        # the type arguments does not change them
+        {
+            string code = "%modern\n"
+                + "class Box<T> {\n"
+                + "    static Box<T> make(T v) {\n"
+                + "        return new Box<T>(v);\n"
+                + "    }\n"
+                + "}\n"
+                + "sub t(int i) {\n"
+                + "    Box<int> bi = new Box<int>(i);\n"
+                + "    Box<*int> bn = Box<*int>::make(i);\n"
+                + "}\n";
+            AstParser parser();
+            *AstTree tree = parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), "generic declarations and new expressions still parse");
+            string text = treeText(tree);
+            assertRegex("new_expression", text, "the new expressions are new expressions");
+        }
+
+        # the comparison chain with whitespace before the '<' (lib/scanner.lpp reads word<args> only without it)
+        foreach string chain in ("return a < b > (c);", "return a < b && b > (c);", "return (a < b) > c;") {
+            AstParser parser();
+            *AstTree tree = parser.parseString("%modern\nauto sub t(int a, int b, int c) {\n    " + chain + "\n}\n");
+            assertEq(0, parser.getErrorCount(), "no syntax error in " + chain);
+            string text = treeText(tree);
+            assertTrue(text =~ /binary_expression/, "a comparison: " + chain);
+            assertTrue(text !~ /generic_type/, "no generic type arguments: " + chain);
+        }
     }
 
     testParseFile() {

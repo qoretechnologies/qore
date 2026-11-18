@@ -109,11 +109,25 @@ assertTrue(c == 97);
 assertTrue(c >= c'a' && c <= c'z');
 
 string s = "x" + c + "y"; # "xay"
-int next = c + 1;          # 98
+string t = c + c'b';       # "ab"
+string u = c + 1;          # "a1"
+int next = int(c) + 1;     # 98
 char d = cast<char>(next); # c'b'
 ```
 
-Arithmetic treats the char as its codepoint and returns integer results.
+The `+` operator adds a char as a one-character string with every operand
+except a list (to which it is added as an element), at runtime and in the
+parse-time result type (`string`); `+=` on an lvalue that holds a char does the
+same, and a typed `char` lvalue cannot take the result, so `char c; c += x` is a
+parse error.  A char added with `+=` to an lvalue of any other type is added
+exactly as its one-character string is, whatever the lvalue's type:
+`int i = 1; i += c'5'` gives 6, as `i += "5"` does (not 54), a float or number
+lvalue converts the string, a list is appended the string, and an lvalue with no
+value is assigned it.  A char added to a string takes the string's encoding; otherwise
+the result is UTF-8.  This keeps `s[i] + s[j]` a two-character string, as it was
+when a single string index returned a string.  The other arithmetic operators
+(`-`, `*`, `/`, `%`, the bitwise operators, `++` and `--`) treat the char as its
+codepoint and return integer results; code-point addition takes `int(c)`.
 Soft comparison treats a `char` as compatible with an integer codepoint or a
 one-codepoint string; exact comparisons still preserve the distinct `char`
 runtime type. String concatenation materializes the char as a one-codepoint string.

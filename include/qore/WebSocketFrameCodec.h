@@ -78,6 +78,23 @@ struct WsFrame {
     uint16_t close_code;   //!< only valid for WSOP_CLOSE
 };
 
+//! The header of a WebSocket frame, as received before its payload
+/** @since %Qore 3.0
+*/
+struct WsFrameHeader {
+    //! the frame's opcode
+    WsOpcode opcode = WSOP_CONTINUATION;
+    //! the FIN flag
+    bool fin = false;
+    //! the declared length of the payload
+    uint64_t payload_len = 0;
+    //! the size of the header, including the masking key
+    size_t header_size = 0;
+    //! true if the declared length is invalid: its most significant bit is set (RFC 6455 section 5.2); the frame is
+    //! a protocol error
+    bool invalid_length = false;
+};
+
 //! WebSocket frame decoder -- accumulates data and parses complete frames
 /** Thread safety: NOT thread-safe. Use from a single thread (I/O thread).
     @since %Qore 3.0
@@ -102,6 +119,17 @@ public:
 
     //! Returns the number of buffered bytes
     size_t bufferedBytes() const;
+
+    //! Returns true if the header of the next frame has been received, and fills it in; consumes nothing
+    /** So a receiver can check the declared length of a frame against its limit before the payload is buffered
+        (issue #5878).
+    */
+    bool peekHeader(WsFrameHeader& header) const;
+
+    //! Discards up to @p len buffered bytes from the front of the buffer
+    /** @return the number of bytes discarded
+    */
+    size_t discardBytes(size_t len);
 
     //! Clears the internal buffer
     void clear();

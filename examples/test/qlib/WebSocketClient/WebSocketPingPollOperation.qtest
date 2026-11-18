@@ -201,9 +201,9 @@ public class WebSocketPingPollOperationTest inherits QUnit::Test {
 
     #! Drives a poll operation to completion with a deadline
     private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         while (!poller.goalReached()) {
-            timeout elapsed = now_us() - start;
+            timeout elapsed = (clock_get_monotonic_us() - start) / 1000;
             if (elapsed >= deadline) {
                 throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
             }

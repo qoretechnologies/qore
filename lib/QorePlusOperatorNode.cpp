@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -29,10 +29,12 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreArithmeticParseType.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreStatementTemps.h"
 
 QoreString QorePlusOperatorNode::plus_str("+ operator expression");
 
@@ -75,11 +77,101 @@ static bool qore_plus_parse_type_is_unknown(const QoreTypeInfo* ti) {
     return !QoreTypeInfo::hasType(ti) || ti == autoTypeInfo || ti == autoNoNarrowTypeInfo || ti == anyTypeInfo;
 }
 
+//! returns true if the element type of a list type gives a plain list (no element type) at runtime
+static bool qore_plus_list_element_is_plain(const QoreTypeInfo* element_ti) {
+    return !element_ti || element_ti == anyTypeInfo;
+}
+
+//! the parse type of the list that the operator gives at runtime for a list with elements of type \a element_ti to
+//! which a value of type \a new_ti is added (qore_list_private::setListTypeFromNewElementType()): the list of their
+//! common type (a list, not a soft list type of an operand, ex: softlist<int>, which the compiled modes would use as a
+//! container element type, as the AST interpreter does not), or list<auto>; nullptr (the type of the result depends
+//! on the values) if \a from_values is set
+static const QoreTypeInfo* qore_plus_list_add_type(const QoreTypeInfo* element_ti, const QoreTypeInfo* new_ti,
+        bool& from_values) {
+    // an element type of auto gives the type of the values added to an empty list
+    if (element_ti == autoTypeInfo || element_ti == autoNoNarrowTypeInfo) {
+        from_values = true;
+        return nullptr;
+    }
+    if (qore_plus_list_element_is_plain(element_ti)) {
+        return autoListTypeInfo;
+    }
+    // the common type that the runtime finds for the runtime type of the new value depends on the element type of the
+    // list: for a scalar element type, it is the element type for a value of that type, and auto for a value of
+    // another type, such as an enum value, which has no common type with its base type (qore#6274); for an element
+    // type of an enum or an or-nothing type, it depends on the values; bool and binary values are never enums
+    bool exact_element = false;
+    for (const QoreTypeInfo* exact : {bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, boolTypeInfo,
+            binaryTypeInfo, boolOrNothingTypeInfo, binaryOrNothingTypeInfo}) {
+        if (element_ti == exact) {
+            exact_element = true;
+            break;
+        }
+    }
+    if (!exact_element) {
+        from_values = true;
+        return nullptr;
+    }
+    const QoreTypeInfo* ctype = element_ti;
+    if (QoreTypeInfo::matchCommonType(ctype, new_ti)) {
+        return qore_get_complex_list_type(ctype);
+    }
+    return autoListTypeInfo;
+}
+
+//! returns the type of the values of an operand that the operator adds to a list as one element, if every value that
+//! the operand type allows has that type at runtime (QoreValue::getTypeInfo()), as the runtime takes the type of the
+//! value: a scalar base type (not a class or object type, whose values can be of a subclass, a hash type, whose values
+//! can be typed hashes, timeout, whose values are ints, a date, whose values have a subtype, a soft type, a type that
+//! can be NOTHING or a type of more than one value type), else nullptr
+static const QoreTypeInfo* qore_plus_element_value_type(const QoreTypeInfo* ti) {
+    for (const QoreTypeInfo* exact : {bigIntTypeInfo, floatTypeInfo, numberTypeInfo, stringTypeInfo, boolTypeInfo,
+            binaryTypeInfo}) {
+        if (ti == exact) {
+            return ti;
+        }
+    }
+    return nullptr;
+}
+
+//! the type of the container that the operator gives for operand values of the given value types and member types,
+//! if it is known more precisely than the base type of the container; see qore_arith_container_rule_t
+static const QoreTypeInfo* qore_plus_container_type(qore_type_t lt, const QoreTypeInfo* lti, qore_type_t rt,
+        const QoreTypeInfo* rti) {
+    if (lt == NT_LIST || rt == NT_LIST) {
+        // a list and a value added to it as one element; the type of a list made of two lists depends on the values
+        if (lt == rt) {
+            return nullptr;
+        }
+        const QoreTypeInfo* list_ti = lt == NT_LIST ? lti : rti;
+        const QoreTypeInfo* value_ti = qore_plus_element_value_type(lt == NT_LIST ? rti : lti);
+        if (!list_ti || !value_ti) {
+            return nullptr;
+        }
+        bool from_values = false;
+        const QoreTypeInfo* rv = qore_plus_list_add_type(QoreTypeInfo::getElementType(list_ti), value_ti, from_values);
+        return from_values ? nullptr : rv;
+    }
+    // a hash or an object plus NOTHING is the hash or the object, on either side
+    if (lt == NT_NOTHING && (rt == NT_HASH || rt == NT_OBJECT)) {
+        return rti;
+    }
+    if (rt == NT_NOTHING && (lt == NT_HASH || lt == NT_OBJECT)) {
+        return lti;
+    }
+    // two hashes of the same type give a hash of that type, as the rule for operands of one type each gives it
+    if (lt == NT_HASH && rt == NT_HASH && lti && rti && QoreTypeInfo::isOutputIdentical(lti, rti)) {
+        return lti;
+    }
+    return nullptr;
+}
+
 QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    ValueEvalOptimizedRefHolder lh(left, xsink);
+    QoreOperandEvalHolder lh(left, xsink);
     if (*xsink)
         return QoreValue();
-    ValueEvalOptimizedRefHolder rh(right, xsink);
+    QoreOperandEvalHolder rh(right, xsink);
     if (*xsink)
         return QoreValue();
 
@@ -105,9 +197,14 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return qore_list_private::get(*rh->get<const QoreListNode>())->prependElement(lh.takeReferencedValue(), xsink);
     }
 
-    if (lt == NT_STRING) {
+    // a char is added as a one-character string: the operator concatenates it with the other operand converted to a
+    // string, as for a string; a char added to a string takes the encoding of the string, and a char added to any
+    // other value gives a UTF-8 string
+    if (lt == NT_STRING || (lt == NT_CHAR && rt != NT_STRING)) {
         QoreStringNodeValueHelper lstr(*lh);
-        QoreStringNodeHolder str(new QoreStringNode(**lstr));
+        // a char gives a new string of its own, which is taken; a string is copied
+        QoreStringNodeHolder str(lt == NT_CHAR ? lstr.getReferencedValue() : new QoreStringNode(**lstr));
+        assert(str->is_unique());
 
         if (rt == NT_STRING) {
             QoreStringNodeValueHelper rstr(*rh);
@@ -121,7 +218,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return str.release();
     }
 
-    if (rt == NT_STRING) {
+    if (rt == NT_STRING || rt == NT_CHAR) {
         QoreStringNodeValueHelper r(*rh);
         QoreStringNodeValueHelper strval(*lh, r->getEncoding(), xsink);
         if (*xsink)
@@ -143,8 +240,10 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 ms = lh->getAsBigInt() - (secs * 1000);
         DateTime l;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return rh->get<DateTimeNode>()->add(l);
+        if (l.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return rh->get<DateTimeNode>()->add(l, xsink);
     }
 
     if (check_date_timeout_variant && lt == NT_DATE && rt == NT_INT) {
@@ -152,14 +251,36 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         int64 ms = rh->getAsBigInt() - (secs * 1000);
         DateTime r;
         // the leftover is in milliseconds; setRelativeDateSeconds() takes microseconds
-        r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000));
-        return lh->get<DateTimeNode>()->add(r);
+        if (r.setRelativeDateSeconds(secs, static_cast<int>(ms * 1000), xsink)) {
+            return QoreValue();
+        }
+        return lh->get<DateTimeNode>()->add(r, xsink);
     }
 
     if (lt == NT_DATE || rt == NT_DATE) {
-        DateTimeNodeValueHelper l(*lh);
-        DateTimeValueHelper r(*rh);
-        return l->add(*r);
+        // a result out of range raises INVALID-DATE, as does an operand converted to a date out of range (qore#6103)
+        if (lt == NT_DATE) {
+            if (rt == NT_DATE) {
+                return lh->get<const DateTimeNode>()->add(*rh->get<const DateTimeNode>(), xsink);
+            }
+            DateTimeValueHelper r(*rh, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            return lh->get<const DateTimeNode>()->add(**r, xsink);
+        }
+        if (lt != NT_INT && lt != NT_FLOAT) {
+            // other types are converted as before (ex: a hash gives the zero date in the local time zone)
+            DateTimeNodeValueHelper l(*lh);
+            return l->add(*rh->get<const DateTimeNode>(), xsink);
+        }
+        // a number of seconds
+        DateTimeValueHelper l(*lh, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        SimpleRefHolder<DateTimeNode> ln(new DateTimeNode(**l));
+        return ln->add(*rh->get<const DateTimeNode>(), xsink);
     }
 
     if (lt == NT_NUMBER || rt == NT_NUMBER) {
@@ -172,7 +293,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
         return lh->getAsFloat() + rh->getAsFloat();
     }
 
-    if (lt == NT_INT || rt == NT_INT || lt == NT_CHAR || rt == NT_CHAR) {
+    if (lt == NT_INT || rt == NT_INT) {
         return lh->getAsBigInt() + rh->getAsBigInt();
     }
 
@@ -285,28 +406,47 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         QoreBufferBinaryOperation::Add);
     bool is_list_left = QoreTypeInfo::isType(leftTypeInfo, NT_LIST);
     bool is_list_right = QoreTypeInfo::isType(rightTypeInfo, NT_LIST);
+    // set when the type of a list result depends on the values of the operands (it then has no parse type)
+    bool list_type_from_values = false;
+    // issue #3157: try to handle timeout + date specially; an operand of a type that is not known at parse time (the
+    // argument of a map expression, for example) can be a date, so the flag does not depend on the other operand's
+    // type being known, as it does not for the subtraction operator (qore#5735)
+    // (a *timeout is a timeout too: its value in milliseconds, or NOTHING, which is no int to add as milliseconds)
+    if ((QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo) || QoreTypeInfo::equal(leftTypeInfo, timeoutOrNothingTypeInfo))
+        && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
+        check_timeout_date_variant = true;
+    } else if ((QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
+            || QoreTypeInfo::equal(rightTypeInfo, timeoutOrNothingTypeInfo))
+        && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
+        check_date_timeout_variant = true;
+    }
     if (bufferResultTypeInfo) {
         returnTypeInfo = bufferResultTypeInfo;
     }
     // if either side is a list, then the return type is list (highest priority)
     else if (is_list_left || is_list_right) {
+        // the type of the list that the runtime gives (qore_list_private::concatenate(), concatenateElement() and
+        // prependElement()), which depends on the element types of the values
         if (is_list_left && is_list_right) {
-            parse_context.typeInfo = QoreTypeInfo::isOutputIdentical(leftTypeInfo, rightTypeInfo)
-                ? leftTypeInfo
-                : listTypeInfo;
+            // the element types of the values of two lists (an operand of a list type can also be NOTHING when a
+            // typed variable has not been assigned)
+            list_type_from_values = true;
         } else if (is_list_left) {
-            const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getElementType(leftTypeInfo);
-            if (QoreTypeInfo::equal(elementTypeInfo, rightTypeInfo)) {
-                returnTypeInfo = leftTypeInfo;
+            const QoreTypeInfo* value_ti = qore_plus_element_value_type(rightTypeInfo);
+            if (value_ti) {
+                returnTypeInfo = qore_plus_list_add_type(QoreTypeInfo::getElementType(leftTypeInfo), value_ti,
+                    list_type_from_values);
             } else {
-                returnTypeInfo = autoListTypeInfo;
+                list_type_from_values = true;
             }
         } else {
-            const QoreTypeInfo* elementTypeInfo = QoreTypeInfo::getElementType(rightTypeInfo);
-            if (QoreTypeInfo::equal(elementTypeInfo, leftTypeInfo)) {
-                returnTypeInfo = rightTypeInfo;
+            // prependElement() gives the type that concatenateElement() gives (qore#5936)
+            const QoreTypeInfo* value_ti = qore_plus_element_value_type(leftTypeInfo);
+            if (value_ti) {
+                returnTypeInfo = qore_plus_list_add_type(QoreTypeInfo::getElementType(rightTypeInfo), value_ti,
+                    list_type_from_values);
             } else {
-                returnTypeInfo = autoListTypeInfo;
+                list_type_from_values = true;
             }
         }
     }
@@ -314,16 +454,9 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     else if (QoreTypeInfo::hasType(leftTypeInfo) && QoreTypeInfo::hasType(rightTypeInfo)
         && !QoreTypeInfo::parseReturns(leftTypeInfo, NT_LIST)
         && !QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
-        // issue #3157: try to handle timeout + date specially
-        if (QoreTypeInfo::equal(leftTypeInfo, timeoutTypeInfo)
-            && QoreTypeInfo::parseReturns(rightTypeInfo, NT_DATE)) {
-            check_timeout_date_variant = true;
-        } else if (QoreTypeInfo::equal(rightTypeInfo, timeoutTypeInfo)
-            && QoreTypeInfo::parseReturns(leftTypeInfo, NT_DATE)) {
-            check_date_timeout_variant = true;
-        }
-
-        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)) {
+        // a char is added as a one-character string
+        if (QoreTypeInfo::isType(leftTypeInfo, NT_STRING) || QoreTypeInfo::isType(rightTypeInfo, NT_STRING)
+            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
             if (!QoreTypeInfo::canConvertToScalar(leftTypeInfo) || !QoreTypeInfo::canConvertToScalar(rightTypeInfo)) {
                 QoreStringMaker desc("cannot mix %s and %s types with the + operator",
                     QoreTypeInfo::getName(leftTypeInfo), QoreTypeInfo::getName(rightTypeInfo));
@@ -337,8 +470,7 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             returnTypeInfo = numberTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_FLOAT) || QoreTypeInfo::isType(rightTypeInfo, NT_FLOAT)) {
             returnTypeInfo = floatTypeInfo;
-        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)
-            || QoreTypeInfo::isType(leftTypeInfo, NT_CHAR) || QoreTypeInfo::isType(rightTypeInfo, NT_CHAR)) {
+        } else if (QoreTypeInfo::isType(leftTypeInfo, NT_INT) || QoreTypeInfo::isType(rightTypeInfo, NT_INT)) {
             returnTypeInfo = bigIntTypeInfo;
         } else if (QoreTypeInfo::isType(leftTypeInfo, NT_HASH)) {
             if (QoreTypeInfo::isType(rightTypeInfo, NT_HASH)
@@ -358,6 +490,35 @@ int QorePlusOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 && QoreTypeInfo::returnsSingle(leftTypeInfo) && QoreTypeInfo::returnsSingle(rightTypeInfo)) {
             // only return type nothing if both types are available and return a single type
             returnTypeInfo = nothingTypeInfo;
+        }
+    }
+
+    // the result type of every combination of the values that the operand types allow, as the operator gives it at
+    // runtime (qore#5663): the rules above take the type of one operand when it has one value type, whatever values
+    // the other operand can have
+    {
+        const QoreTypeInfo* arith_ti;
+        bool single;
+        switch (qore_arith_parse_result_type(QoreArithParseOp::Plus, leftTypeInfo, rightTypeInfo, arith_ti, single,
+                qore_plus_container_type)) {
+            case QoreArithParseResult::Scalar:
+                returnTypeInfo = arith_ti;
+                break;
+            case QoreArithParseResult::Container:
+                // with one value type on each side, the rules above give a container type more precisely (ex: its
+                // element type), if they give the container that the operator returns; a list whose type depends on
+                // the values of the operands has no parse type
+                if (list_type_from_values && QoreTypeInfo::isType(arith_ti, NT_LIST)) {
+                    returnTypeInfo = nullptr;
+                } else if (!single || !qore_arith_container_rule_matches(returnTypeInfo, arith_ti)) {
+                    returnTypeInfo = arith_ti;
+                }
+                break;
+            case QoreArithParseResult::Untyped:
+                if (!bufferResultTypeInfo) {
+                    returnTypeInfo = nullptr;
+                }
+                break;
         }
     }
 

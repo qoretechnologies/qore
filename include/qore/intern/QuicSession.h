@@ -57,11 +57,14 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <condition_variable>
 #include <queue>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "qore/intern/WebSocketCloseRecord.h"
 
 class QoreDatagramDispatcher;
 class QoreEventNotifier;
@@ -141,6 +144,8 @@ struct QuicStreamInfo {
     //! True for client-side streaming responses (SSE, etc.) — enables incremental
     //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
     bool streaming = false;
+    //! client: the stream credit of the response data is granted when the application consumes it (issue #5820)
+    bool credit_on_consume = false;
     //! True after the peer asked us to stop sending on this stream (STOP_SENDING)
     /** Parallel to Http2StreamInfo::reset.  Subsequent
         @ref QuicSession::sendStreamData() calls must fail with a typed
@@ -214,6 +219,12 @@ struct QuicStreamingBodyData {
     bool eof = false;                //!< InputStream signaled EOF
     bool deferred = false;           //!< WOULDBLOCK returned, waiting for resume
     bool no_end_stream = false;      //!< Keep stream open after data exhausted (CONNECT tunnels)
+    //! the limit of the staged data set with QuicSession::setStreamSendLimit(), 0 for the default
+    size_t send_limit = 0;
+    //! the latest WebSocket pong kept while the staged data was over its limit (issue #5900)
+    std::vector<uint8_t> pending_pong;
+    //! true once a WebSocket close frame was staged past the limit (once per stream; issue #5900)
+    bool close_frame_staged = false;
 };
 
 class qore_socket_private;
@@ -233,7 +244,7 @@ struct QuicReceivedPacket {
 };
 
 //! QUIC session wrapper around ngtcp2 + nghttp3 (parallel to Http2Session)
-class QuicSession {
+class QuicSession : public std::enable_shared_from_this<QuicSession> {
 public:
     //! Named constants for QUIC transport parameters
     static constexpr int QUIC_INITIAL_MAX_STREAMS_UNI = 3;
@@ -520,7 +531,86 @@ public:
         send raises \c QUIC-STREAM-CLOSED.
     */
     DLLLOCAL int sendStreamData(int64_t stream_id, const void* data, size_t len,
-                       bool end_stream, ExceptionSink* xsink);
+                       bool end_stream, ExceptionSink* xsink, bool ignore_limit = false);
+
+    //! Sends a WebSocket control frame that the frame state of a WebSocket stream answers with (issue #5900)
+    /** The frame state answers a ping with a pong and a close frame with its echo on the async I/O thread, which
+        cannot wait for the stream's staged data to drain, so these frames are never refused for a full buffer:
+        - a close frame is staged past the stream's send limit, once per stream (a later one is sent as data);
+        - a pong is staged when there is room; otherwise it is kept, replacing a pong kept before it (a pong
+          answers the most recent ping, RFC 6455 section 5.5.3), and staged when the staged data falls under
+          the limit, so that a ping flood from a peer that does not read keeps at most one pong.
+
+        The opcode is taken from the frame's first byte; any other frame is sent as data.
+
+        @return 0 if the frame was staged or kept, 1 if it was refused (not a control frame, buffer full), -1 on
+        error (exception raised)
+    */
+    DLLLOCAL int sendStreamControlFrame(int64_t stream_id, const void* data, size_t len, ExceptionSink* xsink);
+
+    //! Sends the application's WebSocket close frame on a stream, unless a close frame was sent on it before
+    /** The close frame is recorded under the session's lock, as the close frame of the stream's WebSocket frame
+        state (see sendStreamControlFrame()), so that the stream has one close frame (RFC 6455 section 5.5.1): a close
+        frame sent before, by the frame state or by the application, makes this one not sent, and data sent after
+        it is refused (issue #6077).  The frame is staged past the stream's send limit, as a close frame is never
+        dropped.
+
+        @param stream_id the stream
+        @param data the encoded close frame
+        @param len the size of the frame
+        @param end_stream also ends the stream (also if the frame is not sent)
+        @param xsink exception sink
+
+        @return 0 if the frame was staged, 2 if a close frame was sent on the stream before (only the end of the
+        stream is sent, if requested), -1 on error (exception raised)
+    */
+    DLLLOCAL int sendStreamCloseFrame(int64_t stream_id, const void* data, size_t len, bool end_stream,
+            ExceptionSink* xsink);
+
+    //! Returns the record of the close frame of a WebSocket stream (#6077)
+    /** The record is created when the stream's WebSocket frame state is registered
+        (registerConnectStreamFrameState()), before the stream can carry a close frame, and set when a close frame is
+        staged on the stream (sendStreamCloseFrame()); the session keeps it until it ends, so a stream context created
+        after the stream ended still gets it, and the context's reference outlives the session.
+
+        @return a reference to the stream's record, or an empty reference if it has none
+    */
+    DLLLOCAL WebSocketCloseRecordRef getWebSocketCloseRecord(int64_t stream_id);
+
+#ifdef DEBUG
+    //! Resumes the streams whose staged data dbg_quic_hold_stream_data() held back (debug builds only)
+    /** Called by dbg_quic_release_stream_data() after it clears the hold: a held stream returned
+        \c NGHTTP3_ERR_WOULDBLOCK, so nghttp3 does not read it again until it is resumed; the data is then written
+        with the session's next write, for example when a packet of the peer is processed.
+    */
+    DLLLOCAL static void dbgResumeHeldStreams();
+#endif
+
+    //! Sets the limit of the data of a streaming response that is staged for sending (for example an SSE stream)
+    /** Without a limit, a send returns 1 (buffer full) once more than @ref QUIC_MAX_STREAM_BODY is staged.  With a
+        limit, a send that would make the staged data exceed it returns 1 instead, unless nothing is staged, so that
+        one send larger than the limit can still be made.  Data that has been handed to the transport within the
+        peer's flow-control credit is no longer staged.  The limit ends with the stream.
+
+        @param stream_id the stream of a streaming response
+        @param limit the limit in bytes; must be > 0
+        @param xsink Exception sink for error reporting
+        @return 0 on success, -1 on error (exception set: \c QUIC-HTTP3-ERROR if the limit is not positive or the
+        stream has no streaming response)
+    */
+    DLLLOCAL int setStreamSendLimit(int64_t stream_id, int64_t limit, ExceptionSink* xsink);
+    //! Client: the stream credit of the stream's response data is granted when the application consumes it
+    /** See Http2Session::setStreamCreditOnConsume() (issue #5820).
+    */
+    DLLLOCAL void setStreamCreditOnConsume(int64_t stream_id);
+
+    //! Grants the stream credit of response data that the application of a client has consumed
+    /** See Http2Session::creditConsumedStreamData(); the caller wakes the I/O controller so that MAX_STREAM_DATA is
+        sent.
+
+        @return the number of bytes credited
+    */
+    DLLLOCAL size_t creditConsumedStreamData(int64_t stream_id, size_t len);
 
     //! Handles a send on a stream that is closed for sending without an error; see sendStreamData()
     /** Must be called with \c mtx_ held.
@@ -540,6 +630,10 @@ public:
         @return 0 if buffer drained, 1 if it is still full, -1 if stream not found or closed
     */
     DLLLOCAL int waitForStreamDrain(int64_t stream_id, int timeout_ms);
+
+    //! Returns 0 if the peer has acknowledged all the data staged for the stream (or the stream is gone), 1 otherwise;
+    //! waiters are woken by notifyStreamDrain() when the data is acknowledged or the stream closes
+    DLLLOCAL int streamSendFlushed(int64_t stream_id);
 
     //! Take the next completed stream (transfers ownership)
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeCompletedStream();
@@ -713,9 +807,11 @@ public:
         Used by handler threads to incrementally read request body data.
         @param stream_id the HTTP/3 stream ID
         @param complete [out] set to true if body_complete (END_STREAM received) or stream not found
+        @param credit_due [out] if not null, set to true if credit was granted for the data taken (issue #5820): the
+        caller wakes the socket's I/O thread to send it
         @return body data as BinaryNode*, or NOTHING if no data available
     */
-    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete);
+    DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete, bool* credit_due = nullptr);
 
     //! Returns True if the request body of the stream exceeded the maximum request body size (server)
     /** @see QuicStreamInfo::body_too_large
@@ -1010,11 +1106,16 @@ public:
     //! Read buffered data from an extended CONNECT stream (RFC 9220)
     /** Returns data received on the bidirectional tunnel.
 
+        A client holds the data of a CONNECT stream once, in the stream's body, which this takes; a server, in its
+        CONNECT buffer until a Queue or frame state is registered (issue #5821).
+
         @param stream_id the HTTP/3 stream ID
         @param xsink exception sink
+        @param credit_due if not null, set to true if stream credit was granted for the data taken: the caller wakes
+        the socket's I/O thread to send it
         @return binary data if available, or QoreValue() (NOTHING) if no data
     */
-    DLLLOCAL QoreValue readConnectStreamData(int64_t stream_id, ExceptionSink* xsink);
+    DLLLOCAL QoreValue readConnectStreamData(int64_t stream_id, ExceptionSink* xsink, bool* credit_due = nullptr);
 
     //! Register a Queue for direct data delivery on a CONNECT stream
     /** Once registered, h3RecvDataCallback pushes data directly to the Queue
@@ -1060,9 +1161,59 @@ public:
     DLLLOCAL void deregisterConnectStreamFrameState(int64_t stream_id);
 
     //! Returns true if extended CONNECT protocol is enabled locally (server)
+    /** A server session advertises it unless its socket disabled it (Socket::setHttp3ConnectProtocolEnabled()); see
+        setupHttp3()
+    */
     DLLLOCAL bool isExtendedConnectSupported() const {
-        return is_server_;  // Server always enables via setupHttp3()
+        return is_server_ && enable_connect_protocol_;
     }
+
+    //! Returns true once the peer's HTTP/3 SETTINGS frame has been received (RFC 9114 section 7.2.4)
+    /** The SETTINGS frame is the first frame of the peer's control stream; it can arrive after the QUIC handshake
+    */
+    DLLLOCAL bool isRemoteSettingsReceived() const {
+        return remote_settings_received_.load(std::memory_order_acquire);
+    }
+
+    //! The result of waitForRemoteSettings()
+    enum class SettingsWait {
+        Received,       //!< the peer's SETTINGS have been received
+        Closed,         //!< the connection was closed before
+        Timeout,        //!< the timeout expired before
+        Interrupted,    //!< the thread was cancelled or its Program interrupted; the exception is raised
+    };
+
+    //! Waits until the peer's HTTP/3 SETTINGS have been received or the connection is closed
+    /** Must not be called on the thread that reads the connection's packets (the async I/O thread), which would never
+        receive them.  A close of the connection that the session itself does not see (a client poll operation that is
+        closed, a socket that drops the session) wakes the waiters with wakeSettingsWaiters().
+
+        The wait can be interrupted (QoreCondition::waitWithInterrupt(): Qore::cancel_thread(), a Program interrupt),
+        and a close found at the deadline wins over the timeout.
+
+        @param timeout_ms the maximum time to wait; negative = no limit, 0 = check only
+        @param xsink receives THREAD-CANCELLED or PROGRAM-INTERRUPTED when the wait is interrupted
+
+        @return Received, Closed, Timeout or Interrupted
+    */
+    DLLLOCAL SettingsWait waitForRemoteSettings(int64_t timeout_ms, ExceptionSink* xsink);
+
+    //! Raises the error of a closed connection for a thread that waited for the peer's SETTINGS; returns its code
+    /** HTTP3-IDLE-CLOSE, HTTP3-PEER-CLOSE or HTTP3-LOCAL-CLOSE (also for a session released from its waiters, see
+        releaseSettingsWaiters()), which the HTTP clients repeat on a new connection
+    */
+    DLLLOCAL const char* raiseSettingsWaitCloseError(ExceptionSink* xsink) const;
+
+    //! Wakes the threads in waitForRemoteSettings(), which check the SETTINGS and the connection again
+    /** May be called with mtx_ held: a waiter never holds settings_wait_lock_ while it takes mtx_
+    */
+    DLLLOCAL void wakeSettingsWaiters();
+
+    //! Ends the current and later waits in waitForRemoteSettings() with SettingsWait::Closed
+    /** For a close that the session does not see itself: the client poll operation of the session is closed, or
+        the socket dropped the session; a request submitted afterwards reports the state of the connection
+    */
+    DLLLOCAL void releaseSettingsWaiters();
 
     //! Returns true if remote SETTINGS have been received and enable_connect_protocol was not set
     /** Used by the client to detect servers that don't support extended CONNECT (RFC 9220).
@@ -1071,21 +1222,6 @@ public:
         return remote_settings_received_.load(std::memory_order_acquire)
             && !remote_enable_connect_protocol_.load(std::memory_order_acquire);
     }
-
-    //! Submit a client-side extended CONNECT request (RFC 9220)
-    /** Opens a bidirectional stream and sends a CONNECT request with the :protocol
-        pseudo-header.  Uses a deferred data provider so the stream stays open for
-        bidirectional tunnel data (e.g., WebSocket frames).  A request is refused on a closed connection, as by
-        submitRequest().
-
-        @param path the request path (e.g., "/" or "/ws")
-        @param headers additional request headers
-        @param protocol the :protocol pseudo-header value (e.g., "websocket")
-        @param xsink exception sink
-        @return the stream ID on success, or -1 on error
-    */
-    DLLLOCAL int64_t submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
-        const char* protocol, ExceptionSink* xsink);
 
     //! Cancel a QUIC stream (send RESET_STREAM + STOP_SENDING)
     /** @param stream_id the stream to cancel
@@ -1170,6 +1306,17 @@ public:
         @return number of bytes written, or 0 if the connection cannot generate the frame
     */
     DLLLOCAL ssize_t writeConnectionClose(uint8_t* buf, size_t buflen);
+
+    //! Submits the GOAWAY notice of a server drain, once per session (qore#5899)
+    /** The client opens no new request stream; the session is closed when the streams that it has end (see
+        SocketQuicServerPollOperation::drainSessions())
+
+        @return 0 for success, -1 if an exception was raised
+    */
+    DLLLOCAL int submitDrainNotice(ExceptionSink* xsink);
+
+    //! Returns true if any application-visible request or response stream is active
+    DLLLOCAL bool hasActiveApplicationStreams() const;
 
     //! Clear the stored qore_socket_private pointer
     /** Called after session creation to avoid dangling pointer,
@@ -1781,6 +1928,8 @@ private:
     std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
     std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server
     std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
+    //! true once submitDrainNotice() submitted the notice; protected by mtx_
+    bool drain_notice_sent_ = false;
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
     std::atomic<bool> closed_{false};                //!< true when session is being torn down (abort); wakes blocked handlers
     //! True when ngtcp2 reported NGTCP2_ERR_IDLE_CLOSE from handleExpiryLocked.
@@ -1891,6 +2040,9 @@ private:
     //! Streaming body data for incremental sending (used by data reader callback)
     std::unordered_map<int64_t, QuicStreamingBodyData> streaming_body_data_;
 
+    //! Client: the stream credit deferred until the application consumes the data, per stream (issue #5820)
+    std::unordered_map<int64_t, size_t> deferred_stream_credit_;
+
     //! InputStream storage for I/O thread streaming (set by handler, read by I/O thread)
     /** @since %Qore 3.0
     */
@@ -1907,6 +2059,15 @@ private:
     */
     std::unordered_map<int64_t, std::vector<uint8_t>> connect_stream_data_;
 
+    //! Appends received data to a stream's extended-CONNECT buffer; called with connect_data_mutex_ held
+    DLLLOCAL void appendConnectStreamDataLocked(int64_t stream_id, const uint8_t* data, size_t len);
+
+    //! Takes the data of a stream's extended-CONNECT buffer, which stays empty; called with connect_data_mutex_ held
+    DLLLOCAL std::vector<uint8_t> takeConnectStreamDataLocked(int64_t stream_id);
+
+    //! Removes a stream's extended-CONNECT buffer; called with connect_data_mutex_ held
+    DLLLOCAL void eraseConnectStreamDataLocked(int64_t stream_id);
+
     //! Per-stream Queue for direct data delivery to CONNECT handlers
     /** When registered, h3RecvDataCallback pushes data directly to the Queue
         instead of buffering in connect_stream_data_.  Eliminates dependency on
@@ -1915,6 +2076,17 @@ private:
         Protected by connect_data_mutex_.
     */
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
+
+    //! The records of the close frames of the WebSocket streams, created when their frame state is registered and
+    //! kept for the session's life (getWebSocketCloseRecord(), #6077); protected by mtx_
+    /** Unlike an HTTP/2 socket (one connection), the listener socket of a QUIC session serves every session, so it
+        does not keep the records of a session that was removed: that would keep a record for every WebSocket stream
+        the listener ever served.  A stream context takes its record when it is created, right after the stream is
+        dispatched, and a session is removed only after its drain period, so a context finds its session unless its
+        handler thread is delayed past that period; it then gets no record, and a send fails for the removed session
+        (QUIC-ERROR) instead of with WEBSOCKET-CLOSING-ERROR.  The context's reference otherwise outlives the session.
+    */
+    std::unordered_map<int64_t, WebSocketCloseRecordRef> ws_close_records_;
 
     //! Per-stream WebSocket frame state for tunnels that want C++ frame parsing
     /** When registered, h3RecvDataCallback feeds the decoded stream bytes
@@ -1970,6 +2142,39 @@ private:
     //! Remote peer settings for extended CONNECT (RFC 9220)
     std::atomic<bool> remote_enable_connect_protocol_{false};
     std::atomic<bool> remote_settings_received_{false};
+
+    //! Protects settings_wait_gen_ for waitForRemoteSettings(); never held while mtx_ is taken
+    QoreThreadLock settings_wait_lock_;
+    //! Signaled when settings_wait_gen_ changes; waited on with waitWithInterrupt()
+    QoreCondition settings_wait_cond_;
+    //! Incremented by wakeSettingsWaiters(): the SETTINGS were received or the connection may have been closed
+    uint64_t settings_wait_gen_ = 0;
+    //! Set by releaseSettingsWaiters(): waitForRemoteSettings() returns SettingsWait::Closed
+    std::atomic<bool> settings_wait_released_{false};
+
+#ifdef DEBUG
+    //! DEBUG: the peer's SETTINGS held back from this client session (see qore_quic_test_hold_client_settings())
+    bool test_settings_held_ = false;
+    //! DEBUG: whether the held SETTINGS advertised SETTINGS_ENABLE_CONNECT_PROTOCOL
+    bool test_held_enable_connect_ = false;
+    friend void qore_quic_test_hold_client_settings(bool hold);
+    friend int64_t qore_quic_test_idle_close_held_client_sessions();
+#endif
+
+    //! Records the peer's HTTP/3 SETTINGS (RFC 9114 section 7.2.4) and wakes the waiters; from the SETTINGS callback
+    DLLLOCAL void onRemoteSettings(bool enable_connect_protocol);
+
+    //! Stores the peer's SETTINGS and wakes the threads in waitForRemoteSettings()
+    DLLLOCAL void applyRemoteSettings(bool enable_connect_protocol);
+
+    //! Whether a server session advertises SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220); set before setupHttp3()
+    bool enable_connect_protocol_ = true;
+
+    //! Raises an exception and returns -1 if an extended CONNECT request (RFC 9220) must not be sent now
+    /** A client must not send a request with the :protocol pseudo-header unless the server's SETTINGS advertised
+        SETTINGS_ENABLE_CONNECT_PROTOCOL (RFC 9220 section 3, RFC 8441 section 4)
+    */
+    DLLLOCAL int checkExtendedConnectAllowed(ExceptionSink* xsink) const;
 
     //! Stream data received before HTTP/3 layer is initialized (buffered for replay)
     struct BufferedStreamData {
@@ -2100,6 +2305,27 @@ DLLLOCAL int64_t qore_quic_test_advance_clock(int64_t ms, ExceptionSink* xsink);
 
 //! Debug-only: the number of QUIC packets that client and server connections of the process have processed
 DLLLOCAL void qore_quic_test_packets_received(int64_t& client, int64_t& server);
+
+//! Debug-only: holds back the server's HTTP/3 SETTINGS from the client sessions of the process, or releases them
+/** While held, a client session that receives the server's SETTINGS does not record them, as if they had not arrived
+    yet: QuicSession::isRemoteSettingsReceived() stays false, and QuicSession::waitForRemoteSettings() waits.  A release
+    (\a hold false) records the SETTINGS held so far, as they were received, and wakes the waiters, without network
+    I/O, so a test controls when they arrive.
+*/
+DLLLOCAL void qore_quic_test_hold_client_settings(bool hold);
+
+//! Debug-only: the number of client sessions whose SETTINGS are held (see qore_quic_test_hold_client_settings())
+DLLLOCAL int64_t qore_quic_test_held_client_settings();
+
+//! Debug-only: closes the client sessions whose SETTINGS are held as their idle timer does; returns their number
+/** As if the idle timeout had expired (RFC 9000 section 10.1), without waiting for it; the threads waiting for the
+    SETTINGS are woken (see QuicSession::waitForRemoteSettings())
+*/
+DLLLOCAL int64_t qore_quic_test_idle_close_held_client_sessions();
+
+//! Debug-only: waits until \a count threads of the process wait in QuicSession::waitForRemoteSettings(); returns
+//! false on timeout
+DLLLOCAL bool qore_quic_test_wait_settings_waiters(int64_t count, int64_t timeout_ms);
 
 //! Debug-only: records a UDP socket that QUIC connections of the process receive packets on
 /** qore_quic_test_advance_clock() advances the clock only when none of these sockets has a packet waiting to be

@@ -1,0 +1,16 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# a user module for child-exec-mode.qtest: it runs in a Program of its own, which inherits the explicitly requested
+# execution mode of the Program that loads it
+
+module ChildExecModeModule {
+    version = "1.0";
+    desc = "test module for child Program execution modes";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! returns its argument plus 5
+public int sub module_fn(int x) {
+    return x + 5;
+}

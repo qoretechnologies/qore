@@ -92,6 +92,9 @@ public class Http3StreamContext inherits AbstractStreamContext {
         self.wake_callback = wake_callback;
         self.data_queue = data_queue;
         self.uses_frame_state = uses_frame_state;
+        if (uses_frame_state) {
+            ws_close_record = sock.getQuicStreamWebSocketCloseRecord(session_id, stream_id);
+        }
     }
 
     #! Returns True when the transport feeds pre-decoded WebSocket frame hashes
@@ -151,6 +154,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @param end_stream if True, signals end of stream after this data
     */
     sendData(binary data, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         # Guarantee wake callback fires even if waitForQuicStreamDrain() throws
         on_exit {
             if (wake_callback) {
@@ -194,13 +198,15 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     sendDataWithTimeout(binary data, timeout timeout_ms, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         # the wake callback runs even if the wait throws, so the data already queued is sent
         on_exit {
             if (wake_callback) {
                 wake_callback();
             }
         }
-        int deadline = timeout_ms > 0 ? clock_getmillis() + timeout_ms : 0;
+        # the deadline is on the monotonic clock: a step of the system clock does not change the wait
+        int deadline = timeout_ms > 0 ? clock_get_monotonic_us() / 1000 + timeout_ms : 0;
         while (sock.submitQuicStreamData(session_id, stream_id, data, end_stream) == 1) {
             # the data already queued must be sent before the stream can drain
             if (wake_callback) {
@@ -208,7 +214,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
             }
             int wait_ms = -1;
             if (deadline) {
-                wait_ms = deadline - clock_getmillis();
+                wait_ms = deadline - clock_get_monotonic_us() / 1000;
                 if (wait_ms <= 0) {
                     throw "STREAM-SEND-TIMEOUT", sprintf("HTTP/3 stream %d: the send buffer did not drain within %d "
                         "ms; %d bytes were not sent", stream_id, timeout_ms, data.size());
@@ -216,6 +222,39 @@ public class Http3StreamContext inherits AbstractStreamContext {
             }
             sock.waitForQuicStreamDrain(session_id, stream_id, wait_ms);
         }
+        # the stream was ended with the data: it is not ended again
+        if (end_stream) {
+            ended = True;
+        }
+    }
+
+    #! Sends the close frame of a WebSocket connection on the stream, unless one was sent on it before
+    /** See @ref Qore::Socket::submitQuicStreamWebSocketClose() "Socket::submitQuicStreamWebSocketClose()"
+
+        @param frame the encoded close frame
+        @param end_stream if @ref True, ends the stream after the frame (also if the frame is not sent)
+
+        @return @ref True if the frame was sent; @ref False if a close frame was sent on the stream before
+
+        @since AsyncSocketIo 1.0
+    */
+    bool sendWebSocketClose(binary frame, bool end_stream = False) {
+        # the connection's record decides before the stream or the session, which may have ended
+        if (isWebSocketCloseSent() && !end_stream) {
+            return False;
+        }
+        on_exit {
+            if (wake_callback) {
+                wake_callback();
+            }
+        }
+        int rc = sock.submitQuicStreamWebSocketClose(session_id, stream_id, frame, end_stream);
+        if (end_stream) {
+            ended = True;
+        }
+        # a close frame was staged on the stream, now or before
+        ws_close_sent = True;
+        return !rc;
     }
 
     #! Flush pending HTTP/3 writes for this session through the async I/O controller
@@ -240,6 +279,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @since AsyncSocketIo 1.0
     */
     bool trySendData(binary data, bool end_stream = False) {
+        checkWebSocketDataFrame(data);
         int rc = sock.submitQuicStreamData(session_id, stream_id, data, end_stream);
         # wake the I/O controller so queued packets are flushed on its next tick
         if (wake_callback) {

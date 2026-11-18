@@ -38,6 +38,47 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 
+namespace {
+class LexicalParseHashNode : public QoreParseHashNode {
+public:
+    using QoreParseHashNode::QoreParseHashNode;
+    QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const override {
+        return evalCommon<true>(needs_deref, xsink);
+    }
+};
+}
+
+QoreParseHashNode* QoreParseHashNode::create(LexicalSemanticPolicy policy, const QoreProgramLocation* loc,
+        bool curly) {
+    auto* node = policy.needsFilter() ? static_cast<QoreParseHashNode*>(new LexicalParseHashNode(loc, curly))
+        : new QoreParseHashNode(loc, curly);
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+QoreParseHashNode* QoreParseHashNode::bindSource(QoreParseHashNode* node, LexicalSemanticPolicy policy) {
+    assert(!node->parse_init && !node->semantic_policy_bound);
+    if (policy.needsFilter()) {
+        auto* replacement = create(policy, node->loc, node->curly);
+        replacement->keys.swap(node->keys);
+        replacement->values.swap(node->values);
+        replacement->lvec.swap(node->lvec);
+        replacement->kmap.swap(node->kmap);
+        replacement->parse_error = node->parse_error;
+        node->deref(nullptr);
+        return replacement;
+    }
+    ParseNode::bindSemanticPolicy(QoreValue(node), policy);
+    return node;
+}
+
+QoreParseHashNode* QoreParseHashNode::copyBackground(const QoreParseHashNode& old, ExceptionSink* xsink) {
+    auto* node = old.generic ? old.copyGenericBackground(xsink) : old.getSemanticPolicy().needsFilter()
+        ? static_cast<QoreParseHashNode*>(new LexicalParseHashNode(old, xsink)) : new QoreParseHashNode(old, xsink);
+    node->copySemanticPolicy(old);
+    return node;
+}
+
 static bool qore_parse_hash_literal_value_may_be_nothing(const QoreValue& v) {
     if (v.getType() == NT_VARREF) {
         const VarRefNode* vr = v.get<const VarRefNode>();
@@ -95,6 +136,14 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     bool vcommon = false;
 
     const QoreTypeInfo* expected_hash_type = parse_context.expected_type_info;
+    // the value type of the hash that this literal is stored in, if it is the value stored (issue #5782)
+    const QoreTypeInfo* target_value_type = nullptr;
+    if (parse_context.target_value == this) {
+        target_value_type = QoreTypeInfo::getUniqueReturnComplexHash(parse_context.target_type);
+        if (!target_value_type) {
+            target_value_type = QoreTypeInfo::getReturnComplexHashOrNothing(parse_context.target_type);
+        }
+    }
     const QoreTypeInfo* expected_hash_value_type = expected_hash_type
         ? QoreTypeInfo::getUniqueReturnComplexHash(expected_hash_type)
         : nullptr;
@@ -157,12 +206,34 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 
         parse_context.typeInfo = nullptr;
         parse_context.expected_type_info = expected_value_type;
-        if (parse_init_value(values[i], parse_context) && !err) {
-            err = -1;
+        {
+            // the value is the value stored in the hash that this literal is stored in, if any (issue #5782)
+            QoreParseTargetHelper target(parse_context, values[i], target_value_type);
+            if (parse_init_value(values[i], parse_context) && !err) {
+                err = -1;
+            }
         }
         vtypes[i] = parse_context.typeInfo;
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
             || qore_parse_hash_literal_value_may_be_nothing(values[i]);
+
+        // a date of the other subtype than the value type of the hash that the literal is stored in is a parse
+        // error, as for an assignment (issue #5782)
+        if (QoreTypeInfo::isDateSubtypeMismatch(target_value_type, vtypes[i])) {
+            QoreStringNode* desc = new QoreStringNode("the value of ");
+            std::string key;
+            if (keys[i].isValue() && !QoreHashKeyHelper::getConstKey(keys[i], key)) {
+                desc->sprintf("key '%s'", key.c_str());
+            } else {
+                desc->sprintf("key number %zu (starting from 0)", i);
+            }
+            desc->sprintf(" in the hash is type '%s', but the hash expects '%s'", QoreTypeInfo::getName(vtypes[i]),
+                QoreTypeInfo::getName(target_value_type));
+            parseException(*lvec[i], "PARSE-TYPE-ERROR", desc);
+            if (!err) {
+                err = -1;
+            }
+        }
 
         // For lvalue-like refs, clear type info to prevent baking declared or
         // narrowed types into the hash literal; the actual runtime value may
@@ -179,13 +250,24 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d key type '%s': value type '%s'\n",
         //    this, i, keys[i].getFullTypeName(), values[i].getFullTypeName());
 
+        // the value type of the container is that of the run-time values: a date has no subtype then, while the
+        // type of each value keeps it (call arguments are checked with it) (issue #5722)
         if (!i) {
             if (vtypes[0] && vtypes[0] != anyTypeInfo) {
-                vtype = vtypes[0];
+                vtype = QoreTypeInfo::getRuntimeValueType(vtypes[0]);
                 vcommon = true;
             }
-        } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vtypes[i])) {
-            vcommon = false;
+        } else if (vcommon) {
+            const QoreTypeInfo* vt = QoreTypeInfo::getRuntimeValueType(vtypes[i]);
+            // the common type of a type parameter and another type is not known before the type parameter is
+            // substituted (QoreTypeInfo::matchCommonType() would treat the type parameter as NOTHING and give the
+            // or-nothing type of the other type): the container's value type is then auto (qore#6000)
+            if (vt != vtype && (qore_type_contains_type_parameter(vtype) || qore_type_contains_type_parameter(vt))) {
+                vtype = nullptr;
+                vcommon = false;
+            } else if (!QoreTypeInfo::matchCommonType(vtype, vt)) {
+                vcommon = false;
+            }
         }
 
         if (!needs_eval && values[i].needsEval()) {
@@ -232,6 +314,18 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         return err;
     }
 
+    if (qore_type_contains_type_parameter(vtype)) {
+        // the hash that a literal in a generic callable creates has the type argument of the call in place of the
+        // type parameter, so it cannot be created here; other literals keep their code path (issue #5872)
+        ReferenceHolder<> holder(this, nullptr);
+        QoreParseHashNode* generic_hash = getSemanticPolicy().needsFilter()
+            ? static_cast<QoreParseHashNode*>(new QoreGenericParseHashNode<true>(*this))
+            : new QoreGenericParseHashNode<false>(*this);
+        generic_hash->setParseAnalysis(parse_context.analysis);
+        val = generic_hash;
+        return 0;
+    }
+
     if (needs_eval) {
         return 0;
     }
@@ -263,7 +357,19 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
 }
 
 QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    return evalCommon<false>(needs_deref, xsink);
+}
+
+template <bool Lexical, bool Generic>
+QoreValue QoreParseHashNode::evalCommon(bool& needs_deref, ExceptionSink* xsink) const {
     assert(keys.size() == values.size());
+
+    // the value type in a generic callable has the type argument of the call in place of the type parameter
+    // (issue #5872); the code of the other literals uses the node's value type as before
+    const QoreTypeInfo* generic_vtype = nullptr;
+    if (Generic) {
+        generic_vtype = qore_substitute_type_params_if_needed(this->vtype);
+    }
 
     // Use the parse-time narrowed value type when available so
     // setKeyValue triggers per-value softening (softint, softstring,
@@ -276,12 +382,14 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
     // autoTypeInfo when the parser left vtype as auto/null/any, and
     // the tail block below derives complexTypeInfo from runtime-
     // inferred values as before (issue #2106).
-    const bool parse_time_narrowed = (this->vtype
-        && this->vtype != autoTypeInfo
-        && this->vtype != anyTypeInfo);
+    const bool parse_time_narrowed = Generic
+        ? (generic_vtype && generic_vtype != autoTypeInfo && generic_vtype != anyTypeInfo)
+        : (this->vtype
+            && this->vtype != autoTypeInfo
+            && this->vtype != anyTypeInfo);
 
     ReferenceHolder<QoreHashNode> h(
-        new QoreHashNode(parse_time_narrowed ? this->vtype : autoTypeInfo),
+        new QoreHashNode(parse_time_narrowed ? (Generic ? generic_vtype : this->vtype) : autoTypeInfo),
         xsink);
 
     // issue #2106 we must calculate the runtime type again because lvalues can return NOTHING despite their declared
@@ -324,13 +432,19 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
         //printd(5, "QoreParseHashNode::evalImpl() '%s' this->vtype: '%s' (c: %d) vt: '%s' (c: %d)\n",
         //  key.c_str(), QoreTypeInfo::getName(this->vtype), QoreTypeInfo::hasComplexType(this->vtype),
         //  QoreTypeInfo::getName(vt), QoreTypeInfo::hasComplexType(vt));
-        if (this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
+        // a literal in a generic callable stores its values as they are, as the IR interpreter does: this keeps the
+        // type folding call out of its code
+        if (!Generic && this->vtype && this->vtype != vt && !QoreTypeInfo::hasComplexType(this->vtype)
                 && QoreTypeInfo::hasComplexType(vt)) {
             // this can never throw an exception; it's only used for type folding/stripping
             QoreTypeInfo::acceptInputKey(this->vtype, key.c_str(), val, xsink);
         }
 
-        h->setKeyValue(key.c_str(), val, xsink);
+        if constexpr (Lexical) {
+            qore_hash_private::setKeyValueLexical(**h, key.c_str(), val, xsink, getSemanticPolicy());
+        } else {
+            qore_hash_private::setKeyValueCanonical(**h, key.c_str(), val, xsink);
+        }
         if (xsink && *xsink) {
             needs_deref = false;
             return QoreValue();
@@ -355,3 +469,7 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 
     return rv.release();
 }
+
+// the evaluation of the literals whose value type has a type parameter (QoreGenericParseHashNode, issue #5872)
+template QoreValue QoreParseHashNode::evalCommon<false, true>(bool& needs_deref, ExceptionSink* xsink) const;
+template QoreValue QoreParseHashNode::evalCommon<true, true>(bool& needs_deref, ExceptionSink* xsink) const;

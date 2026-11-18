@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode, whose restricted Programs set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class IndexWriterFilesystemTest
+
+#! Tests that the APIs that write the data provider index files are in the FILESYSTEM domain (#6500)
+/** ProviderIndexUtil::writeDataProviderIndex(), writeDataProviderIndexByApp(), setEnvironmentVariable(),
+    tryLoadModule() (which loads a module by a path that it is given),
+    ProviderIndex::createDataProviderIndex(), prepareIndexWorker() and runIndexWorker() are in the PROCESS_CONTROL and
+    FILESYSTEM domains, and ProviderIndexUtil::dumpIndexYaml(), readSerializedDataProviderIndex() and
+    getSerializedDataProviderIndexSource(), which read or write files in a directory or at a path that the caller
+    gives, in the FILESYSTEM domain, so code restricted only from the file system cannot call them, when it is parsed
+    or at run time, also when unrestricted code loaded the modules first (a module that is already loaded is not
+    checked again for the next Program that loads it), and code restricted from process control cannot call the
+    first.  index-writer.q runs the calls in a Program in each execution mode, in a process of its own with an index
+    directory of its own, which no restricted call writes to or changes; unrestricted code still writes the index.
+*/
+class IndexWriterFilesystemTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string qlib_dir;
+        string script;
+
+        const Expected = "writeDataProviderIndex direct: PARSE-EXCEPTION FILESYSTEM
+writeDataProviderIndex runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+writeDataProviderIndexByApp direct: PARSE-EXCEPTION FILESYSTEM
+writeDataProviderIndexByApp runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+createDataProviderIndex direct: PARSE-EXCEPTION FILESYSTEM
+createDataProviderIndex runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+prepareIndexWorker direct: PARSE-EXCEPTION FILESYSTEM
+prepareIndexWorker runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+runIndexWorker direct: PARSE-EXCEPTION FILESYSTEM
+runIndexWorker runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+dumpIndexYaml direct: PARSE-EXCEPTION FILESYSTEM
+dumpIndexYaml runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+readSerializedDataProviderIndex direct: PARSE-EXCEPTION FILESYSTEM
+readSerializedDataProviderIndex runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+getSerializedDataProviderIndexSource direct: PARSE-EXCEPTION FILESYSTEM
+getSerializedDataProviderIndexSource runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+tryLoadModule direct: PARSE-EXCEPTION FILESYSTEM
+tryLoadModule runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+setEnvironmentVariable direct: PARSE-EXCEPTION FILESYSTEM
+setEnvironmentVariable runtime: INVALID-FUNCTION-ACCESS FILESYSTEM
+index files after the restricted calls: none
+index directory after the restricted calls: unchanged
+writeDataProviderIndex process control: PARSE-EXCEPTION PROCESS_CONTROL
+index files after the unrestricted call: written
+";
+    }
+
+    constructor() : QUnit::Test("IndexWriterFilesystemTest", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
+        script = get_script_dir() + "/index-writer-filesystem/index-writer.q";
+        foreach string mode in (("ast", "ir", "jit")) {
+            string m = mode;
+            addTestCase("execution mode " + m, sub () { check(m); });
+        }
+        set_return_value(main());
+    }
+
+    private check(string mode) {
+        TmpDir dir("qore-index-writer-filesystem-");
+        *string env_dir = ENV.QORE_MODULE_DIR;
+        string mod_dir = env_dir ? qlib_dir + ":" + env_dir : qlib_dir;
+        string cmd = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s "
+            "QORE_PROVIDER_INDEX_DIR=%s %s -b %s %s 2>/dev/null", shellQuote(libqore_dir), shellQuote(libqore_dir),
+            shellQuote(libqore_dir), shellQuote(mod_dir), shellQuote(dir.path), shellQuote(qore_bin), shellQuote(script),
+            mode);
+        assertEq(Expected, backquote(cmd), mode);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

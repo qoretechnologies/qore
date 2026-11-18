@@ -30,6 +30,19 @@ public namespace EdifactUtil {
 
     #! Cache helper for EDIFACT directory schemas
     public class EdifactDirectoryCache {
+        private {
+            #! the cache root directory given to the constructor, if any
+            *string root;
+        }
+
+        #! Creates the cache helper
+        /** @param root the cache root directory; if not given, the directory in the \c QORE_EDIFACT_DIRCACHE
+            environment variable, or \c ~/.qore/edifact
+        */
+        constructor(*string root) {
+            self.root = root;
+        }
+
         private string joinPath(string base, string leaf) {
             if (!base.size()) {
                 return leaf;
@@ -58,8 +71,8 @@ public namespace EdifactUtil {
         }
 
         string getCacheRoot() {
-            string root = getenv(EdifactCacheEnvVar) ?? EdifactCacheDefaultRoot;
-            return expandUserPath(root);
+            string dir = root.val() ? root : (getenv(EdifactCacheEnvVar) ?? EdifactCacheDefaultRoot);
+            return expandUserPath(dir);
         }
 
         string getReleaseRoot(string release) {
@@ -178,7 +191,7 @@ public namespace EdifactUtil {
                             release, ex.err, ex.desc);
                         if (cache_warnings != NOTHING) {
                             push cache_warnings, msg;
-                        } else {
+                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                             stderr.printf("%s\n", msg);
                         }
                     }

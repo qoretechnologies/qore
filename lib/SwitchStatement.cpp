@@ -34,10 +34,17 @@
 #include "qore/intern/SwitchStatement.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/CaseNodeWithOperator.h"
+#include "qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/qore_string_private.h"
+#include "qore/intern/qore_encoding_private.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
@@ -74,6 +81,53 @@ bool qore_switch_case_equal(QoreValue lhs_value, QoreValue rhs_value, ExceptionS
     }
 
     return false;
+}
+
+QoreSwitchStringValue::QoreSwitchStringValue(QoreValue v) {
+    // an enum value is compared with its base value, as qore_switch_case_equal() compares it
+    if (v.isEnum()) {
+        v = v.getEnumBaseValue();
+    }
+    if (v.isShortString()) {
+        // an inline short string is in UTF-8
+        v.getShortString(short_buf);
+        buf = short_buf;
+        len = v.shortStringLen();
+        ascii_identical = true;
+        return;
+    }
+    if (v.getType() == NT_STRING) {
+        setString(*v.get<const QoreStringNode>());
+    }
+}
+
+QoreSwitchStringValue::QoreSwitchStringValue(const QoreString& value) {
+    setString(value);
+}
+
+void QoreSwitchStringValue::setString(const QoreString& value) {
+    // the data of the value, read directly, as a lookup does for each switch
+    const qore_string_private* p = qore_string_private::get(value);
+    str = &value;
+    buf = p->effective_buf();
+    len = p->len;
+    ascii_identical = qore_encoding_private::get(*p->getEncoding())->isKnownAsciiIdentical();
+}
+
+bool QoreSwitchStringValue::equalsConverted(const char* case_str, size_t case_len) const {
+    assert(str);
+    // determines the encoding's property, so that the next lookup can compare bytes if it has it
+    qore_encoding_private::get(*str->getEncoding())->isAsciiIdentical();
+    // compared as the AST interpreter compares the strings (QoreValue::isEqualHard()), for which an encoding conversion
+    // error means that they are not equal; the case is ASCII, and in UTF-8 whatever the default encoding is
+    QoreString case_string(case_str, case_len, QCS_UTF8);
+    ExceptionSink xsink;
+    bool rv = str->equalSoft(case_string, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return rv;
 }
 
 bool CaseNode::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
@@ -158,7 +212,7 @@ int SwitchStatement::execImpl(QoreValue& return_value, ExceptionSink *xsink) {
         }
 
         if (rc == RC_BREAK
-            || ((getProgram()->getParseOptions() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc == RC_CONTINUE)) {
+            || (semantic_policy.brokenLoop() && rc == RC_CONTINUE)) {
             rc = 0;
         }
     }
@@ -201,7 +255,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
         }
 
         if (rc_state == RC_BREAK
-            || ((getProgram()->getParseOptions() & PO_BROKEN_LOOP_STATEMENT) != 0 && rc_state == RC_CONTINUE)) {
+            || (semantic_policy.brokenLoop() && rc_state == RC_CONTINUE)) {
             rc_state = 0;
         }
     }
@@ -347,6 +401,14 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
         }
         //printd(5, "SwitchStatement::parseInit() this=%p case exp: %p %s\n", this, w->val, get_type_name(w->val));
 
+        // a case with an operator compares the value of the switch statement with the case value as the operator
+        // does in the condition of an if statement, with the type of the switch expression (qore#6252)
+        if (auto* op_case = dynamic_cast<CaseNodeWithOperator*>(w)) {
+            if (op_case->parseInitComparison(switch_type_info, parse_context) && !err) {
+                err = -1;
+            }
+        }
+
         // check for duplicate values
         CaseNode* cw = head;
         while (cw != w) {
@@ -381,6 +443,8 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
             // Record facts after this case block and restore for next case
             nth.recordBranchAndRestore();
             ash.recordBranchAndRestore();
+            // the next case block can follow this one when it falls through (qore#5937)
+            ash.applyChangesSinceSave();
         }
         w = w->next;
     }
@@ -394,6 +458,20 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     // Merge facts from all branches
     nth.mergeAndApply();
     ash.mergeAndApply();
+
+    // a value of the switch expression can certainly match no case if there is no default case, every case compares
+    // a value, and the type of the expression has more values than the cases: an enum or a boolean value can be
+    // matched by every case (issue #5940)
+    if (!deflt && QoreTypeInfo::hasType(switch_type_info) && !QoreTypeInfo::getReturnEnum(switch_type_info)
+            && QoreTypeInfo::parseReturns(switch_type_info, NT_BOOLEAN) == QTI_NOT_EQUAL) {
+        no_match_possible = true;
+        for (const CaseNode* c = head; c; c = c->next) {
+            if (!c->isCaseNode()) {
+                no_match_possible = false;
+                break;
+            }
+        }
+    }
 
     // warn if the switch is over an enum value, has no default case, and does not handle all
     // enum members (only when the switch parsed cleanly, to avoid noise on broken code)
@@ -415,17 +493,216 @@ void SwitchStatement::parseCommit(QoreProgram* pgm) {
     }
 }
 
-CaseNodeWithOperator::CaseNodeWithOperator(const QoreProgramLocation* loc, QoreValue v, StatementBlock* c,
-        op_log_func_t op) : CaseNode(loc, v, c), op_func(op) {
+QoreString QoreSwitchValueOperatorNode::op_str("switch value");
+
+namespace {
+//! the value of the switch statement whose case is being matched (QoreSwitchCaseValueScope)
+thread_local const QoreValue* qore_switch_case_value = nullptr;
+}
+
+QoreSwitchCaseValueScope::QoreSwitchCaseValueScope(const QoreValue& value) : old(qore_switch_case_value) {
+    qore_switch_case_value = &value;
+}
+
+QoreSwitchCaseValueScope::~QoreSwitchCaseValueScope() {
+    qore_switch_case_value = old;
+}
+
+QoreValue QoreSwitchValueOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    // the node is only evaluated in the comparison of a switch case, in the scope of the value being matched
+    assert(qore_switch_case_value);
+    // the switch statement holds the value while its cases are matched
+    needs_deref = false;
+    return qore_switch_case_value ? *qore_switch_case_value : QoreValue();
+}
+
+CaseNodeWithOperator::~CaseNodeWithOperator() {
+    cmp.discard(nullptr);
 }
 
 bool CaseNodeWithOperator::isCaseNodeImpl() const {
     return false;
 }
 
-bool CaseNodeWithOperator::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
-    return op_func(lhs_value, val, xsink);
+int CaseNodeWithOperator::parseInitComparison(const QoreTypeInfo* switch_type_info, QoreParseContext& parse_context) {
+    assert(!cmp);
+    QoreValue left(new QoreSwitchValueOperatorNode(loc, switch_type_info));
+    ParseNode::bindSemanticPolicy(left, policy);
+    QoreValue right = val.refSelf();
+    QoreOperatorNode* node = nullptr;
+    switch (op) {
+        case QoreSwitchCaseOperator::GreaterThanOrEquals:
+            node = new QoreLogicalGreaterThanOrEqualsOperatorNode(loc, left, right);
+            break;
+        case QoreSwitchCaseOperator::LessThanOrEquals:
+            node = new QoreLogicalLessThanOrEqualsOperatorNode(loc, left, right);
+            break;
+        case QoreSwitchCaseOperator::Equals:
+            node = QoreLogicalEqualsOperatorNode::create(policy, loc, left, right);
+            break;
+        case QoreSwitchCaseOperator::LessThan:
+            node = new QoreLogicalLessThanOperatorNode(loc, left, right);
+            break;
+        case QoreSwitchCaseOperator::GreaterThan:
+            node = new QoreLogicalGreaterThanOperatorNode(loc, left, right);
+            break;
+    }
+    cmp = node;
+    ParseNode::bindSemanticPolicy(cmp, policy);
+    parse_context.typeInfo = nullptr;
+    int rc = parse_init_value(cmp, parse_context);
+    if (!rc && cmp.hasNode()) {
+        // the comparison operator whose evalValues() the case calls with the switch value; parse initialization
+        // keeps the operator, whose left operand is not a constant
+        const AbstractQoreNode* n = cmp.getInternalNode();
+        bool is_op = false;
+        switch (op) {
+            case QoreSwitchCaseOperator::GreaterThanOrEquals:
+                is_op = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(n);
+                break;
+            case QoreSwitchCaseOperator::LessThanOrEquals:
+                is_op = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(n);
+                break;
+            case QoreSwitchCaseOperator::Equals:
+                is_op = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(n);
+                break;
+            case QoreSwitchCaseOperator::LessThan:
+                is_op = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(n);
+                break;
+            case QoreSwitchCaseOperator::GreaterThan:
+                is_op = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(n);
+                break;
+        }
+        auto* binop = is_op ? dynamic_cast<const QoreBinaryOperatorNode<>*>(n) : nullptr;
+        if (binop && binop->getLeft().hasNode()
+                && dynamic_cast<const QoreSwitchValueOperatorNode*>(binop->getLeft().getInternalNode())) {
+            cmp_op = binop;
+            cmp_right_needs_eval = binop->getRight().needsEval();
+            // the comparison for a switch value that is not a node, with an inline constant: as evalValues() does
+            // for two such values, the scalar comparison, or for == soft equality, unless parse initialization
+            // selected a specialization for the types of the operands or the case has strict boolean semantics
+            if (!cmp_right_needs_eval && !binop->getRight().isPointer()) {
+                switch (op) {
+                    case QoreSwitchCaseOperator::GreaterThanOrEquals: {
+                        auto* n_op = static_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(binop);
+                        if (!n_op->hasSpecialization()) {
+                            cmp_scalar = &QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals;
+                        }
+                        break;
+                    }
+                    case QoreSwitchCaseOperator::LessThanOrEquals: {
+                        auto* n_op = static_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(binop);
+                        if (!n_op->hasSpecialization()) {
+                            cmp_scalar = &QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals;
+                        }
+                        break;
+                    }
+                    case QoreSwitchCaseOperator::Equals:
+                        if (!policy.strictBoolean()
+                                && !static_cast<const QoreLogicalEqualsOperatorNode*>(binop)->hasSpecialization()) {
+                            cmp_scalar = &QoreLogicalEqualsOperatorNode::softEqual;
+                        }
+                        break;
+                    case QoreSwitchCaseOperator::LessThan:
+                        if (!static_cast<const QoreLogicalLessThanOperatorNode*>(binop)->hasSpecialization()) {
+                            cmp_scalar = &QoreLogicalLessThanOperatorNode::doLessThan;
+                        }
+                        break;
+                    case QoreSwitchCaseOperator::GreaterThan:
+                        if (!static_cast<const QoreLogicalGreaterThanOperatorNode*>(binop)->hasSpecialization()) {
+                            cmp_scalar = &QoreLogicalGreaterThanOperatorNode::doGreaterThan;
+                        }
+                        break;
+                }
+            }
+        }
+    }
+    return rc;
 }
+
+QORE_INTERN_ALWAYS_INLINE QoreValue CaseNodeWithOperator::compareValues(const QoreValue& lhs_value,
+        const QoreValue& rhs_value, ExceptionSink* xsink) const {
+    switch (op) {
+        case QoreSwitchCaseOperator::GreaterThanOrEquals:
+            return static_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(cmp_op)->evalValues(lhs_value,
+                rhs_value, xsink);
+        case QoreSwitchCaseOperator::LessThanOrEquals:
+            return static_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(cmp_op)->evalValues(lhs_value,
+                rhs_value, xsink);
+        case QoreSwitchCaseOperator::Equals:
+            return static_cast<const QoreLogicalEqualsOperatorNode*>(cmp_op)->evalValues(lhs_value, rhs_value,
+                policy.strictBoolean(), xsink);
+        case QoreSwitchCaseOperator::LessThan:
+            return static_cast<const QoreLogicalLessThanOperatorNode*>(cmp_op)->evalValues(lhs_value, rhs_value,
+                xsink);
+        case QoreSwitchCaseOperator::GreaterThan:
+            return static_cast<const QoreLogicalGreaterThanOperatorNode*>(cmp_op)->evalValues(lhs_value,
+                rhs_value, xsink);
+    }
+    assert(false);
+    return QoreValue();
+}
+
+bool CaseNodeWithOperator::matches(QoreValue lhs_value, ExceptionSink* xsink) const {
+    // the case matches when value OP x is true as the condition of an if statement (qore#6252)
+    // the common case: the operator compares the switch value with a constant as it compares the values of its
+    // operands; the other cases and the conversion of a result that is not a bool are in functions of their own, so
+    // that this one needs no stack frame of its own for them
+    // a switch value that is not a node compared with an inline constant without a specialization: the scalar
+    // comparison of the operator
+    if (cmp_scalar && !lhs_value.isPointer()) {
+        return cmp_scalar(lhs_value, cmp_op->getRight(), xsink);
+    }
+    if (cmp_op && !cmp_right_needs_eval) {
+        QoreValue result = compareValues(lhs_value, cmp_op->getRight(), xsink);
+        // a comparison of scalars gives a bool
+        if (result.isBool()) {
+            return result.isTrue();
+        }
+        return matchesResult(result, xsink);
+    }
+    return matchesSlow(lhs_value, xsink);
+}
+
+bool CaseNodeWithOperator::matchesResult(QoreValue& result, ExceptionSink* xsink) const {
+    // a buffer compared elementwise or the result of a plugin operation, as the condition of an if statement
+    bool b = !*xsink && (policy.strictBoolean() ? LexicalSemanticPolicy::getAsBoolStrict(result)
+        : LexicalSemanticPolicy::getAsBoolDefault(result));
+    result.discard(xsink);
+    return b && !*xsink;
+}
+
+bool CaseNodeWithOperator::matchesSlow(const QoreValue& lhs_value, ExceptionSink* xsink) const {
+    // the comparison is created when the switch statement is parse-initialized; a program with a parse error in a
+    // case value is not run
+    if (!cmp) {
+        return false;
+    }
+    // unlike the condition of an if statement (qore_eval_condition()), the comparison needs no temp scope of its own:
+    // its operands are the value of the switch statement, which the statement holds, and the case value, a
+    // constant, so it creates no temporary but its result, which is released here
+    if (!cmp_op) {
+        QoreSwitchCaseValueScope scope(lhs_value);
+        ValueEvalOptimizedRefHolder rv(cmp, xsink);
+        if (*xsink) {
+            return false;
+        }
+        return policy.strictBoolean() ? LexicalSemanticPolicy::getAsBoolStrict(*rv)
+            : LexicalSemanticPolicy::getAsBoolDefault(*rv);
+    }
+    // a case value that is evaluated at run time (a constant whose value an AOT build gives then)
+    assert(cmp_right_needs_eval);
+    ValueEvalOptimizedRefHolder right(cmp_op->getRight(), xsink);
+    if (*xsink) {
+        return false;
+    }
+    QoreValue result = compareValues(lhs_value, *right, xsink);
+    if (result.isBool()) {
+        return result.isTrue();
+    }
+    return matchesResult(result, xsink);
+}
+
 
 CaseNodeRegex::CaseNodeRegex(const QoreProgramLocation* loc, QoreRegex* m_re, StatementBlock* blk)
         : CaseNode(loc, QoreValue(), blk), re(m_re) {

@@ -42,6 +42,7 @@
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 class QoreEventNotifier;
 
@@ -623,7 +624,12 @@ protected:
             accepted_socket_obj->ref();
             info->setKeyValue("socket", *accepted_socket_obj, xsink);
         } else {
-            info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+            QoreObject* sock = getReferencedSocketObject(xsink);
+            if (!sock) {
+                // no poll info is returned with an exception: a step returns one or the other (#6525)
+                return nullptr;
+            }
+            info->setKeyValue("socket", sock, xsink);
         }
         return info.release();
     }
@@ -1065,7 +1071,7 @@ private:
     const char* buf;
     size_t size;
 
-    // Idle phase: timeout deadline in milliseconds from epoch
+    // Idle phase: timeout deadline in milliseconds on the monotonic clock (q_get_monotonic_us() / 1000, #6150)
     int64 idle_timeout_ms;
     // the idle timeout in milliseconds, for the deadline of the next request after one answered by a fast route
     int64 idle_ttl_ms = 0;
@@ -1113,6 +1119,13 @@ private:
 
     // true while the response of a fast route to a request with Connection: close is sent: the operation then ends
     bool fast_close = false;
+
+    //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
+    DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
+
+    //! true once the operation has sent a response (see enterIdle()): a draining server closes the connection if no
+    //! request has arrived after it; the first request of a new connection is served
+    bool responded = false;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return true;
@@ -1567,6 +1580,9 @@ private:
 
     // Idle + ReadHeader phases
     bool fused;
+
+    //! Waits for the next request after a response, or ends (Phase::Closed) if the server drains the connection
+    DLLLOCAL QoreHashNode* enterIdle(ExceptionSink* xsink);
     int64 idle_timeout_ms;
     mutable ReferenceHolder<QoreHashNode> header_output;
 
@@ -1651,6 +1667,27 @@ public:
     DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int32_t>& stream_ids,
         std::vector<Http2ResponseHeaderEvent>& out);
 
+#ifdef DEBUG
+    //! Sets whether the next pass holds the data of streaming responses in the session; I/O thread only
+    /** Set by the read pass of the client's poll operation from its decision for the pass, so that the hold is read
+        once per pass
+    */
+    DLLLOCAL void dbgSetOutputsHeld(bool held) {
+        dbg_outputs_held = held;
+    }
+
+    //! Returns the number of streaming streams whose data the session buffers
+    DLLLOCAL size_t dbgStreamingDataCount() const {
+        return h2_session ? h2_session->dbgStreamingDataCount() : 0;
+    }
+#endif
+
+    //! Returns the number of completed responses that getOutput() has not returned yet
+    DLLLOCAL size_t completedResponseCount() const {
+        AutoLocker al(response_lock);
+        return completed_responses.size();
+    }
+
     //! Returns the next completed response, or NOTHING if none available
     DLLLOCAL virtual QoreValue getOutput() const override {
         AutoLocker al(response_lock);
@@ -1684,6 +1721,11 @@ public:
     }
 
 private:
+#ifdef DEBUG
+    //! true if the current pass holds the data of streaming responses (see dbgSetOutputsHeld())
+    bool dbg_outputs_held = false;
+#endif
+
     Http2SessionPtr h2_session;
     int h2_state = H2C_NONE;
     bool peer_closed = false;
@@ -1940,7 +1982,7 @@ public:
             // teardown below.  Matches the pattern used on the server
             // side (SocketQuicServerPollOperation::abort).
             if (quic_session) {
-                int fd = sock->priv->socket->getSocket();
+                int fd = sock->priv->socket->getDescriptor();
                 if (fd >= 0) {
                     uint8_t close_buf[1280];
                     ssize_t close_len = quic_session->writeConnectionClose(
@@ -1994,6 +2036,12 @@ public:
     /** Can be called from any thread
     */
     DLLLOCAL int getAddressFamily() const { return address_family_.load(std::memory_order_acquire); }
+
+    //! Returns true once the QUIC handshake of the connection has completed, also after it has closed
+    /** Can be called from any thread; set before the HTTP/3 layer is set up, so an error raised while it is set up
+        (such as \c QUIC-SEND-ERROR) is known to be raised after the server was reached
+    */
+    DLLLOCAL bool isHandshakeComplete() const { return handshake_completed_.load(std::memory_order_acquire); }
 
     //! Migrate the QUIC connection to a new socket (client-side active migration)
     /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),
@@ -2058,6 +2106,8 @@ private:
     std::vector<int> avoid_families_;
     //! the address family of the remote address once resolved; read from other threads
     std::atomic<int> address_family_{AF_UNSPEC};
+    //! set by the I/O thread when the QUIC handshake completes; never cleared (see isHandshakeComplete())
+    std::atomic<bool> handshake_completed_{false};
 
     //! Soft deadline (ngtcp2 timestamp, ns) after which a handshake that has
     //! seen at least one ICMP port-unreachable (ECONNREFUSED on a connected
@@ -2181,7 +2231,7 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
-        int fd = sock->priv->socket->getSocket();
+        int fd = sock->priv->socket->getDescriptor();
         // Graceful QUIC shutdown (nginx pattern, see nginx-1.29.4
         // src/event/quic/ngx_event_quic.c:468-620):
         //   1. Send HTTP/3 GOAWAY on each session so clients stop opening
@@ -2334,6 +2384,22 @@ private:
 
     //! Clean up closed sessions (called periodically, not every poll cycle)
     DLLLOCAL void cleanupClosedSessions();
+
+    //! Drains the sessions of a server that stops (qore#5899; called on the I/O thread with the socket lock held)
+    /** Sends each session the GOAWAY notice once, and closes (final GOAWAY, then CONNECTION_CLOSE) each session that
+        has no request left
+
+        @return true if every session is closed, in which case the operation ends (isDrained())
+    */
+    DLLLOCAL bool drainSessions();
+
+public:
+    //! Returns true if the operation ended because the server drained all its sessions
+    DLLLOCAL bool isDrained() const {
+        return qcs_state == QCS::CLOSED;
+    }
+
+private:
 
     //! Accumulate peer-reset and session-close events into the lifecycle buffers
     /** Iterates all sessions on the I/O thread (socket lock held), draining each
@@ -2504,7 +2570,7 @@ public:
             // the stream and clear non-block tracking
             if (quic_session && ss_state != QCS_SS::DONE) {
                 ExceptionSink cancel_xsink;
-                sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+                qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
                 cancel_xsink.clear();
             }
             if (quic_session || set_non_block) {
@@ -2540,7 +2606,7 @@ public:
         // Cancel the stream through the socket's async-aware cancellation path.
         if (quic_session) {
             ExceptionSink cancel_xsink;
-            sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+            qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
             cancel_xsink.clear();
             quic_session.reset();
         }

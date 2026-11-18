@@ -37,12 +37,17 @@
 class RuntimeConfig;
 
 #include <atomic>
+#include <functional>
 #include <vector>
+#include <utility>
 #include <set>
 #include <map>
+#include <optional>
 #include <memory>
+#include <new>
 
 #include "qore/intern/QoreSandboxLimits.h"
+#include "qore/QoreSandboxManager.h"
 
 #ifndef QORE_THREAD_STACK_SIZE
 #define QORE_THREAD_STACK_SIZE 1024*512
@@ -202,7 +207,7 @@ public:
     DLLLOCAL QoreModuleDefContext() {
     }
 
-    DLLLOCAL ~QoreModuleDefContext() {
+    DLLLOCAL virtual ~QoreModuleDefContext() {
         init_c.discard(nullptr);
         del_c.discard(nullptr);
     }
@@ -214,6 +219,20 @@ public:
     strmap_t vmap;
 
     DLLLOCAL int set(const QoreProgramLocation* loc, const char* key, QoreValue val);
+
+    //! sets the \c domains key: the functional domains that the module declares (see
+    //! qore_program_private::setModuleOwnDomains())
+    DLLLOCAL int setDomains(const QoreProgramLocation* loc, QoreValue val);
+
+    //! applies the functional domains that the module declares (\c domains) to its Program; returns the inherited
+    //! restrictions that were removed
+    DLLLOCAL virtual int64 applyDomains(int64 dom);
+
+    //! returns the Program of the module that this context defines, if known; the context applies only to the parse of
+    //! that Program, not to another Program parsed while the module is loaded (ex: from its init closure)
+    DLLLOCAL virtual const QoreProgram* getDefinitionProgram() const {
+        return nullptr;
+    }
 
     //! Records a child module declared with %try-child-module in this module
     /** @param loc the location of the directive
@@ -261,6 +280,21 @@ struct QoreBackgroundHelperCode {
     QoreAOTContext* aot_ctx = nullptr;
 };
 
+//! how the thread of a background helper uses the object of the code that starts it
+/** The thread holds the object while it runs when the expression calls methods of the object.  The AST interpreter
+    runs the thread with the object as its context, and so checks that the object has not been deleted when the thread
+    starts, only when the expression is a call of a method of the object; a call elsewhere in the expression checks the
+    object when it is made, so the expression runs until then (qore#5973).
+*/
+enum QoreBackgroundHelperSelf : uint8_t {
+    //! the thread does not use the object
+    QBHS_NONE = 0,
+    //! the expression is a call of a method of the object: the thread checks the object when it starts
+    QBHS_CHECKED = 1,
+    //! the expression calls methods of the object elsewhere: each call checks the object
+    QBHS_HELD = 2,
+};
+
 //! Starts a thread evaluating a background expression with its helper (QoreIRBackgroundInstruction)
 /** The starting code has evaluated the values that the expression takes when the thread starts.  The new thread
     instantiates the helper's parameters with them, runs the helper and releases its value, as the AST interpreter's
@@ -270,13 +304,13 @@ struct QoreBackgroundHelperCode {
     @param params the helper's parameters
     @param values the value of each parameter, borrowed: the thread takes references of its own
     @param num the number of parameters and values
-    @param uses_self true if the thread runs with the object of the starting code, which it holds while it runs
+    @param self_mode how the thread uses the object of the starting code
     @param xsink for exceptions raised starting the thread
 
     @return the TID of the new thread, or NOTHING if an exception was raised
 */
 DLLLOCAL QoreValue do_op_background_helper(const QoreBackgroundHelperCode& code, LocalVar* const* params,
-        const QoreValue* values, size_t num, bool uses_self, ExceptionSink* xsink);
+        const QoreValue* values, size_t num, QoreBackgroundHelperSelf self_mode, ExceptionSink* xsink);
 
 //! Runs a background helper in the thread started by do_op_background_helper(), with its parameters instantiated
 /** Defined with the JIT runtime, which owns the native calling conventions.
@@ -325,6 +359,69 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+//! returns the module Program whose code runs with the restrictions of a sandboxed caller on this thread, if any
+DLLLOCAL const QoreProgram* runtime_get_module_call_program();
+
+//! Returns the number of cancellations and interrupts that cancellation points have raised in the current thread
+/** A caller that runs code on behalf of the thread compares the number before and after the code to know whether the
+    code raised a cancellation, which it may have handled (see QoreDebugProgramWithQoreObject)
+*/
+DLLLOCAL unsigned qore_get_cancel_raise_count();
+
+//! Requests the cancellation of the current thread, scoped to a Program, as a cancellation of another thread
+/** Program::cancelThread() refuses the current thread; a debugger callback that ends the thread while it raises
+    another exception (the one that the callback was made for) makes the end of the thread stick with it: the next
+    cancellation point of the thread raises it, also when the program catches the other exception (qore#5987)
+
+    @param reason the reason of the cancellation, which ends the description of the exception that it raises
+    @param scope_pgm_id the Program whose code the request applies to (see QoreThreadList::cancelThread())
+*/
+DLLLOCAL void qore_request_current_thread_cancel(const char* reason, qore_program_id_t scope_pgm_id);
+
+//! Returns the location of the call stack frame of code being called, and clears the call site
+/** The location of a frame is the location of the call expression that called the code, set by the call site with
+    QoreRcCallSiteHelper (or the equivalent stores of IR and native code); without one, it is the thread's current
+    runtime location.  The call site is cleared, as it is the location of this frame only, not of the frames of the
+    calls that the called code makes.
+*/
+DLLLOCAL const QoreProgramLocation* take_runtime_call_location();
+//! Returns the runtime location for the frame of code that no call expression calls, and hides the call site
+/** For a destructor, for example (see CodeEvaluationHelper): the call site, if any, is cleared, and the caller
+    restores it through \a slot with \a prev when the code has run
+*/
+DLLLOCAL const QoreProgramLocation* hide_runtime_call_site(const QoreProgramLocation**& slot,
+        const QoreProgramLocation*& prev);
+//! Sets the location of the call that the current thread makes; returns the thread's data
+/** @param loc the location of the call expression
+    @param prev receives the previous call site, to be restored with restore_runtime_call_site() after the call
+*/
+DLLLOCAL void* set_runtime_call_site(const QoreProgramLocation* loc, const QoreProgramLocation*& prev);
+//! Restores the call site after a call; see set_runtime_call_site()
+DLLLOCAL void restore_runtime_call_site(void* thread_data, const QoreProgramLocation* prev);
+
+//! Clears the call site for the helper's lifetime if requested, and restores it afterwards
+/** For code that runs other code between a call site and the frame that takes it, such as the member initializers
+    of an object that are evaluated before the frame of its constructor is created: only the calls that the code
+    makes set a call site; without a request, as for code that makes no calls, the helper does nothing
+*/
+class QoreHideCallSiteHelper {
+public:
+    DLLLOCAL QoreHideCallSiteHelper(bool hide) : td(hide ? set_runtime_call_site(nullptr, prev) : nullptr) {
+    }
+
+    DLLLOCAL ~QoreHideCallSiteHelper() {
+        if (td) {
+            restore_runtime_call_site(td, prev);
+        }
+    }
+
+    QoreHideCallSiteHelper(const QoreHideCallSiteHelper&) = delete;
+    QoreHideCallSiteHelper& operator=(const QoreHideCallSiteHelper&) = delete;
+
+private:
+    const QoreProgramLocation* prev = nullptr;
+    void* td;
+};
 //! Pushes a fully constructed location on the current thread's call stack
 /** @param stack_loc the location; other threads can read it from now on, so it must not change afterwards
     @param current_stmt receives the thread's current statement, before the location is pushed
@@ -365,6 +462,17 @@ DLLLOCAL const QoreStackLocation* push_native_call_stack_location(void* thread_d
 //! Pops a location pushed by push_native_call_stack_location() and restores the caller's runtime location
 DLLLOCAL void pop_native_call_stack_location(void* thread_data_ptr, const QoreStackLocation* stack_loc,
         const AbstractStatement* runtime_stmt, const QoreProgramLocation* runtime_loc);
+//! Returns true if the location is the call stack frame of a call that AOT-compiled code makes directly to native code
+/** Such a call has no frame on the stack of local variables (see ProgramThreadCountContextHelper::getContextFrame())
+*/
+DLLLOCAL bool qore_is_aot_native_call_frame(const QoreStackLocation* loc);
+//! Returns true if the location is one where AOT-compiled native code runs, or if it is not known
+/** The location of a frame where code runs is one of AOT-compiled native code when the code runs as such, and one of
+    the AST or the IR interpreter when the code runs there, as AOT-compiled code does with a debugger attached; the
+    variables that AOT-compiled code keeps in native storage are on the stack of local variables only in the latter
+    (see LocalVar::getAOTNativeStorage())
+*/
+DLLLOCAL bool qore_is_aot_code_location(const QoreProgramLocation* loc);
 
 DLLLOCAL const QoreProgramLocation* get_runtime_location();
 //! Sets the runtime statement, location and parse options of the current thread, and returns the previous ones
@@ -378,10 +486,38 @@ DLLLOCAL const QoreProgramLocation* get_runtime_location();
 DLLLOCAL int swap_runtime_statement_location(ExceptionSink* xsink, const AbstractStatement* stmt,
         const QoreProgramLocation* loc, QoreParseOptions po, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
+//! saves the thread's current statement, location and runtime parse options and sets only its runtime parse options
+/** As swap_runtime_statement_location() with the thread's current statement and location, which it keeps, in one
+    lookup of the thread's data and without a stack check; restored with update_runtime_statement_location()
+*/
+DLLLOCAL void swap_runtime_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+        const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
 DLLLOCAL void swap_runtime_location(const QoreProgramLocation*loc, const AbstractStatement*& old_stmt,
         const QoreProgramLocation*& old_loc);
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc, const QoreParseOptions& po);
+
 DLLLOCAL void update_runtime_statement_location(const AbstractStatement* stmt, const QoreProgramLocation* loc);
+
+//! Sets the runtime parse options of the thread for lowered top-level code (TopLevelStatementBlock::execIR())
+/** As swap_runtime_parse_options(), in a function of its own: the per-statement path of the AST interpreter inlines
+    update_runtime_statement_location(), and a caller added to the functions of that path changes the compiler's
+    inlining decisions for it; restored with restore_toplevel_code_parse_options()
+*/
+DLLLOCAL void swap_toplevel_code_parse_options(const QoreParseOptions& po, const AbstractStatement*& old_stmt,
+    const QoreProgramLocation*& old_loc, QoreParseOptions& old_po);
+
+//! Sets the runtime parse options of the thread and of its RuntimeConfig for the lowered top-level code that follows
+//! (QoreIROpcode::SetCodeParseOptions, qore#6293)
+/** The options are restored by the caller of the top-level code, which saved them (TopLevelStatementBlock::execIR()
+    and the run of top-level code compiled ahead of time)
+*/
+DLLLOCAL void set_toplevel_code_parse_options(const QoreParseOptions& po);
+
+//! Restores the runtime statement, location and parse options saved by swap_toplevel_code_parse_options()
+DLLLOCAL void restore_toplevel_code_parse_options(const AbstractStatement* stmt, const QoreProgramLocation* loc,
+    const QoreParseOptions& po);
 
 //! Cached runtime location pointers for hot-loop optimization.
 //! Avoids repeated TLS lookups (pthread_getspecific + std::map::find) per instruction.
@@ -390,6 +526,14 @@ struct RuntimeLocationCache {
     const AbstractStatement** stmt_ptr;
     void* thread_data;   //!< the thread's data, for push_native_call_stack_location()
 };
+
+//! Returns the thread's call site slot, the location of the call being made, from its runtime location slot
+/** The call site follows the runtime location in the thread's data (see QoreRcCallSiteHelper), so IR and native code
+    address it from the runtime location slot that they get once when a function is entered
+*/
+static inline const QoreProgramLocation** qore_call_site_slot(const QoreProgramLocation** loc_ptr) {
+    return loc_ptr + 1;
+}
 
 //! Returns cached pointers to the current thread's runtime location fields.
 //! Call once at function entry, then write through the pointers directly.
@@ -434,6 +578,8 @@ DLLLOCAL QoreParseOptions runtime_get_effective_program_parse_options();
     that call is made on behalf of the helper's Program, so the options are those of that Program
 */
 DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options();
+//! as runtime_take_call_caller_parse_options(), and returns the Program of the code making the call in \a code_pgm
+DLLLOCAL QoreParseOptions runtime_take_call_caller_parse_options(const QoreProgram*& code_pgm);
 
 //! returns the parse options of \a pgm with the active runtime parse options override applied
 /** for a call that has already switched to the Program it runs in; \a pgm is the calling Program
@@ -454,6 +600,28 @@ DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(const QoreProg
     @param po the thread's runtime parse options (runtime_get_parse_options())
 */
 DLLLOCAL QoreParseOptions runtime_get_own_program_state_parse_options(const QoreParseOptions& po);
+
+//! returns true if module code called from \a caller_pgm runs with the restrictions of its caller
+/** Module code runs with its own Program's options, and only the sandbox (the SandboxManager of its callers) governs
+    it at run time, unless the calling context is sandboxed: then it also runs with the restrictions of its caller
+    (see qore_get_module_call_runtime_po_override()).  The calling context is sandboxed if:
+    - \a caller_pgm or the Program running on the thread is sandboxed (qore_program_is_sandboxed()),
+    - the thread runs for sandboxed code: it inherited or applied a captured sandbox (a thread that sandboxed code
+      started, a pool task or an asynchronous operation submitted by it), or
+    - module code already runs for a sandboxed caller (QoreCallParseOptionsOverride::sandboxed), whose restrictions
+      pass on to the module code it calls, also through module code whose own options have them already
+*/
+DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(const QoreProgram* caller_pgm);
+
+//! returns the data of the current thread, for the functions that take it to look it up only once
+DLLLOCAL ThreadData* qore_get_thread_data();
+
+//! runtime_module_call_inherits_caller_restrictions() for the data of the current thread, \a td
+DLLLOCAL bool runtime_module_call_inherits_caller_restrictions(ThreadData* td, const QoreProgram* caller_pgm);
+
+//! returns the effective parse options of \a pgm for the current thread, whose data is \a td; see
+//! runtime_get_effective_parse_options_for()
+DLLLOCAL QoreParseOptions runtime_get_effective_parse_options_for(ThreadData* td, const QoreProgram* pgm);
 
 //! returns the ID of the application Program that module code calling from \a caller_pgm runs for
 /** If module code already runs for an application with that application's restrictions, it is that application;
@@ -526,6 +694,18 @@ DLLLOCAL bool qore_module_init_untrusted_loader();
 */
 DLLLOCAL bool qore_module_init_library();
 
+//! records \a pgm as the Program of the library module whose initialization the innermost barrier is for
+/** Called when the Program of a library module is created under its barrier (see
+    QoreModuleInitSandboxBarrierHelper); the first one created is the module's (qore#6337)
+*/
+DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
+
+//! returns true if a closure of \a pgm created now is created by the initialization of its library module
+/** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
+    such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)
+*/
+DLLLOCAL bool qore_module_init_closure_creation(const QoreProgram* pgm);
+
 //! Returns the sandbox that governs a module that is not library code, loaded while library code is initialized
 /** That is the sandbox of the code that loaded the library code, if it is not trusted; the caller owns the
     reference returned; see QoreModuleInitSandboxBarrierHelper
@@ -566,6 +746,11 @@ public:
         return failed_lift;
     }
 
+    //! returns true if the helper recorded a barrier or a lift (it is restored when the helper is destroyed)
+    DLLLOCAL bool recorded() const {
+        return pushed;
+    }
+
 private:
     bool pushed = false;
     bool failed_lift = false;
@@ -596,6 +781,16 @@ private:
 */
 DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 
+//! Returns true if every sandbox that governs the current thread's code allows uncontrolled APIs, or if none does
+/** Visits the managers that qore_find_thread_sandbox_policy_manager_ref() (\a policy true) or
+    qore_find_thread_sandbox_manager_ref() (\a policy false) would combine, with the same resolution rules, without
+    combining them: it allocates nothing and returns as soon as one of them refuses uncontrolled APIs.  It runs on
+    every call of an uncontrolled API by code that a sandbox governs (qore#5741).
+
+    @since Qore 3.0
+*/
+DLLLOCAL bool qore_thread_sandbox_allows_uncontrolled_apis(bool policy);
+
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
@@ -615,6 +810,14 @@ public:
         later as a new call with budgets of its own
     */
     DLLLOCAL QoreSandboxContext(bool capture_budgets = true);
+
+    //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr) and is work that
+    //! the module cleanup hands over (@ref module_cleanup_delegate)
+    /** For an operation that the module cleanup cancels: what the operation then runs is part of the cleanup (see
+        qore_close_module_programs()), while its sandbox stays the one of the code that started it.  Takes its own
+        references to the managers and budgets of \a src; may throw std::bad_alloc
+    */
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate);
 
     DLLLOCAL ~QoreSandboxContext();
 
@@ -637,6 +840,10 @@ public:
     QoreSandboxManager* provenance_policy_manager = nullptr;
     //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
     QoreSandboxBudgetList budgets;
+    //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
+    //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
+    //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
+    bool module_cleanup_delegate = false;
 };
 
 //! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
@@ -718,6 +925,59 @@ private:
     bool active = false;
 };
 
+#ifdef DEBUG
+//! The steps of an entry into another Program at which dbg_fail_next_program_entry() makes an allocation fail
+enum qore_dbg_program_entry_site_e : int {
+    //! after the thread's current Program is switched (ProgramThreadCountContextHelper::setOtherProgram())
+    QDPES_SWITCH = 0,
+    //! the allocation of the thread's local data in the Program (qore_program_private::setThreadVarData())
+    QDPES_LOCAL_DATA = 1,
+    //! the record of the Program in the thread's Program set (ThreadProgramData::saveProgram())
+    QDPES_PROGRAM_SET = 2,
+    //! the instantiation of the Program's top-level local variables for the thread (ThreadProgramData::saveProgram())
+    QDPES_INSTANTIATION = 3,
+    //! the instantiation of a top-level local variable after the first one (doTopLevelInstantiation())
+    QDPES_INSTANTIATION_VAR = 4,
+    //! the steps of the entry once the thread's context is switched (ProgramThreadCountContextHelper::enterSwitched())
+    QDPES_SWITCHED = 5,
+    //! after the Program's thread entry handler ran (ThreadEntryHandlerFrame::enterHandlers())
+    QDPES_ENTRY_HANDLER = 6,
+    //! the Program's thread exit handler (ThreadEntryHandlerFrame::exitHandlers())
+    QDPES_EXIT_HANDLER = 7,
+    //! the steps of the entry after the Program's entry handler ran (ProgramThreadCountContextHelper::enterSwitched())
+    QDPES_ENTERED = 8,
+};
+
+//! Makes the next step of an entry into another Program at \a site throw std::bad_alloc; several sites can be armed,
+//! each fails once; -1 disarms all of them
+DLLLOCAL void qore_dbg_fail_next_program_entry(int site);
+//! Holds the next background thread that releases its TID for up to \a ms milliseconds before it leaves
+//! thread_counter, or until the static objects are destroyed (issue #6405)
+DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
+//! Holds the next background thread that ends for up to \a ms milliseconds in a thread-local destructor, after it
+//! has returned from its thread function, or until the static objects are destroyed (issue #6412)
+DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
+//! Waits until a finishing background thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
+//! Releases a thread that qore_dbg_hold_next_thread_tls_exit() holds, if it is held (qore#6433)
+DLLLOCAL void qore_dbg_release_thread_finish_hold();
+//! Waits until the background thread count (thread_counter) is at most \a count; returns false on timeout
+/** A thread leaves the count when it has been joined (qore#6412), so a test can tell when a thread was joined
+    (qore#6433)
+*/
+DLLLOCAL bool qore_dbg_wait_thread_counter_at_most(int count, int timeout_ms);
+//! Holds the next thread that is started, before it registers, for up to \a ms milliseconds or until
+//! qore_dbg_release_thread_start() (qore#6469)
+DLLLOCAL void qore_dbg_hold_next_thread_start(int ms);
+//! Waits until a starting thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_start_held(int timeout_ms);
+//! Releases the starting thread held, and waits until it has continued
+DLLLOCAL void qore_dbg_release_thread_start();
+
+//! Returns true, and disarms the site, if the next step at \a site is armed to fail
+DLLLOCAL bool qore_dbg_program_entry_fails(int site);
+#endif
+
 //! Pops a sandbox policy barrier pushed with @ref qore_push_sandbox_policy_barrier()
 DLLLOCAL void qore_pop_sandbox_policy_barrier();
 
@@ -728,6 +988,20 @@ DLLLOCAL const AbstractStatement* get_runtime_statement();
 
 DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg_type_info(const QoreTypeInfo* ti);
 DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg_type_info();
+DLLLOCAL const QoreTypeInfo* parse_set_implicit_arg2_type_info(const QoreTypeInfo* ti);
+DLLLOCAL const QoreTypeInfo* parse_get_implicit_arg2_type_info();
+
+//! sets the number of operators that set the implicit arguments around the code that is parsed; returns the old number
+DLLLOCAL unsigned parse_set_implicit_arg_ctx_depth(unsigned depth);
+
+//! sets where the parse of a function or closure body notes that it reads the implicit arguments of its own call
+DLLLOCAL bool* parse_set_function_reads_implicit_args(bool* reads);
+
+//! notes that the code that is parsed reads the implicit arguments ($1, $$)
+/** if no operator that sets them is around the code, they are the implicit arguments of the call of the function or
+    closure that the code is the body of (qore#5805)
+*/
+DLLLOCAL void parse_note_implicit_arg_use();
 
 DLLLOCAL QoreParseOptions parse_get_parse_options();
 DLLLOCAL QoreParseOptions runtime_get_parse_options();
@@ -743,6 +1017,28 @@ DLLLOCAL bool parse_check_parse_option(const QoreParseOptions& o);
 DLLLOCAL bool parse_check_restriction(const QoreParseOptions& o);
 DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
 
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has negative offsets
+/** Only %modern code is compiled (IR lowering and AOT refuse code with legacy tokens), %modern implies
+    PO_NEGATIVE_OFFSETS and refuses %no-negative-offsets, a module parse option mask cannot strip it, and compiled code
+    runs with its own parse options, also when legacy code calls it; so where compiled code checks the option it
+    always holds, and the run-time lookup is not made.  A debug build asserts it, so that a change that breaks the
+    guarantee fails in the debug tests (compatibility options refused under %modern: qore#5682)
+*/
+static inline bool qore_compiled_code_negative_offsets() {
+    assert(runtime_check_parse_option(PO_NEGATIVE_OFFSETS));
+    return true;
+}
+
+//! Returns true: the code that runs as compiled code (IR, JIT, AOT) always has strict arguments
+/** %modern implies PO_STRICT_ARGS; code after %loose-args is not %modern and is not compiled, and compiled code runs
+    with its own parse options, also when legacy %loose-args code calls it (see
+    qore_compiled_code_negative_offsets()).  A debug build asserts it
+*/
+static inline bool qore_compiled_code_strict_args() {
+    assert(runtime_check_parse_option(PO_STRICT_ARGS));
+    return true;
+}
+
 //! Sets the runtime parse options to those of AOT-compiled code while the code is loaded
 /** When code is parsed from source, the parser binds calls to their variants and checks each builtin variant's
     functional domain against the parse options of the code being parsed.  Code loaded from an AOT image is not
@@ -756,9 +1052,11 @@ DLLLOCAL bool runtime_check_parse_option(const QoreParseOptions& o);
     This helper sets the runtime parse options to the given options of the code being loaded and suspends any such
     override for its lifetime, which makes load-time resolution what parse-time resolution is for the same source.
     It must only be used around the loading of AOT-compiled code (deserialization, slot-map context construction and
-    module initialization), never around the evaluation of code on behalf of a caller: a variant resolved when code is
-    evaluated is checked against the options in effect for that evaluation, including the restrictions of the
-    Program it runs in.
+    module initialization, including the constant initializers of compiled modules and scripts, eager or run when a
+    constant is first read: qore#6189, and those of source code, evaluated when the declaring code is committed or
+    when a constant is first read: qore#6205), never around the evaluation of code on behalf of a caller: a variant resolved
+    when code is evaluated is checked against the options in effect for that evaluation, including the restrictions
+    of the Program it runs in.
 */
 class LoadTimeParseOptionsHelper {
 public:
@@ -778,6 +1076,62 @@ private:
     QoreParseOptions old_caller_restrictions;
     const QoreProgram* old_module_pgm;
     qore_program_id_t old_app_pgm_id;
+    bool old_sandboxed;
+    const QoreProgram* old_override_pgm;
+};
+
+//! Makes the next call on the current thread a call made through a call reference
+/** A call reference runs with the permissions of the context that created it, like a closure: the functional domains
+    declared on a user function or method in Qore source (\c [dom=...]) are checked against the effective parse
+    options of the context that created the reference value, not against the code that calls the reference.  The call
+    with the reference's arguments takes the marker (runtime_take_call_reference_call()); a call with other arguments,
+    such as one in an argument expression, does not.  A path that passes other arguments to the reference's call
+    leaves the marker, and the call is then checked against its caller, the stricter check.  The helper restores the
+    previous state when the reference's call returns.
+*/
+class RuntimeConfig;
+
+class QoreCallReferenceCallHelper {
+public:
+    //! marks the next call on the thread of \a rc with the given arguments as the call of a call reference created
+    //! with \a creator_po
+    /** if \a creator_po is nullptr (a reference that its own code calls in place), nothing is marked
+    */
+    DLLLOCAL QoreCallReferenceCallHelper(RuntimeConfig& rc, const QoreListNode* args,
+            const QoreParseOptions* creator_po);
+    DLLLOCAL ~QoreCallReferenceCallHelper();
+
+    QoreCallReferenceCallHelper(const QoreCallReferenceCallHelper&) = delete;
+    QoreCallReferenceCallHelper& operator=(const QoreCallReferenceCallHelper&) = delete;
+
+private:
+    RuntimeConfig* rc = nullptr;
+    const QoreParseOptions* old_po = nullptr;
+    const QoreListNode* old_args = nullptr;
+};
+
+//! Hides the pending call of a call reference while the arguments of that call are evaluated
+/** Calls made while the arguments are evaluated are not the reference's call; afterwards the pending call is for the
+    evaluated arguments (see evaluated())
+*/
+class QoreCallReferenceArgEvalHelper {
+public:
+    //! hides the pending call on the thread of \a rc while \a args are evaluated
+    DLLLOCAL QoreCallReferenceArgEvalHelper(RuntimeConfig& rc, const QoreListNode* args);
+    //! restores the pending call
+    DLLLOCAL ~QoreCallReferenceArgEvalHelper();
+
+    //! the call is made with \a evaluated_args instead of the arguments given to the constructor
+    DLLLOCAL void evaluated(const QoreListNode* evaluated_args);
+
+    QoreCallReferenceArgEvalHelper(const QoreCallReferenceArgEvalHelper&) = delete;
+    QoreCallReferenceArgEvalHelper& operator=(const QoreCallReferenceArgEvalHelper&) = delete;
+
+private:
+    RuntimeConfig& rc;
+    const QoreParseOptions* saved_po;
+    const QoreListNode* saved_args;
+    const QoreListNode* args;
 };
 
 //! Makes the next user call on the current thread a call made on behalf of another Program
@@ -805,7 +1159,7 @@ private:
     const QoreProgram* old_from_pgm;
 };
 
-//! the runtime parse options override of a call; see qore_get_user_call_runtime_po_override()
+//! the runtime parse options override of a call; see qore_set_user_call_runtime_po_override()
 struct QoreCallParseOptionsOverride {
     //! the options that the override covers
     QoreParseOptions mask;
@@ -826,29 +1180,222 @@ struct QoreCallParseOptionsOverride {
         restrictions the module code inherits
     */
     qore_program_id_t app_pgm_id = 0;
+    //! true if the module code runs for a sandboxed caller (see runtime_module_call_inherits_caller_restrictions())
+    /** Set whether or not the caller has restrictions that the module does not have: the module code that the code
+        calls runs with the caller's restrictions in any case
+    */
+    bool sandboxed = false;
+    //! the Program of the module whose code the override is for, or nullptr if it is not the override of a call of
+    //! module code (see qore_get_module_call_runtime_po_override())
+    /** A call of module code by code of the same module keeps the override, as it is the override that the call
+        would set (see runtime_module_call_override_in_effect())
+    */
+    const QoreProgram* override_pgm = nullptr;
+    //! the data of the current thread if the override was computed with it, or nullptr; it is then set with it
+    ThreadData* td = nullptr;
+};
+
+//! Returns true if the runtime parse options override of the thread is the one set for a call of the code of the given
+//! module Program (see QoreCallParseOptionsOverride::override_pgm)
+/** Module code that calls code of its own module from the module's Program then keeps the override: the override
+    that the call would set is the same, as the caller's options already have the module's options and the caller's
+    restrictions that it inherits, and the module code runs for the same application and sandbox
+*/
+DLLLOCAL bool runtime_module_call_override_in_effect(const QoreProgram* module_pgm);
+
+//! runtime_module_call_override_in_effect() for the data of the current thread, \a td
+DLLLOCAL bool runtime_module_call_override_in_effect(ThreadData* td, const QoreProgram* module_pgm);
+
+//! The run-time parse options of a thread and the override that they were computed with (ThreadData)
+/** Declared here, so that RuntimeParseOptionsOverrideHelper restores it inline in every build: it runs on every call
+    of a user variant (qore#6446).  The members other than the parse options have no initializers, so that the copy
+    that the helper saves is not initialized on every call: a value-initialized struct (\c QoreRuntimePoState()) has
+    them zero
+*/
+struct QoreRuntimePoState {
+    //! the run-time parse options of the thread, with the override applied
+    QoreParseOptions po;
+    QoreParseOptions override_mask;
+    QoreParseOptions override_value;
+    //! the options of override_mask whose value is that of the override, not also that of the code
+    /** see QoreCallParseOptionsOverride::replace
+    */
+    QoreParseOptions override_replace;
+    //! the restrictions that the code of module_pgm inherits from its caller
+    /** see runtime_get_own_program_state_parse_options()
+    */
+    QoreParseOptions caller_restrictions;
+    //! the Program of the module whose code runs with caller_restrictions, or nullptr
+    const QoreProgram* module_pgm;
+    //! the ID of the application Program that the code of module_pgm runs for
+    qore_program_id_t app_pgm_id;
+    //! true while module code runs for a sandboxed caller; see QoreCallParseOptionsOverride::sandboxed
+    bool sandboxed;
+    //! the module Program whose code the override was set for; see QoreCallParseOptionsOverride::override_pgm
+    const QoreProgram* override_pgm;
 };
 
 class RuntimeParseOptionsOverrideHelper {
 public:
+    //! sets no override; see set()
+    DLLLOCAL RuntimeParseOptionsOverrideHelper() = default;
     //! sets an override that inherits no caller restrictions
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreParseOptions& mask, const QoreParseOptions& value);
     //! sets the override of a call
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const QoreCallParseOptionsOverride& o);
-    DLLLOCAL ~RuntimeParseOptionsOverrideHelper();
+
+    //! restores the override that was in effect when the override was set, if it was set
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~RuntimeParseOptionsOverrideHelper() {
+        if (active) {
+            restore();
+        }
+    }
 
     DLLLOCAL RuntimeParseOptionsOverrideHelper(const RuntimeParseOptionsOverrideHelper&) = delete;
     DLLLOCAL RuntimeParseOptionsOverrideHelper& operator=(const RuntimeParseOptionsOverrideHelper&) = delete;
 
-private:
-    QoreParseOptions old_mask;
-    QoreParseOptions old_value;
-    QoreParseOptions old_replace;
-    QoreParseOptions old_po;
-    QoreParseOptions old_caller_restrictions;
-    const QoreProgram* old_module_pgm;
-    qore_program_id_t old_app_pgm_id;
-
+    //! sets the override of a call for a helper created without one; may be called once
     DLLLOCAL void set(const QoreCallParseOptionsOverride& o);
+
+    //! sets the override of a call for a helper created without one on \a td, the current thread; may be called once
+    DLLLOCAL void set(ThreadData* td, const QoreCallParseOptionsOverride& o);
+
+    //! clears the override of the caller for a call, as set() with an empty override does; may be called once
+    DLLLOCAL void setCleared();
+
+    //! returns true if the override has been set
+    DLLLOCAL bool isSet() const {
+        return active;
+    }
+
+    //! restores the override that was in effect when the override was set, if it was set, and leaves the helper
+    //! without one, so that it can be set again
+    DLLLOCAL void reset() {
+        if (active) {
+            restore();
+            active = false;
+        }
+    }
+
+private:
+    //! true if the override has been set; the state saved below is valid only then (it is written by set() and read
+    //! by restore() only), so it takes no initialization beyond that of its parse options: the helper is created on
+    //! every call of a user variant
+    bool active = false;
+    //! the state of the thread (ThreadData::runtime_po_state)
+    QoreRuntimePoState* state;
+    //! the state that set() replaced
+    QoreRuntimePoState old;
+
+    //! restores the state that set() replaced; inline, as it runs on every call of a user variant (qore#6446)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void restore() {
+        assert(active);
+        *state = old;
+    }
+};
+
+//! The run-time parse options in effect on a thread: its options and the override that they were computed with
+/** Taken in the thread that starts a new thread for code (the \c background operator, q_start_thread()), so that the
+    new thread runs with the options of the code that started it, including the restrictions that apply to that code
+    (qore#6208)
+*/
+struct QoreThreadRuntimeParseOptions {
+    //! the run-time parse options, with the override applied
+    QoreParseOptions po;
+    //! the override that \a po was computed with (its \c td is always nullptr)
+    /** The Programs that it names (\c module_pgm, \c override_pgm) are compared by identity only; each copy holds a
+        dependency reference to them (QoreProgram::depRef()), so that their memory is not reused for another Program
+        while the options can be installed, which would make an unrelated Program match them
+    */
+    QoreCallParseOptionsOverride override;
+    //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
+    QoreParseOptions caller_domain_restrictions;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions() = default;
+
+    DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
+            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions) {
+        refPrograms();
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptions& operator=(const QoreThreadRuntimeParseOptions& other) {
+        if (this != &other) {
+            // the other's references are taken before this object's are released, as they can be the same Programs
+            QoreThreadRuntimeParseOptions copy(other);
+            std::swap(po, copy.po);
+            std::swap(override, copy.override);
+            std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
+        }
+        return *this;
+    }
+
+    DLLLOCAL ~QoreThreadRuntimeParseOptions() {
+        derefPrograms();
+    }
+
+    //! returns the run-time parse options in effect on the current thread
+    DLLLOCAL static QoreThreadRuntimeParseOptions capture();
+
+    //! returns true if the options in effect on the current thread restrict nothing
+    /** That is, no override is in effect, and no option that grants or denies access is set (no functional domain
+        restriction, \c QDOM_ALL, and no positive option).  Code that runs with no options installed (a thread started
+        without inheriting options, such as a callback worker of the AsyncIoController) is granted and denied the same
+        access: the code that it runs sets the options of its own statements, and builtin code that it calls directly
+        through a call reference sees no restriction either, so options captured from such code need not be kept;
+        options without effect on access (the style options of \c %modern, for example) are then not applied to builtin
+        code called directly, as before the options were captured.  Checked without copying the options or taking
+        references to Programs.
+    */
+    DLLLOCAL static bool currentRestrictsNothing();
+
+    //! returns the run-time parse options in effect on the current thread for a thread that it starts
+    /** The thread inherits the restrictions of the code that starts it, but not the application that a call of
+        module code runs for (\c app_pgm_id), which is attribution, not a restriction: what the thread adds later
+        (timers, for example) belongs to the call that adds it, not to the caller of the code that started the
+        thread, which a long-lived worker thread of a module does not serve only (qore#6208)
+    */
+    DLLLOCAL static QoreThreadRuntimeParseOptions captureForThread();
+
+private:
+    DLLLOCAL void refPrograms();
+    DLLLOCAL void derefPrograms();
+};
+
+//! Installs the run-time parse options taken from the thread that started the current thread for its life
+/** The thread starts with none: without them, the code that it runs would not run with the options of the code that
+    started it, nor with the restrictions that apply to that code (qore#6208).  The options in effect before are
+    restored when the helper is destroyed or reset.
+*/
+class QoreThreadRuntimeParseOptionsHelper {
+public:
+    //! installs \a o on the current thread; nothing if \a o is nullptr
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o);
+
+    //! restores the options in effect before, if they have not been restored yet
+    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() {
+        reset();
+    }
+
+    //! restores the options in effect before the helper was created; called before the thread's data is deleted
+    DLLLOCAL void reset() {
+        if (override_helper) {
+            override_helper.reset();
+            restoreCallerRestrictions();
+        }
+    }
+
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+    DLLLOCAL QoreThreadRuntimeParseOptionsHelper& operator=(const QoreThreadRuntimeParseOptionsHelper&) = delete;
+
+private:
+    //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
+    //! restores the run-time parse options too)
+    std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
+    //! the restrictions of the code that started the thread in effect before (ThreadData::thread_caller_restrictions)
+    QoreParseOptions old_caller_restrictions;
+
+    //! restores old_caller_restrictions
+    DLLLOCAL void restoreCallerRestrictions();
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
@@ -858,8 +1405,49 @@ DLLLOCAL void updateVStack(VNode* nvs);
 DLLLOCAL VNode* getVStack();
 
 //DLLLOCAL void setParseClass(QoreClass* c);
+//! Returns the class context of the parse-time checks made in the current thread
+/** That is the class of the code being parsed, or, while a QoreIRClassContextHelper is set, its class; the class
+    context decides, for example, whether a class's private parent classes are accessible
+    (qore_class_private::parseCheckPrivateClassAccess())
+*/
 DLLLOCAL QoreClass* parse_get_class();
+//! Returns the class context of the parse-time checks made in the current thread; see parse_get_class()
 DLLLOCAL qore_class_private* parse_get_class_priv();
+
+//! Sets the class context of the parse-time checks made in the current thread while IR is lowered, analyzed or compiled
+/** Code is lowered to IR, analyzed and compiled after it is parsed, in the class context of the code (the class of a
+    method, or the class in which a closure was parsed: see qore_ir_function_class_context()), which is not the class
+    being parsed in the thread, if any: a background compilation thread has no parse state at all, and a thread that
+    lowers or compiles a function at runtime has none of that function's (qore#5750).  The parse-time type checks
+    made meanwhile (QoreTypeInfo::parseAccepts(), for example) use this class context; helpers nest, and each restores
+    the class context set before it.
+
+    While a helper is set, parse_get_class_priv() returns its class whatever the thread's parse state is: code run
+    meanwhile must not set the thread's class context (thread_set_class_and_ns(), QoreParseClassHelper) and expect to
+    read it back; lowering, analysis and compilation parse nothing.
+*/
+class QoreIRClassContextHelper {
+public:
+    //! sets the class context; nullptr is the context of code outside a class
+    DLLLOCAL QoreIRClassContextHelper(const qore_class_private* cls);
+
+    //! sets the class context of an IR function: the class context of its code, or, for a function without code of
+    //! its own (see qore_ir_function_class_context()), the context set for the function that it is part of, if any
+    DLLLOCAL QoreIRClassContextHelper(const QoreIRFunction& func);
+
+    //! returns true if a helper sets the class context of the current thread
+    DLLLOCAL static bool isSet();
+
+    //! restores the class context set before
+    DLLLOCAL ~QoreIRClassContextHelper();
+
+    QoreIRClassContextHelper(const QoreIRClassContextHelper&) = delete;
+    QoreIRClassContextHelper& operator=(const QoreIRClassContextHelper&) = delete;
+
+private:
+    const qore_class_private* old_cls;
+    bool old_set;
+};
 DLLLOCAL void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns, const qore_class_private*& old_cls, qore_ns_private*& old_ns);
 DLLLOCAL void thread_set_class_and_ns(const qore_class_private* new_cls, qore_ns_private* new_ns);
 DLLLOCAL void thread_set_ns(qore_ns_private* new_ns, qore_ns_private*& old_ns);
@@ -901,6 +1489,322 @@ DLLLOCAL void delete_thread_local_data();
 */
 DLLLOCAL void end_thread_cancellation(bool terminating = false);
 
+//! Applies the cancellation rule for destructors to the destructor of one class in an object's class hierarchy
+/** Used around the code of each class's own destructor (not its base classes', which have their own helper); see
+    "Destructors" in design/cooperative-cancellation.md:
+
+    - a trusted class (defined by a Program without a sandbox manager, or a builtin class): cancellation and program
+      interrupts are deferred while its destructor runs, so the destructor completes on a cancelled or interrupted
+      thread; the pending request is left untouched and is raised at the first cancellation point after the
+      destructor returns.  A sandbox limit (an expired call budget, a memory limit) is never deferred, and code of a
+      Program with a sandbox manager that the destructor calls does not get the deferral
+      (ProgramThreadCountContextHelper suspends it)
+    - a sandboxed class (defined by a Program with a sandbox manager): its destructor never runs under any
+      cancellation deferral; if a request is pending that a cancellation point would deliver (a thread cancellation
+      in scope, a program interrupt or a sandbox limit), skip() is true and the destructor is not run: the object's
+      members and private data are released as when it is obliterated
+
+    Only the thread that creates the helper reads or writes the state it changes.
+*/
+class QoreDestructorCancelHelper {
+public:
+    //! Applies the rule for a class whose code is (\a sandboxed true) or is not governed by a sandbox manager
+    DLLLOCAL QoreDestructorCancelHelper(bool sandboxed);
+
+    //! Restores the deferral state of the thread
+    DLLLOCAL ~QoreDestructorCancelHelper();
+
+    //! True if the destructor of the class must not run
+    DLLLOCAL bool skip() const {
+        return skip_dtor;
+    }
+
+    DLLLOCAL QoreDestructorCancelHelper(const QoreDestructorCancelHelper&) = delete;
+    DLLLOCAL QoreDestructorCancelHelper& operator=(const QoreDestructorCancelHelper&) = delete;
+
+private:
+    //! the thread's data, or nullptr if the thread has none (then nothing is changed)
+    ThreadData* td = nullptr;
+    //! the deferral depths of the thread, saved while a sandboxed destructor runs
+    unsigned saved_defer = 0;
+    unsigned saved_dtor_defer = 0;
+    //! true if the destructor deferral of a trusted class was pushed
+    bool pushed = false;
+    //! true if the deferral of the thread was suspended for a sandboxed class
+    bool suspended = false;
+    //! true if the destructor must not run
+    bool skip_dtor = false;
+};
+
+//! The deadline of a wait with a timeout whose condition wait can end before the timeout without its predicate
+/** A condition wait can end early: a spurious wakeup, a wakeup for a cancellation request that is not delivered (out
+    of the thread's scope, or for another Program's interrupt), or another waiter that took what it waited for.  A
+    caller that waits again must wait only for the rest of its timeout, so that the timeout is not restarted.
+*/
+class QoreWaitDeadline {
+public:
+    //! A deadline \a timeout_ms from now if \a timeout_ms is positive, otherwise none
+    DLLLOCAL explicit QoreWaitDeadline(int64 timeout_ms) : deadline_us(timeout_ms > 0
+            ? q_get_monotonic_us() + timeout_ms * 1000 : 0) {
+    }
+
+    //! True if there is a deadline
+    DLLLOCAL bool active() const {
+        return deadline_us;
+    }
+
+    //! The timeout in ms of the next wait: at least 1 before the deadline, 0 once it has passed; needs a deadline
+    DLLLOCAL int64 remainingMs() const {
+        assert(deadline_us);
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        return remaining_us <= 0 ? 0 : (remaining_us + 999) / 1000;
+    }
+
+private:
+    int64 deadline_us;
+};
+
+//! Returns true if the code of the Program is sandboxed
+/** True if the Program has or had a sandbox manager, or was created by sandboxed code, by Qore code or by C++ code
+    acting for it (see qore_caller_is_sandboxed()), or is a user module that a sandboxed Program loaded by a path it
+    chose; false for a Program that trusted code created (the host, library code, a module loaded by trusted code).
+    Never changes from true to false.
+*/
+DLLLOCAL bool qore_program_is_sandboxed(const QoreProgram* pgm);
+
+//! Marks the Program's code as sandboxed (see qore_program_is_sandboxed())
+DLLLOCAL void qore_program_mark_sandboxed(QoreProgram& pgm);
+
+//! Returns true if the code that calls the current builtin is not trusted itself (issue #5659)
+/** True if the current Program is sandboxed (see qore_program_is_sandboxed()) or restricts a functional domain.
+    Unlike qore_caller_is_untrusted(), trusted code that a sandbox governs because sandboxed code called it (a
+    callback of the host, for example) is trusted: it acts on its own behalf when it changes a sandbox manager or
+    issues a module command, and passing such an API what a sandboxed caller supplied is that code's responsibility.
+*/
+DLLLOCAL bool qore_calling_code_is_untrusted();
+
+//! Records that code that is not trusted (see qore_calling_code_is_untrusted()) in the current Program created \a sm
+/** Called by the SandboxManager constructors that %Qore code calls; see qore_sandbox_manager_check_change()
+*/
+DLLLOCAL void qore_sandbox_manager_record_creator(const QoreSandboxManager* sm);
+
+//! Checks that the code running on the current thread may change \a sm (issue #5659)
+/** Trusted code may change any sandbox manager; code that is not trusted (see qore_calling_code_is_untrusted()) may
+    change only one that code of its own Program created (see qore_sandbox_manager_record_creator()): not the one that governs
+    it, which it can get with Program::getSandboxManager(), nor one that governs another Program, which could
+    otherwise be loosened or have its interrupt cleared.
+
+    @param sm the manager to change
+    @param what the API, for the exception
+    @param xsink raises \c SANDBOX-ACCESS-ERROR if the change is refused
+
+    @return 0 if the change is allowed, -1 if an exception was raised
+*/
+DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, const char* what, ExceptionSink* xsink);
+
+//! Returns true if the code running on the current thread is sandboxed, or acts for sandboxed code
+/** Decides whether a Program is sandboxed (issue #5659):
+    - when it is created, in the QoreProgram constructors (qore_program_private), so that it holds wherever a
+      Program is created: by Program::constructor() and ProgramControl::createEvalProgram(), by the module manager
+      for a module, or by a module's C++ code;
+    - when code is parsed in it (qore_program_private::markSandboxedParse()): a Program that sandboxed code adds
+      code to is sandboxed from then on, as is every class that it already has, since the code that it runs is then
+      partly the sandbox's; it is called before the parse switches to the Program.
+
+    True if a sandboxed Program is on the thread's call stack (also one without a manager of its own, which
+    sandboxed code created and trusted code calls), or if a sandbox governs the thread (trusted code that sandboxed
+    code calls, see qore_find_thread_sandbox_manager_ref()).
+
+    Under a module initialization barrier (see QoreModuleInitSandboxBarrierHelper), the code that loads library code
+    is not looked at: a Program that library code's own initialization creates, or parses code in, is trusted, also
+    when sandboxed code loads the library first, so that whether shared library state is trusted never depends on
+    which code loaded the library first.  Library initialization that parses code that sandboxed code supplied
+    (registered with the library before it is loaded, for example) is responsible for parsing it in a sandboxed
+    Program.
+
+    Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
+*/
+DLLLOCAL bool qore_caller_is_sandboxed();
+
+//! returns the domains of \a domain that the code calling a module's user variant that declares them is restricted from
+/** As qore_caller_restricts_domain(), but the initialization of library module code is not a call by the code that
+    loads the module; only the restricting functional domains are returned, not the positive options (qore#6337)
+*/
+DLLLOCAL int64 qore_caller_denied_user_domains(int64 domain);
+
+//! returns true if \a pgm is the Program of a library module (one found in the process-wide module path)
+/** Only such a module's code acts for its caller: a module that is not library code (one loaded by its path, for
+    example) has the restrictions of the Program that loaded it and is calling code (qore#6337)
+*/
+DLLLOCAL bool qore_program_is_library_module(const QoreProgram* pgm);
+
+//! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
+/** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their
+    variants) switch the thread's current Program to the target Program with a ProgramRuntimeParseContextHelper (or
+    one of its variants), which hides the calling Program from sandbox resolution: without this helper, the code that
+    runs for the call in the target Program (the initializers of the parsed code, the initialization of the module,
+    the module manager's own checks, the Programs created) would be governed as if trusted code had made the call.
+
+    Created before the switch: if the caller is sandboxed (see qore_caller_is_sandboxed()), it records that on the
+    thread, so that qore_caller_is_sandboxed() stays true while it exists, and applies the sandbox that governs the
+    caller as the provenance of the code that runs (see QoreSandboxProvenanceHelper).  Under a module initialization
+    barrier set later (the initialization of library code that the call loads), neither is seen, as for any caller of
+    library code (see QoreModuleInitSandboxBarrierHelper).  Inactive if the target Program is the current one or the
+    caller is trusted.
+*/
+class QoreCallerSandboxHelper {
+public:
+    //! Applies the caller's sandbox for a parse or module load in \a target; raises out-of-memory in \a xsink on failure
+    DLLLOCAL QoreCallerSandboxHelper(const QoreProgram* target, ExceptionSink* xsink);
+    DLLLOCAL ~QoreCallerSandboxHelper();
+
+    //! Returns the helper that was active before this one on the thread
+    DLLLOCAL const QoreCallerSandboxHelper* getPrevious() const {
+        return previous;
+    }
+
+    //! Returns the number of module initialization barriers that were active when the helper was created
+    DLLLOCAL size_t getBarrierDepth() const {
+        return barrier_depth;
+    }
+
+    DLLLOCAL QoreCallerSandboxHelper(const QoreCallerSandboxHelper&) = delete;
+    DLLLOCAL QoreCallerSandboxHelper& operator=(const QoreCallerSandboxHelper&) = delete;
+
+private:
+    QoreSandboxProvenanceHelper provenance;
+    const QoreCallerSandboxHelper* previous = nullptr;
+    size_t barrier_depth = 0;
+    bool pushed = false;
+};
+
+//! The generation of the sandbox managers of all Programs: incremented after a manager is set on any Program
+/** A thread caches in its Program context that no Program on its context chain has a sandbox manager (see
+    ProgramThreadCountContextHelper::sandboxChainClear()); the cache holds only for the generation it was made in.  It
+    starts at 1, so that a context's initial generation of 0 is never current.  Removing a manager does not change it:
+    a Program without a manager has none afterwards either.
+*/
+DLLLOCAL extern std::atomic<uint64_t> qore_sandbox_manager_generation;
+
+//! The number of sandbox managers whose interrupt is requested (QoreSandboxManager::requestInterrupt())
+/** A cancellation point resolves the sandbox manager that governs the thread only while it is not 0, so that a check
+    with no request pending costs no lookup (see qore_check_cancel() and "Cost of a check" in
+    design/cooperative-cancellation.md).
+
+    It is never less than the number of managers whose QSB_INTR_REQUESTED bit is set, so it is 0 only while no
+    interrupt is requested: requestInterrupt() increments it before it sets the bit (and decrements it again if the bit
+    was already set), clearInterrupt() decrements it only after it has cleared a set bit, and the destructor of a
+    manager, which does not clear the bit, decrements it if it finds the bit set, when no other thread can request or
+    clear the manager's interrupt any more (the manager is reference-counted, and every caller holds a reference).  A
+    clear that runs between a request's increment and its setting of the bit finds no bit and leaves the count alone,
+    unless the bit was already set: then the clear removes the earlier request's count, and the request sets the bit
+    again and keeps its own increment.  If the request set the bit first, such a clear would decrement the
+    count before the request incremented it, and a check in between would read 0 while the interrupt of another
+    manager is pending.  For a moment it can be higher than the number of set bits by the number of requests and
+    clears in progress (a request from its increment until it sets the bit or takes the increment back, a clear from
+    its clearing of the bit until its decrement), which only makes a check look up the manager.  All changes are
+    seq_cst, as the bit, and requestInterrupt() makes its changes before it wakes the waiting threads: a waiter that
+    registers its wait and then reads 0 is woken by the wakeup that follows.
+*/
+DLLLOCAL extern std::atomic<int> qore_sandbox_interrupt_count;
+
+#ifdef DEBUG
+//! Test hook of the current thread called by QoreSandboxManager::requestInterrupt() between its increment of
+//! qore_sandbox_interrupt_count and its setting of the interrupt bit; see dbg_sandbox_interrupt_request_window()
+DLLLOCAL extern thread_local void (*qore_sandbox_interrupt_request_hook)(QoreSandboxManager* sm);
+#endif
+
+//! Gives the Program of a module (a registered user module, or an AOT module) module lifetime
+/** The Program stays allocated (with a dependency reference) until qore_release_module_program_pins(), which
+    qore_cleanup() calls once no other thread can run Qore code, so code that calls into the module from another
+    Program needs no reference to the Program (see QoreSourceProgramHolder): entering it still fails once its teardown
+    has started.  The call is idempotent.
+*/
+DLLLOCAL void qore_program_set_module_lifetime(QoreProgram& pgm);
+
+//! Returns true if the Program has module lifetime and module lifetime is in effect
+/** The Program must be allocated: the caller holds a reference to it, or runs in it.  Returns false once
+    qore_release_module_program_pins() has been called
+*/
+DLLLOCAL bool qore_program_has_module_lifetime(const QoreProgram* pgm);
+
+//! true while module lifetime is in effect; see qore_module_lifetime_active()
+DLLLOCAL extern std::atomic<bool> qore_module_lifetime_flag;
+
+//! Returns true while module lifetime is in effect: until qore_release_module_program_pins()
+/** Read without a lock on every call into module code from another Program
+*/
+DLLLOCAL inline bool qore_module_lifetime_active() {
+    return qore_module_lifetime_flag.load(std::memory_order_acquire);
+}
+
+//! Returns the Programs with module lifetime; they stay allocated until qore_release_module_program_pins()
+DLLLOCAL void qore_get_module_lifetime_programs(std::vector<QoreProgram*>& pgms);
+
+//! Releases the dependency references of the Programs with module lifetime; called by qore_cleanup() once no other
+//! thread can run Qore code, before the binary modules are deleted
+DLLLOCAL void qore_release_module_program_pins();
+
+//! Stops the entries into Programs with module lifetime without their thread count, and waits for the threads in such
+//! entries to leave them
+/** Entering the Program of a module takes neither the Program's lock nor its thread count while module lifetime is in
+    effect (see ProgramThreadCountContextHelper::set()): the Program is deleted only by the module manager's cleanup,
+    which calls this first, so that every later entry takes the thread count, and the Program's teardown waits for the
+    threads in its code as usual.  Each thread counts its own entries, so concurrent calls into a module's code do not
+    contend for a lock.  Called by QoreModuleManager::delUser() before it clears the data of the module Programs;
+    idempotent
+*/
+DLLLOCAL void qore_stop_module_uncounted_entries();
+
+//! Closes the Programs with module lifetime to every thread but the calling one, which runs the module cleanup
+/** Called by QoreModuleManager::delUser() right after qore_stop_module_uncounted_entries(), before it clears the data
+    of the module Programs: a thread outside the threads that qore_cleanup() waits for (the signal thread running a
+    handler of a Program that is not a module's, a thread pool or asynchronous I/O thread, a foreign thread) would
+    otherwise run module code on data being destroyed.  Such an entry then fails with a \c PROGRAM-ERROR exception.
+    The threads that entered a module's Program before are waited for by the cleanup, as before: a thread blocked in
+    module code for good keeps the cleanup waiting, which cannot be bounded without destroying data that the thread
+    uses; no thread can enter module code anew to prolong the wait.
+
+    The work that the cleanup itself hands to other threads is part of the cleanup, so the Programs stay open to the
+    threads that run it: a ThreadPool task that the cleanup thread submits (a destructor that the cleanup runs can
+    submit a task and wait for its result, which would otherwise wait forever) and a background thread that it starts,
+    and in turn such work of such work (see qore_module_cleanup_delegation() and QoreModuleCleanupDelegateHelper).
+    So does an asynchronous I/O operation or a timer that the cleanup thread adds to the asynchronous I/O controller
+    (QoreSandboxContext::module_cleanup_delegate): its callbacks run on the controller's workers.  Work handed over by
+    any other thread is refused
+*/
+DLLLOCAL void qore_close_module_programs();
+
+//! Returns true if the Programs of the modules are closed (see qore_close_module_programs()) and the calling thread
+//! can still enter them: it runs the module cleanup, or work that the cleanup handed over
+/** Called by the code that hands work to another thread, in the handing thread (QoreSandboxContext for a ThreadPool
+    task and the asynchronous I/O controller, the background operator): the work then enters the Programs of the
+    modules as the handing thread can (see QoreModuleCleanupDelegateHelper)
+*/
+DLLLOCAL bool qore_module_cleanup_delegation();
+
+//! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
+//! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true
+/** See qore_close_module_programs(); the helpers of a thread nest
+*/
+class QoreModuleCleanupDelegateHelper {
+public:
+    DLLLOCAL QoreModuleCleanupDelegateHelper(bool delegate);
+
+    DLLLOCAL ~QoreModuleCleanupDelegateHelper() {
+        reset();
+    }
+
+    //! Ends the delegation before the helper is destroyed; to be called before the thread's data is deleted
+    DLLLOCAL void reset();
+
+    QoreModuleCleanupDelegateHelper(const QoreModuleCleanupDelegateHelper&) = delete;
+    QoreModuleCleanupDelegateHelper& operator=(const QoreModuleCleanupDelegateHelper&) = delete;
+
+private:
+    ThreadData* td = nullptr;
+};
+
 
 //! Waits on a condition variable until it is signalled, the timeout expires, or the thread is cancelled or interrupted
 /** The implementation of QoreCondition::waitWithInterrupt(); a cancellation request
@@ -912,13 +1816,21 @@ DLLLOCAL void end_thread_cancellation(bool terminating = false);
     @param timeout_ms the timeout in milliseconds; negative for no timeout
     @param xsink for the cancellation exception; may be nullptr
     @param operation the operation named in the cancellation exception
+    @param before_block if not nullptr, called with \a before_block_arg and the mutex held after the wait is
+    registered and the last check for a request, just before the thread blocks (also when the wait cannot be
+    registered: then nothing can wake it for what the check reads); if it returns non-zero, the thread does not
+    block and QORE_COND_RESULT_SUCCESS is returned.  A thread that sets what the check reads and then wakes the
+    waiter with QoreThreadList::wakeCondWaiter() is never lost: either the check sees it, or the wakeup sees the
+    registration
+    @param before_block_arg the argument of \a before_block
 
     @return QORE_COND_RESULT_SUCCESS if woken, QORE_COND_RESULT_TIMEOUT on timeout, or QORE_COND_RESULT_INTERRUPTED
     if the thread was cancelled or interrupted (or the condition waker thread could not be started), in which case
     an exception has been raised on \a xsink if it is not nullptr
 */
 DLLLOCAL int qore_cond_wait_cancellable(QoreCondition& cond, pthread_mutex_t* m, int64 timeout_ms,
-        ExceptionSink* xsink, const char* operation);
+        ExceptionSink* xsink, const char* operation, int (*before_block)(void*) = nullptr,
+        void* before_block_arg = nullptr);
 
 //! Stops the condition waker thread; called when no thread can be waiting any more
 DLLLOCAL void qore_stop_cond_waker();
@@ -926,6 +1838,8 @@ DLLLOCAL void qore_stop_cond_waker();
 #ifdef DEBUG
 //! Test hook called by qore_cond_wait_cancellable() after its final check for a request and before it blocks
 DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_window_hook;
+//! Test hook called by qore_cond_wait_cancellable() before it registers a wait that it can register for a wakeup
+DLLLOCAL extern std::atomic<void (*)()> qore_cond_wait_register_hook;
 #endif
 
 //! Sleeps for the given number of microseconds or until the current thread is cancelled or interrupted
@@ -947,7 +1861,9 @@ DLLLOCAL int qore_cancellable_sleep(int64 usecs, ExceptionSink* xsink, const cha
 
     Unlike delete_thread_local_data(), this does not unregister the thread from any
     QoreProgram or set the finalizing flag — the thread continues to be available for
-    new tasks.
+    new tasks.  While it releases the thread_local values, the destructors it runs cannot assign the
+    thread's thread_local variables, as at the end of a thread (see thread_local_vars_finalizing());
+    the values assigned while the other data is cleared are released afterwards.
 */
 DLLLOCAL void clear_all_program_thread_local_data();
 DLLLOCAL void parse_cond_push(bool mark = false);
@@ -957,7 +1873,7 @@ DLLLOCAL void parse_cond_mark_else();
 DLLLOCAL bool parse_cond_has_else();
 DLLLOCAL bool parse_cond_pop(const QoreProgramLocation* loc);
 DLLLOCAL bool parse_cond_test(const QoreProgramLocation* loc);
-DLLLOCAL void push_parse_options();
+DLLLOCAL void push_parse_options(const QoreProgramLocation* loc);
 DLLLOCAL void parse_try_module_inc();
 DLLLOCAL bool parse_try_module_dec(const QoreProgramLocation* loc);
 DLLLOCAL unsigned parse_try_module_get();
@@ -1213,18 +2129,55 @@ private:
    void* operator new(size_t) = delete;
 };
 
-// allows for implicit argument types to be set at parse time
+// allows for implicit argument types to be set at parse time, for the code of an operator that sets the implicit
+// arguments for it: the type of $1 and, for the code of foldl and foldr, which get the next element as $2, the type of
+// $2; every other implicit argument has no parse-time type, and code that sets $1 alone unsets the type of $2 of an
+// enclosing fold
 class ParseImplicitArgTypeHelper {
 public:
-   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti) : ati(parse_set_implicit_arg_type_info(ti)) {
+   //! \a sets_implicit_args is false for a block whose code runs with the implicit arguments of the enclosing code
+   DLLLOCAL ParseImplicitArgTypeHelper(const QoreTypeInfo* ti, const QoreTypeInfo* ti2 = nullptr,
+         bool sets_implicit_args = true)
+         : ati(parse_set_implicit_arg_type_info(ti)), ati2(parse_set_implicit_arg2_type_info(ti2)),
+           depth(parse_set_implicit_arg_ctx_depth(0)) {
+      parse_set_implicit_arg_ctx_depth(depth + (sets_implicit_args ? 1 : 0));
    }
 
    DLLLOCAL ~ParseImplicitArgTypeHelper() {
+      parse_set_implicit_arg2_type_info(ati2);
       parse_set_implicit_arg_type_info(ati);
+      parse_set_implicit_arg_ctx_depth(depth);
    }
 
 private:
    const QoreTypeInfo* ati;
+   const QoreTypeInfo* ati2;
+   unsigned depth;
+};
+
+// parse of the body of a function or a closure: the implicit arguments are those of its own call, so neither $1 nor
+// $2 has the parse-time type of an enclosing operator's element, and a read of them that is not inside an operator
+// that sets them is noted in \a reads (qore#5805)
+class ParseFunctionBodyImplicitArgHelper {
+public:
+   DLLLOCAL ParseFunctionBodyImplicitArgHelper(bool& reads) : ati(parse_set_implicit_arg_type_info(nullptr)),
+         ati2(parse_set_implicit_arg2_type_info(nullptr)), depth(parse_set_implicit_arg_ctx_depth(0)),
+         old_reads(parse_set_function_reads_implicit_args(&reads)) {
+      reads = false;
+   }
+
+   DLLLOCAL ~ParseFunctionBodyImplicitArgHelper() {
+      parse_set_implicit_arg2_type_info(ati2);
+      parse_set_implicit_arg_type_info(ati);
+      parse_set_implicit_arg_ctx_depth(depth);
+      parse_set_function_reads_implicit_args(old_reads);
+   }
+
+private:
+   const QoreTypeInfo* ati;
+   const QoreTypeInfo* ati2;
+   unsigned depth;
+   bool* old_reads;
 };
 
 // acquires a TID and thread entry, returns -1 if not successful
@@ -1264,6 +2217,9 @@ DLLLOCAL ClosureParseEnvironment* thread_get_closure_parse_env();
 
 DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
     bool assign, bool read_only = false);
+//! Creates a local's closure storage with the owning invocation's concrete constraint.
+DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const LocalVar* local, const QoreTypeInfo* runtimeTypeInfo,
+    QoreValue& nval, bool assign);
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
@@ -1361,11 +2317,22 @@ DLLLOCAL const qore_class_private* runtime_get_class();
 */
 DLLLOCAL const qore_class_private* runtime_get_caller_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
+//! returns the current Program and class context with one thread-local lookup
+DLLLOCAL void runtime_get_program_and_class(QoreProgram*& pgm, const qore_class_private*& qc);
 // to get or set the current generic receiver type for static generic method bodies
 DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
 DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti);
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
+
+//! The source Program of a class that CodeContextHelperBase takes for its frame
+struct QoreClassSourceProgramInfo {
+    //! the source Program (see qore_class_private::getSourceProgramForCall()), or nullptr if the class has none
+    QoreProgram* pgm = nullptr;
+    //! true if a reference was taken to \a pgm: it is neither the current Program nor one with module lifetime, nor
+    //! one that the thread deletes
+    bool referenced = false;
+};
 
 class CodeContextHelperBase {
 private:
@@ -1391,7 +2358,79 @@ private:
 public:
     DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
             ExceptionSink* xsink, bool ref_obj = true);
+
+    //! as above; also returns the source Program of the class that the helper takes for its frame
+    DLLLOCAL CodeContextHelperBase(const char* code, QoreObject* obj, const qore_class_private* c,
+            ExceptionSink* xsink, bool ref_obj, QoreClassSourceProgramInfo& spgm_info);
+
     DLLLOCAL ~CodeContextHelperBase();
+
+private:
+    DLLLOCAL void init(const char* code, QoreObject* obj, const qore_class_private* c, bool ref_obj,
+            QoreClassSourceProgramInfo* spgm_info);
+};
+
+//! Runs the body of a plain function or a static method in its own object and class context
+/** A call of user code runs a plain function's body without an object or a class, and a static method's body
+    without an object in the class of its variant (UserVariantBase::eval()); the paths that run the body without that
+    call (the runtime fast-call helpers, the IR interpreter's inline calls and native code calling a fast entry
+    directly) switch to that context with this helper, as ObjectSubstitutionHelper does, and restore the caller's
+    when it is destroyed.  It does nothing when the thread already has that context, as for a plain function called
+    from a plain function or from top-level code, and it updates the thread's RuntimeConfig through its data (as
+    sync_runtime_config_program() does), so a switch makes no thread-local lookup when the caller gives the thread's
+    data, and the runtime helpers set the call's implicit arguments with it (as ArgvContextHelper does) in the same
+    lookup.
+*/
+class CalleeContextHelper {
+public:
+    //! Switches to the callee's context if the thread does not have it
+    /** @param thread_data_ptr the current thread's data (get_thread_data_for_native_calls())
+        @param cls the class of a static method, or nullptr for a plain function
+    */
+    DLLLOCAL CalleeContextHelper(void* thread_data_ptr, const qore_class_private* cls = nullptr);
+
+    //! Sets the implicit arguments of the call, as ArgvContextHelper does, and switches to the callee's context if
+    //! the thread does not have it
+    /** @param argv the implicit arguments, which the helper dereferences when it is destroyed
+        @param xsink for exceptions raised when the arguments are dereferenced
+        @param cls the class of a static method, or nullptr for a plain function
+    */
+    DLLLOCAL CalleeContextHelper(QoreListNode* argv, ExceptionSink* xsink, const qore_class_private* cls = nullptr);
+
+    //! Restores the context that the constructor replaced, if any, and the implicit arguments, if it set them
+    DLLLOCAL ~CalleeContextHelper() {
+        if (argv_xsink) {
+            restoreArgv();
+        }
+        if (switched) {
+            restoreContext();
+        }
+    }
+
+    CalleeContextHelper(const CalleeContextHelper&) = delete;
+    CalleeContextHelper& operator=(const CalleeContextHelper&) = delete;
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
+
+private:
+    //! the current thread
+    ThreadData* td;
+    //! true if the constructor switched the context
+    bool switched = false;
+    QoreObject* old_obj;
+    const qore_class_private* old_class;
+    QoreObject* old_rc_obj;
+    const qore_class_private* old_rc_class;
+    //! the implicit arguments that the call's replaced, if it set them
+    QoreListNode* old_argv = nullptr;
+    //! the sink for the dereference of the call's implicit arguments, if it set them
+    ExceptionSink* argv_xsink = nullptr;
+
+    DLLLOCAL void switchContext(const qore_class_private* cls);
+    DLLLOCAL void restoreContext();
+    DLLLOCAL void restoreArgv();
 };
 
 class ObjectSubstitutionHelper {
@@ -1552,12 +2591,28 @@ public:
     */
     DLLLOCAL void exit(ExceptionSink* xsink);
 
+    //! exits the frame on the given thread, which is the current thread; see exit(ExceptionSink*)
+    DLLLOCAL void exit(ThreadData* td, ExceptionSink* xsink);
+
     //! returns true if the frame is entered
     DLLLOCAL bool isActive() const {
         return active;
     }
 
+    //! returns true if the last entry failed with a C++ exception during or after the entry handler
+    DLLLOCAL bool handlerFailedWithCppException() const {
+        return handler_cpp_exception;
+    }
+
 private:
+    //! runs the entry handler of the Program, if any; see enter()
+    DLLLOCAL QORE_INTERN_NOINLINE int enterHandlers(ThreadData* td, QoreProgram* pgm, ExceptionSink* xsink);
+    //! runs the exit handler paired with the entry handler that ran; see exit(); never throws: a C++ exception is
+    //! recorded in the sink
+    DLLLOCAL QORE_INTERN_NOINLINE void exitHandlers(ThreadData* td, ExceptionSink* xsink);
+    //! leaves the frame for an entry whose handler failed: no exit handler runs for it; never throws
+    DLLLOCAL void failEntry(ThreadData* td, ExceptionSink& handler_xsink) noexcept;
+
     //! the thread's entered Program before the frame
     QoreProgram* old_entry_pgm = nullptr;
     //! the handlers whose entry handler ran, or nullptr; a reference is held while the frame is entered
@@ -1566,27 +2621,95 @@ private:
     QoreValue token;
     //! true while the frame is entered
     bool active = false;
+    //! true if the last entry failed with a C++ exception during or after the entry handler (issue #6255)
+    bool handler_cpp_exception = false;
 };
 
 //! returns true if a call into the given Program must enter it although it is the thread's current Program
 /** This is the case when the Program has thread entry handlers and is not the thread's entered Program: the current
     Program can be set without entering it, for example while a Program is parsed or committed, or while metadata
     of a Program is looked up.  Callers that skip ProgramThreadCountContextHelper for a call within the current
-    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.
+    Program must check this first; ProgramThreadCountContextHelper::set() checks it itself.  Binary modules use the
+    exported qore_program_thread_entry_pending().
 */
-DLLLOCAL bool thread_entry_pending(QoreProgram* pgm);
+DLLLOCAL bool thread_entry_pending(const QoreProgram* pgm);
+
+//! A thread that runs Qore code since an epoch of type retirement (see qore_type_retire_epoch)
+struct QoreTypeRetirementThread {
+    //! the thread's TID
+    int tid;
+    //! the epoch that the thread published when it entered Qore code
+    uint64_t epoch;
+};
+
+//! Scans the threads for the type retirement epochs that they published (see qore_type_retire_epoch)
+/** @param below if not 0, \a threads receives each thread whose epoch is not 0 and is less than this value: the
+    threads that an item retired at this epoch waits for
+    @param threads if not null, receives the threads found, in the order of their TIDs
+
+    @return the lowest epoch of the threads that run Qore code, or 0 if none does
+*/
+DLLLOCAL uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads);
+
+//! A thread's entry into a Program, counted with its thread count, which is left with
+//! qore_program_private::decThreadCount(*pgm, tid, xsink)
+struct QoreReferenceProgramEntry {
+    //! the Program entered, or nullptr if none was
+    QoreProgram* pgm = nullptr;
+    //! the thread's TID; set if \a pgm is
+    int tid;
+};
 
 class ProgramThreadCountContextHelper {
 public:
     DLLLOCAL ProgramThreadCountContextHelper() = default;
-    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+    DLLLOCAL ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool runtime) {
+        set(xsink, pgm, runtime);
+    }
     DLLLOCAL ~ProgramThreadCountContextHelper();
 
+    //! enters the Program; a C++ exception of the entry (std::bad_alloc) is raised in \a xsink as a Qore exception
+    /** The entry leaves the thread as it was, enterFailed() is true, and the exception is \c THREAD-ENTRY-HANDLER-ERROR
+        if the entry handler failed, otherwise \c PROGRAM-ENTRY-ERROR; if \a xsink already holds an exception, as when
+        a destructor runs while an exception propagates, no other is added.  The calls that the interpreter makes into
+        other Programs have nothing above them that converts a C++ exception, which would end the process (issue
+        #6255).
+    */
     DLLLOCAL void set(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 
-    DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink);
+    //! enters the Program as set() does, except that a C++ exception of the entry propagates
+    /** For the C++ API (QoreExternalProgramContextHelper): the exception propagates once the thread is as it was
+        (issue #6198); the helper's destructor then finds nothing to undo.
+    */
+    DLLLOCAL void setRethrow(ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
+
+    //! Returns the data of the thread in the Program of the given frame and the index of the frame there
+    /** @param frame the frame, counted from the caller of the builtin function that looks it up; set to its index
+        on the stack of local variables of the data returned
+        @param xsink for an exception
+        @param aot_code if not null, set to true if the frame runs AOT-compiled native code, or if it is not known
+        whether it does (see qore_is_aot_code_location()), false if it runs in the AST or the IR interpreter
+
+        @return the data, or nullptr if the frame cannot be accessed or does not exist
+    */
+    DLLLOCAL static ThreadLocalProgramData* getContextFrame(int& frame, ExceptionSink* xsink,
+            bool* aot_code = nullptr);
 
     DLLLOCAL bool isFirstThreadLocalProgramData(const ThreadLocalProgramData* tlpd) const;
+
+    //! returns true if set() switched to the Program or entered it without a switch; false if it did neither, as when
+    //! entering the Program failed with an exception
+    DLLLOCAL bool entered() const {
+        return restore || entry_frame.isActive();
+    }
+
+    //! marks the context as the one that runs the top-level code of the Program
+    /** The top-level code has no frame boundary: its frame is the bottom of the thread's local variable stack in the
+        Program, below the frames of the calls it makes (see getContextFrame()); when the Program is already on the
+        thread's stack (its top-level code runs again in a call that it makes), that bottom belongs to the first entry
+        into the Program, and the frame of the top-level code is that of the call
+    */
+    DLLLOCAL void setTopLevel();
 
     //! returns the program active before this context was entered
     DLLLOCAL QoreProgram* getOldProgram() const {
@@ -1598,24 +2721,123 @@ public:
         return old_ctx;
     }
 
+    //! Hands the thread count that set() took in the Program over to the caller
+    /** The caller leaves the Program with qore_program_private::decThreadCount(); the context is still restored
+        when the helper is destroyed, without leaving the Program.  Used to keep the Program of a reference entered
+        until its lvalue has been used (see LValueHelper::adoptReferenceProgram()).
+
+        If set() entered a Program with module lifetime without its thread count (see qore_module_uncounted_entry()),
+        the thread count is taken here, so that the module cleanup also waits for the use of the lvalue after the
+        context is restored, which leaves the uncounted entry; see takeModuleThreadCount()
+
+        @return the Program entered, with no Program if set() did not enter it (it was already in it, or the entry
+        failed)
+    */
+    DLLLOCAL QoreReferenceProgramEntry takeThreadCount() {
+        QoreReferenceProgramEntry rv;
+        if (thread_count_incremented) {
+            thread_count_incremented = false;
+            rv.pgm = count_pgm;
+            rv.tid = count_tid;
+        } else if (module_uncounted) {
+            takeModuleThreadCount(rv);
+        }
+        return rv;
+    }
+
+    //! Returns true if set() raised an exception: the thread did not enter the Program, or its entry or thread
+    //! initialization code failed
+    DLLLOCAL bool enterFailed() const {
+        return failed;
+    }
+
+    //! returns true if a lookup found at generation \a gen that neither \a cur_pgm, the thread's current Program, nor
+    //! any Program left by this context or an enclosing one has a sandbox manager (see qore_sandbox_manager_generation)
+    /** The Programs left by the contexts of the chain do not change while this context is entered, and a Program that
+        gets a manager increments the generation, so the lookup of the thread's sandbox manager need not check them
+        again (a cancellation point runs it on every loop iteration)
+    */
+    DLLLOCAL bool sandboxChainClear(const QoreProgram* cur_pgm, uint64_t gen) const {
+        return sandbox_clear_gen == gen && sandbox_clear_pgm == cur_pgm;
+    }
+
+    //! records that a lookup made at generation \a gen found no sandbox manager on the chain; see sandboxChainClear()
+    DLLLOCAL void setSandboxChainClear(const QoreProgram* cur_pgm, uint64_t gen) const {
+        sandbox_clear_pgm = cur_pgm;
+        sandbox_clear_gen = gen;
+    }
+
 protected:
+    // a context is created on every call; the members without an initializer are written by set() before they are
+    // read: those of a switch (read only while restore is set, for the contexts on the thread's chain), xsink in
+    // every path of set() that enters the Program, and the saved deferral depths by suspendDeferral()
+    //! see sandboxChainClear(); written and read by the thread itself only, set when set() switches the Program
+    mutable const QoreProgram* sandbox_clear_pgm;
+    mutable uint64_t sandbox_clear_gen;
+    //! the data of the thread, which set() entered the Program in, or nullptr if set() did nothing
+    ThreadData* ctx_td = nullptr;
     QoreProgram* old_pgm = nullptr;
-    ThreadLocalProgramData* old_tlpd = nullptr;
-    ProgramThreadCountContextHelper* old_ctx = nullptr;
+    //! the Program that set() counted the thread in, or entered without its thread count (module_uncounted); set,
+    //! and read, only if thread_count_incremented or module_uncounted
+    QoreProgram* count_pgm;
+    //! the TID of the thread in \a count_pgm; set, and read, only if thread_count_incremented or module_uncounted
+    int count_tid;
+    ThreadLocalProgramData* old_tlpd;
+    ProgramThreadCountContextHelper* old_ctx;
     // frame count of tlpd when context is started
-    int save_frameCount = 0;
-    int old_frameCount = 0;
+    int save_frameCount;
+    int old_frameCount;
     //! receives the exceptions of clearing a Program deleted while this context ran its code
-    ExceptionSink* xsink = nullptr;
+    ExceptionSink* xsink;
     //! the thread's entry into the Program, for its thread entry and exit handlers
     ThreadEntryHandlerFrame entry_frame;
+    //! the cancellation-deferral depths of the thread, saved while code of a sandboxed Program runs
+    unsigned saved_defer;
+    unsigned saved_dtor_defer;
     bool restore = false;
+    //! true if set() created the thread's local data of the Program, or if the context runs the top-level code of the
+    //! Program in the thread's first entry into it (setTopLevel()): the context's bottom frame has no frame boundary
     bool init_tlpd = false;
     bool thread_count_incremented = false;
+    //! true if the context entered a Program with module lifetime without its thread count; see
+    //! qore_module_uncounted_entry()
+    bool module_uncounted = false;
+    //! true if the cancellation deferral of the thread was suspended when the Program was entered
+    bool defer_suspended = false;
+
+    //! set() raised an exception; see enterFailed()
+    bool failed = false;
 
 private:
     //! restores the thread's context as it was before set() switched it
     DLLLOCAL void restoreContext();
+
+    //! releases the thread count that set() took in \a pgm, or leaves the entry without it (module_uncounted)
+    DLLLOCAL void releaseThreadCount(ThreadData* td, QoreProgram* pgm);
+
+    //! the steps of setOtherProgram() once the thread's context is switched (the budgets, the deferral, the entry
+    //! handler, the thread initialization code and the debugger); an exception that they raise is undone by the caller
+    DLLLOCAL void enterSwitched(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, qore_program_private* pp,
+        bool runtime);
+
+    //! Takes the thread count in the Program that set() entered without it (module_uncounted) for takeThreadCount()
+    /** The entry without the thread count is still left when the context is restored
+    */
+    DLLLOCAL void takeModuleThreadCount(QoreReferenceProgramEntry& rv);
+
+    //! Suspends every cancellation deferral of the thread while the code of a sandboxed Program runs
+    /** Sandboxed code never runs with cancellation deferred: not when a trusted destructor calls it (a method a
+        sandboxed subclass overrides, a callback), and not when trusted code runs it in a cleanup critical section
+        (defer_thread_cancel(), QoreCancelDeferralHelper) or in thread teardown; see QoreDestructorCancelHelper and
+        "Sandboxed code never runs deferred" in design/cooperative-cancellation.md
+    */
+    DLLLOCAL void suspendDeferral(ThreadData* td);
+
+    //! Restores the deferral suspended by suspendDeferral()
+    DLLLOCAL void restoreDeferral();
+
+    //! switches the thread's context to a Program that is not its current one; see set()
+    DLLLOCAL void setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm, bool runtime);
 };
 
 class ProgramRuntimeParseContextHelper {
@@ -1625,6 +2847,14 @@ protected:
 
 public:
     DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm);
+
+    //! Takes the Program's parse lock without waiting if \a no_wait is true
+    /** If another thread holds the parse lock, \c PROGRAM-ERROR is raised in \a xsink instead of waiting for it (see
+        qore_program_private::tryLockParsing()); used where waiting could deadlock (see
+        QoreModuleManager::issueRuntimeCmd())
+    */
+    DLLLOCAL ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm, bool no_wait);
+
     DLLLOCAL ~ProgramRuntimeParseContextHelper();
 };
 
@@ -1659,10 +2889,212 @@ protected:
 // raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread is exhausted; see thread.cpp
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 
+// raises STACK-LIMIT-EXCEEDED and returns -1 if the stack of the thread cannot take \a reserve more bytes before its
+// stack check would fail (the frame of a compiled function, qore#6414); see thread.cpp
+DLLLOCAL int check_stack_reserve(ExceptionSink* xsink, size_t reserve);
+
+//! Keeps the Program of a reference from being deleted while the reference's lvalue is used
+/** A reference can outlive the Program whose lvalue it refers to: a function of the Program can return one, and the
+    Program's variables and code are freed with the Program, while the reference keeps their addresses (its lvalue
+    expression).  The reference keeps the Program allocated with a dependency reference (lvalue_ref::pgm), and its
+    use enters the Program: a reference to a lvalue of a Program that is being deleted, or has been, raises
+    PROGRAM-ERROR; its use entered the freed Program and crashed.
+
+    The helper enters the Program without switching to it (qore_program_private::enterWithoutContext()) unless it is
+    the current Program, which the thread is in, or one that the thread deletes, so that its teardown waits while the
+    helper exists; RuntimeReferenceHelperBase enters it with its context.  An LValueHelper keeps the entry until the
+    lvalue has been used (LValueHelper::keepReferenceProgram()): the teardown released the variable while another
+    thread assigned it through a reference.
+*/
+class QoreReferenceProgramHelper {
+public:
+    //! Enters the Program of the reference; raises PROGRAM-ERROR in \a xsink if it is being deleted or has been
+    /** @param r the reference
+        @param xsink for exceptions; also used to leave the Program
+    */
+    DLLLOCAL QoreReferenceProgramHelper(const lvalue_ref& r, ExceptionSink* xsink);
+
+    //! Leaves the Program if it was entered and not taken with release()
+    DLLLOCAL ~QoreReferenceProgramHelper();
+
+    DLLLOCAL QoreReferenceProgramHelper(const QoreReferenceProgramHelper&) = delete;
+    DLLLOCAL QoreReferenceProgramHelper& operator=(const QoreReferenceProgramHelper&) = delete;
+
+    //! Returns false if the reference's Program is being deleted or has been
+    DLLLOCAL operator bool() const {
+        return valid;
+    }
+
+    //! Returns the entry into the Program, which the caller leaves with qore_program_private::decThreadCount()
+    DLLLOCAL QoreReferenceProgramEntry release() {
+        QoreReferenceProgramEntry rv = entry;
+        entry.pgm = nullptr;
+        return rv;
+    }
+
+private:
+    //! the entry into the Program, if any
+    QoreReferenceProgramEntry entry;
+    ExceptionSink* xsink;
+    bool valid = true;
+};
+
+//! Keeps the Program that declared a member initializer from being deleted while the thread evaluates it
+/** The member initializers of a hashdecl or class are code of the Program that declared them, but they are evaluated
+    in the Program of the code that creates the hash or the object, which is another Program for a hashdecl or class
+    inherited or imported by another Program, or for a typed hash whose type another Program gets from a value (with
+    the reflection API).  The code of the initializers, such as the function entries of their calls, is freed with
+    their Program: an initializer evaluated after that Program had been deleted crashed.
+
+    The helper enters the declaring Program without switching to it (qore_program_private::enterWithoutContext()),
+    so that its teardown waits until the initializer has been evaluated, unless it is the current Program, which the
+    thread is in, one that the thread deletes, or a Program with module lifetime; entering a Program that is being
+    deleted, or has been, raises \c PROGRAM-ERROR.  See typed_hash_decl_private::enterSourceProgram() and
+    qore_class_private::enterSourceProgramForInit().
+*/
+class QoreDeclaringProgramHelper {
+public:
+    DLLLOCAL QoreDeclaringProgramHelper() = default;
+
+    //! Leaves the Programs entered, if any
+    DLLLOCAL ~QoreDeclaringProgramHelper() {
+        reset();
+    }
+
+    DLLLOCAL QoreDeclaringProgramHelper(const QoreDeclaringProgramHelper&) = delete;
+    DLLLOCAL QoreDeclaringProgramHelper& operator=(const QoreDeclaringProgramHelper&) = delete;
+
+    //! Enters the Program identified by its address and ID, which can have been deleted
+    /** @param p the Program; it is not dereferenced unless it is still registered with the ID given or is the
+        current Program
+        @param id the Program's ID, which tells it from a later Program at the same address
+        @param module_lifetime set once the Program is found to have module lifetime, so that later calls need neither
+        the lock nor a reference to it
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program is being deleted, or has been; may be
+        nullptr, in which case no exception is raised
+
+        @return 0 for OK, -1 if the Program is being deleted, or has been
+
+        If the helper holds a Program already, it holds this one as well
+    */
+    DLLLOCAL int enter(QoreProgram* p, qore_program_id_t id, std::atomic<bool>& module_lifetime,
+            ExceptionSink* xsink);
+
+    //! Takes over a reference to a Program and enters it
+    /** @param p the Program, referenced; the reference is released with the helper, or here if the Program cannot be
+        entered
+        @param xsink for the \c PROGRAM-ERROR exception raised if the Program is being deleted, or has been; may be
+        nullptr
+
+        @return 0 for OK, -1 if the Program is being deleted, or has been
+    */
+    DLLLOCAL int enterReferenced(QoreProgram* p, ExceptionSink* xsink);
+
+    //! Leaves the Programs entered, if any
+    DLLLOCAL void reset() {
+        next.reset();
+        if (pgm) {
+            leave();
+        }
+    }
+
+    //! Raises the \c PROGRAM-ERROR exception for a declaring Program that has been deleted, if \a xsink is not null
+    DLLLOCAL static int raiseDeleted(ExceptionSink* xsink);
+
+private:
+    //! the Program entered and referenced, if any
+    QoreProgram* pgm = nullptr;
+    //! the thread's TID; set if \a pgm is
+    int tid;
+    //! the sink given when the Program was entered, used to leave it; may be nullptr
+    ExceptionSink* leave_xsink = nullptr;
+    //! holds the other Programs entered, if any; left before \a pgm
+    std::unique_ptr<QoreDeclaringProgramHelper> next;
+
+    //! Leaves the Program entered and releases the reference to it
+    DLLLOCAL void leave();
+};
+
+class QoreStatementTempScope;
+
+//! makes the thread have no temp scope of a statement and returns the innermost one (see QoreStatementTempScope)
+DLLLOCAL QoreStatementTempScope* qore_suspend_statement_temp_scope();
+//! makes the scope returned by qore_suspend_statement_temp_scope() the innermost temp scope of the thread again
+DLLLOCAL void qore_resume_statement_temp_scope(QoreStatementTempScope* scope);
+
+//! suspends the temp scope of the statement being executed while a reference is resolved
+/** The lvalue expression of a reference is evaluated in the context of the code that created the reference
+    (RuntimeReferenceHelperBase); a read through the reference is a read of the variable that holds the reference,
+    which the statement holds as a whole if it gives the code a reference of its own (VarRefNode::evalImpl()), so the
+    reads and the temporaries of the lvalue expression are released when the reference is resolved: they are not
+    temporaries of the statement, which the other execution modes do not keep either, as they resolve the reference
+    with no temp scope of the AST interpreter (qore_local_reference_eval())
+*/
+class QoreStatementTempScopeSuspension {
+public:
+    DLLLOCAL QoreStatementTempScopeSuspension() : scope(qore_suspend_statement_temp_scope()) {
+    }
+
+    DLLLOCAL ~QoreStatementTempScopeSuspension() {
+        qore_resume_statement_temp_scope(scope);
+    }
+
+private:
+    QoreStatementTempScope* scope;
+
+    DLLLOCAL QoreStatementTempScopeSuspension(const QoreStatementTempScopeSuspension&) = delete;
+    DLLLOCAL QoreStatementTempScopeSuspension& operator=(const QoreStatementTempScopeSuspension&) = delete;
+};
+
+//! Returns true if the current thread must enter a reference's Program to use the reference's lvalue
+/** It need not if the Program is its current Program, which it is in, or one that it deletes (see
+    qore_program_torn_down_by_current_thread()); one lookup of the thread's data
+
+    @param p the reference's Program
+    @param tid set to the thread's TID if the return value is true
+*/
+DLLLOCAL bool qore_reference_program_needs_entry(const QoreProgram* p, int& tid);
+
+//! records in the thread's data that it deletes a Program's data, which qore_reference_program_needs_entry() reads
+/** @return false if the thread has no data (it is not recorded then)
+*/
+//! registers a function that releases an object of the calling thread when the Qore thread's data is deleted
+/** The function runs on the thread that registered it, when the thread ends (or, for the main thread, when
+    qore_cleanup() deletes the thread data), before the thread's thread-local destructors.  Returns false (and
+    registers nothing) if the thread has no thread data, as after qore_cleanup(); the caller then does not release the
+    object.
+
+    @see QoreThreadLocalObject
+*/
+DLLLOCAL bool qore_thread_add_exit_cleanup(void (*fn)(void*), void* data);
+
+#ifdef DEBUG
+//! Debug-only: makes QoreThreadLocalObject::getNoThrow() fail to allocate an object in the calling thread
+/** For the tests of the callers' handling of an allocation failure; see qore_thread_test_alloc_fails()
+*/
+DLLLOCAL void qore_thread_test_set_alloc_fails(bool fails);
+
+//! Debug-only: returns true if QoreThreadLocalObject::getNoThrow() fails to allocate an object in the calling thread
+DLLLOCAL bool qore_thread_test_alloc_fails();
+#endif
+
+DLLLOCAL bool qore_thread_program_teardown_enter();
+//! records in the thread's data that it has deleted a Program's data; only after qore_thread_program_teardown_enter()
+//! returned true
+DLLLOCAL void qore_thread_program_teardown_leave();
+
 class RuntimeReferenceHelperBase {
 public:
     DLLLOCAL RuntimeReferenceHelperBase(const lvalue_ref& r, ExceptionSink* n_xsink)
             : ref(&r), pch(n_xsink, r.pgm, true), osh(r.self, r.cls) {
+        // the reference's Program is allocated while the reference exists (see lvalue_ref::pgm); a Program that is
+        // being deleted refuses the entry with PROGRAM-ERROR.  Read from the helper, which is cheaper than the
+        // exception sink: a reference to a lvalue of the current Program costs only this test
+        if (pch.enterFailed()) {
+            ref = nullptr;
+            valid = false;
+            return;
+        }
         //printd(5, "RuntimeReferenceHelperBase::RuntimeReferenceHelperBase() this: %p vexp: %p %s %d\n", this,
         //  r.vexp, get_type_name(r.vexp), get_node_type(r.vexp));
         // a reference is resolved by evaluating its lvalue expression, which can be a reference itself; each step of a
@@ -1690,7 +3122,17 @@ public:
         return valid;
     }
 
+    //! Hands the entry into the reference's Program over to the caller, which leaves it with decThreadCount()
+    /** see ProgramThreadCountContextHelper::takeThreadCount(); no Program if the thread was not counted in it (it was
+        already in the Program, as the current Program)
+    */
+    DLLLOCAL QoreReferenceProgramEntry takeProgramEntry() {
+        return pch.takeThreadCount();
+    }
+
 protected:
+    //! the reference is resolved with no temp scope of a statement; constructed first, so it is restored last
+    QoreStatementTempScopeSuspension temps_suspension;
     const lvalue_ref* ref;
     ProgramThreadCountContextHelper pch;
     ObjectSubstitutionHelper osh;
@@ -1713,6 +3155,10 @@ public:
     DLLLOCAL ArgvContextHelper(QoreListNode* argv, ExceptionSink* n_xsink);
     // calls deref(xsink) on list in destructor
     DLLLOCAL ~ArgvContextHelper();
+
+    //! releases the implicit arguments that the helper set before it is destroyed, in the frame of the call, as the
+    //! AST interpreter releases them (issue #5882); the destructor restores the caller's
+    DLLLOCAL void releaseArgv();
 
 private:
     QoreListNode* old_argv;
@@ -1815,10 +3261,17 @@ public:
 
     //! Sets the stack size of threads created with these attributes
     /** The stack of each thread is this size for its code: the static TLS that the C library places on the stack
-        (see q_thread_stack_tls_size()) is added to it
+        (see q_thread_stack_tls_size()) is added to it; a total below the platform's minimum (PTHREAD_STACK_MIN,
+        ex: 128 KB on Linux aarch64) is raised to the minimum, so the thread gets at least the requested size
     */
     DLLLOCAL int setstacksize(size_t ssize) {
-        int rc = pthread_attr_setstacksize(&attr, ssize + q_thread_stack_tls_size());
+        size_t total = ssize + q_thread_stack_tls_size();
+#ifdef PTHREAD_STACK_MIN
+        if (total < static_cast<size_t>(PTHREAD_STACK_MIN)) {
+            total = static_cast<size_t>(PTHREAD_STACK_MIN);
+        }
+#endif
+        int rc = pthread_attr_setstacksize(&attr, total);
         if (!rc) {
             requested_stack_size = ssize;
         }
@@ -1902,14 +3355,53 @@ DLLLOCAL extern QorePThreadAttr ta_default;
 DLLLOCAL int check_stack(ExceptionSink* xsink);
 #endif
 
+//! The stack limit of the current thread (ThreadData::stack_limit), or 0 if it has none or no thread data
+/** Set with the limit (ThreadData::setStackLimit()), so that q_thread_stack_reserve_exceeded() is a TLS read and a
+    comparison inline; atomic only because the primary thread's limit can be set by another thread
+    (enforcePrimaryStackSize()), and constant-initialized, so that its reads need no TLS initialization guard.
+
+    It has the default TLS model: an initial-exec variable marks the whole library STATIC_TLS, and glibc cannot then
+    load libqore with dlopen() (as an embedding runtime such as Python or a JVM does), as its TLS is larger than the
+    static TLS that glibc keeps in reserve for such libraries (see examples/test/qore/misc/libqore-dlopen)
+*/
+DLLLOCAL extern constinit thread_local std::atomic<size_t> q_thread_stack_limit_tls;
+
+//! Returns true if the current thread's stack is smaller than the default thread stack size
+/** The default thread stack size is the size that new Qore threads are created with: STACK_SIZE unless
+    set_default_thread_stack_size() changed it, read with q_thread_get_stack_size().  The stack size of the current
+    thread is the one determined when its thread data was created (ThreadData::stack_size).  The primary thread is never
+    smaller, whatever its size: its stack is the process's, which code that runs in it cannot choose.
+
+    The total stack size is compared, not the stack that remains: a thread whose stack is at least the default size is
+    assumed to have enough stack for a module, so that a module that exceeds it (\c STACK-LIMIT-EXCEEDED) is assumed
+    to have a bug, while in a smaller thread, the error depends on the thread (see qore_find_thread_stack_error())
+*/
+DLLLOCAL bool q_thread_stack_smaller_than_default();
+
 //! Returns true if less than the given number of bytes remain above the current thread's stack limit
 /** For native code that recurses without an exception sink to report check_stack()'s exception, such as IR
-    lowering: it stops before the next recursion step could exhaust the stack.  Always false for a thread with no
-    stack limit, and where the stack is not managed.
+    lowering and parse initialization: it stops before the next recursion step could exhaust the stack.  Always false
+    for a thread with no stack limit, and where the stack is not managed.
 
     @param reserve the stack, in bytes, that the caller needs before it reaches its next check
 */
-DLLLOCAL bool q_thread_stack_reserve_exceeded(size_t reserve);
+DLLLOCAL inline bool q_thread_stack_reserve_exceeded(size_t reserve) {
+#ifdef QORE_MANAGE_STACK
+    size_t limit = q_thread_stack_limit_tls.load(std::memory_order_relaxed);
+    // a thread with no stack guard has no limit (see QTF_NO_STACK_GUARD)
+    if (!limit) {
+        return false;
+    }
+    size_t pos = get_stack_pos();
+#ifdef STACK_DIRECTION_DOWN
+    return pos < limit + reserve;
+#else
+    return pos + reserve > limit;
+#endif
+#else
+    return false;
+#endif
+}
 
 //! Accounts for the stack that the recursion replaced by a deferred deletion would have used
 /** A deletion nested too deeply is deferred to a loop that makes it from a shallower frame (see
@@ -2030,6 +3522,18 @@ private:
 
    ThreadData* td;
 
+   //! a cached local data of the thread in a Program with module lifetime; see findModuleProgramData()
+   struct ModuleProgramDataCacheEntry {
+      const QoreProgram* pgm = nullptr;
+      ThreadLocalProgramData* tlpd = nullptr;
+   };
+   static constexpr unsigned ModuleProgramDataCacheSize = 8;
+   //! accessed by the thread itself only
+   ModuleProgramDataCacheEntry module_pgm_cache[ModuleProgramDataCacheSize];
+   unsigned module_pgm_cache_next = 0;
+   //! set when the thread's data is deleted (del()), after which the cache is neither used nor filled
+   bool module_pgm_cache_disabled = false;
+
 public:
    //! initializes the lock again in a child process created with fork(), where the thread does not exist
    DLLLOCAL void reinitLockAfterFork() {
@@ -2042,14 +3546,14 @@ private:
       assert(pgm_set.empty());
       assert(tld_map.empty());
 #ifdef DEBUG
-      dbgLiveCountChanged(-1);
+      dbgUnregister(dbg_id);
 #endif
    }
 
 public:
    DLLLOCAL ThreadProgramData(ThreadData* n_td) : td(n_td) {
 #ifdef DEBUG
-      dbgLiveCountChanged(1);
+      dbg_id = dbgRegister();
 #endif
    }
 
@@ -2086,13 +3590,42 @@ public:
    DLLLOCAL void freeAllThreadData(ExceptionSink* xsink);
 
    DLLLOCAL void delProgram(QoreProgram* pgm);
+
+   //! returns the thread's local data of a Program with module lifetime cached by cacheModuleProgramData(), or nullptr
+   /** Only for an entry into the Program without its thread count (see qore_stop_module_uncounted_entries()): the
+       Program is not torn down while such entries are allowed, so the thread's local data in it stays in place until
+       the thread's data is deleted (del(), which disables the cache: at the end of the thread, and for the signal
+       thread after each signal handler).  Called in the thread itself only
+   */
+   DLLLOCAL ThreadLocalProgramData* findModuleProgramData(const QoreProgram* pgm) const {
+      // the entry cached last first: a thread usually calls into one module at a time
+      unsigned i = (module_pgm_cache_next + ModuleProgramDataCacheSize - 1) % ModuleProgramDataCacheSize;
+      for (unsigned n = 0; n < ModuleProgramDataCacheSize; ++n) {
+         const ModuleProgramDataCacheEntry& e = module_pgm_cache[i];
+         if (e.pgm == pgm) {
+            return e.tlpd;
+         }
+         i = i ? i - 1 : ModuleProgramDataCacheSize - 1;
+      }
+      return nullptr;
+   }
+
+   //! caches the thread's local data of a Program with module lifetime; see findModuleProgramData()
+   DLLLOCAL void cacheModuleProgramData(const QoreProgram* pgm, ThreadLocalProgramData* tlpd) {
+      if (module_pgm_cache_disabled) {
+         return;
+      }
+      module_pgm_cache[module_pgm_cache_next] = {pgm, tlpd};
+      module_pgm_cache_next = (module_pgm_cache_next + 1) % ModuleProgramDataCacheSize;
+   }
+
    //! saves the thread's data for the current Program and sets the thread's local Program data
    /** @param runtime true to instantiate the Program's top-level local variables for the thread
 
        @return true if this is the thread's first entry into the Program; the caller then runs the Program's thread
        initialization code (qore_program_private::doThreadInit()), after the Program's thread entry handler
    */
-   DLLLOCAL bool saveProgram(bool runtime);
+   DLLLOCAL bool saveProgram(bool runtime, bool* first_entry = nullptr);
    DLLLOCAL void del(ExceptionSink* xsink);
    DLLLOCAL bool canRunDebugCallbacks() const;
    DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;
@@ -2118,15 +3651,26 @@ public:
    typedef void (*dbg_after_unlist_t)(int tid, QoreProgram* pgm);
    DLLLOCAL static std::atomic<dbg_after_unlist_t> dbg_after_unlist;
 
-   //! debug-only: returns the number of objects of this class that exist
-   DLLLOCAL static int64 dbgLiveCount();
+   //! debug-only: returns the ID of this object, unique in the process (also over objects that were destroyed)
+   DLLLOCAL int64 dbgGetId() const {
+      return dbg_id;
+   }
 
-   //! debug-only: waits until no more than \a count objects of this class exist; returns false on timeout
-   DLLLOCAL static bool dbgWaitLiveCount(int64 count, int64 timeout_ms);
+   //! debug-only: waits until the object with the given ID has been destroyed; returns false on timeout
+   /** A test follows the data of the threads it started without counting the objects of the other threads of the
+       process
+   */
+   DLLLOCAL static bool dbgWaitReleased(int64 id, int64 timeout_ms);
 
 private:
-   //! debug-only: counts the objects of this class
-   DLLLOCAL static void dbgLiveCountChanged(int64 delta);
+   //! debug-only: the ID of this object; see dbgGetId()
+   int64 dbg_id;
+
+   //! debug-only: registers a new object as live and returns its ID
+   DLLLOCAL static int64 dbgRegister();
+
+   //! debug-only: registers the object with the given ID as destroyed
+   DLLLOCAL static void dbgUnregister(int64 id);
 #endif
 };
 
@@ -2169,6 +3713,12 @@ DLLLOCAL extern thread_local int qore_thread_counter_share;
 //! the count that the current thread adds to tp_thread_counter (an external-lifecycle thread until it is joined)
 DLLLOCAL extern thread_local int qore_tp_thread_counter_share;
 
+#ifdef DEBUG
+//! called by QoreThreadList::cancelThread() before it publishes a claimed cancellation request, if set; tests use it
+//! to publish after the thread has ended (dbg_cancel_thread_after_end())
+DLLLOCAL extern thread_local std::function<void()>* qore_dbg_cancel_before_publish;
+#endif
+
 #ifdef QORE_HAVE_THREAD_NAME
 DLLLOCAL void q_set_thread_name(const char* name);
 DLLLOCAL void q_get_thread_name(QoreString& str);
@@ -2178,5 +3728,86 @@ DLLLOCAL int q_get_thread_name(int tid, QoreString& str);
 
 //! checkpoints stack usage for debugging purposes
 DLLLOCAL void checkpoint_stack_pos(const char*);
+
+//! an object of class T of each thread that uses it, that is not destroyed by a thread-local destructor
+/** A thread_local object with a destructor (a std::vector, a std::unordered_map, a pool) is destroyed by the thread's
+    thread-local destructors, which the main thread runs when exit() starts, before the destructors of static objects
+    and before any exit handler runs.  Qore code that a static object runs then (a Program that a module keeps at
+    static scope deletes its global objects, and their Qore destructors run) used the destroyed object: a heap
+    use-after-free and a crash (qore#5778).
+
+    The object here is behind a thread_local pointer, which has no destructor and is valid for the life of the thread,
+    created when the thread first uses it and released when the Qore thread ends (or, for the main thread, when
+    qore_cleanup() deletes the thread's data; see qore_thread_add_exit_cleanup()).  A thread without thread data (a
+    thread that runs no Qore code, or one that runs after qore_cleanup()) gets an object from get() that is never
+    released; getNoThrow() gives it an object of its own instead, which the caller deletes.
+
+    @tparam T the class of the object, default constructible
+    @tparam Tag a type that identifies the use (an empty struct): each use has its own pointer
+*/
+template <typename T, typename Tag>
+class QoreThreadLocalObject {
+public:
+    //! returns the calling thread's object, creating it if the thread has none
+    DLLLOCAL static T& get() {
+        T* p = ptr;
+        if (__builtin_expect(!p, 0)) {
+            p = create();
+        }
+        return *p;
+    }
+
+    //! returns the calling thread's object, creating it if the thread has none, or nullptr if it cannot be allocated
+    /** No exception is thrown for an allocation failure (but the constructor of T can throw).
+
+        A thread without thread data does not keep the object, as nothing would release it: \a owned is then set, and
+        the caller deletes the object when it is done with it.
+
+        @param owned set to true if the caller owns the object returned and must delete it, false otherwise
+    */
+    DLLLOCAL static T* getNoThrow(bool& owned) {
+        owned = false;
+        T* p = ptr;
+        if (__builtin_expect(p != nullptr, 1)) {
+            return p;
+        }
+#ifdef DEBUG
+        if (qore_thread_test_alloc_fails()) {
+            return nullptr;
+        }
+#endif
+        p = new (std::nothrow) T;
+        if (!p) {
+            return nullptr;
+        }
+        if (!qore_thread_add_exit_cleanup(release, nullptr)) {
+            owned = true;
+            return p;
+        }
+        ptr = p;
+        return p;
+    }
+
+private:
+    DLLLOCAL static T* create() {
+        T* p = new T;
+        ptr = p;
+        qore_thread_add_exit_cleanup(release, nullptr);
+        return p;
+    }
+
+    //! releases the calling thread's object
+    DLLLOCAL static void release(void*) {
+        T* p = ptr;
+        // cleared first: the destructor of T must not find the object it is destroying
+        ptr = nullptr;
+        delete p;
+    }
+
+    static thread_local T* ptr;
+};
+
+template <typename T, typename Tag>
+thread_local T* QoreThreadLocalObject<T, Tag>::ptr = nullptr;
 
 #endif

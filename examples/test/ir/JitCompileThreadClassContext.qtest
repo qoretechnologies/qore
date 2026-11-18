@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - the background JIT compilation thread and its thread state, and native code generation
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class JitCompileThreadClassContextTest
+
+#! Regression test for qore#5750: the compile-time type checks of a function's IR use the function's own class context
+/** The JIT compiler checks the values that a function returns against its declared return type with the parse-time
+    type checks, and a class's private parent classes make their result depend on the class context: an object of a
+    class is an object of its private parent class only in the code of the class and of its subclasses.  Those
+    checks read the class being parsed in the current thread, which the background compilation thread does not have:
+    it crashed (a null thread data in parse_get_class_priv()).  They now use the class context of the function's own
+    code (qore_ir_function_class_context()), in any thread.
+
+    - The return analysis of a function's IR (qore_ir_function_returns_pass_through()) is run in a native thread
+      without Qore thread data, as the compilation thread runs it, with the debug-build hook
+      dbg_ir_returns_pass_through_without_thread_data(): methods, a static method and a closure created in a method
+      that return an object as their class's private parent class return it unchanged in their own class context; a
+      closure created in a static method, which has no class recorded for it, keeps the runtime check, and so does a
+      function whose return type converts its value; skipped without library debugging.
+    - The script of the issue, with f() called from top-level code, is a parse error in every execution mode and
+      for qcc: the body of f() is outside every class (qore#5749), so it cannot return an object<C> as its class's
+      private parent class Base, also though C::run() refers to it first.
+*/
+class JitCompileThreadClassContextTest inherits QUnit::Test {
+    public {
+        #! the script of the hook's case, run with tiered execution, which lowers its functions to IR when committed
+        const HookScript = '%modern
+class Base {
+}
+class C inherits private Base {
+    Base asBase() {
+        return self;
+    }
+    static Base staticAsBase(C o) {
+        return o;
+    }
+    code methodClosure() {
+        return Base sub () { return self; };
+    }
+    static code staticClosure(C o) {
+        return Base sub () { return o; };
+    }
+}
+class D inherits C {
+    Base parentAsBase(C o) {
+        return o;
+    }
+}
+softint sub convert(string s) {
+    return s;
+}
+C c();
+D d();
+hash<string, bool> h = {
+    "method": call_function("dbg_ir_returns_pass_through_without_thread_data", \c.asBase()),
+    "static method": call_function("dbg_ir_returns_pass_through_without_thread_data", \C::staticAsBase()),
+    "subclass method": call_function("dbg_ir_returns_pass_through_without_thread_data", \d.parentAsBase()),
+    "method closure": call_function("dbg_ir_returns_pass_through_without_thread_data", c.methodClosure()),
+    "static method closure": call_function("dbg_ir_returns_pass_through_without_thread_data",
+        C::staticClosure(c)),
+    "converting function": call_function("dbg_ir_returns_pass_through_without_thread_data", \convert()),
+};
+map printf("%s: %y\n", $1.key, $1.value), h.pairIterator();
+';
+
+        #! the hook's results: True for a return that leaves its value unchanged in the function's class context
+        /** A closure created in a static method has no class recorded for it (qore_ir_function_class_context()), so
+            its return keeps its runtime check, which decides in the closure's runtime class context
+        */
+        const HookExpected = (
+            "method: True",
+            "static method: True",
+            "subclass method: True",
+            "method closure: True",
+            "static method closure: False",
+            "converting function: False",
+        );
+
+        #! the script of qore#5750, run in every execution mode
+        /** C::run() refers to f(), which used to parse-initialize f() in the class context of C; since qore#5749 the
+            body of f() is parsed outside every class, and its return statement is a parse error
+        */
+        const IssueScript = '%modern
+class Base {
+}
+class C inherits private Base {
+    run(bool call) {
+        if (call) {
+            f(self);
+        }
+    }
+}
+Base sub f(C o) {
+    return o;
+}
+C c();
+c.run(False);
+for (int i = 0; i < 40; ++i) {
+    try {
+        f(c);
+        if (!i || i == 39) {
+            printf("%d: returned\n", i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        if (!i || i == 39) {
+            printf("%d: %s: %s\n", i, ex.err, ex.desc);
+        }
+    }
+}
+';
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : Test("JitCompileThreadClassContext", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        addTestCase("the return analysis of IR in a thread without thread data uses the function's class context",
+            \hookTest());
+        addTestCase("the script of the issue is a parse error in every mode and for qcc (qore#5749)", \issueTest());
+        set_return_value(main());
+    }
+
+    hookTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_ir_returns_pass_through_without_thread_data() requires a debug build");
+        }
+        TmpDir tmp("qore-jit-compile-class-ctx-");
+        string path = tmp.path + DirSep + "hook.q";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(HookScript);
+        f.close();
+        string out = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s --exec-mode=tiered %s", libqore_dir, qore_bin,
+            path), ExecModeHarness::NativeCheck::None);
+        assertEq((map $1 + "\n", HookExpected).join(""), out);
+    }
+
+    issueTest() {
+        TmpDir tmp("qore-jit-compile-class-ctx-");
+        string path = tmp.path + DirSep + "issue.q";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(IssueScript);
+        f.close();
+        string run = sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, qore_bin);
+        # the body of f() is parsed outside every class (qore#5749): returning an object<C> as its private parent
+        # class Base is a parse error in every execution mode
+        const string ParseError = "PARSE-TYPE-ERROR: return value for this block expects object<Base>, but value "
+            "given to the return statement is object<C>";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s --exec-mode=%s %s", run, mode, path),
+                ExecModeHarness::NativeCheck::None);
+            assertTrue(out.find(ParseError) >= 0, sprintf("%s: %s", mode, out));
+        }
+        string exe = tmp.path + DirSep + "issue";
+        int rc;
+        string compile = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1", libqore_dir, qcc_bin, exe,
+            path), \rc);
+        assertNeq(0, rc, sprintf("qcc exit status: %s", compile));
+        assertTrue(compile.find(ParseError) >= 0, sprintf("qcc: %s", compile));
+        assertFalse(is_file(exe), "no executable");
+    }
+}

@@ -141,7 +141,7 @@ public:
 
         @see @ref getStartTime()
     */
-    DLLLOCAL DateTimeNode* getRelativeTime() const;
+    DLLLOCAL DateTimeNode* getRelativeTime(ExceptionSink* xsink) const;
 
     //! Returns throwable info, if any
     DLLLOCAL QoreHashNode* getThrowableInfo() const;

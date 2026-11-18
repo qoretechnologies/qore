@@ -1,0 +1,142 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe-string-encoding.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires FsUtil
+
+%requires dataframe
+
+%exec-class DataFrameStringEncodingTest
+
+#! The string cells of a DataFrame are stored in UTF-8, converted from the encoding of each string, and come back in
+#! UTF-8 (qore#6092)
+class DataFrameStringEncodingTest inherits QUnit::Test {
+    private {
+        #! "é" and "café" in ISO-8859-1 and UTF-16LE
+        string iso_e = convert_encoding("é", "ISO-8859-1");
+        string iso_cafe = convert_encoding("café", "ISO-8859-1");
+        string utf16_cafe = convert_encoding("café", "UTF-16LE");
+        #! a single byte is not a UTF-16 character, so this string cannot be converted to UTF-8
+        string invalid = binary_to_string(<41>, "UTF-16LE");
+    }
+
+    constructor() : Test("DataFrameStringEncodingTest", "1.0", \ARGV) {
+        addTestCase("constructors", \constructorTest());
+        addTestCase("columns and nulls", \columnTest());
+        addTestCase("columnar results", \columnarTest());
+        addTestCase("CSV", \csvTest());
+        addTestCase("keys", \keyTest());
+        addTestCase("filters", \filterTest());
+        addTestCase("conversion errors", \errorTest());
+        set_return_value(main());
+    }
+
+    #! the cells of a string column built from records, a list or a column hash
+    constructorTest() {
+        checkCells(new DataFrame::DataFrame(({"v": iso_cafe}, {"v": "x"}, {"v": utf16_cafe})), ("café", "x", "café"),
+            "records");
+        checkCells(new DataFrame::DataFrame({"v": (iso_cafe, "x", utf16_cafe)}), ("café", "x", "café"),
+            "column hash");
+        # a column that becomes a string column after a value of another type
+        checkCells(new DataFrame::DataFrame({"v": (1, iso_cafe)}), ("1", "café"), "inferred string column");
+    }
+
+    #! the cells of string columns added to a DataFrame or filled in it
+    columnTest() {
+        DataFrame::DataFrame df({"id": (1, 2)});
+        df.addColumn("v", (iso_e, utf16_cafe));
+        checkCells(df, ("é", "café"), "addColumn()");
+        checkCells(df.withColumn("v", (utf16_cafe, iso_e)), ("café", "é"), "withColumn()");
+        DataFrame::DataFrame nulls({"v": ("x", NOTHING)});
+        checkCells(nulls.fillna(iso_e), ("x", "é"), "fillna()");
+    }
+
+    #! the cells of a string column of a columnar result
+    columnarTest() {
+        ColumnarResult cr = ColumnarResult::fromColumnHash({"v": (iso_cafe, "x", NOTHING)},
+            {"v": {"native_type": "varchar", "nullable": True}});
+        checkCells(DataFrame::DataFrame::fromColumnarResult(cr), ("café", "x", NOTHING), "fromColumnarResult()");
+    }
+
+    #! the string cells written to a CSV file, in UTF-8, are read back in UTF-8, the default encoding of the test
+    csvTest() {
+        TmpDir tmp("dataframe-string-encoding");
+        string path = tmp.path + DirSep + "frame.csv";
+        (new DataFrame::DataFrame({"v": (iso_cafe, "x")})).writeCSV(path);
+        assertEq(binary("v\ncafé\nx\n"), ReadOnlyFile::readBinaryFile(path), "the file is in UTF-8");
+        checkCells(DataFrame::DataFrame::readCSV(path), ("café", "x"), "readCSV()");
+    }
+
+    #! equal strings in different encodings make the same group, join and value count keys
+    keyTest() {
+        # a column that holds any value: a char first
+        DataFrame::DataFrame any({"k": (c'z', iso_e, "é"), "n": (1, 2, 3)});
+        assertEq("auto", any.dtypes()[0], "the key column holds any value");
+        assertEq(2, any.groupBy(("k",)).numGroups(), "a string in ISO-8859-1 and in UTF-8 make the same group");
+        DataFrame::DataFrame strings({"k": (iso_e, "é", "x"), "n": (1, 2, 3)});
+        assertEq(2, strings.groupBy(("k",)).numGroups(), "string column groups");
+        DataFrame::DataFrame counts = strings.valueCounts("k");
+        assertEq((2, 1), counts.getColumn(counts.columnNames()[1]), "value counts");
+        DataFrame::DataFrame right({"k": ("é",), "m": (10,)});
+        assertEq((1, 2), strings.join(right, ("k",)).getColumn("n"), "join keys");
+    }
+
+    #! a filter value in another encoding than the input of a string column matches the cells
+    filterTest() {
+        DataFrame::DataFrame df({"v": (iso_cafe, iso_e, "x")});
+        assertEq(("café", "é"), df.filter("v", "contains", iso_e).getColumn("v"), "contains");
+        assertEq(("é",), df.filter("v", "==", iso_e).getColumn("v"), "==");
+        assertEq(("café",), df.filter("v", "startswith", "caf").getColumn("v"), "startswith");
+        assertEq(("é",), df.filter("v", "in", (iso_e, "y")).getColumn("v"), "in");
+    }
+
+    #! a string that cannot be converted to UTF-8 is not stored
+    errorTest() {
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () { new DataFrame::DataFrame(({"v": invalid},)); }, (),
+            "records");
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () { new DataFrame::DataFrame({"v": ("x", invalid)}); }, (),
+            "column hash");
+        DataFrame::DataFrame nulls({"v": ("x", NOTHING)});
+        assertThrows("DATAFRAME-ENCODING-ERROR", \nulls.fillna(), invalid, "fillna()");
+        # a later value that makes the column one that holds any value keeps the string as it is
+        DataFrame::DataFrame any({"v": (invalid, {})});
+        assertEq(("auto", "UTF-16LE"), (any.dtypes()[0], any.getColumn("v")[0].encoding()), "column hash: auto");
+        DataFrame::DataFrame records(({"v": invalid}, {"v": {}}));
+        assertEq(("auto", "UTF-16LE"), (records.dtypes()[0], records.getColumn("v")[0].encoding()),
+            "records: auto");
+        # a column that stays a string column raises the error
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () { new DataFrame::DataFrame({"v": (invalid, "x")}); }, (),
+            "column hash: string");
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () { new DataFrame::DataFrame({"v": (invalid, 1)}); }, (),
+            "column hash: string with an int");
+        assertThrows("DATAFRAME-ENCODING-ERROR", sub () {
+            new DataFrame::DataFrame(({"v": invalid}, {"v": "x"}));
+        }, (), "records: string");
+    }
+
+    #! checks the cells of the column \c v: their values and their encoding, UTF-8
+    private checkCells(DataFrame::DataFrame df, list<auto> expected, string label) {
+        assertEq("string", df.dtypes()[df.columnNames().size() - 1], label + ": string column");
+        list<auto> cells = df.getColumn("v");
+        assertEq(expected, cells, label + ": values");
+        foreach auto cell in (cells) {
+            if (exists cell) {
+                assertEq("UTF-8", cell.encoding(), sprintf("%s: row %d encoding", label, $#));
+                assertEq(binary(convert_encoding(cell, "UTF-8")), binary(cell), sprintf("%s: row %d bytes", label,
+                    $#));
+            }
+        }
+        foreach hash<auto> row in (df.toRecords()) {
+            if (exists row.v) {
+                assertEq("UTF-8", row.v.encoding(), sprintf("%s: record %d encoding", label, $#));
+            }
+        }
+    }
+}

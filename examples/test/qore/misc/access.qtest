@@ -38,7 +38,9 @@ class Base {
         return self;
     }
 
-    int pubtest(int i) {
+    # float: PubChild::pubtest(float) takes calls with an int argument at run time (the child class's variants are
+    # searched first), so a call typed against this class must allow its float (qore#5838)
+    float pubtest(int i) {
         return i;
     }
 
@@ -629,7 +631,7 @@ class TestInheritB {
 
         {
             Program p(PO_NEW_STYLE|PO_REQUIRE_TYPES|PO_STRICT_ARGS);
-            *hash wh = p.parse("class B { int b() {} } class C inherits private B {} sub test() { C c(); c.b();}", "", WARN_ALL);
+            *hash wh = p.parse("class B { int b() { return 1; } } class C inherits private B {} sub test() { C c(); c.b();}", "", WARN_ALL);
             assertEq("NON-EXISTENT-METHOD-CALL", wh.err);
             assertThrows("BASE-CLASS-IS-PRIVATE", \p.callFunction(), "test");
         }

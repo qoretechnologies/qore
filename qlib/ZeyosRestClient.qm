@@ -41,6 +41,8 @@ module ZeyosRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("zeyosrests", ZeyosRestConnection::ConnectionScheme);
     };
+    # the module registers process-wide functionality in its initialization (connection schemes, LLM provider factories)
+    domains = "PROCESS_CONTROL";
 }
 
 /** @mainpage ZeyosRestClient Module
@@ -89,6 +91,10 @@ printf("Response body: %Y\n", response.body);
     @section Zeyosrestclientrelnotes Release Notes
 
     @subsection Zeyosrestclientv1_2 ZeyosRestClient v1.2
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+    - fixed the login: \c loginIntern() overrides the method of \c RestClient, so a login that
+      @ref RestClient::RestClient "RestClient" makes itself (such as a refresh of the token) uses the Zeyos login
     - added the @ref ZeyosRestClient::ZeyosRestClientIo "ZeyosRestClientIo" class, which makes the
       module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
       @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
@@ -216,9 +222,10 @@ ZeyosRestClient zeyos(
                     throw "ZEYOSRESTCLIENT-ERROR", sprintf("missing required option %y", key);
                 }
                 if (value.typeCode() != NT_STRING) {
+                    # only the type of the value, which can be a credential
                     throw "ZEYOSRESTCLIENT-ERROR",
-                            sprintf("required option %y was passed as a %s (%y); expecting \"string\"",
-                                    key, value.type(), value);
+                            sprintf("required option %y was passed as a %s; expecting \"string\"",
+                                    key, value.type());
                 }
                 self{key} = value;
             }
@@ -250,7 +257,8 @@ ZeyosRestClient zeyos(
     }
 
     #! logs in an sets the token for further communication
-    private loginIntern(*reference<hash> info) {
+    #! @return the login response, as RestClient::loginIntern(), which this overrides
+    private hash<auto> loginIntern(*reference<hash<auto>> info) {
         hash<auto> result = RestClient::doValidatedRequest("POST", "/" + instance + AuthPath, make_json({
             "name": username,
             "password": password,
@@ -258,6 +266,7 @@ ZeyosRestClient zeyos(
             "appsecret": appsecret,
         }), \info, True, {"Content-Type": MimeTypeJson});
         setToken("Bearer", result.body.token);
+        return result;
     }
 }
 

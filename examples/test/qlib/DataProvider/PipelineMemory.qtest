@@ -344,12 +344,27 @@ public class PipelineMemoryTest inherits QUnit::Test {
 
     #! Returns the execution mode given on the command line, if any
     private static *string getExecMode() {
-        for (int i = 0; i < QORE_ARGV.size(); ++i) {
+        # only the interpreter's options, the arguments before the script: the test's own arguments follow it
+        # (issue #6250); TestInterpreter.qm is not loaded, as a compiled test runs itself as its worker
+        *string script = get_script_path();
+        if (!script) {
+            return;
+        }
+        # the index of the script: a script given by its name alone has "./" before it in its path; none (and no
+        # interpreter options) when it is not on the command line, as for a compiled test
+        int end = -1;
+        for (int i = 1; i < QORE_ARGV.size(); ++i) {
+            if (QORE_ARGV[i] == script || "./" + QORE_ARGV[i] == script) {
+                end = i;
+                break;
+            }
+        }
+        for (int i = 1; i < end; ++i) {
             *string mode = (QORE_ARGV[i] =~ x/^--exec-mode=(.+)$/)[0];
             if (mode) {
                 return mode;
             }
-            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < QORE_ARGV.size()) {
+            if (QORE_ARGV[i] == "--exec-mode" && i + 1 < end) {
                 return QORE_ARGV[i + 1];
             }
         }

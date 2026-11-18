@@ -49,6 +49,14 @@ struct QoreExceptionBase {
     qore_call_t type;
     QoreListNode* callStack = new QoreListNode(autoTypeInfo);
     QoreValue err, desc, arg;
+    //! the ID of the exception for a debugger, given when a debugger's exception event first reports it, or 0; a
+    //! rethrow keeps it (see QoreException::getDebugId())
+    int64 debug_id = 0;
+    //! the ID of the Program whose parse recorded the exception as a diagnostic (when it was raised, or by
+    //! qore_program_private::addExceptionDiagnostics()), or 0; copies keep it, and an exception that another Program
+    //! recorded (ex: one that a Program parsed by code run in the parse of this Program raised) is not a diagnostic of
+    //! this Program (issue #6516)
+    qore_program_id_t diagnostic_pgm_id = 0;
 
     DLLLOCAL QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg = QoreValue(),
         qore_call_t n_type = CT_BUILTIN);
@@ -56,7 +64,7 @@ struct QoreExceptionBase {
     DLLLOCAL QoreExceptionBase(const QoreExceptionBase& old) :
         type(old.type), callStack(old.callStack->copy()),
         err(old.err.refSelf()), desc(old.desc.refSelf()),
-        arg(old.arg.refSelf()) {
+        arg(old.arg.refSelf()), debug_id(old.debug_id), diagnostic_pgm_id(old.diagnostic_pgm_id) {
     }
 
     DLLLOCAL ~QoreExceptionBase() {
@@ -124,6 +132,8 @@ public:
     // called for generic exceptions
     DLLLOCAL QoreHashNode* makeExceptionObjectAndDelete(ExceptionSink *xsink);
     DLLLOCAL QoreHashNode* makeExceptionObject(int level = 0) const;
+    //! Returns a hash<ExceptionInfo> of this exception without the exceptions chained to it
+    DLLLOCAL QoreHashNode* makeExceptionObjectWithoutChain() const;
 
     // called for runtime exceptions
     DLLLOCAL QoreException(const char *n_err, QoreValue n_desc, QoreValue n_arg = QoreValue())
@@ -225,6 +235,12 @@ public:
 
     DLLLOCAL QoreException* rethrow();
 
+    //! Returns the ID of the exception for a debugger, which is given when it is first called (#5906)
+    /** The ID is unique in the process; a rethrow of the exception keeps it, as the rethrown exception is a copy.  It
+        is given only when a debugger's exception event reports the exception, so raising an exception costs nothing.
+    */
+    DLLLOCAL int64 getDebugId();
+
 protected:
     DLLLOCAL ~QoreException() {
         assert(!callStack);
@@ -257,11 +273,30 @@ struct qore_es_private {
     bool thread_exit = false;
     bool rethrown = false;
     bool externally_managed = false;
+    //! True while an event is pending in the sink: an exception (head) or a thread exit (qore#6370)
+    /** Kept up to date by every change of head and thread_exit (see syncPending()), so that a check of the sink, in
+        libqore and in the code that the JIT and qcc generate (QoreIRToLLVM::emitPendingExceptionTest()), is one load
+        and one compare.  It takes the byte after externally_managed that was padding, so the offsets of the other
+        members and the size, which code compiled before it was added reads, are unchanged (see the static_asserts
+        after the struct)
+    */
+    bool pending = false;
 
     DLLLOCAL qore_es_private() {
     }
 
     DLLLOCAL ~qore_es_private() {
+    }
+
+    //! sets pending from head and thread_exit; called after any change of them
+    DLLLOCAL void syncPending() {
+        pending = head || thread_exit;
+    }
+
+    //! returns true if an exception or a thread exit is pending
+    DLLLOCAL bool isPending() const {
+        assert(pending == (head || thread_exit));
+        return pending;
     }
 
     DLLLOCAL void clearIntern() {
@@ -270,6 +305,7 @@ struct qore_es_private {
         if (head) {
             head->del(&xs);
             head = tail = nullptr;
+            syncPending();
         }
     }
 
@@ -336,6 +372,17 @@ struct qore_es_private {
         return xsink.priv;
     }
 
+    //! clears the exceptions of a sink whose exception an on_error handler rethrew, which replaces it (#5904)
+    /** A thread exit that is pending in the sink, which another handler of the block raised, stays pending, as
+        ExceptionSink::clear() would also clear it.
+    */
+    DLLLOCAL static void clearForRethrow(ExceptionSink& xsink) {
+        bool thread_exit = xsink.priv->thread_exit;
+        xsink.clear();
+        xsink.priv->thread_exit = thread_exit;
+        xsink.priv->syncPending();
+    }
+
     DLLLOCAL static void addStackInfo(ExceptionSink& xsink, qore_call_t type, const char* class_name,
         const char* code, const QoreProgramLocation& loc) {
         xsink.priv->addStackInfo(type, class_name, code, loc);
@@ -345,6 +392,52 @@ struct qore_es_private {
         xsink.priv->appendListIntern(str);
     }
 };
+
+// the members that code compiled before pending was added reads (qcc-compiled code tests head and thread_exit) keep
+// their offsets, and the struct its size (see qore_es_private::pending)
+static_assert(offsetof(qore_es_private, head) == 0, "qore_es_private::head moved");
+static_assert(offsetof(qore_es_private, thread_exit) == sizeof(void*) * 2 + sizeof(unsigned),
+    "qore_es_private::thread_exit moved");
+static_assert(offsetof(qore_es_private, pending) == offsetof(qore_es_private, externally_managed) + 1,
+    "qore_es_private::pending is not in the padding after externally_managed");
+static_assert(sizeof(qore_es_private) == (offsetof(qore_es_private, thread_exit) + 4 + alignof(void*) - 1)
+    / alignof(void*) * alignof(void*), "the size of qore_es_private changed");
+
+// The checks of a sink, inline in libqore (qore#6369): every "if (*xsink)" in the library would otherwise be a call
+// through the PLT.  Modules, which see the declarations without "inline", call the copies that the library exports
+// (ExceptionSink.cpp makes the compiler emit them), so the API and the ABI are unchanged.
+inline bool ExceptionSink::isEvent() const {
+    return priv->isPending();
+}
+
+inline ExceptionSink::operator bool() const {
+    return priv->isPending();
+}
+
+//! Returns the value that code gives, or no value if the code raised an exception
+/** Code that raises an exception gives no value to its caller: a return statement whose value the declared return
+    type rejects raises the error with the value still held, which is released here, so that a caller that takes no
+    value with an exception does not keep it; an immediate value (other than an enum value, which holds a reference
+    to its declaration) holds nothing to release
+
+    @param rv the value that the code gave
+    @param xsink the sink of the code's exception, if any
+
+    @return @p rv, or no value if @p rv holds a reference and @p xsink holds an exception, after releasing @p rv
+*/
+DLLLOCAL QoreValue qore_release_value_with_exception_intern(QoreValue rv, ExceptionSink* xsink);
+
+DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue qore_release_value_with_exception(QoreValue rv, ExceptionSink* xsink) {
+    // the value and the sink are tested inline (ExceptionSink::operator bool() is not), as every call of a user
+    // variant passes its value here; the value is released out of line
+    if (rv.needsRef()) {
+        const qore_es_private* es = qore_es_private::get(*xsink);
+        if (__builtin_expect(es->isPending(), 0)) {
+            return qore_release_value_with_exception_intern(rv, xsink);
+        }
+    }
+    return rv;
+}
 
 //! Returns the number of unhandled exceptions that the default exception handler has reported in the calling thread
 /** A program's entry point takes the count before the program and the library are torn down, and makes its exit

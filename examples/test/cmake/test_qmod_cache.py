@@ -17,6 +17,8 @@
 Copyright (C) 2026 Qore Technologies, s.r.o.
 """
 
+import errno
+import fcntl
 import importlib.util
 import json
 import os
@@ -80,9 +82,14 @@ def sign_build(cache, build, key_path, env=None):
                           input=key_path + "\n", capture_output=True, text=True, timeout=120, env=full)
 
 
-def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append=(), version=2):
-    """An AOT module metadata record (version 2): with @p compiled_with, the module names of the module's compile-time
-    closure, and its own module path directives; @p version 1 writes the earlier layout, without them"""
+def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append=(), restrictions=(), version=4,
+                domains=0, post_header=(), restricted=0):
+    """An AOT module metadata record (version 4): with @p compiled_with, the module names of the module's compile-time
+    closure, its own module path directives, the parse options that its directives gave its dependencies
+    (@p restrictions: (name, lo, hi) tuples, written with no flags, or (name, lo, hi, flags) tuples), the functional
+    domains it declares, the dependencies it requires only after its header and the functional domains its code
+    restricts; @p version 3 writes the layout without the version 4 fields, @p version 2 the one without the parse
+    options either, @p version 1 the earlier layout, without the closure and the paths either"""
     def s(v):
         b = v.encode()
         return struct.pack("<I", len(b)) + b
@@ -91,6 +98,14 @@ def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append
     payload = s(name) + lst(deps) + lst(optional)
     if version != 1:
         payload += lst(compiled_with) + lst(prepend) + lst(append)
+    if version not in (1, 2):
+        payload += struct.pack("<I", len(restrictions)) + b"".join(
+            s(r[0]) + struct.pack("<IIIII", r[1] & 0xffffffff, r[1] >> 32, r[2] & 0xffffffff, r[2] >> 32,
+                                  r[3] if len(r) > 3 else 0)
+            for r in restrictions)
+    if version not in (1, 2, 3):
+        payload += struct.pack("<II", domains & 0xffffffff, domains >> 32) + lst(post_header) \
+            + struct.pack("<II", restricted & 0xffffffff, restricted >> 32)
     return b"QAMI" + struct.pack("<II", version, len(payload)) + payload
 
 
@@ -152,16 +167,21 @@ class ModuleInfoTest(unittest.TestCase):
                          (info.dependencies, info.optional, info.compiled_with))
 
     def test_other_versions(self):
-        """Only version 2 records are read: a module with a record of version 1 (before the closure was recorded) or
-        of a later version is refused, saying which version it has"""
-        for version in (1, 3):
+        """Only version 4 records are read: a module with a record of an earlier version (version 1, before the
+        closure was recorded, version 2, before the options of its directives were, or version 3, before the declared
+        domains were) or of a later version is refused, saying which version it has"""
+        for version in (1, 2, 3, 5):
             with self.assertRaisesRegex(qc.CacheError, "metadata record of version %d" % version):
                 qc.read_module_info(self.write(qami_record("M", ["Util"], version=version)), "M")
 
-    def test_record_v2(self):
+    def test_record_v2_v3_v4(self):
         """Version 2 adds the names of every module of the compile-time closure (re-exported ones too) and the
-        module's own module path directives"""
-        p = self.write(b"junk" + qami_record("M", ["Util"], ["xml"], ["Util", "Base", "Re"], ["/p1", "/p2"], ["/a"])
+        module's own module path directives; version 3 the parse options that the module's directives gave its
+        dependencies, with their flags; version 4 the functional domains that the module declares, the dependencies it
+        requires only after its header and the functional domains its code restricts"""
+        p = self.write(b"junk" + qami_record("M", ["Util"], ["xml"], ["Util", "Base", "Re"], ["/p1", "/p2"], ["/a"],
+                                             domains=0x1000000, post_header=["Util"], restricted=0x20,
+                                             restrictions=[("Util", 0x1000000000, 0x2), ("Pre", 0x4, 0, 1)])
                        + b"tail")
         info = qc.read_module_info(p, "M")
         self.assertEqual(["Util"], info.dependencies)
@@ -169,11 +189,30 @@ class ModuleInfoTest(unittest.TestCase):
         self.assertEqual(["Util", "Base", "Re"], info.compiled_with)
         self.assertEqual(["/p1", "/p2"], info.prepend_paths)
         self.assertEqual(["/a"], info.append_paths)
+        self.assertEqual([("Util", (0, 0x10, 2, 0), 0), ("Pre", (4, 0, 0, 0), 1)], info.dependency_restrictions)
+        self.assertEqual(0x1000000, info.declared_domains)
+        self.assertEqual(["Util"], info.post_header_dependencies)
+        self.assertEqual(0x20, info.restricted_domains)
         info = qc.read_module_info(self.write(qami_record("M")), "M")
-        self.assertEqual(([], [], []), (info.compiled_with, info.prepend_paths, info.append_paths))
-        # a version 2 record must hold all six fields, and nothing after them
+        self.assertEqual(([], [], [], [], 0, [], 0), (info.compiled_with, info.prepend_paths, info.append_paths,
+                                                     info.dependency_restrictions, info.declared_domains,
+                                                     info.post_header_dependencies, info.restricted_domains))
+        # version 3 adds the parse options that the module's directives gave its dependencies
+        info = qc.read_module_info(self.write(qami_record("M", ["Util"], compiled_with=["Util"],
+                                                          restrictions=[("Util", 1 << 40 | 2, 0)])), "M")
+        self.assertEqual(["Util"], info.dependencies)
+        self.assertEqual([("Util", (2, 1 << 8, 0, 0), 0)], info.dependency_restrictions)
+        rec = bytearray(qami_record("M", restrictions=[("Util", 0, 0)]))
+        short = rec[:-1]
+        struct.pack_into("<I", short, 8, len(short) - 12)
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(short)), "M")
+        # a flag that the record format does not define makes it invalid
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(qami_record("M", restrictions=[("Util", 0, 0, 4)])), "M")
+        # a version 4 record must hold all ten fields, and nothing after them
         rec = bytearray(qami_record("M", compiled_with=["A"]))
-        short = rec[:-4]
+        short = rec[:-8]
         struct.pack_into("<I", short, 8, len(short) - 12)
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(short)), "M")
@@ -183,11 +222,29 @@ class ModuleInfoTest(unittest.TestCase):
             qc.read_module_info(self.write(bytes(longer)), "M")
         v1 = qami_record("M", ["Util"], version=1)
         rec = bytearray(v1)
-        rec[4] = 2
+        rec[4] = 3
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(rec)), "M")
         rec = bytearray(qami_record("M", compiled_with=["A"]))
-        rec[4] = 3
+        rec[4] = 5
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(rec)), "M")
+        # a version 2 record labelled version 4 has neither the version 3 nor the version 4 fields, a version 3 record
+        # labelled version 4 has no version 4 fields
+        for version in (2, 3):
+            rec = bytearray(qami_record("M", compiled_with=["A"], version=version))
+            rec[4] = 4
+            with self.assertRaises(qc.CacheError, msg=version):
+                qc.read_module_info(self.write(bytes(rec)), "M")
+        # a restriction entry that is cut short, and a count of restrictions that the record cannot hold
+        rec = bytearray(qami_record("M", restrictions=[("A", 1, 2)]))
+        name_end = 12 + 4 + 1 + 5 * 4 + 4 + 4 + 1
+        short = rec[:name_end + 8] + rec[name_end + 16:]
+        struct.pack_into("<I", short, 8, len(short) - 12)
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(short)), "M")
+        rec = bytearray(qami_record("M"))
+        struct.pack_into("<I", rec, 12 + 4 + 1 + 5 * 4, 65537)
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(rec)), "M")
 
@@ -216,13 +273,13 @@ class ModuleInfoTest(unittest.TestCase):
         a.mkdir()
         self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b), str(self.dir / "missing")]))
         (b / "Opt" / "Opt.qm").write_text("x")
-        (a / "Opt-api-2.0.qmod").write_text("y")
+        (a / "Opt-api-2.3.qmod").write_text("y")
         (a / "Optional.qm").write_text("z")
         # a process lists each directory once
         self.assertEqual([], qc.module_candidates("Opt", [str(a), str(b)]))
         qc._listdir_cache.clear()
         names = [os.path.relpath(p, self.dir) for p, _ in qc.module_candidates("Opt", [str(a), str(b)])]
-        self.assertEqual(["a/Opt-api-2.0.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
+        self.assertEqual(["a/Opt-api-2.3.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
 
 
 class IncludeTest(unittest.TestCase):
@@ -272,7 +329,7 @@ class EntryProblemTest(unittest.TestCase):
                           "module_key": "e"}],
                 "optional": [{"spec": "xml", "name": "xml", "candidates": [["/m/x", "f"]]}],
                 "resolution": [{"name": "U", "candidates": [["/s/U.qm", "/s/U.qm"]]}],
-                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64}, "mode": 0o755,
+                "files": {"qmod": "1" * 64, ".d": "2" * 64, ".d.fingerprints": "3" * 64, ".d.optional": "4" * 64}, "mode": 0o755,
                 "epoch": "4" * 32}
 
     def test_entry_problem(self):
@@ -434,6 +491,206 @@ class CacheStoreTest(unittest.TestCase):
         self.assertEqual(sorted(keys[:1] + keys[2:]), left)
 
 
+class LockFileCreationRaceTest(unittest.TestCase):
+    """The lock files (prune.lock, objects/<key>.lock) when another job creates the same file at the same time
+    (qore#6234)
+
+    macOS's openat() with O_CREAT and without O_EXCL fails with ENOENT in a process that loses the race to create a
+    file that does not exist yet: a prune started at the same time as another one on a cache without prune.lock failed
+    with FileNotFoundError.  These tests make that interleaving happen on every platform: os.open() is wrapped so that
+    the first call that creates the file has another job create it first, and then behaves as macOS does for the
+    loser (ENOENT without O_EXCL; EEXIST, as on every platform, with O_EXCL).
+    """
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-race-")
+        self.addCleanup(d.cleanup)
+        self.root = Path(d.name)
+        self.cache = qc.Cache(str(self.root / "cache"))
+        self.cache.make_dirs("objects")
+
+    def lose_creation_race(self, target):
+        """Wraps os.open() so that this job loses the race to create @p target once; returns the race's state"""
+        real_open = os.open
+        state = {"raced": False, "other": None}
+
+        def racing_open(path, flags, mode=0o777, *, dir_fd=None):
+            if os.path.basename(path) == target and flags & os.O_CREAT and not state["raced"]:
+                state["raced"] = True
+                # another job creates the file between this job's lookup and its create
+                fd = real_open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o666, dir_fd=dir_fd)
+                try:
+                    state["other"] = os.fstat(fd).st_ino
+                finally:
+                    os.close(fd)
+                if flags & os.O_EXCL:
+                    raise FileExistsError(errno.EEXIST, os.strerror(errno.EEXIST), path)
+                # what macOS's openat() gives the job that lost the race
+                raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        # os is the one module of the process, so this replaces os.open() for the whole process while the test runs;
+        # only the opens that create @p target behave differently, every other one is the real os.open()
+        patcher = unittest.mock.patch.object(qc.os, "open", racing_open)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return state
+
+    def test_prune_that_loses_the_race_to_create_prune_lock(self):
+        import argparse
+        import contextlib
+        import io
+        self.assertFalse(os.path.lexists(os.path.join(self.cache.root, "prune.lock")))
+        state = self.lose_creation_race("prune.lock")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rc = qc.cmd_prune(argparse.Namespace(cache_dir=self.cache.dir, build_dir=None, max_age_days=None,
+                                                 max_size=0, job=None))
+        self.assertTrue(state["raced"])
+        self.assertEqual(0, rc)
+        self.assertIn("MiB before pruning", out.getvalue())
+        # this job used the file the other job created
+        self.assertEqual(state["other"], os.lstat(os.path.join(self.cache.root, "prune.lock")).st_ino)
+
+    def test_lock_of_an_entry_that_loses_the_race_to_create_it(self):
+        key = "c" * 64
+        state = self.lose_creation_race(key + ".lock")
+        fd = self.cache.open_lock(key)
+        self.assertIsNotNone(fd)
+        try:
+            self.assertTrue(state["raced"])
+            self.assertEqual(state["other"], os.fstat(fd).st_ino)
+            # opened for writing, as the job that created it would have: the lock and the last use work
+            self.assertEqual(os.O_RDWR, fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            os.close(fd)
+
+    def test_store_that_loses_the_race_to_create_the_lock(self):
+        key, base = "c" * 64, "b" * 64
+        files = {}
+        for suffix in qc.STORED_SUFFIXES:
+            p = self.root / ("src" + suffix)
+            p.write_bytes(b"module" + suffix.encode())
+            files[suffix] = str(p)
+        entry = {"schema": qc.SCHEMA, "key": key, "base_key": base, "deps": [], "optional": [], "resolution": [],
+                 "mode": 0o755, "files": {(s or "qmod"): qc.sha256_file(p) for s, p in files.items()}}
+        state = self.lose_creation_race(key + ".lock")
+        real_open_lock = self.cache.open_lock
+        modes = []
+
+        def recording_open_lock(k, create=True):
+            fd = real_open_lock(k, create)
+            if fd is not None:
+                modes.append(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE)
+            return fd
+        with unittest.mock.patch.object(self.cache, "open_lock", recording_open_lock):
+            self.cache.store(base, key, entry, files)
+        self.assertTrue(state["raced"])
+        # the store held the lock file it opened for writing (it sets the entry's last use through it), not the
+        # read-only fallback for a cache that cannot be written
+        self.assertEqual([os.O_RDWR], modes)
+        self.assertEqual(state["other"], os.lstat(self.cache.lock_path(key)).st_ino)
+        self.assertEqual([key], [e["key"] for _, e in self.cache.candidates(base)])
+
+
+class OpenOrCreateTest(unittest.TestCase):
+    """open_or_create(): O_CREAT without O_EXCL made of O_CREAT | O_EXCL and an open of the existing file"""
+
+    def setUp(self):
+        d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-create-")
+        self.addCleanup(d.cleanup)
+        self.dir = d.name
+        self.dfd = os.open(self.dir, os.O_RDONLY)
+        self.addCleanup(os.close, self.dfd)
+
+    def open(self, name):
+        return qc.open_or_create(name, self.dfd, os.O_RDWR | os.O_NOFOLLOW, 0o640)
+
+    def test_creates(self):
+        fd = self.open("a")
+        try:
+            st = os.fstat(fd)
+            self.assertTrue(os.path.isfile(os.path.join(self.dir, "a")))
+            self.assertEqual(os.lstat(os.path.join(self.dir, "a")).st_ino, st.st_ino)
+            self.assertEqual(0, st.st_mode & 0o037)
+        finally:
+            os.close(fd)
+
+    def test_opens_the_existing_file_unchanged(self):
+        p = os.path.join(self.dir, "a")
+        with open(p, "w") as f:
+            f.write("content")
+        ino = os.lstat(p).st_ino
+        fd = self.open("a")
+        try:
+            self.assertEqual(ino, os.fstat(fd).st_ino)
+        finally:
+            os.close(fd)
+        with open(p) as f:
+            self.assertEqual("content", f.read())
+
+    def test_link_is_not_followed_without_o_nofollow(self):
+        """A caller that leaves O_NOFOLLOW out gets it anyway: a dangling link raises OSError (without it, O_EXCL gives
+        EEXIST and the open that follows the link ENOENT, forever)"""
+        target = os.path.join(self.dir, "target")
+        os.symlink(target, os.path.join(self.dir, "dangling"))
+        real_open = os.open
+        calls = []
+
+        def bounded_open(path, flags, mode=0o777, *, dir_fd=None):
+            # a helper that follows the link loops (EEXIST, then ENOENT): fail instead of hanging the suite
+            calls.append(flags)
+            if len(calls) > 10:
+                raise AssertionError("open_or_create() keeps looping on the dangling link")
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        with unittest.mock.patch.object(qc.os, "open", bounded_open):
+            with self.assertRaises(OSError) as cm:
+                os.close(qc.open_or_create("dangling", self.dfd, os.O_RDWR))
+        # the link is refused, not followed (macOS gives EMLINK for O_NOFOLLOW on a link, Linux ELOOP)
+        self.assertIn(cm.exception.errno, (errno.ELOOP, errno.EMLINK))
+        # O_CREAT | O_EXCL (EEXIST), then the open without following the link
+        self.assertEqual(2, len(calls))
+        self.assertTrue(all(f & os.O_NOFOLLOW for f in calls))
+        self.assertFalse(os.path.lexists(target))
+        self.assertTrue(os.path.islink(os.path.join(self.dir, "dangling")))
+
+    def test_link_is_not_followed(self):
+        target = os.path.join(self.dir, "target")
+        os.symlink(target, os.path.join(self.dir, "dangling"))
+        with open(os.path.join(self.dir, "existing"), "w"):
+            pass
+        os.symlink(os.path.join(self.dir, "existing"), os.path.join(self.dir, "link"))
+        for name in ("dangling", "link"):
+            with self.assertRaises(OSError):
+                os.close(self.open(name))
+        self.assertFalse(os.path.lexists(target))
+
+    def test_file_removed_after_it_was_found(self):
+        """Another job removes the file between this job's EEXIST and its open: the file is created again, as
+        O_CREAT does"""
+        p = os.path.join(self.dir, "a")
+        with open(p, "w"):
+            pass
+        real_open = os.open
+        calls = []
+
+        def removing_open(path, flags, mode=0o777, *, dir_fd=None):
+            calls.append(flags & (os.O_CREAT | os.O_EXCL))
+            if not flags & os.O_CREAT and len(calls) == 2:
+                os.unlink(path, dir_fd=dir_fd)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+        with unittest.mock.patch.object(qc.os, "open", removing_open):
+            fd = self.open("a")
+        try:
+            excl = os.O_CREAT | os.O_EXCL
+            # created exclusively: EEXIST; opened: ENOENT; created exclusively again
+            self.assertEqual([excl, 0, excl], calls)
+            self.assertEqual(os.lstat(p).st_ino, os.fstat(fd).st_ino)
+            self.assertTrue(os.path.isfile(p))
+        finally:
+            os.close(fd)
+
+
 class AuditSampleTest(unittest.TestCase):
     def test_sample(self):
         keys = ["%064x" % i for i in range(2000)]
@@ -523,7 +780,7 @@ class KeyTest(unittest.TestCase):
         self.assertNotEqual(k, qc.result_key("base", deps[:1], opt, res))
         self.assertNotEqual(k, qc.result_key("base", deps, [], res))
         self.assertNotEqual(k, qc.result_key("base", deps, [{"spec": "xml", "name": "xml",
-                                                             "candidates": [["/m/xml-api-2.0.qmod", "d"]]}], res))
+                                                             "candidates": [["/m/xml-api-2.3.qmod", "d"]]}], res))
         self.assertNotEqual(k, qc.result_key("base", deps, opt, []))
         self.assertNotEqual(k, qc.result_key("base", deps, opt, [{"name": "U", "candidates": [
             ["/e/U.qm", "/e/U.qm"], ["/s/U.qm", "/s/U.qm"]]}]))
@@ -691,7 +948,7 @@ def s(v):
     return struct.pack("<I", len(b)) + b
 payload = s(out.stem) + struct.pack("<I", len(required)) + b"".join(s(r) for r in required) \
     + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
-qami_version = 2
+qami_version = 4
 # a qcc before version 2 of the record (qami-v1.txt), which wrote no closure
 if (here / "qami-v1.txt").exists():
     qami_version = 1
@@ -711,6 +968,9 @@ else:
     # a module path directive (qami-paths.txt): the module's own %prepend-module-path, compiled in
     paths = [str(here / "elsewhere")] if (here / "qami-paths.txt").exists() else []
     payload += struct.pack("<I", len(paths)) + b"".join(s(x) for x in paths) + struct.pack("<I", 0)
+    # the restrictions that its directives gave its dependencies (version 3), the declared domains, the dependencies
+    # required after the header and the restricted domains (version 4)
+    payload += struct.pack("<I", 0) + struct.pack("<Q", 0) + struct.pack("<I", 0) + struct.pack("<Q", 0)
 digest = hashlib.sha256(text.encode() + b"".join(p.read_bytes() for p in deps)).hexdigest()
 noise = str(time.time()) if (here / "nondeterministic.txt").exists() else ""
 tmp = out.with_name(out.name + ".tmp")
@@ -721,6 +981,8 @@ tmp.replace(out)
 listed = all_deps + ([Path((here / "extra-dep.txt").read_text().strip())] if (here / "extra-dep.txt").exists() else [])
 depfile.write_text("%s: \\\n    %s\n" % (out, " \\\n    ".join(str(p) for p in listed)))
 Path(str(out) + ".d.fingerprints").write_text("\n".join(lines) + "\n")
+# the paths where the modules of failed %try-module directives could be installed (none here; qore#6145)
+Path(str(out) + ".d.optional").write_text("")
 # a source that is written after qcc read it
 if (here / "slow.txt").exists():
     time.sleep(0.05)
@@ -1073,7 +1335,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         entry_path.write_text(json.dumps(entry))
         self.assertEqual(["Base"], self.build_all())
         self.assertRegex(self.output, r"stored module: module '[^']*' has a metadata record of version 1; the cache "
-                                      r"uses only version 2")
+                                      r"uses only version 4")
 
     def test_module_path_in_v2_metadata_is_not_stored(self):
         """A module whose metadata records module path directives of its own is not stored"""
@@ -1343,7 +1605,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
 
     def test_restored_files_are_checked(self):
         self.build_all()
-        for damaged in ("1", ".d", ".d.fingerprints"):
+        for damaged in ("1", ".d", ".d.fingerprints", ".d.optional"):
             self.assertEqual(["Base", "Mid", "Other", "Top"],
                              self.build_all(env={"QORE_QMOD_CACHE_TEST_CORRUPT_RESTORE": damaged}), damaged)
             self.assertIn("differs from the cache", self.output)
@@ -1679,7 +1941,6 @@ env > "{finished}"
     def test_prune_leaves_work_in_progress(self):
         """Prune never touches a store in progress: a young temporary directory, an object whose entry is not
         written yet, or one that a job holds"""
-        import fcntl
         self.build_all()
         cache = qc.Cache(str(self.cache))
         objects = Path(cache.objects)
@@ -1772,7 +2033,6 @@ env > "{finished}"
         self.assertEqual([keys["Top"]], self.entry_keys())
 
     def test_prune_never_removes_an_entry_being_read(self):
-        import fcntl
         self.build_all()
         keys = self.keys()
         cache = qc.Cache(str(self.cache))
@@ -1791,7 +2051,6 @@ env > "{finished}"
         self.assertNotIn("in use", out)
 
     def test_one_pruner_at_a_time(self):
-        import fcntl
         self.build_all()
         cache = qc.Cache(str(self.cache))
         fd = os.open(os.path.join(cache.root, "prune.lock"), os.O_RDWR | os.O_CREAT)
@@ -2086,7 +2345,7 @@ def qmod_metadata_version(build_dir):
         while pos >= 0:
             if pos + 12 <= len(data):
                 version, size = struct.unpack_from("<II", data, pos + 4)
-                if pos + 12 + size <= len(data) and version in (1, 2):
+                if pos + 12 + size <= len(data) and version in (1, 2, 3, 4):
                     return version
             pos = data.find(b"QAMI", pos + 1)
     return None
@@ -2100,11 +2359,11 @@ class RealQccTest(unittest.TestCase):
         if not self.qore_build:
             self.skipTest("QORE_TEST_BUILD_DIR must name a Qore build tree with qcc and qore")
         version = qmod_metadata_version(self.qore_build)
-        if version != 2:
-            # the cache uses only modules with version 2 records; a build of this branch alone (before
-            # fix/qmod-staleness-gaps, whose qcc writes them) has none, and every module is uncacheable
-            self.skipTest("the qcc of %s writes AOT module metadata of version %s; the cache needs version 2"
-                          % (self.qore_build, version))
+        if version != qc.QAMI_VERSION:
+            # the cache uses only modules with records of its version; a build of a qcc that writes another version
+            # has none, and every module is uncacheable
+            self.skipTest("the qcc of %s writes AOT module metadata of version %s; the cache needs version %d"
+                          % (self.qore_build, version, qc.QAMI_VERSION))
         if not shutil.which(CMAKE):
             self.skipTest("CMake is required")
         d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-real-")

@@ -30,6 +30,7 @@
 
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRExprRegistry.h"
+#include "qore/intern/qore_thread_intern.h"
 
 #include <qore/DateTimeNode.h>
 #include <qore/QoreHashNode.h>
@@ -121,6 +122,7 @@
 #include <qore/intern/QoreValueCoalescingOperatorNode.h>
 #include <qore/intern/QoreXorEqualsOperatorNode.h>
 #include <qore/intern/VarRefNode.h>
+#include <qore/intern/JITRuntime.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -154,7 +156,7 @@ static bool claimCast(const QoreValue& expr) {
 
 static bool claimBuiltinTypeConversion(const QoreValue& expr) {
     const auto* call = expr.hasNode()
-        ? dynamic_cast<const FunctionCallNode*>(expr.getInternalNode()) : nullptr;
+        ? qore_get_function_call_node(expr.getInternalNode()) : nullptr;
     if (!call) {
         return false;
     }
@@ -163,9 +165,15 @@ static bool claimBuiltinTypeConversion(const QoreValue& expr) {
             && strcmp(func_name, "boolean"))) {
         return false;
     }
+    // only the Qore builtins, never a user or module function with the same name
+    if (!qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
+        return false;
+    }
     const QoreListNode* args = call->getArgs();
     const QoreParseListNode* parse_args = call->getParseArgs();
     size_t nargs = args ? args->size() : (parse_args ? parse_args->size() : 0);
+    // the handler lowers a call whose argument may have values that the builtin does not accept as a normal builtin
+    // call: see QoreIRLowering::lowerBuiltinTypeConversion()
     return nargs == 1;
 }
 
@@ -432,9 +440,14 @@ static bool qoreIrExprClaimIsTypeCacheable(QoreIRExprClaimFn claim) {
     return claim != claimConstant && claim != claimBuiltinTypeConversion && claim != claimFunctionCall;
 }
 
+namespace {
+using HandlerCache = std::unordered_map<const std::type_info*, const QoreIRExprHandlerInfo*>;
+// not a thread_local object with a destructor (qore#5778): see QoreThreadLocalObject
+struct HandlerCacheTag {};
+}
+
 const QoreIRExprHandlerInfo* qore_ir_find_expr_handler(const QoreValue& expr) {
-    using HandlerCache = std::unordered_map<const std::type_info*, const QoreIRExprHandlerInfo*>;
-    static thread_local HandlerCache handler_cache;
+    HandlerCache& handler_cache = QoreThreadLocalObject<HandlerCache, HandlerCacheTag>::get();
     static constinit QoreEnvFlag cache_enabled_env("QORE_DISABLE_IR_EXPR_HANDLER_CACHE");
     const bool cache_enabled = !cache_enabled_env.get();
 

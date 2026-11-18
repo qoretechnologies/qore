@@ -1,0 +1,65 @@
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%requires compatprobe
+
+const Source = '%requires compatprobe
+class Derived inherits CompatProbe::NativeProbe {
+    constructor() : NativeProbe("text", "text") {}
+    auto self_bool() { return value_bool("text"); }
+    auto scoped_bool() { return NativeProbe::value_bool("text"); }
+}
+auto sub ctor_explicit() { return (new CompatProbe::NativeProbe("text", "text")).observed(); }
+auto sub ctor_implied() { CompatProbe::NativeProbe obj("text", "text"); return obj.observed(); }
+auto sub ctor_base() { Derived obj(); return obj.observed(); }
+auto sub method() { CompatProbe::NativeProbe obj("text", "text"); return obj.value_bool("text"); }
+auto sub method_filter() { CompatProbe::NativeProbe obj("text", "text"); return obj.filter_bool("text"); }
+auto sub dynamic() { auto obj = new CompatProbe::NativeProbe("text", "text"); return obj.value_bool("text"); }
+auto sub reference() { CompatProbe::NativeProbe obj("text", "text"); code c = \obj.value_bool(); return c("text"); }
+auto sub static_method() { return CompatProbe::NativeProbe::static_bool("text"); }
+auto sub static_filter() { return CompatProbe::NativeProbe::static_filter("text"); }
+auto sub static_reference() { code c = \CompatProbe::NativeProbe::static_bool(); return c("text"); }
+auto sub pseudo() { string value = "text"; return value.toBool(); }
+auto sub dynamic_pseudo() { auto value = "text"; return value.toBool(); }
+auto sub self_method() { Derived obj(); return obj.self_bool(); }
+auto sub scoped_method() { Derived obj(); return obj.scoped_bool(); }
+auto sub forward_object() { CompatProbe::NativeProbe obj("text", "text"); return call_object_method(obj, "value_bool", "text"); }
+auto sub forward_object_args() { CompatProbe::NativeProbe obj("text", "text"); return call_object_method_args(obj, "value_bool", ("text",)); }
+auto sub forward_static() { return call_static_method("CompatProbe::NativeProbe", "static_bool", "text"); }
+auto sub forward_static_args() { return call_static_method_args("CompatProbe::NativeProbe", "static_bool", ("text",)); }
+auto sub forward_object_old() { CompatProbe::NativeProbe obj("text", "text"); return callObjectMethod(obj, "value_bool", "text"); }
+auto sub forward_object_args_old() { CompatProbe::NativeProbe obj("text", "text"); return callObjectMethodArgs(obj, "value_bool", ("text",)); }
+auto sub forward_pseudo() { return call_pseudo("text", "toBool"); }
+auto sub forward_pseudo_args() { return call_pseudo_args("text", "toBool", ()); }
+auto sub program_static(Program target) { return target.callStaticMethod("CompatProbe::NativeProbe", "static_bool", "text"); }
+auto sub program_static_args(Program target) { return target.callStaticMethodArgs("CompatProbe::NativeProbe", "static_bool", ("text",)); }
+';
+
+auto sub invoke(Program target, string name) {
+    return name.startsWith("program_") ? target.callFunction(name, target) : target.callFunction(name);
+}
+
+int failures = 0;
+foreach bool legacy in (False, True) {
+    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+    if (legacy) p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+    p.parse(Source, "native-method-policy");
+    foreach int invocation in (0, 1) {
+        foreach string name in ("ctor_explicit", "ctor_implied", "ctor_base", "method", "method_filter", "dynamic",
+                "reference", "static_method", "static_filter", "static_reference", "pseudo", "dynamic_pseudo",
+                "self_method", "scoped_method", "forward_object", "forward_object_args", "forward_static",
+                "forward_static_args", "forward_object_old", "forward_object_args_old", "forward_pseudo",
+                "forward_pseudo_args", "program_static", "program_static_args") {
+            auto expected = name.startsWith("ctor_") ? (!legacy, !legacy) : !legacy;
+            auto actual = invoke(p, name);
+            bool passed = actual === expected;
+            printf("%s legacy=%y mutated=%d expected=%y actual=%y %s\n", name, legacy, invocation,
+                expected, actual, passed ? "PASS" : "FAIL");
+            if (!passed) ++failures;
+        }
+        if (legacy) p.disableParseOptions(PO_STRICT_BOOLEAN_EVAL);
+        else p.setParseOptions(PO_STRICT_BOOLEAN_EVAL);
+    }
+}
+if (failures) throw "NATIVE-METHOD-POLICY", sprintf("%d failures", failures);
+printf("PASS\n");

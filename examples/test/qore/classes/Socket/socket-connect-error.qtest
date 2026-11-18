@@ -1,0 +1,73 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - non-blocking TCP and UNIX socket connect checks (SO_ERROR and a zero-byte send) and their errors
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SocketConnectErrorTest
+
+#! Tests that a failed connect is reported with the connect's own error (issue #6119)
+/** The check of a non-blocking connect reads the socket's pending error (SO_ERROR), then confirms the connection
+    with a zero-byte send.  When the connect fails between the two system calls (refused, or timed out), Darwin fails
+    the send with EPIPE, and the connect was reported as "Broken pipe" instead of with its own error, which is still
+    pending in SO_ERROR then.
+
+    The C++ unit tests (ConnectErrorAfterSoErrorReadTest in lib/ql_debug.cpp) make this interleaving happen on every
+    platform with a debug-only hook, for an IPv4 connect, the Happy Eyeballs attempts and a UNIX socket connect, and
+    check that the error is taken before the failed attempt is given up or the socket is closed (another debug-only
+    hook changes errno then), and that of the Happy Eyeballs attempts, the error of the last one to fail is reported;
+    they need a debug build of the library.  A UNIX socket connect refused by the system is also checked here in
+    every build.
+*/
+class SocketConnectErrorTest inherits QUnit::Test {
+    public {
+        #! the timeout of a connect; a refused connect ends long before it
+        const ConnectTimeout = 30s;
+    }
+
+    constructor() : QUnit::Test("SocketConnectErrorTest", "1.0", \ARGV) {
+        addTestCase("a connect that fails after its pending error was read reports its error", \testCppUnitTests());
+        addTestCase("a refused UNIX socket connect reports its error", \testUnixRefused());
+        set_return_value(main());
+    }
+
+    testCppUnitTests() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("dbg_run_connect_error_tests() is only registered in a library-debug build");
+        }
+        if (PlatformOS == "Windows") {
+            testSkip("the C++ unit tests use UNIX sockets");
+        }
+        hash<auto> res = call_function("dbg_run_connect_error_tests");
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("C++ unit tests: %d/%d passed, %d failed", res.pass_count,
+            res.test_count, res.fail_count));
+    }
+
+    #! A UNIX socket that is bound and does not listen refuses the connect, which reports ECONNREFUSED
+    testUnixRefused() {
+        if (PlatformOS == "Windows") {
+            testSkip("UNIX sockets are not supported on Windows");
+        }
+        TmpDir dir("socket-connect-error-");
+        string path = dir.path + "/s";
+        Socket bound();
+        bound.bindUNIX(path);
+        assertTrue(is_socket(path), "the socket file exists");
+        Socket client();
+        try {
+            client.connect(path, ConnectTimeout);
+            fail("the connect to the UNIX socket that does not listen succeeded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SOCKET-CONNECT-ERROR", ex.err, "the error is SOCKET-CONNECT-ERROR");
+            assertRegex(strerror(ECONNREFUSED), ex.desc, "the description has the connect's error");
+            assertNRegex(strerror(EPIPE), ex.desc, "the description does not have EPIPE");
+        }
+        assertFalse(client.isOpen(), "the socket is not open after the failed connect");
+    }
+}

@@ -65,6 +65,8 @@ int VRMutex::cleanupImpl() {
 
 int VRMutex::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeout_ms) {
     if (tid != mtid) {
+        // a wait that ends with the lock still held waits again only for the rest of the timeout
+        QoreWaitDeadline deadline(timeout_ms);
         while (tid != Lock_Unlocked) {
             if (tid == Lock_Deleted) {
                 xsink->raiseException("LOCK-ERROR", "TID %d cannot execute %s::enter() because the object has been " \
@@ -72,8 +74,12 @@ int VRMutex::grabImpl(int mtid, VLock *nvl, ExceptionSink *xsink, int64 timeout_
                 return -1;
             }
 
+            int64 wait_ms = timeout_ms;
+            if (deadline.active() && !(wait_ms = deadline.remainingMs())) {
+                return -1;
+            }
             ++waiting;
-            int rc = nvl->waitOn((AbstractSmartLock *)this, vl, xsink, timeout_ms);
+            int rc = nvl->waitOn((AbstractSmartLock *)this, vl, xsink, wait_ms);
             --waiting;
             // if rc is non-zero there was a timeout or deadlock
             if (rc) {

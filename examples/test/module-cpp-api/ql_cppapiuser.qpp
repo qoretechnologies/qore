@@ -26,7 +26,9 @@
 
 #include "cppapiuser-module.h"
 #include <qore/OutputStream.h>
+#include <qore/QoreColumnarResult.h>
 #include <qore/QoreSandboxManager.h>
+#include <qore/QoreColumnarResult.h>
 
 #include <alloca.h>
 #include <atomic>
@@ -38,7 +40,9 @@
 #include <fcntl.h>
 #include <future>
 #include <map>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <poll.h>
@@ -137,6 +141,41 @@ static QoreClass* kv_probe_class = nullptr;
 static std::mutex sb_mem_lock;
 static std::map<int64, void*> sb_mem_buffers;
 static int64 sb_mem_next = 0;
+
+// the sandbox captures made with sb_capture() and sb_capture_copy(), by handle
+static std::mutex sb_capture_lock;
+static std::map<int64, std::shared_ptr<QoreSandboxCapture>> sb_captures;
+static int64 sb_capture_next = 0;
+
+// returns the capture with the given handle, or raises an exception
+static std::shared_ptr<QoreSandboxCapture> sb_capture_get(int64 handle, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lock(sb_capture_lock);
+    auto i = sb_captures.find(handle);
+    if (i == sb_captures.end()) {
+        xsink->raiseException("SB-CAPTURE-ERROR", "unknown capture handle " QLLD, handle);
+        return std::shared_ptr<QoreSandboxCapture>();
+    }
+    return i->second;
+}
+
+// fills a hash with the restriction predicates of the resolved manager
+static void sb_fill_restricts(QoreHashNode& rv, const QoreSandboxManagerHelper& sm, ExceptionSink* xsink) {
+    rv.setKeyValue("sandboxed", static_cast<bool>(sm), xsink);
+    if (sm) {
+        rv.setKeyValue("restricts", sm->restricts(), xsink);
+        rv.setKeyValue("network", sm->networkRestricts(), xsink);
+        rv.setKeyValue("filesystem", sm->filesystemRestricts(), xsink);
+        rv.setKeyValue("limits", sm->limitsRestrict(), xsink);
+        rv.setKeyValue("trusts", sm->trustsUncontrolledApis(), xsink);
+    }
+}
+
+// stores a capture and returns its handle
+static int64 sb_capture_add(std::shared_ptr<QoreSandboxCapture> capture) {
+    std::lock_guard<std::mutex> lock(sb_capture_lock);
+    sb_captures[++sb_capture_next] = std::move(capture);
+    return sb_capture_next;
+}
 
 // returns the time remaining until a deadline for poll(): -1 for no timeout, 0 if it has passed
 int remaining_ms(int timeout_ms, int64 deadline_us) {
@@ -328,6 +367,19 @@ string cpp_api_reverse(string str) [flags=RET_VALUE_ONLY] {
     return api->reverse(*str, xsink);
 }
 
+//! loads a module into the current Program as a binary module's code does, with ModuleManager::parseLoadModule()
+/** The load is a parse-time module load without a directive location; a parse stack error that it raises is
+    located at the directive of the enclosing module load, if any (issue #6047)
+
+    @param name the module to load
+
+    @return the error of the load, or NOTHING if the module was loaded
+*/
+*string cpp_api_parse_load_module(string name) [dom=MODULES] {
+    QoreStringNode* err = ModuleManager::parseLoadModule(name->c_str(), getProgram());
+    return err ? QoreValue(err) : QoreValue();
+}
+
 //! adds each element of \a vals to an opaque counter handle owned by the cppapitest module
 /** Exercises an opaque handle crossing the module boundary with the explicit \c ref and \c deref
     members of the API struct.
@@ -367,6 +419,28 @@ int cpp_api_counter_live_count() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     return api->counter_live_count();
+}
+
+//! returns the module commands that the module has received, in the order received
+/** The module records each module command that it receives (\c \%module-cmd(cppapiuser) and
+    Program::issueModuleCmd()), with \c " [sandboxed]" appended when the Program that the command runs in has a
+    sandbox manager; the command \c "fail" raises \c CPPAPIUSER-COMMAND-ERROR instead and is not recorded
+
+    @return the commands received so far in the process
+*/
+list<string> cpp_api_module_cmds() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_get_module_cmds();
+}
+
+//! returns whether the Program of the calling code has a sandbox manager
+/** Called from a user module's code, it tells whether the module's own Program is governed by a sandbox, which is
+    what a module that takes the sandbox from the Program (QoreSandboxManagerHelper(QoreProgram*)) uses
+
+    @return @ref True if the Program of the calling code has a sandbox manager
+*/
+bool cpp_api_program_has_sandbox() [flags=RET_VALUE_ONLY] {
+    QoreSandboxManagerHelper sm(getProgram());
+    return static_cast<bool>(sm);
 }
 
 //! adds a namespace to the root namespace of a loaded user module's Program, as a binary module does at runtime
@@ -933,6 +1007,37 @@ hash<auto> cpp_api_find_create_timezone(string name, int epoch = 0) [flags=RET_V
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("region", new QoreStringNode(tz_get_region_name(zone)), xsink);
     rv->setKeyValue("utc_offset", utc_offset, xsink);
+    return rv.release();
+}
+
+//! returns the dates that the public default constructors of DateTime and DateTimeNode give in each form
+/** The converting constructors of DateTime and DateTimeNode are explicit, but the default constructors are not, so
+    that copy-list-initialization from an empty brace list keeps compiling; this function does not compile if one of
+    these forms is rejected
+
+    @return the dates of: <tt>DateTime w = {};</tt>, both elements of <tt>DateTime a[2] = {};</tt>,
+    <tt>return {};</tt> from a function returning a DateTime, <tt>{}</tt> given for a <tt>const DateTime&</tt>
+    parameter, <tt>DateTime d;</tt> and <tt>new DateTimeNode</tt>, each an empty absolute date
+*/
+list<date> cpp_api_date_default_forms() [flags=RET_VALUE_ONLY] {
+    DateTime w = {};
+    DateTime a[2] = {};
+    auto make_empty = []() -> DateTime {
+        return {};
+    };
+    auto copy_arg = [](const DateTime& dt) -> DateTimeNode* {
+        return new DateTimeNode(dt);
+    };
+    DateTime d;
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(dateTypeInfo), xsink);
+    rv->push(new DateTimeNode(w), xsink);
+    rv->push(new DateTimeNode(a[0]), xsink);
+    rv->push(new DateTimeNode(a[1]), xsink);
+    rv->push(new DateTimeNode(make_empty()), xsink);
+    rv->push(copy_arg({}), xsink);
+    rv->push(new DateTimeNode(d), xsink);
+    rv->push(new DateTimeNode, xsink);
     return rv.release();
 }
 
@@ -1569,6 +1674,270 @@ binary cpp_api_binary_write_at(int pos, string str) [flags=RET_VALUE_ONLY] {
     return b.release();
 }
 
+//! Appends or prepends part of a binary value to a copy of it the given number of times
+/** BinaryNode::append() and BinaryNode::prepend() take data that may be part of the value itself, whose buffer can
+    move when it grows, or stay when it has room for the data
+
+    @param b the value to copy
+    @param offset the byte offset in the copy of the part to add
+    @param size the byte size of the part to add
+    @param count the number of times to add the part, each time from the current value
+    @param prepend @ref True to prepend the part, @ref False to append it
+
+    @return the copy with the parts added
+
+    @throw BINARY-PART-ERROR the part is not in the value
+*/
+binary cpp_api_binary_add_own_part(binary b, int offset, int size, int count, bool prepend) [flags=RET_VALUE_ONLY] {
+    if (offset < 0 || size < 0 || static_cast<size_t>(offset) + static_cast<size_t>(size) > b->size()) {
+        return xsink->raiseException("BINARY-PART-ERROR", "the part at offset " QLLD " with size " QLLD " is not in "
+            "the value of size %zu", offset, size, b->size());
+    }
+    SimpleRefHolder<BinaryNode> rv(b->copy());
+    for (int64 i = 0; i < count; ++i) {
+        const void* part = static_cast<const char*>(rv->getPtr()) + offset;
+        if (prepend) {
+            rv->prepend(part, static_cast<size_t>(size));
+        } else {
+            rv->append(part, static_cast<size_t>(size));
+        }
+    }
+    return rv.release();
+}
+
+//! Writes part of a copy of a binary value to the copy itself with BinaryNode::writeTo()
+/** @param b the value to copy
+    @param pos the position to write the part at; beyond the end of the value, the gap is filled with zero bytes
+    @param offset the byte offset in the copy of the part to write
+    @param size the byte size of the part to write
+
+    @return the copy written to
+
+    @throw BINARY-PART-ERROR the part is not in the value
+    @throw BINARY-WRITE-ERROR BinaryNode::writeTo() failed
+*/
+binary cpp_api_binary_write_own_part(binary b, int pos, int offset, int size) [flags=RET_VALUE_ONLY] {
+    if (pos < 0 || offset < 0 || size < 0 || static_cast<size_t>(offset) + static_cast<size_t>(size) > b->size()) {
+        return xsink->raiseException("BINARY-PART-ERROR", "the part at offset " QLLD " with size " QLLD " is not in "
+            "the value of size %zu", offset, size, b->size());
+    }
+    SimpleRefHolder<BinaryNode> rv(b->copy());
+    if (rv->writeTo(static_cast<size_t>(pos), static_cast<const char*>(rv->getPtr()) + offset,
+        static_cast<size_t>(size))) {
+        return xsink->raiseException("BINARY-WRITE-ERROR", "BinaryNode::writeTo() failed at position " QLLD, pos);
+    }
+    return rv.release();
+}
+
+//! Replaces bytes of a copy of a binary value with part of the copy itself with BinaryNode::splice()
+/** @param b the value to copy
+    @param offset the offset of the bytes to replace
+    @param length the number of bytes to replace
+    @param poff the byte offset in the copy of the part to insert
+    @param psize the byte size of the part to insert
+
+    @return the copy changed
+
+    @throw BINARY-PART-ERROR the part is not in the value
+*/
+binary cpp_api_binary_splice_own_part(binary b, int offset, int length, int poff, int psize) [flags=RET_VALUE_ONLY] {
+    if (poff < 0 || psize < 0 || static_cast<size_t>(poff) + static_cast<size_t>(psize) > b->size()) {
+        return xsink->raiseException("BINARY-PART-ERROR", "the part at offset " QLLD " with size " QLLD " is not in "
+            "the value of size %zu", poff, psize, b->size());
+    }
+    SimpleRefHolder<BinaryNode> rv(b->copy());
+    rv->splice(offset, length, static_cast<const char*>(rv->getPtr()) + poff, static_cast<size_t>(psize));
+    return rv.release();
+}
+
+//! Changes a string with a QoreString operation whose source is part of the string's own text
+/** @param str the string to copy
+    @param view_from -1 to change a copy of \a str; else the byte offset of a view (QoreStringNode::substr() to the
+    end of a copy of \a str, at least 4096 bytes long) that is changed
+    @param op the operation; \a a, \a b and \a c are byte offsets and sizes in the string changed:
+    - \c "splice": QoreString::splice() of the bytes at \a a with length \a b with the whole string
+    - \c "replace": QoreString::replace() of the bytes at \a a with length \a b with the text from byte \a c
+    - \c "concat": QoreString::concat(const char*, size_t) of the \a b bytes at \a a
+    - \c "concat-text": QoreString::concat(const char*) of the text from byte \a a
+    - \c "concat-string": QoreString::concat(const QoreString*, size_t, ExceptionSink*) of the first \a a characters
+    - \c "prepend": QoreString::prepend(const char*, size_t) of the \a b bytes at \a a
+    - \c "insert": QoreString::insert() of the text from byte \a a at byte \a b
+    - \c "replace-all": QoreString::replaceAll() of the \a b bytes at \a a (as text) with the text from byte \a c
+    - \c "sprintf": QoreString::sprintf() of \c "%s" with the text from byte \a a, \a b times
+    - \c "escape": QoreString::concatEscape(const char*) of the text from byte \a a, escaping \c 'a'
+    - \c "html-encode", \c "html-decode", \c "decode-url": the concat operations of the text from byte \a a
+    - \c "base64", \c "hex": the concat operations of the \a b bytes at \a a
+    - \c "set": QoreString::set(const char*, size_t) of the \a b bytes at \a a
+    - \c "set-view": QoreString::set(const QoreString*) with a view of the string from byte \a a
+    - \c "set-self": QoreString::set(const QoreString*) with the string itself
+    @param a see \a op
+    @param b see \a op
+    @param c see \a op
+
+    @return the string changed
+
+    @throw STRING-PART-ERROR the part is not in the string or the operation is unknown
+*/
+string cpp_api_string_own_part(string str, int view_from, string op, int a, int b, int c) [flags=RET_VALUE_ONLY] {
+    SimpleRefHolder<QoreStringNode> rv(str->copy());
+    if (view_from >= 0) {
+        SimpleRefHolder<QoreStringNode> view(rv->substr(view_from, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+        // the view is changed
+        rv = view.release();
+    }
+    QoreStringNode* s = *rv;
+    size_t size = s->size();
+    if (a < 0 || b < 0 || c < 0) {
+        return xsink->raiseException("STRING-PART-ERROR", "negative argument");
+    }
+    const char* p = s->c_str();
+    std::string o = op->c_str();
+    bool part = o == "concat" || o == "prepend" || o == "base64" || o == "hex" || o == "set" || o == "replace-all";
+    if ((part && static_cast<size_t>(a) + static_cast<size_t>(b) > size)
+        || (!part && o != "splice" && o != "concat-string" && static_cast<size_t>(a) >= size)) {
+        return xsink->raiseException("STRING-PART-ERROR", "the part is not in the string");
+    }
+    if (o == "splice") {
+        s->splice(a, b, *s, xsink);
+    } else if (o == "replace") {
+        s->replace(static_cast<size_t>(a), static_cast<size_t>(b), p + c);
+    } else if (o == "concat") {
+        s->concat(p + a, static_cast<size_t>(b));
+    } else if (o == "concat-text") {
+        s->concat(p + a);
+    } else if (o == "concat-string") {
+        s->concat(s, static_cast<size_t>(a), xsink);
+    } else if (o == "prepend") {
+        s->prepend(p + a, static_cast<size_t>(b));
+    } else if (o == "insert") {
+        s->insert(p + a, static_cast<size_t>(b));
+    } else if (o == "replace-all") {
+        std::string old_text(p + a, static_cast<size_t>(b));
+        // the old text is found in the string itself, at the position given
+        const char* found = strstr(p, old_text.c_str());
+        assert(found);
+        s->replaceAll(found, p + c);
+    } else if (o == "sprintf") {
+        for (int64 i = 0; i < b; ++i) {
+            s->sprintf("%s", s->c_str() + a);
+        }
+    } else if (o == "escape") {
+        s->concatEscape(p + a, 'a');
+    } else if (o == "html-encode") {
+        s->concatAndHTMLEncode(p + a);
+    } else if (o == "html-decode") {
+        s->concatAndHTMLDecode(p + a);
+    } else if (o == "decode-url") {
+        s->concatDecodeUrl(p + a);
+    } else if (o == "base64") {
+        s->concatBase64(p + a, static_cast<size_t>(b));
+    } else if (o == "hex") {
+        s->concatHex(p + a, static_cast<size_t>(b));
+    } else if (o == "set") {
+        s->set(p + a, static_cast<size_t>(b));
+    } else if (o == "set-self") {
+        s->set(s);
+    } else if (o == "set-view") {
+        SimpleRefHolder<QoreStringNode> view(s->substr(a, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+        s->set(*view);
+    } else {
+        return xsink->raiseException("STRING-PART-ERROR", "unknown operation '%s'", op->c_str());
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv.release();
+}
+
+//! Runs a QoreString operation whose source is a QoreString with the string itself and with a copy of it
+/** @param str the string to copy
+    @param view_from -1 to change a copy of \a str; else the byte offset of a view (QoreStringNode::substr() to the
+    end of a copy of \a str, at least 4096 bytes long) that is changed; another view of the same text is kept for
+    \c "set-sibling"
+    @param op the operation: \c "encode", \c "decode", \c "html-encode", \c "decode-url", \c "encode-url",
+    \c "encode-uri-request", \c "decode-uri-request", \c "escape", \c "trim", \c "trim-leading",
+    \c "trim-trailing", \c "trim-trailing-text", \c "concat-pos", \c "concat-pos-len", \c "set-sibling" (set() with
+    another view of the same text; a view is changed then)
+
+    @return a list of the string changed with itself as the source and the string changed with a copy of itself
+
+    @throw STRING-PART-ERROR the operation is unknown
+*/
+list<auto> cpp_api_string_own_vs_copy(string str, int view_from, string op) [flags=RET_VALUE_ONLY] {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int run = 0; run < 2; ++run) {
+        SimpleRefHolder<QoreStringNode> target(str->copy());
+        SimpleRefHolder<QoreStringNode> sibling;
+        if (view_from >= 0) {
+            SimpleRefHolder<QoreStringNode> view(target->substr(view_from, xsink));
+            if (*xsink) {
+                return QoreValue();
+            }
+            sibling = target->substr(view_from, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            target = view.release();
+        }
+        QoreStringNode* s = *target;
+        // the source: the string itself, or a copy of it
+        // (the string itself is not referenced again: it is changed, so it must stay unique)
+        SimpleRefHolder<QoreStringNode> copy(run ? new QoreStringNode(s->c_str(), s->size(), s->getEncoding())
+            : nullptr);
+        const QoreString* src = run ? static_cast<const QoreString*>(*copy) : s;
+        std::string o = op->c_str();
+        if (o == "encode") {
+            s->concatEncode(xsink, *src, CE_ALL);
+        } else if (o == "decode") {
+            s->concatDecode(xsink, *src, CD_ALL);
+        } else if (o == "html-encode") {
+            s->concatAndHTMLEncode(src, xsink);
+        } else if (o == "decode-url") {
+            s->concatDecodeUrl(*src, xsink);
+        } else if (o == "encode-url") {
+            s->concatEncodeUrl(xsink, *src, true);
+        } else if (o == "encode-uri-request") {
+            s->concatEncodeUriRequest(xsink, *src);
+        } else if (o == "decode-uri-request") {
+            s->concatDecodeUriRequest(*src, xsink);
+        } else if (o == "escape") {
+            s->concatEscape(src, 'a', '\\', xsink);
+        } else if (o == "trim") {
+            s->trim(xsink, src);
+        } else if (o == "trim-leading") {
+            s->trimLeading(xsink, src);
+        } else if (o == "trim-trailing") {
+            s->trimTrailing(xsink, src);
+        } else if (o == "trim-trailing-text") {
+            s->trim_trailing(src->c_str() + src->size() / 2);
+        } else if (o == "concat-pos") {
+            s->concat(*src, 3, xsink);
+        } else if (o == "concat-pos-len") {
+            s->concat(*src, 3, 100, xsink);
+        } else if (o == "set-sibling") {
+            if (!sibling) {
+                return xsink->raiseException("STRING-PART-ERROR", "set-sibling needs a view");
+            }
+            // the sibling is a view of the same text as the string changed; with a copy the sibling is copied
+            const QoreString* ssrc = run ? static_cast<const QoreString*>(*copy) : static_cast<const QoreString*>(*sibling);
+            s->set(ssrc);
+        } else {
+            return xsink->raiseException("STRING-PART-ERROR", "unknown operation '%s'", op->c_str());
+        }
+        if (*xsink) {
+            return QoreValue();
+        }
+        rv->push(target.release(), xsink);
+    }
+    return rv.release();
+}
+
 //! Allocates memory with q_sb_malloc() and keeps it; returns a handle for sb_mem_resize() and sb_mem_free()
 /** The memory counts against the memory limit of the sandbox call that the current thread runs.
 
@@ -1630,6 +1999,266 @@ nothing sb_mem_free(int handle) {
         sb_mem_buffers.erase(i);
     }
     q_sb_free(p);
+    return QoreValue();
+}
+
+//! Returns the restriction predicates of the sandbox manager that governs the current thread
+/** Resolves the manager with QoreSandboxManagerHelper (the manager of a call through several sandboxed Programs is
+    their composition), and reports QoreSandboxManager::restricts(), networkRestricts(), filesystemRestricts() and
+    limitsRestrict()
+
+    @param policy if @ref True "True", resolves the manager with QoreSandboxManagerHelper::Policy (the purpose of a
+    filesystem, network or process policy check, which honors a policy barrier); otherwise with
+    QoreSandboxManagerHelper::All
+
+    @return a hash with the keys \c sandboxed, \c restricts, \c network, \c filesystem, \c limits and \c trusts; only
+    \c sandboxed is present if no sandbox governs the thread
+*/
+hash<auto> sb_governing_restricts(bool policy = False) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreSandboxManagerHelper sm(policy ? QoreSandboxManagerHelper::Policy : QoreSandboxManagerHelper::All);
+    sb_fill_restricts(**rv, sm, xsink);
+    return rv.release();
+}
+
+//! Resolves the governing manager, calls a callback, and reports the predicates before and after it
+/** The resolved manager (a composition of the members' managers when several sandboxes govern the thread) is held
+    across the callback, so that a change that the callback makes to a member is seen by the same composition object
+
+    @param mutate the callback that changes a manager
+    @param policy as for sb_governing_restricts()
+
+    @return a hash with the keys \c before and \c after, each as returned by sb_governing_restricts()
+*/
+hash<auto> sb_governing_restricts_around(code mutate, bool policy = False) {
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreSandboxManagerHelper sm(policy ? QoreSandboxManagerHelper::Policy : QoreSandboxManagerHelper::All);
+    ReferenceHolder<QoreHashNode> before(new QoreHashNode(autoTypeInfo), xsink);
+    sb_fill_restricts(**before, sm, xsink);
+    rv->setKeyValue("before", before.release(), xsink);
+    ValueHolder res(mutate->execValue(nullptr, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> after(new QoreHashNode(autoTypeInfo), xsink);
+    sb_fill_restricts(**after, sm, xsink);
+    rv->setKeyValue("after", after.release(), xsink);
+    return rv.release();
+}
+
+//! Returns the predicates of QoreSandboxManager objects built in C++ that are reset with reset()
+/** Builds a manager that allows everything and sets a rule in each of the network and filesystem managers, resets
+    both with their reset() methods, and reports the predicates before and after; also reports a second allow-all
+    manager that was copied from the first before the reset with copyFrom()
+
+    @return a hash with the keys \c before, \c after and \c copy, each a hash with \c network, \c filesystem and \c default_allow (both default policies allow)
+*/
+hash<auto> sb_reset_restricts() {
+    QoreSandboxManager sm;
+    sm.network().setDefaultPolicy(true);
+    sm.filesystem().setDefaultPolicy(true);
+    sm.network().addAllowedPort(443, QSEC_NET_TCP);
+    sm.filesystem().addDeniedPath("/etc", xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreSandboxManager copy;
+    copy.network().copyFrom(sm.network());
+    copy.filesystem().copyFrom(sm.filesystem());
+    auto fill = [&](const char* key, const QoreSandboxManager& m, QoreHashNode& rv) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("network", m.networkRestricts(), xsink);
+        h->setKeyValue("filesystem", m.filesystemRestricts(), xsink);
+        h->setKeyValue("default_allow", m.network().getDefaultPolicy() && m.filesystem().getDefaultPolicy(), xsink);
+        rv.setKeyValue(key, h.release(), xsink);
+    };
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    fill("before", sm, **rv);
+    sm.network().reset();
+    sm.filesystem().reset();
+    fill("after", sm, **rv);
+    fill("copy", copy, **rv);
+    return rv.release();
+}
+
+//! Captures the sandbox that governs the current thread with QoreSandboxCapture; returns a handle for it
+/** @return the handle of the capture, for the other sb_capture functions; release it with sb_capture_free()
+*/
+int sb_capture() {
+    return sb_capture_add(std::make_shared<QoreSandboxCapture>());
+}
+
+//! Copies a capture with the QoreSandboxCapture copy constructor; returns a handle for the copy
+/** @param handle the handle of the capture to copy
+
+    @return the handle of the copy
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+int sb_capture_copy(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    return sb_capture_add(std::make_shared<QoreSandboxCapture>(*capture));
+}
+
+//! Releases a capture
+/** @param handle the handle of the capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+nothing sb_capture_free(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture;
+    {
+        std::lock_guard<std::mutex> lock(sb_capture_lock);
+        auto i = sb_captures.find(handle);
+        if (i == sb_captures.end()) {
+            return xsink->raiseException("SB-CAPTURE-ERROR", "unknown capture handle " QLLD, handle);
+        }
+        // released after the lock
+        capture = std::move(i->second);
+        sb_captures.erase(i);
+    }
+    return QoreValue();
+}
+
+//! Returns QoreSandboxCapture::isSandboxed() of a capture
+/** @param handle the handle of the capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+bool sb_capture_is_sandboxed(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    return capture ? capture->isSandboxed() : false;
+}
+
+//! Returns QoreSandboxCapture::sameSandbox() of two captures
+/** @param h1 the handle of the first capture
+    @param h2 the handle of the second capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+bool sb_capture_same(int h1, int h2) {
+    std::shared_ptr<QoreSandboxCapture> c1 = sb_capture_get(h1, xsink);
+    if (!c1) {
+        return false;
+    }
+    std::shared_ptr<QoreSandboxCapture> c2 = sb_capture_get(h2, xsink);
+    return c2 ? c1->sameSandbox(*c2) : false;
+}
+
+//! Returns True if QoreSandboxCapture::getPolicyManagerRef() returns a policy manager for a capture
+/** @param handle the handle of the capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+*/
+bool sb_capture_has_policy(int handle) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return false;
+    }
+    ReferenceHolder<QoreSandboxManager> policy(capture->getPolicyManagerRef(), xsink);
+    return policy ? true : false;
+}
+
+//! Checks read access to a path against the policy of a capture with QoreSandboxCapture::getPolicyManagerRef()
+/** The check does not depend on the sandbox of the current thread.
+
+    @param handle the handle of the capture
+    @param path the path to check
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if the captured policy denies the access
+*/
+nothing sb_capture_check_read(int handle, string path) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSandboxManager> policy(capture->getPolicyManagerRef(), xsink);
+    if (policy) {
+        policy->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
+    return QoreValue();
+}
+
+//! Checks read access to a path with the policy that governs the current thread
+/** As the filesystem functions do: QoreSandboxManagerHelper with QoreSandboxManagerHelper::Policy
+
+    @param path the path to check
+
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if the thread's policy denies the access
+*/
+nothing sb_thread_check_read(string path) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
+    return QoreValue();
+}
+
+//! Checks read access to a path with the policy that governs the current thread while a capture is applied
+/** The capture is applied with QoreSandboxCaptureHelper, which governs the thread only as its outermost caller
+
+    @param handle the handle of the capture
+    @param path the path to check
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if the thread's policy denies the access
+*/
+nothing sb_capture_applied_check_read(int handle, string path) {
+    std::shared_ptr<QoreSandboxCapture> capture = sb_capture_get(handle, xsink);
+    if (!capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper sch(*capture);
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh) {
+        smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
+    return QoreValue();
+}
+
+//! Checks read access to a path with one capture applied inside another, as a native bridge does
+/** Applies the outer capture with QoreSandboxCaptureHelper, so that only the inherited context of the outer capture
+    governs the thread, then applies the inner capture and checks the path against the policy of the inner capture
+    (QoreSandboxCapture::getPolicyManagerRef()) and against the policy of the thread.
+
+    @param outer the handle of the capture that governs the thread
+    @param inner the handle of the capture that is applied and checked, as by a policy object
+    @param path the path to check
+    @param thread_first resolve the policy of the thread before applying the inner capture (the documented order) if
+    @ref True; after applying it if @ref False, which loses the policy of the outer capture
+
+    @throw SB-CAPTURE-ERROR unknown handle
+    @throw the exception of QoreSandboxManager::checkFilesystemAccess() if a policy denies the access
+*/
+nothing sb_capture_nested_check_read(int outer, int inner, string path, bool thread_first) {
+    std::shared_ptr<QoreSandboxCapture> outer_capture = sb_capture_get(outer, xsink);
+    if (!outer_capture) {
+        return QoreValue();
+    }
+    std::shared_ptr<QoreSandboxCapture> inner_capture = sb_capture_get(inner, xsink);
+    if (!inner_capture) {
+        return QoreValue();
+    }
+    QoreSandboxCaptureHelper outer_sch(*outer_capture);
+    std::optional<QoreSandboxManagerHelper> thread_policy;
+    if (thread_first) {
+        thread_policy.emplace(QoreSandboxManagerHelper::Policy);
+    }
+    QoreSandboxCaptureHelper inner_sch(*inner_capture);
+    if (!thread_first) {
+        thread_policy.emplace(QoreSandboxManagerHelper::Policy);
+    }
+    ReferenceHolder<QoreSandboxManager> policy(inner_capture->getPolicyManagerRef(), xsink);
+    if (policy && !policy->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+        return QoreValue();
+    }
+    if (*thread_policy) {
+        (*thread_policy)->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink);
+    }
     return QoreValue();
 }
 
@@ -1712,6 +2341,49 @@ nothing cpp_api_class_key_value_set(string key, auto value) {
     }
     ValueHolder old(kv_probe_class->setKeyValue(key->c_str(), value.refSelf()), xsink);
     return QoreValue();
+}
+
+
+//! adds a column with the given data and schema kind, precision and scale with QoreColumnarResult::addColumn()
+/** @param data the column data (a list or a buffer)
+    @param kind the schema kind
+    @param precision the decimal precision of the schema
+    @param scale the decimal scale of the schema
+
+    @return a ColumnarResult with the column \c c
+*/
+object cpp_api_columnar_add_column(auto data, string kind, int precision = 0, int scale = 0) {
+    QoreColumnarTypeDescriptor schema;
+    if (!strcmp(kind->c_str(), "decimal128")) {
+        schema.kind = QoreColumnarTypeKind::Decimal128;
+        schema.column_type = QoreColumnarColumnType::Number;
+    } else if (!strcmp(kind->c_str(), "int")) {
+        schema.kind = QoreColumnarTypeKind::Int;
+        schema.column_type = QoreColumnarColumnType::Int;
+    } else if (!strcmp(kind->c_str(), "binary")) {
+        schema.kind = QoreColumnarTypeKind::Binary;
+        schema.column_type = QoreColumnarColumnType::Binary;
+    }
+    schema.precision = static_cast<int32_t>(precision);
+    schema.scale = static_cast<int32_t>(scale);
+    ReferenceHolder<QoreColumnarResult> result(new QoreColumnarResult, xsink);
+    if (result->addColumn("c", data.refSelf(), schema, xsink)) {
+        return QoreValue();
+    }
+    return qore_columnar_result_to_object(result.release(), xsink);
+}
+
+//! Creates a ColumnarResult with QoreColumnarResult::fromColumnHash(), the C++ API that DBI drivers call
+/** Unlike ColumnarResult::fromColumnHash(), which checks the values that a script gives for a dense integer column,
+    the C++ API converts the driver's values of such a column to integers.
+
+    @param columns hash keyed by column name, where each value is a list or a typed buffer
+    @param desc optional schema metadata keyed by column name, as a driver gives it
+
+    @return a new ColumnarResult object
+*/
+object cpp_api_columnar_from_driver_column_hash(hash<auto> columns, *hash<auto> desc) {
+    return qore_columnar_result_to_object(QoreColumnarResult::fromColumnHash(columns, desc, xsink), xsink);
 }
 
 ///@}

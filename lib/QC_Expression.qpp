@@ -44,6 +44,21 @@ qclass Expression [arg=QoreExpression* e];
 /** @param program The @ref Qore::Program "Program" object where the expression will be created
     @param source The source to the expression
     @param label the label for the expression
+
+    @throw PARSE-EXCEPTION the source of the expression cannot be parsed; a parse directive at the start of a line
+    (such as \c %%requires, \c %%define or a parse option) cannot be used in it, nor can a declaration (such as a
+    function, class, constant, namespace or global variable) after code that ends the expression, nor a global
+    variable that the expression declares (with \c our or \c thread_local) or creates implicitly by assigning an
+    undeclared variable in a Program without @ref Qore::PO_REQUIRE_OUR "PO_REQUIRE_OUR" (since %Qore 3.0)
+    @throw EXPRESSION-ERROR the Program has code pending (@ref Qore::Program::parsePending() "Program::parsePending()"
+    without @ref Qore::Program::parseCommit() "Program::parseCommit()" or
+    @ref Qore::Program::parseRollback() "Program::parseRollback()"), or a parse of it was rolled back without
+    @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE"; the code must be committed or rolled back before an expression
+    can be created in the Program (since %Qore 3.0)
+
+    @note the expression adds no code to the Program and does not change its parse state: a parse directive or a
+    declaration in its source raises a parse exception and is not applied, and other threads can call into the Program
+    and run its expressions while the expression is parsed (since %Qore 3.0)
  */
 Expression::constructor(Program[QoreProgram] program, string source, string label) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreExpression> exp(new QoreExpression(**program, *source, *label, xsink), xsink);

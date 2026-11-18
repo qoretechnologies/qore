@@ -1,0 +1,355 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 client stream queues drained by the async I/O thread over TLS, and their flow control
+
+/*  StreamQueueFlowControl.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    qore#5859: the I/O thread that drains an HTTP/2 client stream into its registered Queue waited for room in a
+    bounded Queue that was full, which blocked every connection that the thread serves; and a deleted Queue dropped
+    the stream's data silently.  A full Queue now leaves the data in the stream, without stream credit, until the
+    Queue has room; a deleted Queue fails the stream with an error.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires ../../TestCertificates.qm
+
+%exec-class StreamQueueFlowControlTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! Hands the test each response stream that the server sets up, so that the test writes to it directly
+class PushHandler inherits ServerSentEventHandler::ServerSentEventHandler {
+    public {
+        #! receives {sock, stream_id, wake} for each stream
+        Queue streams();
+    }
+
+    constructor() : ServerSentEventHandler::ServerSentEventHandler({"data": "none", "heartbeat": 0}) {
+    }
+
+    HttpServerAsyncIo::Http2SseStream setupAsyncSseConnectionHttp2(Socket sock, hash<auto> cx, hash<auto> hdr,
+            string cid, int stream_id, *code<nothing()> wake_callback) {
+        HttpServerAsyncIo::Http2SseStream rv = ServerSentEventHandler::setupAsyncSseConnectionHttp2(sock, cx, hdr,
+            cid, stream_id, wake_callback);
+        streams.push({"sock": sock, "stream_id": stream_id, "wake": wake_callback});
+        return rv;
+    }
+}
+
+class StreamQueueFlowControlTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        PushHandler handler();
+        int port;
+    }
+
+    constructor() : QUnit::Test("StreamQueueFlowControl", "1.0") {
+        addTestCase("a full bounded stream queue does not block the connection", \testBoundedQueue());
+        addTestCase("a deleted stream queue fails the stream", \testDeletedQueue());
+        addTestCase("a registration that replaces one with pending data keeps the data", \testReplaceKeepsPending());
+        addTestCase("a stream reset while its queue is full delivers its data and its end", \testResetWhileFull());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{"debug": False});
+        server.setDefaultHandler("sse", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    #! Writes data and the end of the stream from the server side
+    private writeAndEnd(hash<auto> st) {
+        foreach int i in (xrange(20)) {
+            st.sock.sendHttp2StreamData(st.stream_id, binary(sprintf("data: %d\n\n", i)), False);
+            if (st.wake) {
+                st.wake();
+            }
+        }
+        st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+        if (st.wake) {
+            st.wake();
+        }
+    }
+
+    #! Reads a streaming response to its end; returns the number of data events
+    /** The stream must end normally: a refusal that failed the connection ends it with an error
+    */
+    private int readToEnd(HttpClientIo::HttpClientStreamHandle stream, string label) {
+        int n = 0;
+        while (True) {
+            auto v = stream.readData(HangGuard);
+            if (!exists v) {
+                break;
+            }
+            if (v.typeCode() == NT_HASH && (v.end_stream || v.error)) {
+                assertNothing(v.error, label + ": the stream ends without an error");
+                assertTrue(v.end_stream, label + ": the stream ends normally");
+                break;
+            }
+            ++n;
+        }
+        return n;
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getMgr() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h2",
+            "accept_all_certs": True,
+            "request_timeout": HangGuard,
+            "connect_timeout": HangGuard,
+            # one connection: the next streams are served by the connection whose drain met the refusal
+            "max_connections_per_host": 1,
+        });
+    }
+
+    #! A bounded Queue that is full does not block the I/O thread: the connection serves other streams, and the data
+    #! stays in the stream until the Queue has room
+    testBoundedQueue() {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> h = stream.submitAsync("GET", "/", {"Accept": "text/event-stream"});
+        hash<auto> st = handler.streams.get(HangGuard);
+        # a Queue with room for one value
+        Queue q(1);
+        cast<HttpClientIo::Http2ClientConnection>(stream.getConnection()).registerStreamQueue(h.stream_id, q);
+        # far more values than the Queue has room for, which nothing takes yet: the first two are drained on their
+        # own, so the second finds the Queue full; the connection serves other streams meanwhile, as its I/O thread
+        # does not wait for room in the Queue
+        string expected = sendSynced(mgr, url, st, 2);
+        assertEq(1, q.size(), "the Queue is full");
+        foreach int i in (xrange(2, 20)) {
+            string c = sprintf("data: %d\n\n", i);
+            expected += c;
+            st.sock.sendHttp2StreamData(st.stream_id, binary(c), False);
+            if (st.wake) {
+                st.wake();
+            }
+        }
+        syncRequest(mgr, url);
+        # the stream ends after its data
+        st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+        if (st.wake) {
+            st.wake();
+        }
+        # the consumer takes the values: every byte arrives, in order, and then the end of the stream
+        string got;
+        while (True) {
+            auto v = q.get(HangGuard);
+            if (!exists v) {
+                break;
+            }
+            assertEq(NT_BINARY, v.typeCode(), "the Queue gets the stream's data");
+            got += v.toString();
+            # one value at most, and the end of the stream, which is pushed even if the Queue is full
+            assertLe(2, q.size(), "the Queue holds at most one value and the end of the stream");
+        }
+        hash<auto> r = h.future.get(HangGuard);
+        assertEq(200, r.status_code, "the response ends");
+        # nothing is lost, and the order is kept: the Queue gets the stream's data up to where it was full, and the
+        # data that stayed in the stream, which is a request whose response is returned whole, is the response's body
+        string body = r.body.typeCode() == NT_BINARY ? r.body.toString() : (r.body ?? "");
+        assertNeq("", got, "the Queue gets data");
+        assertEq(expected, got + body, "all of the stream's data arrives, in order");
+    }
+
+    #! Sends chunks one at a time, each followed by a request on the same connection, so that each reaches the I/O
+    #! thread's drain on its own; returns the data sent
+    private string sendSynced(HttpClientIo::HttpClientConnectionManager mgr, string url, hash<auto> st, int n,
+            int start = 0) {
+        string sent;
+        for (int i = start; i < start + n; ++i) {
+            string c = sprintf("data: %d\n\n", i);
+            sent += c;
+            st.sock.sendHttp2StreamData(st.stream_id, binary(c), False);
+            if (st.wake) {
+                st.wake();
+            }
+            # the I/O thread drains the stream queues after it dispatches a cycle's responses, so the first request
+            # can be answered in the cycle that reads the chunk; the second is answered in a later cycle, after the
+            # drain of the chunk
+            syncRequest(mgr, url);
+            syncRequest(mgr, url);
+        }
+        return sent;
+    }
+
+    #! Completes a request on the connection: the I/O thread has drained the stream queues before it reads the answer
+    private syncRequest(HttpClientIo::HttpClientConnectionManager mgr, string url) {
+        HttpClientIo::HttpClientStreamHandle other = mgr.acquireAndStartStreaming(url, "GET", "/",
+            {"Accept": "text/event-stream"});
+        writeAndEnd(handler.streams.get(HangGuard));
+        assertGt(0, readToEnd(other, "sync stream"), "another stream on the connection gets its data");
+    }
+
+    #! Takes every value of a Queue up to the end of the stream; returns the data
+    private string takeAll(Queue q) {
+        string got;
+        while (True) {
+            auto v = q.get(HangGuard);
+            if (!exists v) {
+                break;
+            }
+            got += v.toString();
+        }
+        return got;
+    }
+
+    #! A new registration for the stream gets the data that the old one's full Queue had no room for: it was taken
+    #! from the stream already, so it would be lost otherwise
+    testReplaceKeepsPending() {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> h = stream.submitAsync("GET", "/", {"Accept": "text/event-stream"});
+        hash<auto> st = handler.streams.get(HangGuard);
+        Http2ClientConnection conn = cast<HttpClientIo::Http2ClientConnection>(stream.getConnection());
+        Queue q1(1);
+        conn.registerStreamQueue(h.stream_id, q1);
+        # the second chunk finds the first Queue full, and waits for room
+        string expected = sendSynced(mgr, url, st, 2);
+        assertEq(1, q1.size(), "the first Queue is full");
+        Queue q2();
+        conn.registerStreamQueue(h.stream_id, q2);
+        st.sock.sendHttp2StreamData(st.stream_id, NOTHING, True);
+        if (st.wake) {
+            st.wake();
+        }
+        hash<auto> r = h.future.get(HangGuard);
+        assertEq(200, r.status_code, "the response ends");
+        # the first Queue's value, the second Queue's values and the response body are all of the data, in order
+        string got1;
+        while (q1.size()) {
+            got1 += q1.get().toString();
+        }
+        string got2 = takeAll(q2);
+        string body = r.body.typeCode() == NT_BINARY ? r.body.toString() : (r.body ?? "");
+        assertEq(expected, got1 + got2 + body, "no data is lost when the registration is replaced");
+    }
+
+    #! A stream reset while its bounded Queue is full ends its registration once the Queue has taken the data: the
+    #! client no longer has the record of a stream that is not a CONNECT tunnel, so the data is delivered, then the end
+    testResetWhileFull() {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> h = stream.submitAsync("GET", "/", {"Accept": "text/event-stream"});
+        hash<auto> st = handler.streams.get(HangGuard);
+        Queue q(1);
+        cast<HttpClientIo::Http2ClientConnection>(stream.getConnection()).registerStreamQueue(h.stream_id, q);
+        # the second chunk finds the Queue full, and waits for room
+        sendSynced(mgr, url, st, 2);
+        assertEq(1, q.size(), "the Queue is full");
+        st.sock.resetHttp2Stream(st.stream_id);
+        if (st.wake) {
+            st.wake();
+        }
+        try {
+            h.future.get(HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        # the registration ends: the Queue gets the end of the stream after the data that it took (a reset that the
+        # client still knows drops the data that the Queue had no room for; one whose record is gone delivers it)
+        int values = 0;
+        while (True) {
+            auto v = q.get(HangGuard);
+            if (!exists v) {
+                break;
+            }
+            assertEq(NT_BINARY, v.typeCode(), "the Queue gets data, then the end of the stream");
+            ++values;
+        }
+        assertGt(0, values, "the Queue keeps the value it held");
+        # the connection serves a new stream
+        syncRequest(mgr, url);
+    }
+
+    #! A deleted Queue fails the stream instead of losing its data silently
+    testDeletedQueue() {
+        HttpClientIo::HttpClientConnectionManager mgr = getMgr();
+        on_exit delete mgr;
+        string url = sprintf("https://127.0.0.1:%d/", port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> h = stream.submitAsync("GET", "/", {"Accept": "text/event-stream"});
+        hash<auto> st = handler.streams.get(HangGuard);
+        {
+            Queue q();
+            cast<HttpClientIo::Http2ClientConnection>(stream.getConnection()).registerStreamQueue(h.stream_id, q);
+            delete q;
+        }
+        # the first chunk reaches the drain before the end of the stream, so the deleted Queue refuses data; the
+        # client then cancels the stream, so the server's writes can find it closed
+        try {
+            st.sock.sendHttp2StreamData(st.stream_id, binary("data: 0\n\n"), False);
+            if (st.wake) {
+                st.wake();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("^HTTP2-STREAM-(CLOSED|RESET)$", ex.err, "the client canceled the failed stream");
+        }
+        syncRequest(mgr, url);
+        syncRequest(mgr, url);
+        try {
+            writeAndEnd(st);
+        } catch (hash<ExceptionInfo> ex) {
+            assertRegex("^HTTP2-STREAM-(CLOSED|RESET)$", ex.err, "the client canceled the failed stream");
+        }
+        *string err;
+        try {
+            h.future.get(HangGuard);
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("HTTP2-STREAM-QUEUE-ERROR", err, "the stream fails with an error");
+        # the connection serves a new stream
+        HttpClientIo::HttpClientStreamHandle other = mgr.acquireAndStartStreaming(url, "GET", "/",
+            {"Accept": "text/event-stream"});
+        writeAndEnd(handler.streams.get(HangGuard));
+        assertGt(0, readToEnd(other, "new stream"), "a new stream on the connection gets its data");
+    }
+}

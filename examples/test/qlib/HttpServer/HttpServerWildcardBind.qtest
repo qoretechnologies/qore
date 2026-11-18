@@ -124,42 +124,69 @@ class HttpServerWildcardBindTest inherits QUnit::Test {
 
     http3Test() {
         # a given port on which no socket listens for TCP, held for UDP on 0.0.0.0, the address that receives the
-        # IPv4 datagrams of the port instead of the HTTP/3 listener on all interfaces.  A connection to a listener
-        # that is then closed holds the TCP port, so that no other program can take it before the listener binds it
-        # (a bind that reuses the address, as the listener's does, is allowed on a port that only connections use)
+        # IPv4 datagrams of the port instead of the HTTP/3 listener on all interfaces.  The port is one that the
+        # system assigns to a listener on all interfaces of both address families, as the server's TCP listener is,
+        # so that no other program uses it on any address when it is assigned (a port assigned for 127.0.0.1 can be
+        # in use on ::1, where the server's listener could not bind it).  Connections to listeners that are then
+        # closed hold the TCP port on ::1 and on 127.0.0.1, so that no other program can take it for either loopback
+        # address before the listener binds it (a bind that reuses the address, as the listener's does, is allowed on
+        # a port that only connections use)
         Socket udp();
         on_exit udp.close();
-        *Socket held_client;
-        *Socket held_peer;
-        on_exit {
-            if (held_client) {
-                held_client.close();
-            }
-            if (held_peer) {
-                held_peer.close();
-            }
-        }
+        list<Socket> held = ();
+        on_exit map $1.close(), held;
         int port;
+        *hash<ExceptionInfo> last_ex;
         for (int attempt = 0; attempt < 16 && !port; ++attempt) {
-            Socket probe = listener("127.0.0.1");
-            int candidate = probe.getSocketInfo(False).port;
-            Socket client();
-            client.connect(sprintf("127.0.0.1:%d", candidate), 5s);
-            Socket peer = probe.accept(5s);
-            probe.close();
+            list<Socket> conns = ();
             try {
+                int candidate;
+                Socket probe();
+                bool ipv6;
+                try {
+                    # all-interfaces: a port free on every address of both families
+                    probe.bindINET("::", 0, True, AF_INET6);
+                    ipv6 = True;
+                } catch (hash<ExceptionInfo> ex) {
+                    # no IPv6: no socket can use the port for IPv6
+                }
+                if (ipv6) {
+                    on_exit probe.close();
+                    # a listen refused because the port is in use on an IPv6 address (macOS assigns a port that no
+                    # IPv4 socket uses, and refuses the listen if a socket listens on ::1 on it) takes another port
+                    probe.listen();
+                    candidate = probe.getSocketInfo(False).port;
+                    Socket client6();
+                    bool connected6;
+                    try {
+                        client6.connect(sprintf("[::1]:%d", candidate), 5s);
+                        connected6 = True;
+                    } catch (hash<ExceptionInfo> ex) {
+                        # no IPv6 loopback address: no socket can use the port on it
+                    }
+                    if (connected6) {
+                        conns += (client6, probe.accept(5s));
+                    }
+                }
+                Socket probe4 = listener("127.0.0.1", candidate);
+                on_exit probe4.close();
+                candidate = probe4.getSocketInfo(False).port;
+                Socket client4();
+                client4.connect(sprintf("127.0.0.1:%d", candidate), 5s);
+                conns += (client4, probe4.accept(5s));
                 # all-interfaces: the other program's socket on all interfaces
                 udp.bindINET("0.0.0.0", candidate, False, AF_INET, SOCK_DGRAM);
                 port = candidate;
-                held_client = client;
-                held_peer = peer;
+                held = conns;
             } catch (hash<ExceptionInfo> ex) {
-                # the port is in use for UDP; try another one
-                client.close();
-                peer.close();
+                # the port is in use on an IPv6 address, it was taken by another program for TCP on 127.0.0.1 after
+                # the probe, or it is in use for UDP; try another one
+                map $1.close(), conns;
+                last_ex = ex;
             }
         }
-        assertGt(0, port, "a TCP port is held for UDP");
+        assertGt(0, port, sprintf("a TCP port is held for UDP (last error: %s)",
+            last_ex ? get_exception_string(last_ex) : "none"));
         HttpServer server();
         on_exit server.stop();
         server.setDefaultHandler("test", new WildcardBindHandler());

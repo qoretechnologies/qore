@@ -48,6 +48,13 @@ enum class minus_equals_lvalue_e {
 
 // returns how the -= operator treats the given lvalue type and its dereferenced type
 minus_equals_lvalue_e get_minus_equals_lvalue_kind(const QoreTypeInfo* ti, const QoreTypeInfo* check_ti) {
+    // a value of a type parameter has its bound, or a type known only at run time (qore#5774)
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(ti)) {
+        ti = src;
+    }
+    if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(check_ti)) {
+        check_ti = src;
+    }
     if (QoreTypeInfo::isType(check_ti, NT_HASH)
         || QoreTypeInfo::isType(check_ti, NT_OBJECT)
         || QoreTypeInfo::isType(check_ti, NT_FLOAT)
@@ -86,7 +93,7 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
     if (parse_init_value(right, parse_context) && !err) {
         err = -1;
     }
-    //const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
+    const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
     // Dereference reference types before type checking so that
     // reference<hash<...>> etc. are recognized correctly
@@ -108,10 +115,30 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
         ? kind
         : get_minus_equals_lvalue_kind(plain_ti, plain_check_ti);
 
-    if (check_kind == minus_equals_lvalue_e::INT && check_lvalue_int(loc, ti, "-=") && !err) {
-        err = -1;
+    if (check_kind == minus_equals_lvalue_e::INT) {
+        if (check_lvalue_int(loc, ti, "-=")) {
+            if (!err) {
+                err = -1;
+            }
+        } else if (qore_is_int_lvalue_type(plain_check_ti)) {
+            // an lvalue of an int type is assigned the result of x - d for a date operand, a date
+            // (qore_int_lvalue_minus_date()), which its type must accept (qore#6103)
+            const QoreTypeInfo* rti = rightTypeInfo;
+            if (const QoreTypeInfo* src = QoreTypeInfo::getTypeParameterSourceType(rti)) {
+                rti = src;
+            }
+            if (QoreTypeInfo::isType(rti, NT_DATE)
+                    && check_lvalue_accepts_result(loc, ti, "-=", {dateTypeInfo}, "a date value") && !err) {
+                err = -1;
+            }
+        }
     }
 
+    // an lvalue that converts the integer (ex: softstring, softbool) is assigned the converted difference: the
+    // generic operator, whose value, computed from the converted value, has no type known at parse time (qore#6304)
+    if (kind == minus_equals_lvalue_e::INT && qore_lvalue_converts_result(ti, NT_INT)) {
+        kind = minus_equals_lvalue_e::GENERIC;
+    }
     if (kind == minus_equals_lvalue_e::INT) {
         parse_context.typeInfo = ti = bigIntTypeInfo;
         // the analysis left by the right operand describes that operand, not the result

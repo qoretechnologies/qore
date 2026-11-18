@@ -6,8 +6,9 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
 
-string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string qore_bin = TestInterpreter::qore_interpreter();
 string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
     ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
@@ -251,8 +252,10 @@ int sub directIndex(list<int> values) {
     return result;
 }
 
+# a function called from the body of a foreach statement does not see its index (qore#5690), and a $# in it is a
+# parse error (qore#803): an operator in it gives its own elements their index, not the caller's
 int sub readDynamicIndex() {
-    return $#;
+    return (map $#, (7, 8))[1];
 }
 
 int sub calledIndex(list<int> values) {
@@ -265,7 +268,7 @@ int sub calledIndex(list<int> values) {
 
 class IndexReader {
     int read() {
-        return $#;
+        return (map $#, (7, 8, 9))[2];
     }
 }
 
@@ -489,7 +492,7 @@ string sub runAot(bool disabled, string arg, bool virtual_disabled = False) {
 }
 
 string expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:12304:12302:ab:aabb:"
-    + "123:123:123:123:2:2:1101\n";
+    + "123:1111:2222:123:2:2:1101\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode, False, "");
     if (actual != expected) {
@@ -498,7 +501,7 @@ foreach string mode in (("ast", "ir", "tiered", "jit")) {
     }
 }
 string basic_expected = "10:7.0:2:0:0:0:0:0:17:0:2:72:4:3:21:0:0:ab:aabb:"
-    + "123:123:123:123:2:2:1101\n";
+    + "123:1111:2222:123:2:2:1101\n";
 foreach string mode in (("ir", "tiered", "jit")) {
     string actual = runMode(mode, True, "basic");
     if (actual != basic_expected) {

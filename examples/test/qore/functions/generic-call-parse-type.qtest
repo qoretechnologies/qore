@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class GenericCallParseTypeTest
+
+#! The parse-time type of a generic call resolved at run time names no type parameter of the callee (qore#5896,
+#! qore#6151)
+/** A call of a generic function or method whose variant is resolved at run time (its argument has no type at parse
+    time) had the callee's unsubstituted return type (X) at parse time: a list or hash literal built from it had the
+    element type X, which no value is accepted by, and a call with explicit type arguments taking it as an argument
+    found no variant.  The type parameters are now substituted with the call's explicit type arguments, or else with
+    their bounds if the bounds are basic types that convert no value, or else with auto.
+
+    Each probe file (in generic-call-parse-type/) runs in each execution mode in a child process, with tiered
+    execution at the IR tier and promoted to native code, and as qcc-compiled executables (-O0, -O3):
+    - literals.q (qore#5896): list, hash and typed hash literals and map expressions built from explicit and implicit
+      generic function, method and static method calls (also in a closure, with a container return type and with
+      bounded type parameters, also bounds that convert values and class and hashdecl bounds with child types)
+    - nested.q (qore#6151): nested calls with explicit type arguments (also named and implicit), and a call passed as
+      an argument, returned and assigned to a typed local
+    - generic-callers.q: calls whose explicit type arguments are the type parameters of the calling generic function
+      or class
+    - diagnostics.q: the parse-time type checks of calls whose type parameters have bounds
+*/
+class GenericCallParseTypeTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the expected output line of each probe file
+        const Probes = {
+            "literals": "1 integer|\"s\" string|1 integer|1 integer|1 integer|1 integer|1 integer|1 integer|"
+                "\"121\" string|\"12\" string|2 integer|0 integer|2 integer|2 integer|1 integer|1 integer|"
+                "1 integer|1 integer|"
+                "[1, 2] list<int>|[1, 2] list<int>|RUNTIME-OVERLOAD-ERROR",
+            "nested": "1 integer|1 integer|1 integer|1 integer|\"s\" string|1 integer|1 integer|1 integer",
+            "generic-callers": "1 integer|1 integer|1 integer|{k: 1} hash<string, int>|[[1]] list<list<int>>|"
+                "[1, 2] list<int>|1 integer|1 integer|1 integer|1 integer",
+            "diagnostics": "PARSE-TYPE-ERROR: type 'int'|PARSE-TYPE-ERROR: is list<int>|OK|"
+                "PARSE-TYPE-ERROR: type 'int'",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("GenericCallParseType", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        foreach hash<auto> i in (Probes.pairIterator()) {
+            addTestCase(i.key, \testModes(), (i.key, i.value));
+        }
+        set_return_value(main());
+    }
+
+    testModes(string name, string line) {
+        string expected;
+        for (int i = 0; i < 4; ++i) {
+            expected += sprintf("%d: %s\n", i, line);
+        }
+
+        TmpDir tmp("qore-generic-call-parse-type-");
+        string file = tmp.path + DirSep + name + ".q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + "generic-call-parse-type" + DirSep + name
+            + ".q")
+            + "\nfor (int i = 0; i < 4; ++i) {\n    printf(\"%d: %s\\n\", i, probes());\n}\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=2 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, file)), "tiered, IR tier");
+        assertEq(expected, backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1 "
+            "%s 2>&1", env, qore_bin, file)), "tiered, promoted");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+            assertEq(expected, backquote(sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s "
+                "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, exe)), "qcc " + opt + ", JIT");
+        }
+    }
+}

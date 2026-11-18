@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
+%requires ../TestInterpreter.qm
 %requires FsUtil
 
 %exec-class ParameterDirectCallTest
@@ -37,7 +38,7 @@ public class ParameterDirectCallTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ParameterDirectCallTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
 
         addTestCase("a parameter argument reaches CallDirect", \testParameterReachesDirectCall());
@@ -92,6 +93,8 @@ public class ParameterDirectCallTest inherits QUnit::Test {
 
     private string probeCode() {
         return '%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 # a plain parameter: assigned by the calling convention, so the call can be resolved at parse time
 float sub p_direct(float x) { return sqrt(x) + sqrt(x); }
@@ -177,6 +180,8 @@ printf("local=%y\n", p_local(4.0));
         string qm_path = src_dir + "/ParamDirectProbeMod.qm";
         string qmod_path = qmod_dir + "/ParamDirectProbeMod.qmod";
         writeFile(qm_path, '%modern
+# the unassigned values are deliberate: their run-time handling is tested
+%no-strict-parse-errors
 
 module ParamDirectProbeMod {
     version = "1.0";

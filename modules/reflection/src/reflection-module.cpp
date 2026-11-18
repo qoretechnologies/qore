@@ -68,6 +68,8 @@ static void reflection_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
 static void reflection_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
 static void reflection_module_delete();
 
+extern QoreNamespace ReflectionNS;
+
 extern "C" DLLEXPORT void reflection_qore_module_desc(QoreModuleInfo& mod_info) {
     mod_info.name = "reflection";
     mod_info.version = PACKAGE_VERSION;
@@ -79,6 +81,8 @@ extern "C" DLLEXPORT void reflection_qore_module_desc(QoreModuleInfo& mod_info) 
     mod_info.init = reflection_module_init;
     mod_info.ns_init = reflection_module_ns_init;
     mod_info.del = reflection_module_delete;
+    // the namespace is purged when the module is deleted, before the types are freed (see QoreModuleInfo::ns)
+    mod_info.ns = &ReflectionNS;
     mod_info.license = QL_MIT;
     mod_info.license_str = "MIT";
 }

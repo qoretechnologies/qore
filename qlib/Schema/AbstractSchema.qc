@@ -163,8 +163,7 @@ public namespace Schema {
             if (silent) {
                 return;
             }
-            printf("%s: %s\n", db.getDatasourceDesc(), vsprintf(fmt, argv));
-            flush();
+            schema_terminal_printf("%s: %s\n", db.getDatasourceDesc(), vsprintf(fmt, argv));
         }
 
         #! outputs a log message
@@ -175,8 +174,7 @@ public namespace Schema {
             if (silent) {
                 return;
             }
-            vprintf(fmt + "\n", argv);
-            flush();
+            schema_terminal_printf("%s\n", vsprintf(fmt, argv));
         }
 
         #! outputs a log message without any newline
@@ -186,8 +184,7 @@ public namespace Schema {
             if (silent) {
                 return;
             }
-            printf(str, argv);
-            flush();
+            schema_terminal_printf("%s", vsprintf(str, argv));
         }
 
         #! executes a schema alignment action on the database with the current schema template
@@ -333,7 +330,8 @@ public namespace Schema {
 
             if (al.size() != sch.sql_cache.size()) {
                 if (verbose >= 0) {
-                    printf("callback had %d lines, getAlignSql() had %d lines\n", sch.sql_cache.size(), al.size());
+                    schema_terminal_printf("callback had %d lines, getAlignSql() had %d lines\n", sch.sql_cache.size(),
+                        al.size());
                 }
 
                 hash<string, bool> schh;
@@ -344,7 +342,7 @@ public namespace Schema {
 
                     foreach string sql in (al) {
                         if (!schh{sql} && verbose >= 0) {
-                            printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
+                            schema_terminal_printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
                         }
                     }
                 } else {
@@ -352,7 +350,7 @@ public namespace Schema {
 
                     foreach string sql in (sch.sql_cache) {
                         if (!schh{sql} && verbose >= 0) {
-                            printf("MISSING IN ALIGN %d: %s\n", $#, sql);
+                            schema_terminal_printf("MISSING IN ALIGN %d: %s\n", $#, sql);
                         }
                     }
                 }
@@ -435,10 +433,15 @@ public namespace Schema {
         }
 
         #! executes a schema drop operation in the database
+        /** Each statement is committed on its own: a table, with the objects that depend on it, is dropped in a
+            transaction of its own, and a partitioned table one partition per transaction, so that a schema with
+            partitioned tables stays within the database's lock limits.  A failure leaves the objects dropped before it
+            dropped.
+        */
         drop(bool force = False, int verbose = 0, bool do_msgs = True) {
             SchemaCallbackHelper sch(self, verbose);
 
-            callback_opts = sch.getCallbacks(force);
+            callback_opts = sch.getDropCallbacks(force);
 
             if (!checkExistence()) {
                 if (!force) {
@@ -475,14 +478,15 @@ public namespace Schema {
             list<auto> al = db.getDropSchemaSql(schema, callback_opts);
 
             if (al.size() != sch.sql_cache.size()) {
-                printf("ERROR: callback had %d lines, getDropSchemaSql() had %d lines\n", sch.sql_cache.size(), al.size());
+                schema_terminal_printf("ERROR: callback had %d lines, getDropSchemaSql() had %d lines\n",
+                    sch.sql_cache.size(), al.size());
 
                 # make a hash of each
                 hash<string, bool> schh = map {$1: True}, sch.sql_cache;
 
                 foreach string sql in (al) {
                     if (!schh{sql})
-                        printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
+                        schema_terminal_printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
                 }
                 throw "DROP-SCHEMA-DEBUG-ERROR", "unexpected result";
             }
@@ -586,6 +590,18 @@ public namespace Schema {
             return getMaterializedViewsImpl();
         }
 
+        #! returns view definitions
+        /** this function wraps getViewsImpl(); for forwards-compatibility, do not override this method in subclasses,
+            instead re-implement getViewsImpl()
+
+            @see @ref SqlUtil::AbstractDatabase::ViewDescriptionOptions "AbstractDatabase::ViewDescriptionOptions"
+
+            @since Schema 1.9.0
+        */
+        *hash<auto> getViews() {
+            return getViewsImpl();
+        }
+
         #! returns a hash of "strict reference data", describing the only data that can appear in the target table
         /** this function wraps getStrictReferenceDataHashImpl(); for forwards-compatibility, do not override this
             method in subclasses, instead re-implement getStrictReferenceDataHashImpl()
@@ -645,6 +661,7 @@ public namespace Schema {
                 "procedures": getProcedures(),
                 "packages": getPackages(),
                 "materialized_views": getMaterializedViews(),
+                "views": getViews(),
             };
         }
 
@@ -678,9 +695,8 @@ public namespace Schema {
                 ddl_change_callback(ds, tables);
             } catch (hash<ExceptionInfo> ex) {
                 # an error that no exception reports is shown at any verbosity level
-                printf("%s: DDL metadata callback failed while preserving an active schema error: %s: %s\n",
-                    db.getDatasourceDesc(), ex.err, ex.desc);
-                flush();
+                schema_terminal_printf("%s: DDL metadata callback failed while preserving an active schema error: "
+                    "%s: %s\n", db.getDatasourceDesc(), ex.err, ex.desc);
             }
         }
 
@@ -748,6 +764,15 @@ public namespace Schema {
         /** the default behavior of this method is to return @ref nothing, reimplement in subclasses to return custom configuration
         */
         private *hash<auto> getMaterializedViewsImpl() {
+        }
+
+        #! returns view definitions
+        /** the default behavior of this method is to return @ref nothing, reimplement in subclasses to return custom
+            configuration
+
+            @since Schema 1.9.0
+        */
+        private *hash<auto> getViewsImpl() {
         }
 
         #! returns a hash of "strict reference data", describing the only data that can appear in the target table

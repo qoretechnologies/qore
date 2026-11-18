@@ -133,6 +133,26 @@ public:
     //! Releases internal references
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -166,8 +186,8 @@ private:
     Phase phase;
     //! the state; atomic: abort() sets it from any thread (see transitionState())
     std::atomic<State> op_state;
-    int64_t deadline_us;                            //!< absolute deadline for idle phase
-    int64_t header_deadline_us;                     //!< absolute deadline for header phase
+    int64_t deadline_us;                            //!< deadline of the idle phase (monotonic, nowUs())
+    int64_t header_deadline_us;                     //!< deadline of the header phase (monotonic, nowUs())
     int64_t ttl_us;                                 //!< keep-alive timeout duration in microseconds
     bool registered_pollin = false;                  //!< True after first POLLIN registration
 
@@ -183,11 +203,10 @@ private:
     //! Header phase polling — delegates to inner SocketReadHttpHeaderPollOperation
     DLLLOCAL QoreHashNode* continueHeaderPoll(ExceptionSink* xsink);
 
-    //! Returns current time in microseconds since epoch
+    //! Returns the monotonic clock in microseconds: the deadlines are intervals, which a step of the system clock
+    //! must not end or stop (#6150)
     DLLLOCAL static int64_t nowUs() {
-        int us;
-        int64_t secs = q_epoch_us(us);
-        return secs * 1000000LL + us;
+        return q_get_monotonic_us();
     }
 };
 

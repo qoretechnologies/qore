@@ -1,0 +1,14 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Loads a module whose classes are shared with the Programs of the modules it requires and ends: the library cleanup
+# deletes the module Programs one after the other, and the declarations that survive the deletion of one Program, as a
+# group, are named by those of the next (issue #5790).  A debug libqore asserts that the bookkeeping of the declarations
+# that name each other never reads one that was freed (see deleted-program-types.qtest).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ConnectionProvider
+
+print("ok\n");

@@ -1,0 +1,694 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: parent - checks the parse options of Programs that the test creates, and runs scripts in child processes in every mode
+# test-platform: macos - C++ hosts linked against libqore with rpaths, AOT executables and modules built from the command line
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+# ProgramControl::createEvalProgram() is checked through Program::getProgram()
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class ModernOptionConsistencyTest
+
+#! %modern guarantees a consistent set of parse options (issue #5682)
+/** While %modern is in effect, the compatibility options that change the meaning of code cannot be set, and the options
+    that it implies cannot be disabled while it stays in effect; %modern cannot be set while such an option is in
+    effect (a %modern directive, PO_MODERN given by the API, a child Program, a file parsed in %modern mode by its
+    extension, -M); disabling one of %modern's own options (%old-style, ...) turns %modern off, after which they can be
+    used.  The same applies to parse directives, the Program API and child Programs, in every execution mode and in AOT
+    executables.
+*/
+class ModernOptionConsistencyTest inherits QUnit::Test {
+    public {
+        #! the parse directives that cannot be set while %modern is in effect, with their parse options
+        const Refused = {
+            "broken-cast": PO_BROKEN_CAST,
+            "broken-int-assignments": PO_BROKEN_INT_ASSIGNMENTS,
+            "broken-list-parsing": PO_BROKEN_LIST_PARSING,
+            "broken-list-range": PO_BROKEN_LIST_RANGE,
+            "broken-logic-precedence": PO_BROKEN_LOGIC_PRECEDENCE,
+            "broken-loop-statement": PO_BROKEN_LOOP_STATEMENT,
+            "broken-namespace-resolution": PO_BROKEN_NAMESPACE_RESOLUTION,
+            "broken-narrowed-types": PO_BROKEN_NARROWED_TYPES,
+            "broken-operators": PO_BROKEN_OPERATORS,
+            "broken-range": PO_BROKEN_RANGE,
+            "broken-references": PO_BROKEN_REFERENCES,
+            "broken-sprintf": PO_BROKEN_SPRINTF,
+            "broken-varargs": PO_BROKEN_VARARGS,
+            "broken-soft-types": NOTHING,
+            "broken-auto-cast": NOTHING,
+            "strict-bool-eval": PO_STRICT_BOOLEAN_EVAL,
+            "no-string-index-char": NOTHING,
+        };
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("modern option consistency", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        addTestCase("directives after %modern", \directivesAfterModern());
+        addTestCase("%modern after a directive", \modernAfterDirective());
+        addTestCase("opting out with %old-style", \optOut());
+        addTestCase("options that stay settable", \settable());
+        addTestCase("API", \api());
+        addTestCase("child Programs", \children());
+        addTestCase("%push-parse-options", \pushParseOptions());
+        addTestCase("modules", \modules());
+        addTestCase("command line", \commandLine());
+        addTestCase("scripts in every mode", \scriptModes());
+        addTestCase("scripts as AOT executables", \scriptAot());
+        addTestCase("stale AOT artifacts", \staleArtifacts());
+        addTestCase("an object with %modern and a compatibility option cannot be linked", \craftedObjectLink());
+        addTestCase("all positive parse options", \positiveOptions());
+        set_return_value(main());
+    }
+
+    directivesAfterModern() {
+        foreach string d in (keys Refused) {
+            Program p(PO_MODERN);
+            assertThrows("PARSE-OPTION-ERROR", "%" + d + " cannot be used while %modern is in effect", \p.parse(),
+                ("%" + d + "\n", "refused-" + d), d);
+        }
+        Program p(PO_MODERN);
+        assertThrows("PARSE-OPTION-ERROR", "%no-negative-offsets cannot be used while %modern is in effect, which "
+            "implies %negative-offsets", \p.parse(), ("%no-negative-offsets\n", "no-negative-offsets"));
+        # the %modern directive in the code is the same
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-OPTION-ERROR", "%broken-range cannot be used", \p2.parse(),
+            ("%modern\n%broken-range\n", "directive-modern"));
+    }
+
+    #! %modern cannot be set while a compatibility option that it does not allow is in effect
+    modernAfterDirective() {
+        foreach string d in (keys Refused) {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %" + d + " is in effect", \p.parse(),
+                ("%" + d + "\n%modern\nint sub f() { return 1; }\n", "modern-after-" + d), d);
+        }
+        # also after %old-style turned %modern off and the option was set
+        Program p(PO_MODERN);
+        assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-range is in effect", \p.parse(),
+            ("%old-style\n%broken-range\n%modern\n", "modern-again"));
+    }
+
+    optOut() {
+        Program p(PO_MODERN);
+        p.parse("%old-style\n%no-negative-offsets\n%broken-range\n"
+            "list sub r() { return ((1, 2, 3)[-1], range(1, 3)); }\n", "opt-out");
+        assertEq((NOTHING, (1, 2, 3)), p.callFunction("r"));
+    }
+
+    settable() {
+        Program p(PO_MODERN);
+        p.parse("%no-terminal-io\n%no-enum\n%disable-warning unreferenced-variable\n%no-char-type\n"
+            "%allow-statement-no-effect\nint sub f() { return 1; }\n", "settable");
+        assertEq(1, p.callFunction("f"));
+    }
+
+    api() {
+        {
+            Program p(PO_MODERN);
+            assertThrows("OPTION-ERROR", "Program::setParseOptions\\(\\): %broken-list-parsing cannot be set",
+                \p.setParseOptions(), PO_BROKEN_LIST_PARSING);
+            assertThrows("OPTION-ERROR", "%no-string-index-char cannot be set", \p.setParseOptions(),
+                new ParseOptions("no-string-index-char"));
+            assertThrows("OPTION-ERROR", "Program::disableParseOptions\\(\\): %negative-offsets cannot be disabled",
+                \p.disableParseOptions(), new ParseOptions("negative-offsets"));
+            assertThrows("OPTION-ERROR", "%no-summarize cannot be disabled", \p.disableParseOptions(),
+                new ParseOptions("no-summarize"));
+            # disabling one of %modern's own options turns %modern off
+            p.disableParseOptions(PO_STRICT_ARGS);
+            p.setParseOptions(PO_BROKEN_LIST_PARSING);
+            assertEq(PO_BROKEN_LIST_PARSING, p.getParseOptions() & PO_BROKEN_LIST_PARSING);
+        }
+        {
+            # PO_MODERN cannot be set while the option is in effect; the options are not changed
+            Program p(PO_NEW_STYLE | PO_BROKEN_RANGE);
+            assertThrows("OPTION-ERROR", "Program::setParseOptions\\(\\): %modern cannot be set while %broken-range is "
+                "in effect", \p.setParseOptions(), PO_MODERN);
+            assertEq(PO_BROKEN_RANGE, p.getParseOptions() & PO_BROKEN_RANGE);
+            assertFalse((p.getParseOptions() & PO_MODERN) == PO_MODERN);
+            Program p2(PO_NEW_STYLE);
+            p2.setParseOptions(new ParseOptions("broken-soft-types"));
+            assertThrows("OPTION-ERROR", "%modern cannot be set while %broken-soft-types is in effect",
+                \p2.setParseOptions(), PO_MODERN);
+        }
+        {
+            # %modern and the option given together are refused
+            Program p(PO_NEW_STYLE);
+            assertThrows("OPTION-ERROR", "Program::setParseOptions\\(\\): %modern and %broken-range cannot be set "
+                "together", \p.setParseOptions(), PO_MODERN | PO_BROKEN_RANGE);
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE);
+        }
+        {
+            # %modern from the file name cannot be set while the option is in effect; a .q file has no %modern
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_BROKEN_RANGE);
+            assertThrows("OPTION-ERROR", "%modern cannot be set while %broken-range is in effect",
+                \p.applySourceDefaults(), "x.qr");
+            assertFalse((p.getParseOptions() & PO_MODERN) == PO_MODERN);
+            assertFalse(p.applySourceDefaults("x.q"));
+            p.parse("list sub r() { return range(1, 2); }\n", "source-defaults");
+            assertEq((1, 2), p.callFunction("r"), "the option applies to legacy code");
+        }
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("OPTION-ERROR", "Program::replaceParseOptions\\(\\): %modern and %broken-cast cannot be set "
+                "together",
+                \p.replaceParseOptions(), PO_MODERN | PO_BROKEN_CAST);
+            p.replaceParseOptions(PO_NEW_STYLE | PO_BROKEN_CAST);
+            assertEq(PO_BROKEN_CAST, p.getParseOptions() & PO_BROKEN_CAST);
+        }
+        assertThrows("OPTION-ERROR", "Program::constructor\\(\\): %modern and %broken-range cannot be set together",
+            sub () {
+                Program p(PO_MODERN | PO_BROKEN_RANGE);
+            });
+        {
+            # options that complete %modern while the option is in effect
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_BROKEN_RANGE);
+            assertThrows("OPTION-ERROR", "Program::setParseOptions\\(\\): %modern \\(which the options set complete\\) "
+                "cannot be set while %broken-range is in effect", \p.setParseOptions(),
+                PO_MODERN & ~(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS));
+            assertEq(PO_BROKEN_RANGE, p.getParseOptions() & PO_BROKEN_RANGE);
+        }
+    }
+
+    children() {
+        # this Program allows other options for its children; a child created by a Program that does not has its
+        # options too
+        Program parent(PO_MODERN);
+        parent.parse("sub child_with(int po) { Program p(po); }\n"
+            "int sub modern_child_of_legacy() { Program p(PO_NEW_STYLE | PO_BROKEN_RANGE); "
+            "return p.getParseOptions(); }\n", "parent");
+        assertThrows("OPTION-ERROR", "Program::constructor\\(\\) \\(the new Program has %modern from its parent.*"
+            "%no-child-restrictions.*%broken-range cannot be set", \parent.callFunction(), ("child_with",
+            PO_BROKEN_RANGE));
+        # a child Program with %modern cannot have the option of its parent
+        Program legacy(PO_NEW_STYLE | PO_BROKEN_RANGE);
+        legacy.parse("int sub modern_child() { Program p(PO_MODERN); return p.getParseOptions(); }\n"
+            "int sub independent_modern_child() { Program p(PO_MODERN, True); return p.getParseOptions(); }\n",
+            "legacy");
+        assertThrows("OPTION-ERROR", "Program::constructor\\(\\): %modern cannot be set while %broken-range is in "
+            "effect", \legacy.callFunction(), "modern_child");
+        # ProgramControl::createEvalProgram() is checked the same way
+        assertThrows("OPTION-ERROR", "ProgramControl::createEvalProgram\\(\\): %modern cannot be set while "
+            "%broken-range is in effect", \legacy.getProgram().createEvalProgram(), PO_MODERN);
+        Program plain(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("OPTION-ERROR", "ProgramControl::createEvalProgram\\(\\): %modern and %broken-range cannot be set "
+            "together", \plain.getProgram().createEvalProgram(), PO_MODERN | PO_BROKEN_RANGE);
+        # an independent Program does not have the parent's options
+        int po = legacy.callFunction("independent_modern_child");
+        assertEq(PO_MODERN, po & PO_MODERN, "the independent child has %modern");
+        assertEq(0, po & PO_BROKEN_RANGE, "the independent child does not have the option");
+    }
+
+    #! %modern cannot be set in a pushed scope while a compatibility option is in effect, nor the option after it
+    pushParseOptions() {
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-OPTION-ERROR", "%modern cannot be used while %broken-range is in effect", \p.parse(),
+                ("%push-parse-options\n%broken-range\n%modern\n", "a"));
+        }
+        # the options of a pushed legacy scope do not remain after it
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending("%push-parse-options\n%broken-range\n", "a");
+            p.parsePending("%modern\nlist sub f() { return range(1, 2); }\n", "b");
+            p.parseCommit();
+            assertEq(0, p.getParseOptions() & PO_BROKEN_RANGE, "no option after the scope");
+            assertEq((1,), p.callFunction("f"));
+        }
+        # %push-parse-options is a legacy directive, refused while %modern is in effect (qore#5764)
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-OPTION-ERROR", "%push-parse-options cannot be used while %modern is in effect", \p.parse(),
+                ("%modern\n%push-parse-options\nint sub f() { return 1; }\n", "push-after-modern"));
+            Program p2(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-OPTION-ERROR", "%push-parse-options cannot be used while %modern is in effect", \p2.parse(),
+                ("%push-parse-options\nint sub f() { return 1; }\n", "push-in-modern-program"));
+        }
+        # a file included into %modern code is parsed with %modern, so the directive is refused there as well; the error
+        # does not suggest %old-style before it, which would leave the rest of the including file without %modern
+        {
+            TmpDir tmp("modern-option-consistency-push-");
+            File f();
+            f.open2(tmp.path + "/legacy-include.ql", O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%push-parse-options\nint sub inc() { return 1; }\n");
+            f.close();
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            try {
+                p.parse(sprintf("%%modern\n%%include %s/legacy-include.ql\nint sub f() { return inc(); }\n", tmp.path),
+                    "include-in-modern");
+                fail("the directive in an included file is refused");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-OPTION-ERROR", ex.err);
+                assertRegex("%push-parse-options cannot be used while %modern is in effect", ex.desc);
+                assertRegex("a file included into %modern code is parsed with %modern", ex.desc);
+                assertFalse(ex.desc =~ /%old-style/, "no %old-style remedy");
+            }
+        }
+        # a second %push-parse-options in a legacy file that has set %modern since the first is ignored, as before
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parse("%push-parse-options\n%modern\n%push-parse-options\nint sub f() { return 1; }\n", "twice");
+            assertEq(1, p.callFunction("f"));
+        }
+        # a legacy file can push the options before it sets %modern itself: its %modern ends with it
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending("%push-parse-options\n%modern\nint sub f() { return 1; }\n", "a");
+            # legacy code: a function without a return type, which %modern (require-types) would refuse
+            p.parsePending("sub g() { return 2; }\n", "b");
+            p.parseCommit();
+            assertEq(1, p.callFunction("f"));
+            assertEq(2, p.callFunction("g"));
+            assertFalse(boolean(p.getParseOptions() & PO_REQUIRE_TYPES), "%modern ended with the file that pushed");
+        }
+        # the compatibility options of a pushed legacy scope apply to the code parsed in it only, as the issue's
+        # included file showed (qore#5764): f() has %broken-range, g() after the scope does not
+        {
+            Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+            p.parsePending("%push-parse-options\n%old-style\n%broken-range\nsub f() { return range(1, 3); }\n",
+                "included");
+            p.parsePending("sub g() { return range(1, 3); }\n", "main");
+            p.parseCommit();
+            Program plain(PO_NO_CHILD_PO_RESTRICTIONS);
+            plain.parse("sub h() { return range(1, 3); }\n", "plain");
+            Program broken(PO_NO_CHILD_PO_RESTRICTIONS);
+            broken.parse("%broken-range\nsub h() { return range(1, 3); }\n", "broken");
+            assertEq(broken.callFunction("h"), p.callFunction("f"), "f() has %broken-range");
+            assertEq(plain.callFunction("h"), p.callFunction("g"), "g() does not");
+            assertNeq(p.callFunction("f"), p.callFunction("g"));
+        }
+    }
+
+    #! a module's own Program does not have the compatibility options of the Program loading it
+    modules() {
+        TmpDir tmp("modern-option-consistency-mod-");
+        File f();
+        f.open2(tmp.path + "/ModernCompatMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("module ModernCompatMod {\n    version = \"1.0\";\n    desc = \"test\";\n"
+            "    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\n"
+            "public list<int> sub mod_range() { return range(1, 2); }\n");
+        f.close();
+        Program p(PO_NEW_STYLE | PO_BROKEN_RANGE);
+        p.parse(sprintf("%%requires %s/ModernCompatMod.qm\nauto sub r() { return (mod_range(), range(1, 2)); }\n",
+            tmp.path), "modules");
+        assertEq(((1,), (1, 2)), p.callFunction("r"), "the module is %modern, the loading Program is not");
+
+        # a parse option mask cannot complete %modern on a loaded legacy module with a compatibility option; the module
+        # is legacy code without the parts of %modern that the mask can add (strong-encapsulation, no-summarize), so it
+        # is loaded with QORE_OLD_STYLE_DEFAULT=1 (a .qm file is otherwise %modern by its extension) in a child process
+        f.open2(tmp.path + "/LegacyCompatMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%broken-range\n%new-style\n%require-types\n%strict-args\nmodule LegacyCompatMod {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic list<int> sub legacy_range() { return range(1, 2); }\n");
+        f.close();
+        f.open2(tmp.path + "/mask.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyCompatMod.qm\";\nload_module(mod);\n"
+            "try {\n    load_module_masked(mod, new ParseOptions(), new ParseOptions((\"strong-encapsulation\", "
+            "\"no-summarize\")));\n    printf(\"MASK-APPLIED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n"
+            # the refused mask is not recorded: the module keeps no mask
+            "printf(\"MASK-ADD-EMPTY: %%y\\n\", get_module_parse_option_mask(\"LegacyCompatMod\").add.empty());\n"
+            "printf(\"RANGE: %%y\\n\", call_function(\"legacy_range\"));\n", tmp.path));
+        f.close();
+        string out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s/mask.q", env, qore_bin,
+            tmp.path));
+        assertRegex("MODULE-PARSE-OPTION-MASK-ERROR: module 'LegacyCompatMod': the parse option mask cannot be "
+            "applied: %modern \\(which the options set complete\\) cannot be set while %broken-range is in effect",
+            out);
+        # the module is left as it was: no mask, and its code keeps the compatibility option
+        assertRegex("MASK-ADD-EMPTY: True", out);
+        # %broken-range: the end of the range is included
+        assertRegex("RANGE: \\[1, 2\\]", out);
+
+        # the module is loaded for the first time with the mask, by load_module_masked() and with the mask of the
+        # process: its own directive cannot be used, and the error names the restrictions that the mask adds
+        foreach hash<auto> tcase in (
+                {"name": "first", "code": "load_module_masked(mod, new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));"},
+                {"name": "global", "code": "set_module_parse_option_mask(new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));\nload_module(mod);"},
+            ) {
+            string script = sprintf("%s/mask-%s.q", tmp.path, tcase.name);
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyCompatMod.qm\";\ntry {\n    %s\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path, tcase.code));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("PARSE-OPTION-ERROR: %modern \\(which the options set complete\\) cannot be used while "
+                "%broken-range is in effect.*; %modern is complete only with .*which the module parse option mask "
+                "adds", out, tcase.name);
+            assertEq(-1, out.find("LOADED"), tcase.name);
+        }
+
+        # the loading Program has the restrictions that the mask adds already: the mask adds nothing, and the error
+        # does not name it
+        {
+            string script = tmp.path + "/mask-inherited.q";
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\n%%strong-encapsulation\n%%no-summarize\n"
+                "string mod = \"%s/LegacyCompatMod.qm\";\nset_module_parse_option_mask(new ParseOptions(), "
+                "new ParseOptions((\"strong-encapsulation\", \"no-summarize\")));\ntry {\n    load_module(mod);\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("PARSE-OPTION-ERROR: %modern \\(which the options set complete\\) cannot be used while "
+                "%broken-range is in effect", out, "inherited");
+            assertEq(-1, out.find("module parse option mask"), "inherited: the mask is not named: " + out);
+            assertEq(-1, out.find("LOADED"), "inherited");
+        }
+
+        # %push-parse-options in a module whose %modern the mask completes (qore#5764): the error names the restrictions
+        # that the mask adds, and does not suggest %old-style
+        f.open2(tmp.path + "/LegacyPushMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\n%push-parse-options\nmodule LegacyPushMod {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic int sub legacy_push() { return 1; }\n");
+        f.close();
+        foreach hash<auto> tcase in (
+                {"name": "push-first", "code": "load_module_masked(mod, new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));"},
+                {"name": "push-global", "code": "set_module_parse_option_mask(new ParseOptions(), new ParseOptions("
+                    "(\"strong-encapsulation\", \"no-summarize\")));\nload_module(mod);"},
+            ) {
+            string script = sprintf("%s/mask-%s.q", tmp.path, tcase.name);
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\nstring mod = \"%s/LegacyPushMod.qm\";\ntry {\n    %s\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path, tcase.code));
+            f.close();
+            string out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("%push-parse-options cannot be used while %modern is in effect", out, tcase.name);
+            assertRegex("%modern is complete only with %[-a-z]+.*, which the module parse option mask adds", out,
+                tcase.name);
+            assertEq(-1, out.find("%old-style"), tcase.name + ": no %old-style remedy: " + out);
+            assertEq(-1, out.find("LOADED"), tcase.name);
+        }
+
+        # %no-negative-offsets in a module whose %modern the mask completes: the error names the mask
+        f.open2(tmp.path + "/LegacyNegOffsetsMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\n%no-negative-offsets\nmodule LegacyNegOffsetsMod {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic int sub neg_first(list<int> l) { return l[0]; }\n");
+        f.close();
+        {
+            string script = tmp.path + "/mask-neg-offsets.q";
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\ntry {\n    load_module_masked(\"%s/LegacyNegOffsetsMod.qm\", "
+                "new ParseOptions(), new ParseOptions((\"strong-encapsulation\", \"no-summarize\")));\n"
+                "    printf(\"LOADED\\n\");\n} catch (hash<ExceptionInfo> ex) {\n"
+                "    printf(\"%%s: %%s\\n\", ex.err, ex.desc);\n}\n", tmp.path));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect.*; "
+                "%modern is complete only with .*which the module parse option mask adds", out, "no-negative-offsets");
+        }
+
+        # the record of the restrictions that the mask added is only kept while the module's code is parsed (debug
+        # builds have the hook that reads it)
+        f.open2(tmp.path + "/CompatibleLegacyMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%new-style\n%require-types\n%strict-args\nmodule CompatibleLegacyMod {\n    version = \"1.0\";\n"
+            "    desc = \"test\";\n    author = \"Qore Technologies\";\n    url = \"https://qore.org\";\n}\n"
+            "public int sub compat_one() { return 1; }\n");
+        f.close();
+        {
+            string script = tmp.path + "/mask-record.q";
+            f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(sprintf("%%new-style\n%%require-types\nif (!exists_function(\"dbg_get_module_mask_added\")) {\n"
+                "    printf(\"NO-HOOK\\n\");\n    exit(0);\n}\nload_module_masked(\"%s/CompatibleLegacyMod.qm\", "
+                "new ParseOptions(), new ParseOptions((\"strong-encapsulation\", \"no-summarize\")));\n"
+                "printf(\"RECORD: %%y\\n\", call_function(\"dbg_get_module_mask_added\", \"CompatibleLegacyMod\"));\n",
+                tmp.path));
+            f.close();
+            out = ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s %s", env, qore_bin, script));
+            if (out =~ /NO-HOOK/) {
+                testSkip("the debug hook dbg_get_module_mask_added() is not available (release build)");
+            } else {
+                assertEq("RECORD: []\n", out, "the record is cleared after the module's parse");
+            }
+        }
+    }
+
+    #! an executable cannot be linked from an object whose parse options have %modern with a compatibility option that
+    #! it does not allow (an object compiled before issue #5682; here: one whose recorded parse options are patched)
+    /** The checksum of the patched metadata is set again with qore-aot-reseal, as the object of an earlier version of
+        Qore would have a checksum that matches its options; the same object without its checksum set again is
+        refused because of its checksum, before its options are read (issue #6451).
+    */
+    craftedObjectLink() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is unavailable");
+            return;
+        }
+        string reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qcc_bin) + "/qore-aot-reseal";
+        if (!is_file(reseal_bin)) {
+            testSkip("qore-aot-reseal is not available at " + reseal_bin);
+            return;
+        }
+        TmpDir tmp("modern-option-consistency-link-");
+        string src = tmp.path + "/main.qr";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("int sub main() {\n    printf(\"ran\\n\");\n    return 0;\n}\n");
+        f.close();
+        string obj = tmp.path + "/main.qo";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -c -L %s -o %s %s", env, qcc_bin, tmp.path, obj, src));
+        assertTrue(is_file(obj), "compiled the object: " + out);
+        if (!is_file(obj)) {
+            return;
+        }
+        # the AOT metadata header: magic (4 bytes), version (2), flags (2), parse options 0-63 (8, little-endian)
+        binary data = File::readBinaryFile(obj);
+        string hex = make_hex_string(data);
+        int pos = -1;
+        int start = 0;
+        while (True) {
+            int i = hex.find("514f5244", start);
+            if (i < 0) {
+                break;
+            }
+            if (!(i % 2)) {
+                pos = i / 2;
+                break;
+            }
+            start = i + 1;
+        }
+        assertGt(-1, pos, "found the AOT metadata header");
+        if (pos < 0) {
+            return;
+        }
+        BinaryInputStream input(data.substr(pos + 8, 8));
+        StreamReader r(input);
+        int lo = r.readi8LSB();
+        assertEq(PO_MODERN, lo & PO_MODERN, "the object is %modern");
+        assertEq(0, lo & PO_BROKEN_RANGE, "the object has no compatibility option");
+        BinaryOutputStream bout();
+        StreamWriter w(bout);
+        w.writei8LSB(lo | PO_BROKEN_RANGE);
+        {
+            File pf();
+            pf.open2(obj, O_RDWR);
+            on_exit pf.close();
+            pf.setPos(pos + 8);
+            pf.write(bout.getData());
+        }
+
+        # the patched object without its checksum set again: refused because of the checksum
+        string unsealed = tmp.path + "/unsealed.qo";
+        {
+            File uf();
+            uf.open2(unsealed, O_CREAT | O_WRONLY | O_TRUNC);
+            on_exit uf.close();
+            uf.write(File::readBinaryFile(obj));
+        }
+        string unsealed_exe = tmp.path + "/unsealed";
+        out = ExecModeHarness::run_any(sprintf("%s %s -o %s %s", env, qcc_bin, unsealed_exe, unsealed));
+        assertRegex("does not match its checksum", out, "the patched object without its checksum set again");
+        assertNRegex("%modern and %broken-range cannot be set together", out,
+            "the options of an object whose checksum does not match are not read");
+        assertFalse(is_file(unsealed_exe), "no executable was linked from the object without its checksum set again");
+
+        # the patched object with its checksum set again: refused because of its options
+        int reseal_rc;
+        string reseal_out = backquote(sprintf("%s %s %s 2>&1", env, reseal_bin, obj), \reseal_rc);
+        assertEq(0, reseal_rc, "the checksum of the patched metadata is set again: " + reseal_out);
+        string exe = tmp.path + "/main";
+        out = ExecModeHarness::run_any(sprintf("%s %s -o %s %s", env, qcc_bin, exe, obj));
+        assertRegex("link failed for output .*%modern and %broken-range cannot be set together.*rebuild the objects "
+            "with this version of Qore", out);
+        assertNRegex("does not match its checksum", out, "the checksum of the patched object was set again");
+        assertFalse(is_file(exe), "no executable was linked");
+    }
+
+    #! an option given on the command line: a file in %modern mode, by its extension or -M, is refused; a .q file is
+    #! legacy code, to which the option applies
+    commandLine() {
+        assertRegex("PARSE-OPTION-ERROR: .*modern-cli.qr' is parsed in %modern mode by its extension, which cannot be "
+            "used while %broken-range is in effect", ExecModeHarness::run_any(sprintf("%s %s -pbroken-range "
+            "%s/modern-cli.qr", env, qore_bin, dir)), "a file in %modern mode by its extension");
+        string out = ExecModeHarness::run_any(sprintf("%s %s -M -pbroken-range %s/legacy-script.q", env, qore_bin,
+            dir));
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; remove the option, "
+            "or -M",
+            out, "-M");
+        assertEq(1, (out =~ x/(PARSE-OPTION-ERROR)/g).size(), "-M: one error: " + out);
+        # %modern given with -p
+        out = ExecModeHarness::run_any(sprintf("%s %s -pmodern -pbroken-range %s/legacy-script.q", env, qore_bin,
+            dir));
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; remove the option, "
+            "or the %modern options given with -p", out, "-p modern");
+        assertEq(1, (out =~ x/(PARSE-OPTION-ERROR)/g).size(), "-p modern: one error: " + out);
+        # code given on the command line is parsed in %modern mode by default
+        out = ExecModeHarness::run_any(sprintf("%s %s -pbroken-range -e 1", env, qore_bin));
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*code given on the "
+            "command line or read from stdin is parsed in %modern mode; remove the option, or set "
+            "QORE_OLD_STYLE_DEFAULT=1 to parse it without %modern", out, "-e");
+        assertEq(1, (out =~ x/(PARSE-OPTION-ERROR)/g).size(), "-e: one error: " + out);
+        assertEq("[1, 2]\n", ExecModeHarness::run_any(sprintf("QORE_OLD_STYLE_DEFAULT=1 %s %s -pbroken-range "
+            "-e 'printf(\"%%y\\n\", range(1, 2));'", env, qore_bin)), "-e without %modern");
+        assertEq(ReadOnlyFile::readTextFile(dir + "/legacy-script.expected"), ExecModeHarness::run_any(sprintf("%s %s "
+            "-pbroken-range %s/legacy-script.q", env, qore_bin, dir)), "a legacy script");
+    }
+
+    scriptModes() {
+        # code without %modern runs in the AST interpreter only (the other execution modes and AOT need %modern)
+        assertEq(ReadOnlyFile::readTextFile(dir + "/opt-out.expected"), ExecModeHarness::run(sprintf("%s %s "
+            "--exec-mode=ast %s/opt-out.qr", env, qore_bin, dir)), "opt-out: the AST interpreter");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/refused.qr", env, qore_bin, mode, dir),
+                ExecModeHarness::NativeCheck::None);
+            assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect", out,
+                "refused: " + mode);
+        }
+    }
+
+    scriptAot() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("modern-option-consistency-aot-");
+        string refused = tmp.path + "/refused";
+        string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s/refused.qr", env, qcc_bin, refused, dir));
+        assertFalse(is_file(refused), "qcc refuses the script");
+        assertRegex("PARSE-OPTION-ERROR: %no-negative-offsets cannot be used while %modern is in effect", out,
+            "refused: AOT");
+
+        # a compatibility option given on the command line: %modern from the extension or -M is refused
+        string exe = tmp.path + "/modern-cli";
+        out = ExecModeHarness::run_any(sprintf("%s %s --compile -pbroken-range --output=%s %s/modern-cli.qr", env,
+            qore_bin, exe, dir));
+        assertFalse(is_file(exe), "a file in %modern mode by its extension is not compiled");
+        assertRegex("PARSE-OPTION-ERROR: .*modern-cli.qr' is parsed in %modern mode by its extension, which cannot be "
+            "used while %broken-range is in effect", out, "compile: extension");
+        out = ExecModeHarness::run_any(sprintf("%s %s --compile -M -pbroken-range --output=%s %s/legacy-script.q", env,
+            qore_bin, exe, dir));
+        assertFalse(is_file(exe), "-M with the option is not compiled");
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together", out, "compile: -M");
+
+        # qcc --parse-option: a compatibility option with a file in %modern mode by its extension, or with PO_MODERN
+        out = ExecModeHarness::run_any(sprintf("%s %s --parse-option=PO_BROKEN_LIST_PARSING -o %s %s/modern-cli.qr",
+            env, qcc_bin, exe, dir));
+        assertFalse(is_file(exe), "qcc --parse-option with a %modern file is not compiled");
+        assertRegex("PARSE-OPTION-ERROR: .*modern-cli.qr' is parsed in %modern mode by its extension, which cannot be "
+            "used while %broken-list-parsing is in effect", out, "qcc --parse-option: extension");
+        out = ExecModeHarness::run_any(sprintf("%s %s --parse-option=PO_MODERN "
+            "--parse-option=PO_BROKEN_NARROWED_TYPES -o "
+            "%s %s/legacy-script.q", env, qcc_bin, exe, dir));
+        assertFalse(is_file(exe), "qcc --parse-option with PO_MODERN is not compiled");
+        assertRegex("PARSE-OPTION-ERROR: %modern and %broken-narrowed-types cannot be set together", out,
+            "qcc --parse-option: PO_MODERN");
+
+        # the same for a module
+        string mod_dir = tmp.path + "/mod";
+        mkdir(mod_dir);
+        File f();
+        f.open2(mod_dir + "/MocMod.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("module MocMod {\n    version = \"1.0\";\n    desc = \"test\";\n    author = \"Qore Technologies\";\n"
+            "    url = \"https://qore.org\";\n}\npublic int sub moc_mod() { return 1; }\n");
+        f.close();
+        string qmod = tmp.path + "/MocMod.qmod";
+        out = ExecModeHarness::run_any(sprintf("%s %s --compile-module -pbroken-range --output=%s %s/MocMod.qm", env,
+            qore_bin, qmod, mod_dir));
+        assertFalse(is_file(qmod), "a module in %modern mode by its extension is not compiled");
+        assertRegex("PARSE-OPTION-ERROR: .*MocMod.qm' is parsed in %modern mode by its extension, which cannot be used "
+            "while %broken-range is in effect", out, "compile-module: extension");
+        out = ExecModeHarness::run_any(sprintf("%s %s --compile-module -M --output=%s %s/MocMod.qm", env, qore_bin,
+            qmod, mod_dir));
+        assertTrue(is_file(qmod), "the module is compiled without the option: " + out);
+    }
+
+    #! an AOT executable compiled before issue #5682 can store %modern with a compatibility option: refused
+    staleArtifacts() {
+        string libdir = dirname(qore_bin);
+        if (!is_file(libdir + "/libqore.so") && !is_file(libdir + "/libqore.dylib")) {
+            testSkip("no libqore next to " + qore_bin);
+        }
+        string cxx = ENV.CXX ?? "c++";
+        if (system(sprintf("command -v %s > /dev/null 2>&1", cxx))) {
+            testSkip("no C++ compiler (" + cxx + ")");
+        }
+        string root = realpath(dir + "/../../../../..");
+        TmpDir tmp("modern-option-consistency-stale-");
+        string exe = tmp.path + "/host";
+        *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
+        string out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include "
+            "%s/stale-artifact-host.cpp "
+            "-L%s -Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir,
+            target ? target[0] : "", exe));
+        assertTrue(is_file(exe), "compile host: " + out);
+        out = ExecModeHarness::run_any(sprintf("%s %s", env, exe));
+        assertRegex("STALE-REFUSED: PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; "
+            "rebuild the "
+            "program with this version of Qore", out);
+        assertRegex("HELPER-REFUSED: OPTION-ERROR: QoreProgramHelper: %modern and %broken-range cannot be set "
+            "together", out);
+
+        assertRegex("MODERN-CREATED", out);
+
+        # the entry points of an AOT executable
+        string run_exe = tmp.path + "/run-host";
+        string run_out = ExecModeHarness::run_any(sprintf("%s -std=c++17 -I%s/include -I%s/include %s/stale-run-host.cpp -L%s "
+            "-Wl,-rpath,%s -lqore %s -o %s 2>&1", cxx, root, libdir, dir, libdir, libdir, target ? target[0] : "",
+            run_exe));
+        assertTrue(is_file(run_exe), "compile run host: " + run_out);
+        foreach string entry in (("v1", "v3")) {
+            run_out = ExecModeHarness::run_any(sprintf("%s %s %s", env, run_exe, entry));
+            assertRegex("PARSE-OPTION-ERROR: %modern and %broken-range cannot be set together: .*; rebuild the "
+                "program with this version of Qore", run_out, entry);
+            assertRegex("rc=2", run_out, entry);
+            assertFalse(run_out =~ /STALE-CODE-RAN/, entry);
+        }
+    }
+
+
+    #! ParseOptions::positiveOptions() gives all positive options, also the extended ones that PO_POSITIVE_OPTIONS cannot
+    #! hold
+    positiveOptions() {
+        ParseOptions positive = ParseOptions::positiveOptions();
+        assertTrue(positive.hasAll(PO_POSITIVE_OPTIONS), "the integer positive options");
+        assertTrue(positive.hasAll("allow-opaque-references"), "an extended positive option");
+        assertFalse(positive.hasAny(PO_NO_NETWORK), "not a restriction");
+        assertFalse(positive.hasAny("strong-encapsulation"), "not an extended restriction");
+    }
+}

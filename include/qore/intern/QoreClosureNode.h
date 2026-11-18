@@ -119,12 +119,71 @@ public:
     }
 };
 
+//! the type arguments and the receiver type of the generic code that created a closure (qore#5733)
+struct QoreClosureTypeContext {
+    //! a copy of the type arguments of the creating code's call; empty if it had none
+    QoreTypeParamInstantiation inst;
+    //! the receiver type of the creating code if it is a generic class, or nullptr
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    //! the declarations of the type arguments and of the receiver type, which the closure can outlive (a closure
+    //! made by generic code of one Program for a class of another; issue #6489)
+    QoreTypeDeclRefs decls;
+};
+
 class QoreClosureBase : public ResolvedCallReferenceNode {
+public:
+    QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const override = 0;
+
+    //! calls the closure with a temporary argument list, whose values its parameters take over, as the AST
+    //! interpreter's call does (issue #5882); the caller keeps its reference to the list
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const = 0;
+
+    //! calls the closure with arguments in source order with the names in \a arg_names, which are bound to the
+    //! parameters of its single variant by name (see qore_call_ref_invoke_named())
+    DLLLOCAL virtual QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            ExceptionSink* xsink) const = 0;
+
+    QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const override {
+        return dispatchValue(args, xsink);
+    }
+
+    // A closure is user code; its declaration owns the argument filters, and its body owns its operations.
+    QoreValue dispatchLexicalValue(const QoreListNode* args, ExceptionSink* xsink,
+            const LexicalSemanticPolicy& policy) const override {
+        return dispatchValue(args, xsink);
+    }
+
 protected:
     const QoreClosureParseNode* closure;
     mutable ThreadSafeLocalVarRuntimeEnvironment closure_env;
     cvv_vec_t* cvec;
     const qore_class_private* class_ctx;
+    //! the type arguments and the receiver type of the generic code that created the closure, if any (qore#5733)
+    /** Allocated only for a closure in generic code that was created with either; deleted with the closure.  One
+        pointer, so that the creation, the call and the destruction of any other closure only test it
+    */
+    QoreClosureTypeContext* type_context = nullptr;
+    //! true if the initialization of the closure's library module created it (qore#6337)
+    /** Only such a closure can be run later as deferred module initialization (call_module_init_closure()); set when
+        the closure is created and never changed
+    */
+    bool module_init;
+
+    //! copies the type arguments and the receiver type of the code that creates the closure
+    DLLLOCAL void captureTypeContext();
+
+    //! returns true if a closure of \a n created now is created by the initialization of its library module
+    /** The closure's code is that of the Program that defines it, which is not necessarily the current one (see
+        qore_call_reference_code_program())
+    */
+    DLLLOCAL static bool createdByModuleInit(const QoreClosureParseNode* n);
+
+    //! sets the receiver type of the closure's type context if none was current when it was created
+    /** For a closure created in a method with the method's object: the object's class binds the type parameters of
+        its (base) classes, as the receiver type of a call of the method does (code that binds them statically, such
+        as an IR function, does not make the receiver type current)
+    */
+    DLLLOCAL void captureObjectReceiver(const QoreObject* obj);
 
     DLLLOCAL void del(ExceptionSink* xsink) {
         // cvec and closure_env both reference ClosureVarValues captured by the closure;
@@ -149,13 +208,22 @@ protected:
     }
 
 public:
+    //! returns true if the initialization of the closure's library module created it (qore#6337)
+    DLLLOCAL bool isModuleInit() const {
+        return module_init;
+    }
+
    //! constructor is not exported outside the library
     DLLLOCAL QoreClosureBase(const QoreClosureParseNode* n_closure, cvv_vec_t* cv,
             const qore_class_private* class_ctx)
             : ResolvedCallReferenceNode(false, NT_RUNTIME_CLOSURE), closure(n_closure),
-            closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx) {
+            closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx),
+            module_init(createdByModuleInit(n_closure)) {
         //printd(5, "QoreClosureBase::QoreClosureBase() this: %p closure: %p\n", this, closure);
         closure->ref();
+        if (closure->needsTypeContext()) {
+            captureTypeContext();
+        }
         // thread_get_closure_vars_for_vlist() ref'd every CVV in cv; closure_env
         // additionally ref'd each CVV that's in its cmap (subset of cv).
         // That duplicate ref on cmap-members masks cycles from the rsection
@@ -172,6 +240,7 @@ public:
 
     DLLLOCAL ~QoreClosureBase() {
         //printd(5, "QoreClosureBase::~QoreClosureBase() this: %p closure: %p\n", this, closure);
+        delete type_context;
         const_cast<QoreClosureParseNode*>(closure)->deref();
         assert(!cvec);
     }
@@ -227,6 +296,39 @@ public:
 
     //! Returns the full typed code type info (e.g., code<int(string)>) from the closure's signature
     DLLLOCAL const QoreTypeInfo* getCallTypeInfo() const;
+
+    //! returns the type arguments and the receiver type of the code that created the closure, if any
+    DLLLOCAL const QoreClosureTypeContext* getTypeContext() const {
+        return type_context;
+    }
+};
+
+//! makes the type arguments and the receiver type of the code that created a closure current while it is called
+/** (qore#5733); the closure's own call, which has no type parameters, does not change them
+*/
+class QoreClosureTypeContextHelper {
+public:
+    DLLLOCAL QoreClosureTypeContextHelper(const QoreClosureBase* cb) : ctx(cb ? cb->getTypeContext() : nullptr) {
+        if (ctx) {
+            set();
+        }
+    }
+
+    DLLLOCAL ~QoreClosureTypeContextHelper() {
+        if (ctx) {
+            restore();
+        }
+    }
+
+private:
+    const QoreClosureTypeContext* ctx;
+    // set by set(), read only by restore(): not initialized, so that a closure created with no type context only
+    // tests ctx
+    const QoreTypeParamInstantiation* old_inst;
+    const QoreTypeInfo* old_receiver_type_info;
+
+    DLLLOCAL void set();
+    DLLLOCAL void restore();
 };
 
 class QoreClosureNode : public QoreClosureBase {
@@ -249,7 +351,11 @@ public:
     DLLLOCAL virtual ~QoreClosureNode() {
     }
 
-    DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            ExceptionSink* xsink) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return pgm;
@@ -294,13 +400,20 @@ public:
             : QoreClosureBase(n_closure, cv, c_ctx),
                 obj(n_obj) {
         obj->tRef();
+        if (closure->needsTypeContext()) {
+            captureObjectReceiver(obj);
+        }
     }
 
     DLLLOCAL ~QoreObjectClosureNode() {
         assert(!obj);
     }
 
-    DLLLOCAL virtual QoreValue execValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL virtual QoreValue dispatchValue(const QoreListNode* args, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue dispatchNamed(const QoreListNode* args, const name_vec_t& arg_names,
+            ExceptionSink* xsink) const override;
+
+    DLLLOCAL virtual QoreValue execValueTmpArgs(QoreListNode* args, ExceptionSink* xsink) const;
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return obj->getProgram();

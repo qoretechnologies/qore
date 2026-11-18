@@ -374,7 +374,7 @@ public:
         }
         switch (type) {
             case QV_Float: {
-                int64 i = (int64)v.f;
+                int64 i = q_float_to_int64(v.f);
                 v.i = i;
                 type = QV_Int;
                 return nullptr;
@@ -822,7 +822,7 @@ public:
                 assigned = true;
             switch (type) {
                 case QV_Bool: v.b = (bool)f; return 0;
-                case QV_Int: v.i = (int64)f; return 0;
+                case QV_Int: v.i = q_float_to_int64(f); return 0;
                 case QV_Float: v.f = f; return 0;
                 default: assert(false);
                 // no break
@@ -997,7 +997,7 @@ public:
         if (fixed_type) {
             switch (type) {
                 case QV_Bool: v.b = (bool)n; return;
-                case QV_Int: v.i = (int64)n; return;
+                case QV_Int: v.i = q_float_to_int64(n); return;
                 case QV_Float: v.f = n; return;
                 default: assert(false);
                 // no break
@@ -1229,7 +1229,7 @@ public:
             switch (type) {
                 case QV_Bool: return (int64)v.b;
                 case QV_Int: return v.i;
-                case QV_Float: return (int64)v.f;
+                case QV_Float: return q_float_to_int64(v.f);
                 case QV_Enum: return QoreValue::makeEnumBorrowed(v.em).getAsBigInt();
                 case QV_Value: return getInlineValue().getAsBigInt();
                 case QV_Node: return v.n ? v.n->getAsBigInt() : 0;
@@ -1260,7 +1260,8 @@ public:
         return assigned && type == QV_Node ? v.n : nullptr;
     }
 
-    DLLLOCAL qore_type_t getType() const {
+    //! (always inlined: it is read on every load of a local variable)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE qore_type_t getType() const {
         if (assigned)
             switch (type) {
                 case QV_Bool: return NT_BOOLEAN;
@@ -1780,6 +1781,32 @@ public:
             if (type == QV_Node && tracksRealRefs())
                 check_lvalue_object_in_out(nullptr, v.n);
         }
+    }
+
+    //! Moves the value to an lvalue that has none, as it is: no reference and no mark of the value changes
+    /** For a caller that holds a lock under which the value cannot be released: releasing it can remove the real
+        reference mark of an object (check_lvalue_object_in_out(), which can take the object's lock and wait) or
+        release an enum value.  This lvalue has no value afterwards; \a target releases the value with removeValue()
+        or discard() when the lock is released.
+
+        @param target an lvalue with no value, which takes the value, its type and its flags
+    */
+    DLLLOCAL void moveValueTo(QoreLValue<U>& target) {
+        assert(!target.assigned);
+        target.v = v;
+        target.type = type;
+        target.fixed_type = fixed_type;
+        target.assigned = assigned;
+        target.static_assignment = static_assignment;
+        target.is_closure = is_closure;
+        target.closure_lent = closure_lent;
+        assigned = false;
+        static_assignment = false;
+#ifdef DEBUG
+        if (type == QV_Node) {
+            v.n = nullptr;
+        }
+#endif
     }
 
     DLLLOCAL QoreValue removeValue(bool for_del) {

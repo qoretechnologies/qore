@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+/*  The result of an operation that is canceled or times out is delivered after its abort() has returned.
+
+    An abort() implemented in Qore runs on a callback worker; its result was delivered on the I/O thread at the same
+    time (pushed to its result queue, or its onComplete() dispatched to another worker), so the receiver of the result
+    could see the operation before, or while, it was aborted.  An HttpServer's HTTP/2 connection whose operation was
+    canceled by the removal of its listener was then seen as still open, and the end of its streams was ignored: an
+    SSE stream's event source was never stopped.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoAbortBeforeResultTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! A poll operation that waits for its notifier until it is canceled or times out, and whose abort() blocks
+/** Its abort() is implemented in Qore, so it runs on a callback worker; the test controls when it returns.
+*/
+class AbortBlockingOperation inherits AbstractPollOperation<auto> {
+    public {
+        #! decremented when abort() has started
+        Counter entered(1);
+        #! abort() returns when an item is pushed
+        Queue release();
+    }
+
+    private {
+        EventNotifier notifier;
+        bool aborted = False;
+        Mutex m();
+    }
+
+    constructor(EventNotifier notifier) {
+        self.notifier = notifier;
+    }
+
+    string getGoal() {
+        return "waiting";
+    }
+
+    string getState() {
+        return isAborted() ? "aborted" : "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        entered.dec();
+        release.get(HangGuard);
+        AutoLock al(m);
+        aborted = True;
+    }
+
+    bool isAborted() {
+        AutoLock al(m);
+        return aborted;
+    }
+}
+
+#! An operation as above that receives its result in onComplete()
+class AbortBlockingCallbackOperation inherits AbortBlockingOperation {
+    public {
+        #! decremented when onComplete() has been called
+        Counter completed(1);
+        #! the result
+        *hash<SocketPollResultInfo> result;
+        #! True if the operation had been aborted when onComplete() was called
+        *bool aborted_on_complete;
+    }
+
+    constructor(EventNotifier notifier) : AbortBlockingOperation(notifier) {
+    }
+
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        aborted_on_complete = isAborted();
+        self.result = result;
+        completed.dec();
+    }
+}
+
+class AsyncIoAbortBeforeResultTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoAbortBeforeResultTest", "1.0") {
+        addTestCase("the result queue of a canceled operation gets its result after abort()", \testCancelQueue());
+        addTestCase("the onComplete() of a canceled operation is called after abort()", \testCancelOnComplete());
+        addTestCase("the result queue of an operation that timed out gets its result after abort()",
+            \testTimeoutQueue());
+        addTestCase("the last state event of an operation that timed out precedes its result",
+            \testTimeoutStateEvents());
+        set_return_value(main());
+    }
+
+    #! Checks the result of an operation whose abort() is blocked, then lets abort() return
+    private checkQueueResult(AbortBlockingOperation op, Queue<hash<SocketPollResultInfo>> rq, string what) {
+        assertEq(0, op.entered.waitForZero(HangGuard), what + ": abort() has started");
+        # the result is pushed when abort() returns; it would be in the queue now if it were delivered with the
+        # dispatch of abort()
+        assertEq(0, rq.size(), what + ": no result while abort() runs");
+        op.release.push(True);
+        hash<SocketPollResultInfo> r = rq.get(HangGuard);
+        assertTrue(op.isAborted(), what + ": the operation was aborted when its result was delivered");
+        assertEq(op, r.spop, what + ": the result is that of the operation");
+    }
+
+    testCancelQueue() {
+        string owner = sprintf("abort-before-result-cancel-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingOperation op(n);
+        on_exit op.release.push(True);
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+        });
+        assertTrue(AsyncIoController::waitForProcessing(HangGuard), "the submission is processed");
+        # returns when the I/O thread has canceled the operation
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        checkQueueResult(op, rq, "cancel");
+    }
+
+    testCancelOnComplete() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library for dbg_async_io_on_complete_dispatched()");
+        }
+        string owner = sprintf("abort-before-result-callback-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingCallbackOperation op(n);
+        on_exit op.release.push(True);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": -1s,
+        });
+        assertTrue(AsyncIoController::waitForProcessing(HangGuard), "the submission is processed");
+        int dispatched = call_function("dbg_async_io_on_complete_dispatched");
+        assertEq(1, AsyncIoController::cancelByOwner(owner), "the operation is canceled");
+        assertEq(0, op.entered.waitForZero(HangGuard), "abort() has started");
+        # the completion is dispatched when abort() returns; it would have been dispatched now if it were dispatched
+        # with abort(), and could run while abort() runs
+        assertEq(dispatched, call_function("dbg_async_io_on_complete_dispatched"),
+            "onComplete() is not dispatched while abort() runs");
+        op.release.push(True);
+        assertEq(0, op.completed.waitForZero(HangGuard), "onComplete() is called");
+        assertTrue(op.aborted_on_complete, "the operation was aborted when onComplete() was called");
+        assertTrue(op.result.canceled, "the result reports the cancellation");
+    }
+
+    testTimeoutQueue() {
+        string owner = sprintf("abort-before-result-timeout-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingOperation op(n);
+        on_exit op.release.push(True);
+        # the notifier is never signaled, so the operation times out
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": 1ms,
+        });
+        checkQueueResult(op, rq, "timeout");
+    }
+
+    testTimeoutStateEvents() {
+        string owner = sprintf("abort-before-result-state-%d", getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+        EventNotifier n();
+        AbortBlockingOperation op(n);
+        on_exit op.release.push(True);
+        Queue<hash<SocketPollStateInfo>> sq();
+        Queue<hash<SocketPollResultInfo>> rq = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op,
+            "owner": owner,
+            "to": 1ms,
+            "stateQueue": sq,
+        });
+        checkQueueResult(op, rq, "timeout with state events");
+        # the result is delivered after the last state event, which is in the queue now
+        list<hash<SocketPollStateInfo>> events = ();
+        while (*hash<QueueTryResult<hash<SocketPollStateInfo>>> h = sq.tryGet()) {
+            push events, h.value;
+        }
+        assertTrue(events.size() > 0, "the operation's state events precede its result");
+        assertTrue(events.last().done, "the last state event, which ends the operation, precedes its result");
+    }
+}

@@ -34,7 +34,40 @@
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
+namespace {
+class StrictBooleanDoWhileStatement : public DoWhileStatement {
+public:
+    using DoWhileStatement::DoWhileStatement;
+private:
+    int execImpl(QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(return_value, xsink);
+    }
+    int execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) override {
+        return execCommon<true>(rc, return_value, xsink);
+    }
+};
+}
+
+DoWhileStatement* DoWhileStatement::create(LexicalSemanticPolicy policy, int start_line, int end_line,
+        QoreValue c, StatementBlock* cd) {
+    DoWhileStatement* rv = policy.strictBoolean()
+        ? new StrictBooleanDoWhileStatement(start_line, end_line, c, cd)
+        : new DoWhileStatement(start_line, end_line, c, cd);
+    rv->setSemanticPolicy(policy);
+    return rv;
+}
+
 int DoWhileStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(return_value, xsink);
+}
+
+int DoWhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+    return execCommon<false>(rc, return_value, xsink);
+}
+
+
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int DoWhileStatement::execCommon(QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -62,7 +95,7 @@ int DoWhileStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
 
         // the condition and its temporaries are released before the body runs again
         bool b;
-        if (qore_eval_condition(cond, b, xsink) || !b) {
+        if (qore_eval_condition<StrictBoolean>(cond, b, xsink) || !b) {
             break;
         }
     }
@@ -70,7 +103,8 @@ int DoWhileStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     return rc;
 }
 
-int DoWhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
+template <bool StrictBoolean>
+QORE_INTERN_ALWAYS_INLINE int DoWhileStatement::execCommon(RuntimeConfig& rc, QoreValue& return_value, ExceptionSink* xsink) {
     // instantiate local variables
     LVListInstantiator lvi(xsink, lvars, pwo.parse_options);
 
@@ -98,7 +132,7 @@ int DoWhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
 
         // the condition and its temporaries are released before the body runs again
         bool b;
-        if (qore_eval_condition(cond, b, xsink, rc) || !b) {
+        if (qore_eval_condition<StrictBoolean>(cond, b, xsink, rc) || !b) {
             break;
         }
     }
@@ -109,6 +143,8 @@ int DoWhileStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Excep
 /* do ... while statements can have variables local to the statement
  * however, it doesn't do much good :-) */
 int DoWhileStatement::parseInitImpl(QoreParseContext& parse_context) {
+    // code of the loop can run more than once, so a read in it can follow an assignment parsed after it (qore#5937)
+    ParseDeferredScopeHelper deferred_scope;
     // turn off top-level flag for statement vars
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_TOP_LEVEL);
@@ -147,6 +183,8 @@ int DoWhileStatement::parseInitImpl(QoreParseContext& parse_context) {
         ash.recordSavedAsImplicitBranch();
         nth.mergeAndApply();
         ash.mergeAndApply();
+        // break and continue leave the body before its end (qore#5937)
+        ash.applyChangesSinceSave();
     } else if (cond) {
         parse_context.typeInfo = nullptr;
         if (parse_init_value(cond, parse_context) && !err) {

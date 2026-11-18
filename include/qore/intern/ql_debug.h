@@ -33,11 +33,39 @@
 
 #define QORE_LIB_DEBUG_H
 
+#include "qore/QoreThreadLock.h"
+
 #include <atomic>
 #include <string>
 #include <vector>
 
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
+
+//! Holds the lock that protects the error or another value recorded by a poll operation, for a read of it
+/** In debug builds, a read that finds the lock taken calls the "error-read" hold point
+    (QoreDbgHttpHoldPoint::ErrorRead), or "value-read" (QoreDbgHttpHoldPoint::ValueRead) for another value, before
+    it waits for the lock: a test that holds the thread recording it in its critical section ("error-record" or
+    "value-record") is then released only by a read that waits for it (issue #6428); the hold points can be armed
+    for one operation, which is identified by its Qore object
+*/
+class QoreRecordedValueReadLocker {
+public:
+    //! takes the lock
+    /** @param lck the lock
+        @param target the Qore object of the operation, which identifies it for the hold points
+        @param value false for a read of the error, true for a read of another value
+    */
+    DLLLOCAL QoreRecordedValueReadLocker(QoreThreadLock& lck, const void* target, bool value = false);
+
+    DLLLOCAL ~QoreRecordedValueReadLocker() {
+        lck.unlock();
+    }
+
+private:
+    QoreThreadLock& lck;
+};
+
+class AbstractSmartLock;
 
 #ifdef DEBUG
 //! a QCF_NO_DOMAIN_THROW violation aborts the process (the default)
@@ -77,6 +105,18 @@ DLLLOCAL extern std::atomic<qore_dbg_deref_decide_hook_t> qore_dbg_deref_decide_
 typedef void (*qore_dbg_deref_marked_hook_t)(const char* class_name);
 DLLLOCAL extern std::atomic<qore_dbg_deref_marked_hook_t> qore_dbg_deref_marked_hook;
 
+//! called by qore_object_private::customDeref() when the dereference that marked the object as being destroyed has
+//! completed (RObject::derefDone()), before the deletion starts; called with no lock held; set by
+//! dbg_hold_deref_delete()
+typedef void (*qore_dbg_deref_delete_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_delete_hook_t> qore_dbg_deref_delete_hook;
+
+//! called by qore_object_private::customDeref() when a dereference has released the last reference to the object
+//! and has no collection to decide, before it takes the object's lock to delete it or hand its deletion off; called
+//! with no lock held; set by dbg_hold_deref_last()
+typedef void (*qore_dbg_deref_last_hook_t)(const char* class_name);
+DLLLOCAL extern std::atomic<qore_dbg_deref_last_hook_t> qore_dbg_deref_last_hook;
+
 //! called by qore_object_private::customDeref() when a dereference has decided to collect the object as part of a
 //! recursive set, before it takes the object's lock to start deleting it; set by dbg_hold_deref_collect()
 typedef void (*qore_dbg_deref_collect_hook_t)(const char* class_name);
@@ -101,6 +141,13 @@ DLLLOCAL extern std::atomic<qore_dbg_file_read_ready_hook_t> qore_dbg_file_read_
 
 //! called by ClosureVarValue::deref() when a dereference of a closure-bound variable that has a collection decision
 //! to make has taken its count, before it decides; called with no lock held; set by dbg_hold_closure_var_deref()
+//! called by an LValueHelper whose lvalue was reached through a reference and holds an integer, before it releases
+//! the lvalue's locks and leaves the Programs of the references
+/** see dbg_hold_reference_lvalue(): a test holds the thread there, after it assigned the value through the reference
+*/
+typedef void (*qore_dbg_reference_lvalue_hook_t)(int64 value);
+DLLLOCAL extern std::atomic<qore_dbg_reference_lvalue_hook_t> qore_dbg_reference_lvalue_hook;
+
 typedef void (*qore_dbg_closure_var_decide_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure_var_decide_hook;
 
@@ -108,6 +155,40 @@ DLLLOCAL extern std::atomic<qore_dbg_closure_var_decide_hook_t> qore_dbg_closure
 //! set by dbg_count_closure_var_collections()
 typedef void (*qore_dbg_closure_var_collect_hook_t)(const char* name);
 DLLLOCAL extern std::atomic<qore_dbg_closure_var_collect_hook_t> qore_dbg_closure_var_collect_hook;
+
+//! returns true if the staged response data of the given HTTP/3 stream is held back from the transport, as when its
+//! client grants no flow-control credit; set by dbg_quic_hold_stream_data()
+DLLLOCAL bool qore_dbg_quic_stream_data_held(int64_t session_id, int64_t stream_id);
+//! the accounting of the stream credit that the HTTP/2 and HTTP/3 clients defer until the application consumes the
+//! data (issue #5820), for dbg_http_stream_credit_stats(): after every stream has ended, deferred == credited +
+//! settled (a byte is credited when it is consumed, or settled with its stream when the stream or its session ends
+//! before it is consumed); excess and orphaned count reports that credit nothing
+struct QoreDbgStreamCreditStats {
+    //! bytes whose stream credit was deferred when they were received
+    std::atomic<int64_t> deferred{0};
+    //! bytes whose deferred stream credit was granted when they were consumed
+    std::atomic<int64_t> credited{0};
+    //! bytes whose deferred stream credit was settled when their stream or session ended before they were consumed
+    std::atomic<int64_t> settled{0};
+    //! bytes reported as consumed beyond the stream's deferred credit (credited when received, or reported twice)
+    std::atomic<int64_t> excess{0};
+    //! bytes reported as consumed after their session was gone
+    std::atomic<int64_t> orphaned{0};
+};
+DLLLOCAL extern QoreDbgStreamCreditStats qore_dbg_stream_credit_stats;
+//! the bytes held by the extended-CONNECT stream buffers of all QUIC sessions (QuicSession::connect_stream_data_),
+//! for dbg_quic_connect_buffered_bytes() (issue #5821)
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_quic_connect_buffered;
+
+//! the WINDOW_UPDATE frames for the connection (stream 0) that HTTP/2 sessions sent: [0] client sessions, [1] server
+//! sessions; see dbg_http2_connection_window_updates()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_h2_connection_window_updates[2];
+//! true to keep the RFC 9113 default connection window (65535) in new HTTP/2 sessions, for tests that detect lost
+//! connection credit by watching the window shrink; see dbg_http2_default_connection_window()
+DLLLOCAL extern std::atomic<bool> qore_dbg_h2_default_connection_window;
+
+//! adds received bytes whose stream credit was deferred, and wakes dbg_http_stream_credit_wait_deferred()
+DLLLOCAL void qore_dbg_stream_credit_deferred(int64_t bytes);
 
 class AbstractHttpPollConnectionPriv;
 //! called by the HTTP/1 client poll operation when it is about to mark its connection closed (holding a reference
@@ -144,14 +225,35 @@ DLLLOCAL extern std::atomic<qore_dbg_http1_send_hook_t> qore_dbg_http1_send_hook
 //! dbg_fail_http1_header_read_op(), which names the site or none for any
 DLLLOCAL bool qore_dbg_http1_header_read_op_must_fail(const char* site);
 
+//! notes that thread \a tid starts waiting on a lock, for dbg_lock_wait_wait(); called by VLock::waitOn()
+DLLLOCAL void qore_dbg_note_lock_wait(const AbstractSmartLock* asl, int tid);
+
 //! the number of TLS close_notify alerts sent by SSLSocketHelper::sendCloseNotify() (SSL_shutdown() calls); read by
 //! dbg_ssl_close_notify_count()
 DLLLOCAL extern std::atomic<int64_t> qore_dbg_ssl_close_notify_count;
+
+//! the number of sets of references of synchronous operations that their callers took (AsyncIoSyncRelease) instead of
+//! a callback worker; read by dbg_async_io_sync_release_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_taken;
+
+//! the number of sets of references of synchronous operations that their callers refused, as their waits had ended,
+//! and that went to a callback worker; read by dbg_async_io_sync_release_counts()
+DLLLOCAL extern std::atomic<int64_t> qore_dbg_sync_release_refused;
+
+//! holds the thread that converts the end of a synchronous socket call's operation (canceled, or ended with an error)
+//! into an error, before it checks the thread's pending cancellation, when dbg_hold_socket_cancel_conversion() has armed
+//! the hold; see qore_socket_raise_pending_cancel()
+DLLLOCAL void qore_dbg_socket_cancel_conversion();
 
 //! called by SocketSendPollOperation::continuePoll() with the socket's lock held, before it writes; \a fd is the
 //! socket's descriptor; set by dbg_http1_send_failure_arm()
 typedef void (*qore_dbg_socket_send_hook_t)(int fd);
 DLLLOCAL extern std::atomic<qore_dbg_socket_send_hook_t> qore_dbg_socket_send_hook;
+
+//! called by SocketRecvUntilBytesPollState::doRecv() after SSL_read() reported SSL_ERROR_WANT_READ, before the
+//! descriptor is polled; \a fd is the socket's descriptor; set by dbg_hold_tls_read_until_hangup() (#6315)
+typedef void (*qore_dbg_tls_read_want_hook_t)(int fd);
+DLLLOCAL extern std::atomic<qore_dbg_tls_read_want_hook_t> qore_dbg_tls_read_want_hook;
 
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, after the close hook and
 //! before it releases the reference that it holds while running the hook; returns true if the hook released a
@@ -166,6 +268,93 @@ DLLLOCAL void qore_dbg_http_note_closed();
 //! called by HTTPClient::startPollSendRecv() right before it submits its request on a ready connection: waits until
 //! the Counter armed by dbg_http_submit_after_close() reaches zero (a connection was marked closed), then disarms it
 DLLLOCAL void qore_dbg_http_wait_submit_after_close();
+
+//! the points at which an HTTP client can be held by dbg_http_hold_at()
+enum class QoreDbgHttpHoldPoint : unsigned char {
+    //! HTTPClient::startPollSendRecv() has checked out its connection and is about to submit the request
+    Submit,
+    //! an HTTP/1 or HTTP/2 client connection's closeConnection() has invalidated it and is about to close it
+    CloseAfterInvalidate,
+    //! HTTPClient::startPollSendRecv() submitted the request on a ready connection, the submit raised an exception, and
+    //! the error is about to be classified (whether it is reported through the poll operation)
+    SubmitFailed,
+    //! HTTPClient::startPollSendRecv() found an ALPN-negotiating connection ready and is about to finalize it (hand it
+    //! over to a concrete connection); while this point is armed, the request waits for its connection to be ready
+    //! first, so that it reaches the point
+    Finalize,
+    //! NegotiatingHttpClientConnection::takeOver() checked the connection and holds its method guard, before it hands
+    //! the socket over to the concrete connection
+    Takeover,
+    //! HttpClientConnectionBase::drainInFlight() has to wait for a call in flight (armed with a release Counter of 0,
+    //! the point only reports that the close waits)
+    DrainWait,
+    //! HttpClientConnectionManagerBase::swapNegotiatedConnection() was given the concrete connection that took over a
+    //! negotiating connection, before it reads the negotiating connection
+    Swap,
+    //! HttpClientConnectionManagerBase::acquireConnectionImpl() found a connection in its pool and released the pool
+    //! lock, before it returns the connection
+    Acquired,
+    //! HttpClientConnectionBase::tryReservePendingStream() was called to reserve a stream of a Qore-level connection,
+    //! before it takes the reservation lock
+    ReservePending,
+    //! an HTTP/1 or HTTP/3 client, HTTP/3 server, WebSocket server or client, or HTTP client ping poll operation
+    //! records its first error: the thread holds the lock that protects the error and has not stored the error yet
+    ErrorRecord,
+    //! a read of the error of one of the poll operations of @ref ErrorRecord (getErrorInfo()) found the lock that
+    //! protects it taken, and is about to wait for it (see QoreRecordedValueReadLocker)
+    ErrorRead,
+    //! an HTTP client ping poll operation stores its output, or a WebSocket server poll operation its close reason:
+    //! the thread holds the lock that protects the value and has not stored it yet
+    ValueRecord,
+    //! a read of a value of @ref ValueRecord found the lock that protects it taken, and is about to wait for it (see
+    //! QoreRecordedValueReadLocker)
+    ValueRead,
+    //! a thread that uses state that another thread can release in a teardown (the poll operation of an HTTP/3 client
+    //! connection, read for its error; the inner operation of an HTTP client ping poll operation) has taken it, and is
+    //! about to use it
+    TeardownRead,
+    //! an HTTP/1.1 or HTTP/3 client poll operation dispatched the end of a request's response and released the
+    //! reference to the request's action that the dispatch held: on the I/O thread, or for an HTTP/3 response that
+    //! arrived before its request was registered, on the thread that registered it (armed with a release Counter of
+    //! 0, the point only reports it)
+    StreamEndDispatched,
+    //! an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on the thread
+    //! (call its continuePoll()); the point is armed for the operation's object
+    ContinuePoll,
+    //! the number of hold points
+    Count,
+};
+
+//! holds the calling thread at the given point if dbg_http_hold_at() armed it (one-shot)
+/** @param point the hold point
+    @param target the object that reaches the point (the Qore object of a poll operation), if any: a point armed for
+    an object holds only the thread that reaches it for that object
+*/
+DLLLOCAL void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target = nullptr);
+
+//! true while dbg_http_hold_at() has armed QoreDbgHttpHoldPoint::ContinuePoll and no thread has reached it yet
+/** Read before the hold point, which is on a path that runs for each step of a poll operation, so that the path takes
+    no lock while the point is not armed
+*/
+DLLLOCAL extern std::atomic<bool> qore_dbg_continue_poll_hold_armed;
+
+//! holds the creation of a child Program after its options were checked and before the Program is created, if
+//! dbg_hold_child_program_create() armed it (one-shot)
+DLLLOCAL void qore_dbg_child_program_create_hold();
+
+//! returns true if dbg_http_hold_at() armed the given point and no thread has reached it yet
+DLLLOCAL bool qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint point);
+
+//! records that an HTTP client connection's closeConnection() runs, for dbg_http_concurrent_closes(); destroying it
+//! records the end of the close
+class QoreDbgHttpCloseScope {
+public:
+    DLLLOCAL QoreDbgHttpCloseScope(const void* conn);
+    DLLLOCAL ~QoreDbgHttpCloseScope();
+
+private:
+    const void* conn;
+};
 
 //! called by AbstractHttpPollConnectionPriv::setClosed() on the first close of a connection, holding a reference to
 //! it and no lock: once after the connection has been marked closed and its waiters woken, before the close hook
@@ -242,5 +431,19 @@ DLLLOCAL void qore_dbg_cares_lookup_env_read();
 typedef void (*qore_dbg_queue_push_locked_hook_t)(const QoreObject* self);
 DLLLOCAL extern std::atomic<qore_dbg_queue_push_locked_hook_t> qore_dbg_queue_push_locked_hook;
 #endif
+
+inline QoreRecordedValueReadLocker::QoreRecordedValueReadLocker(QoreThreadLock& lck, const void* target, bool value)
+        : lck(lck) {
+#ifdef DEBUG
+    if (lck.trylock()) {
+        qore_dbg_http_hold(value ? QoreDbgHttpHoldPoint::ValueRead : QoreDbgHttpHoldPoint::ErrorRead, target);
+        lck.lock();
+    }
+#else
+    (void)target;
+    (void)value;
+    lck.lock();
+#endif
+}
 
 #endif

@@ -52,10 +52,10 @@ QoreObject* QoreReflectionFunction::getFunctionObject(ExceptionSink* xsink) cons
         ReferenceHolder<QoreReflectionMethod> meth(new QoreReflectionMethod(pgm, m), xsink);
         return get_method_object(meth, xsink);
     }
-    return new QoreObject(QC_FUNCTION, pgm, new QoreReflectionFunction(pgm, f));
+    return new QoreObject(QC_FUNCTION, pgm, new QoreReflectionFunction(pgm, f, ns));
 }
 
-QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreListNode* args, size_t offset, method_type_e mtype, ExceptionSink* xsink) {
+QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* func, const QoreListNode* args, size_t offset, method_type_e mtype, ExceptionSink* xsink, const QoreReflectionCaller* caller, const QoreNamespace* ns) {
     // create argument list
     type_vec_t type_vec;
 
@@ -76,20 +76,24 @@ QoreObject* find_function_variant(QoreProgram* pgm, const QoreExternalFunction* 
         type_vec.push_back(t->typeInfo);
     }
 
-    const QoreExternalVariant* v = func->findVariant(type_vec, xsink);
+    // a function's variant that a user module does not export is not found by a caller its export boundary
+    // applies to
+    const QoreExternalVariant* v = caller && mtype == MT_None
+        ? func->findVariant(type_vec, pgm, *caller, xsink)
+        : func->findVariant(type_vec, xsink);
 
     if (*xsink) {
         return nullptr;
     }
     assert(v);
 
-    return get_variant_object(pgm, func, mtype, v, xsink);
+    return get_variant_object(pgm, func, mtype, v, xsink, ns);
 }
 
-QoreObject* get_variant_object(QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, const QoreExternalVariant* v, ExceptionSink* xsink) {
+QoreObject* get_variant_object(QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, const QoreExternalVariant* v, ExceptionSink* xsink, const QoreNamespace* ns) {
     switch (mtype) {
         case MT_None:
-            return new QoreObject(QC_FUNCTIONVARIANT, pgm, new QoreReflectionVariant(pgm, f, v));
+            return new QoreObject(QC_FUNCTIONVARIANT, pgm, new QoreReflectionVariant(pgm, f, v, ns));
         case MT_Static:
             return new QoreObject(QC_STATICMETHODVARIANT, pgm, new QoreReflectionVariant(pgm, f, v));
         case MT_Normal:
@@ -110,10 +114,15 @@ QoreObject* get_variant_object(QoreProgram* pgm, const QoreExternalFunction* f, 
     return nullptr;
 }
 
-void append_variant_objects(QoreListNode& l, QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, ExceptionSink* xsink) {
+void append_variant_objects(QoreListNode& l, QoreProgram* pgm, const QoreExternalFunction* f, method_type_e mtype, ExceptionSink* xsink, const QoreReflectionCaller* caller, const QoreNamespace* ns) {
     QoreExternalFunctionIterator i(*f);
     while (i.next()) {
-        l.push(get_variant_object(pgm, f, mtype, i.getVariant(), xsink), xsink);
+        // a function's variant that a user module does not export is not listed to a caller its export boundary
+        // applies to
+        if (caller && mtype == MT_None && !caller->canSeeVariant(pgm, i.getVariant())) {
+            continue;
+        }
+        l.push(get_variant_object(pgm, f, mtype, i.getVariant(), xsink, ns), xsink);
     }
 }
 
@@ -311,10 +320,25 @@ int n = f.numVariants();
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 */
 int AbstractReflectionFunction::numVariants() [flags=RET_VALUE_ONLY] {
+    // the privileges of the calling code, captured before switching to the function's Program
+    QoreReflectionCaller caller;
     // get read access to program object
     QoreExternalProgramContextHelper tch(xsink, f->pgm);
     if (*xsink) {
         return QoreValue();
+    }
+
+    // a function's variants that a user module does not export are not counted for a caller its export boundary
+    // applies to, as getVariants() does not list them
+    if (!f->f->getClass() && caller.appliesModuleExports(f->pgm)) {
+        int n = 0;
+        QoreExternalFunctionIterator i(*f->f);
+        while (i.next()) {
+            if (caller.canSeeVariant(f->pgm, i.getVariant())) {
+                ++n;
+            }
+        }
+        return n;
     }
 
     // the function ptr must be valid
@@ -383,17 +407,18 @@ list<string> AbstractReflectionFunction::getCodeFlagList() [flags=RET_VALUE_ONLY
     return get_code_flag_list(f->f->getCodeFlags());
 }
 
-//! returns the functional domain common to all variants for this function (for builtin functions only) as a bitfield of @ref functional_domain_constants
+//! returns the functional domain common to all variants for this function as a bitfield of @ref functional_domain_constants
 /** @par Example:
     @code{.py}
 int i = f.getDomain();
     @endcode
 
-    @return the functional domain common to all variants for this function (for builtin functions only) as a bitfield of @ref functional_domain_constants
+    @return the functional domain common to all variants for this function as a bitfield of @ref functional_domain_constants
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note user functions always return 0 here; a value is only returned by builtin functions
+    @note user functions return the functional domains that all their variants declare with an attribute list (see
+    @ref function_domains) since %Qore 3.0
 
     @since %Qore 0.9.5
 */
@@ -408,17 +433,18 @@ int AbstractReflectionFunction::getDomain() [flags=RET_VALUE_ONLY] {
     return f->f->getDomain();
 }
 
-//! returns a list of functional domain strings common to all variants for this function (for builtin functions only); an empty list is returned for user functions
+//! returns a list of functional domain strings common to all variants for this function
 /** @par Example:
     @code{.py}
 list<string> l = f.getDomainStringList();
     @endcode
 
-    @return a list of functional domain strings common to all variants for this function (for builtin functions only)
+    @return a list of functional domain strings common to all variants for this function
 
     @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the function or method has been destroyed
 
-    @note user functions always return an empty list here
+    @note user functions return the functional domains that all their variants declare with an attribute list (see
+    @ref function_domains) since %Qore 3.0
 
     @since %Qore 0.9.5
 */

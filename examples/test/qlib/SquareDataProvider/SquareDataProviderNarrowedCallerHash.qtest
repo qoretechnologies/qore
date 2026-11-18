@@ -9,6 +9,11 @@
 %requires QUnit
 %requires SquareDataProvider
 
+# a request with an idempotency key that the caller does not give generates it with the uuid module
+%try-module uuid
+%define NoUuid
+%endtry
+
 %exec-class SquareDataProviderNarrowedCallerHashTest
 
 #! Records the POST requests of a Square data provider and answers them from memory
@@ -137,6 +142,9 @@ public class SquareDataProviderNarrowedCallerHashTest inherits QUnit::Test {
     }
 
     cancelBookingTest() {
+%ifdef NoUuid
+        testSkip("no uuid module: the request generates an idempotency key");
+%endif
         assertEq("hash<string, string>", mk({"idempotency_key": "k"}).fullType());
         TestCancelBooking prov(rest);
         auto rv = prov.doRequest({"booking_id": "b1", "booking_version": 3});
@@ -147,6 +155,9 @@ public class SquareDataProviderNarrowedCallerHashTest inherits QUnit::Test {
     }
 
     createPaidOrderTest() {
+%ifdef NoUuid
+        testSkip("no uuid module: the request generates an idempotency key");
+%endif
         assertEq("hash<string, string>", mk({"idempotency_key": "k"}).fullType());
         TestCreatePaidOrder prov(rest);
         auto rv = prov.doRequest({"location_id": "L1", "payment_ids": ("p1", "p2")});

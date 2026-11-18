@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - each case runs in a child process started without an execution mode
+# test-platform: macos - an FTP PORT accept poll operation on a listening socket, continued by an async I/O thread
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class FtpPortAcceptUnreferencedTest
+
+#! An FtpPortAcceptPollOperation keeps the accept operation that it is given (issue #6525)
+/** The accept operation is usually given as a temporary (<tt>listener.startPollAccept()</tt>); its steps read the
+    "sock" member of its object, which must be kept as long as the FTP operation's state.  The operation accepts a
+    connection with no error; a step never returns poll info together with an exception.  Each case runs in a child
+    process.
+*/
+class FtpPortAcceptUnreferencedTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("FtpPortAcceptUnreferencedTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("an unreferenced accept operation", \unreferencedTest());
+        addTestCase("a referenced accept operation", \referencedTest());
+        set_return_value(main());
+    }
+
+    unreferencedTest() {
+        checkChild("FtpPortAcceptPollOperation op(listener, listener.startPollAccept());");
+    }
+
+    referencedTest() {
+        checkChild("AbstractPollOperation accept = listener.startPollAccept();
+FtpPortAcceptPollOperation op(listener, accept);");
+    }
+
+    #! runs a child that creates the operation with the given code, submits it and connects to the listener
+    private checkChild(string create) {
+        TmpDir tmp("qore-ftp-port-accept-");
+        string script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%new-style
+%require-types
+Socket listener();
+listener.bindINET(\"127.0.0.1\", 0, True, AF_INET);
+listener.listen();
+int port = listener.getSocketInfo().port;
+" + create + "
+Queue<hash<SocketPollResultInfo>> rq();
+AsyncIoController::submit(<SocketPollOperationInfo>{
+    \"sock\": listener,
+    \"spop\": op,
+    \"owner\": \"ftp-port-accept\",
+    \"key\": \"ftp-port-accept\",
+    \"to\": 30s,
+    \"resultQueue\": rq,
+});
+Socket c();
+c.connect(\"127.0.0.1:\" + port, 30s);
+hash<SocketPollResultInfo> r = rq.get(30s);
+printf(\"ERR=%s\\n\", r.ex.err ?? \"none\");
+printf(\"OUTPUT=%s\\n\", op.getOutput().className());
+c.close();
+listener.close();
+");
+        f.close();
+        string output = backquote(sprintf("%s %s 2>&1; echo \"rc=$?\"", qore_bin, script));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertEq("0", rc[0], sprintf("the child ends normally: %s", output));
+        assertRegex("ERR=none", output, sprintf("the operation accepts with no error: %s", output));
+        assertRegex("OUTPUT=Socket", output, sprintf("the output is the accepted socket: %s", output));
+    }
+}

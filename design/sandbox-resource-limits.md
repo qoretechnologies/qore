@@ -130,9 +130,16 @@ timed call:
   can add the memory over-limit bit to the same word as the issue proposes.
 - Order in `qore_check_cancel()`: the limit bit first (it cannot be cleared and ends the whole call), then a thread
   cancellation, then a sandbox-wide interrupt.
-- Cancellation deferral (`defer_thread_cancel()`, cleanup critical sections) defers `SANDBOX-TIMEOUT` like the other
-  reasons, so cleanup code can finish. `defer_thread_cancel()` is in the `THREAD_CONTROL` domain: a sandbox that must
-  not be able to postpone its timeout must not grant it (`PO_NO_THREAD_CONTROL`), as for interrupts today.
+- Cancellation deferral in trusted code (`defer_thread_cancel()`, `QoreCancelDeferralHelper`, thread teardown)
+  defers `SANDBOX-TIMEOUT` like the other reasons, so trusted cleanup code can finish.  Sandboxed code never runs
+  under a deferral (qore#5634): entering a sandboxed Program suspends it, and `defer_thread_cancel()` called by
+  sandboxed code defers nothing, so a sandbox cannot postpone its timeout, also with the `THREAD_CONTROL` domain
+  (see "Sandboxed code never runs deferred" in
+  [cooperative-cancellation.md](cooperative-cancellation.md#sandboxed-code-never-runs-deferred)).
+- The deferral of a trusted class's destructor (qore#5634) never defers a limit: `qore_check_cancel()` checks the
+  limit bit before that deferral, so a destructor in a sandbox call cannot run unbounded, and the destructor of a
+  sandboxed class runs under no deferral at all (see "Destructors" in
+  [cooperative-cancellation.md](cooperative-cancellation.md#destructors)).
 
 ### Exception
 

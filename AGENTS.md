@@ -66,6 +66,9 @@
   anything in its own process (code in its own `Program`, results it computes itself, its own options given to a
   child); `examples/test/runner/test_exec_mode_markers.py` enforces it.  Put in-process checks of a long harness test in
   a test of their own (ex: `qore/operators/hash-value-increment-exec-modes/hash-value-increment-in-process.qtest`).
+  A test that does not use the harness declares `# test-exec-mode: children - <why>` when its checks run in child
+  processes of its own binary (`QORE_ARGV[0]`) started without an execution mode, which run in the default mode in
+  every job (ex: `qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest`).
 - The Linux CI jobs run every test; the macOS job runs only the tests that declare `# test-platform: macos - <why>` (on
   a line of its own after the `#!` and mode lines; `QORE_TEST_PLATFORM_SUBSET=macos ./run_tests.sh` runs the same
   selection).  Declare it on a test whose checks depend on the platform: the OS-facing C++ code (files, pipes, FIFOs,
@@ -139,9 +142,10 @@
 - A TSan report makes the process exit with code 66, so a test whose output has no failure can still fail under TSan.
 - Some tests cannot run under TSan whatever the code does, and fail without a report from it: `misc/hashdecl.qtest` and
   `misc/deep-release.qtest` recurse past TSan's limit of 64K nested calls (it crashes in `__tsan::CurrentStackId`);
-  `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` and
-  `misc/module-loader/concurrent-module-program-merge.qtest` do so much work in Qore code that they exceed the 300
-  second limit of `run_tests.sh` at TSan's slowdown.
+  `misc/stdio/stdio-startup.qtest` starts V8, which TSan cannot run; `misc/test-listener-addresses.qtest` does so
+  much work in Qore code that it exceeds the 300 second limit of `run_tests.sh` at TSan's slowdown.  The test that
+  exceeded it with it now runs in parts (`misc/module-loader/ConcurrentModuleProgramMerge-<n>.qtest`), which have not
+  been measured under TSan.
 
 ## Commit & Pull Request Guidelines
 - Commit messages use a short type prefix such as `fix:`, `feat:`, or `refactor:` in a present-tense summary.

@@ -41,6 +41,7 @@ class QoreEncoding;
 class BinaryNode;
 class QoreStringNode;
 class SimpleValueQoreNode;
+class TypedHashDecl;
 
 //! The kind of an HTTP message body, which decides how its character encoding is determined
 /** See design/http-body-charset.md for the rules and the specifications they follow.
@@ -132,5 +133,44 @@ DLLLOCAL SimpleValueQoreNode* qore_decode_http_body(const char* content_type, co
     ISO-8859-1
 */
 DLLLOCAL const QoreEncoding* qore_get_http_header_charset(const char* content_type, const QoreEncoding* assumed);
+
+//! The character set and the media type that an HTTP server reports for the Content-Type of a request
+/** As Socket::readHTTPHeader() reports them in its info hash (\c "charset" and \c "body-content-type"), for every HTTP
+    version (qore#6318)
+*/
+struct QoreHttpContentTypeInfo {
+    //! the encoding that the body is read in: by the rules of qore_get_http_header_charset(), else the charset
+    //! parameter, else the assumed encoding
+    const QoreEncoding* enc = nullptr;
+    //! the \c "charset" value: the charset parameter as given, else the name of \c enc
+    std::string charset;
+    //! the \c "body-content-type" value: the field value without its charset parameter
+    std::string body_content_type;
+    //! true if \c body_content_type is set (it can be empty without a charset parameter)
+    bool has_body_content_type = false;
+};
+
+//! Returns the character set and the media type that an HTTP server reports for a Content-Type field value
+/** @param content_type the \c Content-Type field value
+    @param assumed the encoding assumed for text whose encoding is not determined otherwise; must not be nullptr
+*/
+DLLLOCAL QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type,
+        const QoreEncoding* assumed);
+
+//! Returns the response encoding that an HTTP server reports for the Accept-Charset of a request
+/** As Socket::readHTTPHeader() reports it in its info hash (\c "accept-charset"), by the rule of RFC 9110 sections
+    12.5.2 and 12.4.2 that get_http_accept_charset() documents: \c "utf8" if UTF-8, or \c "*" when UTF-8 is not
+    listed, has the highest weight of the acceptable and supported charsets, else the name of the acceptable charset
+    with the highest weight that an untrusted name may select (qore_find_untrusted_encoding()) and iconv converts to,
+    as given if Qore knows the name, else the name of its encoding (the first of those with the same weight); empty if
+    no charset is acceptable and supported, which the server reports as \c "utf8" (qore#6333, qore#6343,
+    qore#6460)
+
+    @param value the \c Accept-Charset field value
+*/
+DLLLOCAL std::string qore_get_http_accept_charset(const char* value);
+
+//! the type of the value of get_http_content_type_info()
+DLLLOCAL extern const TypedHashDecl* hashdeclHttpContentTypeInfo;
 
 #endif
