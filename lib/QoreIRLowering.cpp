@@ -18213,6 +18213,11 @@ void QoreIRLowering::releaseStoredOperatorValue(QoreIRValue value, const QoreTyp
             || qore_ir_type_is_immediate_scalar(builder.getFunction(), ti)) {
         return;
     }
+    // $# of the virtual implicit context is the loop's index, a native int that holds no reference, which the loop
+    // increments after the release (qore#6641)
+    if (virtual_implicit.active && value.id == virtual_implicit.element.id) {
+        return;
+    }
     QoreIRBasicBlock* block = builder.getBlock();
     if (!block || (!block->instructions.empty() && isTerminator(block->instructions.back()->opcode))) {
         return;
