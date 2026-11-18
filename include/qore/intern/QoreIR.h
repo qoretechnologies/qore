@@ -1474,6 +1474,11 @@ static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
 //! directly after it, which takes the reference of a return value; the IR interpreter gives that RefSelf the kept
 //! reference and steps over it (qore#6444)
 static constexpr uint8_t QORE_IR_KEEP_GIVES_REFSELF = 4;
+//! QoreIRInstruction::interpreter_gives_call_args of an UninstantiateLocal: a CheckException with no operands follows
+//! it in its block, which the IR interpreter steps over when the release leaves no exception pending, so that the check
+//! after the release of the locals of a block costs no dispatch of its own on the normal path; the check runs as before
+//! when an exception is pending (qore#6371)
+static constexpr uint8_t QORE_IR_STEPS_OVER_CHECK = 8;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
@@ -1659,7 +1664,7 @@ public:
     // issue #5958, see design/param-take-over.md); 0 for a call that gives nothing; set with the interpreter's analysis
     // of the function, before the function runs.  A byte with bits, not two bools: the next member follows it without
     // padding, so a second bool would change the layout of every instruction.  For a DiscardTempsKeep:
-    // QORE_IR_KEEP_GIVES_REFSELF
+    // QORE_IR_KEEP_GIVES_REFSELF; for an UninstantiateLocal: QORE_IR_STEPS_OVER_CHECK
     uint8_t interpreter_gives_call_args = 0;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
