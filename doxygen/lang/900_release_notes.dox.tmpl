@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Encoding That Is Not Predefined Has One Canonical Name
+    The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
+    \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used
+    it, which made the name depend on the order of use (see @ref character_encoding_overview; issue #6570).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or

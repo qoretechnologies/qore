@@ -2273,7 +2273,8 @@ lorem ipsum\r
         assertEq("ISO-8859-1", m.getBody().encoding());
         # messages in encodings with characters of more than one byte, read by bytes (Shift_JIS, EUC-JP) or in UTF-8
         # (UTF-16, ISO-2022-JP)
-        foreach string e in ("SHIFT_JIS", "EUC-JP", "UTF-16", "UTF-16LE", "ISO-2022-JP") {
+        # the canonical names of the encodings (qore#6570)
+        foreach string e in ("Shift_JIS", "EUC-JP", "UTF-16", "UTF-16LE", "ISO-2022-JP") {
             string text = "From: ポ <a@x.com>\r\nTo: b@x.com,\r\n ポ <c@x.com>\r\nSubject: ポ\r\n\tポ\r\n"
                 "X-A: ポ\r\n\r\nポ\r\n";
             m = new Message(convert_encoding(text, e));
