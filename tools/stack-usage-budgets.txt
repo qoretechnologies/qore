@@ -10,11 +10,15 @@
 #
 # A budget that is exceeded is a frame to shrink: move the large locals of rarely-used paths into QORE_INTERN_NOINLINE
 # helpers.  If the growth is needed, raise the budget here and give the reason and the measured bytes per level
-# (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit.  A function that is MISSING was renamed or
-# inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
+# (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit, and raise the release budgets of that test by
+# the measured bytes per level, so that the two checks agree (issue #6540: the growths of #5824 and #6074 were accepted
+# here only, and a later growth of 64 bytes within the budget of QoreIRInterpreter::execute failed the test).  A
+# function that is MISSING was renamed or inlined into its callers: update its name here, or move its budget to the
+# caller that its frame is now part of.
 #
 # The budgets are for Release builds only; debug builds are not checked here (their per-level growth is covered by
-# examples/test/qore/stack/recursion-frame-budget.qtest, which CI's debug test jobs run on every target).
+# examples/test/qore/stack/recursion-frame-budget.qtest, which CI's debug test jobs run on every target, and its
+# performance job on its x86_64 release build).
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
 # the function, not the lambdas and local classes inside it.  Its frame is the largest of its records (GCC records its
