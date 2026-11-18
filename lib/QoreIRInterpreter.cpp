@@ -23321,9 +23321,23 @@ static QORE_INTERN_NOINLINE QoreValue qore_plus_equals_replace_char(ValueHolder&
     return *right_holder;
 }
 
+//! returns the sum (or, if \a minus is set, the difference) of an int and a float or a number, as the + and - operators
+//! give it: a float or a number (qore#6407)
+static QoreValue qore_union_int_arith(int64 i, const QoreValue& right, bool minus) {
+    if (right.getType() == NT_FLOAT) {
+        double r = right.getAsFloat();
+        return static_cast<double>(i) + (minus ? -r : r);
+    }
+    QoreValue left(i);
+    QoreNumberNodeHelper l(left);
+    QoreNumberNodeHelper r(right);
+    return minus ? l->doMinus(**r) : l->doPlus(**r);
+}
+
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
 // documented in QoreIRInterpreter.h
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, ValueHolder& right_holder,
         ExceptionSink* xsink, LexicalSemanticPolicy policy) {
@@ -23538,6 +23552,19 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
         if (right.getType() == NT_DATE && is_timeout_lvalue_type(v.getTypeInfo())) {
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.plusEqualsBigInt(ms, "<+= operator>");
+        }
+        // an int in a union lvalue and a float or a number are added as the + operator adds them, and a union with a
+        // member of the type of the sum is assigned it; any other union adds the operand as an int, as an int lvalue
+        // does (qore#6407)
+        if (vtype == NT_INT && (right.getType() == NT_FLOAT || right.getType() == NT_NUMBER)
+                && QoreTypeInfo::getUnionType(v.getTypeInfo())) {
+            ValueHolder sum(qore_union_int_arith(v.getAsBigInt(), right, false), xsink);
+            if (v.getTypeInfo()->unionAcceptsExactly(*sum, sum->getType())) {
+                if (assign(sum.release(), "<lvalue for += operator>")) {
+                    return QoreValue();
+                }
+                return v.getReferencedValue();
+            }
         }
         // do integer plus-equals; a char is added as its one-character string is; an error that the lvalue's type
         // raises (ex: an enum lvalue, which refuses the plain int) names the operator, as
@@ -23758,6 +23785,19 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             }
             // any other lvalue subtracts the integer value of the date below, as += adds it: the seconds of a
             // relative date or the epoch seconds of an absolute date
+        }
+        // an int in a union lvalue and a float or a number are subtracted as the - operator subtracts them, and a
+        // union with a member of the type of the difference is assigned it; any other union subtracts the operand as
+        // an int, as an int lvalue does (qore#6407)
+        if (vtype == NT_INT && (right.getType() == NT_FLOAT || right.getType() == NT_NUMBER)
+                && QoreTypeInfo::getUnionType(v.getTypeInfo())) {
+            ValueHolder diff(qore_union_int_arith(v.getAsBigInt(), right, true), xsink);
+            if (v.getTypeInfo()->unionAcceptsExactly(*diff, diff->getType())) {
+                if (v.assign(diff.release())) {
+                    return QoreValue();
+                }
+                return v.getReferencedValue();
+            }
         }
         // do integer minus-equals; an error that the lvalue's type raises names the operator, as
         // QoreIntMinusEqualsOperatorNode::evalImpl() does (qore#6197)

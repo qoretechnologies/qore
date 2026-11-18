@@ -9808,7 +9808,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || get_or_nothing_base_type(ti) != ti
                 || QoreTypeInfo::equal(ti, timeoutTypeInfo)
                 // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
-                || qore_ir_is_enum_lvalue_type(ti)) {
+                || qore_ir_is_enum_lvalue_type(ti)
+                // a union lvalue that holds an int is assigned the result of the arithmetic operator for a float or a
+                // number operand, which the union accepts (doPlusEqualsOnLValue(), qore#6407)
+                || QoreTypeInfo::getUnionType(ti)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
@@ -10076,6 +10079,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || QoreTypeInfo::equal(ti, timeoutTypeInfo)
                 // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
                 || qore_ir_is_enum_lvalue_type(ti)
+                // a union lvalue that holds an int is assigned the result of the arithmetic operator for a float or a
+                // number operand, which the union accepts (doPlusEqualsOnLValue(), qore#6407)
+                || QoreTypeInfo::getUnionType(ti)
                 // an lvalue of a soft type that converts the difference that it is assigned (ex: softstring,
                 // softbool, softlist) holds the converted value, while the operator gives the difference that it
                 // computes (doMinusEqualsOnLValue()), also for a NOTHING operand: the AST operator on its lvalue path

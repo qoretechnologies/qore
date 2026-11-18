@@ -2100,8 +2100,22 @@ union<int, string> sub getValue(bool useInt) {
     @endcode
 
     @par Member Order
-    Union member order is preserved. When a value matches multiple member types, the first matching
-    member in the source declaration is chosen.
+    Union member order is preserved.  A value whose own type is the type of a member is accepted as it is, whatever
+    the order of the members: a scalar value (ex: an \c int for <tt>union\<float, int\></tt>, a string for
+    <tt>union\<softint, string\></tt>, a date for <tt>union\<softstring, date\></tt>; a member of a soft type or of
+    another type of the value's base type keeps it too, as an int for <tt>union\<float, softint\></tt> or
+    <tt>union\<float, timeout\></tt>, and so does a member of a union that is a member, such as a typedef of a union),
+    an @ref enums "enum" value (also of an enum that a module declares) for a union of the enum, and a list or a hash
+    whose type is the type of a member, or for a list or hash member with no element type (ex: a hash for
+    <tt>union\<softlist\<auto\>, hash\<auto\>\></tt>, a \c list<int> for
+    <tt>union\<list\<float\>, list\<int\>\></tt>).  A value whose type is not the type of a member is converted
+    by the first member in the source declaration that accepts it (ex: an \c int for
+    <tt>union\<float, number\></tt> becomes a \c float, a \c list<int> for
+    <tt>union\<list\<float\>, list\<number\>\></tt> becomes a \c list<float>, and a value of a type that a soft
+    member converts, such as a string for <tt>union\<softint, softfloat\></tt>, is converted by the first soft
+    member).  A @ref cast "cast" to a union follows the same rule: <tt>cast\<union\<float, int\>\>(1)</tt> gives the
+    \c int \c 1, and
+    <tt>cast\<union\<int, float\>\>(1.5)</tt> the \c float \c 1.5.
 
     @par Or-Nothing Unions
     The or-nothing modifier allows the union to also accept NOTHING:

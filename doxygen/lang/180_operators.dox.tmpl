@@ -2621,9 +2621,19 @@ if (x || y)
     union with no value is therefore assigned the value of the \a expression, which the union must accept, or
     \c RUNTIME-TYPE-ERROR is raised; ex:
     - <tt>*union&lt;int, float&gt; u; u += 2.5;</tt> gives \c 2.5
-    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2.0
+    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2 (the union keeps a value of a member type as it is: see
+      @ref union_type "union types")
     - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u += 2;</tt> gives \c 2
     - <tt>*union&lt;int, float&gt; u; u += 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
+    @note An int in a union \a lvalue and a float or number \a expression are added as the
+    @ref plus_operator "+ operator" adds them when a member of the union has the type of the result (ex: \c float or
+    \c softfloat for a float, \c number for a number), and the union keeps the result:
+    <tt>union&lt;float, int&gt; u = 1; u += 0.5;</tt> gives \c 1.5; otherwise the \a expression is added as an int,
+    as for an int \a lvalue: <tt>union&lt;int, string&gt; u = 1; u += 0.5;</tt> and
+    <tt>union&lt;int, float&gt; u = 1; u += 2.5n;</tt> give \c 1 and \c 3 (a union with no value is assigned the
+    \a expression instead, which the union must accept, as above); the same applies to the
+    @ref minus_equals_operator "-= operator"
 
     <hr>
     @subsection minus_equals_operator Minus Equals Operator (-=)
@@ -2664,6 +2674,11 @@ if (x || y)
     - <tt>*union&lt;int, float&gt; u; u -= 2.5;</tt> gives \c -2.5
     - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u -= 2;</tt> gives \c -2
     - <tt>*union&lt;int, float&gt; u; u -= 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
+    @note An int in a union \a lvalue and a float or number \a expression are subtracted as the
+    @ref minus_operator "- operator" subtracts them when a member of the union has the type of the result, and as an
+    int otherwise (see @ref compound_assignment_union_nothing "+="): <tt>union&lt;float, int&gt; u = 1; u -= 0.5;</tt>
+    gives \c 0.5, and <tt>union&lt;int, string&gt; u = 1; u -= 0.5;</tt> gives \c 1
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)

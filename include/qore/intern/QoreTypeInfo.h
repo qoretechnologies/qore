@@ -150,6 +150,26 @@ public:
         return accept_vec.size() == 1;
     }
 
+    //! returns true if this is a union with a member whose type is the value's own type
+    /** A member that comes before it could accept the value by converting it; the union accepts it as it is, whatever
+        the order of its members (qore#6407).  Called only before a conversion, so plain types pay nothing for it, and
+        a union whose members have no exact type for the value's base type \a t (n.getType()) pays only a mask test.
+    */
+    DLLLOCAL bool unionAcceptsExactly(const QoreValue& n, qore_type_t t) const {
+        uint64_t bit = static_cast<uint64_t>(t) < 64 ? (1ull << t) : 0;
+        if (!(union_exact_mask & bit)) {
+            return false;
+        }
+        // a member of a plain scalar type keeps a value of that type (an enum value has the base type of its enum)
+        if ((union_scalar_mask & bit) && !n.isEnum()) {
+            return true;
+        }
+        return unionAcceptsExactlyImpl(n);
+    }
+
+    //! returns true if \a ti is a union with an enum type that accepts the enum value \a n (qore#6277, qore#6407)
+    DLLLOCAL static bool unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& n);
+
     DLLLOCAL bool acceptsRuntimeValueWithoutFilter(const QoreValue& n) const {
         if (n.isEnum()) {
             return false;
@@ -1282,6 +1302,12 @@ protected:
         qore_get_type_identity_serial()
     */
     uint64_t identity_serial = 0;
+    //! for a union type, the base value types (bit n for type n < 64) that one of its members has exactly (qore#6407)
+    uint64_t union_exact_mask = 0;
+    //! for a union type, the base value types (as above) that a member of the plain scalar type has (ex: int)
+    uint64_t union_scalar_mask = 0;
+
+    DLLLOCAL bool unionAcceptsExactlyImpl(const QoreValue& n) const;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
@@ -4526,6 +4552,15 @@ public:
             members(std::move(members)) {
     }
 
+    //! records the member types that a value of the type is accepted as, given the value types of the members
+    /** Called when the union type is made, outside the lock of the type caches that get_value_type() takes
+        (qore#6407)
+    */
+    DLLLOCAL void initExactMembers(const type_vec_t& value_types);
+
+    //! returns true if a member of the union has the value's own type (see unionAcceptsExactly())
+    DLLLOCAL bool hasExactMember(const QoreValue& n) const;
+
     //! Returns true if this is an or-nothing union type
     DLLLOCAL bool isOrNothing() const {
         return orNothing;
@@ -4543,6 +4578,9 @@ protected:
     bool orNothing;  //!< true if this union type accepts NOTHING
     //! the member types as declared, without duplicates
     const type_vec_t members;
+    //! the value types of the members (without NOTHING), which a value of one of them is accepted as (qore#6407)
+    type_vec_t exact_members;
+
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
         qore_string_private::get(str)->concat(&tname);

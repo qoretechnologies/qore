@@ -1,0 +1,48 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#! @file UnionExactModule.qm a module with an enum and unions of it, used by union-exact-match-worker.qr
+
+%modern
+
+module UnionExactModule {
+    version = "1.0";
+    desc = "unions of an enum that a module declares; used by union-exact-match.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+#! the namespace of the module
+public namespace UnionExactModule {
+#! an enum of the module, which a Program that imports the module holds a copy of
+public enum MI : int {
+    One = 1,
+    Two = 2,
+}
+
+#! unions of the module's enum in both member orders
+public hashdecl MH {
+    union<int, MI> ie;
+    union<MI, int> ei;
+}
+
+#! returns the value as a union<int, MI>
+public union<int, MI> sub mod_ret_ie(MI e) {
+    return e;
+}
+
+#! returns the value as a union<MI, int>
+public union<MI, int> sub mod_ret_ei(MI e) {
+    return e;
+}
+
+#! returns the value given as a union<int, MI>
+public auto sub mod_param_ie(union<int, MI> v) {
+    return v;
+}
+
+#! returns a local union<int, MI> holding an enum value
+public auto sub mod_local_ie() {
+    union<int, MI> u = MI::Two;
+    return u;
+}
+}
