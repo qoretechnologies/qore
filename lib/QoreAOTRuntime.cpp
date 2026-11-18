@@ -7619,6 +7619,30 @@ static bool qore_aot_check_ir_value_ids(const QoreIRFunction& func, std::string&
     return true;
 }
 
+//! Sets the runtime locations of the instructions of deserialized IR (QoreIRInstruction::stmt_loc)
+/** The IR does not record the statements of its instructions: each instruction takes its own location, the location
+    of the instruction before it in its block where both have the same lines, so that the runtime location is stored
+    when the lines change (qore#6646)
+*/
+static void qore_ir_set_deserialized_statement_locations(QoreIRFunction& func) {
+    for (auto& block : func.blocks) {
+        const QoreProgramLocation* prev = nullptr;
+        for (auto& inst : block->instructions) {
+            const QoreProgramLocation* loc = inst->loc;
+            if (!loc) {
+                continue;
+            }
+            if (prev && prev->start_line == loc->start_line && prev->end_line == loc->end_line
+                    && prev->getFile() == loc->getFile()) {
+                inst->stmt_loc = prev;
+            } else {
+                inst->stmt_loc = loc;
+                prev = loc;
+            }
+        }
+    }
+}
+
 std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr,
@@ -8287,6 +8311,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         error = "AOT IR verification failed in '" + func->name + "': " + error;
         return nullptr;
     }
+    qore_ir_set_deserialized_statement_locations(*func);
     return func;
 }
 

@@ -9548,18 +9548,21 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     if (!loc_cache_ptr || !stmt_cache_ptr) {
         return;
     }
-    if (!inst->loc || inst->loc->start_line <= 0) {
+    // the runtime location of the instruction (QoreIRInstruction::stmt_loc), stored when it changes: not when the
+    // line changes, as a statement can start on the line of the statement or the block that contains it (qore#6646)
+    const QoreProgramLocation* loc = inst->stmt_loc;
+    if (!loc || loc->start_line <= 0) {
         return;
     }
-    if (inst->loc->start_line == last_runtime_line) {
+    if (loc == last_runtime_loc) {
         return;
     }
-    last_runtime_line = inst->loc->start_line;
+    last_runtime_loc = loc;
 
     if (aot_mode) {
         // AOT mode: store the location that the image holds, inline, as the JIT stores the location pointer
         builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)), stmt_cache_ptr);
-        builder->CreateStore(getAotLocationConstant(inst->loc, module), loc_cache_ptr);
+        builder->CreateStore(getAotLocationConstant(loc, module), loc_cache_ptr);
     } else {
         // JIT mode: inline store of statement + location pointers; in a function of a debuggable program, the
         // statement is set by the step hook of each statement instead (see emitDebugStepHook())
@@ -9568,7 +9571,7 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
                 stmt_cache_ptr);
         }
         llvm::Value* loc_val = builder->CreateIntToPtr(
-            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
+            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(loc)),
             llvm::PointerType::getUnqual(ctx));
         builder->CreateStore(loc_val, loc_cache_ptr);
     }
@@ -14596,9 +14599,9 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     // mid-native-frame); routes to the instruction's exception target or the
     // function-level error-return block.
     emitExceptionCheck(module, llvm_func, inst);
-    // the operation then runs in its own location if it starts on another line, as after a DebugStatement instruction
-    if (folded_host && folded_host->loc && inst->loc && folded_host->loc->start_line != inst->loc->start_line) {
-        emitRuntimeLocationStore(folded_host->loc);
+    // the operation then runs in its own runtime location if it differs, as after a DebugStatement instruction
+    if (folded_host && folded_host->stmt_loc && inst->loc && folded_host->stmt_loc != inst->loc) {
+        emitRuntimeLocationStore(folded_host->stmt_loc);
     }
     builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
@@ -15785,7 +15788,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
     call_site_cache_ptr = nullptr;
-    last_runtime_line = -1;
+    last_runtime_loc = nullptr;
     // the thread's runtime location slots and its data for the frames of native calls, got with one call
     // (QoreNativeEntrySlots)
     {
@@ -17250,8 +17253,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         builder->SetInsertPoint(llvm_block);
-        // a block is entered from predecessors at any line, so its first location is always stored
-        last_runtime_line = -1;
+        // a block is entered from predecessors in any location, so its first location is always stored
+        last_runtime_loc = nullptr;
 
         // Track the IR block being lowered so the debug-step hook (issue #5352) can
         // read its name to skip per-statement events in ".cond" blocks.

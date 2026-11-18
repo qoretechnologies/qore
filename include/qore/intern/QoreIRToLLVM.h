@@ -1745,7 +1745,8 @@ private:
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
     llvm::Value* call_site_cache_ptr = nullptr;
-    int last_runtime_line = -1;             //!< Last source line emitted for location tracking
+    //! the runtime location (QoreIRInstruction::stmt_loc) that the code of the block being lowered stored last
+    const QoreProgramLocation* last_runtime_loc = nullptr;
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
     //! module, or nullptr if `loc` has no line

@@ -5335,6 +5335,7 @@ private:
                 for (const auto& inst_ptr : helper->blocks.front()->instructions) {
                     if (inst_ptr && inst_ptr->loc) {
                         call->loc = inst_ptr->loc;
+                        call->stmt_loc = inst_ptr->stmt_loc;
                         call->cached_start_line = inst_ptr->cached_start_line;
                         break;
                     }

@@ -1640,7 +1640,20 @@ public:
     // debug line-change gate below reports the wrong line
     int32_t cached_start_line;
     QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
+    //! the source location of the instruction: of the expression or the statement that it was lowered from (the
+    //! call site of a call, the line of the debugger's step events and of native debug information)
     const QoreProgramLocation* loc = nullptr;
+    //! the runtime location of the instruction: the location of the innermost statement whose code it is, which the
+    //! AST interpreter makes the thread's runtime location while the statement runs (AbstractStatement::exec()), and
+    //! which exceptions take (see @ref exception_location "the location of an exception"); nullptr for code outside
+    //! the statements of the function, which keeps the runtime location that it finds (qore#6646)
+    /** Set by the IR builder from the statement being lowered (QoreIRBuilder::setStatementLocation()); an instruction
+        that an analysis creates in place of another takes the location of the one it replaces.  The IR interpreter
+        and native code store it when it changes, not when the line changes: a statement and the statement or block
+        that contains it can start on the same line.  It is not serialized: deserialized IR takes it from the
+        instruction's own location (qore_ir_set_deserialized_statement_locations()).
+    */
+    const QoreProgramLocation* stmt_loc = nullptr;
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;

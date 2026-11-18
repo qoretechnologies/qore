@@ -1168,6 +1168,11 @@ private:
         //! cleanups of the enclosing blocks and the handler that encloses them, as when the block ends (qore#6084)
         QoreIRBasicBlock* outer_exception_target = nullptr;
         const QoreProgramLocation* loc = nullptr;  //!< location for cleanup instructions
+        //! the runtime location of the cleanup: the location of the statement whose code the entry's block is, where
+        //! the block was entered (QoreIRBuilder::getStatementLocation()); an exit that leaves the block from a
+        //! statement in it runs the cleanup in this location, as the AST interpreter ends the block once the
+        //! statement in it has ended (qore#6646)
+        const QoreProgramLocation* stmt_loc = nullptr;
         QoreIRValue ref_foreach_state;             //!< state handle for RefForeach/RefForeachRecord
         //! for a RefForeach entry: the exception target outside the statement, where an exception raised by the
         //! write-back of the list goes (an enclosing try block's handler, or nullptr to leave the frame; qore#6197)
