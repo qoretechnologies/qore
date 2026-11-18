@@ -10,12 +10,12 @@
 %exec-class TypeRetirementReloadTest
 
 #! Values typed with the declarations of a deleted Program accept the values of a reloaded Program of the same source
-/** A Program is deleted while values typed with its declarations live on (list<Foo>, list<hash<HD>>, list<E>, as a
-    server keeps typed data across reloads of the same code); a Program parsed from the same source then has equal
-    declarations, whose values the kept values accept, and an empty list<Foo> is a list<Base> of the new Program, as Foo
-    inherits Base in both.  The declarations of the deleted Program are freed once no thread can read them, and the
-    derived types name their tombstones, which are equal to them (issue #6419); in debug builds, they are freed before
-    the new Program's values are added.
+/** A Program is deleted while values typed with its declarations live on (list<Foo>, list<hash<HD>>, list<E>, a list
+    of a union of them, as a server keeps typed data across reloads of the same code); a Program parsed from the same
+    source then has equal declarations, whose values the kept values accept, and an empty list<Foo> is a list<Base> of
+    the new Program, as Foo inherits Base in both.  The declarations of the deleted Program are freed once no thread
+    can read them, and the derived types name their tombstones, which are equal to them (issue #6419); in debug builds,
+    they are freed before the new Program's values are added.
 */
 class TypeRetirementReloadTest inherits QUnit::Test {
     public {
@@ -47,7 +47,8 @@ list<auto> sub mk() {
     list<Foo> a = ();
     list<hash<HD>> b = ();
     list<E> c = ();
-    return (a, b, c);
+    list<union<hash<HD>, Foo, int>> d = ();
+    return (a, b, c, d);
 }
 
 Foo sub obj() { return new Foo(); }
@@ -100,6 +101,18 @@ int sub as_base(list<auto> l) {
         l += b.callFunction("ev");
         assertEq("list<enum<E>>", l.fullType());
         assertEq(1, l.size());
+
+        # a union that names the deleted Program's declarations accepts the reloaded Program's values, whose types are
+        # not its exact members
+        l = kept[3];
+        l += b.callFunction("hdv");
+        l += b.callFunction("obj");
+        l += 2;
+        assertEq(3, l.size());
+        assertEq(1, l[0].a);
+        assertEq(1, l[1].x);
+        assertEq(2, l[2]);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { list<auto> u = kept[3]; u += "string"; });
 
         # a value of an unrelated type is still refused
         l = kept[0];
