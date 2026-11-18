@@ -2244,6 +2244,10 @@
     - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
       that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
       ancestors; it now grows about with the square of the length (issue #6106)
+    - the errors of a data provider option whose value or type is a hash, list or object no longer contain its value,
+      and the debug messages of the Empathic Building module give response headers with their credentials redacted
+      and URLs with their passwords masked (see @ref dataprovider_v3_12;
+      <a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)

@@ -7382,6 +7382,51 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
         self += checkOptions("CONSTRUCTOR-OPTION-ERROR", option_desc, options, required_options);
     }
 
+    #! Returns True if an option value, or the option's type, is a hash, list or object, which can hold credentials
+    /** @param type the option's type; @ref nothing if the option has no type
+        @param value the option value
+
+        @return @ref True if the value is not given in an error of an option that is not sensitive
+    */
+    private static bool mayHoldCredentials(*AbstractDataProviderType type, auto value) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+            case NT_LIST:
+            case NT_OBJECT:
+                return True;
+        }
+        if (!type) {
+            return False;
+        }
+        string base = type.getBaseTypeName();
+        return exists type.getFields() || base == "hash" || base == "list" || base == "object";
+    }
+
+    #! Returns the path of the field of a hash type that refuses its value, or @ref nothing
+    /** Called only after the type has refused the value, to name the field in an error without giving the value,
+        which can hold credentials
+
+        @param type the type that refused the value
+        @param value the value refused
+
+        @return the names of the fields, from the outermost, of the field that refuses its value; @ref nothing if the
+        value is not a hash, the type has no fields, or no field refuses its value
+    */
+    private static *list<string> getRefusedFieldPath(AbstractDataProviderType type, auto value) {
+        if (value.typeCode() != NT_HASH) {
+            return;
+        }
+        *hash<string, AbstractDataField> fields = type.getFields();
+        foreach hash<auto> i in (fields.pairIterator()) {
+            AbstractDataField field = i.value;
+            try {
+                field.acceptsValue(value{i.key});
+            } catch (hash<ExceptionInfo> ex) {
+                return (i.key,) + (AbstractDataProvider::getRefusedFieldPath(field.getType(), value{i.key}) ?? ());
+            }
+        }
+    }
+
     #! Verifies options according to the option
     /**
         @param err The error code in case of any errors; this is the exception code (\c err) that will be raised
@@ -7433,10 +7478,22 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     # a type that is not part of this module may still refuse a value with RUNTIME-TYPE-ERROR
                     if (ex.err == "TYPE-VALUE-ERROR" || ex.err == "RUNTIME-TYPE-ERROR") {
                         # the value, and the type's own error, which describes the value too, are given only for an
-                        # option that is not marked sensitive: the value of a sensitive option can be a credential
+                        # option that is not marked sensitive and whose value or type is not a hash, list or object,
+                        # which can hold credentials (ex: headers); the field of a hash that refused its value is
+                        # named instead
+                        string detail = "";
+                        if (!i.value.sensitive) {
+                            if (AbstractDataProvider::mayHoldCredentials(type, options{i.key})) {
+                                *list<string> path = AbstractDataProvider::getRefusedFieldPath(type, options{i.key});
+                                if (path) {
+                                    detail = sprintf(": field %y refused its value", path.join("."));
+                                }
+                            } else {
+                                detail = sprintf(" (value %y): %s: %s", options{i.key}, ex.err, ex.desc);
+                            }
+                        }
                         type_error = sprintf("option %y of type %y cannot be assigned a value of type %y%s",
-                            i.key, type.getName(), options{i.key}.type(), i.value.sensitive
-                                ? "" : sprintf(" (value %y): %s: %s", options{i.key}, ex.err, ex.desc));
+                            i.key, type.getName(), options{i.key}.type(), detail);
                         continue;
                     }
                     rethrow;
@@ -7458,9 +7515,11 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     }
                 }
                 if (!allowed) {
-                    # the value of a sensitive option is never given
+                    # the value of a sensitive option, or a value that can hold credentials, is never given
                     error("OPTION-VALUE-ERROR", "option %y does not accept %s; possible values: %y",
-                        i.key, i.value.sensitive ? "the value given" : sprintf("value %y", options{i.key}),
+                        i.key, (i.value.sensitive || AbstractDataProvider::mayHoldCredentials(NOTHING, options{i.key}))
+                            ? "the value given"
+                            : sprintf("value %y", options{i.key}),
                         (map $1.value, i.value.allowed_values));
                 }
             }
