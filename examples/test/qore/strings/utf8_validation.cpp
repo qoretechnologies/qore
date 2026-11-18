@@ -93,8 +93,34 @@ static Expected reference(const unsigned char* p, size_t len) {
     return {len == n ? n : 0, false};
 }
 
+//! the UTF-8 encoding's character functions use the same definition as the validator (qore#6604): the length of
+//! the character, 0 for a malformed one, minus its length for a truncated one, and the string length with its
+//! validity
+static void check_encoding(const unsigned char* p, size_t len, const Expected& e) {
+    const char* c = reinterpret_cast<const char*>(p);
+    qore_offset_t cl = QCS_UTF8->getCharLen(c, len);
+    bool invalid = false;
+    size_t chars = QCS_UTF8->getLength(c, c + len, invalid);
+    if (e.valid == 0 && !e.incomplete) {
+        require(cl == 0, "getCharLen() of malformed " + hex(p, len) + ": " + std::to_string(cl));
+        require(invalid, "getLength() of malformed " + hex(p, len) + " valid");
+        return;
+    }
+    if (e.incomplete) {
+        // minus the length of the whole character, which the lead byte gives
+        qore_offset_t full = p[0] < 0xe0 ? 2 : (p[0] < 0xf0 ? 3 : 4);
+        require(cl == -full, "getCharLen() of truncated " + hex(p, len) + ": " + std::to_string(cl));
+        require(invalid, "getLength() of truncated " + hex(p, len) + " valid");
+        return;
+    }
+    require(cl == static_cast<qore_offset_t>(len),
+        "getCharLen() of well-formed " + hex(p, len) + ": " + std::to_string(cl));
+    require(!invalid && chars == 1, "getLength() of well-formed " + hex(p, len) + ": " + std::to_string(chars));
+}
+
 static void check(const unsigned char* p, size_t len) {
     Expected e = reference(p, len);
+    check_encoding(p, len, e);
     bool incomplete = true;
     size_t valid = IconvHelper::validUtf8Prefix(reinterpret_cast<const char*>(p), len, incomplete);
     // a sequence longer than one character: the validator also checks the rest, the reference only the first
@@ -160,6 +186,55 @@ static void check_all() {
     require(IconvHelper::validUtf8Prefix(truncated, strlen(truncated), incomplete) == 2 && incomplete,
         "prefix before a truncated sequence");
     require(IconvHelper::validUtf8Prefix("", 0, incomplete) == 0 && !incomplete, "empty input");
+}
+
+//! a character after any number of ASCII bytes, and text with short ASCII runs between other characters: the validator
+//! and the string length give the result of the reference (qore#6604)
+static void check_ascii_runs() {
+    struct Seq {
+        const char* bytes;
+        // the result after the ASCII prefix: 1 = valid, 0 = malformed, -1 = truncated at the end of the input
+        int kind;
+    };
+    static const Seq seqs[] = {
+        {"\xc3\xa9", 1}, {"\xe2\x82\xac", 1}, {"\xf0\x9f\x98\x80", 1}, {"\x80", 0}, {"\xc0\xaf", 0},
+        {"\xed\xa0\x80", 0}, {"\xf4\x90\x80\x80", 0}, {"\xff", 0}, {"\xc3", -1}, {"\xe2\x82", -1},
+    };
+    for (size_t k = 0; k <= 24; ++k) {
+        for (const Seq& q : seqs) {
+            for (size_t after : {static_cast<size_t>(0), static_cast<size_t>(3), static_cast<size_t>(11)}) {
+                // a truncated sequence is truncated only at the end of the input
+                if (q.kind < 0 && after) {
+                    continue;
+                }
+                std::string in = std::string(k, 'a') + q.bytes + std::string(after, 'b');
+                bool incomplete = q.kind >= 0;
+                size_t valid = IconvHelper::validUtf8Prefix(in.data(), in.size(), incomplete);
+                std::string label = std::to_string(k) + " ASCII bytes + " +
+                    hex(reinterpret_cast<const unsigned char*>(q.bytes), strlen(q.bytes)) + " + " +
+                    std::to_string(after);
+                if (q.kind == 1) {
+                    require(valid == in.size() && !incomplete, "valid " + label);
+                } else {
+                    require(valid == k && incomplete == (q.kind < 0), "prefix of " + label);
+                }
+                bool invalid = false;
+                size_t chars = QCS_UTF8->getLength(in.data(), in.data() + in.size(), invalid);
+                require(invalid == (q.kind != 1) && (q.kind != 1 || chars == k + 1 + after), "getLength() of " + label);
+            }
+        }
+    }
+    // short ASCII runs between other characters, then an invalid byte after them
+    std::string text;
+    for (int i = 0; i < 64; ++i) {
+        text += "caf\xc3\xa9 na\xc3\xafve r\xc3\xa9sum\xc3\xa9 ";
+    }
+    bool incomplete = true;
+    require(IconvHelper::validUtf8Prefix(text.data(), text.size(), incomplete) == text.size() && !incomplete,
+        "short ASCII runs");
+    std::string bad = text + "x\x80";
+    require(IconvHelper::validUtf8Prefix(bad.data(), bad.size(), incomplete) == text.size() + 1 && !incomplete,
+        "an invalid byte after short ASCII runs");
 }
 
 //! clears a cancellation request of the current thread
@@ -243,6 +318,7 @@ int main() {
     int status = 0;
     try {
         check_all();
+        check_ascii_runs();
         check_cancellation();
         check_conversion();
     } catch (const std::exception& error) {
