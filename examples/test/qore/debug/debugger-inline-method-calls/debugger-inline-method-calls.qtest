@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - threads attaching and detaching a debugger, and JIT and AOT code generation of the debugged calls
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+%requires ../../../TestInterpreter.qm
+
+%exec-class DebuggerInlineMethodCallsTest
+
+#! The method calls of a frame that runs when a debugger attaches are debugged as the AST interpreter debugs them (#6473)
+/** InlineCallsDebugger.q calls run() of InlineCallsTarget.q, which calls a method and a static method in a loop, once
+    without a debugger, and once with a debugger that run() attaches in its iteration i == 2 and removes in its
+    iteration i == 4.  The IR interpreter, with IR execution and on the IR tier of tiered execution, ran the calls of
+    run() inline once it had resolved their call sites, also while the debugger was attached: the callees had no
+    frame of their own (the debugger saw the variables of run() at their statements) and ignored the debugger's break
+    and continue requests.  Every execution mode, and the script compiled with qcc, now reports the step events, the
+    callees' own frame variables and the outcome of the requests of the AST interpreter.
+
+    With a DEBUG build of the library, the call sites of run() are suspended while the debugger is attached and inline
+    their calls again once it is removed.
+*/
+class DebuggerInlineMethodCallsTest inherits QUnit::Test {
+    public {
+        #! the results of run() with each request
+        const Results = {
+            "none": (30, 300, 31, 301, 32, 302, 33, 303, 34, 304, 35, 305),
+            # the request leaves the loop of each callee at its first iteration, before the statement runs
+            "break": (30, 300, 31, 301, 2, 2, 3, 3, 34, 304, 35, 305),
+            # the request skips the statement in each iteration of the loop of each callee
+            "continue": (30, 300, 31, 301, 2, 2, 3, 3, 34, 304, 35, 305),
+        };
+
+        #! the step events in a callee with each request: its first statement, then the statement of its loop
+        const LoopSteps = {
+            "none": 3,
+            "break": 1,
+            "continue": 3,
+        };
+
+        #! the frame variables of the callees at their first statements, in each of the two iterations debugged
+        const Frames = ("m_first:a,argv,self,x", "s_first:a,argv,y", "m_first:a,argv,self,x", "s_first:a,argv,y");
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("DebuggerInlineMethodCalls", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        dir = get_script_dir();
+        foreach string request in (keys Results) {
+            addTestCase(request, \checkRequest(), (request,));
+        }
+        set_return_value(main());
+    }
+
+    #! returns the output line of InlineCallsDebugger.q expected for a request
+    private static string getExpected(string request) {
+        list<string> steps = ();
+        for (int i = 0; i < 2; ++i) {
+            foreach string callee in (("m", "s")) {
+                push steps, callee + "_first";
+                steps += map callee + "_body", xrange(LoopSteps{request});
+            }
+        }
+        return sprintf("RESULT:%y STEPS:%y FRAMES:%y", Results{request}, steps, Frames);
+    }
+
+    #! checks the output of InlineCallsDebugger.q
+    /** @param ir True if run() runs in the IR interpreter, whose call sites are then counted with a DEBUG build;
+        False if it does not; NOTHING if either can be the case (the execution mode is chosen by the executable)
+    */
+    private checkOutput(string request, string label, string out, *bool ir) {
+        *list<*string> line = out =~ x/^(RESULT:.*)$/m;
+        assertEq(getExpected(request), line ? line[0] : out, label);
+        *list<*string> sites = out =~ x/^SITES:([0-9]+) ([0-9]+) (-?[0-9]+)$/m;
+        if (!Option::HAVE_LIBRARY_DEBUGGING || !exists ir) {
+            return;
+        }
+        assertEq(3, sites.size(), label + ": the call sites are counted");
+        if (ir) {
+            # the call sites of the method and of the static method in run()
+            assertEq(2, sites[0].toInt(), label + ": the call sites are suspended while the debugger is attached");
+            assertEq(0, sites[1].toInt(), label + ": no call site is suspended once the debugger is removed");
+            assertGe(2, sites[2].toInt(), label + ": the call sites inline their calls again");
+        } else {
+            assertEq(0, sites[0].toInt(), label + ": no call site of run() runs in the IR interpreter");
+        }
+    }
+
+    #! runs a request in every execution mode, on the IR tier and compiled with qcc
+    checkRequest(string request) {
+        string args = sprintf("%s/InlineCallsDebugger.q %s/InlineCallsTarget.q %s", dir, dir, request);
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                qore_bin, mode, args));
+            ExecModeHarness::check_native(r);
+            checkOutput(request, sprintf("%s: %s", request, mode), r.out, mode == "ir");
+        }
+
+        # on the IR tier, the calls of the callees run on the AST tier while the debugger is attached, and only they:
+        # run() runs on the IR tier
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=tiered %s",
+            qore_bin, args), NOTHING, ExecModeHarness::IRTierEnv);
+        string label = sprintf("%s: %s", request, ExecModeHarness::IRTierName);
+        assertEq((), (select r.trace, ExecModeHarness::is_native_compilation($1)), label + ": no native code");
+        assertEq(("[ir-ast-tier] m", "[ir-ast-tier] s", "[ir-ast-tier] m", "[ir-ast-tier] s"),
+            (select r.trace, ExecModeHarness::is_ast_trace_line($1)), label + ": the calls on the AST tier");
+        checkOutput(request, label, r.out, True);
+
+        # the debugger's script compiled ahead of time; the target runs in the default execution mode
+        if (!qcc_bin) {
+            return;
+        }
+        TmpDir tmp("qore-debugger-inline-method-calls-");
+        string exe = tmp.path + "/dbg";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O2 -o %s %s/InlineCallsDebugger.q 2>&1", libqore_dir,
+            qcc_bin, exe, dir));
+        assertTrue(is_executable(exe), "qcc: the executable is built: " + out);
+        out = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s/InlineCallsTarget.q %s",
+            libqore_dir, libqore_dir, exe, dir, request));
+        checkOutput(request, request + ": qcc", out);
+    }
+}

@@ -4378,7 +4378,10 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
     // Exactly one thread fills the payload; the rest take the generic path this pass.
     QoreIRInlineStateClaim claim(inst->inline_ir_state, payload_claimed);
     if (!claim.held()) {
-        return QORE_IR_INLINE_UNCHECKED;
+        // a state suspended while a debugger is attached to the callee's Program cannot be claimed (issue #6473)
+        return state <= QORE_IR_INLINE_SUSPENDED_DIRECT_PARAMS
+            ? qore_ir_resume_inline_state(inst->inline_ir_state, inst->cached_callee_ir)
+            : QORE_IR_INLINE_UNCHECKED;
     }
 
     if (!variant || inst->has_ref_args || !method) {
@@ -4423,8 +4426,7 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
         && nargs >= static_cast<int>(sig->numParams())
         && qore_ir_callee_single_variant(qore_method_private::get(*method)->getFunction())
         ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
-    inst->inline_ir_state.store(eligible_state, std::memory_order_release);
-    return eligible_state;
+    return qore_ir_publish_inline_state(inst->inline_ir_state, inst->inline_ir_recorded, eligible_state, callee_ir);
 }
 
 //! ensureInterpreterResolvedInlineIRCallState() out of line, for the call sites that inline its fast path
@@ -6362,6 +6364,15 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     if (state == QORE_IR_INLINE_INELIGIBLE) {
         return false;
     }
+    if (state <= QORE_IR_INLINE_SUSPENDED_DIRECT_PARAMS) {
+        // a call site suspended while a debugger was attached to the callee's Program (issue #6473); the callee is
+        // read only for the receiver's class that the cache names, which keeps it alive, as for an eligible state
+        if (inst->cached_object_class == object_class && inst->cached_method
+                && inst->cached_object_class_serial == qore_class_private::get(*object_class)->getInstanceSerial()) {
+            qore_ir_resume_inline_state(inst->inline_ir_state, inst->cached_callee_ir);
+        }
+        return false;
+    }
 
     const QoreMethod* method = inst->method;
     const AbstractQoreFunctionVariant* variant = inst->variant;
@@ -6449,7 +6460,8 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         QoreProgram* caller_pgm, uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         void* thread_data, bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     int8_t inline_state = caller_pgm
-        ? ensureInterpreterResolvedInlineIRCallState(inst, inst->method, inst->variant, caller_pgm, nargs, false) : -1;
+        ? ensureInterpreterResolvedInlineIRCallStateFast(inst, inst->method, inst->variant, caller_pgm, nargs, false)
+        : -1;
     if (inline_state <= 0) {
         return false;
     }
@@ -23984,6 +23996,111 @@ QoreValue QoreIRInterpreter::evalLValueTernary(QoreIROpcode op, const QoreValue&
 
 // QoreIRInterpreterGivenArgs.cpp compiles this file again (see above): these functions are defined once
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
+namespace {
+//! The call sites whose eligible inline call state a debugger attaching to the callee's Program suspends (#6473)
+/** Keyed by the address of the instruction's state, with the address of the callee Program's attached debug program
+    (QoreIRFunction::source_dpgm_addr).  A state is published and resumed with the lock held and the debug program
+    checked under it, and qore_ir_suspend_inline_states() takes the lock after the debug program is set, so no state
+    is made eligible after the suspension has missed it.  The lock is held only by these functions and by the
+    destruction of a recorded call site, and takes no other lock.
+*/
+struct QoreIRInlineSiteRegistry {
+    std::mutex lck;
+    std::unordered_map<std::atomic<int8_t>*, const void*> sites;
+};
+
+QoreIRInlineSiteRegistry& qore_ir_inline_sites() {
+    // never destroyed: a call site can be destroyed after the static objects of the library
+    static QoreIRInlineSiteRegistry* reg = new QoreIRInlineSiteRegistry;
+    return *reg;
+}
+
+bool qore_ir_dpgm_attached(const void* dpgm_addr) {
+    return static_cast<const std::atomic<qore_debug_program_private*>*>(dpgm_addr)->load(
+        std::memory_order_acquire);
+}
+}
+
+QORE_INTERN_NOINLINE int8_t qore_ir_publish_inline_state(std::atomic<int8_t>& state, std::atomic<bool>& recorded,
+        int8_t eligible, const QoreIRFunction* callee) {
+    const void* dpgm_addr = callee->source_dpgm_addr;
+    if (!dpgm_addr) {
+        // the callee's Program cannot be debugged
+        state.store(eligible, std::memory_order_release);
+        return eligible;
+    }
+    // while a debugger is attached, the call is made by the call path, which runs the callee with the debugger; this
+    // is checked without the lock first, so that the calls made meanwhile do not wait for each other, and again with
+    // it, which orders the publication with qore_ir_suspend_inline_states()
+    if (qore_ir_dpgm_attached(dpgm_addr)) {
+        return QORE_IR_INLINE_UNCHECKED;
+    }
+    QoreIRInlineSiteRegistry& reg = qore_ir_inline_sites();
+    std::lock_guard<std::mutex> lock(reg.lck);
+    if (qore_ir_dpgm_attached(dpgm_addr)) {
+        return QORE_IR_INLINE_UNCHECKED;
+    }
+    reg.sites[&state] = dpgm_addr;
+    recorded.store(true, std::memory_order_release);
+    state.store(eligible, std::memory_order_release);
+    return eligible;
+}
+
+QORE_INTERN_NOINLINE int8_t qore_ir_resume_inline_state(std::atomic<int8_t>& state, const QoreIRFunction* callee) {
+    // a state is suspended only after it was published eligible, which published the payload with the callee; as in
+    // qore_ir_publish_inline_state(), the debugger is checked without the lock first
+    if (qore_ir_dpgm_attached(callee->source_dpgm_addr)) {
+        return QORE_IR_INLINE_UNCHECKED;
+    }
+    QoreIRInlineSiteRegistry& reg = qore_ir_inline_sites();
+    std::lock_guard<std::mutex> lock(reg.lck);
+    if (!qore_ir_dpgm_attached(callee->source_dpgm_addr)) {
+        int8_t suspended = state.load(std::memory_order_acquire);
+        if (suspended <= QORE_IR_INLINE_SUSPENDED_DIRECT_PARAMS) {
+            state.compare_exchange_strong(suspended, static_cast<int8_t>(-suspended - 2),
+                std::memory_order_acq_rel, std::memory_order_relaxed);
+        }
+    }
+    return QORE_IR_INLINE_UNCHECKED;
+}
+
+void qore_ir_forget_inline_state(std::atomic<int8_t>& state) {
+    QoreIRInlineSiteRegistry& reg = qore_ir_inline_sites();
+    std::lock_guard<std::mutex> lock(reg.lck);
+    reg.sites.erase(&state);
+}
+
+void qore_ir_suspend_inline_states(const void* dpgm_addr) {
+    QoreIRInlineSiteRegistry& reg = qore_ir_inline_sites();
+    std::lock_guard<std::mutex> lock(reg.lck);
+    for (auto& i : reg.sites) {
+        if (i.second != dpgm_addr) {
+            continue;
+        }
+        int8_t eligible = i.first->load(std::memory_order_acquire);
+        if (eligible > 0) {
+            i.first->compare_exchange_strong(eligible, static_cast<int8_t>(-eligible - 2),
+                std::memory_order_acq_rel, std::memory_order_relaxed);
+        }
+    }
+}
+
+#ifdef DEBUG
+void qore_ir_dbg_inline_site_states(int64& eligible, int64& suspended) {
+    eligible = suspended = 0;
+    QoreIRInlineSiteRegistry& reg = qore_ir_inline_sites();
+    std::lock_guard<std::mutex> lock(reg.lck);
+    for (auto& i : reg.sites) {
+        int8_t state = i.first->load(std::memory_order_acquire);
+        if (state > 0) {
+            ++eligible;
+        } else if (state <= QORE_IR_INLINE_SUSPENDED_DIRECT_PARAMS) {
+            ++suspended;
+        }
+    }
+}
+#endif
+
 QoreIRFunction::~QoreIRFunction() {
     // no eviction may run on the guard profiles once they are being freed (issue #6421)
     if (guard_profile_types) {
