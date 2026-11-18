@@ -1,0 +1,22 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain and requires DdMidLc before
+# its header: DdMidLc has the restriction, which its own header removes for the module it requires (qore#6351)
+
+%modern
+%requires DdMidLc
+
+module DdTopPre {
+    version = "1.0";
+    desc = "a module that requires a module declaring the domain before its header";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+public namespace DdTopPre {
+    public string sub run() {
+        return DdMidLc::run();
+    }
+}

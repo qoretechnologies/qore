@@ -456,6 +456,8 @@ static QoreString* get_include_file_name(char* file) {
 
     // if the filename begins with an environment variable, then try to do environment variable substitution
     if (file[0] == '$') {
+        // the file depends on the environment where the code is loaded (qore#6351)
+        qore_program_private::setLoadDependentParse(getProgram());
         QoreString* rv = new QoreString;
 
         QoreString var;
@@ -493,6 +495,8 @@ static QoreString* get_include_file_name(char* file) {
         }
     }
 
+    // found through a search path, the file depends on the environment where the code is loaded (qore#6351)
+    qore_program_private::setLoadDependentParse(getProgram());
     rv = findFileInEnvPath(file, "QORE_INCLUDE_DIR");
     if (!rv) {
         const char* pp = getProgram()->parseGetIncludePath();

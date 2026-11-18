@@ -462,7 +462,7 @@ thread_local QoreSocketDbgConnectFailure qore_socket_dbg_connect_failure = {-1, 
 
 //! Ends the connect failure that the hook models when the check of the connect returns
 struct QoreSocketDbgConnectFailureScope {
-    DLLLOCAL ~QoreSocketDbgConnectFailureScope() {
+    ~QoreSocketDbgConnectFailureScope() {
         qore_socket_dbg_connect_failure = {-1, 0};
     }
 };

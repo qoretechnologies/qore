@@ -213,7 +213,13 @@ This generalizes the existing Phase 1.5 init-expression outliner
    locals (transient `shared_locals`): the coordinator releases its
    reload storage of them (reload tracker, deferred slot, entry owner)
    right before the call and reloads them right after it, as around a
-   call that runs handlers out of line (`finalizeHandlerSites()`).
+   call that runs handlers out of line (`finalizeHandlerSites()`); only
+   for those that the helper can write (`written_shared_locals`: those
+   that an instruction of the region writes or that a handler declared
+   in the region references (see below), top-level locals, and those
+   that a reference, a closure or code evaluated through the AST can
+   reach), as a local that the helper only reads keeps its value across
+   the call (qore#6314).
    Otherwise that storage kept the value that the helper replaced in a
    shared local alive until the coordinator next reloaded the local, and
    its destructor ran late (qore#6300).  The locals of the function that
@@ -222,7 +228,8 @@ This generalizes the existing Phase 1.5 init-expression outliner
    instruction (`QoreIRFunction::collectOnBlockExitLocals()`; a region
    cannot hold a handler whose locals cannot be collected).  So a local
    declared before the region, or a parameter, that only a handler in
-   the region references there is shared: the coordinator releases its
+   the region references there is shared and counts as written by the
+   helper, which runs the handler: the coordinator releases its
    storage of the local before the call, and the value that the handler
    replaces is released at the assignment (qore#6545).  Closure-use
    locals are left out, as their values are not in reload storage.

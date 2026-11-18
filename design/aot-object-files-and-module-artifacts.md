@@ -426,7 +426,7 @@ of the module's image:
   is the record. The linker places it in a `PT_NOTE` segment, and it is marked
   `SHF_GNU_RETAIN`, so `--gc-sections` keeps it.
 
-The record is little-endian: magic `QAMI`, format version (3), payload size,
+The record is little-endian: magic `QAMI`, format version (4), payload size,
 then the module name, the dependency count and dependencies, the optional
 module count and requests, the count and names of the modules the module was
 compiled with (every module it requires, directly or not, and every module one
@@ -451,7 +451,24 @@ removes the declared domains from the restrictions, as its source loads them.
 A conditional directive before its header makes every entry `QMDR_INEXACT`, as
 what it requests there can depend on where it is loaded: the loader then loads
 every listed module with the restrictions of the loading code, relieving none
-(fail-closed; qore#6386).
+(fail-closed; qore#6386).  Then (version 4) follow the functional domains that
+the module declares in its header (a 64-bit value as two 32-bit words, low word first),
+the count and names of the dependencies that it requires only after its
+header, and the functional domains that its own code restricts (64-bit, as
+before; qore#6351): the dependencies of a module loaded as library code that it
+requires after its header inherit the restrictions without the declared
+domains, as the source's do.  That relief never applies to a module listed with
+`QMDR_BEFORE_HEADER`, and a record with a `QMDR_INEXACT` entry relieves nothing,
+neither with its declared domains nor with a relief from a module loading it:
+qcc then writes no post-header dependency and `QDOM_ALL` as the restricted
+domains, and the loader enforces both rules for any record.  The relief
+applies only to the load of the dependency itself (the load frame that is a
+direct child of the module's own, with the dependency's name), not to a load
+that the loading Program's code makes meanwhile (a callback or a constant of
+the dependency that runs it).  Both domain fields hold only functional domains
+(`QDOM_ALL`; the decoder refuses other bits), and the module's initialization
+refuses a module whose record declares other domains than its
+`MODULE_DOMAINS` section.
 
 When the restrictions refuse a module that a `%try-module` directive before
 the header requests, the qmod, compiled where the request succeeded and with no
@@ -462,11 +479,14 @@ the source continues without the module and fails or not by its own code (with
 
 Version 2 added the compiled-with and module path lists, version 3 the parse
 option list, which came with AOT format version 44
-(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), so that the format that a
-module reports tells which record it has. Every string is nonempty and
-contains no NUL; payloads are bounded to 16 MiB and 65,536 entries per list.
-`QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h` documents the
-layout.
+(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), and version 4 the three
+fields of the declared domains, with AOT format version 45
+(`QORE_AOT_MODULE_INFO_DOMAINS_VERSION`), so that the format that a module
+reports tells which record it has; a runtime reads only its own record version
+and refuses any other, asking for the module to be rebuilt. Every string is
+nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
+per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
+documents the layout.
 
 qcc adds the section as a constant global of the LLVM module
 (`addAOTModuleInfoSection()` in `lib/QoreAOT.cpp`) to the object that is linked

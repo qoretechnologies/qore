@@ -309,9 +309,12 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - FtpPortAcceptUnreferenced (#6525): each case runs in a child process started without an execution mode
         # - library-registry-origin (#6520): each case runs in a child process whose registering Program sets its own
         #   execution mode
+        # - aot-dependency-domains (#6351): its checks load modules from source and compiled with qcc in child
+        #   processes, as a module is loaded once in a process
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
+                                 "examples/test/qore/misc/aot-dependency-domains/aot-dependency-domains.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",

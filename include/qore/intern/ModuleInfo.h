@@ -43,6 +43,7 @@ extern "C" {
 
 #include <cstdio>
 #include <exception>
+#include <atomic>
 #include <string>
 #include <map>
 #include <set>
@@ -278,6 +279,11 @@ public:
         return trusted;
     }
 
+    //! returns the sequence number of the module's registration (see QoreModuleManager::getModuleRegistrationSeq())
+    DLLLOCAL uint64_t getRegistrationSeq() const {
+        return reg_seq;
+    }
+
     //! returns true if code that is not trusted loaded the module from outside the directories of library code
     /** Such a module is given only to code that is not trusted and has the same sandbox (see tenantOwner()); see
         QoreModuleManager::checkShadowingLoad()
@@ -425,6 +431,9 @@ protected:
 
     // true if the module is library code; see isTrusted()
     bool trusted = false;
+    // the sequence number of the module's registration (QoreModuleManager::addModule()): a module registered
+    // before the header of a module closed was not loaded by the code after the header (qore#6351)
+    uint64_t reg_seq = 0;
     // true once the module's load has been recorded on it (see QoreModuleManager::addModule())
     bool load_recorded = false;
     // true if code that is not trusted chose the module; see isTenantChosen()
@@ -703,6 +712,11 @@ public:
         QoreModuleLoadFrameHelper) is recorded on it; a module registered under a new name keeps it
     */
     DLLLOCAL void addModule(QoreAbstractModule* m);
+
+    //! returns the sequence number of the last module registration (see QoreAbstractModule::reg_seq; qore#6351)
+    DLLLOCAL uint64_t getModuleRegistrationSeq() const {
+        return module_reg_seq.load(std::memory_order_acquire);
+    }
 
     DLLLOCAL QoreAbstractModule* findModule(const char* name) {
         AutoLocker al(mutex);
@@ -1354,6 +1368,9 @@ protected:
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
 
+    //! the sequence number of the last module registration (qore#6351)
+    std::atomic<uint64_t> module_reg_seq{0};
+
     //! Returns the user modules that delUser() cannot delete yet, with the user modules that they require
     /** These are the user modules that AOT user modules require, which are left to cleanup(), and the given user
         modules imported into Programs that still hold data: Programs that binary modules own and delete only when they
@@ -1490,11 +1507,22 @@ protected:
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     /** @param restrictions the options that the module's directives gave its dependencies, in directive order, if
         known (from its module metadata, QoreAOTModuleFileInfo::dependency_restrictions): those modules are loaded
-        first, in that order, each with its options
+        first, in that order, each with its options (qore#6406)
+        @param relief_dom the domains that the dependencies do not inherit as restrictions from \a path_pgm: those
+        that a module loaded as library code declares in its header (qore#6351)
+        @param post_header_dependencies the dependencies that the module requires only after its header, which
+        inherit the restrictions without \a relief_dom; the others inherit them with it, also one that \a restrictions
+        lists with QMDR_BEFORE_HEADER
+        @param restricted_dom the domains that the module restricts itself, which a relief in effect from a module
+        loading it does not cover for its dependencies
+
+        If an entry of \a restrictions has QMDR_INEXACT, no dependency is relieved: \a relief_dom is ignored, and
+        no relief in effect from a module loading this one applies to its dependencies (qore#6386)
     */
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
             const std::vector<std::string>& dependencies, QoreProgram* path_pgm,
-            const std::vector<QoreModuleDependencyRestriction>* restrictions = nullptr);
+            const std::vector<QoreModuleDependencyRestriction>* restrictions = nullptr, int64 relief_dom = 0,
+            const std::vector<std::string>* post_header_dependencies = nullptr, int64 restricted_dom = 0);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,

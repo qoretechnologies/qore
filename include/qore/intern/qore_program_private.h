@@ -624,6 +624,31 @@ public:
     // modules loadded with parse commands
     strset_t parse_modules;
 
+    //! the module requests (without their version requirements) of the %requires directives before and after the
+    //! header of the module that the Program parses; an AOT module records which of its dependencies are requested
+    //! only after it (qore#6351)
+    strset_t pre_header_requires;
+    strset_t post_header_requires;
+    //! the names of the modules that the module requests of the Program's parse loaded (qore#6351)
+    std::map<std::string, std::string> module_request_names;
+    //! the module requests whose module was loaded by the request itself, not found loaded (qore#6351)
+    strset_t loading_requires;
+    //! the module requests after the header made while the module's code restricted a domain that its header declares
+    //! again, which the header does not remove for them (qore#6351)
+    strset_t restricted_requires;
+    //! the domains that the module's code restricts again after its header (qore#6351)
+    int64 dom_restricted_after_header = 0;
+    //! the domains that the module's code restricts with its own parse directives, before or after its header
+    //! (qore#6351)
+    int64 dom_restricted_by_code = 0;
+    //! true if the parse depends on where the code is loaded: a conditional on a define that is neither built in nor
+    //! set by the code (a parse option or a define of the loading code), or an included file found through an
+    //! environment variable or a search path (qore#6351)
+    bool load_dependent_parse = false;
+    //! the sequence number of the last module registration when the header of the Program's module closed: a module
+    //! registered until then was loaded before the header, or by other code (qore#6351)
+    uint64_t module_header_close_seq = 0;
+
     //! the module requests of %try-module directives that failed, in parse order, without duplicates
     /** An AOT module records them in its module metadata, since its code takes the branch for the module being
         unavailable; see QoreAOTModuleFileInfo
@@ -1208,6 +1233,13 @@ public:
     //! true if the %set-time-zone directive recorded in \c time_zone_directive follows the header of a user module,
     //! whose declared domains have then removed the restrictions they relieve (qore#6270)
     bool time_zone_after_module_header = false;
+    //! true if the %set-time-zone directive recorded in \c time_zone_directive applies only to a load of the module
+    //! as library code: the module's own restriction disallowed it where it is, and the locale control domain that its
+    //! header declares removes the restriction in a load as library code (qore#6352)
+    bool time_zone_trusted_only = false;
+    //! true if the module's code restricts locale control again after its header (%no-locale-control): a load as
+    //! library code does not lift that restriction (qore#6352)
+    bool locale_control_restricted_after_header = false;
     //! true once the header of a user module has been parsed (QoreUserModuleDefContextHelper::close())
     bool module_header_closed = false;
 
@@ -1244,6 +1276,8 @@ public:
         dmap
     */
     std::set<std::string> source_defines;
+    //! the names of the built-in defines, which are fixed for the library (qore#6351)
+    strset_t builtin_defines;
 
     struct source_parse_define_t {
         std::string source_file;
@@ -1732,6 +1766,21 @@ public:
             }
         }
         parse_module_restrictions.emplace_back(mod, restrictions, module_header_closed ? 0 : QMDR_BEFORE_HEADER);
+    }
+
+    //! Records the module request of a %requires directive before or after the header of the module parsed
+    /** a request before the header is loaded with the restrictions in effect there, one after it without the domains
+        that the header declares (qore#6351)
+    */
+    DLLLOCAL void addModuleRequest(const char* spec, const char* name, bool loaded) {
+        module_request_names[spec] = name;
+        if (loaded) {
+            loading_requires.insert(spec);
+        }
+        if (module_header_closed && (dom_restricted_after_header & module_own_dom)) {
+            restricted_requires.insert(spec);
+        }
+        (module_header_closed ? post_header_requires : pre_header_requires).insert(spec);
     }
 
     //! Records the module request of a %try-module directive that failed
@@ -3872,10 +3921,10 @@ public:
         // (qore#6518)
         class ExpressionParseOnlyHelper {
         public:
-            DLLLOCAL ExpressionParseOnlyHelper(qore_program_private& pp) : pp(pp) {
+            ExpressionParseOnlyHelper(qore_program_private& pp) : pp(pp) {
                 pp.expression_parse_only = true;
             }
-            DLLLOCAL ~ExpressionParseOnlyHelper() {
+            ~ExpressionParseOnlyHelper() {
                 // cleared with plock held, after parsing_in_progress: see refusesRuntimeEntry()
                 AutoLocker al(pp.plock);
                 pp.expression_parse_only = false;
@@ -4477,6 +4526,17 @@ public:
             qore_dbg_parse_scope_begin(pgm, "directive");
         }
 #endif
+        // a restriction of locale control after the header of a module applies in every load of it (qore#6352), as
+        // does the restriction of any domain after it, also for the modules requested then (qore#6351)
+        if (set) {
+            if (module_header_closed) {
+                if (po & PO_NO_LOCALE_CONTROL) {
+                    locale_control_restricted_after_header = true;
+                }
+                dom_restricted_after_header |= static_cast<int64>(po.getLo());
+            }
+            dom_restricted_by_code |= static_cast<int64>(po.getLo());
+        }
         return 0;
     }
 
@@ -4568,6 +4628,26 @@ public:
         // check PO_NO_LOCALE_CONTROL
         ExceptionSink xsink;
         if (pwo.parse_options & PO_NO_LOCALE_CONTROL) {
+            // after the header of a module that declares the locale control domain, which was not applied, as the
+            // module is not loaded as library code (as when qcc compiles it), the restriction in effect at the header
+            // is removed in a load as library code, unless the module's code restricts locale control again after
+            // the header: an AOT image records the directive for such a load (qore#6352); the zone is checked as in
+            // that load
+            if (module_header_closed && (module_own_dom & QDOM_LOCALE_CONTROL)
+                    && !(module_trusted_dom & QDOM_LOCALE_CONTROL) && !locale_control_restricted_after_header) {
+                if (*zone == '-' || *zone == '+') {
+                    QTZM.findCreateOffsetZone(zone, &xsink);
+                } else {
+                    QTZM.findLoadRegion(zone, &xsink);
+                }
+                if (xsink) {
+                    mergeParseException(xsink);
+                    return;
+                }
+                time_zone_directive = zone;
+                time_zone_after_module_header = true;
+                time_zone_trusted_only = true;
+            }
             mergeParseException(xsink);
             return;
         }
@@ -4579,6 +4659,7 @@ public:
         // an AOT image records where the directive is, as its loader checks it against the restrictions in effect
         // there (qore#6270)
         time_zone_after_module_header = module_header_closed;
+        time_zone_trusted_only = false;
     }
 
     //! sets the time zone of the Program as the %set-time-zone directive with the given argument does
@@ -5863,7 +5944,21 @@ public:
     }
 
     DLLLOCAL static bool parseIsDefined(QoreProgram* pgm, const char* name) {
-        return pgm->priv->isDefined(name);
+        // a conditional on a define that is neither built in (fixed for the library) nor set by the code itself can
+        // take another branch where the code is loaded than where it is compiled (a parse option, a define of the
+        // loading code): an AOT module records it (qore#6351)
+        qore_program_private* pp = pgm->priv;
+        if (pp->builtin_defines.find(name) == pp->builtin_defines.end()
+                && pp->source_defines.find(name) == pp->source_defines.end()) {
+            pp->load_dependent_parse = true;
+        }
+        return pp->isDefined(name);
+    }
+
+    //! records that the parse depends on the environment where the code is loaded (an included file found through an
+    //! environment variable or a search path; qore#6351)
+    DLLLOCAL static void setLoadDependentParse(QoreProgram* pgm) {
+        pgm->priv->load_dependent_parse = true;
     }
 
     DLLLOCAL static bool runTimeIsDefined(QoreProgram* pgm, const char* name) {

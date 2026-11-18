@@ -1233,7 +1233,12 @@ const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
 //! Allows a Program to be parsed multiple times (for REPL functionality)
 /** This option enables incremental parsing using parsePending()/parseCommit() cycles.
     When set, parse() can be called multiple times on the same Program object,
-    with each parse cycle adding to the existing definitions.
+    with each parse cycle adding to the existing definitions.\n
+    A run of the Program (@ref Qore::Program::run() "Program::run()") executes the top-level statements that no run
+    has executed yet, once each, also when several threads run the Program at the same time: each run takes the next
+    statement before it executes it, so the statements of runs in different threads can execute at the same time.  A
+    statement that raises an exception is not executed again; the run ends with the exception, and the next run
+    executes the statements after it.
 
     @note Parsing is only allowed when no threads are active in the Program.
 
