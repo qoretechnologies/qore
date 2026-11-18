@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/QoreUtf8.h"
 
 #include <cassert>
 #include <cerrno>
@@ -212,50 +213,18 @@ public:
             }
             next_check = i + CancelCheckBytes;
          }
-         unsigned char ch = s[i];
-         if (ch < 0x80) {
+         if (s[i] < 0x80) {
             ++i;
             continue;
          }
-         // the number of continuation bytes and the range of the first one
-         size_t n;
-         unsigned char lo = 0x80;
-         unsigned char hi = 0xbf;
-         if (ch >= 0xc2 && ch <= 0xdf) {
-            n = 1;
-         } else if (ch == 0xe0) {
-            n = 2;
-            lo = 0xa0;
-         } else if ((ch >= 0xe1 && ch <= 0xec) || ch == 0xee || ch == 0xef) {
-            n = 2;
-         } else if (ch == 0xed) {
-            n = 2;
-            hi = 0x9f;
-         } else if (ch == 0xf0) {
-            n = 3;
-            lo = 0x90;
-         } else if (ch >= 0xf1 && ch <= 0xf3) {
-            n = 3;
-         } else if (ch == 0xf4) {
-            n = 3;
-            hi = 0x8f;
-         } else {
-            incomplete = false;
+         // the one definition of a valid UTF-8 character (qore#6604)
+         long l = q_utf8_char_len(p + i, len - i);
+         if (l <= 0) {
+            // a negative length: every byte up to the end of the input fits the sequence
+            incomplete = l < 0;
             return i;
          }
-         for (size_t k = 1; k <= n; ++k) {
-            if (i + k >= len) {
-               // every byte up to the end of the input fits the sequence
-               incomplete = true;
-               return i;
-            }
-            unsigned char cb = s[i + k];
-            if (k == 1 ? (cb < lo || cb > hi) : (cb < 0x80 || cb > 0xbf)) {
-               incomplete = false;
-               return i;
-            }
-         }
-         i += n + 1;
+         i += l;
       }
       incomplete = false;
       return len;

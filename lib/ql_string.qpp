@@ -2640,6 +2640,9 @@ string column = trunc_str(str, 80, dsp.getOSEncoding());
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if an explicit @ref character_encoding "character encoding" was given and an error occurs during encoding conversion
+    @throw INVALID-ENCODING the part of the string within the length is not valid in its multi-byte @ref character_encoding "character encoding"
+
+    @since %Qore 3.0 a string with an invalid character within the length raises \c INVALID-ENCODING instead of being truncated before it
  */
 string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : str->getEncoding();
@@ -2650,9 +2653,15 @@ string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VA
    if (!tmp)
       return QoreValue();
 
-   if (tmp->strlen() < (size_t)length) {
+   // the whole string is within the length
+   bool whole = tmp->strlen() <= static_cast<size_t>(length);
+   if (whole) {
       length = tmp->strlen();
-      return new QoreStringNode(tmp.giveBuffer(), length, length + 1, enc);
+      // the text of a stateful encoding and of a single-byte encoding is returned as it is; it is copied by its
+      // length, as it can have NUL bytes (qore#6604)
+      if (!enc->isMultiByte() || qore_encoding_private::isStateful(enc)) {
+         return new QoreStringNode(tmp->c_str(), length, enc);
+      }
    }
 
    if (qore_encoding_private::isStateful(enc)) {
@@ -2699,13 +2708,22 @@ string trunc_str(softstring str, softint length, *string encoding) [flags=RET_VA
    const char* p = tmp->c_str();
    int64 sl = 0;
    int64 i = 0;
-   while (true) {
+   while (sl < length) {
       if (i && !(i % 100) && qore_check_cancel(xsink, "truncating string")) {
          return QoreValue();
       }
       qore_offset_t size = enc->getCharLen(p, length - sl);
-      if (size <= 0 || ((sl + size) > length))
+      // a negative size is a character that the length cuts, which is left out, unless the whole string is within
+      // the length: then it is a character cut off by the end of the string, which is invalid
+      if (!size || (size < 0 && whole)) {
+         // an invalid character within the length (qore#6604), as for the other string functions (qore#6595)
+         xsink->raiseException("INVALID-ENCODING", "trunc_str(): the string is not valid %s: invalid byte sequence "
+            "at byte offset " QLLD, enc->getCode(), sl);
+         return QoreValue();
+      }
+      if (size < 0 || ((sl + size) > length)) {
          break;
+      }
       sl += size;
       p += size;
       ++i;
