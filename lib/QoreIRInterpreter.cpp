@@ -1659,6 +1659,9 @@ struct QoreIRDebugNestEntry {
     const AbstractStatement* stmt = nullptr;
     //! the number of scopes of the frame (scope_stack) at its start
     size_t scope_depth = 0;
+    //! the number of temp scope marks of the frame (temp_cleanup_marks) at its start: the statement's own temp scope,
+    //! if it has one, is the next one (qore#6626)
+    size_t mark_depth = 0;
     //! the depth and the QORE_IR_DEBUG_NEST_* flags of the statement
     uint16_t depth = 0;
     uint8_t flags = 0;
@@ -8592,7 +8595,8 @@ static QoreIRDebugNest& qore_ir_dbg_frame_nest() {
 
 //! Records the statement of a DebugStatement instruction in the statements that the frame is in
 static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameState& st,
-        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth) {
+        const QoreIRDebugStatementInstruction* inst, const AbstractStatement* stmt, size_t scope_depth,
+        size_t mark_depth) {
     QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
     if (!st.nest_used) {
         n.reset();
@@ -8603,6 +8607,7 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_nest_statement(QoreIRDebugFrameStat
     QoreIRDebugNestEntry& e = entries.back();
     e.stmt = stmt;
     e.scope_depth = scope_depth;
+    e.mark_depth = mark_depth;
     e.depth = inst->nest_depth;
     e.flags = inst->nest_flags;
     e.block = nullptr;
@@ -8641,6 +8646,138 @@ static QORE_INTERN_NOINLINE void qore_ir_dbg_statement_end(QoreIRDebugFrameState
         entries.resize(inst->nest_depth);
         st.frame_stmt = entries.empty() ? nullptr : entries.back().stmt;
         *stmt_ptr = st.frame_stmt;
+    }
+}
+
+//! Returns the number of temp scope marks of the frame when the given statement started, if it is one of the
+//! statements that the frame is in, or -1 (qore#6626)
+/** The statements nested in it that it ran before (the statements of a foreach body in an earlier iteration) are
+    still recorded after it: the innermost entry of the statement is searched from the innermost one outward
+*/
+static QORE_INTERN_NOINLINE ptrdiff_t qore_ir_dbg_statement_mark_depth(const QoreIRDebugFrameState& st,
+        const AbstractStatement* stmt) {
+    if (!st.nest_used || !stmt) {
+        return -1;
+    }
+    const QoreIRDebugNest& n = qore_ir_dbg_frame_nest();
+    for (size_t i = n.entries.size(); i > 0; --i) {
+        if (n.entries[i - 1].stmt == stmt) {
+            return static_cast<ptrdiff_t>(n.entries[i - 1].mark_depth);
+        }
+    }
+    return -1;
+}
+
+//! Finds the point where the code continues after a dismissed exception event of a call (qore#6626)
+/** As the AST interpreter continues after the statement whose exception it was: if the statement has a temp scope of
+    its own, whose mark records \a stmt_scope_id, the DiscardTemps that closes it (the instruction's temp_scope_id,
+    which pairs it with its PushTempMark), past the temp scopes opened in the statement, such as those of the elements
+    of a map, whose own DiscardTemps comes first; otherwise (code without the pairing, such as IR read from an AOT
+    module) the first DiscardTemps reached before a nested temp scope starts; with \a find_return, the return or throw
+    that ends a statement whose own temp scope ends without a DiscardTemps (a return or a throw statement).  The search
+    follows the normal edges from \a start; \a path is the blocks from \a start to the block of the target, whose
+    instructions before it are skipped.  Out of line, as only a debugger's dismissal runs it.
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_ir_find_dismiss_target(QoreIRBasicBlock* start,
+        uint32_t stmt_scope_id, bool find_return, QoreIRBasicBlock*& target_block, size_t& target_ip,
+        std::vector<QoreIRBasicBlock*>& path) {
+    if (!start) {
+        return false;
+    }
+    // each block with the block that it was reached from
+    std::vector<std::pair<QoreIRBasicBlock*, QoreIRBasicBlock*>> stack{{start, nullptr}};
+    std::unordered_map<QoreIRBasicBlock*, QoreIRBasicBlock*> parent;
+    while (!stack.empty() && parent.size() < 1024) {
+        auto [b, from] = stack.back();
+        stack.pop_back();
+        if (!b || !parent.emplace(b, from).second) {
+            continue;
+        }
+        for (size_t i = 0; i < b->instructions.size(); ++i) {
+            QoreIRInstruction* candidate = b->instructions[i].get();
+            if (find_return ? (candidate->opcode == QoreIROpcode::Return
+                        || candidate->opcode == QoreIROpcode::ReturnNothing
+                        || candidate->opcode == QoreIROpcode::Throw
+                        || candidate->opcode == QoreIROpcode::Rethrow)
+                    : (candidate->opcode == QoreIROpcode::DiscardTemps
+                        && (!stmt_scope_id || candidate->temp_scope_id == stmt_scope_id))) {
+                target_block = b;
+                target_ip = i;
+                path.clear();
+                for (QoreIRBasicBlock* pb = b; pb; pb = parent[pb]) {
+                    path.push_back(pb);
+                }
+                std::reverse(path.begin(), path.end());
+                return true;
+            }
+            if (!stmt_scope_id && !find_return && (candidate->opcode == QoreIROpcode::PushTempMark
+                    || candidate->opcode == QoreIROpcode::PushTempMarkPair)) {
+                break;
+            }
+            // the block's terminator: its normal successors (every kind of branch, the loops of operators such
+            // as map, and the normal targets of the invokes)
+            if (i + 1 == b->instructions.size()) {
+                qore_ir_visit_successors(*candidate, [&](QoreIRBasicBlock* succ) {
+                    stack.emplace_back(succ, b);
+                });
+            }
+        }
+    }
+    return false;
+}
+
+//! Skips the code between a dismissed exception event of a call and the point where the code continues (qore#6626)
+/** The implicit arguments and elements that the skipped code would restore are restored, innermost first (the pops
+    on the path whose push is not on it); the values that the skipped instructions define are added to \a to_clear,
+    so that the caller clears them and the code that continues reads defined values, except a value registered for
+    the release of a temp scope, which the DiscardTemps that releases it releases
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_skip_code(
+        const std::vector<QoreIRBasicBlock*>& path, const QoreIRBasicBlock* target_block, size_t target_ip,
+        IRValueSlots& values, const IRCleanupSlots& cleanup, ExceptionSink* xsink, std::vector<uint32_t>& to_clear) {
+    std::unordered_set<uint32_t> pushed;
+    for (QoreIRBasicBlock* pb : path) {
+        size_t end = pb == target_block ? target_ip : pb->instructions.size();
+        for (size_t k = 0; k < end; ++k) {
+            const QoreIRInstruction* si = pb->instructions[k].get();
+            switch (si->opcode) {
+                case QoreIROpcode::PushImplicitArg:
+                case QoreIROpcode::SetImplicitArgv:
+                case QoreIROpcode::PushImplicitElement:
+                    pushed.insert(si->result.id);
+                    break;
+                case QoreIROpcode::PopImplicitArg:
+                case QoreIROpcode::PopImplicitElement: {
+                    if (si->operands.empty() || pushed.count(si->operands[0].id)
+                            || si->operands[0].id >= values.size()) {
+                        break;
+                    }
+                    QoreValue old_val = getIRValue(values, si->operands[0]);
+                    if (si->opcode == QoreIROpcode::PopImplicitElement) {
+                        save_implicit_element(static_cast<int>(old_val.getAsBigInt()));
+                    } else {
+                        // as PopImplicitArg does
+                        const QoreListNode* current = thread_get_implicit_args();
+                        if (current) {
+                            const_cast<QoreListNode*>(current)->deref(xsink);
+                        }
+                        thread_set_implicit_args(old_val.get<QoreListNode>());
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+    }
+    for (QoreIRBasicBlock* pb : path) {
+        size_t end = pb == target_block ? target_ip : pb->instructions.size();
+        for (size_t k = 0; k < end; ++k) {
+            QoreIRValue r = pb->instructions[k]->result;
+            if (r.isValid() && r.id < values.size() && !pushed.count(r.id) && !hasCleanupEntry(cleanup, r.id)) {
+                to_clear.push_back(r.id);
+            }
+        }
     }
 }
 
@@ -10773,56 +10910,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return getDebugStatement(inst);
     };
 
-    auto findDismissTarget = [](QoreIRBasicBlock* start, QoreIRBasicBlock*& target_block,
-            size_t& target_ip) -> bool {
-        if (!start) {
-            return false;
-        }
-        std::vector<QoreIRBasicBlock*> stack{start};
-        std::unordered_set<QoreIRBasicBlock*> seen;
-        while (!stack.empty() && seen.size() < 64) {
-            QoreIRBasicBlock* b = stack.back();
-            stack.pop_back();
-            if (!b || !seen.insert(b).second) {
-                continue;
-            }
-            for (size_t i = 0; i < b->instructions.size(); ++i) {
-                QoreIRInstruction* candidate = b->instructions[i].get();
-                if (candidate->opcode == QoreIROpcode::DiscardTemps) {
-                    target_block = b;
-                    target_ip = i;
-                    return true;
-                }
-                if (candidate->opcode == QoreIROpcode::PushTempMark
-                        || candidate->opcode == QoreIROpcode::PushTempMarkPair) {
-                    break;
-                }
-                if (auto* br = qore_ir_inst_cast<QoreIRBranchInstruction*>(candidate)) {
-                    stack.push_back(br->target);
-                    break;
-                }
-                if (auto* br_if = qore_ir_inst_cast<QoreIRBranchIfInstruction*>(candidate)) {
-                    stack.push_back(br_if->false_target);
-                    stack.push_back(br_if->true_target);
-                    break;
-                }
-                if (auto* inv = qore_ir_inst_cast<QoreIRInvokeInstruction*>(candidate)) {
-                    stack.push_back(inv->normal_target);
-                    break;
-                }
-                if (auto* inv_md = qore_ir_inst_cast<QoreIRInvokeMethodDirectInstruction*>(candidate)) {
-                    stack.push_back(inv_md->normal_target);
-                    break;
-                }
-                if (auto* inv_dot = qore_ir_inst_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(candidate)) {
-                    stack.push_back(inv_dot->normal_target);
-                    break;
-                }
-            }
-        }
-        return false;
-    };
-
     // Call dbgFunctionEnter if debug is active, then fire block-entry event.
     // AST mode fires dbgStep(block, nullptr) at block entry (StatementBlock.cpp:239)
     // to signal the debugger that a new block scope is being entered.
@@ -12709,8 +12796,58 @@ dispatch_folded_step_host:
                         if (!*xsink) {
                             QoreIRBasicBlock* dismiss_block = nullptr;
                             size_t dismiss_ip = 0;
+                            std::vector<QoreIRBasicBlock*> dismiss_path;
+                            // the call gives no value, and the code continues after the statement (qore#6626)
+                            ptrdiff_t stmt_marks = qore_ir_dbg_statement_mark_depth(dbg_state,
+                                get_exception_statement(inst));
+                            size_t cur_marks = temp_cleanup_marks.size();
+                            // the scope of the statement's own temp scope, if it has one and the scopes are paired
+                            uint32_t stmt_scope_id = stmt_marks >= 0 && cur_marks > static_cast<size_t>(stmt_marks)
+                                ? temp_cleanup_marks[static_cast<size_t>(stmt_marks)].scope_id : 0;
                             prev_block = block;
-                            if (findDismissTarget(inv->normal_target, dismiss_block, dismiss_ip)) {
+                            bool found = qore_ir_find_dismiss_target(inv->normal_target, stmt_scope_id, false,
+                                dismiss_block, dismiss_ip, dismiss_path);
+                            // a statement with a temp scope of its own whose end is not found (a return or a throw
+                            // statement, whose scope ends with the function's exit) ends the function, which
+                            // returns no value, as a dismissed exception of a throw statement does (#5825); the
+                            // restores of the code on the path to its return or throw are done
+                            bool exit_function = !found && stmt_scope_id;
+                            bool exit_path = exit_function && qore_ir_find_dismiss_target(inv->normal_target, 0, true,
+                                dismiss_block, dismiss_ip, dismiss_path);
+                            if (stmt_scope_id && (found || exit_function)) {
+                                // the temporaries of the statement are released now, as the AST interpreter
+                                // releases them while the exception unwinds, before its event: the exceptions of
+                                // their destructors are dismissed with it; the statement's mark stays for its
+                                // DiscardTemps if the code continues there, and goes if the function ends
+                                cleanupToTempMark(static_cast<size_t>(stmt_marks), true, found);
+                                if (*xsink) {
+                                    xsink->clear();
+                                }
+                            }
+                            if (found || exit_path) {
+                                std::vector<uint32_t> to_clear;
+                                qore_ir_dismiss_skip_code(dismiss_path, dismiss_block, dismiss_ip, values, cleanup,
+                                    xsink, to_clear);
+                                for (uint32_t id : to_clear) {
+                                    clearSlotForOverwrite(id);
+                                }
+                            }
+                            if (inv->result.isValid() && !hasCleanupEntry(cleanup, inv->result.id)) {
+                                clearSlotForOverwrite(inv->result.id);
+                            }
+                            if (exit_function) {
+                                // the frame's exit restores the implicit contexts still open at the return
+                                // reached; those that the path closed were restored above
+                                if (exit_path) {
+                                    block = dismiss_block;
+                                    ip = dismiss_ip;
+                                }
+                                dbg_state.exit_dismissed = true;
+                                unwindForException();
+                                cleanupLocalCaches();
+                                return exitAfterUnwind();
+                            }
+                            if (found) {
                                 block = dismiss_block;
                                 ip = dismiss_ip;
                             } else {
@@ -17277,7 +17414,7 @@ load_local_done:
                         // the statements that the frame is in, for the exception events (#5816)
                         if (dbg_inst->nest_flags & QORE_IR_DEBUG_NEST_VALID) {
                             qore_ir_dbg_nest_statement(dbg_state, dbg_inst, dbg_stmt,
-                                scope_stack.size());
+                                scope_stack.size(), temp_cleanup_marks.size());
                         }
                         int dbg_rc = tlpd->dbgStep(statements, dbg_stmt, xsink);
                         // the debugger can set the local variables of the frame while the thread is stopped,
