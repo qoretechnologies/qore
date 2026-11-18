@@ -189,6 +189,9 @@ hash<auto> desc = {
     - implemented @ref select_option_recursive "recursive queries" on SQL Server; a query with a \c max_depth sets the
       recursion limit of the statement to it with \c MAXRECURSION; Sybase raises \c RECURSIVE-QUERY-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select, whose WITH clause starts the
+      statement (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - the triggers of a table on SQL Server are read from the database: a table with triggers is aligned with no
       change, and a changed trigger, or an encrypted one, whose definition cannot be read, is dropped and created;
       each alignment created the triggers again, which failed as they existed.  A trigger of the table that the
@@ -2896,6 +2899,28 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
                 : (rq.max_depth ?: 1));
         }
         return sql;
+    }
+
+    #! Returns the SQL of an insert-select whose select is a recursive query
+    /** SQL Server needs the WITH clause before the statement: <tt>with ... insert into t (c1, c2) select ...</tt>,
+        with the \c MAXRECURSION hint of getRecursiveQuerySqlImpl() at its end
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveInsertSelectSqlImpl(string insert_sql, string with_sql, string select_sql,
+            hash<auto> rq) {
+        return getRecursiveQuerySqlImpl(with_sql, insert_sql + " " + select_sql, rq);
+    }
+
+    #! Returns the SQL of a create-as-select whose select is a recursive query
+    /** SQL Server needs the WITH clause before the statement: <tt>with ... select ... into t from ...</tt>, with the
+        \c MAXRECURSION hint of getRecursiveQuerySqlImpl() at its end
+
+        @since MssqlSqlUtilBase 1.1
+    */
+    private string getRecursiveCreateAsSelectSqlImpl(string with_sql, string select_sql, hash<auto> rq,
+            *hash<auto> opt) {
+        return getRecursiveQuerySqlImpl(with_sql, getCreateAsSelectSqlImpl(select_sql, opt), rq);
     }
 
     #! returns a name as an SQL identifier for SQL Server and Sybase

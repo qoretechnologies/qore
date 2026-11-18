@@ -243,6 +243,9 @@ module SqlUtil {
       @ref SqlUtil::AbstractTable::supportsRecursiveQueries() "AbstractTable::supportsRecursiveQueries()" and
       @ref SqlUtil::AbstractTable::getRecursiveQueryRecordType() "AbstractTable::getRecursiveQueryRecordType()"
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select, placed in the statement as each
+      database needs it (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
       @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
       @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
@@ -1376,14 +1379,40 @@ reaches 1024 levels; a \c max_depth above 1023 raises \c RECURSIVE-QUERY-ERROR
       8.0, MariaDB before 10.2.2, Oracle before 11.2, SQLite before 3.8.3, and any driver without an implementation),
       with an invalid \c "recursive" option, with \c "union": \c "distinct" on Oracle, SQL Server and Firebird, and
       with the \c "superquery", \c "forupdate", \c "forupdate_no_key" and \c "partition" options
-    - a recursive query cannot be a subquery, a select of a set operator or of a superquery, or the select of
-      @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()" and
-      @ref SqlUtil::AbstractTable::createAsSelect() "AbstractTable::createAsSelect()", which raise
-      \c RECURSIVE-QUERY-ERROR for it
+    - a recursive query cannot be a subquery or a select of a set operator or of a superquery, which raise
+      \c RECURSIVE-QUERY-ERROR for it; it can be the select of an insert-select or a create-as-select (see
+      @ref select_option_recursive_insert_create)
     - the outer select of a recursive query with an \c "offset" needs the \c "orderby_no_unique" option, as the CTE
       has no unique key
 
     @since %SqlUtil 3.11.0
+
+    @par Recursive Queries in Insert-Select and Create-As-Select
+    @anchor select_option_recursive_insert_create
+    A select option hash with the \c "recursive" option can be given to
+    @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()" and the other insert-select
+    methods, and to @ref SqlUtil::AbstractTable::createAsSelect() "AbstractTable::createAsSelect()" and the other
+    create-as-select methods; the target columns of an insert-select without a \c "columns" option in the outer
+    select are those of the CTE, with its depth column.  Each database places the WITH clause and the recursion limit
+    of the query in the statement as it needs:
+    |!Database|!Insert-select|!Create-as-select
+    |PostgreSQL, SQLite|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>|\
+<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>
+    |Oracle|<tt>INSERT INTO t (...) WITH ... SELECT ...</tt>|<tt>CREATE TABLE t AS WITH ... SELECT ...</tt>, with \
+the values of the query given as literals in the SQL, as Oracle refuses bind values in a create-as-select (see \
+\c OracleTable::getInlineSqlValue() in the \c OracleSqlUtilBase module for the literals and the values that it \
+refuses); the values then appear in the text of the statement
+    |MySQL|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>, with the \c SET_VAR hint of a \c max_depth \
+of 1000 or more after the \c INSERT keyword|<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>; a \
+\c max_depth of 1000 or more raises \c RECURSIVE-QUERY-ERROR, as the statement cannot raise the recursion limit
+    |MariaDB|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>, after the <tt>SET STATEMENT ... FOR</tt> of \
+a \c max_depth above 1000|<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>, after the \
+<tt>SET STATEMENT ... FOR</tt> of a \c max_depth above 1000
+    |SQL Server|<tt>WITH ... INSERT INTO t (...) SELECT ...</tt>, with the <tt>OPTION (MAXRECURSION n)</tt> of a \
+\c max_depth at its end|<tt>WITH ... SELECT ... INTO t FROM ...</tt>, with the <tt>OPTION (MAXRECURSION n)</tt> \
+of a \c max_depth at its end
+    |Firebird|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>|not supported: Firebird has no \
+create-as-select statement, and create-as-select raises \c OPTION-ERROR
 
     @subsubsection select_option_forupdate Select Option "forupdate"
     <b>For Update Example:</b>
