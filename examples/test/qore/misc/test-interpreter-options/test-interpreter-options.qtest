@@ -19,9 +19,11 @@
     that <tt>run_tests.sh -v</tt> gives a test), and an option and its value given as two arguments stay together
     (issue #6250).
 
-    The script also runs after it empties \c ARGV, as QUnit removes the options that it takes from the \c ARGV that a
-    test gives it, and compiled with qcc, with arguments and with the options of the runtime of a compiled executable:
-    an interpreted script is never taken for a compiled one, nor a compiled one for an interpreted one
+    A second script empties \c ARGV, as QUnit removes the options that it takes from the \c ARGV that a test gives it,
+    before it prints what the functions return.  Interpreted, with interpreter options that are also options of the
+    runtime of a compiled executable, it is never taken for a compiled script.  Compiled with qcc, where the module is
+    compiled into the executable and reads the same \c ARGV as the script, it is never taken for an interpreted one,
+    with arguments and with the options of its runtime
 */
 class TestInterpreterOptionsTest inherits QUnit::Test {
     constructor() : QUnit::Test("TestInterpreterOptions", "1.0", \ARGV) {
@@ -56,8 +58,9 @@ class TestInterpreterOptionsTest inherits QUnit::Test {
         TmpDir tmp("qore-test-interpreter-options-");
         string script = writeArgvProbe(tmp.path);
 
-        # QUnit has removed the -v from ARGV, so QORE_ARGV has two more arguments than ARGV, as for a compiled
-        # executable given one runtime option
+        # an interpreted script is not compiled, also with an interpreter option that is a runtime option of a
+        # compiled executable (--enable-debug); the module loaded by the interpreter has its own copy of ARGV, which
+        # the script's change to ARGV does not reach (only compiledTest() checks a module that reads the changed ARGV)
         assertEq("compiled: False\noptions: \nmode: none\n", run("", script, "-v"));
         assertEq("compiled: False\noptions: --exec-mode|ir\nmode: ir\n", run("--exec-mode ir", script, "-v"));
         assertEq("compiled: False\noptions: --enable-debug\nmode: none\n", run("--enable-debug", script, "-v"));
@@ -77,7 +80,8 @@ class TestInterpreterOptionsTest inherits QUnit::Test {
         assertEq(0, rc, out);
 
         # the test's own arguments, the options of the compiled executable's runtime, and both: always compiled, and
-        # an argument that looks like an interpreter option is not one
+        # an argument that looks like an interpreter option is not one; -d is left out, as it makes the runtime write
+        # debug output, which would be compared with the output of the script
         foreach string args in ("", "-v", "--exec-mode=jit -v", "--enable-debug", "-b --enable-debug -v", "-G -v") {
             out = backquote(sprintf("%s %s 2>&1", quote(exe), args), \rc);
             assertEq(0, rc, out);

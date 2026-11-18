@@ -69,10 +69,15 @@ public namespace TestInterpreter {
 
         The number of arguments before \c ARGV is the one when the module was loaded (TestInterpreterState::argOffset()):
         a test gives QUnit \c ARGV as a reference, and QUnit removes the options that it takes (such as \c -v) from it.
+        Only in a compiled executable, into which the module is compiled, is that the \c ARGV that the module reads: a
+        module loaded by the interpreter has its own copy.
 
-        The interpreter given only options that are also runtime options of a compiled executable and reading its
-        script from stdin (<tt>qore -b \< script</tt>) has the same command line as such an executable and counts as
-        one: then the interpreter is taken from the environment or the \c PATH, not from \c QORE_ARGV[0].
+        The interpreter reading its script from stdin with no options or only options that are also runtime options of
+        a compiled executable (<tt>qore \< script</tt>, <tt>qore -b \< script</tt>) has the same command line as such
+        an executable and counts as one: qore_interpreter() then takes neither \c QORE_ARGV[0] nor an interpreter from
+        the environment that is the running qore (is_own_executable()), but another one from the environment or the
+        \c PATH, and fails if there is none; guard_recursion() also takes the running qore for the executable of a
+        compiled test.  Tests are never run that way (run_tests.sh gives qore the path of the test).
     */
     public bool sub running_compiled() {
         # no QORE_ARGV: the module is initialized by qcc when it compiles code that requires it
