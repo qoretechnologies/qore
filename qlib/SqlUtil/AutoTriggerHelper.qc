@@ -180,7 +180,7 @@ public string sub get_physical_placement_trigger_guard(string driver_name, strin
     if (driver_name != "pgsql" || !table_name || table_name.size() > 128 || table_name.find("\0") >= 0) {
         throw "AUTO-TRIGGER-ERROR", "physical-placement guard requires pgsql and a bounded table name";
     }
-    string literal = table_name;
+    string literal = sql_literal_check_encoding(table_name);
     literal =~ s/\\/\\\\/g;
     literal =~ s/'/''/g;
     return "  if nullif(pg_catalog.current_setting('qore.physical_placement', true), '') is not null then\n"

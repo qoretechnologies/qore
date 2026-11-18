@@ -706,6 +706,7 @@ string sub pgsql_get_relation_name_literal(string name) {
 # single quotes as an escape character when standard_conforming_strings is off, and an escape string is read the same
 # way whatever its value
 string sub pgsql_get_string_literal(string v) {
+    sql_literal_check_encoding(v);
     if (v.find("\\") >= 0) {
         return "E'" + replace(replace(v, "\\", "\\\\"), "'", "''") + "'";
     }
@@ -4318,10 +4319,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 auto arg = iop_val.arg;
                 if (cmd.immediate) {
                     # only an identifier is given to the operator's code, as the SQL that it returns is inserted
-                    # directly into the query, as for AbstractTable::insert()
-                    if (arg =~ /[^a-z\._0-9]/i) {
-                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y "
-                            "which contains illegal characters", getDesc(), iop, arg);
+                    # directly into the query, as for AbstractTable::insert(); the value must match the allowed
+                    # characters as a whole, so that a string that cannot be matched (one that is not valid UTF-8) is
+                    # refused
+                    if (arg !~ /\A[A-Za-z\._0-9]*\z/) {
+                        # a value that is not valid in its encoding is not given in the message (qore#6553)
+                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s "
+                            "which contains illegal characters", getDesc(), iop,
+                            arg.typeCode() == NT_STRING && !(arg =~ /^/)
+                                ? sprintf("a string of %d bytes not valid in its encoding", arg.size())
+                                : sprintf("%y", arg));
                     }
                     select_exprs += cmd.code ? cmd.code(i.key, arg) : arg;
                 } else {
@@ -5434,6 +5441,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         # use negative lookahead to avoid double-replacing "HH24" → "HH2424"
         fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);

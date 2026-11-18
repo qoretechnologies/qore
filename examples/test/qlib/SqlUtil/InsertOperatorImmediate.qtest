@@ -54,11 +54,18 @@ class InsertOperatorImmediateTest inherits QUnit::Test {
         const HostileSequence = "s; drop table iop_sentinel";
     }
 
+    #! returns the hostile sequence name after a byte that is not valid UTF-8 in a string tagged as UTF-8, which no
+    #! regular expression can match: the check of the name refuses it (qore#6553)
+    private static string invalidHostileSequence() {
+        return binary_to_string(parse_hex_string("ff") + binary(HostileSequence), "UTF-8");
+    }
+
     constructor() : Test("InsertOperatorImmediateTest", "1.0", \ARGV) {
         addTestCase("PostgreSQL binds the sequence name", \pgsqlSql());
         addTestCase("Oracle names the sequence in the SQL", \oracleSql());
         addTestCase("SQL Server names the sequence in the SQL", \mssqlSql());
         addTestCase("drivers without sequence insert operators refuse them", \unsupportedSql());
+        addTestCase("string literals refuse strings not valid in their encoding", \literalEncoding());
         set_return_value(main());
     }
 
@@ -111,6 +118,15 @@ class InsertOperatorImmediateTest inherits QUnit::Test {
             ({"id": 3, "v": iop_seq(HostileSequence)},));
         assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
             ({"id": 3, "v": iop_seq_currval(HostileSequence)},));
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq(invalidHostileSequence())},));
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq_currval(invalidHostileSequence())},));
+        # letters that case-fold to ASCII letters (the Kelvin sign, the long s) are not ASCII letters
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq("sKq")},));
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq("ſeq")},));
     }
 
     mssqlSql() {
@@ -129,6 +145,8 @@ class InsertOperatorImmediateTest inherits QUnit::Test {
         ), recorded);
         assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
             ({"id": 3, "v": iop_seq(HostileSequence)},));
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq(invalidHostileSequence())},));
     }
 
     unsupportedSql() {
@@ -162,6 +180,46 @@ class InsertOperatorImmediateTest inherits QUnit::Test {
 %endif
         if (!drivers) {
             testSkip("no driver modules available");
+        }
+    }
+
+    #! A string literal is refused for a string that is not valid in its encoding, with every driver (qore#6553)
+    literalEncoding() {
+        string bad = invalidHostileSequence();
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \sql_literal_check_encoding(), (bad,));
+        assertEq("it's", sql_literal_check_encoding("it's"));
+        list<hash<auto>> tables = ();
+%ifndef NO_PGSQL
+        tables += {"name": "PostgreSQL", "table": new PgsqlTable(new RecordingDatasource("pgsql:user/pass@db",
+            "PostgreSQL 16.4", "pgsql"), "lit_t")};
+%endif
+%ifndef NO_ORACLE
+        tables += {"name": "Oracle", "table": new OracleTable(new RecordingDatasource("oracle:u/p@db",
+            "Oracle Database 19c Enterprise Edition Release 19.0.0.0.0", "oracle"), "lit_t")};
+%endif
+%ifndef NO_FREETDS
+        tables += {"name": "SQL Server", "table": new MssqlTable(new RecordingDatasource("freetds:u/p@db",
+            "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6", "mssql"), "lit_t")};
+%endif
+%ifndef NO_MYSQL
+        tables += {"name": "MySQL", "table": new MysqlTable(new RecordingDatasource("mysql:u/p@db%localhost:1",
+            "11.4.2-MariaDB", "mysql"), "lit_t")};
+%endif
+%ifndef NO_ODBC
+        tables += {"name": "Firebird", "table": new XdbcFirebirdTable(new RecordingDatasource("odbc:u/p@db",
+            "WI-V3.0.10 Firebird 3.0", "firebird"), "lit_t")};
+%endif
+%ifndef NO_SQLITE3
+        tables += {"name": "SQLite", "table": new Sqlite3Table(new Datasource("sqlite3:@:memory:"), "lit_t")};
+%endif
+        if (!tables) {
+            testSkip("no driver modules available");
+        }
+        foreach hash<auto> h in (tables) {
+            AbstractTable t = h.table;
+            assertThrows("VALUE-ERROR", "not valid in its encoding", \t.getSqlValue(), (bad,), h.name);
+            # a valid string with a quote is quoted as before
+            assertRegex("it''s", t.getSqlValue("it's"), h.name);
         }
     }
 }

@@ -84,6 +84,38 @@ ds.recvDataStream(
 */
 
 #! the DataStreamClient namespace contains all the public objects in the DataStreamClientIo module
+namespace DataStreamClientIoPrivate {
+    # private function
+    # returns True if the string is valid in its encoding: a regular expression matches every valid string, and no
+    # string in UTF-8 that is not valid; one in another encoding that cannot be converted to UTF-8 raises a conversion
+    # error
+    bool sub ds_string_valid(string str) {
+        try {
+            return str =~ /^/;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+    }
+
+    # private function
+    # returns "err: desc" for the exception on one line: CR and LF are replaced by spaces; an error code or a
+    # description that is not valid in its encoding (it can come from a peer) cannot be processed and is not given, so
+    # that the caller, which handles an error, does not raise another one (qore#6553)
+    string sub ds_error_line(hash<ExceptionInfo> ex) {
+        auto err = ex.err;
+        if (err.typeCode() == NT_STRING && !ds_string_valid(err)) {
+            err = "<error code not valid in its encoding>";
+        }
+        auto desc = ex.desc;
+        if (desc.typeCode() == NT_STRING && !ds_string_valid(desc)) {
+            desc = "<description not valid in its encoding>";
+        }
+        string str = sprintf("%s: %s", err, desc);
+        str =~ s/[\r\n]/ /g;
+        return str;
+    }
+}
+
 public namespace DataStreamClient {
 
 #! strips DataStream-specific options before passing to RestClientIo
@@ -1556,8 +1588,8 @@ public class DataStreamClientIo inherits RestClientIo::RestClientIo {
                 # secondary error, triggering belt-and-suspenders cleanup in
                 # the caller that can block on the REST helper's default
                 # request_timeout.
-                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
-                err_msg =~ s/[\r\n]/ /g;
+                # one line, without a string that cannot be processed (qore#6553)
+                string err_msg = DataStreamClientIoPrivate::ds_error_line(ex);
                 string json = make_json({"error": {"code": "internal", "message": err_msg}});
                 try {
                     stream.sendData(connect_frame_message(binary(json),

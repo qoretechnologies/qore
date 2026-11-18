@@ -2235,7 +2235,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     #! Returns the SQL that sets or removes the comment of a view: Oracle comments on a view as on a table
     private softlist<string> getViewCommentSqlImpl(AbstractView view, *string comment, *string old_comment) {
         return sprintf("comment on table %s is %s", oracle_get_sql_object_name(view.name),
-            "'" + replace(comment ?? "", "'", "''") + "'");
+            "'" + replace(sql_literal_check_encoding(comment ?? ""), "'", "''") + "'");
     }
 
     private OracleFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -2842,7 +2842,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             # try to drop any table created to back the materialized view, ignoring ORA-00942
             # "table or view does not exist" errors but rethrowing all others
             # the name is in a string literal, where each single quote is doubled
-            ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when "
+            ds.execRaw("begin execute immediate 'drop table " + replace(sql_literal_check_encoding(name), "'", "''") + "'; exception when "
                 "others then if sqlcode != -942 then raise; end if; end;");
         }
     }
@@ -4913,6 +4913,8 @@ group by p.index_name", schema.upr(), name.upr());
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         # use negative lookahead to avoid double-replacing "HH24" -> "HH2424"
         fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);
@@ -5515,7 +5517,7 @@ group by p.index_name", schema.upr(), name.upr());
             case NT_INT: return v.toString();
 
             # double any single quotes in strings
-            case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+            case NT_STRING: v = sql_literal_check_encoding(v); v =~ s/'/''/g; return "'" + v + "'";
 
             case NT_NULL:
             case NT_NOTHING: return "null";
