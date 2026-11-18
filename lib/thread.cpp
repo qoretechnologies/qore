@@ -6774,12 +6774,23 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
             undo();
             throw;
         }
-    } else {
-        assert(qore_program_private::get(*pgm)->parsingLocked());
+    } else if (!qore_program_private::get(*pgm)->parsingLocked()) {
+        // code that runs in the Program, and not in its commit (where the thread holds the parse lock already), parses
+        // code in it: the parse lock is taken as for another Program, and the parse is refused as one while threads run
+        // in the Program (issue #6568)
+        if (qore_program_private::lockParsing(*pgm, xsink)) {
+            return;
+        }
+        locked_pgm = pgm;
     }
 }
 
 ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper() {
+    if (locked_pgm) {
+        assert(!restore);
+        qore_program_private::unlockParsing(*locked_pgm, xsink);
+        return;
+    }
     if (!restore)
         return;
 
