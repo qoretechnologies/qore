@@ -144,6 +144,10 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - a path template is checked and its pattern compiled when the schema is loaded: one that is not valid (such as
+      \c "/a/{b") raises \c INVALID-PATH-COMPONENT then (or the path is left out with
+      @ref Swagger::LM_IGNORE_INVALID_PATHS "LM_IGNORE_INVALID_PATHS"), instead of failing each request to it
+      (issue #6603)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): a debug print
       of a list content type was removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - a value that a schema type refuses is reported with \c TYPE-VALUE-ERROR instead of \c RUNTIME-TYPE-ERROR, as by
@@ -2714,6 +2718,20 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
         list<hash<string, list<string>>> security;
     }
 
+    private {
+        #! the compiled pattern of the path template, which captures the value of each parameter (qore#6603)
+        transient *Regex path_template_re;
+    }
+
+
+    #! Returns the compiled pattern of the path template of the operation (qore#6603)
+    /** The pattern is compiled when the operation is created; it is not serialized, so a deserialized operation
+        compiles it on first use
+    */
+    private Regex getPathTemplateRegex() {
+        return path_template_re ?? (path_template_re = new Regex(PathComponent::getTemplatePattern(path)));
+    }
+
     #! Constructor.
     /** @param path the path for the operation
         @param method the HTTP method for the operation
@@ -2727,6 +2745,11 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
     public constructor(string path, string method, hash<auto> oh, SwaggerSchema swagger) : ParameterGroup(oh) {
         self.path = path;
         self.method = method.upr();
+        # the path template is checked and its pattern compiled here, so that a template that is not valid is an error
+        # of the schema, not of each request (qore#6603)
+        if (index(path, "{") >= 0) {
+            getPathTemplateRegex();
+        }
         string objType = "Operation";
         *list<auto> tagsObj;
         if (optional_field(objType, oh, "tags", NT_LIST, \tagsObj)) {
@@ -3030,7 +3053,7 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
                 actual_path += "/";
             }
             # every template is replaced in the pattern, so each value is that of its own parameter
-            path_values = regex_extract(actual_path, PathComponent::getTemplatePattern(path));
+            path_values = getPathTemplateRegex().extractGroups(actual_path);
             if (path_values.size() != path_names.size()) {
                 error("SCHEMA-VALIDATION-ERROR", "Request path %y does not match path template %y for %s",
                     actual_path, path, method.upr());

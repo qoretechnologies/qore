@@ -94,6 +94,9 @@ http.waitStop();
     @section jsonrpchandler_relnotes JsonRpcHandler Release Notes
 
     @subsection jsonrpchandler_2_0_2 JsonRpcHandler v2.0.2
+    - the \c "name" pattern of a method is compiled when the method is added, which raises
+      \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each request, and one that is
+      not valid failed the requests after it (issue #6603)
     - fixed logging sensitive data: a logged request is masked as with
       @ref HttpServer::http_mask_value() "http_mask_value()", and only if it will be logged
     - added @ref JsonRpcHandler::JsonRpcHandler::isLogDebugEnabled() "JsonRpcHandler::isLogDebugEnabled()"
@@ -176,6 +179,8 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
     private:internal {
         list methods = ();
         hash mi;
+        #! the compiled name patterns of the methods, by method text (qore#6603)
+        hash<string, Regex> name_res;
         int loglevel;
 
         # if True then verbose exception info will be logged
@@ -217,6 +222,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
 
         @throw JSON-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \"text" key in method hash,
         \c "function" key not assigned to a callable value
+        @throw REGEX-COMPILATION-ERROR the \c "name" of a method is not a valid regular expression
     */
     constructor(Logger::LoggerInterface logger, HttpServer::AbstractAuthenticator auth, *list<auto> methods,
             *code getLogMessage, bool dbg = False, *string get_prefix)
@@ -249,6 +255,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
 
         @throw JSON-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \"text" key in method hash,
         \c "function" key not assigned to a callable value
+        @throw REGEX-COMPILATION-ERROR the \c "name" of a method is not a valid regular expression
     */
     constructor(HttpServer::AbstractAuthenticator auth, *list<auto> methods, *code getLogMessage,
             bool dbg = False, *string get_prefix, *code log)
@@ -282,6 +289,10 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
     }
 
     #! Add a list of methods
+    /** @throw JSON-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \c "text" key in method hash,
+        \c "function" key not assigned to a callable value
+        @throw REGEX-COMPILATION-ERROR the \c "name" of a method is not a valid regular expression
+    */
     addMethods(list<auto> methods) {
         foreach hash<auto> m in (methods) {
             if (!exists m.name)
@@ -315,6 +326,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         splice methods, i, 1;
         # rebuild method index
         remove mi{text};
+        remove name_res{text};
         # update indices for methods after the removed one
         foreach string key in (keys mi) {
             if (mi{key} > i) {
@@ -385,6 +397,10 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
 
         if (!exists h.name)
             h.name = sprintf("^%s\$", h.text);
+        # the name pattern is compiled when the method is added, so that a pattern that is not valid fails here and
+        # not in each request (qore#6603)
+        Regex name_re(h.name);
+        name_res{h.text} = name_re;
         methods[i] = h;
         mi{h.text} = i;
     }
@@ -442,7 +458,7 @@ public class JsonRpcHandler inherits public AbstractHttpRequestHandler, Logger::
         # find method function
         hash<auto> found;
         foreach hash<auto> m in (methods) {
-            if (regex(method, m.name)) {
+            if (name_res{m.text}.match(method)) {
                 found = m;
                 break;
             }

@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The regular expressions of HTTP handlers are compiled when the handler is created, so that a pattern that is not
+# valid fails there and not in each request with a 500 response (qore#6603): HttpServer handler paths, JSON-RPC and
+# YAML-RPC method names and MCP resource templates.
+
+%modern
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires json
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires JsonRpcHandler
+%requires DataProvider
+%requires McpServerHandler
+%ifndef NoYaml
+%requires YamlRpcHandler
+%requires YamlRpcClient
+%endif
+
+%exec-class HandlerPatternsAtCreationTest
+
+class TextHandler inherits AbstractHttpRequestHandler {
+    private {
+        string text;
+    }
+
+    constructor(string text) {
+        self.text = text;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, text, {"Content-Type": MimeTypeText});
+    }
+}
+
+class TemplateMcpServerHandler inherits McpServerHandler {
+    constructor() : McpServerHandler(new Logger("mcp"), new PermissiveAuthenticator()) {
+    }
+
+    *string matchTemplate(string uri) {
+        return matchResourceTemplate(uri).uriTemplate;
+    }
+}
+
+class HandlerPatternsAtCreationTest inherits QUnit::Test {
+    constructor() : Test("handler patterns compiled at creation", "1.0") {
+        addTestCase("HttpServer handler paths", \httpServerTest());
+        addTestCase("JSON-RPC method names", \jsonRpcTest());
+        addTestCase("YAML-RPC method names", \yamlRpcTest());
+        addTestCase("MCP resource templates", \mcpTemplateTest());
+        set_return_value(main());
+    }
+
+    httpServerTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setDefaultHandler("default", new TextHandler("default"));
+        # a path that is not a valid regular expression fails when the handler is set
+        assertThrows("REGEX-COMPILATION-ERROR", \server.setHandler(), ("bad", "v(", NOTHING,
+            new TextHandler("bad")));
+        assertThrows("REGEX-COMPILATION-ERROR", \server.setDynamicHandler(), ("bad", "v[", NOTHING,
+            new TextHandler("bad")));
+        # the failed handler was not added, so the name can be used again
+        server.setHandler("bad", "^v[0-9]+/", NOTHING, new TextHandler("versioned"));
+        # a path that is not a regular expression is not compiled
+        server.setHandler("literal", "a(b", NOTHING, new TextHandler("literal"), NOTHING, False);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        HTTPClient hc({"url": "http://localhost:" + port});
+        assertEq("versioned", hc.get("/v2/x"));
+        assertEq("default", hc.get("/vx/x"));
+        assertEq("literal", hc.get("/a(b"));
+        assertEq("default", hc.get("/ab"));
+    }
+
+    jsonRpcTest() {
+        list<hash<auto>> methods = ({
+            "name": "^math\\.(add|plus)\$",
+            "text": "math.add",
+            "function": int sub (int a, int b) { return a + b; },
+        },);
+        # a method name that is not a valid regular expression fails when the method is added
+        assertThrows("REGEX-COMPILATION-ERROR", sub () {
+            JsonRpcHandler h(new PermissiveAuthenticator(), methods + ({
+                "name": "^bad(",
+                "text": "bad",
+                "function": sub () {},
+            },));
+        });
+        list<hash<auto>> logged;
+        JsonRpcHandler handler(new PermissiveAuthenticator(), methods,
+            *string sub (hash<auto> cx, hash<auto> method, reference<auto> params) {
+                logged += method;
+            });
+        assertThrows("REGEX-COMPILATION-ERROR", \handler.addMethods(), (({
+            "name": "^bad[",
+            "text": "bad",
+            "function": sub () {},
+        },),));
+        # the method that failed was not added
+        assertFalse(handler.hasMethod("bad"));
+        assertTrue(handler.hasMethod("math.add"));
+
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("jsonrpc", "JSON", MimeTypeJsonRpc, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        JsonRpcClient client({"url": sprintf("http://localhost:%d/JSON", port)});
+        # the compiled pattern matches each method name it covers
+        assertEq(3, client.call("math.add", 1, 2).result);
+        assertEq(5, client.call("math.plus", 2, 3).result);
+        assertEq(JsonRpcHandler::JRE_MethodNotFound, client.call("math.sub", 1, 2).error.code);
+        # the method definition given to the log callback is the one that was passed
+        assertEq(sort(("name", "text", "function")), sort(keys logged[0]));
+
+        # a removed method no longer matches
+        assertTrue(handler.removeMethod("math.add"));
+        assertEq(JsonRpcHandler::JRE_MethodNotFound, client.call("math.add", 1, 2).error.code);
+    }
+
+    yamlRpcTest() {
+%ifdef NoYaml
+        testSkip("the yaml module is not available");
+%else
+        list<hash<auto>> methods = ({
+            "name": "^math\\.(add|plus)\$",
+            "text": "math.add",
+            "function": int sub (int a, int b) { return a + b; },
+        },);
+        assertThrows("REGEX-COMPILATION-ERROR", sub () {
+            YamlRpcHandler h(new PermissiveAuthenticator(), methods + ({
+                "name": "^bad(",
+                "text": "bad",
+                "function": sub () {},
+            },));
+        });
+        YamlRpcHandler handler(new PermissiveAuthenticator(), methods);
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit delete server;
+        server.setHandler("yamlrpc", "YAML", MimeTypeYamlRpc, handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        YamlRpcClient client({"url": sprintf("http://localhost:%d/YAML", port)});
+        assertEq(3, client.call("math.add", 1, 2).result);
+        assertEq(5, client.call("math.plus", 2, 3).result);
+%endif
+    }
+
+    mcpTemplateTest() {
+        # the characters of a template other than its expressions match themselves
+        Regex re(McpServerHandler::getUriTemplatePattern("db://a.b/(x)/{id}"));
+        assertTrue(re.match("db://a.b/(x)/5"));
+        assertFalse(re.match("db://a.b/x/5"));
+        # "{}" is not an expression, and the expressions after it are
+        re = new Regex(McpServerHandler::getUriTemplatePattern("x{}{id}"));
+        assertTrue(re.match("x{}5"));
+        assertFalse(re.match("x5"));
+        # a "{" without a "}" is literal text
+        re = new Regex(McpServerHandler::getUriTemplatePattern("a{id}{b"));
+        assertTrue(re.match("a5{b"));
+        assertFalse(re.match("a5b"));
+
+        TemplateMcpServerHandler mcp();
+        mcp.registerResourceTemplate("db://a.b/(x)/{id}", "parens", NOTHING, MimeTypeJson);
+        mcp.registerResourceTemplate("file:///[{dir}]/{name}+", "brackets", NOTHING, MimeTypeText);
+        assertEq("db://a.b/(x)/{id}", mcp.matchTemplate("db://a.b/(x)/5"));
+        # "." is not any character, and an expression does not match "/"
+        assertNothing(mcp.matchTemplate("db://aXb/(x)/5"));
+        assertNothing(mcp.matchTemplate("db://a.b/(x)/5/6"));
+        assertNothing(mcp.matchTemplate("db://a.b/(x)/"));
+        assertEq("file:///[{dir}]/{name}+", mcp.matchTemplate("file:///[d]/n+"));
+        assertNothing(mcp.matchTemplate("file:///[d]/nn"));
+        # an unregistered template no longer matches
+        assertTrue(mcp.unregisterResourceTemplate("db://a.b/(x)/{id}"));
+        assertNothing(mcp.matchTemplate("db://a.b/(x)/5"));
+    }
+}

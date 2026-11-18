@@ -12,6 +12,7 @@ class PathTemplatesTest inherits QUnit::Test {
         addTestCase("literal and template routing", \routingTest());
         addTestCase("parameter extraction", \parametersTest());
         addTestCase("invalid and ambiguous templates", \invalidTest());
+        addTestCase("deserialized schema", \deserializedTest());
         set_return_value(main());
     }
 
@@ -68,6 +69,19 @@ class PathTemplatesTest inherits QUnit::Test {
         assertEq({"id": "abc"}, req.path_args);
         req = s.parseRequest("GET", "/files/reports/file-september.json", NOTHING, \headers);
         assertEq({"folder": "reports", "name": "september"}, req.path_args);
+    }
+
+    # the compiled patterns of the templates are not serialized; a deserialized schema compiles them when they are used
+    # (qore#6603)
+    private deserializedTest() {
+        OpenApi3Schema s = Serializable::deserialize(schema(("/batches/{id}:cancel", "/files/{folder}/file-{name}.json",
+            "/files/{folder}/{name}")).serialize());
+        hash<auto> headers;
+        assertEq({"id": "abc"}, s.parseRequest("GET", "/batches/abc:cancel", NOTHING, \headers).path_args);
+        assertEq({"folder": "reports", "name": "september"},
+            s.parseRequest("GET", "/files/reports/file-september.json", NOTHING, \headers).path_args);
+        assertEq("/files/{folder}/{name}", s.paths.match("/files/reports/other.json").getOperation("get",
+            "/files/reports/other.json").path);
     }
 
     private invalidTest() {

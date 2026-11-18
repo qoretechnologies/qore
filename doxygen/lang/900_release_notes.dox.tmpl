@@ -2238,6 +2238,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref httpserverintro "HttpServer" and @ref swaggerintro "Swagger" modules: a handler path that is not a valid
+      regular expression raises \c REGEX-COMPILATION-ERROR when the handler is set, and a Swagger path template that is
+      not valid raises \c INVALID-PATH-COMPONENT when the schema is loaded, instead of failing each request with a
+      500 response; the patterns are compiled once (see @ref http1_7 and @ref swagger_2_6; issue #6603)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)

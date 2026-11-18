@@ -554,6 +554,8 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         #! Registered resource templates: uriTemplate -> template info
         hash<string, hash<McpResourceTemplateInfo>> rtmap;
+        #! the patterns of the resource templates, compiled when a template is registered (qore#6603)
+        hash<string, Regex> rtregex;
 
         #! Session map; session ID -> session info
         hash<string, hash<McpSessionInfo>> smap;
@@ -3932,21 +3934,39 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
     #! Matches a URI against resource templates
     private *hash<McpResourceTemplateInfo> matchResourceTemplate(string uri) {
-        foreach string tpl in (keys rtmap) {
-            if (matchUriTemplate(tpl, uri)) {
-                return rtmap{tpl};
+        foreach hash<auto> i in (rtregex.pairIterator()) {
+            if (i.value.match(uri)) {
+                return rtmap{i.key};
             }
         }
         return NOTHING;
     }
 
-    #! Simple URI template matching (RFC 6570 basic)
-    private bool matchUriTemplate(string template, string uri) {
-        # Convert template to regex pattern
-        string pattern = template;
-        pattern =~ s/\{[^}]+\}/[^\/]+/g;
-        pattern = "^" + pattern + "$";
-        return uri.regex(pattern);
+    #! Returns the anchored pattern of a URI template (RFC 6570, simple expressions)
+    /** Each expression (\c "{name}") matches one or more characters other than \c "/"; the other characters of the
+        template match themselves (qore#6603: they were regular expression syntax, so a template with \c "(" failed
+        every request and \c "." matched any character)
+    */
+    static string getUriTemplatePattern(string template) {
+        string pattern = "^";
+        int offset = 0;
+        int start;
+        while ((start = index(template, "{", offset)) >= 0) {
+            int end = index(template, "}", start + 1);
+            if (end < 0) {
+                # no expression: the rest of the template is literal text
+                break;
+            }
+            if (end == start + 1) {
+                # "{}" is not an expression: it is literal text
+                pattern += regex_escape(template.substr(offset, end + 1 - offset));
+                offset = end + 1;
+                continue;
+            }
+            pattern += regex_escape(template.substr(offset, start - offset)) + "[^/]+";
+            offset = end + 1;
+        }
+        return pattern + regex_escape(template.substr(offset)) + "$";
     }
 
     #
@@ -3964,6 +3984,10 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     registerResourceTemplate(string uriTemplate, string name, *string desc, *string mimeType,
             *code<auto(hash<auto>, string)> reader,
             *hash<auto> annotations) {
+        # the pattern is compiled here, so that a template that cannot be matched is an error of the registration,
+        # not of each request (qore#6603)
+        Regex re(McpServerHandler::getUriTemplatePattern(uriTemplate));
+        rtregex{uriTemplate} = re;
         rtmap{uriTemplate} = <McpResourceTemplateInfo>{
             "uriTemplate": uriTemplate,
             "name": name,
@@ -3979,6 +4003,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         @return True if the template was unregistered, False if it was not found
     */
     bool unregisterResourceTemplate(string uriTemplate) {
+        remove rtregex{uriTemplate};
         return exists remove rtmap{uriTemplate};
     }
 

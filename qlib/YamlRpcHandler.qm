@@ -98,6 +98,8 @@ http.waitStop();
     @section yamlrpchandler_relnotes YamlRpcHandler Release Notes
 
     @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
+    - the \c "name" pattern of a method is compiled when the method is added, which raises
+      \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each request (issue #6603)
     - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
     - added debug logging support
     - updated copyright year to 2025
@@ -156,6 +158,8 @@ public namespace YamlRpcHandler {
         private {
             list methods = ();
             hash mi;
+            #! the compiled name patterns of the methods, by method text (qore#6603)
+            hash<string, Regex> name_res;
             int loglevel;
 
             # if True then verbose exception info will be logged
@@ -186,6 +190,7 @@ public namespace YamlRpcHandler {
             @param log an optional closure or call reference to be called when logging
 
             @throw YAML-RPC-CONSTRUCTOR-ERROR missing \c "name", \c "function", or \"text" key in method hash, \c "function" key not assigned to a callable value
+            @throw REGEX-COMPILATION-ERROR the \c "name" of a method is not a valid regular expression
          */
         constructor(HttpServer::AbstractAuthenticator auth, list<auto> methods, *code get_log_msg, bool dbg = False,
                 *string get_prefix, *code log) : HttpServer::AbstractHttpRequestHandler(auth) {
@@ -361,6 +366,10 @@ public namespace YamlRpcHandler {
 
             if (!exists h.name)
                 h.name = sprintf("^%s\$", h.text);
+            # the name pattern is compiled when the method is added, so that a pattern that is not valid fails here
+            # and not in each request (qore#6603)
+            Regex name_re(h.name);
+            name_res{h.text} = name_re;
             methods[i] = h;
         }
 
@@ -418,7 +427,7 @@ public namespace YamlRpcHandler {
             # find method function
             hash<auto> found;
             foreach hash<auto> m in (methods) {
-                if (regex(method, m.name)) {
+                if (name_res{m.text}.match(method)) {
                     found = m;
                     break;
                 }
