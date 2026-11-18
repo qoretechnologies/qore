@@ -93,6 +93,36 @@ class PerfBuildTargetsTest(unittest.TestCase):
         # the partial build is not installed
         self.assertNotRegex(test, r"(?m)^\s*cmake --install")
 
+    def test_release_build_tests(self):
+        """The tests that check a release build ("# test-release-build: <why>") run in the performance job, CI's only
+        release build, and in the test jobs as well (issue #6540: the release stack budgets of
+        recursion-frame-budget.qtest were never checked in CI)"""
+        def listed(env):
+            out = subprocess.run(["sh", str(ROOT / "run_tests.sh"), "-l"], cwd=ROOT, check=True, capture_output=True,
+                                 text=True, env=dict({"PATH": "/usr/bin:/bin"}, **env)).stdout
+            return {str((ROOT / line).resolve()) for line in out.split()}
+        perf = {str(Path(t).resolve()) for t in perf_tests()}
+        excluded = listed({"QORE_EXCLUDE_PERF_TESTS": "1"})
+        marked = set()
+        for test in (ROOT / "examples/test").rglob("*.qtest"):
+            lines = test.read_text(errors="replace").splitlines()
+            decl = [line for line in lines if line.startswith("# test-release-build:")]
+            if not decl:
+                continue
+            # one declaration with its reason, on a line of its own
+            self.assertEqual(1, len(decl), str(test))
+            self.assertRegex(decl[0], r"^# test-release-build: \S(?:.*\S)?$", str(test))
+            marked.add(str(test.resolve()))
+        recursion = str((ROOT / "examples/test/qore/stack/recursion-frame-budget.qtest").resolve())
+        self.assertIn(recursion, marked)
+        for test in marked:
+            self.assertIn(test, perf)
+            self.assertIn(test, excluded)
+        # the performance tests are still selected by their names, and only they and the marked tests
+        self.assertEqual(perf - marked, {t for t in perf if re.search(r"Perf|PipelineMemory\.qtest$", t)})
+        # perf-build-targets.py builds what the marked tests require
+        self.assertIn("QUnit", targets.modules_of([recursion]))
+
 
 if __name__ == "__main__":
     unittest.main()

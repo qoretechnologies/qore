@@ -9,7 +9,8 @@ print_usage () {
   echo "  -j         Use --format=junit option for the tests, making them print JUnit output."
   echo "  -l         List the tests that would run (after the selection and the shard), one per line, and exit."
   echo "  -E         Exclude performance/stress tests (matched by *Perf* or PipelineMemory pattern)."
-  echo "  -P         Run only performance/stress tests."
+  echo "  -P         Run only performance/stress tests, and the tests that check a release build"
+  echo "             ('# test-release-build: <why>')."
   echo "  -t         Measure execution time of the tests."
   echo "  -v         Use --format=plain option for the tests, making them print one statement per each test case."
   echo
@@ -42,7 +43,9 @@ print_usage () {
   echo "                           The column of test-durations.tsv used (default: CI_JOB_NAME without its shard)."
   echo "  QORE_TEST_DURATIONS_FILE The durations file (default: examples/test/docker_test/test-durations.tsv)."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
-  echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
+  echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P), and the tests that"
+  echo "                           declare '# test-release-build: <why>', which check a release build (the CI"
+  echo "                           test jobs test a debug build; the performance job a release build)."
   echo "  QORE_TEST_EXCLUDE_EXEC_MODE_CHILDREN"
   echo "                           Set to '1' to leave out the tests that declare '# test-exec-mode: children'"
   echo "                           (needs --exec-mode in QORE_TEST_OPTS): their child processes set their own"
@@ -208,11 +211,22 @@ if [ $PERF_EXCLUDE -eq 1 ]; then
     done
     TESTS="$FILTERED"
 elif [ $PERF_ONLY -eq 1 ]; then
+    # with the performance tests, the tests that check a release build (a "# test-release-build: <why>" line, such as
+    # the stack budgets of qore/stack/recursion-frame-budget.qtest): the performance job tests CI's only release
+    # build, as the test jobs test a debug build, and these tests run there too (issue #6540)
+    RELEASE_BUILD_TESTS=""
+    if [ -n "$TESTS" ]; then
+        RELEASE_BUILD_TESTS=" "`grep -l '^# test-release-build: ' $TESTS | tr '\n' ' '`
+    fi
     FILTERED=""
     for test in $TESTS; do
         if is_perf_test "$test"; then
             FILTERED="$FILTERED $test"
+            continue
         fi
+        case "$RELEASE_BUILD_TESTS" in
+            *" $test "*) FILTERED="$FILTERED $test" ;;
+        esac
     done
     TESTS="$FILTERED"
 fi
