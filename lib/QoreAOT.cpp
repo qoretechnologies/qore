@@ -3984,6 +3984,12 @@ public:
                             temp_mark_idx[inst->temp_scope_id] = i;
                         }
                         break;
+                    case QoreIROpcode::PushTempMarkPair:
+                        if (inst->temp_scope_id) {
+                            temp_mark_idx[inst->temp_scope_id] = i;
+                            temp_mark_idx[inst->unwind_inner_temp_scope_id] = i;
+                        }
+                        break;
                     case QoreIROpcode::DiscardTemps:
                     case QoreIROpcode::DiscardTempsKeep:
                         if (inst->temp_scope_id) {
@@ -4221,6 +4227,9 @@ private:
                     // transformRegion().
                     case QoreIROpcode::PushTempMark:
                         ++temp_push_count;
+                        break;
+                    case QoreIROpcode::PushTempMarkPair:
+                        temp_push_count += 2;
                         break;
                     case QoreIROpcode::DiscardTemps:
                     case QoreIROpcode::DiscardTempsKeep:
@@ -6661,6 +6670,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::CheckException:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::ConstString:
@@ -6877,6 +6887,7 @@ static bool qore_aot_get_fixed_hash_remap(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -6972,6 +6983,7 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -7540,6 +7552,7 @@ static bool qore_aot_get_string_expression(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -7883,6 +7896,7 @@ static bool qore_aot_get_collection_op(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -8269,6 +8283,7 @@ static bool qore_aot_get_conditional_aggregate_shape(
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::LoadLocal: {
@@ -8747,6 +8762,7 @@ static bool qore_aot_get_aggregate_return(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -9314,6 +9330,7 @@ static bool qore_aot_collect_composed_aggregate_return_summaries(
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::LoadLocal: {
@@ -9791,6 +9808,7 @@ static int8_t qore_aot_get_boxed_return_param(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -9905,6 +9923,7 @@ static int8_t qore_aot_get_forwarded_return_param(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -10171,6 +10190,7 @@ static int8_t qore_aot_get_composed_boxed_return_param(
                     case QoreIROpcode::DebugBlock:
                     case QoreIROpcode::DebugStatement:
                     case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::PushTempMarkPair:
                     case QoreIROpcode::DiscardTemps:
                     case QoreIROpcode::Br:
                     case QoreIROpcode::BrIf:
@@ -10494,6 +10514,7 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -10665,6 +10686,7 @@ static bool qore_aot_get_context_int(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -10803,6 +10825,7 @@ static bool qore_aot_get_global_int(const QoreIRFunction& func,
             case QoreIROpcode::DebugBlock:
             case QoreIROpcode::DebugStatement:
             case QoreIROpcode::PushTempMark:
+            case QoreIROpcode::PushTempMarkPair:
             case QoreIROpcode::DiscardTemps:
                 break;
             case QoreIROpcode::LoadLocal: {
@@ -11850,6 +11873,7 @@ static bool qore_aot_collect_int_expression_summaries(
             return opcode == QoreIROpcode::DebugBlock
                 || opcode == QoreIROpcode::DebugStatement
                 || opcode == QoreIROpcode::PushTempMark
+                || opcode == QoreIROpcode::PushTempMarkPair
                 || opcode == QoreIROpcode::DiscardTemps;
         };
         if (func->blocks.size() >= 3) {
@@ -12562,6 +12586,7 @@ static bool qore_aot_collect_float_expression_summaries(
             return opcode == QoreIROpcode::DebugBlock
                 || opcode == QoreIROpcode::DebugStatement
                 || opcode == QoreIROpcode::PushTempMark
+                || opcode == QoreIROpcode::PushTempMarkPair
                 || opcode == QoreIROpcode::DiscardTemps;
         };
         auto append_instruction = [&](const QoreIRInstruction* inst,
@@ -14109,7 +14134,8 @@ bool qore_ir_resolve_batch_function_summaries(
             const QoreIRInstruction* inst = inst_ptr.get();
             if (inst->opcode == QoreIROpcode::DebugBlock
                     || inst->opcode == QoreIROpcode::DebugStatement
-                    || inst->opcode == QoreIROpcode::PushTempMark) {
+                    || inst->opcode == QoreIROpcode::PushTempMark
+                    || inst->opcode == QoreIROpcode::PushTempMarkPair) {
                 continue;
             }
             if (inst->opcode == QoreIROpcode::LoadSelfMember) {
@@ -14173,6 +14199,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::LoadLocal: {
@@ -14307,6 +14334,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 case QoreIROpcode::DebugBlock:
                 case QoreIROpcode::DebugStatement:
                 case QoreIROpcode::PushTempMark:
+                case QoreIROpcode::PushTempMarkPair:
                 case QoreIROpcode::DiscardTemps:
                     break;
                 case QoreIROpcode::LoadLocal: {
@@ -15030,6 +15058,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     case QoreIROpcode::DebugBlock:
                     case QoreIROpcode::DebugStatement:
                     case QoreIROpcode::PushTempMark:
+                    case QoreIROpcode::PushTempMarkPair:
                     case QoreIROpcode::DiscardTemps:
                         break;
                     case QoreIROpcode::LoadLocal: {

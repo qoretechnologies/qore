@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 439,
+static_assert(QORE_IR_MAX_OPCODE == 440,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -17184,6 +17184,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 || inst->opcode == QoreIROpcode::ConstNull
                 || inst->opcode == QoreIROpcode::ConstString
                 || inst->opcode == QoreIROpcode::PushTempMark
+                || inst->opcode == QoreIROpcode::PushTempMarkPair
                 // the check of the target of a call (issue #5784, #5823) changes no local and runs no Qore code: it
                 // reads the state of an object or looks up a method, and a failure leaves the path that would reuse
                 // the extraction
@@ -37485,6 +37486,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst->temp_scope_id,
                 iterator_cleanup_allocas.size()
             });
+            return true;
+        }
+        case QoreIROpcode::PushTempMarkPair: {
+            // the marks of two nested scopes, as two PushTempMark instructions push them (qore#6444)
+            for (uint32_t scope_id : {inst->temp_scope_id, inst->unwind_inner_temp_scope_id}) {
+                temp_cleanup_marks.push_back({
+                    invoke_result_allocas.size(),
+                    pending_ssa_cleanup.size(),
+                    scope_id,
+                    iterator_cleanup_allocas.size()
+                });
+            }
             return true;
         }
         case QoreIROpcode::DebugStatement: {

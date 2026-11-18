@@ -6802,6 +6802,9 @@ static bool qore_ir_loop_temp_scopes_are_closed(const QoreIRNaturalLoop& loop,
             }
             if (inst->opcode == QoreIROpcode::PushTempMark && inst->temp_scope_id) {
                 marks.insert(inst->temp_scope_id);
+            } else if (inst->opcode == QoreIROpcode::PushTempMarkPair && inst->temp_scope_id) {
+                marks.insert(inst->temp_scope_id);
+                marks.insert(inst->unwind_inner_temp_scope_id);
             }
         }
     }
