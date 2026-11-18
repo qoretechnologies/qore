@@ -7428,6 +7428,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::RangeDate: {
             QoreValue left = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
             QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
+            if (inv->auto_local_string_append && op == QoreIROpcode::AddAssignAny) {
+                return fromBits(qore_rt_add_assign_local_any(toBits(left), toBits(right), xsink));
+            }
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
         }
         // Ternary computation opcodes.  These can be emitted as Invoke
@@ -13110,13 +13113,14 @@ dispatch_folded_step_host:
                             goto load_local_done;
                         }
                         if (cache_has_value) {
-                            if (local_inst->borrowed_local_load) {
+                            if (local_inst->borrowed_local_load
+                                    || (local_inst->auto_local_string_append && cached_node_type == NT_STRING)) {
                                 // Load pairs with a local mutation and has no
                                 // other consumers: borrow the slot-cache reference
                                 // so the builder node stays unique at the mutation
                                 // site (native code borrows via alloca loads)
                                 out = cached_val;
-                                if ((local_inst->string_append_local_cow
+                                if ((local_inst->auto_local_string_append || local_inst->string_append_local_cow
                                         || local_inst->list_push_local_cow)
                                         && !is_ir_only_local) {
                                     // The runtime local remains the persistent
@@ -13196,9 +13200,10 @@ dispatch_folded_step_host:
                                 }
                             }
                         }
-                        if (local_inst->borrowed_local_load
-                                && (local_inst->string_append_local_cow
-                                    || local_inst->list_push_local_cow)
+                        if (((local_inst->borrowed_local_load
+                                    && (local_inst->string_append_local_cow || local_inst->list_push_local_cow))
+                                || (local_inst->auto_local_string_append && !reference_value
+                                    && val.getType() == NT_STRING))
                                 && !is_ir_only_local && !is_weak_ref_local) {
                             // eval() returned a temporary +1 ref while the TLS
                             // local remains the owner. Release that temporary
@@ -18260,7 +18265,9 @@ load_local_done:
                 }
                 QoreValue left = getIRValue(values, inst->operands[0]);
                 QoreValue right = getIRValue(values, inst->operands[1]);
-                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
+                QoreValue res = inst->auto_local_string_append && inst->opcode == QoreIROpcode::AddAssignAny
+                    ? fromBits(qore_rt_add_assign_local_any(toBits(left), toBits(right), xsink))
+                    : QoreIRInterpreter::evalBinary(inst->opcode, left, right, xsink);
                 if (xsink && *xsink) {
                     res.discard(xsink);
                     // an operation with a handler in this frame - such as a compound assignment to an element of a

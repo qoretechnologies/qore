@@ -18128,6 +18128,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 }
 
 // documented in QoreIRToLLVM.h
+void QoreIRToLLVM::prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs,
+        llvm::Module& module, llvm::Function* llvm_func) {
+    const auto* load = static_cast<const QoreIRLocalInstruction*>(value_definitions.at(inst.operands[0].id));
+    auto key = reinterpret_cast<const void*>(load->local);
+    if (!local_allocas.count(key) || (ir_only_locals_set && ir_only_locals_set->count(key))) {
+        return;
+    }
+    ensureLocalReloadDeferred(key, llvm_func);
+    auto slot = [&](const auto& slots) -> llvm::Value* {
+        auto it = slots.find(key);
+        return it == slots.end() ? llvm::Constant::getNullValue(ptr_type) : static_cast<llvm::Value*>(it->second);
+    };
+    auto helper = module.getOrInsertFunction("qore_rt_drop_local_string_cache",
+        llvm::FunctionType::get(void_type, {i64_type, ptr_type, ptr_type, ptr_type}, false));
+    builder->CreateCall(helper, {lhs, slot(preinstantiated_entry_cleanup_by_local),
+        slot(local_reload_trackers), slot(local_reload_deferred)});
+}
+
 llvm::Value* QoreIRToLLVM::emitStringAppendCow(const QoreIRInstruction* inst, llvm::Value* lhs_boxed,
         llvm::Value* rhs_boxed, bool use_in_place, llvm::Module& module, llvm::Function* llvm_func, bool& borrowed,
         std::string& error) {
@@ -22302,6 +22320,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = builder->CreateCall(helper, {opcode_val, val_boxed, xsink_arg});
                 // No reloadAllLocalsFromRuntime — pure computation
 
+            } else if (inv->auto_local_string_append && inv->invoke_opcode == QoreIROpcode::AddAssignAny) {
+                auto* lhs = getVal(inv->operands[0].id, error);
+                auto* rhs = getVal(inv->operands[1].id, error);
+                if (!lhs || !rhs) {
+                    return false;
+                }
+                prepareAutoLocalStringAppend(*inv, boxValue(lhs, inv->operands[0].id), module, llvm_func);
+                auto helper = module.getOrInsertFunction("qore_rt_add_assign_local_any",
+                    llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {boxValue(lhs, inv->operands[0].id),
+                    boxValue(rhs, inv->operands[1].id), xsink_arg});
             } else if (!inv->operands.empty() && isBinaryInvokeOpcode(inv->invoke_opcode)
                     && inv->operands.size() >= 2) {
                 // Binary invoke: use pre-evaluated operands with qore_rt_binary_op
@@ -35475,7 +35504,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Add, llvm::Instruction::FAdd,
-                "qore_rt_add_assign_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, true);
+                inst->auto_local_string_append ? "qore_rt_add_assign_local_any" : "qore_rt_add_assign_any",
+                inst, lhs_boxed, rhs_boxed, llvm_func, module, true);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -39913,6 +39943,9 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
 
     // Slow path: call runtime helper
     builder->SetInsertPoint(slow_bb);
+    if (inst && inst->auto_local_string_append && inst->opcode == QoreIROpcode::AddAssignAny) {
+        prepareAutoLocalStringAppend(*inst, lhs, module, llvm_func);
+    }
     auto ca_ft = llvm::FunctionType::get(i64_type,
             {i64_type, i64_type, ptr_type}, false);
     auto ca_helper = module.getOrInsertFunction(slow_helper, ca_ft);
