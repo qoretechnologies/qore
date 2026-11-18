@@ -13841,7 +13841,10 @@ load_local_done:
                             }
                         }
 
-                        if (!(xsink && *xsink)) {
+                        // an assignment past the end of a list whose element type does not take NOTHING would
+                        // leave a gap (qore#6435)
+                        if (!(xsink && *xsink)
+                            && !qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
                             // Apply element type coercion if the list has a typed value type
                             // (e.g. list<softint> converts "50" → 50 before storing)
                             const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -13908,7 +13911,7 @@ load_local_done:
                                   : nullptr);
                         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
                         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-                        {
+                        if (!qore_list_private::get(*new_l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
                             const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
                             QoreValue entry = val.refSelf();
                             if (QoreTypeInfo::hasType(vti)
@@ -18818,7 +18821,8 @@ load_local_done:
                                     // holds the value removed: it is the caller's result for "remove", and for
                                     // "delete" it keeps the value alive until the destructor can be run with the
                                     // lvalue locks released
-                                    res = qore_lvalue_remove_index(lvh, last_step.index, xsink);
+                                    res = qore_lvalue_remove_index(lvh, last_step.index, xsink,
+                                        path_inst->unary_op == LVUnaryOp::Delete);
                                     pending_delete_finish = true;
                                 } else if (last_step.kind == LVPathStepKind::HashKeySlice
                                         && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {

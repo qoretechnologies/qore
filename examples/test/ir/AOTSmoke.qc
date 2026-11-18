@@ -9183,7 +9183,7 @@ printf(\"%d:%d:%d\\n\", result[0], result[1], result[2]);
         code = "%modern
 list<hash<auto>> mixed = ({\"val\": \"a\"}, {\"val\": 2});
 list<auto> dynamic = map ($1.val + 7), mixed;
-list<hash<auto>> sparse = ();
+list<*hash<auto>> sparse = ();
 sparse[1] = {\"val\": 2};
 list<auto> guarded = map ($1.val + 7), sparse;
 list<auto> reversed = map (7 + $1.val), mixed;
@@ -9293,7 +9293,7 @@ printf(\"%s:%d:%s:%d\\n\", result[0].n, result[0].v,
 hash<auto> sub remap(hash<auto> h) {
     return (\"n\": h.name, \"v\": h.value);
 }
-list<hash<auto>> items = ();
+list<*hash<auto>> items = ();
 items[0] = (\"name\": \"first\", \"value\": 1);
 items[2] = (\"name\": \"third\", \"value\": 3);
 try {
@@ -9309,7 +9309,7 @@ try {
             "AOT fixed hash remap sends unassigned element through parameter binding: " + aot_out);
 
         code = "%modern
-list<hash<auto>> items = ();
+list<*hash<auto>> items = ();
 items[0] = (\"id\": \"bool\", \"active\": True);
 items[1] = (\"id\": \"false\", \"active\": False);
 items[2] = (\"id\": \"int\", \"active\": 1);
@@ -9318,7 +9318,7 @@ items[4] = (\"id\": \"string\", \"active\": \"x\");
 items[5] = (\"id\": \"empty\", \"active\": \"\");
 items[6] = (\"id\": \"missing\");
 items[8] = (\"id\": \"last\", \"active\": True);
-list<hash<auto>> result = (select items, $1.active);
+list<auto> result = (select items, $1.active);
 printf(\"%s\\n\", (map $1.id, result).join(\",\"));
 ";
         aot_out = compileAndRun(code);

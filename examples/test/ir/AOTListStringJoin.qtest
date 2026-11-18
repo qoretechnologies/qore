@@ -19,9 +19,9 @@ if (!is_file(qcc_bin)) {
 string code = "%modern
 
 list<string> regular = (\"alpha\", \"beta\", \"gamma\");
-list<string> sparse = (\"alpha\", \"beta\", \"gamma\");
+list<*string> sparse = (\"alpha\", \"beta\", \"gamma\");
 delete sparse[1];
-list<string> all_missing = (\"alpha\", \"beta\", \"gamma\");
+list<*string> all_missing = (\"alpha\", \"beta\", \"gamma\");
 delete all_missing[0];
 delete all_missing[1];
 delete all_missing[2];
@@ -69,14 +69,7 @@ try {
     removed_exception = ex.err;
 }
 
-string identity_map_sparse_exception = \"none\";
-try {
-    auto unused = join(\", \", (map \$1, sparse));
-} catch (hash<ExceptionInfo> ex) {
-    identity_map_sparse_exception = ex.err;
-}
-
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     join(\", \", regular),
     join(\", \", sparse),
     join(\", \", all_missing),
@@ -91,7 +84,6 @@ printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     unassigned_exception,
     removed_exception,
     join(\", \", (map \$1, regular)),
-    identity_map_sparse_exception,
     join(\", \", (map \$1, empty)),
     join(\", \", (map \$1, singleton)));
 ";
@@ -125,7 +117,9 @@ string expected = "alpha, beta, gamma|alpha, , gamma|, , ||solo|alpha / beta / g
     # an unassigned or removed list has no value, which join(string, ...) accepts: the call is resolved at run time
     # and joins no values (issue #5686), before, join(string, list<auto>) was selected at parse time and raised the
     # type error
-    + "none|none|alpha, beta, gamma|RUNTIME-TYPE-ERROR||solo\n";
+    # a list<string> cannot hold NOTHING, so the identity map of a list<string> with a hole is not tested any more
+    # (qore#6435)
+    + "none|none|alpha, beta, gamma||solo\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {

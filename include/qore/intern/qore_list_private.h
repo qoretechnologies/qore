@@ -736,6 +736,46 @@ struct qore_list_private {
 
     DLLLOCAL int getLValue(size_t ind, LValueHelper& lvh, bool for_remove, ExceptionSink* xsink);
 
+    //! raises RUNTIME-TYPE-ERROR for an assignment to element \a ind past the end of the list that would leave a gap
+    /** the elements between the end of the list and \a ind would have no value (NOTHING), which a declared element
+        type that does not take NOTHING refuses (ex: list<int>); an assignment at the end of the list leaves no gap,
+        and a list whose element type takes NOTHING (list<*int>, list<auto>, an untyped list) pads the gap
+        (qore#6435)
+
+        @return -1 if an exception was raised, 0 if not
+    */
+    DLLLOCAL int checkAssignmentGap(size_t ind, ExceptionSink* xsink) const {
+        if (ind <= length || !complexTypeInfo) {
+            return 0;
+        }
+        return raiseAssignmentGapError(ind, xsink);
+    }
+
+    //! raises RUNTIME-TYPE-ERROR for delete or remove of element \a ind of a list whose element type does not take
+    //! NOTHING held by an lvalue whose declared type \a holder_type requires the element type (qore#6435)
+    DLLLOCAL void raiseElementRemovalError(size_t ind, bool for_del, const QoreTypeInfo* holder_type,
+            ExceptionSink* xsink) const;
+
+    //! makes the element type of the list its or-nothing type (list<*int> for a list<int>) if its element type does
+    //! not take NOTHING, as for delete or remove of an element of a list held by an lvalue that allows it (qore#6435)
+    DLLLOCAL void setOrNothingElementType() {
+        if (complexTypeInfo) {
+            complexTypeInfo = QoreTypeInfo::getOrNothingListType(complexTypeInfo);
+        }
+    }
+
+    //! returns true if the element type of the list does not take NOTHING
+    DLLLOCAL bool elementTypeRejectsNothing() const {
+        return complexTypeInfo && !QoreTypeInfo::listElementTakesNothing(complexTypeInfo);
+    }
+
+private:
+    //! raises the error of checkAssignmentGap() if the element type does not take NOTHING
+    DLLLOCAL int raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const;
+
+
+public:
+
     // mergesort for controlled and interruptible sorts (stable)
     DLLLOCAL int mergesort(const ResolvedCallReferenceNode* fr, bool ascending, ExceptionSink* xsink);
 
