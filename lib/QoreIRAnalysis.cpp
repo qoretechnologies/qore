@@ -3326,8 +3326,8 @@ static bool qore_ir_is_assigned_boxed_hash(
     return qore_ir_is_boxed_hash_type(facts->type_info);
 }
 
-static bool qore_ir_is_hoistable_read_only_query(
-        const QoreIRFunction& func, const QoreIRInstruction& inst) {
+static bool qore_ir_is_read_only_query(const QoreIRFunction& func, const QoreIRInstruction& inst,
+        bool require_nothrow) {
     if (!inst.result.isValid() || inst.exception_target) {
         return false;
     }
@@ -3356,6 +3356,8 @@ static bool qore_ir_is_hoistable_read_only_query(
     // LICM can execute the query before a zero-trip loop. Character length can raise
     // INVALID-ENCODING even for an assigned operand; byte length cannot.
     switch (direct.intrinsic) {
+        case QoreIRIntrinsic::StringLength:
+            return !require_nothrow && inst.operands.size() == 1;
         case QoreIRIntrinsic::Size:
         case QoreIRIntrinsic::Empty:
         case QoreIRIntrinsic::Val:
@@ -3380,12 +3382,17 @@ static bool qore_ir_is_hoistable_read_only_query(
     }
 }
 
+static bool qore_ir_is_hoistable_read_only_query(
+        const QoreIRFunction& func, const QoreIRInstruction& inst) {
+    return qore_ir_is_read_only_query(func, inst, true);
+}
+
 static bool qore_ir_preserves_read_only_pseudo_facts(
         const QoreIRFunction& func, const QoreIRInstruction& inst) {
     return !q_env_is_set(
             "QORE_DISABLE_IR_READ_ONLY_PSEUDO_FACT_PRESERVATION")
         && inst.opcode == QoreIROpcode::DotEvalMethodDirect
-        && qore_ir_is_hoistable_read_only_query(func, inst);
+        && qore_ir_is_read_only_query(func, inst, false);
 }
 
 struct QoreIRScalarUse {
