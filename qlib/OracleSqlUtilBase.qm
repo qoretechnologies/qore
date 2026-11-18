@@ -3672,8 +3672,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     if (exists args[1]) {
-                        string fmt = OracleTable::convertDateFormat(args[1]);
-                        return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
+                        return sprintf("to_timestamp(%s, %s)", exp0, OracleTable::getDateFormatLiteral(args[1]));
                     }
                     return sprintf("cast(%s as timestamp)", exp0);
                 },
@@ -3730,8 +3729,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    string fmt = OracleTable::convertDateFormat(args[1]);
-                    return sprintf("to_char(%s, '%s')", exp0, fmt);
+                    return sprintf("to_char(%s, %s)", exp0, OracleTable::getDateFormatLiteral(args[1]));
                 },
             },
         };
@@ -4920,9 +4918,16 @@ group by p.index_name", schema.upr(), name.upr());
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);
         fmt = regex_subst(fmt, "us", "FF6", RE_Global);
         fmt = regex_subst(fmt, "ms", "FF3", RE_Global);
-        # escape single quotes for safe SQL embedding
-        fmt = regex_subst(fmt, "'", "''", RE_Global);
         return fmt;
+    }
+
+    #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+    /** The format is given in single quotes, with each single quote doubled
+
+        @throw VALUE-ERROR the format is not valid in its encoding
+    */
+    static string getDateFormatLiteral(string fmt) {
+        return "'" + replace(convertDateFormat(fmt), "'", "''") + "'";
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash opts) {

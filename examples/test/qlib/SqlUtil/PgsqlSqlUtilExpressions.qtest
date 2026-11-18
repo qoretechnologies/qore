@@ -495,6 +495,17 @@ class PgsqlExpressionTest inherits QUnit::Test {
         row = selectExprRow("result",
             expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY-MM-DD HH:mm:SS")), 1);
         assertEq("2026-01-15 10:30:00", row.result);
+
+        # a format with a backslash before a quote: with standard_conforming_strings off, PostgreSQL reads a backslash
+        # in a string in single quotes as an escape character, so a literal with doubled quotes ended where the format
+        # did not (qore#6557); the format is given as an escape string, which is read the same way either way
+        on_exit ds.rollback();
+        foreach string scs in ("off", "on") {
+            ds.exec(sprintf("set local standard_conforming_strings = %s", scs));
+            row = selectExprRow("result", expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY\\' || 'x")), 1);
+            # to_char() gives the characters of the format that are not codes as they are
+            assertEq("2026\\' || 'x", row.result, scs);
+        }
     }
 
     testDpFuncSubstr() {
@@ -523,8 +534,11 @@ class PgsqlExpressionTest inherits QUnit::Test {
         assertEq("MM-DD", PgsqlTable::convertDateFormat("MM-DD"));
         # ensure already-converted HH24 is NOT double-replaced
         assertEq("HH24:MI:SS", PgsqlTable::convertDateFormat("HH24:MI:SS"));
-        # ensure single quotes are escaped for SQL safety
-        assertEq("YYYY''MM''DD", PgsqlTable::convertDateFormat("YYYY'MM'DD"));
+        # the format is converted without quoting; getDateFormatLiteral() gives it as an SQL string literal (qore#6557)
+        assertEq("YYYY'MM'DD", PgsqlTable::convertDateFormat("YYYY'MM'DD"));
+        assertEq("'YYYY''MM''DD'", PgsqlTable::getDateFormatLiteral("YYYY'MM'DD"));
+        assertEq("E'YYYY\\\\MM'", PgsqlTable::getDateFormatLiteral("YYYY\\MM"));
+        assertEq("E'YYYY\\\\'' or 1=1 -- '", PgsqlTable::getDateFormatLiteral("YYYY\\' or 1=1 -- "));
     }
 
     testExpressionMapKeys() {

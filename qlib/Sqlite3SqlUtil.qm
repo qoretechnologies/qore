@@ -1493,9 +1493,7 @@ string sql = pk.getTableConstraintSql();
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."date");
-                        # a quote in the format value is doubled so that it cannot end the string literal
-                        string fmt = replace(Sqlite3Table::convertDateFormat(args[1]), "'", "''");
-                        return sprintf("strftime('%s', %s)", fmt, exp0);
+                        return sprintf("strftime(%s, %s)", Sqlite3Table::getDateFormatLiteral(args[1]), exp0);
                     },
                 },
                 # SQLite LIKE is ASCII-case-insensitive by default. Use GLOB for case-sensitive LIKE semantics and
@@ -2311,9 +2309,16 @@ string str = table.getSqlValue(date);
             fmt = regex_subst(fmt, "SS", "%S", RE_Global);
             fmt = regex_subst(fmt, "us", "%f", RE_Global);
             fmt = regex_subst(fmt, "ms", "%f", RE_Global);
-            # escape single quotes for safe SQL embedding
-            fmt = regex_subst(fmt, "'", "''", RE_Global);
             return fmt;
+        }
+
+        #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+        /** The format is given in single quotes, with each single quote doubled
+
+            @throw VALUE-ERROR the format is not valid in its encoding
+        */
+        static string getDateFormatLiteral(string fmt) {
+            return "'" + replace(convertDateFormat(fmt), "'", "''") + "'";
         }
 
         private bool emptyImpl() {

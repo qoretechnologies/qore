@@ -2541,8 +2541,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    string fmt = MssqlTable::convertDateFormat(args[1]);
-                    return sprintf("FORMAT(%s, '%s')", exp0, fmt);
+                    return sprintf("FORMAT(%s, %s)", exp0, MssqlTable::getDateFormatLiteral(args[1]));
                 },
             },
         };
@@ -2932,9 +2931,16 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         fmt = regex_subst(fmt, "us", "ffffff", RE_Global);
         fmt = regex_subst(fmt, "ms(?!s)", "fff", RE_Global);
         # MM and HH and mm are the same in both formats
-        # escape single quotes for safe SQL embedding
-        fmt = regex_subst(fmt, "'", "''", RE_Global);
         return fmt;
+    }
+
+    #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+    /** The format is given in single quotes, with each single quote doubled (see mssql_get_string_literal())
+
+        @throw VALUE-ERROR the format is not valid in its encoding
+    */
+    static string getDateFormatLiteral(string fmt) {
+        return mssql_get_string_literal(convertDateFormat(fmt));
     }
 
     #! Returns the expression map for Mssql

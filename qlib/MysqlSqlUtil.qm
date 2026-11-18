@@ -2546,8 +2546,7 @@ end";
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         if (exists args[1]) {
-                            string fmt = MysqlTable::convertDateFormat(args[1]);
-                            return sprintf("str_to_date(%s, '%s')", exp0, fmt);
+                            return sprintf("str_to_date(%s, %s)", exp0, MysqlTable::getDateFormatLiteral(args[1]));
                         }
                         return sprintf("cast(%s as datetime)", exp0);
                     },
@@ -2612,8 +2611,7 @@ end";
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."date");
-                        string fmt = MysqlTable::convertDateFormat(args[1]);
-                        return sprintf("date_format(%s, '%s')", exp0, fmt);
+                        return sprintf("date_format(%s, %s)", exp0, MysqlTable::getDateFormatLiteral(args[1]));
                     },
                 },
             };
@@ -2726,9 +2724,23 @@ end";
             fmt = regex_subst(fmt, "mm", "%i", RE_Global);
             fmt = regex_subst(fmt, "SS", "%s", RE_Global);
             fmt = regex_subst(fmt, "us", "%f", RE_Global);
-            # escape single quotes for safe SQL embedding
-            fmt = regex_subst(fmt, "'", "''", RE_Global);
             return fmt;
+        }
+
+        #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+        /** A backslash is an escape character in a string literal unless the sql_mode of the session has
+            NO_BACKSLASH_ESCAPES, so a format with a backslash is given as a hex literal in UTF-8 with a character set
+            introducer, which every sql_mode reads as the same string, as string values are (see getSqlValueImpl());
+            any other format is given in single quotes, with each single quote doubled
+
+            @throw VALUE-ERROR the format is not valid in its encoding
+        */
+        static string getDateFormatLiteral(string fmt) {
+            fmt = convertDateFormat(fmt);
+            if (fmt.find("\\") >= 0) {
+                return "_utf8mb4 X'" + binary(convert_encoding(fmt, "UTF-8")).toHex() + "'";
+            }
+            return "'" + replace(fmt, "'", "''") + "'";
         }
 
         #! Returns the expression map for MySQL
