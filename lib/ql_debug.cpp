@@ -20192,6 +20192,17 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
     }
     return make_unit_test_result(c, xsink);
 }
+
+//! Debug-only: returns the numbers of the recorded IR inline call sites that inline their calls and of those that a
+//! debugger attached to their callees' Program suspended (qore_ir_suspend_inline_states(), issue #6473)
+static QoreValue f_dbg_ir_inline_site_states(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 eligible, suspended;
+    qore_ir_dbg_inline_site_states(eligible, suspended);
+    QoreHashNode* h = new QoreHashNode(bigIntTypeInfo);
+    h->setKeyValue("eligible", eligible, xsink);
+    h->setKeyValue("suspended", suspended, xsink);
+    return h;
+}
 #endif
 
 #ifdef DEBUG
@@ -27086,6 +27097,8 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,

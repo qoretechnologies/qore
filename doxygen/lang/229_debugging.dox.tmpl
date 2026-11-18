@@ -90,7 +90,9 @@
       contain them and that started before the debugger attached, an exception in the condition of a loop gets an
       event for the last statement of its body too, and after a debugger dismisses an exception, the
       function can end there, with no value, instead of continuing after the statement; as native code, it gets no
-      event
+      event.  The functions and methods that it calls run with the debugger as the calls made after it attached:
+      with their own frames and the debugger's requests, also when the IR interpreter ran such calls inline before
+      the debugger attached (<a href="https://github.com/qoretechnologies/qore/issues/6473">issue 6473</a>)
 
     An exception that matches a @ref common_pitfalls "common pitfall" of %Qore, such as a variable that was declared
     but not assigned or a call reference to a deleted object, is shown with a hint and corrective actions: by \c qdbg

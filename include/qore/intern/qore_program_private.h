@@ -82,6 +82,10 @@ class qore_object_private;
 class RObject;
 class RSetHelper;
 
+// suspends the inlined calls of the IR interpreter whose callees belong to a Program that a debugger attaches to
+// (declared in QoreIR.h; issue #6473)
+DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
+
 typedef vector_map_t<int, unsigned> ptid_map_t;
 //typedef std::map<int, unsigned> ptid_map_t;
 
@@ -6141,6 +6145,8 @@ public:
         if (dpgm.load(std::memory_order_relaxed) == n_dpgm)
             return;
         dpgm.store(const_cast<qore_debug_program_private*>(n_dpgm), std::memory_order_release);
+        // the IR interpreter no longer inlines the calls of this Program's methods (issue #6473)
+        qore_ir_suspend_inline_states(&dpgm);
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d\n",
             dpgm.load(std::memory_order_relaxed), (int)(pgm_data_map.size()));
         for (auto& i : pgm_data_map) {
