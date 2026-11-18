@@ -2794,7 +2794,10 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         closeConnectionPriv(false, xsink);
     }
 
-    // Dispatch to action
+    // Dispatch to action; a body error without an action (a request that was cancelled) is not reported
+    if (!action) {
+        body_xsink.clear();
+    }
     if (action) {
         if (body_xsink) {
             QoreStringValueHelper err(body_xsink.getExceptionErr());

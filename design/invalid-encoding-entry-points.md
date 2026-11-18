@@ -38,8 +38,8 @@ this work; no change).
 | same | header values | ISO-8859-1 when not valid UTF-8 (rule 3) | done |
 | `HttpServerNativeAsyncTarget::tryInlineRequest()` | the raw head given to an inline handler | a head that is not valid text or needs a change takes the full path (`inlineHeadValid()`) | done (inline case of the same test) |
 | HTTP/1.x request head in C++ (`processHttpHeaderString()`, `CHF_REQUEST`) | HTTP version format, header-name `tchar`s | optional earlier refusal (`SOCKET-HTTP-ERROR` → 400 + close); the Qore check above already gives 400 for text that is not valid | not done: the Qore check gives the 400; an earlier C++ refusal is optional hardening |
-| `qore_http_body_string()` / `decodeRequestText()` | buffered request bodies | 400 for a body that is not valid in its charset (`HttpServer::decodeRequestText()`, both buffered paths; the direct HTTP/1.1 read answers 400 as for any read error) | done (`HttpServerInvalidEncoding.qtest`: HTTP/1.1, HTTP/2, HTTP/3) |
-| WebSocket text frames (HTTP/1, /2, /3; server and client) | messages, close reasons | close 1007 (RFC 6455), after permessage-deflate: `WebSocketConnection::applyIncomingExtensions()` raises `WEBSOCKET-INVALID-PAYLOAD`, which both server paths answer with 1007; the WebSocket client is #6604 | done for the server (`WebSocketInvalidUtf8.qtest`: HTTP/1.1 plain and compressed, HTTP/2) |
+| `qore_http_body_string()` / `decodeRequestText()` | buffered request bodies | 400 for a body that is not valid in its charset (`HttpServer::decodeRequestText()`, both buffered paths; the direct HTTP/1.1 read answers 400 as for any read error) | done for bodies with a `Content-Length` and buffered HTTP/2 and HTTP/3 bodies (`HttpServerInvalidEncoding.qtest`); HTTP/1.1 chunked bodies (`getMessageBody()`), compressed bodies and chunk trailers: #6604 |
+| WebSocket text frames (HTTP/1, /2, /3; server and client) | messages, close reasons | close 1007 (RFC 6455), after permessage-deflate: `WebSocketConnection::applyIncomingExtensions()` raises `WEBSOCKET-INVALID-PAYLOAD`, which both server paths answer with 1007; the WebSocket client is #6604 | done for the server's message path (`WebSocketInvalidUtf8.qtest`: HTTP/1.1 plain and compressed, HTTP/2); close reasons, the C++ echo fast path (`WsEchoFrameHandler`) and `gotRawMessage()`, which sees a message before the check: #6604 |
 | Streamed bodies, multipart parts, DataStream / Connect JSON (`binary.toString()`, `binary_to_string()` only tag) | message text | validated where the bytes become a string | #6604 |
 
 ### Clients and data inputs
@@ -48,7 +48,7 @@ this work; no change).
 |---|---|---|
 | `PollPipeline::addRecvLineResponse()` reply text (SMTP, FTP) | ISO-8859-1 when not valid in its encoding | done |
 | `PollPipeline::addCheckRegex()` | strings strictly; binary as before | done |
-| HTTP client response bodies (`qore_http_response_body_string()`, `qore_decode_http_response_body()`) | HTML and other text (or no Content-Type): ISO-8859-1; structured types: `INVALID-ENCODING` (HTTP/1.1 completes the request with the error, HTTP/2 completes the stream with it); chunks given to a receive callback are given as received | done (`HttpBodyCharset.qtest`: HTTP/1.1, HTTP/2) |
+| HTTP client response bodies (`qore_http_response_body_string()`, `qore_decode_http_response_body()`) | HTML and other text (or no Content-Type): ISO-8859-1; structured types: `INVALID-ENCODING` (HTTP/1.1 completes the request with the error, HTTP/2 completes the stream with it); chunks given to a receive callback are given as received | done for `HTTPClient` (`HttpBodyCharset.qtest`: HTTP/1.1, HTTP/2); the qlib client modules (HttpClientIo, RestClientIo, RestClient, FileLocationHandlerHttp) decode with the public `decode_http_body()`: #6604 |
 | Mime quoted-printable / base64 / encoded-word decoding, part bodies; MailMessage `force_encoding()` paths; POP3 data | the HTTP client rule (#6604); `sanitize_filename()` gives `"attachment"` (done) | #6604 |
 | JSON parser output (`modules/json`) | raise | #6604 |
 | File, `StreamReader` and line readers (CsvUtil, FixedLengthUtil, Ndjson, file data providers) | an `encoding_errors` option (raise, latin1, keep), default raise | #6604 |
@@ -72,3 +72,8 @@ and `YamlRpcHandler` method matching, `OpenApi3`/`Swagger` path templates, `McpS
 - `\C` (one byte, which can be a part of a character) is refused when a pattern is compiled
   (`PCRE2_NEVER_BACKSLASH_C`), so that no match or substitution gives a string that is not valid UTF-8.
 - A match error gives the byte offset of the first invalid sequence of the subject.
+
+## Other matchers
+
+- `modules/tokenizer` (`SplitPreTokenizer.cpp`) uses PCRE2 directly and takes a UTF-8 error as the end of the
+  matches: #6604.

@@ -523,7 +523,7 @@ QoreStringNode* qore_http_response_body_string(const char* content_type, const Q
             break;
     }
     xsink->raiseException("INVALID-ENCODING", "the HTTP response body of %zu bytes is not valid in its encoding "
-        "\"%s\", which its Content-Type gives", len, charset.enc->getCode());
+        "\"%s\"", len, charset.enc->getCode());
     return nullptr;
 }
 

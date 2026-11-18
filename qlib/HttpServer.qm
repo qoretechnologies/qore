@@ -243,10 +243,11 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
-    - a request whose target (the path or the query, raw or percent-decoded) or whose method, HTTP version or header
-      names are not valid text is answered with @c 400 before any handler sees it, over HTTP/1.x, HTTP/2 and HTTP/3; a
-      header value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes unchanged, as obs-text
-      (RFC 9110 section 5.5) (issue #6554)
+    - a request whose target (the path or the query, which must decode to valid UTF-8 text) or whose method, HTTP
+      version or header names are not valid text, or whose body (with a \c Content-Length, or buffered over HTTP/2 or
+      HTTP/3) is not valid text in its encoding, is answered with @c 400 before any handler sees it, over HTTP/1.x,
+      HTTP/2 and HTTP/3; a header value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes
+      unchanged, as obs-text (RFC 9110 section 5.5) (issue #6554)
     - the thread of a persistent HTTP/1.x connection (a handler that called
       @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the handler pool for the
       life of the connection, so it does not count against \c max_handler_threads and the other requests of the
@@ -7608,10 +7609,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 return decode_url(path);
             }
             string query = path.substr(i);
-            # the query is given raw to the handler, which decodes it; it is checked here
-            if (!decode_url(query)) {
-                throw "URL-ENCODING-ERROR", "the query decodes to an empty string";
-            }
+            # the query is given raw to the handler, which decodes it; it must decode to valid UTF-8 text:
+            # decode_url() raises URL-ENCODING-ERROR for one that does not
+            string decoded_query = decode_url(query);
             return decode_url(path.substr(0, i)) + query;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "URL-ENCODING-ERROR" && ex.err != "INVALID-ENCODING") {
@@ -7620,6 +7620,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             err = sprintf("the request target of %d bytes is not valid: %s", path.size(), ex.desc);
             return "/";
         }
+    }
+
+    #! Returns a header value with each string that is not valid UTF-8 given in ISO-8859-1 (RFC 9110 obs-text; qore#6554)
+    static auto obsText(auto v) {
+        switch (v.typeCode()) {
+            case NT_STRING:
+                return v.isEncodingValid() ? v : force_encoding(v, "ISO-8859-1");
+            case NT_LIST:
+                return map $1.typeCode() == NT_STRING && !$1.isEncodingValid() ? force_encoding($1, "ISO-8859-1") : $1,
+                    v;
+        }
+        return v;
     }
 
     #! Checks the request head before the request is processed, for every HTTP version (qore#6554)
@@ -7647,22 +7659,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                             if (!err) {
                                 err = sprintf("the %s of the request is not valid text", i.key);
                             }
-                        } else {
-                            hdr{i.key} = force_encoding(i.value, "ISO-8859-1");
                         }
+                        # the value is given in ISO-8859-1, so that the code that runs before the request is answered
+                        # (ex: the log of the request) can process it
+                        hdr{i.key} = force_encoding(i.value, "ISO-8859-1");
                     }
                     break;
-                case NT_LIST: {
+                case NT_LIST:
                     # a header given more than once
-                    list<auto> vals = i.value;
-                    for (int j = 0; j < vals.size(); ++j) {
-                        if (vals[j].typeCode() == NT_STRING && !vals[j].isEncodingValid()) {
-                            vals[j] = force_encoding(vals[j], "ISO-8859-1");
-                        }
-                    }
-                    hdr{i.key} = vals;
+                    hdr{i.key} = HttpListener::obsText(i.value);
                     break;
-                }
             }
         }
         if (err) {
@@ -7777,6 +7783,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # when nothing but a charset parameter is given
         if (header_info."body-content-type".val()) {
             hdr."content-type" = header_info."body-content-type";
+            # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
+            hdr."content-type" = HttpListener::obsText(hdr."content-type");
             if (hdr."content-type".typeCode() == NT_LIST) {
                 hdr."content-type" = hdr."content-type"[0];
             }
@@ -8703,6 +8711,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
                 if (conn_info.header_info."body-content-type".val()) {
                     req_hdr."content-type" = conn_info.header_info."body-content-type";
+                    # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
+                    req_hdr."content-type" = HttpListener::obsText(req_hdr."content-type");
                     if (req_hdr."content-type".typeCode() == NT_LIST) {
                         req_hdr."content-type" = req_hdr."content-type"[0];
                     }
@@ -8926,6 +8936,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
             if (conn_info.header_info."body-content-type".val()) {
                 req_hdr."content-type" = conn_info.header_info."body-content-type";
+                # a header value that is not valid UTF-8 is obs-text (qore#6554), as setupRequestHead() gives it
+                req_hdr."content-type" = HttpListener::obsText(req_hdr."content-type");
                 if (req_hdr."content-type".typeCode() == NT_LIST) {
                     req_hdr."content-type" = req_hdr."content-type"[0];
                 }
