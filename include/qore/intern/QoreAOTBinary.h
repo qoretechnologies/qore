@@ -677,7 +677,7 @@ constexpr uint16_t QORE_AOT_BATCH_AI_VERSION = 47;
 //! cap handed over (see v47 above, #6137)
 constexpr uint16_t QORE_AOT_HANDED_OVER_RETURN_VERSION = 47;
 static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AI_VERSION,
-    "the format changes of batch AI share one format version (v46)");
+    "the format changes of batch AI share one format version (v47)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
