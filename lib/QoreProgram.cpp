@@ -5617,32 +5617,65 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
     if (!strcasecmp(p, "false"))
         return false;
 
-    // see if there are non-numeric characters in the string
+    // an empty value is no value, as with %define without one (issue #6564)
+    if (!*p) {
+        return QoreValue();
+    }
+
+    // a number: an optional sign, decimal digits and an optional fraction; anything else, as text after the number
+    // (1-2), is an error (issue #6564)
+    const char* q = p;
+    if (*q == '-' || *q == '+') {
+        ++q;
+    }
+    bool digits = false;
+    while (isdigit(static_cast<unsigned char>(*q))) {
+        ++q;
+        digits = true;
+    }
     bool flt = false;
-    while (*p) {
-        if (*p == '.') {
-            if (flt) {
-                parse_error(*loc, "'%s' is defined with an invalid number: '%s'", str, arg.getBuffer());
+    if (*q == '.') {
+        flt = true;
+        ++q;
+        while (isdigit(static_cast<unsigned char>(*q))) {
+            ++q;
+            digits = true;
+        }
+    }
+    if (*q || !digits) {
+        for (const char* a = p; *a; ++a) {
+            if (isalpha(static_cast<unsigned char>(*a))) {
+                parse_error(*loc, "'%s' has unquoted alphabetic characters in the value; use quotes (\" or ') to "
+                    "define strings", str);
                 ok = false;
                 return QoreValue();
             }
-            flt = true;
         }
-        else if (isalpha(*p)) {
-            parse_error(*loc, "'%s' has unquoted alphabetic characters in the value; use quotes (\" or ') to define strings", str);
-            ok = false;
-            return QoreValue();
-        }
-        ++p;
+        parse_error(*loc, "'%s' is defined with an invalid number: '%s'", str, arg.getBuffer());
+        ok = false;
+        return QoreValue();
     }
 
-    p = arg.c_str();
     // a number is decimal, also with a leading zero (issue #6530); an integer stays an integer: the two results are
     // not given by one conditional expression, whose type would be double
     if (flt) {
-        return q_strtod(p);
+        double d = q_strtod(p);
+        if (std::isinf(d)) {
+            parse_error(*loc, "'%s' is defined with a number that cannot be represented: '%s'", str, arg.getBuffer());
+            ok = false;
+            return QoreValue();
+        }
+        return d;
     }
-    return static_cast<int64>(strtoll(p, 0, 10));
+    errno = 0;
+    int64 i = strtoll(p, 0, 10);
+    if (errno == ERANGE) {
+        parse_error(*loc, "'%s' is defined with a number that cannot be represented: '%s'; integers must be in the "
+            "range " QLLD " (MININT) to " QLLD " (MAXINT)", str, arg.getBuffer(), -LLONG_MAX, LLONG_MAX);
+        ok = false;
+        return QoreValue();
+    }
+    return i;
 }
 
 void QoreProgram::parseDefine(const char* str, QoreValue val) {

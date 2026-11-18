@@ -704,6 +704,33 @@ static std::vector<std::string> stub_files;
 // AOT-compiled sources honor the same `%ifdef` / `%ifndef` surface
 // the runtime sees.  Repeatable; applied in declaration order.
 static std::vector<std::string> parse_defines;
+
+//! Sets the parse defines (--define NAME[=VALUE]) on \a pgm before it parses: a define without a value is True, and a
+//! value is read as by qore's -D (QoreProgram::parseCmdLineDefines()); an invalid value is raised in \a xsink
+//! (issue #6564)
+static void qcc_apply_parse_defines(QoreProgram* pgm, ExceptionSink& xsink, ExceptionSink& wsink) {
+    // the last definition of a name counts, in declaration order: a name without a value is True
+    std::map<std::string, std::pair<bool, std::string>> last;
+    for (const std::string& def : parse_defines) {
+        size_t eq = def.find('=');
+        if (eq == std::string::npos) {
+            last[def] = {false, std::string()};
+        } else {
+            last[def.substr(0, eq)] = {true, def.substr(eq + 1)};
+        }
+    }
+    std::map<std::string, std::string> values;
+    for (const auto& [name, val] : last) {
+        if (val.first) {
+            values[name] = val.second;
+        } else {
+            pgm->parseDefine(name.c_str(), QoreValue(true));
+        }
+    }
+    if (!values.empty()) {
+        pgm->parseCmdLineDefines(xsink, wsink, QP_WARN_DEFAULT, values);
+    }
+}
 // --parse-option=NAME OR's a `PO_*` flag into the
 // compile program's parse options.  Mirrors the runtime
 // `qpgm->parseSetParseOptions(QORUS_PARSE_OPTIONS)` pattern Qorus
@@ -11754,7 +11781,12 @@ int main(int argc, char** argv) {
         ExceptionSink xsink;
         ExceptionSink wsink;
 
-        qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        // the parse defines (--define) apply to this parse as to the other compile paths: they were not set for an
+        // executable (issue #6564)
+        qcc_apply_parse_defines(qpgm, xsink, wsink);
+        if (!xsink.isException()) {
+            qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        }
 
         if (xsink.isException()) {
             // the warnings of the parse, then its errors, as diagnostics (issue #6555)

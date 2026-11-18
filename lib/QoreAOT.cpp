@@ -29001,21 +29001,44 @@ static bool resolveParseOptionFlag(const std::string& name,
     return false;
 }
 
-static void apply_parse_defines(QoreProgram* pgm,
-        const std::vector<std::string>& parse_defines) {
+//! Sets the parse defines given to qcc (--define NAME[=VALUE]); returns false and sets \a error if a value is invalid
+/** A define without a value is True; a value is read as by qore's -D (QoreProgram::parseCmdLineDefines(): a quoted
+    string, true, false or a decimal number), not kept as a string (issue #6564)
+*/
+static bool apply_parse_defines(QoreProgram* pgm, const std::vector<std::string>& parse_defines, std::string& error) {
+    // the last definition of a name counts, in declaration order: a name without a value is True
+    std::map<std::string, std::pair<bool, std::string>> last;
     for (const std::string& def : parse_defines) {
-        std::string name;
-        QoreValue val;
         size_t eq = def.find('=');
         if (eq == std::string::npos) {
-            name = def;
-            val = QoreValue(true);
+            last[def] = {false, std::string()};
         } else {
-            name = def.substr(0, eq);
-            val = QoreValue::makeStringValue(def.substr(eq + 1));
+            last[def.substr(0, eq)] = {true, def.substr(eq + 1)};
         }
-        pgm->parseDefine(name.c_str(), val);
     }
+    std::map<std::string, std::string> values;
+    for (const auto& [name, val] : last) {
+        if (val.first) {
+            values[name] = val.second;
+        } else {
+            pgm->parseDefine(name.c_str(), QoreValue(true));
+        }
+    }
+    if (values.empty()) {
+        return true;
+    }
+    ExceptionSink xsink, wsink;
+    pgm->parseCmdLineDefines(xsink, wsink, 0, values);
+    if (xsink) {
+        QoreValue desc = xsink.getExceptionDesc();
+        QoreStringValueHelper desc_str(desc);
+        error = "invalid value of a --define: ";
+        error += desc_str->c_str();
+        xsink.clear();
+        return false;
+    }
+    wsink.clear();
+    return true;
 }
 
 // Choose the maximum AOT batch worker-thread count. An explicit
@@ -29705,7 +29728,9 @@ bool QoreAOT::compileScriptFilesBatch(
     // from the oracle module we haven't loaded).  Default value is
     // the Qore literal `True` to mirror bin/qdsp-style
     // `qpgm->parseDefine("NAME", true)` idioms.
-    apply_parse_defines(*qpgm, parse_defines);
+    if (!apply_parse_defines(*qpgm, parse_defines, error)) {
+        return false;
+    }
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.
@@ -30513,7 +30538,9 @@ bool QoreAOT::compileScriptAggregate(
         qpgm = **owned_qpgm;
         qpgm->setScriptPath(entries.front().canon.c_str());
 
-        apply_parse_defines(qpgm, parse_defines);
+        if (!apply_parse_defines(qpgm, parse_defines, error)) {
+            return false;
+        }
 
         if (!loadRequireModules(qpgm, require_modules, error)) {
             return false;
@@ -31021,7 +31048,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
     qpgm->setScriptPath(target_canon.c_str());
 
-    apply_parse_defines(*qpgm, parse_defines);
+    if (!apply_parse_defines(*qpgm, parse_defines, error)) {
+        return false;
+    }
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.
@@ -31066,7 +31095,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         QoreProgramHelper probe_pgm(probe_po, probe_xsink);
         if (!probe_xsink.isException()) {
             probe_pgm->setScriptPath(target_canon.c_str());
-            apply_parse_defines(*probe_pgm, parse_defines);
+            // best-effort as the probe parse: the real compile below reports an invalid value
+            std::string probe_error;
+            apply_parse_defines(*probe_pgm, parse_defines, probe_error);
             // Best-effort: collect whatever declarations were registered,
             // even if the parse reports errors (an unresolved type, a
             // missing `%include`, …).  The real compile below reports the

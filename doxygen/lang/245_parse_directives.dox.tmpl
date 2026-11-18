@@ -1183,7 +1183,10 @@ i+ =4;
     The value is a string in single or double quotes, \c true or \c false (case-insensitive), or a number: a
     @ref float "float" if it has a decimal point, otherwise an @ref integer "integer".  A number is decimal, also with
     a leading zero (<tt>%%define X 010</tt> sets \c X to \c 10), unlike an integer literal with a leading zero in code,
-    which is octal.  A value given with \c -D or \c --define on the command line of \c qore is read in the same way.
+    which is octal.  Any other value is a parse error, as is a number that cannot be represented.  A value given with
+    \c -D or \c --define on the command line of \c qore, or with \c --define to \c qcc when it compiles a script, is
+    read in the same way; with \c qore, a define without a value or with an empty one (<tt>-DX</tt>, <tt>-DX=</tt>)
+    has no value, and \c qcc gives a define without a value the value \c True.
 
     @since %Qore 0.8.3
 

@@ -138,6 +138,10 @@
     The number of an implicit argument reference is decimal: <tt>$010</tt> is the tenth argument, where it was the
     eighth (octal), and <tt>$08</tt> is the eighth, where it was a parse error (see
     @ref implicit_argument_offsets "implicit argument references"; issue #6529).
+    @par Parse Define Values Are Validated
+    A parse define value that is not a quoted string, \c true, \c false or a decimal number is a parse error, as is a
+    number too large (<tt>1-2</tt> was \c 1, a large number was clamped), and a <tt>qore -D</tt> define without a value
+    (<tt>-DX</tt>, <tt>-DX=</tt>) has no value, where it was \c 0.0 (see @ref define_values "%define"; issue #6564).
 
     @par The Integer Value of a Parse Define Is an Integer
     A parse define with an integer value (<tt>%%define X 12</tt>, <tt>qore -DX=12</tt>) has an integer value, as
@@ -2245,6 +2249,9 @@
 
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
+    - \c qcc applies its parse defines (<tt>--define</tt>) when it compiles a script into an executable, and reads
+      their values as \c qore reads <tt>-D</tt> values instead of keeping them as strings (see
+      @ref define_values "%define"; issue #6564)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)

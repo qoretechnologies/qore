@@ -5,16 +5,18 @@
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires FsUtil
 %requires ../../TestInterpreter.qm
 %exec-class DefineValuesTest
 
-#! the values of parse defines (issue #6530): a number is decimal, also with a leading zero, and an integer stays an
-#! integer (it was a float)
+#! the values of parse defines (issues #6530, #6564): a number is decimal, also with a leading zero, an integer stays an
+#! integer (it was a float), any other unquoted value is an error, and qcc reads its --define values in the same way
 class DefineValuesTest inherits QUnit::Test {
     constructor() : QUnit::Test("define values", "1.0") {
         addTestCase("values of %define", \directive());
         addTestCase("values of -D", \commandLine());
         addTestCase("invalid and negative values", \otherValues());
+        addTestCase("qcc --define", \qccDefines());
         set_return_value(main());
     }
 
@@ -42,6 +44,52 @@ class DefineValuesTest inherits QUnit::Test {
         assertEq(-5, p.getDefine("M"));
         assertRegex("'D' is defined with an invalid number: '1.2.3'", parseError("%define D 1.2.3\n"));
         assertRegex("'A' has unquoted alphabetic characters in the value", parseError("%define A abc\n"));
+        # text after a number, and a number that cannot be represented (issue #6564)
+        assertRegex("'T' is defined with an invalid number: '1-2'", parseError("%define T 1-2\n"));
+        assertRegex("'T' is defined with an invalid number: '-'", parseError("%define T -\n"));
+        assertRegex("'T' is defined with a number that cannot be represented: '99999999999999999999'",
+            parseError("%define T 99999999999999999999\n"));
+        p = new Program(PO_NEW_STYLE);
+        p.parse("%define P +3\n%define Q .5\n", "signs");
+        assertEq(3, p.getDefine("P"));
+        assertEq(0.5, p.getDefine("Q"));
+    }
+
+    #! qcc applies its defines to the compile of an executable and reads their values as qore's -D (issue #6564)
+    private qccDefines() {
+        string qore = TestInterpreter::qore_interpreter();
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available next to " + qore);
+        }
+        TmpDir tmp("qore-define-values-");
+        string src = tmp.path + "/d.qr";
+        {
+            File f();
+            f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%ifdef X\nprintf(\"x\\n\");\n%endif\n");
+        }
+        foreach string def in (("X", "X=12", "X=\"s\"")) {
+            string exe = tmp.path + "/d" + $#;
+            int rc;
+            # single quotes keep the double quotes of a string value for qcc
+            string out = backquote(sprintf("%s '--define=%s' -o %s %s 2>&1", qcc_bin, def, exe, src), \rc);
+            assertEq(0, rc, def + ": " + out);
+            assertEq("x\n", backquote(sprintf("%s -b 2>&1", exe)), def);
+        }
+        int rc;
+        string out = backquote(sprintf("%s --define=X=1-2 -o %s/bad %s 2>&1", qcc_bin, tmp.path, src), \rc);
+        assertNeq(0, rc, out);
+        assertRegex("'X' is defined with an invalid number: '1-2'", out);
+        # the compile of an object (qcc -c) reads the values as well
+        out = backquote(sprintf("%s --define=X=1-2 -c -o %s/bad.o %s 2>&1", qcc_bin, tmp.path, src), \rc);
+        assertNeq(0, rc, out);
+        assertRegex("'X' is defined with an invalid number: '1-2'", out);
+        # the last definition of a name counts
+        string exe = tmp.path + "/last";
+        out = backquote(sprintf("%s --define=X=1 --define=Y --define=Y=2 -o %s %s 2>&1", qcc_bin, exe, src), \rc);
+        assertEq(0, rc, out);
+        assertEq("x\n", backquote(sprintf("%s -b 2>&1", exe)));
     }
 
     #! returns the description of the parse error of the code, or NOTHING
@@ -63,5 +111,13 @@ class DefineValuesTest inherits QUnit::Test {
             qore), \rc);
         assertEq(0, rc, out);
         assertEq("10 integer 7 integer\n", out);
+        # an empty value is no value; an invalid one is an error
+        out = backquote(sprintf("%s -DE= -ne 'Program p(); printf(\"%%y %%y\\n\", p.isDefined(\"E\"), "
+            "p.getDefine(\"E\"));' 2>&1", qore), \rc);
+        assertEq(0, rc, out);
+        assertEq("True null\n", out);
+        out = backquote(sprintf("%s -DE=1-2 -ne 'printf(\"x\\n\");' 2>&1", qore), \rc);
+        assertNeq(0, rc, out);
+        assertRegex("'E' is defined with an invalid number: '1-2'", out);
     }
 }
