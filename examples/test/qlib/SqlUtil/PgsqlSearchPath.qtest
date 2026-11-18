@@ -11,6 +11,7 @@
 %requires PgsqlSqlUtilBase
 %requires PgsqlSqlUtil
 %requires QUnit
+%requires ./PgsqlTestIsolation.qm
 
 %try-module pgsql
 %define NoPgsql
@@ -20,11 +21,12 @@
 
 #! PostgreSQL introspection resolves an unqualified name in the schema of the connection's search_path
 /** The test creates a schema of its own for the run and sets it as the search_path of its connection (with
-    \c PGOPTIONS, before the connection is opened), and a decoy schema outside the search_path with objects of the
-    same names but other definitions; every object described or listed must be the run schema's.  A third schema,
+    PgsqlTestIsolation, before the connection is opened), and a decoy schema outside the search_path with objects of
+    the same names but other definitions; every object described or listed must be the run schema's.  A third schema,
     whose name must be quoted, and the decoy schema hold the functions of triggers that name them with their schema,
     some called with arguments, and a fourth schema, whose name has a \c ".", holds objects whose names have one too,
-    which are looked up with quoted names.  The schemas are dropped when the test ends, also when it fails.
+    which are looked up with quoted names.  The schemas are dropped when the test ends, also when it fails.  Other
+    runs of the test can share the database: every catalog query is limited to the schemas of this run.
 */
 class PgsqlSearchPathTest inherits QUnit::Test {
     private {
@@ -34,8 +36,6 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         *Datasource admin;
         #! the connection of the tests, whose search_path is the run schema
         *Datasource ds;
-        #! the PGOPTIONS environment variable before the test set it
-        *string pgoptions;
         string run_schema;
         string decoy_schema;
         #! a schema outside the search_path whose name must be quoted (upper case letters and a space)
@@ -93,19 +93,22 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         if (!connstr) {
             return;
         }
-        string tail = sprintf("%s_%d_%d", PgsqlSearchPathTest::namePart(gethostname(), 16), getpid(),
-            get_epoch_seconds(now_utc()));
-        run_schema = "qtest_searchpath_" + tail;
-        decoy_schema = "qtest_spdecoy_" + tail;
-        other_schema = "Qtest Sp " + tail;
-        dot_schema = "Qtest.Dot " + tail;
-
-        # the schemas are created and dropped with the default search_path
+        # the schemas are created and dropped with the default search_path: the connection is opened before the
+        # run's schema is set up, which sets the search_path of the connections opened after it
         admin = new Datasource(connstr);
         if (admin.getDriverName() != "pgsql") {
             throw "PGSQL-ERROR", sprintf("cannot run the PostgreSQL tests with driver %y", admin.getDriverName());
         }
         admin.open();
+
+        # the run's schema, and a decoy schema dropped with it
+        run_schema = PgsqlRunSchema::setup(connstr, "SearchPath");
+        decoy_schema = PgsqlRunSchema::getAuxName("decoy");
+        # schemas whose names must be quoted, dropped by cleanup(); unique to the run as well
+        string tail = sprintf("%s_%d_%d", PgsqlSearchPathTest::namePart(gethostname(), 16), getpid(),
+            get_epoch_seconds(now_utc()));
+        other_schema = "Qtest Sp " + tail;
+        dot_schema = "Qtest.Dot " + tail;
         {
             on_error admin.rollback();
             on_success admin.commit();
@@ -135,14 +138,13 @@ class PgsqlSearchPathTest inherits QUnit::Test {
         }
 
         # every connection of this process opened from now on has the run schema as its search_path
-        pgoptions = ENV.PGOPTIONS;
-        setenv("PGOPTIONS", (pgoptions ? pgoptions + " " : "") + "-c search_path=" + run_schema + ",public");
         ds = new Datasource(connstr);
         ds.open();
     }
 
     private createObjects(string schema, hash<auto> def) {
-        admin.exec(sprintf("create schema %s", schema));
+        # the run's schema exists already (PgsqlRunSchema::setup())
+        admin.exec(sprintf("create schema if not exists %s", schema));
         admin.exec(sprintf("create table %s.sp_t (%s)", schema, def.columns));
         admin.exec(sprintf("create index sp_t_ix on %s.sp_t (%s)", schema, def.index_col));
         admin.exec(sprintf("create sequence %s.sp_seq %s", schema, def.seq));
@@ -267,18 +269,16 @@ class PgsqlSearchPathTest inherits QUnit::Test {
             ds.rollback();
             ds.close();
         }
-        if (pgoptions) {
-            setenv("PGOPTIONS", pgoptions);
-        } else {
-            unsetenv("PGOPTIONS");
-        }
         if (admin) {
             admin.rollback();
-            # one statement, so that every schema is dropped or none
-            admin.exec(sprintf("drop schema if exists %s cascade", (foldl $1 + ", " + $2,
-                (map quote($1), (run_schema, decoy_schema, other_schema, dot_schema)))));
+            # the schemas with quoted names; the run's schema and the decoy are dropped by teardown()
+            if (other_schema) {
+                admin.exec(sprintf("drop schema if exists %s, %s cascade", quote(other_schema), quote(dot_schema)));
+            }
             admin.commit();
+            admin.close();
         }
+        PgsqlRunSchema::teardown();
     }
 
     private Datasource getDatasource() {
@@ -387,10 +387,12 @@ class PgsqlSearchPathTest inherits QUnit::Test {
             getQualifiedTriggerFunctions().iterator());
     }
 
-    #! returns the schemas that have a function of the given name
+    #! returns the schemas of this run that have a function of the given name
+    /** the schemas of other runs of the test, which can share the database, have functions of the same names */
     private list<string> getFunctionSchemas(string name) {
         return sort(ds.select("select n.nspname from pg_catalog.pg_proc p join pg_catalog.pg_namespace n "
-            "on n.oid = p.pronamespace where p.proname = %v", name).nspname ?? ());
+            "on n.oid = p.pronamespace where p.proname = %v and n.nspname in (%v, %v, %v, %v)", name, run_schema,
+            decoy_schema, other_schema, dot_schema).nspname ?? ());
     }
 
     private qualifiedTriggerFunctions() {
