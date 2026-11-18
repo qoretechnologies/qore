@@ -15,7 +15,8 @@ that many strings.  The payload of each version:
   each a module name, four u32 words of options and a u32 word of flags (FLAG_*) (qore#6406, qore#6386);
 - version 4: as version 3, then the functional domains that the module declares in its header (a u64 as two u32, low
   word first), the dependencies that it requires only after its header (a list) and the functional domains that its
-  own code restricts (a u64 as two u32, low word first) (qore#6351).
+  own code restricts (a u64 as two u32, low word first) (qore#6351); either domain value with a bit outside
+  ALL_DOMAINS makes the record invalid.
 """
 
 import struct
@@ -42,6 +43,10 @@ FLAG_BEFORE_HEADER = 1 << 0
 FLAG_INEXACT = 1 << 1
 #: the flags that a record can have; any other bit makes it invalid (QMDR_ALL_FLAGS)
 ALL_FLAGS = FLAG_BEFORE_HEADER | FLAG_INEXACT
+#: the functional domain bits (QDOM_ALL in include/qore/Restrictions.h): a record whose declared or restricted domains
+#: have any other bit is invalid, as libqore refuses it (qoreAOTDecodeModuleInfo()); test_qmod_cache.py checks that
+#: this is the value of the header
+ALL_DOMAINS = 0x28201621ddd00c
 
 
 class ModuleInfo:
@@ -163,8 +168,12 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
                 restrictions.append((dep, words, flags))
         if version >= 4:
             declared_domains, cur = read_u64(cur)
+            if declared_domains & ~ALL_DOMAINS:
+                raise ValueError
             post_header, cur = read_list(cur)
             restricted_domains, cur = read_u64(cur)
+            if restricted_domains & ~ALL_DOMAINS:
+                raise ValueError
     except (ValueError, UnicodeDecodeError):
         return None
     if cur != end:
