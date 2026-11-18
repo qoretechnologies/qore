@@ -459,7 +459,8 @@ public class SharePointRecordsDataProvider inherits SharePointDataProviderBase {
         foreach hash<auto> site in (getRecordSites()) {
             list<hash<auto>> lists;
             try {
-                lists = getAllPages("sites/" + site.id + "/lists?" + ListSelect + "&$top=" + MaxPageSize);
+                lists = getAllPages("sites/" + SharePointDataProviderBase::getSitePathSegment(site.id) + "/lists?"
+                    + ListSelect + "&$top=" + MaxPageSize);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG, "getTableMap: site %y: %s: %s", site.id, ex.err, ex.desc);
                 continue;
@@ -490,13 +491,17 @@ public class SharePointRecordsDataProvider inherits SharePointDataProviderBase {
         list<hash<auto>> rv = ();
         try {
             if (default_site_id.val()) {
-                rv += doRestCommand("GET",
-                    "sites/" + default_site_id + "?$select=id,displayName,name").body;
+                rv += doRestCommand("GET", "sites/" + SharePointDataProviderBase::getSitePathSegment(default_site_id)
+                    + "?$select=id,displayName,name").body;
             } else {
                 rv += doRestCommand("GET", "sites/root?$select=id,displayName,name").body;
                 rv += getAllPages("sites/root/sites?$select=id,displayName,name", MaxPageSize);
             }
         } catch (hash<ExceptionInfo> ex) {
+            # a site option that is not a site is an error of the configuration, not a site out of reach
+            if (ex.err == "SHAREPOINT-SITE-ERROR" || ex.err == "VALUE-ERROR") {
+                rethrow;
+            }
             log(LoggerLevel::DEBUG, "getRecordSites: %s: %s", ex.err, ex.desc);
         }
         return rv;
