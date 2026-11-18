@@ -624,6 +624,21 @@ public:
     */
     std::vector<std::string> unavailable_try_modules;
 
+    //! the options that the Program's directives gave each module that they loaded, in the order of the directives
+    /** For each module that a %requires or %try-module directive of the Program loaded, the parse options that it
+        gave the module to inherit then (not the options that relieve restrictions); recorded once per module, for the
+        first directive.  An AOT module records them in its module metadata, so that the loader loads its dependencies
+        with them, in the same order, as its source does (qore#6406); see QoreAOTModuleFileInfo; a module requested
+        before the header of a user module has QMDR_BEFORE_HEADER (qore#6386)
+    */
+    std::vector<QoreModuleDependencyRestriction> parse_module_restrictions;
+
+    //! true if a conditional directive (%ifdef, %ifndef, %if) was parsed before the header of a user module
+    /** The modules that the module requests before its header can then depend on where it is loaded (qore#6386; see
+        QMDR_INEXACT)
+    */
+    bool conditional_before_module_header = false;
+
     //! the files that %include directives opened while this Program was parsed, by their real paths, without duplicates
     /** qcc lists them in the depfile of an AOT module, with which an incremental build and the module loader decide
         whether the module is out of date with its sources (see design/aot-linked-module-sources.md)
@@ -1682,6 +1697,17 @@ public:
 
     DLLLOCAL void addParseModule(const char* mod) {
         parse_modules.insert(mod);
+    }
+
+    //! Records the options that a directive of the Program gave a module that it loaded (see
+    //! parse_module_restrictions), and whether the directive precedes the header of a user module
+    DLLLOCAL void addParseModuleRestrictions(const char* mod, const QoreParseOptions& restrictions) {
+        for (const auto& i : parse_module_restrictions) {
+            if (i.module == mod) {
+                return;
+            }
+        }
+        parse_module_restrictions.emplace_back(mod, restrictions, module_header_closed ? 0 : QMDR_BEFORE_HEADER);
     }
 
     //! Records the module request of a %try-module directive that failed

@@ -293,7 +293,11 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - expression-declarations-modes (#6524): its probes run in child processes that set their own --exec-mode and
         #   in qcc executables
         # - ModuleCleanupCancel (#6510): its checks run in child processes that set their own --exec-mode
+        # - AOTModuleDependencyRestrictions (#6406) and AOTModuleHeaderRequests (#6386): their checks run in child
+        #   processes that set their own --exec-mode and in qcc executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
+                                 "examples/test/ir/AOTModuleHeaderRequests.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",

@@ -3465,6 +3465,17 @@ void parse_cond_push(bool mark) {
         td->pcs = new ParseConditionalStack;
     }
     td->pcs->push(mark);
+    // a conditional directive before the header of a user module: the modules that the module requests before its
+    // header can depend on where it is loaded (qore#6386)
+    if (mark) {
+        QoreProgram* pgm = getProgram();
+        if (pgm) {
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            if (!pp->module_header_closed) {
+                pp->conditional_before_module_header = true;
+            }
+        }
+    }
 }
 
 bool parse_cond_else() {

@@ -181,23 +181,44 @@ class ArtifactChecksTest(unittest.TestCase):
             subprocess.run(["cc", "-shared", "-fPIC", "-o", str(module), str(source)], check=True)
             return module.read_bytes()
 
-        def record(magic=0x494D4151, version=1, size_delta=0):
-            payload = struct.pack("<I", 6) + b"Module" + struct.pack("<II", 0, 0)
+        # the records are encoded by the parser that the checker shares with tools/qore-qmod-cache.py (qore#6526)
+        qami = artifacts.qore_qami
+
+        def record(magic=0x494D4151, version=qami.CURRENT_VERSION, size_delta=0, truncate=0):
+            encoded = qami.encode(min(version, qami.CURRENT_VERSION), "Module", ["Dep"], [], ["Dep"], ["/p"], [],
+                                  [("Dep", (1, 0, 0, 0))])
+            payload = encoded[12:len(encoded) - truncate]
             return struct.pack("<III", magic, version, len(payload) + size_delta) + payload
 
-        def note(**fields):
-            data = record(**fields)
+        def note(data):
             data = struct.pack("<III", 5, len(data), 0x494D4151) + b"Qore\0\0\0\0" + data
             return data + b"\0" * (-len(data) % 4)
 
-        data = build(note())
-        self.assertEqual(record(), artifacts.module_info(data))
+        # every record version that the build writes or wrote is accepted, the current one included
+        self.assertEqual(3, qami.CURRENT_VERSION)
+        for version in qami.VERSIONS:
+            with self.subTest(version=version):
+                rec = record(version=version)
+                self.assertEqual(rec, artifacts.module_info(build(note(rec))))
+                info = qami.parse(rec, exact=True)
+                self.assertEqual((version, "Module", ["Dep"]), (info.version, info.name, info.dependencies))
+                self.assertEqual([("Dep", (1, 0, 0, 0), 0)] if version >= 3 else [], info.dependency_restrictions)
+        # the flags of a dependency restriction: the known ones are read, any other bit makes the record invalid
+        flags = qami.FLAG_BEFORE_HEADER | qami.FLAG_INEXACT
+        rec = qami.encode(qami.CURRENT_VERSION, "Module", [], [], [], [], [], [("Dep", (0, 0, 0, 0), flags)])
+        self.assertEqual([("Dep", (0, 0, 0, 0), flags)], qami.parse(rec, exact=True).dependency_restrictions)
+        rec = qami.encode(qami.CURRENT_VERSION, "Module", [], [], [], [], [], [("Dep", (0, 0, 0, 0), 4)])
+        self.assertIsNone(qami.parse(rec, exact=True))
+        with self.assertRaises(ValueError):
+            artifacts.module_info(build(note(rec)))
+        data = build(note(record()))
         self.assertIsNone(artifacts.module_info(build(b"")))
         self.assertIsNone(artifacts.module_info(b"not an ELF image"))
-        for invalid in ({"magic": 0x58414D49}, {"version": 2}, {"size_delta": 1}):
+        for invalid in ({"magic": 0x58414D49}, {"version": 0}, {"version": qami.CURRENT_VERSION + 1},
+                        {"size_delta": 1}, {"truncate": 3}):
             with self.subTest(invalid=invalid):
                 with self.assertRaises(ValueError):
-                    artifacts.module_info(build(note(**invalid)))
+                    artifacts.module_info(build(note(record(**invalid))))
         with self.assertRaises(ValueError):
             artifacts.module_info(data[:100])
 

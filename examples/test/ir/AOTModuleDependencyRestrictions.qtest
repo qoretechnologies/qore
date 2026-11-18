@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in qcc executables
+# test-platform: macos - AOT modules loaded with dlopen() and their dependencies loaded by the module loader
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class AOTModuleDependencyRestrictionsTest
+
+#! The dependencies of an AOT module inherit the restrictions that the module's own code sets, as from its source
+/** A module's source restricts functionality with parse directives of its own; the modules that it requires after
+    such a directive inherit the restriction, as its Program loads them.  The dependencies of an AOT module are loaded
+    before its initialization, and must inherit the same restrictions (qore#6406).
+
+    Each module sets a restriction before its header, after its header (both before its %requires directive) or after
+    its %requires directive, and requires a module whose code it restricts.  Each AOT module is loaded by unrestricted
+    code in a new process (a module is loaded once per process), in every execution mode and from a qcc-compiled
+    executable, with its dependency as a source module and as an AOT module, and must give the result of its source.
+
+    One module first requires a module that loads the dependency without the restriction, then sets the restriction
+    and requires the dependency itself: from its source the dependency is loaded already, without the restriction, so
+    the module runs; the AOT module must load its dependencies in the order of its directives, also those whose
+    directive gave no restriction, to give the same result.
+*/
+class AOTModuleDependencyRestrictionsTest inherits QUnit::Test {
+    public {
+        #! the modules and where each restricts thread control
+        const Modules = {
+            "RestrictBeforeHeader": True,
+            "RestrictAfterHeader": True,
+            "RestrictAfterRequires": False,
+            "RestrictAfterEarlierLoad": False,
+        };
+
+        #! a module that requires the dependency, with no restriction
+        const LoadsDepSource = "%modern\n%requires ThreadDep\n"
+            "module LoadsDep { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; "
+            "license = \"MIT\"; }\n"
+            "public namespace LoadsDep { public int sub run() { return ThreadDep::run(); } }\n";
+
+        #! the execution modes
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        TmpDir tmp("qore-aot-module-dependency-restrictions-");
+        string qore_bin;
+        string qcc_bin;
+        string libdir;
+        #! the driver: loads the module given and prints its value or the code of the error
+        string driver;
+        #! the qcc-compiled driver
+        string driver_exe;
+    }
+
+    constructor() : QUnit::Test("AOTModuleDependencyRestrictionsTest", "1.0", \ARGV) {
+        addTestCase("the dependencies of AOT modules inherit the restrictions of the modules' code",
+            \restrictionTest());
+        set_return_value(main());
+    }
+
+    #! the source of the dependency: it uses thread control if \a threads is True
+    static string depSource(bool threads) {
+        return "%modern\n"
+            "module ThreadDep { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; url = \"https://qore.org\"; "
+            "license = \"MIT\"; }\n"
+            "public namespace ThreadDep {\n"
+            + (threads
+                ? "    public int sub run() { Counter c(1); int rv; background sub () { rv = 42; c.dec(); }(); "
+                    "c.waitForZero(); return rv; }\n"
+                : "    public int sub run() { return 42; }\n")
+            + "}\n";
+    }
+
+    #! the source of a module that restricts thread control where given and requires the dependency
+    static string moduleSource(string name) {
+        string header = sprintf("module %s { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+            "url = \"https://qore.org\"; license = \"MIT\"; }\n", name);
+        string ns = sprintf("public namespace %s { public int sub run() { return ThreadDep::run(); } }\n", name);
+        switch (name) {
+            case "RestrictBeforeHeader":
+                return "%modern\n%no-thread-control\n%requires ThreadDep\n" + header + ns;
+            case "RestrictAfterHeader":
+                return "%modern\n" + header + "%no-thread-control\n%requires ThreadDep\n" + ns;
+            case "RestrictAfterRequires":
+                return "%modern\n%requires ThreadDep\n" + header + "%no-thread-control\n" + ns;
+            case "RestrictAfterEarlierLoad":
+                return "%modern\n%requires LoadsDep\n%no-thread-control\n%requires ThreadDep\n" + header + ns;
+        }
+        throw "TEST-ERROR", name;
+    }
+
+    private static writeFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+    }
+
+    private static string quote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+
+    #! runs a command and returns its output, failing on a non-zero exit status
+    private string run(string cmd) {
+        int rc;
+        string out = trim(backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1",
+            quote(libdir), quote(libdir), quote(libdir), cmd), \rc));
+        assertEq(0, rc, cmd + ": " + out);
+        return out;
+    }
+
+    #! returns the result of loading a module with the module path given, in the mode given, or with the executable
+    private string load(string mod, string path, *string mode) {
+        string cmd = mode
+            ? sprintf("QORE_MODULE_DIR=%s %s --exec-mode=%s %s %s", quote(path), quote(qore_bin), mode,
+                quote(driver), mod)
+            : sprintf("QORE_MODULE_DIR=%s %s %s", quote(path), quote(driver_exe), mod);
+        return run(cmd);
+    }
+
+    restrictionTest() {
+        qore_bin = TestInterpreter::qore_interpreter();
+        *string qcc = TestInterpreter::qcc_compiler();
+        if (!qcc) {
+            testSkip("qcc is not available");
+        }
+        qcc_bin = qcc;
+        libdir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        string base = tmp.path;
+        # the version of the dependency that the AOT modules are compiled against
+        string clean_dir = base + "/clean";
+        # the source modules, and the version of the dependency that they are loaded with, as a source and as an AOT
+        # module
+        string src_dir = base + "/src";
+        string dep_src_dir = base + "/dep-src";
+        string dep_aot_dir = base + "/dep-aot";
+        string aot_dir = base + "/aot";
+        map mkdir($1), (clean_dir, src_dir, dep_src_dir, dep_aot_dir, aot_dir);
+        writeFile(clean_dir + "/ThreadDep.qm", depSource(False));
+        writeFile(dep_src_dir + "/ThreadDep.qm", depSource(True));
+        # a module that loads the dependency without any restriction
+        map writeFile($1 + "/LoadsDep.qm", LoadsDepSource), (clean_dir, dep_src_dir, dep_aot_dir);
+        run(sprintf("QORE_MODULE_DIR=%s %s -m -o %s %s", quote(dep_src_dir), quote(qcc_bin),
+            quote(dep_aot_dir + "/ThreadDep.qmod"), quote(dep_src_dir + "/ThreadDep.qm")));
+        foreach string mod in (keys Modules) {
+            writeFile(src_dir + "/" + mod + ".qm", moduleSource(mod));
+            run(sprintf("QORE_MODULE_DIR=%s %s -m -o %s %s", quote(clean_dir), quote(qcc_bin),
+                quote(aot_dir + "/" + mod + ".qmod"), quote(src_dir + "/" + mod + ".qm")));
+        }
+
+        driver = base + "/driver.q";
+        writeFile(driver, "%modern\n"
+            "try {\n"
+            "    load_module(ARGV[0]);\n"
+            "    printf(\"value %d\\n\", call_function(ARGV[0] + \"::run\"));\n"
+            "} catch (hash<ExceptionInfo> ex) {\n"
+            "    printf(\"error %s\\n\", ex.err);\n"
+            "}\n");
+        driver_exe = base + "/driver";
+        run(sprintf("%s -o %s %s", quote(qcc_bin), quote(driver_exe), quote(driver)));
+
+        foreach hash<auto> mod in (Modules.pairIterator()) {
+            foreach string dep_dir in ((dep_src_dir, dep_aot_dir)) {
+                string label = sprintf("%s with its dependency from %s", mod.key, basename(dep_dir));
+                # the source module, which the AOT module must give the same result as
+                string expected = load(mod.key, src_dir + ":" + dep_dir, "ast");
+                if (mod.value) {
+                    assertRegex("^error ", expected, label + ": source");
+                } else {
+                    assertEq("value 42", expected, label + ": source");
+                }
+                foreach *string mode in (Modes + (NOTHING,)) {
+                    assertEq(expected, load(mod.key, aot_dir + ":" + dep_dir, mode),
+                        sprintf("%s: AOT module (%s)", label, mode ?? "qcc executable"));
+                }
+            }
+        }
+    }
+}
