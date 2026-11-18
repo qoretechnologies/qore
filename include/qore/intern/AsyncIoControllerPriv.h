@@ -965,6 +965,24 @@ public:
     */
     DLLLOCAL static void opObjectDeleted(SocketPollOperationBase* op);
 
+    //! Registers a submission of a poll operation without a C++ poll operation by its Qore object (qore#6531)
+    /** The deletion of the object (qoreOpObjectDeleted()) cancels the operation with this controller; the
+        registration ends with the operation's cache entry (PollInfo::cleanup()) or the submission that failed
+    */
+    DLLLOCAL void registerQoreOp(const QoreObject* obj);
+
+    //! Ends a registration made by registerQoreOp()
+    DLLLOCAL static void unregisterQoreOp(const QoreObject* obj);
+
+    //! Returns true if the Qore object of a registered poll operation was deleted
+    DLLLOCAL static bool isQoreOpDeleted(const QoreObject* obj);
+
+    //! Called when the Qore object of a poll operation is deleted: a submitted operation without a C++ poll operation
+    //! is canceled (qore#6531)
+    /** Does not wait for the I/O threads and runs no Qore code
+    */
+    DLLLOCAL static void qoreOpObjectDeleted(const QoreObject* obj);
+
     //! Wakes the I/O thread of the controller that holds the given C++ poll operation; never raises an exception
     /** See SocketPollOperationBase::wakeIoThread()
     */
@@ -1174,6 +1192,9 @@ private:
         GetInfo,             //!< Snapshot cache info on the I/O thread
         //! Cancel the operation of a C++ poll operation whose Qore object was deleted (see opObjectDeleted())
         CancelDeletedOp,
+        //! Cancel the operation of a poll operation without a C++ poll operation (one implemented in Qore, an
+        //! HTTPClientPollOperation) whose Qore object was deleted (see qoreOpObjectDeleted(); qore#6531)
+        CancelDeletedObj,
     };
 
     //! Forward declaration — full definition below (requires PollInfo)
@@ -1302,6 +1323,11 @@ private:
         /** The reference keeps the address from being reused for another operation until the command is processed
         */
         SocketPollOperationBase* cancel_spop_base = nullptr;
+        //! For CancelDeletedObj: the Qore object of the operation whose object was deleted (referenced; qore#6531)
+        QoreObject* deleted_spop_obj = nullptr;
+        //! For SubmitOp: the operation, which has no C++ poll operation, is registered by its Qore object (see
+        //! registerQoreOp())
+        bool submit_qop_registered = false;
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -1339,6 +1365,9 @@ private:
         /** Only the entry that made the current attachment detaches the operation
         */
         uint64_t spop_attach_id = 0;
+        //! true if the operation, which has no C++ poll operation, is registered by its Qore object (see
+        //! registerQoreOp(); qore#6531): the entry unregisters it when it is cleaned up
+        bool qop_registered = false;
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         //! True once a terminal completion (goal/timeout/cancel/error) has been
@@ -2188,6 +2217,13 @@ private:
         @param only_idx if not negative, the command is sent to this I/O thread only
     */
     DLLLOCAL void postDeletedOpCancel(SocketPollOperationBase* op, int only_idx = -1);
+
+    //! Sends a CancelDeletedObj command for the given Qore object of a poll operation to the running I/O threads
+    /** @param obj the operation's object, referenced by each command
+        @param only_idx if not negative, the command is sent to this I/O thread only
+    */
+    DLLLOCAL void postDeletedObjCancel(const QoreObject* obj, int only_idx = -1);
+
 
     //! Releases references held by the controller for an operation, off the async I/O thread
     /** As releaseOffIoThread(AsyncIoDeferredRelease&, ExceptionSink*), except that on an I/O thread the references
