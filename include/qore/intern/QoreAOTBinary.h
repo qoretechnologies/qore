@@ -581,7 +581,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
 //!      v9-v45 image has none: a request at a step event of its code returns from the function.
-//! v47 (batch AI; one format version for the format changes of the batch, one line each):
+//! v47 (batch AJ; one format version for the format changes of the batch, one line each):
 //!      - the block cleanups of a return statement that run handlers out of line past the inline cap have a ScopeExit
 //!        with flag bit 2 (hand_over_return), whose handlers hand the values of their returns to the frame's
 //!        handed-over return, and the return takes it with TakeHandedOverReturn (QoreIROpcode 441), or a return in a
@@ -674,20 +674,20 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
-//! The format version of the format changes of batch AI (see v47 above)
+//! The format version of the format changes of batch AJ (see v47 above)
 /** Each change of the batch adds its line to the v47 history above and, if it needs one, a feature version of its own
     that a static_assert keeps equal to this one
 */
-constexpr uint16_t QORE_AOT_BATCH_AI_VERSION = 47;
+constexpr uint16_t QORE_AOT_BATCH_AJ_VERSION = 47;
 //! First format version whose return statements can take the values that handlers run out of line past the inline
 //! cap handed over (see v47 above, #6137)
 constexpr uint16_t QORE_AOT_HANDED_OVER_RETURN_VERSION = 47;
-static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AI_VERSION,
-    "the format changes of batch AI share one format version (v47)");
+static_assert(QORE_AOT_HANDED_OVER_RETURN_VERSION == QORE_AOT_BATCH_AJ_VERSION,
+    "the format changes of batch AJ share one format version (v47)");
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AI_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AJ_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
