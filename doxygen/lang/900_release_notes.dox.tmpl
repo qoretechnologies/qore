@@ -1688,6 +1688,9 @@
         alignment, which failed with \c ORA-03050
       - fixed a column declared with \c "default null", which was described with the default value \c null
         (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+      - a create-as-select gives the values of its select in the SQL as literals that give them exactly, as Oracle
+        refuses bind values in it
+        (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
 
     - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
@@ -1857,6 +1860,10 @@
       - @ref WebUtil::FileHandler "FileHandler" sends caching headers, answers conditional and range requests, and
         serves pre-compressed files
       - see @ref webutil_v1_8_1 for all changes
+
+    - @ref xdbcfirebirdsqlutilbaseintro "XdbcFirebirdSqlUtilBase" module
+      - a create-as-select, which Firebird does not support, raises \c OPTION-ERROR instead of giving SQL that the
+        database refuses (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
 
     - @ref zeyosrestclientintro "ZeyosRestClient" module
       - see @ref Zeyosrestclientv1_2 for all changes

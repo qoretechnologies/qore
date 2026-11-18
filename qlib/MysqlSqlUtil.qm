@@ -203,6 +203,9 @@ hash<auto> desc = {
     - implemented @ref select_option_recursive "recursive queries", which need MySQL 8.0 or MariaDB 10.2.2 or later;
       a query with a \c max_depth above the default recursion limit of the server raises it for the statement
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select; a create-as-select on MySQL
+      cannot raise the recursion limit (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select need MySQL
       8.0.31 or MariaDB 10.3 or later; with an older server they raise \c SET-OPERATOR-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
@@ -4036,6 +4039,56 @@ string str = table.getSqlValue(date);
                     sql = with_sql + " " + regex_subst(select_sql, "^select ",
                         sprintf("select /*+ SET_VAR(cte_max_recursion_depth = %d) */ ", rq.max_depth + 1));
                 } else if (rq.max_depth > MysqlRecursionDepthDefault) {
+                    sql = sprintf("set statement max_recursive_iterations = %d for %s", rq.max_depth, sql);
+                }
+            }
+            return sql;
+        }
+
+        #! Returns the SQL of an insert-select whose select is a recursive query
+        /** The recursive query follows the insert: <tt>insert into t (c1, c2) with recursive ... select ...</tt>; when
+            the \c max_depth of the query needs a higher recursion limit (see getRecursiveQuerySqlImpl()), MySQL gives
+            the \c SET_VAR hint after the \c INSERT keyword, the first keyword of the statement, and MariaDB gives
+            <tt>SET STATEMENT ... FOR</tt> before the statement
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getRecursiveInsertSelectSqlImpl(string insert_sql, string with_sql, string select_sql,
+                hash<auto> rq) {
+            string sql = insert_sql + " " + with_sql + " " + select_sql;
+            if (exists rq.max_depth && rq.max_depth >= MysqlRecursionDepthDefault) {
+                if (ds.getServerVersion() < 100000) {
+                    sql = regex_subst(insert_sql, "^insert ",
+                        sprintf("insert /*+ SET_VAR(cte_max_recursion_depth = %d) */ ", rq.max_depth + 1)) + " "
+                        + with_sql + " " + select_sql;
+                } else if (rq.max_depth > MysqlRecursionDepthDefault) {
+                    sql = sprintf("set statement max_recursive_iterations = %d for %s", rq.max_depth, sql);
+                }
+            }
+            return sql;
+        }
+
+        #! Returns the SQL of a create-as-select whose select is a recursive query
+        /** The recursive query follows the create: <tt>create table t as with recursive ... select ...</tt>; when the
+            \c max_depth of the query needs a higher recursion limit (see getRecursiveQuerySqlImpl()), MariaDB gives
+            <tt>SET STATEMENT ... FOR</tt> before the statement, and MySQL, whose \c CREATE \c TABLE statement takes no
+            \c SET_VAR hint, raises \c RECURSIVE-QUERY-ERROR
+
+            @throw RECURSIVE-QUERY-ERROR MySQL: the query has a \c max_depth of 1000 or more
+
+            @since MysqlSqlUtil 1.6
+        */
+        private string getRecursiveCreateAsSelectSqlImpl(string with_sql, string select_sql, hash<auto> rq,
+                *hash<auto> opt) {
+            string sql = getCreateAsSelectSqlImpl(with_sql + " " + select_sql, opt);
+            if (exists rq.max_depth && rq.max_depth >= MysqlRecursionDepthDefault) {
+                if (ds.getServerVersion() < 100000) {
+                    throw "RECURSIVE-QUERY-ERROR", sprintf("%s: a create-as-select on MySQL cannot raise the "
+                        "recursion limit of the server (cte_max_recursion_depth), which a recursive query with a "
+                        "max_depth of %d needs; create the table and use insert-select instead", getDesc(),
+                        rq.max_depth);
+                }
+                if (rq.max_depth > MysqlRecursionDepthDefault) {
                     sql = sprintf("set statement max_recursive_iterations = %d for %s", rq.max_depth, sql);
                 }
             }
