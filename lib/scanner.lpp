@@ -690,6 +690,18 @@ static int64 parse_get_octal(YYLTYPE* yylloc, const char* str) {
     return rv;
 }
 
+//! returns the offset of an implicit argument reference ($N): decimal, as leading zeros are ignored ($08 is $8, $010
+//! is $10); raises a parse exception if it cannot be represented (issue #6529)
+static int parse_get_implicit_arg_offset(YYLTYPE* yylloc, const char* str) {
+    errno = 0;
+    long rv = strtol(str + 1, 0, 10);
+    if (errno == ERANGE || rv > INT_MAX) {
+        parse_error(*get_loc(yylloc), "implicit argument offset '%s' is too large", str);
+        return 1;
+    }
+    return static_cast<int>(rv);
+}
+
 static inline int get_int_2(const char*& p) {
     int rv = (*p - '0') * 10;
     ++p;
@@ -3971,7 +3983,7 @@ hash\<{WORD}\>\{                        {
 \`[^`]*\`                               yylval->string = strdup(remove_quotes(yytext)); return BACKQUOTE;
 \'[^\']*\'                              yylval->String = new QoreStringNode(remove_quotes(yytext)); return QUOTED_WORD;
 \$\$                                    yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), -1); return IMPLICIT_ARG_REF;
-\$[0-9][0-9]*                           yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), strtol(yytext + 1, 0, 0)); return IMPLICIT_ARG_REF;
+\$[0-9][0-9]*                           yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), parse_get_implicit_arg_offset(yylloc, yytext)); return IMPLICIT_ARG_REF;
 \$#                                     return IMPLICIT_ELEMENT;
 \?\?                                    return NULL_COALESCING;
 \?:                                     return VALUE_COALESCING;
