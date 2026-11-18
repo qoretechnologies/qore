@@ -67,6 +67,14 @@
 
 // a token scanned again in the generic_rescan start condition is one token: the scanner goes back to INITIAL before
 // the rule's action runs (see QORE_GENERIC_STATIC_REF_CUT())
+//! flex's default rule copies text that no rule matches to the output; the scanner never writes the source, so such
+//! text is a parse error, once per line (issue #6512: the argument of %ifdef on a line that ended with CRLF was
+//! written to stdout)
+#define ECHO { if (yyextra->unexpected_text_line != yylloc->first_line) { \
+    yyextra->unexpected_text_line = yylloc->first_line; \
+    parse_error(*get_loc(yylloc), "unexpected text in the source: '%s'", \
+        (yytext[0] == '\r' ? "\\r" : (yytext[0] == '\n' ? "\\n" : yytext))); } }
+
 #define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); \
     set_native_token_info(yylloc, yyextra); \
     if (yyextra->line_start_directive_active && (YY_START == INITIAL || YY_START == generic_rescan) && yyleng == 1 \
@@ -2086,6 +2094,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 #endif
                                         }
    \n                                   // ignore
+   .                                    // the rest of a line, as the CR of a CRLF line (issue #6512)
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }
@@ -2176,7 +2185,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing argument to %%ifdef"); }
 ^%ifdef{WS}+                            { QORE_EXPR_DIRECTIVE(); BEGIN(p_ifdef); }
 <p_ifdef>{
-   [^\n\r]+$                            {
+   [^\n\r]+                               {
                                             parse_cond_push(true);
                                             if (parse_is_defined(yylloc, yytext)) {
                                                 //printd(5, "%%ifdef: '%s' is defined\n", yytext);
@@ -2195,7 +2204,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing argument to %%ifndef"); }
 ^%ifndef{WS}+                           { QORE_EXPR_DIRECTIVE(); BEGIN(p_ifndef); }
 <p_ifndef>{
-   [^\n\r]+$                            {
+   [^\n\r]+                               {
                                             parse_cond_push(true);
                                             if (!parse_is_defined(yylloc, yytext)) {
                                                 //printd(5, "ifndef: '%s' is not defined\n", yytext);
@@ -2214,7 +2223,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing expression in %%if"); }
 ^%if{WS}+                               { QORE_EXPR_DIRECTIVE(); BEGIN(p_if); }
 <p_if>{
-   [^\n\r]+$                            {
+   [^\n\r]+                               {
                                             parse_cond_push(true);
                                             bool result;
                                             if (parse_evaluate_condition(yylloc, yytext, result)) {
@@ -2247,7 +2256,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%elif{WS}+[^\n\r]+$                    { QORE_EXPR_DIRECTIVE();
+^%elif{WS}+[^\n\r]+\r?$                    { QORE_EXPR_DIRECTIVE();
                                             // We're in a true branch, skip remaining elif/else to endif
                                             if (!parse_cond_else()) {
                                                 parse_error(*get_loc(yylloc), "%%elif found without %%if");
@@ -2258,7 +2267,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%else({WS}+[^\n\r]*)?$                              { QORE_EXPR_DIRECTIVE();
+^%else({WS}+[^\n\r]*)?\r?$                              { QORE_EXPR_DIRECTIVE();
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (!parse_cond_can_else(get_loc(yylloc))) {
                                                 if (!parse_cond_else()) {
@@ -2272,7 +2281,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             }
                                         }
 <p_skip_to_endif>{
-   ^%endif({WS}+[^\n\r]*)?$                          {
+   ^%endif({WS}+[^\n\r]*)?\r?$                          {
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
@@ -2283,7 +2292,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
-   ^%else({WS}+[^\n\r]*)?$                           {
+   ^%else({WS}+[^\n\r]*)?\r?$                           {
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             // Check for duplicate %else at the current level
                                             if (parse_cond_test(get_loc(yylloc))) {
@@ -2294,7 +2303,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             }
                                             // else: nested %else, just continue skipping
                                         }
-   ^%elif{WS}+[^\n\r]+$                 {
+   ^%elif{WS}+[^\n\r]+\r?$                 {
                                             // Check for %elif after %else at the current level
                                             if (parse_cond_test(get_loc(yylloc)) && parse_cond_has_else()) {
                                                 parse_error(*get_loc(yylloc), "%%elif after %%else in conditional block");
@@ -2316,12 +2325,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 #endif
                                         }
    \n                                   // ignore
+   .                                    // the rest of a line after a directive, as the CR of a CRLF line (issue #6512)
    <<EOF>>                              {
                                             QORE_FLEX_DO_EOF
                                         }
 }
 <p_skip_to_endif_or_else>{
-   ^%elif{WS}+[^\n\r]+$                 {
+   ^%elif{WS}+[^\n\r]+\r?$                 {
                                             // Only evaluate %elif if we're at the top level of the current conditional
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 // Check if %else was already seen
@@ -2350,7 +2360,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             }
                                             // If not at top level, just continue skipping (stay in current state)
                                         }
-   ^%else({WS}+[^\n\r]*)?$                           {
+   ^%else({WS}+[^\n\r]*)?\r?$                           {
                                             //printd(5, "p_skip_to_endif_or_else: found %else\n");
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (parse_cond_test(get_loc(yylloc))) {
@@ -2364,7 +2374,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 }
                                             }
                                         }
-   ^%endif({WS}+[^\n\r]*)?$                     {
+   ^%endif({WS}+[^\n\r]*)?\r?$                     {
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
@@ -2390,6 +2400,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 #endif
                                         }
    \n                                   // ignore
+   .                                    // the rest of a line after a directive, as the CR of a CRLF line (issue #6512)
    <<EOF>>                              {
                                             QORE_FLEX_DO_EOF
                                         }
@@ -2453,7 +2464,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%endif({WS}+[^\n\r]*)?$                             { QORE_EXPR_DIRECTIVE();
+^%endif({WS}+[^\n\r]*)?\r?$                             { QORE_EXPR_DIRECTIVE();
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             parse_cond_pop(get_loc(yylloc));
                                         }
