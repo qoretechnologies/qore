@@ -1514,6 +1514,13 @@ extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, v
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
+    // the event runs in the statement's own location, as in the IR interpreter: native code updates the runtime
+    // location only when the line changes, so it is still that of the code before, which can be another statement
+    // on the same line or the statement that contains this one (#6248); the next line that native code reaches sets
+    // it again
+    if (statement && statement->loc) {
+        *get_runtime_location_cache().loc_ptr = statement->loc;
+    }
     tlpd->dbgStep(static_cast<const StatementBlock*>(statements_block), statement, xsink);
 }
 

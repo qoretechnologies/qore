@@ -17220,6 +17220,16 @@ load_local_done:
                         dbg_stmt = getDebugStatement(inst);
                     }
                     if (dbg_stmt) {
+                        // the event runs in the statement's own location, as the event of a folded statement does
+                        // (QORE_IR_DISPATCH_FOLDED_DEBUG_STEP()): the location of the instructions, which is updated
+                        // only when the line changes, is still that of the instruction before, which can be another
+                        // statement on the same line or the statement that contains this one (#6248).  The
+                        // statement's location is the instruction's for lowered code; the location of the
+                        // instruction of deserialized AOT closure IR has no columns, unlike its statement's
+                        if (dbg_inst->cached_start_line >= 0 && dbg_stmt->loc) {
+                            *rl_cache.loc_ptr = dbg_stmt->loc;
+                            last_ephemeral_line = dbg_inst->cached_start_line;
+                        }
                         // the current statement of the frame, which the frames of its calls record
                         *rl_cache.stmt_ptr = dbg_stmt;
                         dbg_state.frame_stmt = dbg_stmt;
