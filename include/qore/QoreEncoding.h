@@ -157,7 +157,9 @@ public:
         @return 0=invalid, positive = number of bytes needed to represent the character (and all are present),
         negative numbers = minus the number of bytes that the character needs, when \a valid_len bytes are a valid
         start of it; UTF-8 is checked as RFC 3629 defines it (no overlong forms, surrogates or code points above
-        U+10FFFF; since %Qore 3.0)
+        U+10FFFF; since %Qore 3.0), and UTF-16 with paired surrogates only (a high surrogate followed by a low
+        surrogate; since %Qore 3.0), where one byte of a little-endian code unit gives -2, as only its second byte
+        says whether it is a surrogate
     */
     DLLEXPORT qore_offset_t getCharLen(const char* p, size_t valid_len) const;
 

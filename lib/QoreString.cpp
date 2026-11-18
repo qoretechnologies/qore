@@ -687,19 +687,24 @@ void QoreAsciiCompatStringHelper::decodeToUtf8(const QoreEncoding* enc, const ch
     // most characters in a string to be parsed are ASCII and need one byte each
     op->check_char(op->len + static_cast<size_t>(end - p) / ep->getMinCharWidth() + 1);
     while (p < end) {
-        qore_offset_t clen = enc->getCharLen(p, end - p);
-        if (clen <= 0) {
+        size_t left = static_cast<size_t>(end - p);
+        qore_offset_t clen = enc->getCharLen(p, left);
+        if (clen < 0) {
             // an incomplete character at the end of the string
             op->concatUTF8FromUnicode(0xfffd);
             break;
         }
-        unsigned code = ep->getUnicode(p);
-        // an unpaired surrogate is not a valid character
-        if (code >= 0xd800 && code <= 0xdfff) {
-            code = 0xfffd;
-            // only the first code unit is skipped, since the next one may be a valid character
-            clen = ep->getMinCharWidth();
+        if (!clen) {
+            // an invalid character (ex: an unpaired surrogate in UTF-16) is replaced, and the text after it is
+            // decoded: only its first code unit is skipped, since the next one may be a valid character (qore#6604)
+            op->concatUTF8FromUnicode(0xfffd);
+            size_t unit = ep->getMinCharWidth();
+            p += unit < left ? unit : left;
+            continue;
         }
+        unsigned code = ep->getUnicode(p);
+        // the character functions accept no surrogate code point as a character
+        assert(code < 0xd800 || code > 0xdfff);
         op->concatUTF8FromUnicode(code);
         p += clen;
     }

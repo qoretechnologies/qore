@@ -1596,11 +1596,15 @@ public:
             const char* p = src;
             char* targ_end = targ.ownedBuffer() + len;
             const char* end = src + len;
+            // an encoding made of units of more than one byte (UTF-16) reverses a unit that does not start a
+            // character as a character of its own, so that the text after it is read in whole units, as length()
+            // counts it; a byte is reversed on its own where a whole unit does not remain (qore#6604)
+            const size_t unit = getEncoding()->getMinCharWidth();
             while (p < end) {
                 bool invalid;
-                int bl = getEncoding()->getByteLen(p, end, 1, invalid);
+                size_t bl = getEncoding()->getByteLen(p, end, 1, invalid);
                 if (invalid) {
-                    bl = 1;
+                    bl = unit > 1 && static_cast<size_t>(end - p) >= unit ? unit : 1;
                 }
                 targ_end -= bl;
                 if (targ_end < targ.ownedBuffer()) {
