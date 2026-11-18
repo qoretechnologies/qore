@@ -522,6 +522,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
             bool buffered = false;
             AbstractAsyncAction* action = takeResponseAction(sid, output, buffered, xsink);
+#ifdef DEBUG
+            if (buffered) {
+                // reports that the response of a request that is not registered yet was kept for the registration
+                qore_dbg_http_hold(QoreDbgHttpHoldPoint::Http3ResponseBuffered, *self);
+            }
+#endif
             if (action) {
                 response_dispatched = true;
             }
@@ -1079,6 +1085,24 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
 
     endSubmitOk(stream_id);
+
+#ifdef DEBUG
+    // a test holds the thread here, with the I/O thread woken, so that the response arrives before the registration
+    if (qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint::Http3Register)) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv(static_cast<AsyncIoControllerPriv*>(
+                ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &wake_xsink)), &wake_xsink);
+            ReferenceHolder<QoreObject> sock(getReferencedSocket(), &wake_xsink);
+            if (ctl_priv && sock) {
+                ctl_priv->wakeSocketByObject(*sock, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::Http3Register);
+    }
+#endif
 
     // Phase 3: register stream with action
     bool need_cancel = false;
