@@ -311,6 +311,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution mode
         # - aot-dependency-domains (#6351): its checks load modules from source and compiled with qcc in child
         #   processes, as a module is loaded once in a process
+        # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
@@ -399,6 +400,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-6.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-7.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-8.qtest",
+                                 "examples/test/qlib/WebSocketClient/WebSocketAsyncTextEncoding.qtest",
                                  "examples/test/qlib/WebSocketHandler/WebSocketProgramEnd.qtest",
                                  "examples/test/qlib/TerminalIoRestrictedLoad/TerminalIoRestrictedLoad.qtest",
                                  "examples/test/qore/classes/Program/entry-cpp-exception/entry-cpp-exception.qtest",
