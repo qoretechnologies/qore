@@ -29010,15 +29010,27 @@ static bool loadRequireModules(QoreProgram* pgm,
         const std::vector<std::string>& require_modules,
         std::string& error) {
     for (const std::string& mod : require_modules) {
-        SimpleRefHolder<QoreStringNode> err(
-            MM.parseLoadModule(mod.c_str(), pgm));
-        if (err) {
-            error = "cannot load required module '" + mod + "': ";
-            error += err->getBuffer();
+        // the parse errors and warnings of the module are reported as diagnostics of the compiled code (issue #6584)
+        ExceptionSink xsink;
+        ExceptionSink wsink;
+        QoreAotWarningReportHelper wsink_report(wsink);
+        if (QMM.parseLoadModule(xsink, wsink, mod.c_str(), pgm)) {
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
+            error = "cannot load required module '" + mod + "'";
+            return false;
+        }
+        // its warnings, which fail the compile with -r as those of the compiled code do
+        if (qoreAotHandleWarnings(wsink, error, ("loading required module '" + mod + "'").c_str())) {
             return false;
         }
     }
     return true;
+}
+
+bool qore_aot_load_required_modules(QoreProgram* pgm, const std::vector<std::string>& require_modules,
+        std::string& error) {
+    return loadRequireModules(pgm, require_modules, error);
 }
 
 class ParseStubDeclarationModeHelper {
