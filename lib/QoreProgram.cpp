@@ -1349,6 +1349,21 @@ void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
     }
 }
 
+int64 qore_program_private::skipPendingStatements(QoreProgram& pgm, ExceptionSink* xsink) {
+    if (lockParsing(pgm, xsink)) {
+        return -1;
+    }
+    // the parse lock is released also if an exception leaves
+    ON_BLOCK_EXIT([&pgm, xsink] () {
+        qore_program_private::unlockParsing(pgm, xsink);
+    });
+    // without PO_ALLOW_REPARSE, a run executes all of the statements
+    if (!(pgm.priv->pwo.parse_options & PO_ALLOW_REPARSE)) {
+        return 0;
+    }
+    return pgm.priv->sb.skipUnexecuted();
+}
+
 void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink) {
     qore_program_private::get(pgm)->addExceptionDiagnostics(&xsink);
 }

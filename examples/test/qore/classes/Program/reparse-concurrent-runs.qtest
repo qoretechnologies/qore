@@ -22,6 +22,9 @@ public class ReparseConcurrentRunsTest inherits QUnit::Test {
         addTestCase("a statement that raises an exception is not executed again", \exceptionTest());
         addTestCase("the statements after an exception are executed by the next run", \afterExceptionTest());
         addTestCase("a return statement is executed once", \returnTest());
+        addTestCase("skipping the statements that no run has executed", \skipTest());
+        addTestCase("skipping from the code of the Program", \skipSelfTest());
+        addTestCase("skipping without PO_ALLOW_REPARSE", \skipNoReparseTest());
         set_return_value(main());
     }
 
@@ -126,5 +129,52 @@ public class ReparseConcurrentRunsTest inherits QUnit::Test {
         assertEq(0, p.getGlobalVariable("m"));
         assertEq(NOTHING, p.run());
         assertEq(1, p.getGlobalVariable("m"));
+    }
+
+    #! Program::skipPendingStatements() skips the committed statements that no run has executed, not pending code
+    skipTest() {
+        Program p = newProgram();
+        assertEq(0, p.skipPendingStatements(), "nothing to skip");
+        p.parse("our int n = 0;\n", "setup");
+        p.run();
+        assertEq(0, p.skipPendingStatements(), "everything has run");
+        p.parse("n++;\nthrow \"X\";\nn++;\nn++;\n", "code");
+        assertThrows("X", \p.run());
+        assertEq(1, p.getGlobalVariable("n"));
+        assertEq(2, p.skipPendingStatements(), "the two statements after the exception are skipped");
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+        # code parsed later runs
+        p.parse("n += 10;\n", "later");
+        p.run();
+        assertEq(11, p.getGlobalVariable("n"));
+        # pending code is not affected
+        p.parsePending("n += 100;\n", "pending");
+        assertEq(0, p.skipPendingStatements());
+        p.parseCommit();
+        p.run();
+        assertEq(111, p.getGlobalVariable("n"));
+    }
+
+    #! code of the Program skips the statements after it
+    skipSelfTest() {
+        Program p = newProgram();
+        p.parse("our auto self;\nour int n = 0;\nour int skipped = -1;\n", "setup");
+        p.run();
+        p.setGlobalVarValue("self", p);
+        on_exit p.setGlobalVarValue("self", NOTHING);
+        p.parse("skipped = self.skipPendingStatements();\nn++;\nn++;\n", "code");
+        p.run();
+        assertEq(2, p.getGlobalVariable("skipped"));
+        assertEq(0, p.getGlobalVariable("n"));
+    }
+
+    #! without PO_ALLOW_REPARSE, a run executes all of the statements: nothing is skipped
+    skipNoReparseTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int n = 0;\nn++;\nn++;\n", "code");
+        assertEq(0, p.skipPendingStatements());
+        p.run();
+        assertEq(2, p.getGlobalVariable("n"));
     }
 }

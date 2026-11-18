@@ -5771,6 +5771,10 @@ public:
         return pgm.priv->lockParsing(xsink);
     }
 
+    //! Implements Program::skipPendingStatements(); returns the number of statements skipped, or -1 if an exception
+    //! was raised (the parse lock could not be acquired)
+    DLLLOCAL static int64 skipPendingStatements(QoreProgram& pgm, ExceptionSink* xsink);
+
     //! Releases the parse lock; clears and dereferences a Program deleted while the thread held it
     /** @param pgm the Program
         @param xsink exceptions raised while the Program is cleared are appended here; if null, they are handled
