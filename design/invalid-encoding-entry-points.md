@@ -37,10 +37,10 @@ this work; no change).
 | `HttpServer.qm` `HttpListener::setupRequestHead()` (the three request setup points: `processNativeRequest()`, the persistent HTTP/1.x loop, the orphaned persistent request) | path and query (`decodeRequestPath()`), method, HTTP version, header names; all protocols (nghttp2 passes 0x80-0xFF in `:path` and values) | `cx."request-head-error"` → 400 in `handleRequest()` before any handler, next to the `%00` check; the path is `"/"` meanwhile, so the code before cannot raise | done (`HttpServerInvalidEncoding.qtest`: HTTP/1.1, HTTP/2, HTTP/3) |
 | same | header values | ISO-8859-1 when not valid UTF-8 (rule 3) | done |
 | `HttpServerNativeAsyncTarget::tryInlineRequest()` | the raw head given to an inline handler | a head that is not valid text or needs a change takes the full path (`inlineHeadValid()`) | done (inline case of the same test) |
-| HTTP/1.x request head in C++ (`processHttpHeaderString()`, `CHF_REQUEST`) | HTTP version format, header-name `tchar`s | optional earlier refusal (`SOCKET-HTTP-ERROR` → 400 + close); the Qore check above already gives 400 for text that is not valid | todo (hardening) |
-| `qore_http_body_string()` / `decodeRequestText()` | buffered request bodies | 400 for a body that is not valid in its charset | todo |
-| WebSocket text frames (HTTP/1, /2, /3; server and client) | messages, close reasons | close 1007 (RFC 6455), after permessage-deflate | todo |
-| Streamed bodies, multipart parts, DataStream / Connect JSON (`binary.toString()`, `binary_to_string()` only tag) | message text | validated where the bytes become a string | todo |
+| HTTP/1.x request head in C++ (`processHttpHeaderString()`, `CHF_REQUEST`) | HTTP version format, header-name `tchar`s | optional earlier refusal (`SOCKET-HTTP-ERROR` → 400 + close); the Qore check above already gives 400 for text that is not valid | not done: the Qore check gives the 400; an earlier C++ refusal is optional hardening |
+| `qore_http_body_string()` / `decodeRequestText()` | buffered request bodies | 400 for a body that is not valid in its charset (`HttpServer::decodeRequestText()`, both buffered paths; the direct HTTP/1.1 read answers 400 as for any read error) | done (`HttpServerInvalidEncoding.qtest`: HTTP/1.1, HTTP/2, HTTP/3) |
+| WebSocket text frames (HTTP/1, /2, /3; server and client) | messages, close reasons | close 1007 (RFC 6455), after permessage-deflate: `WebSocketConnection::applyIncomingExtensions()` raises `WEBSOCKET-INVALID-PAYLOAD`, which both server paths answer with 1007; the WebSocket client is #6604 | done for the server (`WebSocketInvalidUtf8.qtest`: HTTP/1.1 plain and compressed, HTTP/2) |
+| Streamed bodies, multipart parts, DataStream / Connect JSON (`binary.toString()`, `binary_to_string()` only tag) | message text | validated where the bytes become a string | #6604 |
 
 ### Clients and data inputs
 
@@ -48,11 +48,11 @@ this work; no change).
 |---|---|---|
 | `PollPipeline::addRecvLineResponse()` reply text (SMTP, FTP) | ISO-8859-1 when not valid in its encoding | done |
 | `PollPipeline::addCheckRegex()` | strings strictly; binary as before | done |
-| HTTP client response heads and bodies | header values rule 3; bodies raise | todo |
-| Mime quoted-printable / base64 / encoded-word decoding, part bodies; MailMessage `force_encoding()` paths; POP3 data | raise, or the default for names (`sanitize_filename()` gives `"attachment"`) | todo |
-| JSON parser output (`modules/json`) | raise | todo |
-| File, `StreamReader` and line readers (CsvUtil, FixedLengthUtil, Ndjson, file data providers) | raise | todo |
-| MongoDB BSON strings; proto2 protobuf strings | raise | todo |
+| HTTP client response bodies (`qore_http_response_body_string()`, `qore_decode_http_response_body()`) | HTML and other text (or no Content-Type): ISO-8859-1; structured types: `INVALID-ENCODING` (HTTP/1.1 completes the request with the error, HTTP/2 completes the stream with it); chunks given to a receive callback are given as received | done (`HttpBodyCharset.qtest`: HTTP/1.1, HTTP/2) |
+| Mime quoted-printable / base64 / encoded-word decoding, part bodies; MailMessage `force_encoding()` paths; POP3 data | the HTTP client rule (#6604); `sanitize_filename()` gives `"attachment"` (done) | #6604 |
+| JSON parser output (`modules/json`) | raise | #6604 |
+| File, `StreamReader` and line readers (CsvUtil, FixedLengthUtil, Ndjson, file data providers) | an `encoding_errors` option (raise, latin1, keep), default raise | #6604 |
+| MongoDB BSON strings; proto2 protobuf strings | raise | #6604 |
 | YAML (libyaml), IMAP and SMTP replies (ISO-8859-1), Mime header text (`convert_encoding()`) | already valid | covered |
 | `ENV`, `ARGV` | trusted | unchanged |
 
@@ -64,5 +64,11 @@ SqlUtil literal and insert-operator checks) use `isEncodingValid()`: done.
 
 ## Regular expressions compiled per request
 
-To be compiled when the handler is created (todo): `HttpServer` `HandlerInfo::matchRequest()`, `JsonRpcHandler`
+To be compiled when the handler is created (#6603, David's requirement: no 500 response at run time for a pattern): `HttpServer` `HandlerInfo::matchRequest()`, `JsonRpcHandler`
 and `YamlRpcHandler` method matching, `OpenApi3`/`Swagger` path templates, `McpServerHandler` URI templates.
+
+## Regular expressions themselves
+
+- `\C` (one byte, which can be a part of a character) is refused when a pattern is compiled
+  (`PCRE2_NEVER_BACKSLASH_C`), so that no match or substitution gives a string that is not valid UTF-8.
+- A match error gives the byte offset of the first invalid sequence of the subject.

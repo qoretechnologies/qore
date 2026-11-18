@@ -127,6 +127,16 @@
     names are not valid text with \c 400 before any handler sees it, and gives a header value that is not valid UTF-8
     to the handler in ISO-8859-1, as RFC 9110 obs-text (issue #6554).
 
+    @par HTTP Clients Check a Response Body's Encoding
+    A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
+    text, as a page's declared charset is often wrong, and fails with \c INVALID-ENCODING when it is JSON, YAML, XML or
+    another structured type, with @ref Qore::HTTPClient "HTTPClient" and the HTTP client modules (issue #6554).
+
+    @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
+    A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)
+    before the connection's code sees it, in @ref websockethandlerintro "WebSocketHandler" over HTTP/1.1, HTTP/2 and
+    HTTP/3 (issue #6554).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
