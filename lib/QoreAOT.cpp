@@ -4605,6 +4605,39 @@ private:
                 return fail("scope enter/exit crosses region boundary");
             }
         }
+        // A closure created in the region that captures both a local of the region (instantiated in the helper)
+        // and a local that the coordinator shares with it cannot find the coordinator's local when it runs ("local
+        // variable ... is not instantiated in the current context"; found by compiling the test scripts with the
+        // outliner's thresholds forced low: qore#6560).  A closure capturing only one of the two kinds works.
+        for (size_t i = first; i <= last; ++i) {
+            for (const auto& inst_ptr : fn.blocks[i]->instructions) {
+                if (!inst_ptr || inst_ptr->opcode != QoreIROpcode::CreateClosure) {
+                    continue;
+                }
+                const auto* cci = static_cast<const QoreIRCreateClosureInstruction*>(inst_ptr.get());
+                const QoreClosureParseNode* closure = cci->closure_node
+                    ? cci->closure_node
+                    : qore_get_closure_parse_node(cci->expr.getInternalNode());
+                const LVarSet* vlist = closure ? closure->getVList() : nullptr;
+                if (!vlist) {
+                    continue;
+                }
+                bool captures_region_local = false;
+                bool captures_shared_local = false;
+                for (const LocalVar* lv : *vlist) {
+                    auto it = local_info.find(lv);
+                    if (it != local_info.end() && it->second.min_ref >= first && it->second.max_ref <= last
+                            && body_local_set.count(reinterpret_cast<const void*>(lv))) {
+                        captures_region_local = true;
+                    } else {
+                        captures_shared_local = true;
+                    }
+                }
+                if (captures_region_local && captures_shared_local) {
+                    return fail("closure captures locals of both the region and the coordinator");
+                }
+            }
+        }
         // Classify referenced locals.
         for (const LocalVar* lv : region_locals) {
             auto it = local_info.find(lv);

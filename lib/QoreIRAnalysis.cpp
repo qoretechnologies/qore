@@ -7584,14 +7584,21 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
     // lifetime across DiscardTemps. Only values proven inline may cross a
     // basic-block boundary; within a block, boxed candidates expire at a drain.
     std::unordered_set<uint32_t> inline_scalars;
-    for (const auto& block : func.blocks) {
-        for (const auto& inst : block->instructions) {
+    // the layout position of the block that defines each value: the native code generator lowers the blocks in
+    // layout order, so a use can only take a value defined in its own block or in one laid out before it, even if a
+    // block laid out later dominates it (ex: the latch of a foreach loop is laid out before the blocks of its body
+    // that run before it; when the loop's constants stay in the loop, as in a function that the AOT outliner
+    // considers, the latch's constant 1 matched one of the body: issue #6560)
+    std::unordered_map<uint32_t, size_t> value_block;
+    for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
+        for (const auto& inst : func.blocks[block_id]->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR scalar CSE lifetime analysis")) {
                 return {};
             }
             if (!inst->result.isValid()) {
                 continue;
             }
+            value_block[inst->result.id] = block_id;
             const QoreIRValueFacts* facts = func.getValueFacts(inst->result);
             bool is_inline = facts && (facts->representation == QoreIRValueRepresentation::NativeBool
                 || (facts->representation == QoreIRValueRepresentation::NativeInt && facts->hasInlineIntRange()));
@@ -7824,6 +7831,26 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 }
             }
         }
+        // true if \a value, defined in a block laid out after this one (see value_block), cannot replace the result
+        // of \a inst: a use of the result other than an incoming value of a phi (whose values are lowered after all
+        // blocks) in a block laid out before or at the block defining \a value would have no value
+        auto laid_out_later = [&value_block, &uses, block_id](const QoreIRValue& value,
+                const QoreIRInstruction& inst) {
+            auto it = value_block.find(value.id);
+            if (it == value_block.end() || it->second <= block_id) {
+                return false;
+            }
+            auto use_it = uses.find(inst.result.id);
+            if (use_it == uses.end()) {
+                return false;
+            }
+            for (const QoreIRScalarUse& use : use_it->second) {
+                if (use.block_id <= it->second && use.inst->opcode != QoreIROpcode::Phi) {
+                    return true;
+                }
+            }
+            return false;
+        };
         const auto& block = func.blocks[block_id];
         // the paths of the debugger's flow requests leave the block before an instruction
         QoreIRDebugFlowCursor flow_cursor;
@@ -7883,9 +7910,14 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 LoadMap& candidates = inline_scalars.count(inst.result.id) ? available_loads : scoped_loads;
                 auto [load_it, inserted] = candidates.emplace(load.local, inst.result);
                 if (!inserted) {
-                    replacements.emplace(inst.result.id, load_it->second);
-                    eliminated.insert(&inst);
-                    forwarded_loads.insert(&inst);
+                    if (laid_out_later(load_it->second, inst)) {
+                        // this load provides the value from here on
+                        load_it->second = inst.result;
+                    } else {
+                        replacements.emplace(inst.result.id, load_it->second);
+                        eliminated.insert(&inst);
+                        forwarded_loads.insert(&inst);
+                    }
                 }
                 continue;
             }
@@ -7909,6 +7941,11 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             ExpressionMap& candidates = inline_scalars.count(inst.result.id) ? available : scoped_expressions;
             auto [available_it, inserted] = candidates.emplace(std::move(key), inst.result);
             if (inserted) {
+                continue;
+            }
+            if (laid_out_later(available_it->second, inst)) {
+                // this instruction provides the value from here on
+                available_it->second = inst.result;
                 continue;
             }
             replacements.emplace(inst.result.id, available_it->second);
