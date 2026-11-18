@@ -54,16 +54,45 @@ public namespace TestInterpreter {
     #! the environment variable that records the executable of a compiled test for its child processes
     public const ParentExecutableVar = "QORE_TEST_COMPILED_PARENT";
 
+    #! the options of the runtime of an executable compiled with qcc, which it takes before the arguments (\c ARGV)
+    public const CompiledRuntimeOptions = {
+        "-b": True,
+        "-d": True,
+        "-G": True,
+        "--enable-debug": True,
+    };
+
     #! returns True if the process runs a script compiled with qcc (an executable), False for the interpreter
     /** The interpreter's \c QORE_ARGV holds the interpreter, its options and the script before the arguments of the
-        script (\c ARGV); that of a compiled executable holds the executable and the arguments only
+        script (\c ARGV); that of a compiled executable holds the executable, the options of its runtime
+        (CompiledRuntimeOptions) and the arguments only.
+
+        The number of arguments before \c ARGV is the one when the module was loaded (TestInterpreterState::argOffset()):
+        a test gives QUnit \c ARGV as a reference, and QUnit removes the options that it takes (such as \c -v) from it.
+        Only in a compiled executable, into which the module is compiled, is that the \c ARGV that the module reads: a
+        module loaded by the interpreter has its own copy.
+
+        The interpreter reading its script from stdin with no options or only options that are also runtime options of
+        a compiled executable (<tt>qore \< script</tt>, <tt>qore -b \< script</tt>) has the same command line as such
+        an executable and counts as one: qore_interpreter() then takes neither \c QORE_ARGV[0] nor an interpreter from
+        the environment that is the running qore (is_own_executable()), but another one from the environment or the
+        \c PATH, and fails if there is none; guard_recursion() also takes the running qore for the executable of a
+        compiled test.  Tests are never run that way (run_tests.sh gives qore the path of the test).
     */
     public bool sub running_compiled() {
         # no QORE_ARGV: the module is initialized by qcc when it compiles code that requires it
         if (!QORE_ARGV) {
             return False;
         }
-        return (QORE_ARGV.size() - (ARGV.size() ?? 0)) < 2;
+        int offset = TestInterpreterState::argOffset();
+        # the interpreter has its script (or the code of -e or another option) before ARGV, never only options of
+        # the runtime of a compiled executable
+        for (int i = 1; i < offset; ++i) {
+            if (!CompiledRuntimeOptions{QORE_ARGV[i]}) {
+                return False;
+            }
+        }
+        return True;
     }
 
     #! returns the interpreter options of this process: the arguments between the interpreter and the script
@@ -245,6 +274,21 @@ class TestInterpreterState {
         static Mutex lck();
         static bool read;
         static *string parent_executable;
+        # -1 until it is read
+        static int arg_offset = -1;
+    }
+
+    #! returns the number of arguments of \c QORE_ARGV before \c ARGV, as it was the first time that it was read
+    /** It is read first when the module is loaded (its initialization calls TestInterpreter::guard_recursion()),
+        before the test's code runs: the test gives QUnit \c ARGV as a reference, and QUnit removes the options that
+        it takes from it, after which the sizes of \c QORE_ARGV and \c ARGV no longer tell where \c ARGV starts
+    */
+    static int argOffset() {
+        AutoLock al(lck);
+        if (arg_offset < 0) {
+            arg_offset = QORE_ARGV.size() - (ARGV.size() ?? 0);
+        }
+        return arg_offset;
     }
 
     #! returns the executable that the parent process recorded, if any, and records \a own for child processes

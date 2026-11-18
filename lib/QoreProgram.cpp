@@ -2183,6 +2183,14 @@ void qore_program_private_base::newProgram() {
         dmap["QoreHasUserModuleLicense"] = true;
     }
 
+    // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
+    // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
+    // below or QoreDebug, which depend on the build configuration of the library (a qmod compiled by one build of the
+    // library is loaded by another of the same sources) or on the process (HAVE_SIGNAL_HANDLING)
+    for (auto& i : dmap) {
+        builtin_defines.insert(i.first);
+    }
+
     QoreNamespace* ns = QoreNS->findLocalNamespace("Option");
     assert(ns);
     ConstantListIterator cli(qore_ns_private::getConstantList(ns));
@@ -2921,9 +2929,9 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // lifts the restriction when the commit ends, also with an exception
             class CommitEntryRestrictionHelper {
             public:
-                DLLLOCAL CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
+                CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
                 }
-                DLLLOCAL ~CommitEntryRestrictionHelper() {
+                ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
                     pp.clearParseTidsIntern();

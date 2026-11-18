@@ -1,0 +1,26 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain, restricts it again after
+# its header where the loading code defines DD_HOST_DEFINE, and requires DdSxI: DdSxI keeps the restriction (qore#6351)
+
+%modern
+
+module DdHd {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%ifdef DD_HOST_DEFINE
+%no-locale-control
+%endif
+%requires DdSxI
+
+public namespace DdHd {
+    public string sub run() {
+        return DdSxI::run();
+    }
+}
