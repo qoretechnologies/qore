@@ -306,7 +306,11 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |<em>@ref expressions "buffer_expression"</em>|If the expression evaluates to a buffer, then the <em>@ref expressions "index_expression"</em> will be used to return the given typed element(s) from the buffer.
     |<em>@ref expressions "index_expression"</em>|If the expression does not evaluate to a list or to an integer it is converted to an integer. Then the value(s) of the given element(s) are returned according to the type of the first expression (as listed above; elements start at position 0). If @ref negative-offsets "%negative-offsets" is enabled, negative integer indexes and explicit negative range endpoints are first resolved against the container size. If the expression is in the range form (e.g. [1..3], [2..], [-2..]) then the dereference operator supports @ref op_functional "lazy functional evaluation".
 
-    This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
+    If the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
+
+    <b>Exceptions Thrown by []</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: its characters cannot be found, and no partial result is returned
 
     @note a slice (several values or a range between the square brackets, or a list given by an expression) is not an
     lvalue: it can be the whole lvalue of the @ref remove "remove" and @ref delete "delete" operators, and using it
@@ -563,7 +567,11 @@ delete bin[2..4,10,12];
 delete l[2,5..7,8];
     @endcode
 
-    This operator does not throw any exceptions, however exceptions could be thrown in an object's destructor method when deleted by this operator.
+    <b>Exceptions Thrown by delete</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|characters are deleted from a string that is not valid in its encoding: its characters cannot be found, and the string is not changed
+
+    Exceptions could also be thrown in an object's destructor method when deleted by this operator.
 
     <hr>
     @subsection remove Remove Operator (remove)
@@ -598,7 +606,11 @@ binary nbin = remove bin[2..4,10,12];
 list nlist = remove l[2,5..7,8];
     @endcode
 
-    This operator does not throw any exceptions, however exception could be thrown in an object's destructor if it goes out of scope due to the action of this operator.
+    <b>Exceptions Thrown by remove</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|characters are removed from a string that is not valid in its encoding: its characters cannot be found, and the string is not changed
+
+    Exceptions could also be thrown in an object's destructor if it goes out of scope due to the action of this operator.
 
     <hr>
     @subsection cast Cast Operator (cast<>())

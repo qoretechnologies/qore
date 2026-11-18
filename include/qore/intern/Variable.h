@@ -1783,10 +1783,11 @@ DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 
     @param lvh the lvalue holding the container, after LValueHelper::startContainerRemoval()
     @param index the index
+    @param for_delete true for the delete operator, false for the remove operator, for exception descriptions
     @param xsink for exceptions
 
     @return the value removed, owned by the caller
 */
-DLLLOCAL QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink* xsink);
+DLLLOCAL QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, bool for_delete, ExceptionSink* xsink);
 
 #endif // _QORE_VARIABLE_H

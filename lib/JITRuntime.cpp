@@ -17601,7 +17601,14 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         SimpleRefHolder<QoreStringNode> v(new QoreStringNode(str->getEncoding()));
-        size_t len = str->length();
+        // a string that is not valid in its encoding has no character count to resolve the indexes against
+        // (qore#6595)
+        int64 clen = qore_string_private::getCheckedLength(*str, is_delete ? "<delete operator>"
+            : "<remove operator>", xsink);
+        if (clen < 0) {
+            return QoreValue();
+        }
+        size_t len = static_cast<size_t>(clen);
         std::set<int64_t, std::greater<int64_t>> iset;
         for (size_t sel_i = 0; sel_i < last_step.slice_values.size(); ++sel_i) {
             const QoreValue& operand = last_step.slice_values[sel_i];
@@ -17940,7 +17947,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // binary object, and any other value is removed itself; res holds the value removed: it is the
                 // caller's result for "remove", and for "delete" it keeps the value alive until the destructor
                 // can be run below, with the lvalue locks released
-                res = qore_lvalue_remove_index(lvh, last_step.index, xsink);
+                res = qore_lvalue_remove_index(lvh, last_step.index, inst->unary_op == LVUnaryOp::Delete, xsink);
                 pending_delete_finish = true;
                 handled_multistep_remove = true;
             } else if (last_is_hash_slice && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {

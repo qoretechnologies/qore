@@ -202,6 +202,14 @@ static QoreStringNode* q_replace_string(const QoreStringNode* str, const QoreStr
         const QoreStringNode* target, int64 start, int64 end, ExceptionSink* xsink) {
     const QoreEncoding* ccs = str->getEncoding();
 
+    // a string that is not valid in its encoding raises an exception instead of giving a partial or invalid result
+    // (qore#6595)
+    if (qore_string_private::checkValidEncoding(*str, "replace()", "subject", xsink)
+        || qore_string_private::checkValidEncoding(*source, "replace()", "source", xsink)
+        || qore_string_private::checkValidEncoding(*target, "replace()", "target", xsink)) {
+        return nullptr;
+    }
+
     TempEncodingHelper t1(source, ccs, xsink);
     if (*xsink) {
         return nullptr;
@@ -257,14 +265,15 @@ static QoreStringNode* q_replace_string(const QoreStringNode* str, const QoreStr
                 }
                 end = length + end;
             }
+            // an end before the start of the string or before the start position leaves nothing to replace
+            if (end < 0 || (start > 0 && end < start)) {
+                return str->stringRefSelf();
+            }
             const char* cn = str->c_str() + str->size();
             // get the byte length to the character after the requested one
             size_t i = ccs->getByteLen(str->c_str(), cn, end + 1, xsink);
             if (*xsink) {
                 return nullptr;
-            }
-            if (start > 0 && end < start) {
-                return str->stringRefSelf();
             }
             //printd(5, "end: %d\n", (int)i);
 
@@ -2336,6 +2345,10 @@ string str = replace("hello there", "there", "you"); # returns "hello you"
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different @ref character_encoding "character encodings" and an error occurs during encoding conversion
+    @throw INVALID-ENCODING \a str, \a source or \a target is in a multi-byte encoding and is not valid in it (see
+    @ref Qore::zzz8stringzzz9::isEncodingValid() "<string>::isEncodingValid()"): its characters cannot be found, and no
+    partial result is returned; a string in a single-byte encoding is not checked, as each byte is a character (since
+    %Qore 3.0)
 
     @note no regular expressions are used in this function, only direct replacements
 
@@ -2706,6 +2719,8 @@ string ret = strmul("%s,", 3, 1); # returns "%s,%s,%s"
     @endcode
 
     @throw STRMUL-ERROR \a offset is < 0 or \a count < 0
+    @throw INVALID-ENCODING \a offset is given and \a str is not valid in its encoding: its characters cannot be
+    found, and no partial result is returned (since %Qore 3.0)
  */
 string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (offset < 0)
@@ -2737,9 +2752,13 @@ string strmul(softstring str, softint count, *softint offset) [flags=RET_VALUE_O
    }
 
    if (offset) {
-      if (offset > (int64)ret->length())
-         return xsink->raiseException("STRMUL-ERROR", "Offset (" QLLD ") is greater than string length (" QLLD ")", offset, (int64)(ret->length()));
-      ret->splice(ret->length() - offset, xsink);
+      // a string that is not valid in its encoding has no character count to resolve the offset against (qore#6595)
+      int64 len = qore_string_private::getCheckedLength(**ret, "strmul()", xsink);
+      if (len < 0)
+         return QoreValue();
+      if (offset > len)
+         return xsink->raiseException("STRMUL-ERROR", "Offset (" QLLD ") is greater than string length (" QLLD ")", offset, len);
+      ret->splice(len - offset, xsink);
       if (*xsink)
          return QoreValue();
    }

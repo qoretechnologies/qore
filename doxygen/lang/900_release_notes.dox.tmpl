@@ -113,6 +113,11 @@
     64-bit integer, which was read as the largest integer (see
     @ref octal_integer_literals "octal integer literals"; issue #504).
 
+    @par String Replacement, Ranges and Character Removal Raise INVALID-ENCODING for a String Not Valid in Its Encoding
+    @ref Qore::replace() "replace()", a string range with the @ref list_element_operator "[] operator" and the
+    @ref remove "remove" and @ref delete "delete" operators with string indexes raise an \c INVALID-ENCODING exception
+    for a string in a multi-byte encoding that is not valid in it; before, they gave a partial result (issue #6595).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
