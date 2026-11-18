@@ -57,7 +57,12 @@
 #   debug:   ir function 5011 (1653) -> 5023 (1648), method 6393 (1293) -> 6423 (1289),
 #            static method 4975 (1663) -> 4993 (1657)
 # (0.4-0.8% of the depth; the AST recursions do not change; at least 67 B to the test's budgets)
-4352 QoreIRInterpreter::execute
+# #6540: 4240 B on develop 54285687c5 with the parent slot count error of #6451 raised out of line (#6451 had made it
+# 4288 B); the budget is 64 B over it, and the x86_64 release budgets of recursion-frame-budget.qtest are 56 bytes per
+# level over the measured 5102 / 6078 / 5077 (ir function / method / static method), so a growth of 64 B, which
+# costs 62-68 bytes per level, fails the test even within this budget: raise both, by the measured growth, when a
+# growth is accepted
+4304 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef
