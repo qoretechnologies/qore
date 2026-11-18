@@ -3891,10 +3891,10 @@ public:
         // (qore#6518)
         class ExpressionParseOnlyHelper {
         public:
-            DLLLOCAL ExpressionParseOnlyHelper(qore_program_private& pp) : pp(pp) {
+            ExpressionParseOnlyHelper(qore_program_private& pp) : pp(pp) {
                 pp.expression_parse_only = true;
             }
-            DLLLOCAL ~ExpressionParseOnlyHelper() {
+            ~ExpressionParseOnlyHelper() {
                 // cleared with plock held, after parsing_in_progress: see refusesRuntimeEntry()
                 AutoLocker al(pp.plock);
                 pp.expression_parse_only = false;
