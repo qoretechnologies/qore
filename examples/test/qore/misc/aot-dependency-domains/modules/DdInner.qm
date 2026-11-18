@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that uses the locale control domain and that the outer modules
+# require (qore#6351)
+
+%modern
+
+module DdInner {
+    version = "1.0";
+    desc = "a module that uses locale control";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DdInner {
+    public string sub run() {
+        set_thread_tz(TimeZone::get());
+        return "inner ran";
+    }
+}

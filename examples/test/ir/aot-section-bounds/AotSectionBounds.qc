@@ -1,22 +1,9 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - every load runs in a child process; the hand-picked cases set their own execution modes
-# test-platform: macos - the AOT module loader reads the sections of patched, ad hoc re-signed modules
-# test-timeout: 240
-# (measured with debug builds: 30 s on macOS, the sample, under qbuild --heavy and 43 s beside a run_tests load;
-# 76 s on Linux, the full case, under load)
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../TestInterpreter.qm
-%requires ../../ExecModeHarness.qm
-
-%exec-class AotSectionBoundsTest
+# The cases of qore#6265, which AotSectionBounds-<part>.qtest run in parts so that each test takes a short time
+# (qore#6544): part 1 runs the hand-picked cases and every part a quarter of the loads of the systematic case (see
+# addPartCase())
 
 #! the section of the metadata of an AOT module
 hashdecl AotSection {
@@ -57,8 +44,11 @@ hashdecl AotSection {
     expensive: there the systematic case takes a sample of every section instead, still deterministic, with at most
     DarwinMaxTruncations truncated sizes and DarwinMaxCountOffsets evenly spaced offsets for each count value per
     section (about 950 loads instead of about 5400); the Linux jobs run the full case.
+
+    The systematic case is divided between the parts (qore#6544): each part loads every SystematicParts-th variant,
+    and part 1 also runs the hand-picked cases.
 */
-class AotSectionBoundsTest inherits QUnit::Test {
+class AotSectionBoundsBase inherits QUnit::Test {
     public {
         #! the magic number of the metadata ("QORD")
         const Magic = binary("QORD");
@@ -94,6 +84,8 @@ class AotSectionBoundsTest inherits QUnit::Test {
         const Workers = 4;
         #! the number of loads that run at once on macOS, where a load also signs the patched copy
         const DarwinWorkers = 6;
+        #! the number of parts that the loads of the systematic case are divided between (see addPartCase())
+        const SystematicParts = 4;
         #! the most truncated sizes tested per section on macOS
         const DarwinMaxTruncations = 8;
         #! the most offsets patched per section and count value on macOS
@@ -119,15 +111,29 @@ class AotSectionBoundsTest inherits QUnit::Test {
         #! the address space limit of a load in kB, or 0 for none
         int vm_limit = 0;
         int variant_id = 0;
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : QUnit::Test("AOT section bounds", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
         reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qore_bin) + "/qore-aot-reseal";
-        addTestCase("hand-picked malformed sections", \handPicked());
-        addTestCase("every section truncated and with an excessive count", \systematic());
+        addPartCase(1, "hand-picked malformed sections", \handPicked());
+        # each part loads every SystematicParts-th variant, so that the parts take about as long
+        addPartCase(1, "every section truncated and with an excessive count (part 1)", \systematic(), 0);
+        addPartCase(2, "every section truncated and with an excessive count (part 2)", \systematic(), 1);
+        addPartCase(3, "every section truncated and with an excessive count (part 3)", \systematic(), 2);
+        addPartCase(4, "every section truncated and with an excessive count (part 4)", \systematic(), 3);
         set_return_value(main());
+    }
+
+    #! adds the case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     globalSetUp() {
@@ -378,7 +384,8 @@ class AotSectionBoundsTest inherits QUnit::Test {
         }
     }
 
-    systematic() {
+    #! loads the variants whose index modulo SystematicParts is the given slice
+    systematic(int slice) {
         # macOS takes a sample of every section (see the class description)
         bool sample = PlatformOS == "Darwin";
         int max_truncations = sample ? DarwinMaxTruncations : MaxTruncations;
@@ -405,6 +412,8 @@ class AotSectionBoundsTest inherits QUnit::Test {
                 }
             }
         }
+        # this part's share of the variants, every SystematicParts-th of the whole list
+        variants = select variants, $# % SystematicParts == slice;
         # the loads run in worker threads, each in a child process
         Queue q();
         map q.push($1), variants;

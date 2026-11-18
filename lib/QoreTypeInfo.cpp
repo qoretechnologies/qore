@@ -1305,11 +1305,11 @@ struct QoreTypeOwnerReleaseQueue {
 //! Marks the queue of the thread active while it is drained, also if a release throws
 class QoreTypeOwnerReleaseQueueHelper {
 public:
-    DLLLOCAL QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
+    QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
         q.active = true;
     }
 
-    DLLLOCAL ~QoreTypeOwnerReleaseQueueHelper() {
+    ~QoreTypeOwnerReleaseQueueHelper() {
         q.active = false;
     }
 

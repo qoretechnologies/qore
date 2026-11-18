@@ -26,6 +26,11 @@
     program that sets none (usemod.q) and by Programs with PO_NO_LOCALE_CONTROL, which ignore the directive (nlc.q).
     Modules that declare the locale control domain set their zones after their headers (TzDomAfter.qm), where the
     declaration has removed the restriction, and before them (TzDomBefore.qm), where it applies (domains.q).
+    Modules that restrict locale control themselves (%no-locale-control) set their zones after their headers
+    (ownnlc.q, issue #6352): the header's locale control domain removes a restriction before the header in a load as
+    library code (TzOwnBefore.qm), also from a module compiled with qcc, whose compilation is not such a load; not in
+    a load by a path outside the module path (TzOwnUntrusted.qm), not a restriction after the header (TzOwnAfter.qm,
+    TzOwnBoth.qm) and not with another domain declared (TzOwnOther.qm).
 
     Every child runs with \c TZ=Europe/Prague, a process time zone that none of the programs sets.
 */
@@ -37,10 +42,11 @@ class SetTimeZoneCompiledTest inherits QUnit::Test {
         const Programs = ("region", "offset", "utc", "lock");
 
         #! the fixture programs that use the modules of the test (TzMod, TzDomAfter and TzDomBefore)
-        const ModulePrograms = ("usemod", "nlc", "mask-add", "mask-strip", "domains");
+        const ModulePrograms = ("usemod", "nlc", "mask-add", "mask-strip", "domains", "ownnlc");
 
         #! the modules of the test
-        const Modules = ("TzMod", "TzDomAfter", "TzDomBefore");
+        const Modules = ("TzMod", "TzDomAfter", "TzDomBefore", "TzDomBeforeNlc", "TzOwnBefore", "TzOwnUntrusted",
+            "TzOwnAfter", "TzOwnBoth", "TzOwnOther", "TzOwnCond", "TzOwnHost");
 
         #! the process time zone of the children: none of the programs sets it
         const ProcessTimeZone = "Europe/Prague";

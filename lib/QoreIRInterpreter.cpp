@@ -2212,7 +2212,8 @@ static QORE_INTERN_NOINLINE void qore_ir_push_temp_mark_pair(const QoreIRInstruc
     cleanup.push_back(UINT32_MAX);
 }
 
-//! Releases the temps of the innermost temp scope and removes its mark, for a DiscardTempsKeep (qore#6444)
+//! Releases the temps of the innermost temp scope and removes its mark, for a DiscardTemps or DiscardTempsKeep
+//! (qore#6444, qore#6541)
 /** The caller has checked that the scope's mark is the innermost one and that no temp of the frame is held by a
     weak-reference load or is borrowed, and that there is no cleanup log: this then does what the interpreter's
     general drain does (cleanupToTempMark() of the innermost mark, raising), without the bookkeeping of those.  Out of
@@ -11132,6 +11133,31 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             - static_cast<size_t>(std::distance(temp_cleanup_marks.rbegin(), mark)), no_throw, keep_mark);
     };
 
+#ifdef DEBUG
+    // The fast drain of the innermost temp scope (qore_ir_drain_innermost_temp_scope(), qore#6444, qore#6541) releases
+    // what the general drain (cleanupToTempScope()) would: before it, the mark that the general drain selects (the last
+    // one with the scope's id) is the innermost one, whose size both drains release down to; after it, the temps down
+    // to that size and the mark are gone, and no temp is held by a weak-reference load or borrowed (whose bookkeeping
+    // the fast drain leaves out).  The sentinel of the mark is not always at that size: the removal of a temp entry
+    // pushed before the mark moves the entries after it down without the mark (except for ReleaseOwnedTemp,
+    // qore_ir_remove_released_temp()), as both drains find
+    auto debugInnermostDrainStart = [&](uint32_t scope_id) -> std::pair<size_t, size_t> {
+        auto general_mark = std::find_if(temp_cleanup_marks.rbegin(), temp_cleanup_marks.rend(),
+            [scope_id](const IRCallFrame::TempCleanupMark& candidate) {
+                return candidate.scope_id == scope_id;
+            });
+        assert(general_mark == temp_cleanup_marks.rbegin());
+        // the size that both drains stop at
+        assert(cleanup.size() >= general_mark->cleanup_size);
+        return {general_mark->cleanup_size, temp_cleanup_marks.size()};
+    };
+    auto debugInnermostDrainEnd = [&](std::pair<size_t, size_t> start) {
+        assert(cleanup.size() == start.first);
+        assert(temp_cleanup_marks.size() == start.second - 1);
+        assert(weak_load_temp_slots.empty() && !borrowed_temp_active);
+    };
+#endif
+
     // Returns the temp scope that an exception that the given instruction raised drains to before it branches to its
     // handler in this frame: the temp scopes that the exception leaves are those opened after the handler's
     // (QoreIRBasicBlock::getHandlerTempScopeId()), which can be more than the raising instruction's own when it runs in
@@ -17364,7 +17390,23 @@ load_local_done:
                 // present (malformed IR), falls back to a full drain rather
                 // than looping forever.
                 bool raised = xsink && *xsink;
-                cleanupToTempScope(inst->temp_scope_id, false, true);
+                // the scope's mark is the innermost one at the end of nearly every statement: when no temp is held by
+                // a weak-reference load or borrowed and there is no cleanup log, the temps are released without the
+                // search for the mark and the bookkeeping of those that the general drain makes (qore#6541)
+                if (inst->temp_scope_id && !temp_cleanup_marks.empty()
+                        && temp_cleanup_marks.back().scope_id == inst->temp_scope_id && !cleanup_log
+                        && !borrowed_temp_active && weak_load_temp_slots.empty()) {
+#ifdef DEBUG
+                    auto debug_start = debugInnermostDrainStart(inst->temp_scope_id);
+#endif
+                    qore_ir_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks, ephemeral_weak_ref_slots,
+                        xsink);
+#ifdef DEBUG
+                    debugInnermostDrainEnd(debug_start);
+#endif
+                } else {
+                    cleanupToTempScope(inst->temp_scope_id, false, true);
+                }
                 while (!weak_load_temp_slots.empty()) {
                     uint32_t id = weak_load_temp_slots.begin()->first;
                     releaseWeakLoadTemp(id);
@@ -17582,22 +17624,12 @@ load_local_done:
                         && temp_cleanup_marks.back().scope_id == inst->temp_scope_id && !cleanup_log
                         && !borrowed_temp_active && weak_load_temp_slots.empty()) {
 #ifdef DEBUG
-                    // the general drain selects the same mark and releases down to the same size
-                    size_t debug_cleanup_size = temp_cleanup_marks.back().cleanup_size;
-                    auto general_mark = std::find_if(temp_cleanup_marks.rbegin(), temp_cleanup_marks.rend(),
-                        [scope_id = inst->temp_scope_id](const IRCallFrame::TempCleanupMark& candidate) {
-                            return candidate.scope_id == scope_id;
-                        });
-                    assert(general_mark == temp_cleanup_marks.rbegin());
-                    assert(general_mark->cleanup_size == debug_cleanup_size);
-                    size_t debug_mark_count = temp_cleanup_marks.size();
+                    auto debug_start = debugInnermostDrainStart(inst->temp_scope_id);
 #endif
                     qore_ir_drain_innermost_temp_scope(values, cleanup, temp_cleanup_marks, ephemeral_weak_ref_slots,
                         xsink);
 #ifdef DEBUG
-                    assert(cleanup.size() == debug_cleanup_size);
-                    assert(temp_cleanup_marks.size() == debug_mark_count - 1);
-                    assert(weak_load_temp_slots.empty() && !borrowed_temp_active);
+                    debugInnermostDrainEnd(debug_start);
 #endif
                 } else {
                     cleanupToTempScope(inst->temp_scope_id, false, true);
