@@ -12,6 +12,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 #include <qore/intern/QoreHashKeyHelper.h>
+#include "qore/intern/qore_string_private.h"
 #include "QoreIRTypeProfile.h"
 
 #include <algorithm>
@@ -11634,6 +11635,11 @@ dispatch_folded_step_host:
             case QoreIROpcode::ConstString: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 QoreStringNode* str = new QoreStringNode(cinst->constant.string_value);
+                // a literal that is ASCII text has its ASCII prefix known, so that the operations on it do not scan
+                // it at each evaluation (qore#6625)
+                if (cinst->constant.string_ascii) {
+                    qore_string_private::get(*str)->setOwnedAsciiText();
+                }
                 setOwnedValueSlot(values, cleanup, cinst->result.id, QoreValue(str), xsink);
                 ++ip;
                 break;

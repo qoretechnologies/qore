@@ -198,6 +198,20 @@ public:
         view_offset = 0;
     }
 
+    //! Sets the ASCII prefix cache of a new string that owns its storage and holds only ASCII text
+    /** For a string made from text known to be ASCII, such as a string literal, so that its first use does not scan
+        it (qore#6625); no other thread can read the string yet
+    */
+    DLLLOCAL void setOwnedAsciiText() {
+        assert(!view_parent);
+#ifndef NDEBUG
+        for (size_t i = 0; i < len; ++i) {
+            assert(static_cast<unsigned char>(buffer[i]) < 0x80);
+        }
+#endif
+        view_offset = len;
+    }
+
     //! Lowers the ASCII prefix cache of a string that owns its storage to at most the given byte offset
     /** For a mutation that keeps the bytes before \a offset
     */

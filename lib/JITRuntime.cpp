@@ -181,6 +181,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr) },
     { "qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string) },
     { "qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len) },
+    { "qore_rt_make_ascii_string_len", reinterpret_cast<void*>(&qore_rt_make_ascii_string_len) },
     { "qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote) },
     { "qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing) },
     { "qore_rt_find", reinterpret_cast<void*>(&qore_rt_find) },
@@ -1594,6 +1595,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t 
     QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
     QoreValue v(s);
     return toBits(v);
+}
+
+//! As qore_rt_make_string_len() for a literal that is ASCII text: the string has its ASCII prefix known (qore#6625)
+extern "C" DLLEXPORT uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len) {
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    qore_string_private::get(*s)->setOwnedAsciiText();
+    return toBits(QoreValue(s));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink) {

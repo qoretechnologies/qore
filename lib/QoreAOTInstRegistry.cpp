@@ -1143,7 +1143,7 @@ static std::unique_ptr<QoreIRInstruction> readConst(
         case QoreIRConstant::Kind::Null:
             break;
         case QoreIRConstant::Kind::String:
-            ci->constant.string_value = ctx.reader.readStringRef(ctx.ptr);
+            ci->constant.setStringValue(ctx.reader.readStringRef(ctx.ptr));
             break;
         case QoreIRConstant::Kind::Date:
             ci->constant.date_microseconds = QoreAOTBinaryReader::readI64(ctx.ptr);
