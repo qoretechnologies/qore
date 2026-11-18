@@ -149,7 +149,8 @@ public class SharePointGetSiteDataProvider inherits SharePointDataProviderBase {
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", getSiteBasePath(req)).body;
+        # the site ends the path
+        return doRestCommand("GET", getSiteBasePath(req, False)).body;
     }
 }
 

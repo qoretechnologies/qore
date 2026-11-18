@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class ObservableTempArgsScalingTest
+
+#! the IR analysis of observable temporary call arguments is linear in the size of the call (qore#6515)
+/** qore_ir_find_observable_temp_call_args() scanned the rest of the statement for a write of the local for each read
+    of a local in a list literal given to a call, which made a call whose argument reads a local n times cost O(n^2):
+    at n = 4000 it took 900M instructions, and at the size used here it takes hours.  With the writes of a block found
+    in one backward scan, and the result of each value remembered, the program here runs in a few seconds in every
+    execution mode; the old code exceeds the runner's time limit.  The program's output is checked in each mode.
+*/
+class ObservableTempArgsScalingTest inherits QUnit::Test {
+    public {
+        #! the number of reads of the local in the call's argument: under a second in each mode; the quadratic
+        #! analyses took hours (900M instructions at 4000 reads, growing 4x per doubling)
+        const Reads = 200000;
+        #! the reads for qcc, whose compilation of the function grows faster than linearly in it
+        const QccReads = 500;
+    }
+
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+    }
+
+    constructor() : Test("observable temporary call arguments scaling", "1.0", \ARGV) {
+        addTestCase("a call reading a local many times lowers in linear time", \scaling());
+        set_return_value(main());
+    }
+
+    scaling() {
+        TmpDir dir("qore-observable-temp-args-");
+        string script = writeScript(dir.path + "/reads.q", Reads);
+        string expected = sprintf("%d\n", Reads);
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", qore_bin, "-b", "--exec-mode=" + mode, script)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--exec-mode=tiered", script)), "tiered");
+        string qcc_script = writeScript(dir.path + "/qcc-reads.q", QccReads);
+        string exe = dir.path + "/qcc-reads";
+        run((qcc_bin, "-O0", "-o", exe, qcc_script));
+        assertEq(sprintf("%d\n", QccReads), run((exe, "-b")), "qcc -O0");
+    }
+
+    #! writes a program whose function gives a call a list literal that reads its parameter \a reads times
+    private static string writeScript(string path, int reads) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nsub g(list<auto> l) { printf(\"%d\\n\", l.size()); }\nsub f(auto x) {\n    g((");
+        for (int i = 1; i < reads; ++i) {
+            f.write("x, ");
+        }
+        f.write("x));\n}\nf((1,));\n");
+        f.close();
+        return path;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

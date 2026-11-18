@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# Copyright (c) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# the script of ForeachReferenceElementRelease.qtest: the variable of a foreach loop given a reference by an element
+# of the list reads as the referenced lvalue, and the value read is released as in the AST interpreter (issue #6441)
+%modern
+class T {
+    public { string n; *T m; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+    string get() { return n; }
+}
+
+our *T g_o;
+our list<auto> g_l;
+our hash<auto> g_h;
+our auto g_keep;
+
+# keeps the value, clears the referenced variable and writes the parameter
+sub w_k(auto a) { g_keep = a; g_o = NOTHING; a = NOTHING; }
+# clears the referenced variable and writes the parameter
+sub ww(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+class C {
+    m(auto a) { w_k(a); }
+    mw(auto a, string tag) { g_o = NOTHING; a = NOTHING; printf("after write %s\n", tag); }
+    static s(auto a) { w_k(a); }
+}
+
+# the issue's case: a reference and a plain value passed on through auto parameters
+sub inner(auto r) {
+    for (int i = 0; i < 2; ++i) {
+        w_k(r);
+        g_keep = NOTHING;
+    }
+}
+sub alt(list<auto> args) {
+    foreach auto r in (args) {
+        inner(r);
+    }
+}
+
+# a read in the loop: the object is destroyed when the referenced variable is cleared
+sub read_clear(list<auto> args, string tag) {
+    foreach auto r in (args) {
+        printf("%s %s %s\n", tag, r.n, r.get());
+        g_o = NOTHING;
+        printf("after clear %s\n", tag);
+    }
+}
+# reads of a reference to a list element, a hash key and a member
+sub read_end(list<auto> args, string tag) {
+    foreach auto r in (args) {
+        auto y = r;
+        printf("%s %s\n", tag, y.n);
+    }
+    printf("end %s\n", tag);
+}
+# the value read is given to a callee that writes the referenced variable and its parameter
+sub give(list<auto> args, string tag) {
+    foreach auto r in (args) {
+        ww(r, tag);
+    }
+}
+sub give_method(list<auto> args, string tag) {
+    C c();
+    foreach auto r in (args) {
+        c.mw(r, tag);
+    }
+}
+sub keep_method(list<auto> args) {
+    C c();
+    foreach auto r in (args) {
+        c.m(r);
+        g_keep = NOTHING;
+    }
+}
+sub keep_static(list<auto> args) {
+    foreach auto r in (args) {
+        C::s(r);
+        g_keep = NOTHING;
+    }
+}
+sub keep_closure(list<auto> args) {
+    code f = sub (auto a) { w_k(a); };
+    foreach auto r in (args) {
+        f(r);
+        g_keep = NOTHING;
+    }
+}
+# an untyped variable: the read as an integer
+sub read_int(list<auto> args, string tag) {
+    foreach auto r in (args) {
+        int i = r + 1;
+        printf("%s %d\n", tag, i);
+    }
+}
+
+for (int round = 0; round < 3; ++round) {
+    printf("round %d\n", round);
+
+    g_o = new T("alt");
+    T plain("plain");
+    alt((\g_o, plain));
+    printf("after alt\n");
+    delete plain;
+    printf("after plain\n");
+
+    g_o = new T("clear");
+    read_clear((\g_o,), "clear");
+    printf("after read clear\n");
+
+    g_l = (new T("lel"),);
+    read_end((\g_l[0],), "lel");
+    g_l = ();
+    printf("after lel\n");
+
+    g_h = {"k": new T("hkey")};
+    read_end((\g_h.k,), "hkey");
+    g_h = {};
+    printf("after hkey\n");
+
+    g_o = new T("outer");
+    g_o.m = new T("member");
+    read_end((\g_o.m,), "member");
+    g_o.m = NOTHING;
+    printf("after member\n");
+    g_o = NOTHING;
+
+    g_o = new T("give");
+    give((\g_o,), "give");
+    printf("after give\n");
+
+    g_o = new T("gmeth");
+    give_method((\g_o,), "gmeth");
+    printf("after gmeth\n");
+
+    g_o = new T("kmeth");
+    keep_method((\g_o,));
+    printf("after kmeth\n");
+
+    g_o = new T("kstatic");
+    keep_static((\g_o,));
+    printf("after kstatic\n");
+
+    g_o = new T("kclosure");
+    keep_closure((\g_o,));
+    printf("after kclosure\n");
+
+    our auto g_i = round;
+    read_int((\g_i,), "int");
+
+    # top-level code
+    g_o = new T("top");
+    foreach auto r in ((\g_o,)) {
+        printf("top %s\n", r.n);
+        g_o = NOTHING;
+        printf("after clear top\n");
+    }
+    printf("round end %d\n", round);
+}

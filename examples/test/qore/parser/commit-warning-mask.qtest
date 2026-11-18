@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class CommitWarningMaskTest
+
+#! The warning raised when a local variable goes out of scope follows the warning directives in effect where the
+#! variable is declared, also when the code is committed in another parse action (issue #6589)
+/** UNREFERENCED-VARIABLE is raised at commit, after the statements of a function, method or constructor body or of
+    the top-level code; it used the warning mask of the commit (Program::parseCommit(), or the one at the end of
+    Program::parse()) instead of the one that the code's own %enable-warning or %disable-warning directives set where
+    the variable is declared.
+*/
+class CommitWarningMaskTest inherits QUnit::Test {
+    constructor() : QUnit::Test("CommitWarningMaskTest", "1.0", \ARGV) {
+        addTestCase("a warning that the code enables is raised at commit", \enabledTest());
+        addTestCase("a warning that the code disables is not raised at commit", \disabledTest());
+        addTestCase("methods, constructors and top-level code", \kindsTest());
+        addTestCase("the directives in effect where the variable is declared", \declarationTest());
+        addTestCase("a directive after a function in one parse", \singleParseTest());
+        addTestCase("a closure", \closureTest());
+        set_return_value(main());
+    }
+
+    #! parses \\a src with Program::parsePending() and commits it with \\a commit_mask; returns the warnings
+    private list<string> commitWarnings(string src, int commit_mask) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parsePending(src, "commit-warning-mask", WARN_NONE);
+        *hash<ExceptionInfo> w = p.parseCommit(commit_mask);
+        list<string> rv = ();
+        while (w) {
+            rv += w.err;
+            w = w.next;
+        }
+        return rv;
+    }
+
+    enabledTest() {
+        assertEq(("UNREFERENCED-VARIABLE",), commitWarnings("%enable-warning unreferenced-variable\n"
+            "sub f() {\n    int unused;\n}\n", WARN_NONE));
+    }
+
+    disabledTest() {
+        assertEq((), commitWarnings("%disable-warning unreferenced-variable\nsub f() {\n    int unused;\n}\n",
+            WARN_ALL));
+    }
+
+    #! every kind of code: a method, a constructor (with a base class constructor call) and the top-level code
+    kindsTest() {
+        string code = "class B {\n    constructor(int i) {}\n}\n"
+            "class C inherits B {\n"
+            "    constructor() : B(1) {\n        int unused_c;\n    }\n"
+            "    m() {\n        int unused_m;\n    }\n"
+            "    static s() {\n        int unused_s;\n    }\n}\n"
+            "int unused_top;\n";
+        assertEq(4, commitWarnings("%enable-warning unreferenced-variable\n" + code, WARN_NONE).size());
+        assertEq((), commitWarnings("%disable-warning unreferenced-variable\n" + code, WARN_ALL));
+    }
+
+    #! a directive applies to the variables declared after it, also in the same function
+    declarationTest() {
+        list<string> w = commitWarnings("%enable-warning unreferenced-variable\nsub f() {\n    int unused_a;\n"
+            "%disable-warning unreferenced-variable\n    int unused_b;\n}\n", WARN_NONE);
+        assertEq(("UNREFERENCED-VARIABLE",), w);
+    }
+
+    #! a directive after the function does not apply to its variables, in a single parse (Program::parse(); a mask
+    #! that does not have the warning, so that the warnings are returned)
+    singleParseTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        *hash<ExceptionInfo> w = p.parse("%enable-warning unreferenced-variable\nsub f() {\n    int unused;\n}\n"
+            "%disable-warning unreferenced-variable\n", "single", WARN_DEPRECATED);
+        assertEq("UNREFERENCED-VARIABLE", w.err);
+        assertEq(NOTHING, w.next);
+    }
+
+    closureTest() {
+        string code = "sub f() {\n    code c = sub () {\n        int unused;\n    };\n    c();\n}\n";
+        assertEq(("UNREFERENCED-VARIABLE",), commitWarnings("%enable-warning unreferenced-variable\n" + code,
+            WARN_NONE));
+        assertEq((), commitWarnings("%disable-warning unreferenced-variable\n" + code, WARN_ALL));
+    }
+}

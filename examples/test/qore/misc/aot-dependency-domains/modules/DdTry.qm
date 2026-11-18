@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain and requests DdWrap with
+# %try-module and a module that uses locale control with %requires after its header: both are loaded after the header;
+# qcc loads the module of a %try-module directive before the parse to check that it is available, so the compiled
+# module loads the inner module with the restriction (it fails closed) (qore#6351)
+
+%modern
+
+module DdTry {
+    version = "1.0";
+    desc = "a module with a try-module request after its header";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%try-module DdWrap
+%define NO_DD_WRAP
+%endtry
+%requires DdInner
+
+public namespace DdTry {
+    public string sub run() {
+        return DdInner::run();
+    }
+}

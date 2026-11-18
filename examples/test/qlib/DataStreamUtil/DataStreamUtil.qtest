@@ -16,6 +16,7 @@
 class DataStreamUtilTest inherits QUnit::Test {
     constructor() : Test("DataStreamUtil test", "1.0") {
         addTestCase("base test", \testDataStreamUtil());
+        addTestCase("send callback error lines", \testSendErrorLine());
         addTestCase("YAML media types", \testYamlMediaTypes());
         addTestCase("content encoding", \testContentEncoding());
         addTestCase("content decoding", \testContentDecoding());
@@ -1445,6 +1446,26 @@ class DataStreamUtilTest inherits QUnit::Test {
 
         assertTrue(eod_called, "DS v1 error recv: EOD called");
         assertEq(result{DataStreamError}, eod_error, "DS v1 error recv: error propagated");
+    }
+
+    #! the error line of a send callback that raises: an exception's code and description are given as they are, a
+    #! string that is not valid in its encoding is replaced (qore#6553)
+    testSendErrorLine() {
+        code send = auto sub (auto err, auto desc) {
+            return ds_get_send(sub () { throw err, desc; })();
+        };
+        # one line
+        assertEq("ERR: a b", send("ERR", "a\nb")."DataStream-Error");
+        # an error code or description that is not a string is given as it is
+        assertEq("1: 2", send(1, 2)."DataStream-Error");
+        assertEq("ERR: ", send("ERR", NOTHING)."DataStream-Error");
+        # strings that are not valid in their encoding, in UTF-8 and in another encoding
+        # (Shift_JIS 0x81 0x7f: a lead byte with an invalid trail byte, which every iconv refuses; musl decodes 0x82 0xff)
+        string bad_utf8 = binary_to_string(parse_hex_string("61ff"), "UTF-8");
+        string bad_sjis = binary_to_string(parse_hex_string("817f"), "SHIFT_JIS");
+        assertEq("ERR: <description not valid in its encoding>", send("ERR", bad_utf8)."DataStream-Error");
+        assertEq("ERR: <description not valid in its encoding>", send("ERR", bad_sjis)."DataStream-Error");
+        assertEq("<error code not valid in its encoding>: d", send(bad_sjis, "d")."DataStream-Error");
     }
 }
 

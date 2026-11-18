@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain and requires DdHookMid after
+# its header: DdHookMid is relieved, but not a module that the code of the Program loading DdHookTop loads while
+# DdHookMid is loaded (qore#6351)
+
+%modern
+
+module DdHookTop {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%requires DdHookMid
+
+public namespace DdHookTop {
+    public string sub run() {
+        return DdHookMid::run();
+    }
+}

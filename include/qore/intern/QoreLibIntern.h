@@ -1635,6 +1635,44 @@ DLLLOCAL void qore_dbg_fd_wait(int fd);
 //! Debug-only: called by a read of a File that found its descriptor readable, right before the read (see
 //! dbg_hold_file_read_ready())
 DLLLOCAL void qore_dbg_file_read_ready(int fd);
+
+//! Debug-only: the outcome of a rendezvous of File::redirect() calls (see qore_dbg_file_redirect_rendezvous())
+enum QoreDbgFileRedirectOutcome : int {
+    //! not decided yet
+    QDFR_NONE = 0,
+    //! all the calls arrived, each with the first lock of its own: they hold different locks
+    QDFR_ARRIVED = 1,
+    //! a call waits for the first lock that the call at the rendezvous holds
+    QDFR_WAITER = 2,
+    //! the timeout of the rendezvous passed
+    QDFR_TIMEOUT = 3,
+};
+
+//! Debug-only: arms a rendezvous of the next calls of File::redirect() after they take their first lock
+/** The first of the next \a count calls to take its first lock waits there, with the lock held, until the outcome is
+    known: either \a count calls have arrived, each with a first lock of its own, or another call waits for the lock
+    that it holds, or, as a safety net, \a timeout_ms has passed (see dbg_file_redirect_rendezvous(), issue #6567)
+*/
+DLLLOCAL void qore_dbg_file_redirect_rendezvous(int count, int timeout_ms);
+
+//! Debug-only: waits until the outcome of the armed rendezvous is known, for up to \a timeout_ms; returns it
+DLLLOCAL QoreDbgFileRedirectOutcome qore_dbg_file_redirect_rendezvous_wait(int timeout_ms);
+
+//! Debug-only: returns the calls that arrived at the last rendezvous, those that waited until the timeout, and its
+//! outcome
+DLLLOCAL void qore_dbg_file_redirect_rendezvous_result(int& arrived, int& timed_out,
+        QoreDbgFileRedirectOutcome& outcome);
+
+//! Debug-only: a call of File::redirect() starts or stops waiting for the first lock of its two files
+/** @param lock the File (its private data) whose lock it waits for
+    @param waiting true when it is about to lock it, false when it has it
+*/
+DLLLOCAL void qore_dbg_file_redirect_lock_wait(const void* lock, bool waiting);
+
+//! Debug-only: the rendezvous of a call of File::redirect() with the first lock of its two files held, if one is armed
+/** @param lock the File (its private data) whose lock it holds
+*/
+DLLLOCAL void qore_dbg_file_redirect_locked(const void* lock);
 #endif
 
 //! Writes all of the data to the descriptor, waiting for room after EAGAIN (see qore_fd_wait_ready())

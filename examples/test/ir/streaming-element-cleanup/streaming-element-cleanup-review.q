@@ -220,7 +220,39 @@ sub sel_list_pred_obj(Log log) { list r = select holders(log, 3, "s"), new Holde
 sub ic_stage(Log log) { try { int c = (count True, (map exists ((10 / div_by($1)) ?? NOTHING), new It(log, 3))); log.add("c " + c); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 sub ic_map_it(Log log) { try { list r = map exists ((10 / div_by($1)) ?? NOTHING), new It(log, 3); log.add("r " + r.size()); } catch (hash<ExceptionInfo> ex) { log.add("catch " + ex.err); } log.add("after"); }
 
+# Each nested operator produces a fresh iterator for every outer element. Observe the
+# previous result and source when the next invocation runs, also when a predicate throws.
+sub nested_select_normal(Log log) {
+    list r = select new It(log, 2, "out"), (map $1, new It(log, 2, "in")).size();
+    log.add("result " + r.size());
+}
+
+sub nested_select_map_raises(Log log) {
+    list r = select new It(log, 2, "out"), (map sel_fail($1, "in2"), new It(log, 3, "in")).size();
+    log.add("result " + r.size());
+}
+
+sub nested_select_in_map(Log log) {
+    list r = map (select new It(log, 2, "in"), sel_fail($1, "in2")).size(), new It(log, 2, "out");
+    log.add("result " + r.size());
+}
+
+sub deep_nested(Log log, string fail_at) {
+    int c = (count (select new It(log, 2, "mid"),
+        (map sel_fail($1, fail_at), new It(log, 2, "in")).size()).size(), new It(log, 1, "out"));
+    log.add("result " + c);
+}
+
+sub deep_normal(Log log) {
+    deep_nested(log, "");
+}
+
+sub deep_nohandler(Log log) {
+    deep_nested(log, "in2");
+}
+
 const Cases = (
+    "nested_select_normal", "nested_select_map_raises", "nested_select_in_map", "deep_normal", "deep_nohandler",
     "temp_pred_select", "temp_pred_takewhile", "temp_pred_count", "temp_pred_mapsel", "temp_pred_first",
     "temp_pred_any", "temp_pred_all", "temp_map_expr_mapsel", "nested_normal", "mapsel_stmt", "mapsel_stmt_raises",
     "fmap_take", "fmap_any", "fmap_takewhile", "fmap_first", "fmap_raises", "fmap_all_raises_nh", "fused_two_stage",

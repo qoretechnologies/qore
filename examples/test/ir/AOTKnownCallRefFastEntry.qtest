@@ -88,7 +88,7 @@ string sub maybeNothing(bool assign) {
 
 string sub sparseIntCall() {
     code<int(int)> fn = \\increment();
-    list<int> values = (1, 2);
+    list<*int> values = (1, 2);
     delete values[1];
     try {
         return sprintf(\"%y\", (map fn($1), values));
@@ -103,7 +103,7 @@ float sub addHalf(float value) {
 
 string sub sparseFloatCall() {
     code<float(float)> fn = \\addHalf();
-    list<float> values = (1.0, 2.0);
+    list<*float> values = (1.0, 2.0);
     delete values[1];
     try {
         return sprintf(\"%y\", (map fn($1), values));

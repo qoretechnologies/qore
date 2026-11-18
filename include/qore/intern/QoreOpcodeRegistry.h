@@ -509,6 +509,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::GePlugin, "GePlugin"                       , false, false, false,  2, ">= that may dispatch to a plugin operation", false, true , "ParseNode", true , false, true , false, true  }, // 437
     { QoreIROpcode::HandlerReturn, "HandlerReturn"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "Hand the value of a return in a handler run out of line to its function", true , true , "ReturnStatement", false, false, false, false, false }, // 438
     { QoreIROpcode::SetCodeParseOptions, "SetCodeParseOptions"      , false, false, false,  4, "Set the parse options of the top-level code that follows", true , false, "AbstractStatement", false, false, false, false, false }, // 439
+    { QoreIROpcode::PushTempMarkPair, "PushTempMarkPair"            , false, false, false,  0, "Push the sentinels of two nested statement-scoped cleanup regions", false, false, "ParseNode", false, false, false, false, false }, // 440
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

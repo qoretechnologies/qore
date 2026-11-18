@@ -541,6 +541,8 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::GePlugin, {G::Base, G::Expr}, true},
     {O::HandlerReturn, {G::Base}},
     {O::SetCodeParseOptions, {G::Base}},
+    // written as two PushTempMark instructions (serializeIRFunction())
+    {O::PushTempMarkPair, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {
@@ -2514,6 +2516,65 @@ static std::unique_ptr<QoreIRInstruction> readScopeEnter(
 }
 
 // ============================================================================
+// The paths of a debugger's flow requests (QoreIRDebugFlowTargets, #6200, #6201)
+// ============================================================================
+
+//! the bits of the flow mask of a DebugStatement, DebugBlock or ScopeExit record (QORE_AOT_DEBUG_FLOW_VERSION)
+static constexpr uint8_t QORE_AOT_DEBUG_FLOW_BREAK = 0x01;
+static constexpr uint8_t QORE_AOT_DEBUG_FLOW_CONTINUE = 0x02;
+static constexpr uint8_t QORE_AOT_DEBUG_FLOW_RETURN = 0x04;
+static constexpr uint8_t QORE_AOT_DEBUG_FLOW_MASK = 0x07;
+
+//! Writes the paths of a debugger's flow requests of an instruction: a u8 mask of the requests with a path (break,
+//! continue, return), then the u16 index of the block of each path, in that order
+static void writeDebugFlow(AOTInstWriteCtx& ctx, const QoreIRDebugFlowTargets* flow) {
+    QoreIRBasicBlock* targets[3] = {flow ? flow->break_target : nullptr, flow ? flow->continue_target : nullptr,
+        flow ? flow->return_target : nullptr};
+    uint8_t mask = 0;
+    for (unsigned i = 0; i < 3; ++i) {
+        if (targets[i] && ctx.block_idx.count(targets[i])) {
+            mask |= static_cast<uint8_t>(1u << i);
+        }
+    }
+    ctx.writer.writeU8(mask);
+    for (unsigned i = 0; i < 3; ++i) {
+        if (mask & (1u << i)) {
+            ctx.writer.writeU16(ctx.block_idx.find(targets[i])->second);
+        }
+    }
+}
+
+//! Reads the paths written by writeDebugFlow() in an image of version QORE_AOT_DEBUG_FLOW_VERSION or later; returns
+//! false with ctx.error set for a mask with an unknown bit or a block index out of range
+static bool readDebugFlow(AOTInstReadCtx& ctx, std::unique_ptr<QoreIRDebugFlowTargets>& flow) {
+    if (ctx.reader.getHeader().version < QORE_AOT_DEBUG_FLOW_VERSION) {
+        return true;
+    }
+    uint8_t mask = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (mask & ~QORE_AOT_DEBUG_FLOW_MASK) {
+        ctx.error = "invalid debugger flow mask " + std::to_string(mask);
+        return false;
+    }
+    if (!mask) {
+        return true;
+    }
+    flow = std::make_unique<QoreIRDebugFlowTargets>();
+    QoreIRBasicBlock** targets[3] = {&flow->break_target, &flow->continue_target, &flow->return_target};
+    for (unsigned i = 0; i < 3; ++i) {
+        if (mask & (1u << i)) {
+            uint16_t idx = QoreAOTBinaryReader::readU16(ctx.ptr);
+            QoreIRBasicBlock* block = ctx.resolveBlock(idx);
+            if (!block) {
+                ctx.error = "invalid debugger flow path block " + std::to_string(idx);
+                return false;
+            }
+            *targets[i] = block;
+        }
+    }
+    return true;
+}
+
+// ============================================================================
 // Group 18: ScopeExit - Scope exit tracking
 // ============================================================================
 
@@ -2527,6 +2588,8 @@ static bool writeScopeExit(AOTInstWriteCtx& ctx) {
     if (si->trim) {
         ctx.writer.writeU32(si->keep_handlers);
     }
+    // from format version QORE_AOT_DEBUG_FLOW_VERSION, the paths of a request that its handlers end with
+    writeDebugFlow(ctx, si->flow.get());
     return true;
 }
 
@@ -2541,6 +2604,9 @@ static std::unique_ptr<QoreIRInstruction> readScopeExit(
     if (flags & 2) {
         inst->trim = true;
         inst->keep_handlers = QoreAOTBinaryReader::readU32(ctx.ptr);
+    }
+    if (!readDebugFlow(ctx, inst->flow)) {
+        return nullptr;
     }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
@@ -3367,6 +3433,8 @@ static bool writeDebugStatement(AOTInstWriteCtx& ctx) {
             ctx.writer.writeU32(i < bl->slots.size() ? bl->slots[i] : UINT32_MAX);
         }
     }
+    // from format version QORE_AOT_DEBUG_FLOW_VERSION, the paths of the debugger's requests at the event
+    writeDebugFlow(ctx, dbg ? dbg->flow.get() : nullptr);
     return true;
 }
 
@@ -3408,6 +3476,9 @@ static std::unique_ptr<QoreIRInstruction> readDebugStatement(
                 inst->block_locals->slots.push_back(slot_id);
             }
         }
+    }
+    if (!readDebugFlow(ctx, inst->flow)) {
+        return nullptr;
     }
     inst->result = QoreIRValue(result_id);
     inst->operands = std::move(operands);

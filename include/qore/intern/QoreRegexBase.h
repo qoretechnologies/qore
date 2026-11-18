@@ -74,6 +74,29 @@ static inline bool qore_pcre2_expected_match_error(int rc) {
         || (rc <= PCRE2_ERROR_UTF8_ERR1 && rc >= PCRE2_ERROR_UTF8_ERR21);
 }
 
+//! Returns true for the PCRE2 match return codes that report a subject that is not valid UTF-8
+/** @ref PCRE2_ERROR_UTF8_ERR1 through @ref PCRE2_ERROR_UTF8_ERR21: the subject is tagged as UTF-8 but has invalid
+    byte sequences.  An operation that only tests for a match can take them as no match (see
+    qore_pcre2_expected_match_error()); one that gives a transformed copy of its subject must not, or it gives the
+    subject back unchanged, invalid bytes included, as if nothing in it had matched: see
+    qore_pcre2_raise_invalid_subject().
+ */
+static inline bool qore_pcre2_invalid_utf_error(int rc) {
+    // PCRE2_ERROR_UTF8_ERR1 = -3 (highest), PCRE2_ERROR_UTF8_ERR21 = -23 (lowest) — see pcre2.h
+    return rc <= PCRE2_ERROR_UTF8_ERR1 && rc >= PCRE2_ERROR_UTF8_ERR21;
+}
+
+//! Raises an INVALID-ENCODING exception for a subject that is not valid UTF-8 given to an operation that transforms it
+/** A substitution must fail closed on such a subject: giving it back unchanged would let a string that an escaping or
+    sanitizing substitution was meant to process pass through unprocessed (qore#6553).
+
+    @param rc the pcre2_match() return code, for which qore_pcre2_invalid_utf_error() is true
+    @param md the match data of the failed match, which gives the offset of the invalid byte sequence
+    @param op the name of the operation, for the exception's description
+    @param xsink the exception sink
+ */
+DLLLOCAL void qore_pcre2_raise_invalid_subject(int rc, pcre2_match_data* md, const char* op, ExceptionSink* xsink);
+
 //! Executes a PCRE2 match with the calling thread's match context.
 /** The thread's match context carries a heap-allocated JIT stack, which both keeps the JIT's
     backtracking stack off the machine stack (PCRE2 otherwise uses a 32 KB machine-stack buffer)

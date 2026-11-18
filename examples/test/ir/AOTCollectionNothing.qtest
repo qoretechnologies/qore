@@ -131,7 +131,7 @@ class AOTCollectionNothingTest inherits QUnit::Test {
 
     list<int> bool_source = (0, 1, 2, 3);
     list<bool> bool_map = (map ($1 & 1) == 0, bool_source);
-    list<bool> sparse_bool = (True, False, True);
+    list<*bool> sparse_bool = (True, False, True);
     delete sparse_bool[1];
     string sparse_bool_error = \"none\";
     try {
@@ -164,7 +164,7 @@ class AOTCollectionNothingTest inherits QUnit::Test {
         list<string> string_source = (\"alpha\", \"beta\", \"atom\");
         string_select = (select string_source, $1.startsWith(\"a\"));
     }
-    list<string> sparse_string = (\"alpha\", \"beta\", \"atom\");
+    list<*string> sparse_string = (\"alpha\", \"beta\", \"atom\");
     delete sparse_string[1];
     string sparse_string_select_error = \"none\";
     try {

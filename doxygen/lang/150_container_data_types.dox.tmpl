@@ -930,7 +930,7 @@ sub test() {
       <tt>h.o.m()</tt> after <tt>h.o := obj</tt>, or by a member of an object, a member of the current object, a
       global variable or a static class variable, is a @ref temporary_lifetime "temporary value" and is kept until
       the end of the statement, so in <tt>string s = h.o.m() + log();</tt> it is destroyed after \c log() has run
-    - @anchor temporary_lifetime temporary values: an object or other value that an expression creates and nothing else refers to, such as the object returned by a call in <tt>getDocument().components.schemas.Pet.getDataType()</tt>, lives until the end of the statement that created it, or until the call returns if it is passed to a call as an argument, in every @ref execution_modes "execution mode"
+    - @anchor temporary_lifetime temporary values: an object or other value that an expression creates and nothing else refers to, such as the object returned by a call in <tt>getDocument().components.schemas.Pet.getDataType()</tt>, lives until the end of the statement that created it, in every @ref execution_modes "execution mode"; passed to a call as an argument, it is taken over by the parameter when nothing else holds it: it is released when the call returns, or earlier, when the callee overwrites or removes that parameter
       - every part of a chain of member accesses, element accesses, casts and method calls can use it: a weak
         reference to it, a closure created by one of its methods and a call reference to one of its methods work
         until the statement ends
@@ -940,7 +940,7 @@ sub test() {
         call, member access or element access or as the operand of an operator, it lives until the end of the
         statement even if a later part of the statement assigns the variable another value, so in
         <tt>v.name() + (o = NOTHING) + log()</tt> the object is destroyed after \c log() has run; given to a call as
-        an argument, it is released when the call returns, as every argument is, so in
+        an argument, it is released as every argument is, by the time the call returns, so in
         <tt>f(v) + (o = NOTHING) + log()</tt> the object is destroyed by the assignment, before \c log() runs; a
         value read from another local variable is the variable's value, which such an assignment releases at once
       - the default value of a parameter and the initializer of a member of a class or a hashdecl are evaluated

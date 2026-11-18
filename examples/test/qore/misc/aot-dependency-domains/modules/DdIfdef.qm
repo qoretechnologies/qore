@@ -1,0 +1,26 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain and requires a module that
+# uses it after its header in code that a conditional excludes: its source never loads the module; qcc lists it as a
+# dependency, which the loader loads without relief (qore#6351)
+
+%modern
+
+module DdIfdef {
+    version = "1.0";
+    desc = "a module with an excluded request";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%ifdef DD_IFDEF_NEVER_DEFINED
+%requires DdInner
+%endif
+
+public namespace DdIfdef {
+    public string sub run() {
+        return "no inner";
+    }
+}

@@ -1,0 +1,376 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires PgsqlSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires Sqlite3SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class SqlValueLiteralsTest
+
+#! A datasource that does not connect: it gives a driver name and a server version, and records the SQL it is given
+class OfflineDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        list<string> log = ();
+    }
+
+    private {
+        string driver;
+        auto version;
+        *string real_driver;
+    }
+
+    constructor(string driver, auto version, *string real_driver) {
+        self.driver = driver;
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    string getDriverRealName() { return real_driver ?? driver; }
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "testdb"; }
+    *string getUserName() { return "testuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return driver; }
+    auto getServerVersion() { return version; }
+    auto getClientVersion() {}
+    string getConfigString() { return driver + ":testuser@testdb"; }
+    hash<auto> getConfigHash() { return {"type": driver, "user": "testuser", "db": "testdb"}; }
+    auto getOption(string opt) {}
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { log += sql; return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { log += sql; return 0; }
+    auto execRaw(string sql) { log += sql; return 0; }
+    auto select(string sql, ...) { log += sql; }
+    auto vselect(string sql, *softlist<auto> vargs) { log += sql; }
+    # SQL Server's table reads the user's default schema
+    auto selectRow(string sql, ...) { log += sql; return sql =~ /schema_name\(\)/ ? {"schema": "dbo"} : NOTHING; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRows(string sql, ...) { log += sql; return (); }
+    auto vselectRows(string sql, *softlist<auto> vargs) { log += sql; return (); }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! Tests the SQL string literals of values: quotes, encodings and NUL characters (issue #6586)
+/** A string given in an SQL string literal (a value of the "in" operator, a column operator value, an update
+    operator value, a default value) has its quotes doubled, and a string whose encoding is invalid or that has a NUL
+    character is refused with VALUE-ERROR before any SQL is sent.  The SQL is checked for each database with
+    datasources that do not connect, and the values run on SQLite and, each in a schema or database of its own, on
+    PostgreSQL, MySQL or MariaDB, Oracle, SQL Server and Firebird (through JDBC) when \c QORE_DB_CONNSTR_PGSQL,
+    \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE, \c QORE_DB_CONNSTR_FREETDS and
+    \c QORE_DB_CONNSTR_JDBC_FIREBIRD are set (an Oracle schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS).
+*/
+class SqlValueLiteralsTest inherits QUnit::Test {
+    public {
+        #! the test table
+        const Desc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "name": {"qore_type": "string", "size": 40},
+            },
+        };
+
+        #! the offline datasources: driver, server version, real driver
+        const Dialects = {
+            "pgsql": ("pgsql", 170000),
+            "mysql": ("mysql", 80400),
+            "mssql": ("freetds", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6"),
+            "sqlite3": ("sqlite3", "3.45.1"),
+            "firebird": ("jdbc", "5.0", "firebird"),
+        };
+
+        #! a value with quotes, a backslash and a non-ASCII character
+        const Quoted = "a'b''c \\ ä";
+    }
+
+    private {
+        #! connections by driver (\c "jdbc" is Firebird)
+        hash<string, Datasource> dsh;
+        #! why a database is skipped, by driver
+        hash<string, string> skip = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "freetds": "QORE_DB_CONNSTR_FREETDS is not set",
+            "jdbc": "no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD",
+        };
+    }
+
+    constructor() : Test("SqlValueLiterals", "1.0", \ARGV) {
+        addTestCase("string literals", \literalTest());
+        addTestCase("refused values send no SQL", \offlineTest());
+        addTestCase("SQLite", \sqliteTest());
+        addTestCase("PostgreSQL", sub () { checkDriver("pgsql"); });
+        addTestCase("MySQL", sub () { checkDriver("mysql"); });
+        addTestCase("Oracle", sub () { checkDriver("oracle"); });
+        addTestCase("SQL Server", sub () { checkDriver("freetds"); });
+        addTestCase("Firebird", sub () { checkDriver("jdbc"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        connect("pgsql", ENV.QORE_DB_CONNSTR_PGSQL, *string sub (string connstr) {
+            PgsqlRunSchema::setup(connstr, "SqlValueLiterals");
+            return connstr;
+        });
+        connect("mysql", ENV.QORE_DB_CONNSTR_MYSQL, *string sub (string connstr) {
+            return MysqlRunDatabase::getConnectionString(connstr, "SqlValueLiterals");
+        });
+        connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
+            return OracleRunSchema::getConnectionString(connstr, "SqlValueLiterals");
+        });
+        connect("freetds", ENV.QORE_DB_CONNSTR_FREETDS, *string sub (string connstr) {
+            return MssqlRunDatabase::getConnectionString(connstr, "SqlValueLiterals");
+        });
+%ifdef NoJni
+        skip.jdbc = "no jni module";
+%else
+        connect("jdbc", ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, *string sub (string connstr) {
+            return FirebirdRunDatabase::getConnectionString(connstr, "SqlValueLiterals");
+        });
+        if (dsh.jdbc && dsh.jdbc.getDriverRealName() !~ /^firebird/i) {
+            skip.jdbc = "not a Firebird connection";
+            remove dsh.jdbc;
+        }
+%endif
+    }
+
+    globalTearDown() {
+        foreach hash<auto> i in (dsh.pairIterator()) {
+            i.value.rollback();
+        }
+        remove dsh;
+        if (PgsqlRunSchema::getName()) {
+            PgsqlRunSchema::teardown();
+        }
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+        FirebirdRunDatabase::teardown();
+    }
+
+    #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
+    private connect(string driver, *string connstr, code isolate) {
+        if (!connstr) {
+            return;
+        }
+        try {
+            Datasource ds(isolate(connstr));
+            if (ds.getDriverName() != driver) {
+                skip{driver} = sprintf("the connection uses driver %y", ds.getDriverName());
+                return;
+            }
+            ds.open();
+            dsh{driver} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skip{driver} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! returns the strings that cannot be given in an SQL string literal: an invalid encoding, also with quotes, and
+    #! a NUL character
+    private static list<string> getRefusedStrings() {
+        return (
+            binary_to_string(binary("x' or 'a'='a") + <ff>, "UTF-8"),
+            binary_to_string(<ff27>, "UTF-8"),
+            binary_to_string(<c327>, "UTF-8"),
+            binary_to_string(<610062>, "UTF-8"),
+            binary_to_string(<41ff0027>, "UTF-8"),
+        );
+    }
+
+    #! returns a table of a dialect
+    private static AbstractTable getTable(AbstractDatasource ds, string dialect, string name, hash<auto> desc) {
+        AbstractTable t;
+        switch (dialect) {
+            case "pgsql": t = new PgsqlTable(ds, name); break;
+            case "mysql": t = new MysqlTable(ds, name); break;
+            case "mssql": t = new FreetdsTable(ds, name); break;
+            case "sqlite3": t = new Sqlite3Table(ds, name); break;
+            case "firebird": t = new XdbcFirebirdTable(ds, name); break;
+        }
+        t.setupTable(desc);
+        return t;
+    }
+
+    #! the literals of each database for datasources that do not connect
+    literalTest() {
+        foreach hash<auto> i in (Dialects.pairIterator()) {
+            OfflineDatasource ds(i.value[0], i.value[1], i.value[2]);
+            AbstractTable t = getTable(ds, i.key, "t", Desc);
+            string lit = t.getSqlValue(Quoted);
+            if (i.key == "pgsql") {
+                assertEq("E'a''b''''c \\\\ ä'", lit, i.key);
+            } else if (i.key == "mysql") {
+                # a string with a backslash is given as a hex literal
+                assertEq("_utf8mb4 X'" + binary(Quoted).toHex() + "'", lit, i.key);
+                assertEq("'a''b'", t.getSqlValue("a'b"), i.key);
+            } else {
+                assertEq("'a''b''''c \\ ä'", lit, i.key);
+            }
+            # booleans and dates
+            if (i.key == "mssql") {
+                assertEq("1", t.getSqlValue(True), i.key);
+                assertEq("0", t.getSqlValue(False), i.key);
+            } else if (i.key == "sqlite3") {
+                date d = 2026-01-02T03:04:05.123456+01:00;
+                assertEq("'" + d.format("IF") + "'", t.getSqlValue(d), i.key);
+            }
+            # a string in another encoding
+            assertRegex("^('|E')x''y", t.getSqlValue(convert_encoding("x'y", "ISO-8859-1")), i.key);
+            foreach string bad in (getRefusedStrings()) {
+                assertThrows("VALUE-ERROR", \t.getSqlValue(), bad, i.key);
+            }
+        }
+        assertEq("'a''b'", AbstractSqlUtilBase::getSqlStringLiteral("a'b"));
+
+        # the comment of a column on SQL Server
+        OfflineDatasource mds("freetds", Dialects.mssql[1]);
+        MssqlTable mt = cast<MssqlTable>(getTable(mds, "mssql", "t", Desc));
+        assertRegex("@value = N'a''b'", mt.getColumnCommentSql("name", "sp_addextendedproperty", "a'b"));
+        foreach string bad in (getRefusedStrings()) {
+            assertThrows("VALUE-ERROR", \mt.getColumnCommentSql(), ("name", "sp_addextendedproperty", bad));
+        }
+        foreach string bad in (getRefusedStrings()) {
+            assertThrows("VALUE-ERROR", \AbstractSqlUtilBase::checkSqlStringValue(), bad);
+        }
+    }
+
+    #! a refused value raises VALUE-ERROR before any SQL is sent: in the "in" operator, a column operator value, an
+    #! update operator value and a default value
+    offlineTest() {
+        string bad = getRefusedStrings()[0];
+        foreach hash<auto> i in (Dialects.pairIterator()) {
+            OfflineDatasource ds(i.value[0], i.value[1], i.value[2]);
+            AbstractTable t = getTable(ds, i.key, "t", Desc);
+            ds.log = ();
+            assertThrows("VALUE-ERROR", \t.selectRows(), {"where": {"name": op_in(("ok", bad))}}, i.key + ": in");
+            assertThrows("VALUE-ERROR", \t.selectRows(), {"columns": (cop_as(cop_value(bad), "v"), "id")},
+                i.key + ": column operator");
+            assertThrows("VALUE-ERROR", \t.update(), ({"name": uop_append(bad)}, {"id": 1}),
+                i.key + ": update operator");
+            hash<auto> desc = Desc;
+            desc.columns.name.default_value = bad;
+            *string err;
+            try {
+                getTable(ds, i.key, "t2", desc).getCreateSqlString();
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex.err;
+            }
+            assertEq("VALUE-ERROR", err, i.key + ": default value");
+            # only the catalog of the database is read: no statement with the value, or that would use it, is sent
+            list<string> sent = (select ds.log, $1 =~ /x' or|^\s*(update|insert|create|delete)\b|'ok'|cast\(/i)
+                ?? ();
+            assertEq((), sent, i.key + ": no SQL with the value is sent");
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        TmpDir tmp("qore-sql-value-literals-");
+        Datasource ds({"type": "sqlite3", "db": tmp.path + DirSep + "test.db"});
+        on_exit ds.rollback();
+        checkRoundTrip(ds);
+    }
+
+    #! runs the round trip on a database
+    private checkDriver(string driver) {
+        if (!dsh{driver}) {
+            testSkip(skip{driver});
+        }
+        Datasource ds = dsh{driver};
+        on_exit ds.rollback();
+        checkRoundTrip(ds);
+    }
+
+    #! values in the SQL of a database, and refused values that change nothing in it
+    private checkRoundTrip(Datasource ds) {
+        Database db(ds);
+        hash<auto> desc = Desc;
+        desc.columns.name.default_value = Quoted;
+        AbstractTable t = db.makeTable("sv_lit", desc);
+        t.create();
+        on_exit {
+            ds.rollback();
+            try {
+                ds.exec("drop table sv_lit");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+        # Firebird cannot write to a table in the transaction that creates it
+        ds.commit();
+        # the default value
+        t.insert({"id": 1});
+        t.insert({"id": 2, "name": "other"});
+        ds.commit();
+        assertEq(Quoted, t.selectRow({"where": {"id": 1}}).name);
+        # the "in" operator
+        assertEq((1,), map $1.id, t.selectRows({"where": {"name": op_in((Quoted, "x'y"))}}));
+        # a column operator value
+        assertEq(Quoted, t.selectRow({"columns": (cop_as(cop_value(Quoted), "v"),), "where": {"id": 2}}).v);
+        # booleans and dates as column operator values
+        hash<auto> row = t.selectRow({"columns": (cop_as(cop_value(True), "bt"), cop_as(cop_value(False), "bf")),
+            "where": {"id": 2}});
+        assertTrue(boolean(row.bt), "true: " + row.bt);
+        assertFalse(boolean(row.bf), "false: " + row.bf);
+        if (ds.getDriverName() == "sqlite3") {
+            # a date is the string that the driver binds for it
+            date d = 2026-01-02T03:04:05.123456Z;
+            assertEq(ds.selectRow("select %v as v", d).v,
+                t.selectRow({"columns": (cop_as(cop_value(d), "v"),), "where": {"id": 2}}).v);
+        }
+        # an update operator value
+        assertEq(1, t.update({"name": uop_append("'z")}, {"id": 2}));
+        assertEq("other'z", t.selectRow({"where": {"id": 2}}).name);
+        ds.commit();
+
+        # refused values change nothing; Oracle binds the values of the "in" operator
+        foreach string bad in (getRefusedStrings()) {
+            if (ds.getDriverName() != "oracle") {
+                assertThrows("VALUE-ERROR", \t.selectRows(), {"where": {"name": op_in(("other'z", bad))}});
+            }
+            assertThrows("VALUE-ERROR", \t.update(), ({"name": uop_append(bad)}, {"id": 2}));
+        }
+        ds.rollback();
+        assertEq(({"id": 1, "name": Quoted}, {"id": 2, "name": "other'z"}), t.selectRows({"orderby": "id"}));
+    }
+}

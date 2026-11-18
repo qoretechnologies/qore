@@ -1,0 +1,180 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - threads running the top-level code of one Program at the same time
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ReparseConcurrentRunsTest
+
+#! Each top-level statement of a Program with PO_ALLOW_REPARSE runs once (issue #6511)
+/** A run executes the statements that no run has executed yet; it claims each statement before it executes it, so
+    that two threads running the Program at the same time do not both execute the same statements, and a statement
+    that raises an exception is not executed again by the next run.
+*/
+public class ReparseConcurrentRunsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ReparseConcurrentRunsTest", "1.0", \ARGV) {
+        addTestCase("concurrent runs execute each statement once", \concurrentTest());
+        addTestCase("a statement that raises an exception is not executed again", \exceptionTest());
+        addTestCase("the statements after an exception are executed by the next run", \afterExceptionTest());
+        addTestCase("a return statement is executed once", \returnTest());
+        addTestCase("skipping the statements that no run has executed", \skipTest());
+        addTestCase("skipping from the code of the Program", \skipSelfTest());
+        addTestCase("skipping without PO_ALLOW_REPARSE", \skipNoReparseTest());
+        set_return_value(main());
+    }
+
+    private Program newProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseOptions(PO_ALLOW_REPARSE);
+        return p;
+    }
+
+    #! a thread runs the Program and waits in the first new statement while this thread runs it too
+    concurrentTest() {
+        Program p = newProgram();
+        p.parse("our *Counter started;\nour *Counter release;\nour int entered = 0;\nour int n = 0;\n", "setup");
+        p.run();
+        Counter started(1);
+        Counter release(1);
+        p.setGlobalVarValue("started", started);
+        p.setGlobalVarValue("release", release);
+        # the first run to enter the first statement waits in it until it is released; another one passes through
+        p.parse("if (!entered++) {\n    started.dec();\n    release.waitForZero();\n}\nn++;\n", "new");
+
+        Counter done(1);
+        # the background run is released and ends also when an assertion fails
+        on_exit {
+            if (release.getCount()) {
+                release.dec();
+            }
+            done.waitForZero();
+        }
+        *hash<ExceptionInfo> bg_ex;
+        bool bg_ended;
+        background sub () {
+            on_exit {
+                # this thread does not wait for the background run if it ends before it enters the first statement
+                if (started.getCount()) {
+                    bg_ended = True;
+                    started.dec();
+                }
+                done.dec();
+            }
+            try {
+                p.run();
+            } catch (hash<ExceptionInfo> ex) {
+                bg_ex = ex;
+            }
+        }();
+        # the background run is in the first statement
+        started.waitForZero();
+        if (bg_ended) {
+            # it ended before: this run would wait in the first statement
+            fail(sprintf("the background run ended before the first statement: %y", bg_ex));
+            return;
+        }
+        # this run executes only the statement that the background run has not taken
+        p.run();
+        assertEq(1, p.getGlobalVariable("entered"), "the first statement was entered once");
+        assertEq(1, p.getGlobalVariable("n"), "the second statement was executed by this run");
+        release.dec();
+        done.waitForZero();
+        assertEq(NOTHING, bg_ex);
+        assertEq(1, p.getGlobalVariable("entered"), "the first statement was executed once");
+        assertEq(1, p.getGlobalVariable("n"), "the second statement was executed once");
+
+        # nothing is left to execute
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+    }
+
+    #! the next run does not raise the exception again, as a REPL that runs the Program after each input needs
+    exceptionTest() {
+        Program p = newProgram();
+        p.parse("our int n = 0;\n", "setup");
+        p.run();
+        p.parse("throw \"X\";\n", "throw");
+        assertThrows("X", \p.run());
+        p.parse("n++;\n", "next");
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+    }
+
+    #! the statements parsed together after the one that raised an exception are executed by the next run
+    afterExceptionTest() {
+        Program p = newProgram();
+        p.parse("our int n = 0;\nour int m = 0;\n", "setup");
+        p.run();
+        p.parse("n++;\nthrow \"X\";\nm++;\n", "code");
+        assertThrows("X", \p.run());
+        assertEq(1, p.getGlobalVariable("n"));
+        assertEq(0, p.getGlobalVariable("m"));
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+        assertEq(1, p.getGlobalVariable("m"));
+    }
+
+    #! a top-level return ends the run; the next run executes the statements after it
+    returnTest() {
+        Program p = newProgram();
+        p.parse("our int m = 0;\n", "setup");
+        p.run();
+        p.parse("return 5;\nm++;\n", "code");
+        assertEq(5, p.run());
+        assertEq(0, p.getGlobalVariable("m"));
+        assertEq(NOTHING, p.run());
+        assertEq(1, p.getGlobalVariable("m"));
+    }
+
+    #! Program::skipPendingStatements() skips the committed statements that no run has executed, not pending code
+    skipTest() {
+        Program p = newProgram();
+        assertEq(0, p.skipPendingStatements(), "nothing to skip");
+        p.parse("our int n = 0;\n", "setup");
+        p.run();
+        assertEq(0, p.skipPendingStatements(), "everything has run");
+        p.parse("n++;\nthrow \"X\";\nn++;\nn++;\n", "code");
+        assertThrows("X", \p.run());
+        assertEq(1, p.getGlobalVariable("n"));
+        assertEq(2, p.skipPendingStatements(), "the two statements after the exception are skipped");
+        p.run();
+        assertEq(1, p.getGlobalVariable("n"));
+        # code parsed later runs
+        p.parse("n += 10;\n", "later");
+        p.run();
+        assertEq(11, p.getGlobalVariable("n"));
+        # pending code is not affected
+        p.parsePending("n += 100;\n", "pending");
+        assertEq(0, p.skipPendingStatements());
+        p.parseCommit();
+        p.run();
+        assertEq(111, p.getGlobalVariable("n"));
+    }
+
+    #! code of the Program skips the statements after it
+    skipSelfTest() {
+        Program p = newProgram();
+        p.parse("our auto self;\nour int n = 0;\nour int skipped = -1;\n", "setup");
+        p.run();
+        p.setGlobalVarValue("self", p);
+        on_exit p.setGlobalVarValue("self", NOTHING);
+        p.parse("skipped = self.skipPendingStatements();\nn++;\nn++;\n", "code");
+        p.run();
+        assertEq(2, p.getGlobalVariable("skipped"));
+        assertEq(0, p.getGlobalVariable("n"));
+    }
+
+    #! without PO_ALLOW_REPARSE, a run executes all of the statements: nothing is skipped
+    skipNoReparseTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our int n = 0;\nn++;\nn++;\n", "code");
+        assertEq(0, p.skipPendingStatements());
+        p.run();
+        assertEq(2, p.getGlobalVariable("n"));
+    }
+}

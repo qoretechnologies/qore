@@ -23,15 +23,13 @@
 
     The functions of receivers.q call such methods in a foreach over references, with arguments, in a chain, in the
     condition of an if statement and in a loop, and such a closure, and a method through a local declared with a
-    reference; their destructors log the order of the releases.  The output is compared with the AST in the ir and
-    tiered modes and in executables made by qcc at -O0 and -O3.
+    reference; their destructors log the order of the releases.  The output is compared with the AST in the ir, jit
+    and tiered modes and in executables made by qcc at -O0 and -O3.
 */
 class AOTReceiverReferenceReleaseTest inherits QUnit::Test {
     public {
         #! the execution modes compared with the AST
-        /** not jit: its native code does not release such a receiver at all (qore#6565)
-        */
-        const Modes = ("ir", "tiered");
+        const Modes = ("ir", "jit", "tiered");
         #! the qcc optimization levels
         const OptLevels = ("-O0", "-O3");
     }

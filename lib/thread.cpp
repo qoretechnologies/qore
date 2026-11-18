@@ -148,8 +148,14 @@ struct QoreDbgFinishHold {
     bool held = false;
     //! the held thread is to continue
     bool released = false;
+    //! true while a hold is armed (hold_ms or tls_hold_ms): a thread that finishes takes the mutex only then, so a
+    //! fork() made while a thread finishes finds it unlocked (qore#6543)
+    std::atomic<bool> armed{false};
 };
 static QoreDbgFinishHold* dbg_finish_hold = new QoreDbgFinishHold;
+//! the mutex is a process-wide lock: a child of fork() gets it unlocked (qore#6543; see design/fork-handlers.md)
+static QoreForkStdMutex dbg_finish_hold_fork_handler{dbg_finish_hold->m, QFLR_LEAF, "dbg_finish_hold", QFLM_ACQUIRE,
+    {&dbg_finish_hold->cv}};
 
 //! Releases a held finishing thread when the static objects of this file are destroyed (issue #6405)
 /** Declared before thread_counter, so that it is destroyed after it: a thread that exit() left finishing then uses
@@ -179,17 +185,28 @@ struct QoreDbgStartHold {
     bool held = false;
     //! the held thread is to continue
     bool released = false;
+    //! true while a hold is armed: a thread that starts takes the mutex only then, so a fork() made while a thread
+    //! starts finds it unlocked (qore#6543)
+    std::atomic<bool> armed{false};
 };
 static QoreDbgStartHold* dbg_start_hold = new QoreDbgStartHold;
+//! the mutex is a process-wide lock: a child of fork() gets it unlocked (qore#6543; see design/fork-handlers.md)
+static QoreForkStdMutex dbg_start_hold_fork_handler{dbg_start_hold->m, QFLR_LEAF, "dbg_start_hold", QFLM_ACQUIRE,
+    {&dbg_start_hold->cv}};
 
 //! Holds a thread that has been started, before it registers, if a hold is armed (qore#6469)
 static void qore_dbg_hold_thread_start() {
+    // every thread that starts gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_start_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::unique_lock<std::mutex> l(dbg_start_hold->m);
     int ms = dbg_start_hold->hold_ms;
     if (ms <= 0) {
         return;
     }
     dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->armed.store(false, std::memory_order_release);
     dbg_start_hold->held = true;
     dbg_start_hold->cv.notify_all();
     dbg_start_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_start_hold->released; });
@@ -778,8 +795,13 @@ public:
     // current generic receiver type for static generic method bodies
     const QoreTypeInfo* current_receiver_type_info = nullptr;
 
-    // current program context
+    // current program context; set with set_thread_current_pgm()
     QoreProgram* current_pgm = nullptr;
+    //! the type retirement epoch at which the thread entered Qore code, or 0 while it has no Program context
+    /** Written by the thread when its Program context is set from none or cleared (set_thread_current_pgm()), read by
+        qore_type_retirement_scan() (see qore_type_retire_epoch; issue #6419)
+    */
+    std::atomic<uint64_t> type_epoch{0};
 
     // issue #3024: program context for calls prior to a call
     QoreProgram* call_program_context = nullptr;
@@ -1037,6 +1059,10 @@ public:
             try_reexport(false),
             finalizing(false),
             tlv_clearing(false) {
+        if (p) {
+            // the thread runs the Program's code from its start
+            type_epoch.store(qore_type_retire_epoch.load(std::memory_order_seq_cst), std::memory_order_seq_cst);
+        }
 #ifdef QORE_MANAGE_STACK
         if (n_flags & QTF_NO_STACK_GUARD) {
             // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
@@ -1604,6 +1630,36 @@ public:
 };
 
 static QoreThreadLocalStorage<ThreadData> thread_data;
+
+//! Sets the Program context of the thread, publishing its type retirement epoch when it enters or leaves Qore code
+/** The epoch is published when the context is set from none and cleared when it is cleared (see
+    qore_type_retire_epoch; issue #6419).  The exchange is sequentially consistent: the types that the thread reads
+    in its code are read after the epoch is published, and the epoch is cleared after the last of them was read.
+*/
+static inline void set_thread_current_pgm(ThreadData* td, QoreProgram* pgm) {
+    if (!td->current_pgm != !pgm) {
+        td->type_epoch.exchange(pgm ? qore_type_retire_epoch.load(std::memory_order_seq_cst) : 0,
+            std::memory_order_seq_cst);
+    }
+    td->current_pgm = pgm;
+}
+
+uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads) {
+    uint64_t min_epoch = 0;
+    thread_list.anyThreadData([&](ThreadData* td) -> bool {
+        uint64_t e = td->type_epoch.load(std::memory_order_seq_cst);
+        if (e) {
+            if (!min_epoch || e < min_epoch) {
+                min_epoch = e;
+            }
+            if (threads && below && e < below) {
+                threads->push_back(QoreTypeRetirementThread{td->tid, e});
+            }
+        }
+        return false;
+    });
+    return min_epoch;
+}
 
 void ThreadEntry::allocate(tid_node* tn, int stat) {
     assert(status == QTS_AVAIL);
@@ -3409,6 +3465,17 @@ void parse_cond_push(bool mark) {
         td->pcs = new ParseConditionalStack;
     }
     td->pcs->push(mark);
+    // a conditional directive before the header of a user module: the modules that the module requests before its
+    // header can depend on where it is loaded (qore#6386)
+    if (mark) {
+        QoreProgram* pgm = getProgram();
+        if (pgm) {
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            if (!pp->module_header_closed) {
+                pp->conditional_before_module_header = true;
+            }
+        }
+    }
 }
 
 bool parse_cond_else() {
@@ -4244,7 +4311,7 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     }
     ThreadData* td  = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -4253,7 +4320,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
         return;
     }
     ThreadData* td  = thread_data.get();
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
 }
 
@@ -5049,7 +5116,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
     restoreDeferral();
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
     sync_runtime_config_program(td);
@@ -5221,7 +5288,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     // set up thread stacks; an exception (std::bad_alloc) restores the thread and releases the thread count before it
     // propagates from the constructor, whose destructor does not run (issue #6198)
     restore = true;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     bool first_entry = false;
     try {
 #ifdef DEBUG
@@ -5251,7 +5318,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
             td->tlpd->thread_init_pending = true;
         }
         restore = false;
-        td->current_pgm = old_pgm;
+        set_thread_current_pgm(td, old_pgm);
         td->tlpd = old_tlpd;
         releaseThreadCount(td, pgm);
         module_uncounted = false;
@@ -5834,8 +5901,14 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_i
     }
     if (pgm_id && !*pgm_id) {
         ThreadData* td = thread_data.get();
-        if (td->sandbox_provenance) {
-            *pgm_id = td->sandbox_provenance->getContext()->pgm_id;
+        // a frame that records only the origin of the code that runs (qore#6520) names no sandbox
+        const QoreSandboxProvenanceHelper* frame = td->sandbox_provenance;
+        while (frame && !frame->getContext()->manager && !frame->getContext()->policy_manager
+                && !frame->getContext()->provenance_manager && !frame->getContext()->provenance_policy_manager) {
+            frame = frame->getPrevious();
+        }
+        if (frame) {
+            *pgm_id = frame->getContext()->pgm_id;
         } else {
             const auto* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
             if (ctx) {
@@ -6015,6 +6088,29 @@ static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
     return mib ? rv : (rv | td->thread_caller_restrictions);
 }
 
+//! returns the functional-domain restrictions recorded with the objects and call references whose code runs on the
+//! thread (qore#6520)
+/** An object or call reference of library module code that restricted code created records the creator's
+    restrictions (QoreSandboxContext::origin_restrictions), which apply while its code runs (its provenance frame,
+    QoreSandboxProvenanceHelper): a library registry that runs it later, as the initialization of a library module
+    does under its barrier, runs it for its creator.  The frames of the code that loads a library module are not
+    looked at past the module initialization barrier \a mib, as for the caller walk
+
+    @param td the current thread's data
+    @param mib the module initialization barrier that the walk stops at, or nullptr
+*/
+static QoreParseOptions qore_get_provenance_origin_restrictions(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib) {
+    QoreParseOptions rv;
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        if (mib && frame == mib->provenance) {
+            break;
+        }
+        rv |= frame->getContext()->origin_restrictions;
+    }
+    return rv;
+}
+
 bool qore_caller_restricts_domain(int64 domain) {
     // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
     const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
@@ -6026,6 +6122,10 @@ bool qore_caller_restricts_domain(int64 domain) {
     // the restrictions of a sandboxed caller that the module code runs with (see
     // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls
     if (td->runtime_po_state.caller_restrictions.hasAny(dom)) {
+        return true;
+    }
+    // the code of an object or call reference that restricted code created (qore#6520)
+    if (qore_get_provenance_origin_restrictions(td, nullptr).hasAny(dom)) {
         return true;
     }
     return qore_get_caller_domain_restrictions(td).hasAny(dom);
@@ -6049,7 +6149,23 @@ int64 qore_caller_denied_user_domains(int64 domain) {
     const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     QoreParseOptions denied = mib ? QoreParseOptions() : (td->runtime_po_state.caller_restrictions & dom);
     denied |= qore_get_caller_domain_restrictions(td, mib) & dom;
+    // the code of an object or call reference that restricted code created runs for that code, also under a module
+    // initialization barrier (qore#6520)
+    denied |= qore_get_provenance_origin_restrictions(td, mib) & dom;
     return denied.getLo();
+}
+
+//! returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
+/** The restrictions that a check of a declared domain would apply to the creating code: those of a sandboxed caller,
+    of the calling code, and of the objects and call references whose code runs; not looked up past a module
+    initialization barrier, as the initialization of a library module creates its state for nobody
+*/
+static QoreParseOptions qore_get_creation_origin_restrictions(ThreadData* td) {
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    QoreParseOptions rv = mib ? QoreParseOptions() : td->runtime_po_state.caller_restrictions;
+    rv |= qore_get_caller_domain_restrictions(td, mib);
+    rv |= qore_get_provenance_origin_restrictions(td, mib);
+    return rv & qore_restricting_domain_options();
 }
 
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
@@ -6361,6 +6477,36 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     provenance_policy_manager = provenance_policy.release();
 }
 
+QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)
+        : module_cleanup_delegate(module_cleanup_delegate) {
+    if (!src) {
+        return;
+    }
+    // copied first, as they can throw std::bad_alloc; the references below are taken only after that
+    program_ids = src->program_ids;
+    budgets = src->budgets;
+    pgm_id = src->pgm_id;
+    for (QoreSandboxCallBudget* budget : budgets) {
+        budget->ref();
+    }
+    manager = src->manager;
+    if (manager) {
+        manager->ref();
+    }
+    policy_manager = src->policy_manager;
+    if (policy_manager) {
+        policy_manager->ref();
+    }
+    provenance_manager = src->provenance_manager;
+    if (provenance_manager) {
+        provenance_manager->ref();
+    }
+    provenance_policy_manager = src->provenance_policy_manager;
+    if (provenance_policy_manager) {
+        provenance_policy_manager->ref();
+    }
+}
+
 QoreSandboxContext::~QoreSandboxContext() {
     qore_sandbox_budgets_deref(budgets);
     if (manager) {
@@ -6377,10 +6523,28 @@ QoreSandboxContext::~QoreSandboxContext() {
     }
 }
 
-QoreSandboxContext* qore_capture_sandbox_provenance() {
+QoreParseOptions qore_creation_origin_restrictions() {
+    ThreadData* td = thread_data.get();
+    return td ? qore_get_creation_origin_restrictions(td) : QoreParseOptions();
+}
+
+QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm) {
     // Check before allocating: the common unsandboxed object/callback needs no context storage.
     ReferenceHolder<QoreSandboxManager> manager(qore_find_thread_sandbox_manager_ref(), nullptr);
-    return manager ? new QoreSandboxContext(false) : nullptr;
+    // the restrictions of the code that creates an object of library module code (qore#6520)
+    QoreParseOptions origin;
+    if (code_pgm && qore_program_is_library_module(code_pgm)) {
+        ThreadData* td = thread_data.get();
+        if (td) {
+            origin = qore_get_creation_origin_restrictions(td);
+        }
+    }
+    if (!manager && !origin) {
+        return nullptr;
+    }
+    QoreSandboxContext* ctx = new QoreSandboxContext(false);
+    ctx->origin_restrictions = origin;
+    return ctx;
 }
 
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
@@ -6654,9 +6818,9 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         restore = true;
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
-        td->current_pgm = pgm;
+        set_thread_current_pgm(td, pgm);
         auto undo = [this, td, pgm]() {
-            td->current_pgm = old_pgm;
+            set_thread_current_pgm(td, old_pgm);
             td->tlpd = old_tlpd;
             sync_runtime_config_program(td);
             qore_program_private::unlockParsing(*pgm);
@@ -6677,12 +6841,23 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
             undo();
             throw;
         }
-    } else {
-        assert(qore_program_private::get(*pgm)->parsingLocked());
+    } else if (!qore_program_private::get(*pgm)->parsingLocked()) {
+        // code that runs in the Program, and not in its commit (where the thread holds the parse lock already), parses
+        // code in it: the parse lock is taken as for another Program, and the parse is refused as one while threads run
+        // in the Program (issue #6568)
+        if (qore_program_private::lockParsing(*pgm, xsink)) {
+            return;
+        }
+        locked_pgm = pgm;
     }
 }
 
 ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper() {
+    if (locked_pgm) {
+        assert(!restore);
+        qore_program_private::unlockParsing(*locked_pgm, xsink);
+        return;
+    }
     if (!restore)
         return;
 
@@ -6694,7 +6869,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     // the exit handler runs while the thread is still in the Program
     entry_frame.exit(xsink);
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
 
@@ -6715,7 +6890,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -6742,7 +6917,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -6752,7 +6927,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
     // last: the Program is cleared and dereferenced here if code run while it was locked deleted it
     qore_program_private::unlockParsing(*pgm);
@@ -6822,7 +6997,7 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
 
         restore = true;
         old_pgm = td->current_pgm;
-        td->current_pgm = pgm;
+        set_thread_current_pgm(td, pgm);
         sync_runtime_config_program(td);
     }
 }
@@ -6833,7 +7008,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }
@@ -7230,7 +7405,9 @@ bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
         && !td->runtime_po_state.override_pgm
         // module code called by restricted code passes the restrictions on to the threads that it starts (qore#6337),
         // but not the initialization of library module code
-        && !qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td));
+        && !qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td))
+        // nor the code of an object or call reference that restricted code created (qore#6520)
+        && !qore_get_provenance_origin_restrictions(td, qore_get_caller_module_init_barrier(td));
 }
 
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
@@ -7246,7 +7423,11 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     rv.override.sandboxed = td->runtime_po_state.sandboxed;
     rv.override.override_pgm = td->runtime_po_state.override_pgm;
     // a thread that the initialization of library module code starts is not started by the code that loads it
-    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td));
+    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td))
+        // a thread that the code of an object or call reference that restricted code created starts runs for that code
+        // (qore#6520)
+        | (qore_get_provenance_origin_restrictions(td, qore_get_caller_module_init_barrier(td))
+            & qore_restricting_domain_options());
     rv.refPrograms();
     return rv;
 }
@@ -7544,6 +7725,7 @@ void qore_dbg_hold_next_thread_start(int ms) {
     std::lock_guard<std::mutex> l(dbg_start_hold->m);
     dbg_start_hold->hold_ms = ms;
     dbg_start_hold->released = false;
+    dbg_start_hold->armed.store(ms > 0, std::memory_order_release);
 }
 
 bool qore_dbg_wait_thread_start_held(int timeout_ms) {
@@ -7556,6 +7738,7 @@ void qore_dbg_release_thread_start() {
     std::unique_lock<std::mutex> l(dbg_start_hold->m);
     // a hold that no thread has taken yet is disarmed
     dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->armed.store(false, std::memory_order_release);
     dbg_start_hold->released = true;
     dbg_start_hold->cv.notify_all();
     // returns when the held thread has continued, so that a later hold is not ended by this release
@@ -7566,6 +7749,8 @@ void qore_dbg_hold_next_thread_finish(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->hold_ms = ms;
     dbg_finish_hold->released = false;
+    dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0 || dbg_finish_hold->tls_hold_ms > 0,
+        std::memory_order_release);
 }
 
 bool qore_dbg_wait_thread_finish_held(int timeout_ms) {
@@ -7579,6 +7764,8 @@ void qore_dbg_hold_next_thread_tls_exit(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->tls_hold_ms = ms;
     dbg_finish_hold->released = false;
+    dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0 || dbg_finish_hold->tls_hold_ms > 0,
+        std::memory_order_release);
 }
 
 namespace {
@@ -7614,21 +7801,31 @@ thread_local QoreDbgTlsHold qore_dbg_tls_hold;
 
 //! Arms the thread-local hold of the calling thread if a hold of the next thread's exit is armed
 static void qore_dbg_arm_thread_tls_hold() {
+    // every thread that finishes gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_finish_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     if (dbg_finish_hold->tls_hold_ms > 0) {
         // the first use constructs the thread-local object, whose destructor then runs when the thread ends
         qore_dbg_tls_hold.ms = dbg_finish_hold->tls_hold_ms;
         dbg_finish_hold->tls_hold_ms = 0;
+        dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0, std::memory_order_release);
     }
 }
 
 static void qore_dbg_hold_thread_finish() {
+    // every thread that finishes gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_finish_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::unique_lock<std::mutex> l(dbg_finish_hold->m);
     int ms = dbg_finish_hold->hold_ms;
     if (ms <= 0) {
         return;
     }
     dbg_finish_hold->hold_ms = 0;
+    dbg_finish_hold->armed.store(dbg_finish_hold->tls_hold_ms > 0, std::memory_order_release);
     dbg_finish_hold->held = true;
     dbg_finish_hold->cv.notify_all();
     dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
