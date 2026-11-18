@@ -497,9 +497,13 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
     switch (seq_type) {
         case NT_LIST:   seq_size = seq.get<const QoreListNode>()->size(); break;
         case NT_STRING: {
-            // the elements of a string are its characters, which the range is resolved against
+            // the elements of a string are its characters, which the range is resolved against; a string that is not
+            // valid in its encoding has no character count to resolve it against (qore#6595)
             QoreStringValueHelper str(seq);
-            seq_size = str->length();
+            seq_size = qore_string_private::getCheckedLength(**str, "range operator [m..n]", xsink);
+            if (seq_size < 0) {
+                return false;
+            }
             break;
         }
         case NT_BINARY: seq_size = seq.get<const BinaryNode>()->size(); break;

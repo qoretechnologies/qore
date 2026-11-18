@@ -58,6 +58,7 @@
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/BackgroundLValueRootNode.h"
@@ -3099,7 +3100,7 @@ bool qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode) {
 }
 
 // documented in Variable.h
-QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink* xsink) {
+QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, bool for_delete, ExceptionSink* xsink) {
     int64 original_index = index;
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);
     qore_type_t t = lvh.getType();
@@ -3117,7 +3118,14 @@ QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink
             size = container.get<QoreListNode>()->size();
         } else if (t == NT_STRING) {
             str.emplace(container);
-            size = (*str)->length();
+            // a string that is not valid in its encoding has no character count to resolve the index against
+            // (qore#6595)
+            int64 clen = qore_string_private::getCheckedLength(***str, for_delete ? "<delete operator>"
+                : "<remove operator>", xsink);
+            if (clen < 0) {
+                return QoreValue();
+            }
+            size = static_cast<size_t>(clen);
         } else {
             size = container.get<BinaryNode>()->size();
         }
@@ -4504,7 +4512,14 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 // string, which a string enum lvalue does not hold (qore#6195); the helper reads a short string held
                 // inline and an enum value
                 QoreStringNodeValueHelper str(lvh.getValue());
-                size_t len = str->length();
+                // a string that is not valid in its encoding has no character count to resolve the index against
+                // (qore#6595)
+                int64 clen = qore_string_private::getCheckedLength(**str, for_del ? "<delete operator>"
+                    : "<remove operator>", xsink);
+                if (clen < 0) {
+                    return;
+                }
+                size_t len = static_cast<size_t>(clen);
                 if (negative_offsets && ind < 0) {
                     ind += static_cast<int64>(len);
                 }
@@ -4523,7 +4538,14 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                     return;
                 }
                 QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
-                size_t len = str->length();
+                // a string that is not valid in its encoding has no character count to resolve the indexes against
+                // (qore#6595)
+                int64 clen = qore_string_private::getCheckedLength(*str, for_del ? "<delete operator>"
+                    : "<remove operator>", xsink);
+                if (clen < 0) {
+                    return;
+                }
+                size_t len = static_cast<size_t>(clen);
                 v = new QoreStringNode(str->getEncoding());
                 // keep a set of offsets removed to remove them from the list in reverse order
                 ind_set_t iset;
@@ -4671,7 +4693,14 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
             }
             QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
             SimpleRefHolder<QoreStringNode> v(new QoreStringNode(str->getEncoding()));
-            size_t len = str->length();
+            // a string that is not valid in its encoding has no character count to resolve the indexes against
+            // (qore#6595)
+            int64 clen = qore_string_private::getCheckedLength(*str, for_del ? "<delete operator>"
+                : "<remove operator>", xsink);
+            if (clen < 0) {
+                return;
+            }
+            size_t len = static_cast<size_t>(clen);
 
 
             // keep a set of offsets removed to remove them from the list in reverse order

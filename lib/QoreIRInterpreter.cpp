@@ -19022,7 +19022,8 @@ load_local_done:
                                     // holds the value removed: it is the caller's result for "remove", and for
                                     // "delete" it keeps the value alive until the destructor can be run with the
                                     // lvalue locks released
-                                    res = qore_lvalue_remove_index(lvh, last_step.index, xsink);
+                                    res = qore_lvalue_remove_index(lvh, last_step.index,
+                                        path_inst->unary_op == LVUnaryOp::Delete, xsink);
                                     pending_delete_finish = true;
                                 } else if (last_step.kind == LVPathStepKind::HashKeySlice
                                         && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
