@@ -162,6 +162,10 @@ These properties of the pinned schema are load-bearing:
   and changes only what the fix changes. Taking an upstream update is a deliberate step: move the source to a
   newer revision, re-import with `--drift`, review the diff and the drift report, and run the application's
   tests. Do this periodically, so the application stays aligned with the vendor's API.
+  Where the host has no fixed revision (Mistral's `https://docs.mistral.ai/openapi.yaml`), the downloaded document is
+  vendored beside the import spec, which names it as a local `source` (read relative to the spec, as all of its paths
+  are) and gives the URL it was downloaded from as `source_url`; the provenance records that URL with the digest and
+  size of the vendored document, which only the module's source tree carries.
 
 - **A vendored schema is never edited by hand, and house style does not apply to it.** It is generated
   output: the next import rewrites the file, so an edit is silently temporary and shows up as drift in

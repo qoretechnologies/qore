@@ -608,10 +608,11 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
             // pending_stream_registrations for ref'd queue_obj / notifier_obj
             // QoreObject pointers that live in C++ containers invisible to
             // the normal data/cdmap walk.  See design/dgc.md Pattern B.
-            ReferenceHolder<Http2ClientPollOperationPriv> h2pop(
+            // the reference can be the last one if the object is deleted meanwhile: its release, which runs the
+            // operation's cleanup, is not made in the scan
+            QorePollOpOffThreadRef<Http2ClientPollOperationPriv> h2pop(
                 reinterpret_cast<Http2ClientPollOperationPriv*>(
-                    getScanPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE)),
-                &xsink);
+                    getScanPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE)));
             if (*h2pop && (*h2pop)->scanMembers(*this, rsh)) {
                 return true;
             }

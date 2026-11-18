@@ -5124,8 +5124,10 @@ rest.addSensitiveHeaders("Qorus-Token");
                 h = h.OAuth;
             }
             if (h.token_type.typeCode() != NT_STRING || h.access_token.typeCode() != NT_STRING) {
+                # only the types and keys: the response holds the tokens
                 throw "OAUTH2-ERROR", sprintf("OAuth2 response is invalid, needs both token_type "
-                    "(%y) and access_token (%y): %y", h.token_type, h.access_token, h);
+                    "(type %y) and access_token (type %y); keys in the response: %y", h.token_type.type(),
+                    h.access_token.type(), keys h);
             }
             *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h) : NOTHING;
             setOAuth2LoginInfo(h);
@@ -7130,7 +7132,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                         }
                         on_error {
                             conn.authFailure();
-                            rethrow $1.err, sprintf("%s: url: %y %s %y", $1.desc, conn.real_url,
+                            # the URL is given without its password
+                            rethrow $1.err, sprintf("%s: url: %y %s %y", $1.desc, get_masked_url(conn.real_url),
                                 ping_method, ping_path);
                         }
                         schema_validator.parseResponse(ping_method, ping_path, status_code,

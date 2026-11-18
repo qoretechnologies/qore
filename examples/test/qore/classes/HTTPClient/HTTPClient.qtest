@@ -596,6 +596,16 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         printOption("-P,--proxy=ARG", "the proxy to use for proxy tests", OptionColumn);
     }
 
+    #! asserts the state of an operation that startPollSendRecv() started on a new connection
+    /** The connection manager connects a new connection in its I/O thread, which can complete the connect before the
+        start method looks at the connection: the operation is then sending already instead of connecting (#6478)
+    */
+    private assertNewConnectionStartState(SocketPollOperation spop) {
+        string state = spop.getState();
+        assertTrue(state == "connecting" || state == "sending",
+            sprintf("the state of an operation started on a new connection is %y", state));
+    }
+
     private pollSocketOperation(SocketPollOperation spop, date max_wait = 20s) {
         date start = now();
         while (*hash<SocketPollInfo> info = spop.continuePoll()) {
@@ -889,7 +899,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             hc.disconnect();
             spop = hc.startPollSendRecv("GET", "/");
             assertEq("received", spop.getGoal());
-            assertEq("connecting", spop.getState());
+            assertNewConnectionStartState(spop);
 
             pollSocketOperation(spop, 60s);
             assertEq("received", spop.getState());
@@ -926,7 +936,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             hc.disconnect();
             spop = hc.startPollSendRecv("GET", "/");
             assertEq("received", spop.getGoal());
-            assertEq("connecting", spop.getState());
+            assertNewConnectionStartState(spop);
 
             pollSocketOperation(spop, 60s);
             assertEq("received", spop.getState());
@@ -1111,7 +1121,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
             spop = hc.startPollSendRecv("PUT", "/", msg);
             assertEq("received", spop.getGoal());
-            assertEq("connecting", spop.getState());
+            assertNewConnectionStartState(spop);
             delete hc;
             assertThrows("OBJECT-ALREADY-DELETED", \spop.continuePoll());
         }

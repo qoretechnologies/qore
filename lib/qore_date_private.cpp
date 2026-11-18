@@ -1011,9 +1011,14 @@ static constexpr int64 qore_days_from_civil(int64 y, int64 m, int64 d) {
 // the range of the epoch offset of an absolute date: from the start of year QORE_DATE_MIN_YEAR to the end of year
 // QORE_DATE_MAX_YEAR, one year inside the range of an int on each side, so that the year of a date in the range fits
 // an int in every time zone (qore#6103)
-static constexpr int64 QORE_DATE_MAX_EPOCH = qore_days_from_civil(QORE_DATE_MAX_YEAR, 12, 31) * SECS_PER_DAY
-    + SECS_PER_DAY - 1;
-static constexpr int64 QORE_DATE_MIN_EPOCH = qore_days_from_civil(QORE_DATE_MIN_YEAR, 1, 1) * SECS_PER_DAY;
+static_assert(QORE_DATE_MAX_EPOCH == qore_days_from_civil(QORE_DATE_MAX_YEAR, 12, 31) * SECS_PER_DAY
+    + SECS_PER_DAY - 1, "QORE_DATE_MAX_EPOCH");
+static_assert(QORE_DATE_MIN_EPOCH == qore_days_from_civil(QORE_DATE_MIN_YEAR, 1, 1) * SECS_PER_DAY,
+    "QORE_DATE_MIN_EPOCH");
+static_assert(QORE_DATE_WIDE_MAX_EPOCH == qore_days_from_civil(std::numeric_limits<int>::max(), 12, 31)
+    * SECS_PER_DAY + SECS_PER_DAY - 1, "QORE_DATE_WIDE_MAX_EPOCH");
+static_assert(QORE_DATE_WIDE_MIN_EPOCH == qore_days_from_civil(std::numeric_limits<int>::min(), 1, 1) * SECS_PER_DAY,
+    "QORE_DATE_WIDE_MIN_EPOCH");
 static_assert(qore_days_from_civil(1970, 1, 1) == 0 && qore_days_from_civil(2000, 3, 1) == 11017
     && qore_days_from_civil(1, 1, 1) == -719162, "qore_days_from_civil()");
 

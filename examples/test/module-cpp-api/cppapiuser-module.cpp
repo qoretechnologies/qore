@@ -147,6 +147,8 @@ static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xs
     QoreClass* accessor_probe = initMemberAccessorProbeClass(CppApiTestNs);
     init_member_accessor_probe_members(*accessor_probe);
     CppApiTestNs.addSystemClass(accessor_probe);
+    // members added to the committed class during the module's initialization, as module-jni does (#6272, #6422)
+    add_member_accessor_probe_init_late_members(*accessor_probe);
     QoreClass* inherited_probe = new QoreClass("MemberWriteDerivedProbe", "Qore::CppApiTest");
     inherited_probe->addBuiltinBaseClass(write_probe);
     CppApiTestNs.addSystemClass(inherited_probe);

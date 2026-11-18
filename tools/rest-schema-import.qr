@@ -136,8 +136,12 @@ class RestSchemaImport {
                     printf("%s: would update the %s record in %s\n", res[i].name, prov[i]."const",
                         prov[i].file);
                 } else {
-                    RestSchemaImporter::updateProvenanceFile(prov[i].file,
-                        RestSchemaImporter::getProvenance(res[i]), prov[i]."const");
+                    hash<RestSchemaImportResultInfo> r = res[i];
+                    if (prov[i].source) {
+                        r.source = prov[i].source;
+                    }
+                    RestSchemaImporter::updateProvenanceFile(prov[i].file, RestSchemaImporter::getProvenance(r),
+                        prov[i]."const");
                     printf("%s: updated the %s record in %s\n", res[i].name, prov[i]."const", prov[i].file);
                 }
             }
@@ -213,9 +217,17 @@ class RestSchemaImport {
             if (!d.source.val() || !d.output.val()) {
                 error("every document in %y needs \"source\" and \"output\"", path);
             }
+            if (exists d.source_url && (d.source_url.typeCode() != NT_STRING
+                    || d.source_url !~ /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//)) {
+                error("\"source_url\" in %y must be the URL the source document was downloaded from; got %y", path,
+                    d.source_url);
+            }
+            # a local source document is read relative to the spec, as the other paths are; the provenance
+            # records the upstream URL that a vendored source was downloaded from (source_url), or else the source
+            # as the spec names it, so that the record does not depend on where the import was run
             docs += <RestSchemaImportInfo>{
                 "name": d.name ?? basename(d.output),
-                "source": d.source,
+                "source": resolvePath(dir, d.source),
                 "output": resolvePath(dir, d.output),
                 "operations": getOperations(d.ops.val() ? resolvePath(dir, d.ops) : NOTHING, d.op,
                     d.manifest),
@@ -224,7 +236,8 @@ class RestSchemaImport {
                 "json": d.json,
             };
             prov += d.provenance.val()
-                ? {"file": resolvePath(dir, d.provenance), "const": d."const" ?? "Provenance"}
+                ? {"file": resolvePath(dir, d.provenance), "const": d."const" ?? "Provenance",
+                    "source": d.source_url ?? d.source}
                 : NOTHING;
         }
         return (docs, prov);
@@ -368,7 +381,10 @@ class RestSchemaImport {
 "Imports a vendor REST schema, prunes it to the operations an application exports, writes the\n"
 "pruned document, and optionally updates the application's provenance record and reports drift.\n\n"
 "The document:\n"
-"  -s,--spec FILE       import every document described by a YAML or JSON spec file\n"
+"  -s,--spec FILE       import every document described by a YAML or JSON spec file; its\n"
+"                       paths, including a local \"source\", are relative to the spec, and\n"
+"                       \"source_url\" names the URL a vendored local source came from, which\n"
+"                       the provenance records\n"
 "  --source URL|FILE    the upstream document to import\n"
 "  -o,--output FILE     where to write the pruned document\n"
 "  -n,--name NAME       a label for the document, used in messages\n"
