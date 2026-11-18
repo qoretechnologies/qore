@@ -939,7 +939,7 @@ int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern,
     };
     // a string is text in its encoding: one that is not valid in it raises INVALID-ENCODING, as every regular
     // expression match does (qore#6554)
-    std::shared_ptr<pcre2_code> re = compile(PCRE2_UTF);
+    std::shared_ptr<pcre2_code> re = compile(PCRE2_UTF | PCRE2_NEVER_BACKSLASH_C);
     if (!re) {
         return -1;
     }
