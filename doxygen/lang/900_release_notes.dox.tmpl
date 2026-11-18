@@ -106,6 +106,10 @@
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
     \c on_error statement) is a parse error, as its scope was unclear; put it in braces (see
     @ref on_block_exit_in_block "on_exit statements"; issue #240).
+    @par Database Connections Are Checked Against the Sandbox
+    A database connection chosen by code whose sandbox restricts network or filesystem access is checked against that
+    sandbox before the DBI driver connects, and a driver that cannot report the destinations of its connections is
+    refused for it with \c NETWORK-ACCESS-DENIED (see @ref sandbox_dbi_connections; issue #5747).
 
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
