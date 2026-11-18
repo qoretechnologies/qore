@@ -1852,13 +1852,6 @@ static uint16_t read_u16_le(const uint8_t* p) {
         | (static_cast<uint16_t>(p[1]) << 8);
 }
 
-static uint32_t read_u32_le(const uint8_t* p) {
-    return static_cast<uint32_t>(p[0])
-        | (static_cast<uint32_t>(p[1]) << 8)
-        | (static_cast<uint32_t>(p[2]) << 16)
-        | (static_cast<uint32_t>(p[3]) << 24);
-}
-
 //! Returns the length of the encoded AOT metadata at \a data, with its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
 static bool find_aot_metadata_length(const uint8_t* data, size_t avail, size_t& len) {
     // the length of the encoded metadata, without its checksum (libqore, which the reader uses as well)

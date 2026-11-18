@@ -1,0 +1,8 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# starts an operation whose step result is held, so that the module cleanup cancels it while its step is in flight
+# (qore#6510); needs a debug build of the library
+
+%requires CleanupCancelStep
+
+printf("held: %y\n", Holder::start());

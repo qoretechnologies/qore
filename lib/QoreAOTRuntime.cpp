@@ -15933,7 +15933,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
             "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
-            &info);
+            info);
     }
     if (xsink) {
         xsink.handleExceptions();
@@ -15942,7 +15942,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
 
 // Phase 4 slice 10d: script-context register path.  Called by the
 // glue object that qcc emits for `qcc -o binary *.qo` (slice 10d).
-// Differs from qore_aot_register_into_program / qore_aot_module_init_v3:
+// Differs from qore_aot_register_into_program_v2() / qore_aot_module_init_v3:
 //
 //   * NO shadow module program created.  Metadata is deserialized
 //     straight into the caller's @p tpgm via

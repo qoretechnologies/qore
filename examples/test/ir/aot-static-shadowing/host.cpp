@@ -8,7 +8,7 @@
     statically linked into it, or loads the .qmod files of the same modules by path, and the host reports what
     happened.
 
-    usage: host <static|file> <scenario> <qmod dir> <library module dir>
+    usage: host <static|file> <scenario> <qmod dir>
 
     Each step prints "<step>: loaded", "<step>: refused" or "<step>: value=<v>"; exceptions are printed to stderr.
 
@@ -44,15 +44,12 @@ extern "C" void qore_ShadowLib_register(QoreProgram*);
 extern "C" void qore_TenantMod_register(QoreProgram*);
 extern "C" void qore_ProbeMod_register(QoreProgram*);
 extern "C" void qore_LiftMod_register(QoreProgram*);
-extern "C" void ProbeMod_qore_module_desc(QoreModuleInfo&);
 
 namespace {
 //! true to register the statically linked modules, false to load their .qmod files
 bool use_static = false;
 //! the directory of the .qmod files
 std::string qmod_dir;
-//! the directory of the library modules (in the module path)
-std::string lib_dir;
 //! the Program that reg() registers into when its second argument is true
 QoreProgram* other_target = nullptr;
 //! the Program that the library module's initialization registers LiftMod into (see liftlib-module.cpp)
@@ -108,21 +105,7 @@ QoreValue f_reg(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsin
     return register_module(name, args->retrieveEntry(1).getAsBool() ? other_target : getProgram());
 }
 
-//! api_reg(): registers ProbeMod with ModuleManager::registerAOTStaticModule() into the calling Program
-/** with a path label in the directory of the library modules; returns true if the Program has the module then
-*/
-QoreValue f_api_reg(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) {
-    QoreProgram* pgm = getProgram();
-    assert(pgm);
-    ExceptionSink lsink;
-    std::string path = lib_dir + "/ProbeMod.qmod";
-    ModuleManager::registerAOTStaticModule(&lsink, pgm, ProbeMod_qore_module_desc, path.c_str());
-    lsink.handleExceptions();
-    return has_feature(pgm, "ProbeMod");
-}
-
 const char* Code = "bool sub load(string n, bool other) { return reg(n, other); }\n"
-    "bool sub api_load() { return api_reg(); }\n"
     "nothing sub lift() { load_module(\"LiftLib\"); }\n"
     "string sub use(string n) { return call_function(n + \"::value\"); }\n";
 
@@ -145,7 +128,6 @@ QoreProgram* make_program(const QoreParseOptions& po, QoreSandboxManager* sm = n
     // each parameter is given by its type, its default value and its name
     pgm->getRootNS()->addBuiltinVariant("reg", f_reg, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 2, stringTypeInfo,
         QORE_PARAM_NO_ARG, "name", boolTypeInfo, QORE_PARAM_NO_ARG, "other");
-    pgm->getRootNS()->addBuiltinVariant("api_reg", f_api_reg, QCF_NO_FLAGS, QDOM_DEFAULT, boolTypeInfo, 0);
     ExceptionSink xsink;
     pgm->parse((prefix + Code).c_str(), "host", &xsink);
     if (xsink) {
@@ -178,16 +160,6 @@ QoreValue call(QoreProgram* pgm, const char* func, const char* name, ExceptionSi
 bool load(const char* step, const char* name, QoreProgram* pgm, bool other = false) {
     ExceptionSink xsink;
     ValueHolder v(call(pgm, "load", name, xsink, other), &xsink);
-    const bool ok = !xsink && v->getAsBool();
-    xsink.handleExceptions();
-    report(step, ok ? "loaded" : "refused");
-    return ok;
-}
-
-//! the code of the Program registers ProbeMod with the C++ API
-bool api_load(const char* step, QoreProgram* pgm) {
-    ExceptionSink xsink;
-    ValueHolder v(call(pgm, "api_load", nullptr, xsink), &xsink);
     const bool ok = !xsink && v->getAsBool();
     xsink.handleExceptions();
     report(step, ok ? "loaded" : "refused");
@@ -257,14 +229,13 @@ extern "C" __attribute__((visibility("default"))) void aot_static_shadowing_lift
 }
 
 int main(int argc, char** argv) {
-    if (argc != 5) {
-        fprintf(stderr, "usage: %s <static|file> <scenario> <qmod dir> <library module dir>\n", argv[0]);
+    if (argc != 4) {
+        fprintf(stderr, "usage: %s <static|file> <scenario> <qmod dir>\n", argv[0]);
         return 2;
     }
     use_static = !strcmp(argv[1], "static");
     const std::string scenario = argv[2];
     qmod_dir = argv[3];
-    lib_dir = argv[4];
     qore_init(QL_GPL, "UTF-8", true);
     int rc = 0;
     {
@@ -359,9 +330,10 @@ int main(int argc, char** argv) {
                 use("use", "TenantMod", restricted);
             }
             require("other-require", "TenantMod");
-        } else if (scenario == "api-path-sandboxed") {
-            // registered with the C++ API with a path label in the module path: not library code
-            if (api_load("register", sb1)) {
+        } else if (scenario == "probe-sandboxed") {
+            // registered by sandboxed code with its register function: the module is not library code, its static
+            // initializers and its init closure run under the sandbox of that code, and the module is chosen by it
+            if (load("register", "ProbeMod", sb1)) {
                 use("use", "ProbeMod", sb1);
             }
             load("other-sandbox-register", "ProbeMod", sb2);

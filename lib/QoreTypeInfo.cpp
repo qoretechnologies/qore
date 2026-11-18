@@ -715,6 +715,20 @@ void init_qore_types() {
 
 //! derived types removed from the caches because a type they refer to was destroyed; deleted at library cleanup
 static std::vector<QoreTypeInfo*> retired_derived_types;
+//! the retirement epoch of each element of retired_derived_types (see qore_type_retire_epoch), guarded by ctl
+static std::vector<uint64_t> retired_derived_type_epochs;
+
+std::atomic<uint64_t> qore_type_retire_epoch{1};
+
+//! Adds a retired item and its epoch; an exception (from an allocation) leaves both vectors as they were
+template <typename T>
+static void push_retired(std::vector<T*>& items, std::vector<uint64_t>& epochs, T* item, uint64_t epoch) {
+    if (epochs.size() == epochs.capacity()) {
+        epochs.reserve(epochs.empty() ? 16 : epochs.size() * 2);
+    }
+    items.push_back(item);
+    epochs.push_back(epoch);
+}
 
 namespace {
 //! The registry of the generic caches by the types that their keys name (issue #5765)
@@ -915,11 +929,16 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
     //
     // There is deliberately no qore_check_cancel() in these loops: this runs in the destructor of the type's
     // owner, and stopping part way would leave entries keyed by an address about to be freed
+    // the epoch of the derived types retired here: the first one retired increments it (see qore_type_retire_epoch)
+    uint64_t epoch = 0;
     bool removed;
     do {
         removed = false;
         auto retire = [&](QoreTypeInfo* ti) {
-            retired_derived_types.push_back(ti);
+            if (!epoch) {
+                epoch = qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1;
+            }
+            push_retired(retired_derived_types, retired_derived_type_epochs, ti, epoch);
             dead.insert(ti);
             removed = true;
         };
@@ -995,6 +1014,8 @@ static void qore_purge_derived_types_intern(const void* owner, std::set<const Qo
 //! The class, hashdecl and enum declarations retired and not freed yet (issue #5790; see QoreTypeOwner), guarded by
 //! ctl
 static std::vector<QoreTypeOwner*> retired_type_owners;
+//! the retirement epoch of each element of retired_type_owners (see qore_type_retire_epoch), guarded by ctl
+static std::vector<uint64_t> retired_type_owner_epochs;
 //! true once library cleanup frees the retired declarations: no declaration is retired anymore
 /** Read without the lock first: a Program held at static scope can be deleted by a static destructor after library
     cleanup, when the containers above can already have been destroyed
@@ -1377,7 +1398,8 @@ bool qore_type_owner_released(QoreTypeOwner* owner) {
         owner->type_owner_retired = true;
         // no other thread frees it while it is retired without the lock
         owner->type_owner_retiring = true;
-        retired_type_owners.push_back(owner);
+        push_retired(retired_type_owners, retired_type_owner_epochs, owner,
+            qore_type_retire_epoch.fetch_add(1, std::memory_order_seq_cst) + 1);
         // a retired declaration that keeps its members keeps what they name until library cleanup, without
         // references, which would keep them whole: they are retired when they are released; marked now, while the
         // lock decides them
@@ -1603,6 +1625,36 @@ size_t qore_retired_type_owner_count() {
     return retired_type_owners.size();
 }
 
+void qore_type_retirement_info(QoreTypeRetirementInfo& info) {
+    info = QoreTypeRetirementInfo();
+    std::vector<uint64_t> owner_epochs, derived_epochs;
+    {
+        AutoLocker al(ctl);
+        owner_epochs = retired_type_owner_epochs;
+        derived_epochs = retired_derived_type_epochs;
+    }
+    // the threads are scanned after the items are read: a thread that entered Qore code since then published an epoch
+    // after theirs, which cannot read them (see qore_type_retire_epoch)
+    info.min_active_epoch = qore_type_retirement_scan(0, nullptr);
+    info.epoch = qore_type_retire_epoch.load(std::memory_order_seq_cst);
+    auto count = [&info](const std::vector<uint64_t>& epochs, size_t& pending, size_t& freeable) {
+        pending = epochs.size();
+        for (uint64_t e : epochs) {
+            if (!info.oldest_pending_epoch || e < info.oldest_pending_epoch) {
+                info.oldest_pending_epoch = e;
+            }
+            if (e > info.newest_pending_epoch) {
+                info.newest_pending_epoch = e;
+            }
+            if (!info.min_active_epoch || info.min_active_epoch >= e) {
+                ++freeable;
+            }
+        }
+    };
+    count(owner_epochs, info.pending_declarations, info.freeable_declarations);
+    count(derived_epochs, info.pending_derived_types, info.freeable_derived_types);
+}
+
 size_t qore_type_owner_group_count() {
     AutoLocker al(ctl);
     return type_owner_groups.size();
@@ -1754,6 +1806,7 @@ void delete_qore_types() {
             AutoLocker al(ctl);
             type_owner_cleanup.store(true, std::memory_order_release);
             owners.swap(retired_type_owners);
+            retired_type_owner_epochs.clear();
             // the groups not collected yet are dissolved, and the holds of their members released below
             for (QoreTypeOwnerGroup* g : type_owner_groups) {
                 for (QoreTypeOwner* m : g->members) {
@@ -1867,6 +1920,7 @@ void delete_qore_types() {
     for (QoreTypeInfo* i : retired_derived_types)
         delete i;
     retired_derived_types.clear();
+    retired_derived_type_epochs.clear();
 }
 
 void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {

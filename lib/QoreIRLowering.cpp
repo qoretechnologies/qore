@@ -2154,9 +2154,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // releases it on the way to the target of the statement (#5992).
         // The block is made in the temp scope of the expression, so that the replaced value is released before
         // the temporaries of the expression, as in the AST interpreter, where they are released with the
-        // statement's
+        // statement's.
+        // The scope's mark is fused with the mark of the statement's scope, which the statement lowering emits just
+        // before (a PushTempMarkPair): the IR interpreter then dispatches one instruction for the two (qore#6444)
         if (ret_temp_scope) {
-            builder.createPushTempMark(nullptr);
+            builder.createNestedPushTempMark(nullptr);
         }
         QoreIRBasicBlock* replaced_release_block = replacesPendingReturn() ? createBlock("return.replaced.release")
             : nullptr;

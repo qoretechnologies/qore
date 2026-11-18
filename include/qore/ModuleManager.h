@@ -57,8 +57,9 @@
     @since %Qore 3.0: 2.2, which adds the source-compatible callback invocation slots for lexical semantics in
     ResolvedCallReferenceNode; modules built with the 2.1 headers are refused
     @since %Qore 3.0: 2.3, which adds QoreModuleInfo::cmd_caller_aware, QoreModuleCommandRestrictions and
-    QoreModuleCommandContext (a module command handler judges the code that issues a command); modules built with the
-    2.2 headers are refused
+    QoreModuleCommandContext (a module command handler judges the code that issues a command), and has no
+    ModuleManager::registerAOTStaticModule(): a statically linked AOT module registers with the register function that
+    qcc emits for it, with its metadata record; modules built with the 2.2 headers are refused
 */
 #define QORE_MODULE_API_MINOR 3
 
@@ -482,43 +483,6 @@ public:
     */
     DLLEXPORT static int runTimeLoadModule(ExceptionSink* xsink, const char* name, QoreProgram* pgm = nullptr,
         qore_binary_module_desc_t mod_desc_func = nullptr);
-
-    //! Register a statically-linked AOT-compiled module into a target program without dlopen
-    /** Intended for AOT <tt>.qo</tt> object files that have been linked directly into the host
-        image. The caller provides a pointer to the module's descriptor function (emitted
-        by qcc as <tt>&lt;name&gt;_qore_module_desc</tt>); the descriptor is invoked, validated and
-        routed through the standard module registration path, skipping the filesystem
-        search and dlopen that the normal loader uses.
-
-        A statically registered module is never library code, whatever \a path is given: a path in a directory of
-        the process-wide module path does not make it trusted, as its code is linked into the program, not loaded
-        from that directory.  It is checked as a load of the same module by path from outside the module path, for
-        the code that calls the registration:
-        - that is the %Qore code running in the calling thread, also when it registers the module into another
-          Program (for example through a native function that it calls); a native host that calls this function
-          with no %Qore code running is trusted, unless \a tpgm has a sandbox manager (see
-          QoreProgram::setSandboxManager()), whose code is then the caller; parse options that restrict a functional
-          domain in \a tpgm do not make such a call untrusted, as for a load by path;
-        - when that code is not trusted (code that a sandbox governs, or whose parse options restrict a functional
-          domain), the module cannot have the name of a module in the process-wide module path
-          (\c LOAD-MODULE-ERROR), and with a name of its own it is recorded as chosen by that code: it is used only
-          by code with the same sandbox (or, with no sandbox, by the code of the same Program), and a later
-          registration or load of that name by other code is refused;
-        - when a module of that name is already loaded, it is attached to \a tpgm instead, as for a load of a feature
-          that is already loaded: a library module that is already loaded is attached also for code that is not
-          trusted, and a module that such code chose is refused to other code;
-        - registered while a library module that such code loaded is initialized, the module is governed by the
-          sandbox of that code, as a module loaded then by path.
-
-        @param xsink if any errors occur, a Qore-language "LOAD-MODULE-ERROR" exception is raised here
-        @param tpgm the target QoreProgram to register the module into; must be non-null
-        @param desc_fn the module descriptor function pointer
-        @param path a label used for diagnostics; defaults to "<aot-static>"; it never makes the module library code
-        @return 0 on success, -1 if an exception was raised
-        @since %Qore 3.0
-    */
-    DLLEXPORT static int registerAOTStaticModule(ExceptionSink* xsink, QoreProgram* tpgm,
-        qore_binary_module_desc_t desc_fn, const char* path = "<aot-static>");
 
     //! loads the named module at parse time (or before run time, even if parsing is not active), returns a non-0 QoreStringNode pointer if an error occured, caller owns the QoreStringNode pointer's reference count returned if non-0
     /** if the feature is already loaded, then the function returns immediately without raising an error
