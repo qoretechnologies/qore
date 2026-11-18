@@ -156,6 +156,11 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - no text given to a select is written into its SQL where it could change the query: a
+      @ref select_option_comment "comment" or @ref select_option_hint "hint" that could end its SQL comment raises
+      \c OPTION-ERROR, a string given with @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is
+      bound (a number is a numeric literal), and an alias referenced in a superquery or a window is given as an
+      identifier (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
       an existing constraint name is raised without also printing its message, and a debug print of update operators was
       removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -949,6 +954,8 @@ table.selectRows({"comment": "foo bar"});
 select /* foo bar *<!--%%-->/ ...
     @endcode
     @warning Oracle: using different comments in the same SQL can lead to new optimizer statement hard parsing.
+    @note The comment is written into an SQL comment, so a comment that contains \c "/<!--%%-->*" or
+    \c "*<!--%%-->/" or a NUL character raises an \c OPTION-ERROR exception
 
     @subsubsection select_option_hint Select Option "hint"
     In database query operations, various SQL implementations use hints as additions to the SQL standard that instruct the database engine on how to execute the query. For example, a hint may tell the engine to use as little memory as possible (even if the query will run slowly), or to use or not to use an index (even if the query optimizer would decide otherwise).
@@ -961,7 +968,9 @@ table.selectRows(("hint": "full(t1)"));
     @code{.py}
 select /*+ full(a) *<!--%%-->/ ...
     @endcode
-    The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.
+    The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.; as it is
+    written into an SQL comment, a hint that contains \c "/<!--%%-->*" or \c "*<!--%%-->/" or a NUL character raises
+    an \c OPTION-ERROR exception
     @note Hints are platform dependent. Curently only Oracle and some versions of PostgreSQL hints are supported in Sqlutil module.
     @warning Use hints only when you know what you are doing.
 
@@ -6331,6 +6340,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                         }
                         # a column is an identifier in SQL
                         partitionby = info.table.getColumnSqlName(partitionby);
+                    } else {
+                        # an alias is an identifier in SQL, as the select list gives it, never its text (qore#6574)
+                        partitionby = info.table.getAliasSqlName(partitionby);
                     }
                     sql += sprintf("partition by %s", partitionby);
                 }
@@ -6344,6 +6356,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                                 "accessible column", orderby);
                         }
                         orderby = info.table.getColumnSqlName(orderby);
+                    } else {
+                        # an alias is an identifier in SQL (qore#6574)
+                        orderby = info.table.getAliasSqlName(orderby);
                     }
                     sql += sprintf(" order by %s", orderby);
                 }

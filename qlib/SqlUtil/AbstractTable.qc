@@ -5947,6 +5947,20 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
+    #! Returns the text of a comment or hint of a select, which is written into an SQL comment (qore#6574)
+    /** The text cannot end the comment (\c "*" followed by \c "/") or open another one (\c "/" followed by \c "*",
+        as comments nest in some databases), so a text with either is refused, as is a text with a NUL character
+
+        @throw OPTION-ERROR the text has a character sequence that is not allowed in a comment
+    */
+    private static string checkCommentText(string option, string text) {
+        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0) {
+            throw "OPTION-ERROR", sprintf("the %y select option cannot contain the character sequences \"/*\" or "
+                "\"*/\" or a NUL character, as it is written into an SQL comment", option);
+        }
+        return text;
+    }
+
     private string getSelectSqlStringIntern(*hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
         if (!columns) {
             l.lock();
@@ -6371,10 +6385,10 @@ string sql = table.getSelectSql(sh, \args);
         if (info.query_hash.comment || info.query_hash.hint) {
             string comment;
             if (info.query_hash.comment) {
-                comment = sprintf("/* %s */ ", replace(info.query_hash.comment, "*/", ""));
+                comment = sprintf("/* %s */ ", AbstractTable::checkCommentText("comment", info.query_hash.comment));
             }
             if (info.query_hash.hint) {
-                comment += sprintf("/*+ %s */ ", replace(info.query_hash.hint, "*/", ""));
+                comment += sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
             }
             # splice comment / hint test right before the " from " text in the query
             int i = sql.find(" from ");
@@ -7277,9 +7291,21 @@ string sql = table.getSelectSql(sh, \args);
             arg = getSqlValue(arg);
         } else if (cmd.argcolumn) {
             if (!cmd.argoptional || arg) {
-                # issue #2555: allow the use of literal with other column operators
+                # issue #2555: allow the use of literal with other column operators; a number is written as a numeric
+                # literal, and any other value is bound, so that no text of the value is written into the SQL
+                # (qore#6574)
                 if (arg.cop == COP_VALUE) {
-                    arg = arg.arg.toString();
+                    switch (arg.arg.typeCode()) {
+                        case NT_INT:
+                        case NT_FLOAT:
+                        case NT_NUMBER:
+                            arg = arg.arg.toString();
+                            break;
+                        default:
+                            info.args += arg.arg;
+                            arg = "%v";
+                            break;
+                    }
                 } else {
                     if (arg.typeCode() != NT_STRING) {
                         throw "SELECT-ERROR", sprintf("%s: expecting a string column designation for column "
@@ -7379,6 +7405,10 @@ string sql = table.getSelectSql(sh, \args);
                 if (column_name =~ /^distinct\s+/i) {
                     return regex_subst(column_name, "^distinct\\s+", "", RE_Caseless);
                 }
+            } else if (!getPseudoColumnHash(){column_name}) {
+                # a reference to an alias is the alias as an SQL identifier, as the select list gives it, never its
+                # text (qore#6574); a pseudocolumn of the database (ex: rownum) is given as the driver names it
+                column_name = getAliasSqlName(column_name);
             }
             # issue #4214: use table prefixes in a join for pseudocolumns
             return use_prefix ? sprintf("%s.%s", getSqlName(), column_name) : column_name;

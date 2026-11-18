@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires DataProvider
+%prepend-module-path "${SCRIPT_DIR}"
+%requires ./PgsqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires OracleSqlUtilBase
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class SqlUtilQueryInjectionTest
+
+#! text given to a select is never written into the SQL where it can change the query (qore#6574)
+/** - a cop_value() argument of an arithmetic column operator: a number is written as a numeric literal, any other
+      value is bound; before, a string was written into the SQL as it was
+    - the comment and hint select options: a text that would end the SQL comment is refused; before, "*" "/" was
+      removed once, which "**" "//" survived
+    - a reference to a column alias in a superquery or in the over() expression: the alias is given as an SQL
+      identifier; before, its text was written into the SQL
+*/
+class SqlUtilQueryInjectionTest inherits QUnit::Test {
+    public {
+        # a value that ended the expression and added a select of another table
+        const Injection = "0 from cva_t union select pw from cva_secret --";
+    }
+
+    constructor() : Test("SqlUtil query injection", "1.0", \ARGV) {
+        addTestCase("SQLite", \sqlite());
+        addTestCase("PostgreSQL", \pgsql());
+        addTestCase("Oracle", \oracle());
+        set_return_value(main());
+    }
+
+    sqlite() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        ds.exec("create table cva_t (id integer)");
+        ds.exec("insert into cva_t values (1)");
+        ds.exec("create table cva_secret (pw varchar(20))");
+        ds.exec("insert into cva_secret values ('hunter2')");
+        ds.commit();
+        Table t(ds, "cva_t");
+        check(t, "sqlite");
+        checkCommentAlias(t, "sqlite");
+    }
+
+    pgsql() {
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr.val()) {
+            testSkip("no PostgreSQL connection (QORE_DB_CONNSTR_PGSQL)");
+        }
+        PgsqlRunSchema::setup(connstr, "CopValueArithmetic");
+        on_exit PgsqlRunSchema::teardown();
+        # the tables are made in the run's own schema
+        Datasource ds(connstr);
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table if exists cva_t");
+            ds.exec("drop table if exists cva_secret");
+            ds.commit();
+        }
+        ds.exec("create table cva_t (id integer)");
+        ds.exec("insert into cva_t values (1)");
+        ds.exec("create table cva_secret (pw varchar(20))");
+        ds.exec("insert into cva_secret values ('hunter2')");
+        ds.commit();
+        Table t(ds, "cva_t");
+        check(t, "pgsql");
+        checkCommentAlias(t, "pgsql");
+    }
+
+    oracle() {
+        *string connstr = OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "SqlUtilQueryInjection");
+        if (!connstr) {
+            testSkip("no Oracle connection (QORE_DB_CONNSTR_ORACLE)");
+        }
+        on_exit OracleRunSchema::teardown();
+        Datasource ds;
+        try {
+            ds = new Datasource(connstr);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+            testSkip("the oracle module is not available");
+        }
+        on_exit {
+            ds.rollback();
+            ds.exec("drop table if exists cva_t");
+            ds.exec("drop table if exists cva_secret");
+            ds.commit();
+        }
+        ds.exec("create table cva_t (id integer, name varchar(20))");
+        ds.exec("insert into cva_t values (1, 'a')");
+        ds.exec("create table cva_secret (pw varchar(20))");
+        ds.exec("insert into cva_secret values ('hunter2')");
+        ds.commit();
+        Table t(ds, "cva_t");
+        check(t, "oracle");
+        checkCommentAlias(t, "oracle");
+
+        # the in() expression binds a string as a value; it was written into the SQL as a column name
+        hash<DataProviderExpression> in_exp = <DataProviderExpression>{
+            "exp": OP_IN,
+            "args": ("1=1 or name", ("zzz",)),
+        };
+        list<auto> args;
+        string sql = t.getSelectSql({"columns": "id", "where": in_exp}, \args);
+        assertEq(-1, sql.find("1=1"), sql);
+        assertEq("1=1 or name", args[0]);
+        # the condition was true for every row
+        assertEq((), t.selectRows({"columns": "id", "where": in_exp}));
+    }
+
+    private check(Table t, string db) {
+        # numbers are numeric literals
+        list<auto> args;
+        string sql = t.getSelectSql({"columns": (cop_as(cop_plus("id", cop_value(2)), "x"),)}, \args);
+        assertRegex("id \\+ 2", sql, db);
+        assertEq((), args, db);
+        assertEq(3, t.selectRow({"columns": (cop_as(cop_plus("id", cop_value(2)), "x"),)}).x, db);
+        assertEq(2.5, t.selectRow({"columns": (cop_as(cop_multiply("id", cop_value(2.5)), "x"),)}).x.toFloat(), db);
+        assertEq(-1, t.selectRow({"columns": (cop_as(cop_minus("id", cop_value(2n)), "x"),)}).x.toInt(), db);
+
+        # any other value is bound: its text is not in the SQL
+        foreach code op in (\cop_plus(), \cop_minus(), \cop_multiply(), \cop_divide()) {
+            args = ();
+            sql = t.getSelectSql({"columns": (cop_as(op("id", cop_value(Injection)), "x"),)}, \args);
+            assertFalse(sql =~ /union|cva_secret/, db + ": " + sql);
+            assertEq((Injection,), args, db);
+        }
+        # the injection returned the rows of the other table
+        list<hash<auto>> rows;
+        try {
+            rows = t.selectRows({"columns": (cop_as(cop_plus("id", cop_value(Injection)), "x"),)});
+        } catch (hash<ExceptionInfo> ex) {
+            # PostgreSQL and Oracle refuse the text as a number
+            assertTrue(db == "pgsql" || db == "oracle", sprintf("%s: %s: %s", db, ex.err, ex.desc));
+        }
+        assertEq(0, (select rows, $1.x == "hunter2").size(), db);
+        assertTrue(rows.size() <= 1, db);
+    }
+
+    private checkCommentAlias(Table t, string db) {
+        # the comment and hint select options cannot end the SQL comment
+        foreach string opt in ("comment", "hint") {
+            foreach string text in ("x **//, (select pw from cva_secret) as leak /*", "x */ y", "x /* y", "x\0y") {
+                assertThrows("OPTION-ERROR", "cannot contain", sub () {
+                    *list<hash<auto>> l = t.selectRows({"columns": "id", opt: text});
+                }, NOTHING, db + ": " + opt);
+            }
+            # a text without them is written as before
+            list<auto> args;
+            assertRegex("/\\*\\+? a b \\*/", t.getSelectSql({"columns": "id", opt: "a b"}, \args), db);
+        }
+
+        # a superquery reference to an alias is the alias as an identifier
+        string a = "* from cva_secret --";
+        list<hash<auto>> rows = t.selectRows({"columns": (cop_as("id", a),), "superquery": {"columns": (a,)}});
+        assertEq(1, rows.size(), db);
+        assertEq(1, rows[0].firstValue().toInt(), db);
+
+        # an alias given to the over() expression is the alias as an identifier
+        string b = "1) as z, current_user as v, max(id) over (partition by 1";
+        list<auto> args;
+        string sql = t.getSelectSql({"columns": (cop_as("id", b), <DataProviderExpression>{
+            "exp": COP_OVER,
+            "args": (<DataProviderFieldReference>{"field": "id"}, b),
+        })}, \args);
+        # the alias is in the SQL only as a delimited identifier: in the select list and in the window
+        assertRegex("over \\(partition by \"", sql, db);
+        string rest = replace(sql, "\"" + b + "\"", "");
+        assertEq(-1, rest.find("current_user"), db + ": " + sql);
+    }
+}

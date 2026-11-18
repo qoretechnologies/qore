@@ -392,6 +392,9 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - a string given as the first argument of the \c in data provider expression is a bound value, as with the other
+      databases; it was written into the SQL as a column name
+      (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
     - fixed a column declared with \c "default null", which was described with the default value \c null, so
       table alignment set it again every time
       (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
@@ -3360,15 +3363,9 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     # make a copy of "info" before modifying
                     hash<QueryInfo> info0 = info;
 
-                    # add column argument first
-                    string exp0;
-                    if (val.typeCode() == NT_STRING) {
-                        # assume column name
-                        exp0 = val;
-                    } else {
-                        exp0 = info.table.getExpressionArg(\info, role, val,
-                            AbstractDataProviderTypeMap."any");
-                    }
+                    # add column argument first: a column is given as a field reference; a string is a value, which is
+                    # bound, as in the default expression map, and never written into the SQL (qore#6574)
+                    string exp0 = info.table.getExpressionArg(\info, role, val, AbstractDataProviderTypeMap."any");
 
                     *string sql = OracleTable::getInSql(\info, exp0, args[1] ?? (), "ORACLE-IN-OPERATOR-ERROR");
                     if (sql) {
