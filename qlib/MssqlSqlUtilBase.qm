@@ -543,6 +543,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
     }
 
     #! creates the object from the arguments
+    /** @note the method and the options are written into the DDL as they are given here; the indexes of a table
+        description are checked by MssqlTable::checkIndexOptions() (qore#6577)
+    */
     constructor(string n_name, bool n_unique, hash n_cols, *string n_filegroup,
             *string n_method, *hash<auto> n_with)
             : AbstractIndex(n_name, n_unique, n_cols) {
@@ -567,7 +570,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
             list<string> parts = ();
             HashIterator wi(with_options);
             while (wi.next()) {
-                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+                # checked by MssqlTable::checkIndexOptions() (qore#6577); a boolean is ON or OFF
+                auto v = wi.getValue();
+                parts += sprintf("%s = %s", wi.getKey(), v.typeCode() == NT_BOOLEAN ? (v ? "ON" : "OFF") : v);
             }
             sql += sprintf(" with (%s)", parts.join(", "));
         }
@@ -3681,11 +3686,57 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         return new MssqlPrimaryKey(cname, ch, opt.index_filegroup);
     }
 
+    #! the index methods (the words before \c "index" in \c "create index")
+    const MssqlIndexMethods = {
+        "clustered": True,
+        "nonclustered": True,
+        "columnstore": True,
+        "clustered columnstore": True,
+        "nonclustered columnstore": True,
+    };
+
+    #! Checks the index options that are written into the DDL (qore#6577)
+    /** Called for each index of a table description
+
+        @param iname the name of the index
+        @param opt the index options
+
+        @throw INDEX-OPTION-ERROR the method is not an index method, an option name is not a name, or an option
+        value is not a number, a boolean, a keyword or a number of minutes
+    */
+    static checkIndexOptions(string iname, *hash<auto> opt) {
+        if (exists opt.method && (opt.method.typeCode() != NT_STRING || !MssqlIndexMethods{opt.method.lwr()})) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: %y is not an index method; expecting one of: %y", iname,
+                opt.method, keys MssqlIndexMethods);
+        }
+        foreach hash<auto> i in (opt.with.pairIterator()) {
+            if (!regex(i.key, "\\A[A-Za-z_][A-Za-z0-9_]*\\z")) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the index option %y is not a name", iname, i.key);
+            }
+            switch (i.value.typeCode()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                    break;
+                case NT_STRING:
+                    # ON, OFF, NONE, ROW, PAGE, ..., a number, or a number of minutes (COMPRESSION_DELAY)
+                    if (regex(i.value, "\\A(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+(?: (?i:minutes?))?)\\z")) {
+                        break;
+                    }
+                default:
+                    throw "INDEX-OPTION-ERROR", sprintf("index %y: the value %y of the index option %y is not a "
+                        "number, a boolean, a keyword or a number of minutes", iname, i.value, i.key);
+            }
+        }
+    }
+
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
         if (opt.opclass) {
             throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'opclass' option is not supported "
                 "on MSSQL (SQL Server)", iname);
         }
+        MssqlTable::checkIndexOptions(iname, opt);
         return new MssqlIndex(iname, enabled, ch, opt.index_filegroup, opt.method, opt.with);
     }
 
