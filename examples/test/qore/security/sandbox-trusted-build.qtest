@@ -932,11 +932,29 @@ auto sub run_in_thread(code c) {
     }();
     return q.get();
 }
+auto sub run(code c) {
+    return c();
+}
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"creator made entry %d with some padding to use memory\", i);
+    }
+    return l;
+}
+code sub mk_maker() {
+    return list<string> sub (int n) { return make(n); };
+}
 code build_cap;
 code thread_cap;
+code run_cap;
 sub mk() {
     build_cap = Qore::SandboxManager::createTrustedBuildCall(\\build());
     thread_cap = Qore::SandboxManager::createTrustedBuildCall(\\run_in_thread());
+    run_cap = Qore::SandboxManager::createTrustedBuildCall(\\run());
+}
+code sub get_run_cap() {
+    return run_cap;
 }
 sub use_cap(int n) {
     build_cap(n);
@@ -978,6 +996,22 @@ sub clear() {
         code keeper = tenant.callFunction("mk_keeper", 30000);
         assertEq(30000, tenant.callFunction("call", thread_cap, keeper));
         assertGt(1024 * 1024, ma.getMemoryUsage());
+
+        # the caller's code in a build calls the creator's own code (a function, a closure) and keeps what it returns:
+        # the caller's limit applies, as when it calls that code directly, and the creator is not charged
+        cs.setMemoryLimit(64 * 1024 * 1024);
+        code run_cap = creator.callFunction("get_run_cap");
+        SandboxManager small = newManager(2 * 1024 * 1024);
+        Program keeping(PO_MODERN);
+        keeping.setSandboxManager(small);
+        keeping.parse(TenantSource, "creator-code-tenant");
+        int cs_before = cs.getMemoryUsage();
+        foreach code maker in ((creator.getCallReference("make"), creator.callFunction("mk_maker"))) {
+            code keeps = keeping.callFunction("keeps", maker, 200000);
+            assertThrows("SANDBOX-MEMORY-LIMIT", \keeping.callFunction(), ("call", keeps));
+            assertThrows("SANDBOX-MEMORY-LIMIT", \keeping.callFunction(), ("call", run_cap, keeps));
+            assertLt(cs_before + 1024 * 1024, cs.getMemoryUsage());
+        }
     }
 
     stackInBuildThread() {

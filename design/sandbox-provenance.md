@@ -121,11 +121,12 @@ its sandboxes; under a carrier of the build's own code (`build_own_carrier`) or 
 itself, nothing is chained. The sandboxes of the creator govern the code that the build's code calls (a stricter caller
 governs the code that it calls), so they are members of the composite sandbox of that code; their accounts are charged
 by the build's own entries only (`isBuildOwnSandbox()`), and an entry of build-own sandboxes only is the build's own
-code. A continuation of code in a build (a thread, a pool task, async I/O) attaches a floor with no caller (`attach()`,
-`QoreSandboxContext::in_build`) and the carriers that it captured, so a thread that the caller's code starts keeps the
-caller's charge, and one that the build's own code starts charges the code that it runs to that code's own sandboxes
-only. Work that the build hands to another thread captures only the budgets entered in the build (`capture()`), so it is
-not a part of the caller's call either.
+code when it is not under a carrier of the caller's code (the creator's code that the caller's code calls is a part of
+the caller's call). A continuation of code in a build (a thread, a pool task, async I/O) attaches a floor with no caller
+(`attach()`, `QoreSandboxContext::in_build`) and the carriers that it captured, so a thread that the caller's code
+starts keeps the caller's charge, and one that the build's own code starts charges the code that it runs to that code's
+own sandboxes only. Work that the build hands to another thread captures only the budgets entered in the build
+(`capture()`), so it is not a part of the caller's call either.
 
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
 provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build

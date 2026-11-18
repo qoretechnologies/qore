@@ -672,9 +672,26 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
     const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm);
     QoreSandboxManager* const* first = members ? members->data() : &sm;
     const size_t count = members ? members->size() : 1;
-    // an entry of sandboxes that the build entered as its own only is the build's own code (the Program that created
-    // the capability, entered again for the callback)
+    // code that the caller's code runs (any sandbox, also in a thread that the caller's code started in the build) is
+    // a part of the caller's call, as a nested call is: it is charged to the charge of the innermost carrier as well,
+    // if that carries the caller's code; a carrier of the build's own code or of code that the build runs by itself is
+    // not chained
+    const QoreSandboxCallBudget* outer_caller = nullptr;
     if (!build_own) {
+        for (size_t i = frames.size(); i > floor.frames; --i) {
+            const QoreSandboxCallBudget* b = frames[i - 1].budget;
+            if (b->carrier) {
+                if (b->caller_carrier) {
+                    outer_caller = b;
+                }
+                break;
+            }
+        }
+    }
+    // an entry of sandboxes that the build entered as its own only is the build's own code (the Program that created
+    // the capability, entered again for the callback), unless the caller's code runs it: the creator's code that the
+    // caller's code calls is a part of the caller's call (and is not charged to the creator: see below)
+    if (!build_own && !outer_caller) {
         build_own = true;
         for (size_t n = 0; n < count; ++n) {
             if (!isBuildOwnSandbox(floor.frames, first[n])) {
@@ -714,22 +731,6 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
         if (qore_sandbox_is_caller(floor.callers, first[n])) {
             caller_code = true;
             break;
-        }
-    }
-    // code that the caller's code runs (any sandbox, also in a thread that the caller's code started in the build) is
-    // a part of the caller's call, as a nested call is: it is charged to the charge of the innermost carrier as well,
-    // if that carries the caller's code; a carrier of the build's own code or of code that the build runs by itself is
-    // not chained
-    const QoreSandboxCallBudget* outer_caller = nullptr;
-    if (!build_own) {
-        for (size_t i = frames.size(); i > floor.frames; --i) {
-            const QoreSandboxCallBudget* b = frames[i - 1].budget;
-            if (b->carrier) {
-                if (b->caller_carrier) {
-                    outer_caller = b;
-                }
-                break;
-            }
         }
     }
 

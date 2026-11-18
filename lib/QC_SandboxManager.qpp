@@ -1178,9 +1178,9 @@ static code SandboxManager::createSystemPolicyCall(code call) [dom=UNCONTROLLED_
       caller; it counts against the memory limit of the %Program that created the capability, if that %Program has
       a sandbox with one, also when the code of that %Program calls the capability; the caller's own code that the
       build calls (its callbacks and the methods of its objects) is charged to the caller's memory limit as when the
-      caller calls it directly, also in threads that it starts and in nested builds; code of other sandboxes that the
-      build calls is charged to those sandboxes only, not to the %Program that created the capability and not to the
-      caller: the callback must therefore not call code of another sandbox that the caller supplies (a call reference
+      caller calls it directly, also in threads that it starts and in nested builds, as is the code (of any sandbox)
+      that the caller's code calls; code of other sandboxes that the build's own code calls is charged to those
+      sandboxes only, not to the %Program that created the capability and not to the caller: the callback must therefore not call code of another sandbox that the caller supplies (a call reference
       or an object in its arguments), or the caller could keep memory beyond its own limit through that code
     - shared state that the build creates and that trusted code grows later is charged to the code that grows it, as
       storage without a charge is; keep it unchanged after the build, or change it only in builds
