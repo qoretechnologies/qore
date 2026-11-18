@@ -115,32 +115,46 @@ DLLEXPORT bool qore_aot_read_module_source_fingerprints(const std::string& path,
 */
 DLLEXPORT bool qore_aot_read_module_depfile(const std::string& qmod, std::vector<std::string>& deps);
 
-//! the result of qore_aot_check_optional_modules()
-enum class QoreAOTOptionalModuleCheck {
-    //! the module was compiled with every optional module that can be loaded now, from the files it saw
+//! the result of qore_aot_check_module_sources()
+enum class QoreAOTModuleCheck {
+    //! the module is current: the loader would not find it out of date
     CURRENT,
-    //! a module of a failed %try-module directive can be loaded now, or one of its candidate files has changed
+    //! the module is out of date
     STALE,
-    //! the check could not be made (the module's metadata cannot be read)
+    //! the module cannot be checked
     ERROR,
 };
 
-//! checks an AOT module of a build tree for the optional modules it was compiled without (qcc
-//! --check-optional-modules, qore#6598)
-/** The checks of the module loader for the modules of the failed %try-module directives that the module's metadata
-    records: one of their candidate files in the module path that is not the file qcc saw (its size and content
-    hash differ from those of the fingerprint file next to the module's dependency file, or it did not exist then),
-    and one of the modules that can be loaded now (QoreModuleManager::findAvailableOptionalModule(), with the
-    module's own module path directories), so that the build rebuilds a module that the loader would refuse or find
-    out of date (cmake/QoreOptionalModuleStamp.cmake).  The module path is that of the process, as for the compile.
+//! checks an AOT module of a build tree as the module loader checks it, for the build (qcc --check-module-sources,
+//! qore#6598)
+/** The build compares the modification times of the dependencies of an AOT module with its own, and the loader
+    their contents (qore_build_aot_module_is_stale()): a dependency replaced by a file with another content and an
+    older modification time (an install that keeps the time of the build: cp -p, cmake --install) makes the loader
+    find the module out of date, and the build does not rebuild it.  This check makes the loader's comparison for the
+    build:
+    - each file of the module's dependency file (<tt>\<module\>.d</tt>) is compared with its fingerprint (<tt>.d
+      .fingerprints</tt>): another size, or the same size and another content hash when its modification time
+      differs, makes the module out of date; a file without a fingerprint makes it out of date if it is newer than
+      the module, and a file that no longer exists makes it out of date;
+    - for a module with failed %try-module directives (a non-empty <tt>\<module\>.d.optional</tt>), the checks of
+      the loader for the optional modules, with the module path of the process (that of the compile): a candidate
+      file of one of them that the dependency file does not list, and a module that can be loaded now
+      (QoreModuleManager::findAvailableOptionalModule()).
+
+    Without a dependency file, which Ninja removes once it has read it into its log, the files of the fingerprint
+    file are compared.
+
+    Unlike the loader, the check fails closed: a module whose dependency file or fingerprint file cannot be read or
+    does not describe it, or a dependency that cannot be read, cannot be checked.
 
     Internal: for qcc only.
 
-    @param qmod the AOT module
-    @param reason set to the reason when the module is stale
-    @param error set to the error when the check cannot be made
+    @param qmod the AOT module, which exists
+    @param reason set to the reason when the module is out of date
+    @param dependency set to the dependency concerned, if any, when the module is out of date or cannot be checked
+    @param error set to the error when the module cannot be checked
 */
-DLLEXPORT QoreAOTOptionalModuleCheck qore_aot_check_optional_modules(const char* qmod, std::string& reason,
-        std::string& error);
+DLLEXPORT QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& reason,
+        std::string& dependency, std::string& error);
 
 #endif
