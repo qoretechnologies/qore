@@ -13649,9 +13649,11 @@ static void qore_socket_set_bind_no_address_error() {
 
 #ifndef _Q_WINDOWS
 //! Applies the rules of a sandbox for a UNIX socket path; see qore_socket_check_unix_sandbox()
-/** @return 0 if allowed, -1 if denied (an exception is raised)
+/** Also used for the UNIX socket destinations of a DBI connection (qore#5747)
+
+    @return 0 if allowed, -1 if denied (an exception is raised)
 */
-static int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
+int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
         ExceptionSink* xsink) {
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;

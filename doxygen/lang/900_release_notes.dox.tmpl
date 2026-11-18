@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Database Connections Are Checked Against the Sandbox
+    A database connection chosen by code whose sandbox restricts network or filesystem access is checked against that
+    sandbox before the DBI driver connects, and a driver that cannot report the destinations of its connections is
+    refused for it with \c NETWORK-ACCESS-DENIED (see @ref sandbox_dbi_connections; issue #5747).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
