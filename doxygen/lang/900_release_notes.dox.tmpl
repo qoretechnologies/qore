@@ -297,6 +297,11 @@
     TableCache::get()) declare \c PROCESS_CONTROL; see @ref sandbox_caller_domains and @ref sandbox_module_init
     (issue #6337).
 
+    @par Library State That Restricted Code Creates Keeps Its Restrictions
+    An object, call reference or closure of library module code that restricted code creates runs with the
+    restrictions of that code also when a library module's initialization runs it from a registry; see
+    @ref sandbox_caller_domains (issue #6520).
+
     @par Modules May Not Declare Public thread_local Variables
     A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
     compiled; keep the variable private and export functions that read and set it (see @ref thread_local).  A module

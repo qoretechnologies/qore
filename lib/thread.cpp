@@ -5901,8 +5901,14 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(qore_program_i
     }
     if (pgm_id && !*pgm_id) {
         ThreadData* td = thread_data.get();
-        if (td->sandbox_provenance) {
-            *pgm_id = td->sandbox_provenance->getContext()->pgm_id;
+        // a frame that records only the origin of the code that runs (qore#6520) names no sandbox
+        const QoreSandboxProvenanceHelper* frame = td->sandbox_provenance;
+        while (frame && !frame->getContext()->manager && !frame->getContext()->policy_manager
+                && !frame->getContext()->provenance_manager && !frame->getContext()->provenance_policy_manager) {
+            frame = frame->getPrevious();
+        }
+        if (frame) {
+            *pgm_id = frame->getContext()->pgm_id;
         } else {
             const auto* ctx = td->sandbox_context ? td->sandbox_context : td->inherited_sandbox_context;
             if (ctx) {
@@ -6082,6 +6088,29 @@ static QoreParseOptions qore_get_caller_domain_restrictions(ThreadData* td,
     return mib ? rv : (rv | td->thread_caller_restrictions);
 }
 
+//! returns the functional-domain restrictions recorded with the objects and call references whose code runs on the
+//! thread (qore#6520)
+/** An object or call reference of library module code that restricted code created records the creator's
+    restrictions (QoreSandboxContext::origin_restrictions), which apply while its code runs (its provenance frame,
+    QoreSandboxProvenanceHelper): a library registry that runs it later, as the initialization of a library module
+    does under its barrier, runs it for its creator.  The frames of the code that loads a library module are not
+    looked at past the module initialization barrier \a mib, as for the caller walk
+
+    @param td the current thread's data
+    @param mib the module initialization barrier that the walk stops at, or nullptr
+*/
+static QoreParseOptions qore_get_provenance_origin_restrictions(ThreadData* td,
+        const ThreadData::ModuleInitBarrier* mib) {
+    QoreParseOptions rv;
+    for (const auto* frame = td->sandbox_provenance; frame; frame = frame->getPrevious()) {
+        if (mib && frame == mib->provenance) {
+            break;
+        }
+        rv |= frame->getContext()->origin_restrictions;
+    }
+    return rv;
+}
+
 bool qore_caller_restricts_domain(int64 domain) {
     // only the restricting options are domains; the positive options (PO_ALLOW_*) and PO_IN_MODULE are not
     const QoreParseOptions dom = QoreParseOptions(domain) & qore_restricting_domain_options();
@@ -6093,6 +6122,10 @@ bool qore_caller_restricts_domain(int64 domain) {
     // the restrictions of a sandboxed caller that the module code runs with (see
     // qore_set_module_call_runtime_po_override()); the module code passes them on to the module code it calls
     if (td->runtime_po_state.caller_restrictions.hasAny(dom)) {
+        return true;
+    }
+    // the code of an object or call reference that restricted code created (qore#6520)
+    if (qore_get_provenance_origin_restrictions(td, nullptr).hasAny(dom)) {
         return true;
     }
     return qore_get_caller_domain_restrictions(td).hasAny(dom);
@@ -6116,7 +6149,23 @@ int64 qore_caller_denied_user_domains(int64 domain) {
     const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
     QoreParseOptions denied = mib ? QoreParseOptions() : (td->runtime_po_state.caller_restrictions & dom);
     denied |= qore_get_caller_domain_restrictions(td, mib) & dom;
+    // the code of an object or call reference that restricted code created runs for that code, also under a module
+    // initialization barrier (qore#6520)
+    denied |= qore_get_provenance_origin_restrictions(td, mib) & dom;
     return denied.getLo();
+}
+
+//! returns the functional-domain restrictions of the code that creates an object or call reference now (qore#6520)
+/** The restrictions that a check of a declared domain would apply to the creating code: those of a sandboxed caller,
+    of the calling code, and of the objects and call references whose code runs; not looked up past a module
+    initialization barrier, as the initialization of a library module creates its state for nobody
+*/
+static QoreParseOptions qore_get_creation_origin_restrictions(ThreadData* td) {
+    const ThreadData::ModuleInitBarrier* mib = qore_get_caller_module_init_barrier(td);
+    QoreParseOptions rv = mib ? QoreParseOptions() : td->runtime_po_state.caller_restrictions;
+    rv |= qore_get_caller_domain_restrictions(td, mib);
+    rv |= qore_get_provenance_origin_restrictions(td, mib);
+    return rv & qore_restricting_domain_options();
 }
 
 //! returns the ID of the current Program of the thread, or QORE_NO_PROGRAM_ID
@@ -6474,10 +6523,28 @@ QoreSandboxContext::~QoreSandboxContext() {
     }
 }
 
-QoreSandboxContext* qore_capture_sandbox_provenance() {
+QoreParseOptions qore_creation_origin_restrictions() {
+    ThreadData* td = thread_data.get();
+    return td ? qore_get_creation_origin_restrictions(td) : QoreParseOptions();
+}
+
+QoreSandboxContext* qore_capture_sandbox_provenance(const QoreProgram* code_pgm) {
     // Check before allocating: the common unsandboxed object/callback needs no context storage.
     ReferenceHolder<QoreSandboxManager> manager(qore_find_thread_sandbox_manager_ref(), nullptr);
-    return manager ? new QoreSandboxContext(false) : nullptr;
+    // the restrictions of the code that creates an object of library module code (qore#6520)
+    QoreParseOptions origin;
+    if (code_pgm && qore_program_is_library_module(code_pgm)) {
+        ThreadData* td = thread_data.get();
+        if (td) {
+            origin = qore_get_creation_origin_restrictions(td);
+        }
+    }
+    if (!manager && !origin) {
+        return nullptr;
+    }
+    QoreSandboxContext* ctx = new QoreSandboxContext(false);
+    ctx->origin_restrictions = origin;
+    return ctx;
 }
 
 void QoreSandboxProvenanceHelper::apply(QoreSandboxContext* captured) {
@@ -7338,7 +7405,9 @@ bool QoreThreadRuntimeParseOptions::currentRestrictsNothing() {
         && !td->runtime_po_state.override_pgm
         // module code called by restricted code passes the restrictions on to the threads that it starts (qore#6337),
         // but not the initialization of library module code
-        && !qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td));
+        && !qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td))
+        // nor the code of an object or call reference that restricted code created (qore#6520)
+        && !qore_get_provenance_origin_restrictions(td, qore_get_caller_module_init_barrier(td));
 }
 
 QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
@@ -7354,7 +7423,11 @@ QoreThreadRuntimeParseOptions QoreThreadRuntimeParseOptions::capture() {
     rv.override.sandboxed = td->runtime_po_state.sandboxed;
     rv.override.override_pgm = td->runtime_po_state.override_pgm;
     // a thread that the initialization of library module code starts is not started by the code that loads it
-    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td));
+    rv.caller_domain_restrictions = qore_get_caller_domain_restrictions(td, qore_get_caller_module_init_barrier(td))
+        // a thread that the code of an object or call reference that restricted code created starts runs for that code
+        // (qore#6520)
+        | (qore_get_provenance_origin_restrictions(td, qore_get_caller_module_init_barrier(td))
+            & qore_restricting_domain_options());
     rv.refPrograms();
     return rv;
 }

@@ -424,6 +424,13 @@ authenticate();
     trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs
     in the %Program that created it, so a closure of restricted code that trusted code calls back is restricted code.
 
+    State of library code that restricted code creates keeps the restrictions of its creator: an object of a class of
+    a library module, a call reference to a library module's function or method and a closure of a library module's
+    code that restricted code creates, directly or through the library's code that it calls, are run for that code
+    whoever runs them later, also when a library registry runs them during the initialization of another library
+    module, where the calling code is not looked up (see @ref sandbox_module_init): a declared domain that their code
+    calls is refused as it would be for their creator (\c INVALID-FUNCTION-ACCESS).
+
     The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
     variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
     @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of
