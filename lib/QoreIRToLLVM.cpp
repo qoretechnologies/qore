@@ -14767,8 +14767,9 @@ void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_fun
                 same = true;
                 continue;
             }
-            if (pred == &bb || pred->getSingleSuccessor() != &bb
-                    || !llvm::isa<llvm::BranchInst>(pred->getTerminator())) {
+            // an unconditional branch to the block (every block has its terminator here)
+            auto* br = llvm::dyn_cast_or_null<llvm::BranchInst>(pred->getTerminator());
+            if (pred == &bb || !br || !br->isUnconditional() || br->getSuccessor(0) != &bb) {
                 ok = false;
                 break;
             }
