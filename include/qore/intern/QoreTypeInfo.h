@@ -311,13 +311,11 @@ public:
     */
     DLLLOCAL static bool listElementTakesNothing(const QoreTypeInfo* lti) {
         signed char c = lti->list_elem_takes_nothing_cache.load(std::memory_order_relaxed);
-        if (c >= 0) {
-            return c;
-        }
-        bool rv = runtimeTakesNothing(getComplexListValueType(lti));
-        lti->list_elem_takes_nothing_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
-        return rv;
+        return c >= 0 ? c : listElementTakesNothingIntern(lti);
     }
+
+    //! computes and caches the value returned by listElementTakesNothing()
+    DLLLOCAL static bool listElementTakesNothingIntern(const QoreTypeInfo* lti);
 
     //! returns the list type whose element type is the or-nothing type of the element type of the complex list type
     //! \a lti (list<*int> for list<int>), or \a lti if its element type takes NOTHING; cached in the list type

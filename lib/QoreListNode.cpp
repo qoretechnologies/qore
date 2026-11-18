@@ -164,9 +164,7 @@ void qore_list_private::raiseElementRemovalError(size_t ind, bool for_del, const
 }
 
 int qore_list_private::raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const {
-    if (!elementTypeRejectsNothing()) {
-        return 0;
-    }
+    assert(elementTypeRejectsNothing());
     const QoreTypeInfo* vti = getValueTypeInfo();
     if (xsink) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot assign element " QLLD " of a list with " QLLD " elements "
@@ -176,6 +174,12 @@ int qore_list_private::raiseAssignmentGapError(size_t ind, ExceptionSink* xsink)
             QoreTypeInfo::getName(vti));
     }
     return -1;
+}
+
+bool QoreTypeInfo::listElementTakesNothingIntern(const QoreTypeInfo* lti) {
+    bool rv = runtimeTakesNothing(getComplexListValueType(lti));
+    lti->list_elem_takes_nothing_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+    return rv;
 }
 
 const QoreTypeInfo* QoreTypeInfo::getOrNothingListTypeIntern(const QoreTypeInfo* lti) {
@@ -200,7 +204,7 @@ int qore_list_private::getLValue(size_t ind, LValueHelper& lvh, bool for_remove,
         }
         // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
         // (qore#6435)
-        if (checkAssignmentGap(ind, xsink)) {
+        if (ind > length && elementTypeRejectsNothing() && raiseAssignmentGapError(ind, xsink)) {
             return -1;
         }
         // the elements are added for this assignment; a rejected assignment removes them again
@@ -591,12 +595,18 @@ int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
         val.discard(xsink);
         return -1;
     }
-    // a list whose element type does not take NOTHING holds no NOTHING element, as a gap or as a hole (qore#6435):
-    // the callers check the value and the index
-    assert((val && index <= priv->length) || !priv->elementTypeRejectsNothing());
     if (index >= priv->length) {
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap: the
+        // compiled stores reach it here (qore#6435)
+        if (priv->checkAssignmentGap(index, xsink)) {
+            val.discard(xsink);
+            return -1;
+        }
         priv->resize(index + 1);
     }
+    // a list whose element type does not take NOTHING holds no NOTHING element (qore#6435): the callers check the
+    // value
+    assert(val || !priv->elementTypeRejectsNothing());
     if (needs_scan(priv->entry[index])) {
         priv->incScanCount(-1);
     }
