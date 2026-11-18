@@ -493,6 +493,9 @@ class PgsqlExpressionTest inherits QUnit::Test {
         assertEq("1", row.result);
         row = selectExprRow("result", expr(COP_CAST, (fref("id"), "character varying")), 1);
         assertEq("1", row.result);
+        # a size after a word of a type name of several words
+        row = selectExprRow("result", expr(COP_CAST, (fref("created_at"), "timestamp(0) without time zone")), 1);
+        assertEq(2026-01-15T10:30:00, row.result);
         # the type name ran SQL of its own in the cast: current_user
         assertThrows("OPERATOR-ERROR", "invalid cast type name", \selectExprRow(),
             ("result", expr(COP_CAST, (fref("id"), "text) || current_user || cast(1 as text")), 1));

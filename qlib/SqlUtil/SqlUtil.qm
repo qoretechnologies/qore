@@ -3828,15 +3828,21 @@ public namespace SqlUtil {
     }
 
     #! the regular expression of a type name for a cast (see sql_check_cast_type())
-    const CastTypeNameRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*(?:\\.[A-Za-z_][A-Za-z0-9_$]*)?(?: [A-Za-z_][A-Za-z0-9_$]*)*"
-        "(?:\\([0-9]+(?:, ?[0-9]+)?\\))?(?:\\[\\])*\\z";
+    const CastTypeNameRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*(?:\\.[A-Za-z_][A-Za-z0-9_$]*)?" + CastTypeSizeRegex
+        + "(?: [A-Za-z_][A-Za-z0-9_$]*" + CastTypeSizeRegex + ")*(?:\\[\\])*\\z";
+
+    #! the optional size of a word of a type name for a cast: digits, \c max or \c *, an optional scale and an optional
+    #! length unit (ex: \c "(max)", \c "(10,2)", \c "(*,2)", \c "(10 char)")
+    const CastTypeSizeRegex = "(?:\\((?:[0-9]+|(?i:max)|\\*)(?:, ?[0-9]+)?(?: (?i:char|byte))?\\))?";
 
     #! Checks that a string is a type name for a cast and returns it
     /** A cast writes its type name into the SQL, so only a type name is accepted: one or more words of ASCII letters,
         digits, \c "_" and \c "$" (the first character of each word not a digit) separated by single spaces (ex:
-        \c "double precision", \c "timestamp with time zone"), with an optional schema prefix (\c "schema.type"), an
-        optional size or precision and scale in parentheses (ex: \c "numeric(10,2)") and optional array brackets
-        (\c "[]"); quotes, comments, statement separators and any other character are refused
+        \c "double precision", \c "timestamp with time zone"), with an optional schema prefix (\c "schema.type"),
+        an optional size after each word (digits, \c max or \c *, an optional scale and an optional \c char or
+        \c byte unit: ex: \c "numeric(10,2)", \c "nvarchar(max)", \c "timestamp(3) with time zone",
+        \c "varchar2(10 char)") and optional array brackets (\c "[]"); quotes (so quoted identifiers), comments,
+        statement separators and any other character are refused
 
         @param type the type name
 

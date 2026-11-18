@@ -25,6 +25,10 @@ class CastTypeNamesTest inherits QUnit::Test {
             "varchar", "string", "NUMBER", "nvarchar", "text", "bigint", "double precision", "character varying",
             "timestamp with time zone", "timestamp without time zone", "numeric(10,2)", "numeric(10, 2)",
             "varchar(40)", "int[]", "text[][]", "myschema.mytype", "my_type$1",
+            # sizes after any word, as the databases write them
+            "nvarchar(max)", "varchar(MAX)", "varbinary(max)", "timestamp(3) with time zone",
+            "timestamp(6) with local time zone", "interval day(2) to second(6)", "varchar2(10 char)",
+            "varchar2(10 BYTE)", "number(*,2)", "char(10) character set utf8mb4",
         );
 
         # values that are not type names; each would change the SQL of the cast
@@ -47,6 +51,12 @@ class CastTypeNamesTest inherits QUnit::Test {
             "a.b.c",
             "numeric(10,2,3)",
             "numeric(a)",
+            "int(1))",
+            "int(1;)",
+            "int(max char byte)",
+            "int(1)(2)",
+            "int(max,max)",
+            "int (1)",
             "x--",
             "é",
         );
