@@ -3726,6 +3726,33 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
     }
 }
 
+//! Enumerates the locals that an instruction can write: every local reference of aotOutlineForEachLocalRef() but the
+//! reads of a load and of the read operands of the fused int operations (qore#6314)
+template <typename F>
+static void aotOutlineForEachLocalWrite(const QoreIRInstruction* inst, F&& cb) {
+    switch (inst->opcode) {
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::BranchIfLtLocalInt:
+            return;
+        case QoreIROpcode::AddAssignLocalInt: {
+            // the source is read; the target is written
+            const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            if (fused->target) {
+                cb(fused->target);
+            }
+            return;
+        }
+        default:
+            aotOutlineForEachLocalRef(inst, [&](const AOTOutlineLocalRef& ref) {
+                if (ref.local) {
+                    cb(ref.local);
+                }
+            });
+            return;
+    }
+}
+
 //! Enumerate every mutable basic-block target slot of an instruction.
 //! Mirrors QoreIRVerifier's collectBranchTargets(): dedicated fields for
 //! branch/switch/phi/invoke/throw classes plus the base-class
@@ -3865,6 +3892,8 @@ struct AOTFnOutlineRegion {
     std::vector<const LocalVar*> shared_locals;
     //! Body locals whose every reference is inside the region.
     std::vector<const LocalVar*> contained_locals;
+    //! The shared locals that the helper can assign or remove (see QoreIRCallAOTHelperInstruction)
+    std::vector<const LocalVar*> written_shared_locals;
 };
 
 //! Whole-function analysis state for outline-region discovery.
@@ -4205,6 +4234,8 @@ private:
             }
         }
         std::unordered_set<const LocalVar*> region_locals;
+        // the locals that an instruction of the region can write (qore#6314)
+        std::unordered_set<const LocalVar*> region_written;
         size_t temp_push_count = 0;
         size_t temp_discard_count = 0;
         for (size_t i = first; i <= last; ++i) {
@@ -4294,6 +4325,9 @@ private:
                     if (ref.local) {
                         region_locals.insert(ref.local);
                     }
+                });
+                aotOutlineForEachLocalWrite(inst, [&](const LocalVar* lv) {
+                    region_written.insert(lv);
                 });
             }
         }
@@ -4397,6 +4431,14 @@ private:
                 // (return-path) clear — a true scope end is never followed
                 // by references to the same LocalVar.
                 region.shared_locals.push_back(lv);
+                // a shared local that the helper only reads keeps its value across the call, unless a reference, a
+                // closure or code evaluated through the AST can reach it (qore#6314)
+                const void* key = reinterpret_cast<const void*>(lv);
+                if (region_written.count(lv) || info.parse_reference || lv->closureUse() || lv->isTopLevel()
+                        || fn.has_opaque_ast_local_access || fn.ast_referenced_locals.count(key)
+                        || fn.reference_store_locals.count(key)) {
+                    region.written_shared_locals.push_back(lv);
+                }
             } else {
                 region.contained_locals.push_back(lv);
             }
@@ -4849,6 +4891,7 @@ private:
             // the coordinator releases its references to the values of the locals that the helper can assign
             // before the call (qore#6300)
             call->shared_locals = region.shared_locals;
+            call->written_shared_locals = region.written_shared_locals;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;

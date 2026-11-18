@@ -5310,6 +5310,14 @@ bool QoreIRToLLVM::releasesReloadStorageForHandlers(const void* key) const {
     if (handler_locals_known && !handler_locals.count(key)) {
         return false;
     }
+    // a local that the handlers only read keeps its value across them, unless a closure that a handler calls can
+    // write it (qore#6314)
+    if (handler_written_locals_known && !handler_written_locals.count(key)) {
+        const LocalVar* lv = static_cast<const LocalVar*>(key);
+        if (!lv->closureUse() && !lv->isTopLevel()) {
+            return false;
+        }
+    }
     return canReloadLocalFromRuntime(key, true);
 }
 
@@ -15400,6 +15408,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // publishLocalsForHandlers())
     handler_locals.clear();
     handler_locals_known = has_on_block_exit_handlers && func.collectHandlerLocals(handler_locals);
+    // the locals that the handlers can write: those that they only read keep their reload storage (qore#6314)
+    handler_written_locals.clear();
+    handler_written_locals_known = handler_locals_known
+        && qore_ir_collect_handler_written_locals(func, handler_written_locals);
     handler_sites.clear();
     catch_depth_saved = nullptr;
     catch_scope_count = nullptr;
@@ -37850,7 +37862,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // finalizeHandlerSites()); the reloads go after the epoch bump emitted here, so that they leave the
             // caches fresh and a later read does not reload them again.
             reloadAllLocalsFromRuntime(module, llvm_func);
-            recordHelperSite(result, cah->shared_locals, &builder->GetInsertBlock()->back());
+            // only the shared locals that the helper can assign are released and reloaded (qore#6314)
+            recordHelperSite(result, cah->written_shared_locals, &builder->GetInsertBlock()->back());
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

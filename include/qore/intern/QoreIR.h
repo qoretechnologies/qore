@@ -110,6 +110,15 @@ DLLLOCAL bool qore_ir_local_may_hold_reference(const LocalVar* lv);
 */
 DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv);
 
+//! Collects the locals that the handlers of \a ir_func (on_exit, on_error, on_success, and their handlers) can write,
+//! and those that \a ir_func creates a reference to, which a handler can write through the reference; returns false
+//! if any local can be written (a write that the analysis cannot attribute to a local), as then \a written is not
+//! complete (qore#6314)
+/** Defined in QoreIRTakeOver.cpp, which is compiled outside the single compilation unit of libqore
+*/
+DLLLOCAL bool qore_ir_collect_handler_written_locals(const QoreIRFunction& ir_func,
+        std::unordered_set<const void*>& written);
+
 //! Returns true if \a ir_func can leave the function by a deoptimization: it has a guard with a deopt target
 /** The deoptimization runs the function again from its parameters' runtime variables, so such a function takes no
     parameter over (native code: QoreIRToLLVM::preCreateLocalAllocas(); the IR interpreter:
@@ -4208,6 +4217,12 @@ public:
         QoreIRToLLVM::recordHelperSite())
     */
     std::vector<const LocalVar*> shared_locals;
+    //! The shared locals that the helper can assign or remove: the release before the call and the reload after it
+    //! are made only for these, as a local that the helper only reads keeps its value across the call (qore#6314)
+    /** A shared local is in it if an instruction of the helper writes it (anything but a load and the read operands
+        of the fused int operations), or if a reference, a closure or code evaluated through the AST can reach it
+    */
+    std::vector<const LocalVar*> written_shared_locals;
 };
 
 //! Returns the instruction as the given instruction class pointer type if it is one, otherwise nullptr
