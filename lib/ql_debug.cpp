@@ -17799,6 +17799,13 @@ static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params,
     return QoreValue();
 }
 
+//! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
+static QoreValue f_dbg_async_io_fail_next_timer_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgFailNextTimerHold();
+    return QoreValue();
+}
+
 //! Debug-only: waits until at least the given number of timer callbacks are held; False if the wait timed out
 static QoreValue f_dbg_async_io_wait_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -27080,6 +27087,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_hold_timer_callbacks", f_dbg_async_io_hold_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_fail_next_timer_hold", f_dbg_async_io_fail_next_timer_hold,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
