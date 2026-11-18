@@ -1031,6 +1031,18 @@ struct IRScopeEntry {
 //! of a return until the function ends (#5920)
 #define QORE_IR_SLOT_RETURN 2
 
+//! Sets the vector to \a n copies of \a value: in place when it already has \a n elements, as a pooled call frame
+//! reused by the same function has, so that the reset of the frame makes no out-of-line call (qore#6627); the result
+//! is the same as assign(n, value) in either case
+template <typename V, typename T>
+static QORE_INTERN_ALWAYS_INLINE void qore_ir_reset_vector(V& v, size_t n, const T& value) {
+    if (v.size() == n) {
+        std::fill(v.begin(), v.end(), value);
+    } else {
+        v.assign(n, value);
+    }
+}
+
 class IRCleanupSlots {
 public:
     //! clears all entries and resizes the per-slot counts to the value pool size
@@ -1039,7 +1051,7 @@ public:
     void reset(size_t slot_count, const std::vector<uint8_t>* n_slot_owned = nullptr) {
         entries.clear();
         slot_owned_entries.clear();
-        counts.assign(slot_count, 0);
+        qore_ir_reset_vector(counts, slot_count, 0u);
         slot_owned = n_slot_owned;
     }
 
@@ -1771,8 +1783,9 @@ struct IRCallFrame {
         // Owned references are tracked in `cleanup` and drained by cleanupValues() at
         // every execute() return path; by the time we reach reset(), all owned slots
         // are already NOTHING.
-        values.clear();
-        values.resize(reserve_size);
+        // every slot is NOTHING again, and the vector has exactly reserve_size slots, which the instructions check
+        // their ids against
+        qore_ir_reset_vector(values, reserve_size, QoreValue());
         cleanup.reset(reserve_size);
         if (borrowed_temp_active) {
             std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
@@ -1785,10 +1798,10 @@ struct IRCallFrame {
             locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_slot_cache.resize(local_slot_count);
-            locals_lvar_cache.assign(local_slot_count, nullptr);
-            locals_ir_only.assign(local_slot_count, false);
-            locals_instantiated.assign(local_slot_count, false);
-            local_init_slots.assign(local_slot_count, UINT32_MAX);
+            qore_ir_reset_vector(locals_lvar_cache, local_slot_count, nullptr);
+            qore_ir_reset_vector(locals_ir_only, local_slot_count, false);
+            qore_ir_reset_vector(locals_instantiated, local_slot_count, false);
+            qore_ir_reset_vector(local_init_slots, local_slot_count, UINT32_MAX);
             // the vectors kept keep their capacity, so a call reading a local does not allocate one
             if (local_load_slots.size() > local_slot_count) {
                 local_load_slots.resize(local_slot_count);
