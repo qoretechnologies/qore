@@ -246,6 +246,7 @@ Program sub mk(string src) {
         addTestCase("each sandbox of a composite governs the caller's code in a build", \compositeMemory());
         addTestCase("the code of other sandboxes in a build, and nested builds", \nestedAndForeignCode());
         addTestCase("a thread that the caller's code starts in a build keeps its stack limit", \stackInBuildThread());
+        addTestCase("the build's own code is charged to its creator only", \buildOwnAccounting());
         addTestCase("the memory limit of the Program that created the capability governs the build",
             \creatorMemory());
         set_return_value(main());
@@ -813,6 +814,79 @@ code sub mk() {
             code go = inner.getCallReference("go");
             assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", go, BuildCalling));
         }
+    }
+
+    buildOwnAccounting() {
+        # a creator with a sandbox of its own whose code calls its capability: a tenant that calls that code is not
+        # charged for the state that the build keeps
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+our list<string> state;
+sub build(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"creator state entry %d with some padding to use memory\", i);
+    }
+    state = l;
+}
+# runs a closure in a thread that the build's own code starts and waits for
+auto sub run_in_thread(code c) {
+    Qore::Thread::Queue q();
+    background sub () {
+        try {
+            q.push(c());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+    return q.get();
+}
+code build_cap;
+code thread_cap;
+sub mk() {
+    build_cap = Qore::SandboxManager::createTrustedBuildCall(\\build());
+    thread_cap = Qore::SandboxManager::createTrustedBuildCall(\\run_in_thread());
+}
+sub use_cap(int n) {
+    build_cap(n);
+}
+code sub get_thread_cap() {
+    return thread_cap;
+}
+int sub state_size() {
+    return state.size();
+}
+sub clear() {
+    remove state;
+}
+", "own-creator");
+        creator.callFunction("mk");
+        code thread_cap = creator.callFunction("get_thread_cap");
+        on_exit creator.callFunction("clear");
+        SandboxManager cs = newManager(64 * 1024 * 1024);
+        creator.setSandboxManager(cs);
+
+        SandboxManager ma = newManager(64 * 1024 * 1024);
+        Program tenant(PO_MODERN);
+        tenant.setSandboxManager(ma);
+        tenant.parse(OwnSource + "auto sub call(code c, *softlist<auto> args) {
+    return call_function_args(c, args);
+}
+", "own-tenant");
+        on_exit tenant.callFunction("release");
+        # about 3 MB of state, built by the creator's code that the tenant calls
+        tenant.callFunction("call", creator.getCallReference("use_cap"), 30000);
+        assertEq(30000, creator.callFunction("state_size"));
+        assertGt(1024 * 1024, cs.getMemoryUsage());
+        assertLt(1024 * 1024, ma.getMemoryUsage());
+
+        # the tenant's closure, run in a thread that the build's own code starts, is charged to the tenant only: not
+        # to the creator, whose limit is too small for it
+        cs.setMemoryLimit(1024 * 1024);
+        creator.callFunction("clear");
+        code keeper = tenant.callFunction("mk_keeper", 30000);
+        assertEq(30000, tenant.callFunction("call", thread_cap, keeper));
+        assertGt(1024 * 1024, ma.getMemoryUsage());
     }
 
     stackInBuildThread() {

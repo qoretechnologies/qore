@@ -253,7 +253,21 @@ public:
     DLLLOCAL void enter(int tid, QoreSandboxManager* sm, const void* owner);
 
     //! Attaches budgets captured for a continuation of a call; an expired budget sets the limit bit at once
-    DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner);
+    /** @param in_build true if the budgets were captured in a trusted build: the continuation runs in a build with no
+        caller (see suspendCharge()), until leave()
+    */
+    DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false);
+
+    //! Returns true if the thread runs a trusted build (see suspendCharge())
+    DLLLOCAL bool inBuild() const {
+        return !charge_floors.empty();
+    }
+
+    //! Enters the sandbox of the Program that created a trusted build capability, as the build's own code
+    /** Its charge has the accounts of \a sm only: not the caller's, also when the caller is the code of that
+        %Program (see enterInBuild())
+    */
+    DLLLOCAL void enterBuildOwn(int tid, QoreSandboxManager* sm, const void* owner);
 
     //! Removes the frames that \a owner attached, which must be on the top of the stack
     DLLLOCAL void leave(int tid, const void* owner) {
@@ -284,7 +298,7 @@ public:
 
 private:
     //! Enters \a sm inside a trusted build (see suspendCharge())
-    DLLLOCAL void enterInBuild(int tid, QoreSandboxManager* sm, const void* owner);
+    DLLLOCAL void enterInBuild(int tid, QoreSandboxManager* sm, const void* owner, bool build_own = false);
 
 public:
 
@@ -344,6 +358,8 @@ private:
         QoreSandboxCharge* saved;
         //! the sandboxes that governed the caller then, or nullptr
         const QoreSandboxManager* callers;
+        //! the helper of a continuation that attached the floor (see attach()), or nullptr for a build
+        const void* owner;
     };
     //! the trusted builds that the thread runs, innermost last
     std::vector<BuildFloor> charge_floors;
@@ -365,10 +381,8 @@ private:
     bool lost_stack_closed = false;
 
     DLLLOCAL bool hasBudgetFor(const QoreSandboxManager* sm) const;
-    //! Starts a budget; \a in_build: its charge has the sandbox's own account only (see enterInBuild()), else the
-    //! accounts of the current charge as well
     DLLLOCAL void startBudget(int tid, QoreSandboxManager* sm, int64 limit_ms, int64 cpu_limit_ms, int64 stack_bytes,
-            int64 memory_limit, const void* owner, bool in_build = false);
+            int64 memory_limit, const void* owner);
     //! Pushes a frame for a referenced budget and applies its stack limit; may throw std::bad_alloc (nothing changed)
     DLLLOCAL void pushFrame(QoreSandboxCallBudget* budget, const void* owner);
     //! Pops the top frame and restores the stack limit; returns its budget (the reference passes to the caller)

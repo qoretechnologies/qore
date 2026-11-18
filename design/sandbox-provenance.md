@@ -102,16 +102,22 @@ Program's sandboxes in the build, as entering the Program does, so that its budg
 the capability (the Program is current then, and entering it again enters nothing). Before the barrier is set, the build
 records the sandboxes that govern the caller (`qore_find_thread_sandbox_manager_ref()`) and the charge of the caller's
 call. In the build, each entry into a sandbox (`QoreSandboxBudgetStack::enterInBuild()`) starts the budgets that its
-sandboxes do not have yet with a charge of their own account only, pushes again the budgets of its sandboxes that are
-below the build (the caller's calls in progress: a continuation captures them, with their time and stack limits), and
-makes current a charge of the union of the accounts of all of its budgets, of the charge that the same entry made
-current already (a Program is entered with its own sandbox and the one that it keeps, in two calls), and, if a sandbox
-of the caller governs the code (the caller's code), of the caller's call; that charge is carried by a budget of its own
-that is pushed last, so a thread that the code starts makes it current too. The build's charge (the creator's) is never
-added: the code of other sandboxes that the build runs is charged to those sandboxes, and the caller's code is charged
-as when the caller calls it directly, also in nested builds, whatever the order of the members of a composite sandbox.
-Work that the build hands to another thread captures only the budgets entered in the build (`capture()`), so it is not a
-part of the caller's call either.
+sandboxes do not have yet, pushes again the budgets of its sandboxes that are below the build (the caller's calls in
+progress: a continuation captures them, with their time and stack limits), and makes current a charge of the union of
+the accounts of all of its budgets, of the charge that the same entry made current already (a Program is entered with
+its own sandbox and the one that it keeps, in two calls), and, if a sandbox of the caller governs the code (the caller's
+code), of the caller's call; that charge is carried by a budget of its own that is pushed last, so a thread that the
+code starts makes it current too. The build's own entries of the creator's sandboxes (`enterBuildOwn()`) charge the
+creator's own accounts only, never the caller's, also when the caller is the creator's code. Each entry charges the own
+accounts of its sandboxes, not the chained charges of their budgets, whose accounts include those of the code that
+called them when they started. The build's charge (the creator's) is never added: the caller's code is charged as when
+the caller calls it directly, also in nested builds, whatever the order of the members of a composite sandbox, and the
+code of other sandboxes that the build runs is charged to those sandboxes only. A capability's callback must therefore
+not run code of another sandbox that the caller supplies: the caller would keep memory beyond its own limit through it
+(a follow-up would give code passed in the arguments the caller's provenance). A continuation of code in a build (a
+thread, a pool task, async I/O) attaches a floor with no caller (`attach()`, `QoreSandboxContext::in_build`), so the
+code that it runs is charged to its own sandboxes only. Work that the build hands to another thread captures only the
+budgets entered in the build (`capture()`), so it is not a part of the caller's call either.
 
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
 provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build

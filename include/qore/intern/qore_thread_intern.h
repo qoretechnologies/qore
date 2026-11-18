@@ -859,6 +859,8 @@ public:
     QoreSandboxManager* provenance_policy_manager = nullptr;
     //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
     QoreSandboxBudgetList budgets;
+    //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
+    bool in_build = false;
     //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
