@@ -20,6 +20,8 @@
 #
 # output: RESULT:<value returned or exception raised> LOG:<values logged by the function> STEPS:<step events>
 # - a step event of a statement is its line, that of a block "b<line>"
+# - a line REQUEST-STACK:<the user code functions of the call stack at the first request, innermost first>
+#   FRAME:<the local variables of the frame of the code at the first request>
 # - with "again", a second line AGAIN-RESULT:... LOG:... STEPS:... for the second call, and a third line
 #   DETACHED-RESULT:<value> COMPILED:<the number of functions compiled to native code by the third call, which runs the
 #   code compiled before the debugger attached, or "-" without library debugging>
@@ -42,6 +44,10 @@ class StepFlowDebugger inherits DebugProgram {
         int hits2 = 0;
         #! false while the step events are not recorded and no flow is requested
         bool recording = True;
+        #! the user code functions of the call stack at the first request, innermost first
+        list<string> request_stack = ();
+        #! the local variables of the frame of the code at the first request
+        list<auto> request_locals = ();
     }
 
     constructor(int flow_value, int flow_line, int flow_hit, bool at_block) {
@@ -70,6 +76,10 @@ class StepFlowDebugger inherits DebugProgram {
         if (line == flow_line && (at_block ? !sid : exists sid) && ++hits == flow_hit) {
             flow = flow_value;
             requested = True;
+            # the user code functions of the call stack of the thread at the request, innermost first
+            request_stack = map $1.function, get_thread_call_stack(), $1.type == "user";
+            # the local variables of the frame of the code that made the step event (frame 0 is this method's)
+            request_locals = sort(keys get_local_vars(1) ?? {});
         } else if (requested && exists flow2_value && sid && line == flow2_line && ++hits2 == flow2_hit) {
             flow = flow2_value;
         }
@@ -179,6 +189,7 @@ done.waitForZero();
 # the function does not detach the debugger if it returns at a step event
 dbg.removeProgram(pc);
 printf("RESULT:%s LOG:%y STEPS:%y\n", result, log, dbg.steps);
+printf("REQUEST-STACK:%y FRAME:%y\n", dbg.request_stack, dbg.request_locals);
 if (again) {
     printf("AGAIN-RESULT:%s LOG:%y STEPS:%y\n", again_result, again_log, again_steps);
     printf("DETACHED-RESULT:%s COMPILED:%s\n", detached_result, exists compiled_before

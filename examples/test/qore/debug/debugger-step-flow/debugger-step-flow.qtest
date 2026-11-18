@@ -84,6 +84,10 @@ class DebuggerStepFlowTest inherits QUnit::Test {
               native code (JIT and tiered execution) or in the IR interpreter (IR execution and the IR tier of tiered
               execution), where they are not those of an ignored request (the run without the request) or, for a
               return in the IR interpreter, of the AST interpreter (#6201)
+            - \c inline_callee: the callee of a call path case that the IR interpreter runs inline in the frame that
+              was running at attach (#6473): the call stack at the request has the callee's \c function in every
+              mode, and the frame of the request has the callee's \c local, except in the IR interpreter, where the
+              callee has no frame of local variables of its own and the frame is the caller's
             - \c again: the function is called again with the debugger attached, which takes the request as the AST
               interpreter in every mode (#6201); the value is the result of that call
         */
@@ -514,6 +518,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             },
             {"function": "callpath_method_caller", "flow": "return", "tag": "callpath_method", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::m", "local": "v"},
                 "result": "5",
                 "log": ("1", "11", "null", "31", "41"),
                 "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
@@ -523,6 +528,21 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             # which ignores the break (#6473)
             {"function": "callpath_method_caller", "flow": "break", "tag": "callpath_method", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::m", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
+                    648, "b640", 640),
+                "ir": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603",
+                    603, 604, 648, "b640", 640),
+                },
+            },
+            {"function": "callpath_method_caller", "flow": "continue", "tag": "callpath_method", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::m", "local": "v"},
                 "result": "5",
                 "log": ("1", "11", "null", "31", "41"),
                 "steps": (646, "b603", 603, "b643", 643, 646, "b603", 603, 604, "b643", 643, 646, "b603", 603, 604,
@@ -536,6 +556,7 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             },
             {"function": "callpath_static_caller", "flow": "return", "tag": "callpath_static", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::s", "local": "v"},
                 "result": "5",
                 "log": ("1", "11", "null", "31", "41"),
                 "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
@@ -545,6 +566,21 @@ class DebuggerStepFlowTest inherits QUnit::Test {
             # which ignores the break (#6473)
             {"function": "callpath_static_caller", "flow": "break", "tag": "callpath_static", "hit": 1, "block": False,
                 "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::s", "local": "v"},
+                "result": "5",
+                "log": ("1", "11", "null", "31", "41"),
+                "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
+                    659, "b652", 652),
+                "ir": {
+                    "result": "5",
+                    "log": ("1", "11", "21", "31", "41"),
+                    "steps": (657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608",
+                    608, 609, 659, "b652", 652),
+                },
+            },
+            {"function": "callpath_static_caller", "flow": "continue", "tag": "callpath_static", "hit": 1, "block": False,
+                "call_path": True, "calls": True,
+                "inline_callee": {"function": "CallPathTarget::s", "local": "v"},
                 "result": "5",
                 "log": ("1", "11", "null", "31", "41"),
                 "steps": (657, "b608", 608, "b654", 654, 657, "b608", 608, 609, "b654", 654, 657, "b608", 608, 609,
@@ -737,6 +773,19 @@ class DebuggerStepFlowTest inherits QUnit::Test {
                     string name = "'" + c.function + "@";
                     assertEq(1, (select r.trace, ExecModeHarness::is_native_compilation($1) && $1.find(name) >= 0)
                         .size(), sprintf("%s: %s: compilations of %s()", what, mode, c.function));
+                }
+            }
+            # the frame and call stack at the request in a callee that the IR interpreter runs inline (#6473)
+            if (c.inline_callee) {
+                *list<*string> req = r.out =~ x/^REQUEST-STACK:(.*) FRAME:(.*)$/m;
+                assertTrue((req[0] ?? "").find("\"" + c.inline_callee.function + "\"") >= 0,
+                    sprintf("%s: %s: %s() is on the call stack: %s", what, mode, c.inline_callee.function, req[0]));
+                bool has_local = (req[1] ?? "").find("\"" + c.inline_callee.local + "\"") >= 0;
+                if (mode == "ir") {
+                    assertFalse(has_local, sprintf("%s: %s: the inline callee has no frame of its own: %s", what,
+                        mode, req[1]));
+                } else {
+                    assertTrue(has_local, sprintf("%s: %s: the callee's frame: %s", what, mode, req[1]));
                 }
             }
             # the locals that the IR keeps in native registers in the function (SSA promotion)

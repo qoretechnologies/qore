@@ -21552,6 +21552,54 @@ static QoreValue f_dbg_run_datasource_pending_tests(const QoreListNode* params, 
 }
 #endif
 
+//! native lowering gives the blocks of the paths of a debugger's flow requests no code, and refuses JIT code that
+//! branches to one (#6201)
+/** Only the debug IR of AOT code has the paths (QoreIRFunction::hasDebugFlowPaths()), which only its step events enter;
+    native code takes no requests, so QoreIRToLLVM::lowerFunction() erases the blocks of the paths once every block is
+    lowered.  A JIT function whose code branched to one would branch to code that native code does not have: its
+    lowering fails with an error (fail closed), the function staying on its tier, and does not crash
+*/
+static void ut_jit_debug_flow_block_fail_closed(UnitTestCounters& c) {
+    for (bool branch : {false, true}) {
+        std::string what = branch ? "a branch to a path block: " : "a path block that no code enters: ";
+        QoreIRFunction func("jit_debug_flow_block_fail_closed");
+        QoreIRBuilder builder(&func);
+        QoreIRBasicBlock* entry = func.createBlock("entry");
+        QoreIRBasicBlock* path = func.createBlock("debug.flow.return.0");
+        path->debug_flow = true;
+        builder.setBlock(entry);
+        if (branch) {
+            builder.createBranch(path);
+        } else {
+            builder.createReturnNothing();
+        }
+        builder.setBlock(path);
+        builder.createReturnNothing();
+
+        llvm::LLVMContext llvm_context;
+        llvm::Module module("jit_debug_flow_block_fail_closed", llvm_context);
+        QoreIRToLLVM lowering(llvm_context);
+        std::string error;
+        bool ok = lowering.lowerFunction(func, module, error);
+        if (branch) {
+            UT_ASSERT(c, !ok, (what + "the lowering fails").c_str());
+            UT_ASSERT(c, error.find("paths of a debugger's flow requests") != std::string::npos,
+                (what + "the error names the path block: " + error).c_str());
+            continue;
+        }
+        UT_ASSERT(c, ok, (what + "the lowering succeeds: " + error).c_str());
+        bool path_code = false;
+        for (llvm::Function& llvm_func : module) {
+            for (llvm::BasicBlock& bb : llvm_func) {
+                if (bb.getName().starts_with("debug.flow")) {
+                    path_code = true;
+                }
+            }
+        }
+        UT_ASSERT(c, !path_code, (what + "the block gets no native code").c_str());
+    }
+}
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -21570,6 +21618,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_debug_step_folded_statements(c, rc.getProgram());
     ut_ir_fold_debug_statements_exception_target(c);
+    ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
@@ -21973,6 +22022,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_debug_step_folded_statements(c, rc.getProgram());
     ut_ir_fold_debug_statements_exception_target(c);
+    ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
