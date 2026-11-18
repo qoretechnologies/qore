@@ -30,7 +30,7 @@ public const ConvertApiStringListType = new SoftListDataType("ConvertApiStringLi
 
 #! Data type for one output file of a conversion
 public class ConvertApiFileResultDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions
         const Fields = {
             "FileName": {
@@ -86,7 +86,7 @@ public const ConvertApiFileResultDataType = new ConvertApiFileResultDataType();
 
 #! Response data type for conversions
 public class ConvertApiConversionResponseDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions
         const Fields = {
             "ConversionCost": {
@@ -113,7 +113,7 @@ public class ConvertApiConversionResponseDataType inherits HashDataType {
 
 #! Data type for a converter parameter
 public class ConvertApiConverterParameterDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions
         const Fields = {
             "Name": {
@@ -185,7 +185,7 @@ public const ConvertApiConverterParameterDataType = new ConvertApiConverterParam
 
 #! Response data type for converter information
 public class ConvertApiConverterInfoResponseDataType inherits HashDataType {
-    public {
+    private {
         #! Field definitions
         const Fields = {
             "Name": {
