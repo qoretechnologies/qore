@@ -64,6 +64,7 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreHashKeyHelper.h"
+#include "qore/intern/QoreBufferNodePrivate.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -1802,7 +1803,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             return -1;
         }
         QoreBufferNode* b = getValue().get<QoreBufferNode>();
-        if (!b->isUniqueForMutation()) {
+        if (!qore_buffer_node_private(b).isUniqueForMutation()) {
             ensureUnique();
             b = getValue().get<QoreBufferNode>();
         }
@@ -2868,7 +2869,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                             "(index must evaluate to a non-negative integer)", (int64)original_idx);
                         return -1;
                     }
-                    if (!b->isUniqueForMutation()) {
+                    if (!qore_buffer_node_private(b).isUniqueForMutation()) {
                         ensureUnique();
                         b = getValue().get<QoreBufferNode>();
                     }
