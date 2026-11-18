@@ -1296,14 +1296,21 @@ public:
     }
 
     //! As release(), and returns true if the value released was a node whose release left an exception in the sink
-    /** Every value is released: an enum value holds a reference to its enum, which release() gives up, although it is
-        not a node.  Only the release of a node can run a destructor, so the sink is tested only then (the inline tag
-        test: hasNode() is a call), and a store of a scalar tests no more than release() does (#6244)
+    /** A value that holds a reference is released: a node, and an enum value, which holds a reference to its enum
+        although it is not a node (QoreValue::isReferenceCounted()); a scalar holds none, and is not.  Only the release
+        of a node can run a destructor, so the sink is tested only then.  The tests are the inline tag tests (hasNode()
+        is a call), so a store of a scalar costs nothing more (#6244)
     */
     DLLLOCAL bool releaseRaised(size_t i, ExceptionSink* xsink) {
-        bool node = slots[i].isPointer();
-        release(i, xsink);
-        return node && *xsink;
+        const QoreValue& v = slots[i];
+        if (v.isPointer()) {
+            release(i, xsink);
+            return *xsink;
+        }
+        if (v.isEnum()) {
+            release(i, xsink);
+        }
+        return false;
     }
 
     //! Stores a value in the given slot, which takes its reference; the slot's value has been released
