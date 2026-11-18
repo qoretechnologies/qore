@@ -1569,7 +1569,16 @@ const WARN_NONEXHAUSTIVE_SWITCH = QP_WARN_NONEXHAUSTIVE_SWITCH;
     not refused, also when the thread that holds the lock waits for the parse lock of a third Program itself.  Some
     internal waits for the parse lock (of binary modules, for example) can neither be refused nor ended; when such a
     wait closes a cycle, a wait of a parse action in the cycle is refused instead (unless all of them wait in code
-    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").
+    run with cancellation deferred by @ref Qore::defer_thread_cancel() "defer_thread_cancel()").\n
+    Code that runs in a Program and parses code in it (for example, creates an
+    @ref Qore::Expression "Expression" of the Program) takes the parse lock of the Program like a parse action in
+    another thread: it waits while another thread holds it.  Only the thread that holds the parse lock (the code
+    that a commit runs) parses without waiting.  A thread that an initializer starts and that parses code in the
+    Program therefore waits until the commit ends: when the initializer waits for that thread, neither can go on, and
+    as the thread that holds the lock does not wait for a parse lock, the wait is not refused as one that closes a
+    cycle; it can only be ended with @ref Qore::cancel_thread() "cancel_thread()" or
+    @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()".  The same applies when the
+    thread runs in another Program and parses code in this one.
 
     @ref parse_options "Parse option constants" can be used to limit the capabilities of a Program object. These options should be
     binary-OR'ed together and passed to the Program object's constructor. Also see @ref command_line_processing for equivalent
