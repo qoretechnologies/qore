@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ParseNumberSingleByteTest
+
+#! Tests parse_number(), parse_float() and parse_int() with formats in a single-byte encoding (issue #6238)
+/** The decimal separator of the format was read with all the bytes after it in a single-byte encoding, so the
+    number was not converted
+*/
+class ParseNumberSingleByteTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ParseNumberSingleByteTest", "1.0", \ARGV) {
+        addTestCase("formats in single-byte encodings", \testSingleByte());
+        set_return_value(main());
+    }
+
+    testSingleByte() {
+        foreach string enc in ("ISO-8859-1", "ISO-8859-2", "UTF-8") {
+            string text = convert_encoding("1.234,56", enc);
+            string fmt = convert_encoding(".,2", enc);
+            assertEq(1234.56n, parse_number(text, fmt), enc + ": parse_number()");
+            assertEq(1234.56, parse_float(text, fmt), enc + ": parse_float()");
+            assertEq(1234, parse_int(convert_encoding("1.234", enc), fmt), enc + ": parse_int()");
+            # a format whose decimal separator is the last character
+            assertEq(1234.5n, parse_number(convert_encoding("1 234,5", enc), convert_encoding(" ,", enc)),
+                enc + ": a separator at the end of the format");
+        }
+        # the format in a single-byte encoding and the text in UTF-8
+        assertEq(1234.56n, parse_number("1.234,56", convert_encoding(".,2", "ISO-8859-1")));
+    }
+}

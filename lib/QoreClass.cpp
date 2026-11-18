@@ -1928,7 +1928,41 @@ int qore_class_private::enterSourceProgramForInitSlow(QoreDeclaringProgramHelper
     return -1;
 }
 
+void qore_class_private::markMultiPathAncestors() const {
+    if (!scl) {
+        return;
+    }
+    // the hierarchy is walked iteratively, each class once: a class reached again is reached through a second path
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({scl, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        if (!n.sclass) {
+            continue;
+        }
+        qore_class_private* priv = n.sclass->priv;
+        if (!visited.insert(priv).second) {
+            if (!priv->multi_path.load(std::memory_order_relaxed)) {
+                priv->multi_path.store(true, std::memory_order_relaxed);
+            }
+            continue;
+        }
+        if (priv->scl) {
+            stack.push({priv->scl, 0});
+        }
+    }
+}
+
 int8_t qore_class_private::computeMemberInitCode() const {
+    // computed once for the class, when its first object is created: the base classes reached through more than one
+    // path are marked, so that the walk of the base class constructors of its objects walks each once (qore#6513)
+    markMultiPathAncestors();
     int8_t rv = 0;
     for (auto& i : member_init_list) {
         if (i.info->initIsCode()) {
@@ -2149,6 +2183,13 @@ QORE_INTERN_ALWAYS_INLINE void qore_class_private::execBaseClassConstructorImpl(
     // if there is no constructor, execute the superclass constructors directly
     if (!constructor){
         if (scl) { // execute base class constructors if any
+            // in a hierarchy with a diamond, a class can be reached through more than one path: the base classes of a
+            // class without a constructor are walked once for the object, as a class with a constructor is executed
+            // once (qore#6513); only a class marked as reached through more than one path is recorded, so that
+            // other objects cost nothing more
+            if (multi_path.load(std::memory_order_relaxed) && bceal->visitNoConstructorClass(cls->getID())) {
+                return;
+            }
             if constexpr (Lexical) scl->execConstructors({}, self, bceal, rc, xsink);
             else scl->execConstructors(self, bceal, rc, xsink);
         }
@@ -2690,6 +2731,21 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* BCEAList::findArgsImpl(LexicalSemanticPo
     loc = i->second->loc;
     if constexpr (Lexical) policy = i->second->semantic_policy;
     return i->second->args;
+}
+
+bool BCEAList::visitNoConstructorClass(qore_classid_t classid) {
+    bceamap_t::iterator i = lower_bound(classid);
+    if (i == end() || i->first != classid) {
+        BCEANode* n = new BCEANode(false);
+        n->walked = true;
+        insert(i, bceamap_t::value_type(classid, n));
+        return false;
+    }
+    if (i->second->walked) {
+        return true;
+    }
+    i->second->walked = true;
+    return false;
 }
 
 QoreListNode* BCEAList::findArgs(qore_classid_t classid, bool* aexeced, const AbstractQoreFunctionVariant*& variant, const QoreProgramLocation*& loc) {
@@ -3394,9 +3450,32 @@ int BCList::initialize(QoreClass* cls) {
 }
 
 bool BCList::parseHasPublicMembersInHierarchy() const {
-    for (auto& i : *this) {
-        if ((*i).sclass && qore_class_private::get(*(*i).sclass)->parseHasPublicMembersInHierarchy()) {
+    // the hierarchy is walked iteratively, as for findInHierarchy(), each ancestor once: whether a class or its
+    // ancestors declare public members does not depend on the path to it, and a walk of every path of a diamond
+    // hierarchy is exponential in its depth (issue #6499)
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        if (!n.sclass) {
+            continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        qore_class_private* priv = n.sclass->priv;
+        if (!visited.insert(priv).second) {
+            continue;
+        }
+        if (priv->has_public_memdecl || priv->pending_has_public_memdecl) {
             return true;
+        }
+        if (priv->scl) {
+            stack.push({priv->scl, 0});
         }
     }
     return false;
@@ -3508,6 +3587,8 @@ bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void BCList::execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
     for (auto& i : *this) {
+        // counted in debug builds only (qore#6513)
+        QORE_CLASS_HIERARCHY_WALK_STEP();
         if constexpr (Lexical) (*i).execConstructors({}, o, bceal, rc, xsink);
         else (*i).execConstructors(o, bceal, rc, xsink);
         if (*xsink)
@@ -3561,32 +3642,68 @@ void BCList::addNewStaticAncestors(QoreMethod* m) {
     }
 }
 
+// the methods of a builtin class's base classes are added once each: the hierarchy is walked iteratively, depth first
+// in the order of the base classes as the recursion that this replaces, each class once, so that a base class reached
+// through more than one path of a diamond hierarchy has its method once in the inheritance list, as for user classes,
+// and the walk is linear in the hierarchy (issues #6488, #6499)
 void BCList::addAncestors(QoreMethod* m) {
     const char* name = m->getName();
-    for (auto& i : *this) {
-        QoreClass* qc = (*i).sclass;
+    auto* mf = qore_method_private::get(*m)->getFunction();
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        QoreClass* qc = n.sclass;
         assert(qc);
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (!visited.insert(qc->priv).second) {
+            continue;
+        }
 
         const QoreMethod* w = qc->priv->findLocalCommittedMethod(name);
-        if (w)
-            qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                (*i).access);
-
-        qc->priv->addAncestors(m);
+        if (w) {
+            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), n.access);
+        }
+        if (qc->priv->scl) {
+            stack.push({qc->priv->scl, 0});
+        }
     }
 }
 
 void BCList::addStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
-    for (auto& i : *this) {
-        QoreClass* qc = (*i).sclass;
+    auto* mf = qore_method_private::get(*m)->getFunction();
+    // as for addAncestors()
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        QoreClass* qc = n.sclass;
         assert(qc);
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (!visited.insert(qc->priv).second) {
+            continue;
+        }
 
         const QoreMethod* w = qc->priv->findLocalCommittedStaticMethod(name);
-        if (w)
-            qore_method_private::get(*m)->getFunction()->addAncestor(qore_method_private::get(*w)->getFunction(),
-                (*i).access);
-        qc->priv->addStaticAncestors(m);
+        if (w) {
+            mf->addNewAncestor(qore_method_private::get(*w)->getFunction(), n.access);
+        }
+        if (qc->priv->scl) {
+            stack.push({qc->priv->scl, 0});
+        }
     }
 }
 
@@ -3613,6 +3730,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
         if (!qc) {
             continue;
         }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
         // each ancestor is visited once: a class reached through another path of a diamond hierarchy has been added
         // with its own ancestors already, at its first position (issue #6488)
         if (!visited.insert(qc->priv).second) {
@@ -3651,6 +3769,7 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
         if (!qc) {
             continue;
         }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
         // each ancestor is visited once, as in parseAddAncestors() (issue #6488)
         if (!visited.insert(qc->priv).second) {
             continue;
@@ -3722,6 +3841,9 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
     HierarchyWalkStack<HierarchyWalkFrame> stack;
+    // each ancestor is visited once: a class reached again through another path of a diamond hierarchy has been
+    // searched with its ancestors already, so that the walk is linear in the hierarchy, not in its paths (issue #6499)
+    qcp_set_t visited;
     stack.push({this, 0});
     while (!stack.empty()) {
         HierarchyWalkFrame& f = stack.back();
@@ -3735,6 +3857,10 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
             continue;
         }
         QORE_CLASS_HIERARCHY_STEP();
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (!visited.insert(n.sclass->priv).second) {
+            continue;
+        }
         if (n.sclass->priv->equal(qc)) {
             return n.sclass->priv->cls;
         }
@@ -3805,53 +3931,79 @@ bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_acce
 
 MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
         const QoreTypeInfo* receiver) const {
-    for (auto& i : *this) {
-        const QoreClass* nqc = (*i).sclass;
-        //printd(5, "BCList::matchNonAbstractVariant() this: %p %s::%s %p (%s) ncq: %p\n", this, nqc ? nqc->getName() : "n/a", name.c_str(), v, v->getAbstractSignature(), nqc);
-
+    // the hierarchy is walked iteratively, depth first in the order of the base classes as the recursion that this
+    // replaces, each class once: a class reached again through another path of a diamond hierarchy has been searched
+    // with its ancestors already, without a match, so that the walk is linear in the hierarchy, not in its paths
+    // (issue #6499)
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const QoreClass* nqc = (*(*f.list)[f.next++]).sclass;
         // nqc may be 0 if there were a parse error with an unknown class earlier
         // also if the original abstract variant comes from the class being searched, then skip it
-        if (!nqc || v->getClass() == nqc)
+        if (!nqc || v->getClass() == nqc) {
             continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (!visited.insert(nqc->priv).second) {
+            continue;
+        }
 
         QoreMethod* m = nqc->priv->parseFindLocalMethod(name);
         if (m) {
-            MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
-            MethodVariantBase* ov = f->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match, receiver);
-            if (ov && !ov->isAbstract())
+            auto* mf = qore_method_private::get(*m)->getFunction();
+            MethodVariantBase* ov = mf->parseHasVariantWithSignature(v, nqc->priv->ahm.relaxed_match, receiver);
+            if (ov && !ov->isAbstract()) {
                 return ov;
+            }
         }
         if (nqc->priv->scl) {
-            MethodVariantBase* ov = nqc->priv->scl->matchNonAbstractVariant(name, v, receiver);
-            if (ov)
-                return ov;
+            stack.push({nqc->priv->scl, 0});
         }
     }
 
     return nullptr;
 }
 
-// runtime version for dynamically-created classes (e.g., JNI classes)
 MethodVariantBase* BCList::runtimeMatchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
         bool relaxed_match) const {
-    for (auto& i : *this) {
-        const QoreClass* nqc = (*i).sclass;
+    // the hierarchy is walked iteratively, each class once, as in matchNonAbstractVariant() (issue #6499)
+    HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
+    stack.push({this, 0});
+    while (!stack.empty()) {
+        HierarchyWalkFrame& f = stack.back();
+        if (f.next == f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const QoreClass* nqc = (*(*f.list)[f.next++]).sclass;
         // nqc may be nullptr if there were errors earlier
         // also if the original abstract variant comes from the class being searched, then skip it
-        if (!nqc || v->getClass() == nqc)
+        if (!nqc || v->getClass() == nqc) {
             continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (!visited.insert(nqc->priv).second) {
+            continue;
+        }
 
         QoreMethod* m = nqc->priv->findLocalCommittedMethod(name.c_str());
         if (m) {
-            MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
-            MethodVariantBase* ov = f->runtimeHasVariantWithSignature(v, relaxed_match);
-            if (ov && !ov->isAbstract())
+            auto* mf = qore_method_private::get(*m)->getFunction();
+            MethodVariantBase* ov = mf->runtimeHasVariantWithSignature(v, relaxed_match);
+            if (ov && !ov->isAbstract()) {
                 return ov;
+            }
         }
         if (nqc->priv->scl) {
-            MethodVariantBase* ov = nqc->priv->scl->runtimeMatchNonAbstractVariant(name, v, relaxed_match);
-            if (ov)
-                return ov;
+            stack.push({nqc->priv->scl, 0});
         }
     }
 
@@ -6261,6 +6413,10 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
     // the base classes of the class itself from its class list (sml)
     assert(this == thisparent->priv->scl);
     HierarchyWalkStack<AddBaseClassesFrame> stack;
+    // each base class is walked once: a class reached again through another path of a diamond hierarchy has been
+    // added to the subclass with its base classes already (BCSMList::add() keeps the first entry, also its virtual
+    // flag), so that the walk is linear in the hierarchy, not in its paths (issue #6499)
+    qcp_set_t visited;
     stack.push({thisparent, thisparent->priv, is_virtual, 0});
     while (!stack.empty()) {
         AddBaseClassesFrame& f = stack.back();
@@ -6272,6 +6428,10 @@ int BCList::addBaseClassesToSubclass(QoreClass* thisparent, QoreClass* child, bo
             QORE_CLASS_HIERARCHY_STEP();
             // issue #2318 must check for duplicate base classes here; sclass may be 0 in case of a parse exception
             if (!n.sclass) {
+                continue;
+            }
+            QORE_CLASS_HIERARCHY_WALK_STEP();
+            if (!visited.insert(n.sclass->priv).second) {
                 continue;
             }
             if (n.sclass->priv->scl && n.sclass->priv->scl->findInHierarchy(*child->priv)) {
@@ -7160,6 +7320,7 @@ void collect_hierarchy_functions(const qore_class_private& qc, const std::string
 
 #ifdef DEBUG
 std::atomic<int64> qore_generic_parent_check_steps{0};
+std::atomic<int64> qore_class_hierarchy_walk_steps{0};
 #endif
 
 namespace {
@@ -9938,8 +10099,11 @@ QoreMemberInfo::QoreMemberInfo(const QoreMemberInfo& old, const qore_class_priva
         //printd(5, "QoreMemberInfo::QoreMemberInfo() added class %p '%s' to inheritance list\n", cls,
         //    cls->name.c_str());
     } else {
-        // when importing internal members, add context access entries for the child classes
-        if (!member_info_list) {
+        // when importing internal members, add context access entries for the child classes; a member declared in the
+        // class it is imported from has entries already when it hides a private:internal member of a base class with
+        // the same name, but none for its own class, which is added here too, or the member of that class would be
+        // neither initialized nor accessed in its own storage in an object of a subclass (issue #6402)
+        if (!member_info_list || old.local()) {
             //printd(5, "QoreMemberInfo::QoreMemberInfo() adding context access for class %p '%s'\n",
             //    old.getLastClass(), old.getLastClass()->name.c_str());
             // add context to last class

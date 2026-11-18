@@ -40,6 +40,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <cstdio>
 
@@ -177,7 +178,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
     // TCP + SSL handshake done.  Read the negotiated ALPN protocol.
-    SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocolForAsyncPoll());
+    SimpleRefHolder<QoreStringNode> alpn(qore_socket_object_private(sock_obj).getAlpnProtocolForAsyncPoll());
     std::string alpn_id;
     if (alpn && !alpn->empty()) {
         alpn_id = alpn->c_str();
@@ -401,7 +402,7 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
     }
     if (!ssl_config.ca_file.empty() || !ssl_config.ca_path.empty()) {
         // the socket is not submitted yet, so it is configured directly
-        sock_priv_raw->setSslCaLocationsForAsyncPoll(
+        qore_socket_object_private(sock_priv_raw).setSslCaLocationsForAsyncPoll(
             ssl_config.ca_file.empty() ? nullptr : ssl_config.ca_file.c_str(),
             ssl_config.ca_path.empty() ? nullptr : ssl_config.ca_path.c_str(), xsink);
         if (*xsink) {

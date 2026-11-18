@@ -141,11 +141,11 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
 
         string url = TokenRefreshUriPath;
         on_success debug("Haltian: POST to %y successful", url);
-        # the request body (credentials or the refresh token) is not logged, and the request headers are logged with
-        # their credentials redacted
+        # the request body (credentials or the refresh token) is not logged, and the request and response headers
+        # are logged with their credentials redacted
         on_error debug("Haltian: POST to %y failed: %s: %s request: %y headers: %y response: %y headers: %y body: %y",
             url, $1.err, $1.desc, info."request-uri", RestDiagnostics::headers(info.headers), info."response-uri",
-            info."response-headers-raw", info."response-body");
+            RestDiagnostics::headers(info."response-headers-raw"), info."response-body");
         return RestClient::doRequestIntern("POST", url, login, \info).body;
     }
 
@@ -158,11 +158,11 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
 
         string url = LoginUriPath;
         on_success debug("Haltian: POST to %y successful", url);
-        # the request body (credentials or the refresh token) is not logged, and the request headers are logged with
-        # their credentials redacted
+        # the request body (credentials or the refresh token) is not logged, and the request and response headers
+        # are logged with their credentials redacted
         on_error debug("Haltian: POST to %y failed: %s: %s request: %y headers: %y response: %y headers: %y body: %y",
             url, $1.err, $1.desc, info."request-uri", RestDiagnostics::headers(info.headers), info."response-uri",
-            info."response-headers-raw", info."response-body");
+            RestDiagnostics::headers(info."response-headers-raw"), info."response-body");
         return RestClient::doRequestIntern("POST", url, login, \info).body;
     }
 

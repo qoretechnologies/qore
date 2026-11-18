@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of push and unshift on lvalue paths
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class PushUnshiftErrorsTest
+
+#! push and unshift on a value that is not a list raise the errors of the AST interpreter in every mode
+/** The IR interpreter and native code (qore_rt_lv_path_binary_mut_impl()) gave the errors of push and unshift through
+    a member or an element without the operator's name: "the lvalue argument is type ..." instead of "the lvalue
+    argument to push is type ..."
+*/
+class PushUnshiftErrorsTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/PushUnshiftErrors/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("push and unshift errors", "1.0", \ARGV) {
+        addTestCase("AST errors", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = "\n" + getAst();
+        foreach string lv in ("local", "member", "element") {
+            assertRegex("\nunshift " + lv + ": UNSHIFT-ERROR: the lvalue argument to unshift is type \"string\"; "
+                "expecting \"list\"\n", out, "unshift " + lv);
+            assertRegex("\npush " + lv + ": PUSH-ERROR: the lvalue argument to push is type \"string\"; "
+                "expecting \"list\"\n", out, "push " + lv);
+        }
+        assertRegex("\npush int member: PUSH-ERROR: the lvalue argument to push is type \"integer\"; ", out);
+        # the lvalues are left as they were
+        assertRegex("\nafter: s=\"str\" h=\\{s: \"str\", i: 1\\} l=\\[\"str\", 2\\]\n", out);
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+                probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-push-unshift-errors-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

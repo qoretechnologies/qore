@@ -867,10 +867,10 @@ public class VscDebugAdapterTest inherits QUnit::Test {
             "columnsStartAt1": True, "pathFormat": "path"});
         assertTrue(r.success, r.message);
         # the adapter sends no stopped event before a program is launched
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         assertThrows("DAP-ERROR", "^no stopped event from the adapter within <time: 2 seconds>; the messages received "
             "and not taken: .*; stray output: .*; adapter stderr: ", \dap.waitForEvent(), ("stopped", 2s));
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         assertTrue(elapsed >= 2s, sprintf("%y", elapsed));
         assertTrue(elapsed < 30s, sprintf("%y", elapsed));
         # the adapter is still running: the wait ended at the deadline, not at the end of the adapter's output

@@ -42,6 +42,7 @@
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/WebSocketStreamFrameState.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 // Forward declarations for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -82,7 +83,7 @@ bool Http2PollOperationPriv::goalReached() const {
 }
 
 void Http2PollOperationPriv::collectResponseSendResults() {
-    std::vector<std::pair<int32_t, bool>> results = sock->takeHttp2ResponseSendResultsForAsyncPoll();
+    std::vector<std::pair<int32_t, bool>> results = qore_socket_object_private(sock).takeHttp2ResponseSendResultsForAsyncPoll();
     response_send_results.insert(response_send_results.end(), results.begin(), results.end());
 }
 
@@ -170,7 +171,7 @@ int Http2PollOperationPriv::startDrain(ExceptionSink* xsink) {
     // set before the GOAWAY is submitted, so that the read cycle that the submission's wake runs sees it
     drain_requested.store(true, std::memory_order_release);
     // the submission waits for the socket's I/O thread, whose continuePoll() takes op_lock, so it is made without it
-    int rv = s->startHttp2Drain(xsink);
+    int rv = qore_socket_object_private(s).startHttp2Drain(xsink);
     s->deref(xsink);
     return rv;
 }
@@ -186,7 +187,7 @@ int Http2PollOperationPriv::sendShutdownGoaway(ExceptionSink* xsink) {
         s->ref();
     }
     // the write waits for the socket's I/O thread, whose continuePoll() takes op_lock, so it is made without the lock
-    int rv = s->sendHttp2ShutdownGoaway(xsink);
+    int rv = qore_socket_object_private(s).sendHttp2ShutdownGoaway(xsink);
     s->deref(xsink);
     return rv;
 }
@@ -361,7 +362,7 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
     // WebSocket responses sit in the nghttp2 session buffer and never reach
     // the client — the read poll cycle only reads, it doesn't write.
     {
-        int srv = sock->flushHttp2PendingDataForAsyncPoll(xsink);
+        int srv = qore_socket_object_private(sock).flushHttp2PendingDataForAsyncPoll(xsink);
         if (*xsink) {
             h2_state = H2ServerState::CLOSED;
             return nullptr;
@@ -548,12 +549,12 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     // the body, even once the handler is done with it (Http2Session::cleanupStream()); marked before the
     // registration is visible to the I/O thread, so that the drain cannot complete the Queue before
     if (request_body) {
-        sock->setHttp2StreamBodyConsumer(stream_id);
+        qore_socket_object_private(sock).setHttp2StreamBodyConsumer(stream_id);
     }
     // the data that a bounded queue has no room for stays in the stream without stream credit, so the client cannot
     // send more than the stream's window beyond what the queue holds (issue #5859)
     if (queue->getMax() > 0) {
-        sock->setHttp2StreamCreditOnConsume(stream_id);
+        qore_socket_object_private(sock).setHttp2StreamCreditOnConsume(stream_id);
     }
     {
         AutoLocker al(sq_lock);
@@ -587,7 +588,7 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
                 notifier_obj->deref(nullptr);
             }
             if (request_body) {
-                sock->releaseHttp2StreamBodyConsumer(stream_id);
+                qore_socket_object_private(sock).releaseHttp2StreamBodyConsumer(stream_id);
             }
             return;
         }
@@ -621,7 +622,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
+            int rv = qore_socket_object_private(sock_ptr).sendHttp2StreamControlFrameForAsyncPoll(stream_id, *holder, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path.
                 cxsink.clear();
@@ -661,7 +662,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
     // directly into the frame state so we don't lose pre-registration data.
     ExceptionSink xsink;
     while (true) {
-        BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
+        BinaryNode* data = qore_socket_object_private(sock).readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
         if (xsink) {
             xsink.clear();
             break;
@@ -746,7 +747,7 @@ void Http2PollOperationPriv::deliverPersistentSessionClose(ExceptionSink* xsink)
     // method must NOT re-acquire it (op_lock is non-recursive).  register /
     // deregister run on other threads under op_lock, so they are excluded for
     // the duration of this access.
-    std::vector<int32_t> resets = sock->takeHttp2PeerResetReportsForAsyncPoll();
+    std::vector<int32_t> resets = qore_socket_object_private(sock).takeHttp2PeerResetReportsForAsyncPoll();
     if (resets.empty()) {
         return;
     }
@@ -880,7 +881,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
             }
         }
         while (!full) {
-            BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
+            BinaryNode* data = qore_socket_object_private(sock).readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
                 return;
             }
@@ -926,7 +927,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // registration, which ends with the error for an incomplete body (issue #5859); a stream that ended
         // normally keeps its data for a reader that reads the queue to its end
         if (full) {
-            if (sock->isHttp2StreamResetForAsyncPoll(stream_id) || !sock->isOpen()) {
+            if (qore_socket_object_private(sock).isHttp2StreamResetForAsyncPoll(stream_id) || !sock->isOpen()) {
                 if (info.pending) {
                     info.pending->deref(xsink);
                     info.pending = nullptr;
@@ -945,7 +946,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // An oversized request body ends with an error instead of the NOTHING sentinel, so a consumer can never
         // take the part it received for the complete body; the bytes buffered when the limit was exceeded were
         // drained above, so a consumer that counts them sees more than the limit before the error
-        if (!info.frame_state && sock->isHttp2StreamBodyTooLargeForAsyncPoll(stream_id)) {
+        if (!info.frame_state && qore_socket_object_private(sock).isHttp2StreamBodyTooLargeForAsyncPoll(stream_id)) {
             ReferenceHolder<QoreHashNode> err(new QoreHashNode(autoTypeInfo), xsink);
             err->setKeyValue("err", new QoreStringNode("HTTP-BODY-TOO-LARGE"), xsink);
             err->setKeyValue("desc", new QoreStringNodeMaker("HTTP/2 request body on stream %d exceeds the "
@@ -970,14 +971,14 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // A CONNECT tunnel (no request body, no WebSocket frame state) of a draining connection is ended as well:
         // a tunnel has no end that a drain could wait for, and its handler ends the stream when its inbound side ends
         // (qore#5899); a WebSocket tunnel is closed with its closing handshake by the server instead
-        if (sock->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
-                || sock->isHttp2StreamClosedForAsyncPoll(stream_id)
+        if (qore_socket_object_private(sock).isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
+                || qore_socket_object_private(sock).isHttp2StreamClosedForAsyncPoll(stream_id)
                 || !sock->isOpen()
                 || (!info.request_body && !info.frame_state && drain_requested.load(std::memory_order_acquire))) {
             // Push the end of the stream so the handler thread knows the stream is done; the data received before
             // END_STREAM was drained above.  A request body closed without END_STREAM (RST_STREAM, a dropped
             // connection) ends with an error, so its consumer cannot take the part it received for the complete body
-            pushStreamEnd(stream_id, info, sock->isHttp2StreamEndStreamReceivedForAsyncPoll(stream_id),
+            pushStreamEnd(stream_id, info, qore_socket_object_private(sock).isHttp2StreamEndStreamReceivedForAsyncPoll(stream_id),
                 sock->isOpen() ? "the stream was closed" : "the connection was closed", xsink);
             // Also mark as data-ready so the handler wakes up for the sentinel
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
@@ -1018,7 +1019,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
             // the Queue has received the end of the request body: the session can remove the stream once its
             // handler is done with it and it is closed
             if (request_body) {
-                sock->releaseHttp2StreamBodyConsumer(sid);
+                qore_socket_object_private(sock).releaseHttp2StreamBodyConsumer(sid);
             }
         }
     }
@@ -1091,7 +1092,7 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
             info.notifier_obj->deref(xsink);
         }
         if (info.request_body) {
-            sock->releaseHttp2StreamBodyConsumer(stream_id);
+            qore_socket_object_private(sock).releaseHttp2StreamBodyConsumer(stream_id);
         }
     }
     stream_queues.clear();

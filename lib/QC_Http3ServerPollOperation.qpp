@@ -41,6 +41,7 @@
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <exception>
 
@@ -765,7 +766,7 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
     // a draining server ends the CONNECT tunnels, which have no end that a drain could wait for: the handler ends
     // the stream when the inbound side of its tunnel ends; a WebSocket tunnel is closed with its closing handshake by
     // the server instead (qore#5899)
-    if (!tunnel_stream_keys.empty() && sock_obj && sock_obj->isHttpDraining()) {
+    if (!tunnel_stream_keys.empty() && sock_obj && qore_socket_object_private(sock_obj).isHttpDraining()) {
         for (const std::string& skey : tunnel_stream_keys) {
             auto i = stream_queues.find(skey);
             if (i != stream_queues.end()) {

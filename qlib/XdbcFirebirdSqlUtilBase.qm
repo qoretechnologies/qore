@@ -237,6 +237,8 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
 
 
     @section xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+    - implemented @ref select_option_recursive "recursive queries" on Firebird, which runs them to a \c max_depth of
+      at most 1023 (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select, which Firebird
       does not have, raise \c SET-OPERATOR-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
@@ -1570,6 +1572,14 @@ string sql = db.getSqlIdentifier("Order Date");
 
     #! provides the XdbcFirebird-specific implementation of the AbstractTable interface
     public class XdbcFirebirdTable inherits SqlUtil::AbstractTable {
+        #! the largest \c max_depth of a recursive query that Firebird can run
+        /** Firebird ends a recursive query with an error (\c "Too many concurrent executions of the same request")
+            when it reaches 1024 levels of recursion
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        const FirebirdRecursionDepthLimit = 1023;
+
         public {
             #! maps xdbcfirebird type names to type configurations
             const XdbcFirebirdTypeMap = {
@@ -3350,6 +3360,26 @@ string str = table.getSqlValue(date);
                     op);
             }
             return AbstractTable::getSetOperatorSql(op);
+        }
+
+        #! Returns @ref nothing: Firebird supports recursive queries (see @ref select_option_recursive)
+        /** @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        private *string getRecursiveQueryUnsupportedReasonImpl() {
+        }
+
+        #! Returns @ref False: a recursive query needs \c UNION \c ALL on Firebird
+        /** @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        private bool recursiveQuerySupportsUnionDistinctImpl() {
+            return False;
+        }
+
+        #! Returns 1023: Firebird ends a recursive query with an error when it reaches 1024 levels
+        /** @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        private *int getRecursiveQueryMaxDepthLimitImpl() {
+            return FirebirdRecursionDepthLimit;
         }
 
         #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement

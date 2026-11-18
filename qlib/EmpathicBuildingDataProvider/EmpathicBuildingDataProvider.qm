@@ -192,7 +192,9 @@ module EmpathicBuildingDataProvider {
       @ref EmpathicBuildingDataProvider::EmpathicBuildingRestClient "EmpathicBuildingRestClient" describes its login
       request when the login fails; it was left empty
     - the debug message of a failed login or token refresh no longer contains the request body (with the password or the
-      refresh token) and gives the request headers with their credentials redacted
+      refresh token) and gives the request and response headers with their credentials redacted, and the debug
+      message of a REST request gives the client URL with any password masked
+      (<a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)
     - migrated to the async multiplexed @ref RestClientIo::RestClientIo "RestClientIo"
       transport (HTTP/1.1/2/3) on the default build path; the \c restclient data provider
       option is widened to @ref RestClient::AbstractRestClient "AbstractRestClient"

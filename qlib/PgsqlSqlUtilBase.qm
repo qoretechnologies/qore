@@ -235,6 +235,7 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - implemented @ref select_option_recursive "recursive queries" on PostgreSQL (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed writing a string to a \c json or \c jsonb column with an insert, an update or an upsert, which
       PostgreSQL refused as \c text; the value is cast to the column's type in the SQL
       (<a href="https://github.com/qoretechnologies/qore/issues/4448">issue 4448</a>)
@@ -4906,8 +4907,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     /** the schema is given as the name of the table gives it, or quoted if it needs quotes
     */
     string getSqlName() {
+        # issue #3544: the common table expression of a recursive query has no schema
+        if (recursive_cte) {
+            return pgsql_get_sql_identifier(name);
+        }
         return (sql_schema ? pgsql_get_sql_schema(sql_schema) : pgsql_quote_identifier(schema)) + "."
             + (pgsql_is_quoted_identifier(name) ? name : pgsql_get_sql_identifier(name));
+    }
+
+    #! Returns @ref nothing: PostgreSQL supports recursive queries (see @ref select_option_recursive)
+    /** @since PgsqlSqlUtilBase 1.19
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
     }
 
     #! returns a name as an SQL identifier for PostgreSQL
