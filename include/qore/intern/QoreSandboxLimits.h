@@ -177,6 +177,13 @@ private:
     std::atomic<bool> expired{false};
     //! the limit that expired the budget (@ref QSB_LIMIT_WALL_TIME or @ref QSB_LIMIT_CPU_TIME); set before expired
     unsigned expired_kind = 0;
+    //! true for the budget that carries the charge of an entry into a sandbox in a trusted build (see
+    //! QoreSandboxBudgetStack::enterInBuild()); set before the budget is shared
+    bool carrier = false;
+    //! true for a carrier of the caller's code: the code that it runs is the caller's call as well
+    bool caller_carrier = false;
+    //! true for a carrier of the build's own entry of a sandbox of the Program that created the capability
+    bool build_own_carrier = false;
 
     //! a thread attached to the budget; guarded by the watchdog lock
     struct Attachment {
@@ -253,7 +260,21 @@ public:
     DLLLOCAL void enter(int tid, QoreSandboxManager* sm, const void* owner);
 
     //! Attaches budgets captured for a continuation of a call; an expired budget sets the limit bit at once
-    DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner);
+    /** @param in_build true if the budgets were captured in a trusted build: the continuation runs in a build with no
+        caller (see suspendCharge()), until leave()
+    */
+    DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false);
+
+    //! Returns true if the thread runs a trusted build (see suspendCharge())
+    DLLLOCAL bool inBuild() const {
+        return !charge_floors.empty();
+    }
+
+    //! Enters the sandbox of the Program that created a trusted build capability, as the build's own code
+    /** Its charge has the accounts of \a sm only: not the caller's, also when the caller is the code of that
+        %Program (see enterInBuild())
+    */
+    DLLLOCAL void enterBuildOwn(int tid, QoreSandboxManager* sm, const void* owner);
 
     //! Removes the frames that \a owner attached, which must be on the top of the stack
     DLLLOCAL void leave(int tid, const void* owner) {
@@ -270,24 +291,24 @@ public:
 
     //! Starts the memory accounting of a trusted build (SandboxManager::createTrustedBuildCall())
     /** The memory that the build's own code allocates is shared state, charged to no call: the thread's charge is
-        suspended.  Code of a sandbox whose budget is below the build (the caller's code that the build calls) is
-        charged to that budget again while it runs: entering its sandbox pushes a frame that makes the budget's charge
-        current (see enter()); if that frame cannot be recorded, the call is lost (see lose()).  Every call must be
-        paired with resumeCharge(); may throw std::bad_alloc.
+        suspended.  Code that a sandbox governs and that the build runs is charged to the sandboxes that govern it, and
+        also to the caller's call if a sandbox of the caller governs it (the caller's code), as when the caller calls
+        it directly (see enter()).  Every call must be paired with resumeCharge(); may throw std::bad_alloc.
 
-        @return the suspended charge, for resumeCharge()
+        @param callers the sandboxes that governed the caller when the build started (a manager or a composite), or
+        nullptr; it must stay valid until resumeCharge()
     */
-    DLLLOCAL QoreSandboxCharge* suspendCharge();
+    DLLLOCAL void suspendCharge(const QoreSandboxManager* callers);
 
     //! Ends the memory accounting of a trusted build started with suspendCharge()
-    DLLLOCAL void resumeCharge(QoreSandboxCharge* saved);
+    DLLLOCAL void resumeCharge();
 
 private:
-    //! Makes the charge of the budget of \a sm current again if it is below the innermost trusted build
-    /** @param entry_start the number of frames when the enter() call that calls it started: a charge that a frame
-        pushed since then made current is combined with the budget's charge
-    */
-    DLLLOCAL void enterBelowBuild(int tid, QoreSandboxManager* sm, const void* owner, size_t entry_start);
+    //! Enters \a sm inside a trusted build (see suspendCharge())
+    DLLLOCAL void enterInBuild(int tid, QoreSandboxManager* sm, const void* owner, bool build_own = false);
+
+    //! Returns true if \a sm is a sandbox that the build entered as its own (see enterBuildOwn())
+    DLLLOCAL bool isBuildOwnSandbox(size_t floor_frames, const QoreSandboxManager* sm) const;
 
 public:
 
@@ -326,9 +347,9 @@ private:
     struct Frame {
         QoreSandboxCallBudget* budget;
         const void* owner;
-        //! true for a frame that only makes the charge of a budget below a trusted build current again (see enter());
-        //! the budget is attached to the watchdog by its own frame
-        bool charge_only;
+        //! true for a frame of a budget below a trusted build that its code runs under again (see enterInBuild()); the
+        //! budget is attached to the watchdog by its own frame
+        bool shared;
         //! the thread's stack limit address before the frame was pushed
         size_t saved_stack_limit;
         //! the stack limit address the frame set, or 0 if it did not change the limit
@@ -337,13 +358,21 @@ private:
         QoreSandboxCharge* saved_charge;
         //! true if the frame made its budget's charge the thread's charge
         bool charge_set;
-        //! a charge that the frame created and made the thread's charge (referenced), or nullptr; see
-        //! enterBelowBuild()
-        QoreSandboxCharge* owned_charge = nullptr;
     };
     std::vector<Frame> frames;
-    //! the number of frames when each trusted build that the thread runs started (see suspendCharge())
-    std::vector<size_t> charge_floors;
+    //! a trusted build that the thread runs (see suspendCharge())
+    struct BuildFloor {
+        //! the number of frames when the build started
+        size_t frames;
+        //! the charge of the caller's call when the build started
+        QoreSandboxCharge* saved;
+        //! the sandboxes that governed the caller then, or nullptr
+        const QoreSandboxManager* callers;
+        //! the helper of a continuation that attached the floor (see attach()), or nullptr for a build
+        const void* owner;
+    };
+    //! the trusted builds that the thread runs, innermost last
+    std::vector<BuildFloor> charge_floors;
     //! the helper whose frame could not be recorded, or nullptr; see the class documentation
     const void* lost_owner = nullptr;
     //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)

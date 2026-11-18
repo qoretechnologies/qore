@@ -2232,8 +2232,14 @@ private:
         if (!build) {
             return 0;
         }
+        // the sandboxes that govern the caller, resolved before the barrier hides them: the code that they govern is
+        // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
+        QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
         barrier.emplace(QoreTrustedBuildTag());
         if (!barrier->established()) {
+            if (callers) {
+                callers->deref(nullptr);
+            }
             xsink->outOfMemory();
             return -1;
         }
@@ -2241,7 +2247,7 @@ private:
         // the Program that created the capability, if it has a memory limit; the caller's code that it calls stays
         // charged to the caller (QoreSandboxBudgetStack::suspendCharge()); the floor is set before the creator is
         // entered, so that the creator's budgets are above it
-        charge.emplace(trusted_program);
+        charge.emplace(trusted_program, callers);
         if (!charge->established()) {
             xsink->outOfMemory();
             return -1;
