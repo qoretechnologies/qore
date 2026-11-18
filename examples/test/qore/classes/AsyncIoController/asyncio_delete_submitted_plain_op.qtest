@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - deletion of Socket, File, FTP and HTTPClient poll operations while an async I/O thread continues them
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AsyncIoDeleteSubmittedPlainOpTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! The bound on the deletion: the I/O thread is held for up to a minute, and a deletion that waits for it fails first
+const DeleteGuard = 30s;
+
+#! a connected TCP socket pair
+class SocketPair {
+    public {
+        #! the client end
+        Socket client();
+        #! the server end
+        Socket server;
+    }
+
+    private {
+        Socket listener();
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, HangGuard);
+        *Socket s = listener.accept(HangGuard);
+        if (!s) {
+            throw "TEST-ERROR", "the connection was not accepted";
+        }
+        server = s;
+    }
+
+    #! returns the port of the listener
+    int getPort() {
+        return listener.getSocketInfo().port;
+    }
+
+    close() {
+        client.close();
+        server.close();
+        listener.close();
+    }
+}
+
+#! A submitted Socket, File, FTP or HTTPClient poll operation that is deleted is canceled (issue #6505)
+/** As for the operations of issue #6464, the I/O thread is held when it is committed to a step of the operation, the
+    operation is deleted from another thread, which must not wait for the I/O thread, and the I/O thread is released:
+    the controller completes the operation as canceled, without another step.
+*/
+class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoDeleteSubmittedPlainOpTest", "1.0") {
+        addTestCase("Socket receive operation", \socketRecvTest());
+        addTestCase("Socket connect operation", \socketConnectTest());
+        addTestCase("File operation", \fileTest());
+        addTestCase("FTP control operation", \ftpControlTest());
+        addTestCase("FTP data operation", \ftpDataTest());
+        addTestCase("FTP PORT accept operation", \ftpPortAcceptTest());
+        addTestCase("HTTPClient connect operation", \httpClientTest());
+        set_return_value(main());
+    }
+
+    socketRecvTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation waits for data that the server never sends
+        deleteInStep(p.client, p.client.startPollRecvString(4), "socket-recv");
+    }
+
+    socketConnectTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        Socket s();
+        deleteInStep(s, s.startPollConnect("127.0.0.1:" + p.getPort()), "socket-connect");
+    }
+
+    fileTest() {
+        checkDebug();
+        TmpDir tmp("qore-asyncio-delete-file-");
+        string path = tmp.path + DirSep + "data.txt";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("data");
+        f.close();
+        ReadOnlyFile rf(path);
+        deleteInStep(rf, new FilePollOperation(rf, path, True), "file");
+    }
+
+    ftpControlTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation connects to the listener of the pair and waits for a greeting that is never sent
+        deleteInStep(p.client, new FtpControlPollOperation("127.0.0.1", p.getPort()), "ftp-control");
+    }
+
+    ftpDataTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation connects to the listener of the pair and reads data that is never sent
+        deleteInStep(p.client, new FtpDataPollOperation("127.0.0.1", p.getPort()), "ftp-data");
+    }
+
+    ftpPortAcceptTest() {
+        checkDebug();
+        Socket listener();
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+        on_exit listener.close();
+        # the operation waits for a connection that is never made; the accept operation is kept, as the FTP client
+        # keeps it
+        AbstractPollOperation accept = listener.startPollAccept();
+        deleteInStep(listener, new FtpPortAcceptPollOperation(listener, accept), "ftp-port-accept");
+    }
+
+    httpClientTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        HTTPClient hc({"url": "http://127.0.0.1:" + p.getPort()});
+        Socket s();
+        deleteInStep(s, hc.startPollConnect(), "http-client");
+    }
+
+    private deleteInStep(object sock, object op, string name) {
+        string owner = sprintf("delete-submitted-plain-%s-%d", name, getpid());
+        on_exit AsyncIoController::cancelByOwner(owner);
+
+        Counter reached(1);
+        Counter release(1);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+        on_exit call_function("dbg_http_hold_clear");
+        call_function("dbg_http_hold_at", "continue-poll", reached, release, op);
+
+        # the result Queue is given, as no Queue is returned for an operation with its own onComplete()
+        Queue<hash<SocketPollResultInfo>> rq();
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "owner": owner,
+            "key": owner,
+            "to": -1s,
+            "resultQueue": rq,
+        });
+        # only the hold point decrements the Counter: an operation whose step does not reach it fails the test here
+        if (reached.waitForZero(HangGuard)) {
+            throw "TEST-ERROR", sprintf("%s: the I/O thread did not continue the operation", name);
+        }
+
+        # reports a further step of the operation without holding it
+        Counter stepped_again(1);
+        call_function("dbg_http_hold_at", "continue-poll", stepped_again, new Counter(0), op);
+
+        # the deletion runs in another thread, so that a deletion that waits for the held I/O thread fails the test
+        # instead of hanging it
+        Counter deleted(1);
+        background sub (object o) {
+            on_exit deleted.dec();
+            delete o;
+        }(op);
+        bool delete_waited = deleted.waitForZero(DeleteGuard) != 0;
+        release.dec();
+        assertFalse(delete_waited, name + ": the deletion did not wait for the I/O thread");
+        if (delete_waited && deleted.waitForZero(HangGuard)) {
+            throw "TEST-ERROR", sprintf("%s: the deletion did not end", name);
+        }
+
+        hash<SocketPollResultInfo> r = rq.get(HangGuard);
+        assertTrue(r.canceled, sprintf("%s: the deleted operation is canceled: %y", name, r - "sock"));
+        assertEq(NOTHING, r.ex, name + ": the deleted operation has no error");
+        assertEq(1, stepped_again.getCount(), name + ": the deleted operation was not continued again");
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_http_hold_at())");
+        }
+    }
+}

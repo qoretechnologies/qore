@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 
@@ -109,6 +110,9 @@ SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *
 /** Destroys the object
  */
 SocketPollOperation::destructor() {
+    // the controller that continues a submitted operation holds references to it; it cancels the operation, whose
+    // state is released with its last reference (#6505)
+    qore_socket_poll_op_object_deleted(op);
     op->deref(xsink);
 }
 

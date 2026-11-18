@@ -232,11 +232,18 @@ public:
     //! Creates the operation
     /** @param self QoreObject wrapper
         @param accept_op the SocketAcceptPollOperation (ref'd, ownership transferred)
-        @param listener the listener socket (not ref'd — raw pointer, owned by "sock" member)
+        @param listener the listener socket (referenced by this state)
         @param secure_data true to upgrade accepted socket to SSL
     */
     DLLLOCAL FtpPortAcceptPollOperationPriv(QoreObject* self,
         SocketPollOperationBase* accept_op, QoreSocketObject* listener, bool secure_data);
+
+    //! keeps the object of the accept operation, which its steps read (#6525)
+    DLLLOCAL void setAcceptObject(QoreObject* obj) {
+        assert(!accept_obj);
+        obj->ref();
+        accept_obj = obj;
+    }
 
     DLLLOCAL virtual ~FtpPortAcceptPollOperationPriv();
     DLLLOCAL void deref(ExceptionSink* xsink) override;
@@ -261,7 +268,10 @@ protected:
 
 private:
     SocketPollOperationBase* current_op = nullptr; //!< current inner op (ref'd)
-    QoreSocketObject* listener = nullptr;          //!< listener socket (raw, not ref'd)
+    //! the object of the accept operation given to the Qore constructor (ref'd), whose "sock" member the accept
+    //! operation's steps read: the object is kept as long as this state, which is released off the I/O threads (#6525)
+    QoreObject* accept_obj = nullptr;
+    QoreSocketObject* listener = nullptr;          //!< listener socket (ref'd)
     QoreSocketObject* client_sock = nullptr;       //!< accepted client socket (ref'd)
     mutable ReferenceHolder<QoreObject> client_sock_obj;  //!< QoreObject wrapper (ref'd)
     AcceptState state = AcceptState::ACCEPTING;

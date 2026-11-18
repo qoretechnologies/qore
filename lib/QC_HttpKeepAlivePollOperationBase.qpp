@@ -251,7 +251,12 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
     info->setKeyValue("events", SOCK_POLLIN, xsink);
-    info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    QoreObject* sock = getReferencedSocketObject(xsink);
+    if (!sock) {
+        // no poll info is returned with an exception (#6525)
+        return nullptr;
+    }
+    info->setKeyValue("socket", sock, xsink);
     info->setKeyValue("poll_timeout_ms", remaining_ms, xsink);
     return info.release();
 }
