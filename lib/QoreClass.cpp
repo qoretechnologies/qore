@@ -5851,6 +5851,17 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
                     privpub(i.second->access));
                 mi->addContextAccess(*i.second);
                 continue;
+            } else if (i.second->access == Inaccessible && mi->access < Internal
+                    && !mi->getClass()->equal(*i.second->getClass())) {
+                // issue #6614: the mirror of the swap above, for the members imported in the other order: the
+                // accessible member imported first is the member of this class, and the hidden member, a
+                // private:internal member of another declaration, which is separate from it, is reached from the
+                // class that declares it, so that the hierarchy is the same whatever the order of its parent classes
+                printd(5, "qore_class_private::parseImportMembers() this: %p keeping '%s' <- '%s::%s' this: '%s' " \
+                    "other: '%s' context access\n", this, name.c_str(), qc.name.c_str(), i.first, privpub(mi->access),
+                    privpub(i.second->access));
+                mi->addContextAccess(*i.second->getClass()->members.find(i.first));
+                continue;
             }
 
             printd(5, "qore_class_private::parseImportMembers() this: %p importing '%s' <- '%s::%s' ('%s') parent " \
