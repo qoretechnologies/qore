@@ -21,9 +21,10 @@
     destructor of a local raises an exception, the check runs and takes it to its handler.  The script releases the
     locals of loop bodies on the normal path in every iteration, and raises exceptions from destructors at the end of
     a block in a try statement in the loop, in a loop in a try statement with the list of a foreach statement live
-    (released before the catch block), with a second local released after the one that raises, in a function whose
-    only handler is an on_error handler, in a function with no handler, and in top-level code, in every execution mode
-    and as a qcc executable (see ExecModeOutputTest); the output is that of the AST interpreter.
+    (released before the catch block), in the release of the first of two locals released (the second is released
+    before the handler runs), after a continue that releases a local that its iteration never instantiated, in a
+    function whose only handler is an on_error handler, in a function with no handler, and in top-level code, in every
+    execution mode and as a qcc executable (see ExecModeOutputTest); the output is that of the AST interpreter.
 */
 class BlockExitExceptionCheckTest inherits ExecModeOutputTest {
     public {
@@ -83,14 +84,32 @@ sub temp_live() {
         printf("caught %s %s\n", ex.err, ex.desc);
     }
 }
-# two locals, the first released raises: the second is still released before the handler
+# two locals, the first released (the last declared) raises: the second is still released before the handler, and the
+# exception is checked after it
 sub two_locals() {
     try {
         for (int i = 0; i < 2; ++i) {
-            Raiser a("a" + i, i == 1);
-            Raiser b("b" + i, False);
+            Raiser a("a" + i, False);
+            Raiser b("b" + i, i == 1);
             printf("body %d\n", i);
         }
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s %s\n", ex.err, ex.desc);
+    }
+}
+# a continue before a local of the loop body is declared releases the local, which the iteration never instantiated,
+# and the exception check follows its release; a later iteration declares it and raises in its release
+sub cont() {
+    try {
+        for (int i = 0; i < 5; ++i) {
+            if (i % 2 == 0) {
+                printf("continue %d\n", i);
+                continue;
+            }
+            Raiser c("c" + i, i == 3);
+            printf("body %d\n", i);
+        }
+        printf("not reached\n");
     } catch (hash<ExceptionInfo> ex) {
         printf("caught %s %s\n", ex.err, ex.desc);
     }
@@ -118,6 +137,7 @@ for (int k = 0; k < 2; ++k) {
     in_try();
     temp_live();
     two_locals();
+    cont();
     try { leaves_frame(); } catch (hash<ExceptionInfo> ex) { printf("caught %s %s\n", ex.err, ex.desc); }
     try { no_handler(); } catch (hash<ExceptionInfo> ex) { printf("caught %s %s\n", ex.err, ex.desc); }
     # top-level code: a block with a local in a loop
@@ -162,7 +182,14 @@ for (int k = 0; k < 2; ++k) {
             "body 1",
             "dtor b1",
             "dtor a1",
-            "caught DTOR-ERR a1",
+            "caught DTOR-ERR b1",
+            "continue 0",
+            "body 1",
+            "dtor c1",
+            "continue 2",
+            "body 3",
+            "dtor c3",
+            "caught DTOR-ERR c3",
             "body 0",
             "dtor lr0",
             "dtor lf0",
@@ -208,7 +235,14 @@ for (int k = 0; k < 2; ++k) {
             "body 1",
             "dtor b1",
             "dtor a1",
-            "caught DTOR-ERR a1",
+            "caught DTOR-ERR b1",
+            "continue 0",
+            "body 1",
+            "dtor c1",
+            "continue 2",
+            "body 3",
+            "dtor c3",
+            "caught DTOR-ERR c3",
             "body 0",
             "dtor lr0",
             "dtor lf0",
