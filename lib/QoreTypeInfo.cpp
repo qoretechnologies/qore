@@ -1882,9 +1882,20 @@ QoreTypeOwnerBatch::QoreTypeOwnerBatch(qore_ns_private& ns) {
     if (type_owner_cleanup.load(std::memory_order_acquire)) {
         return;
     }
-    std::set<QoreTypeOwner*> seen;
     std::vector<QoreTypeOwner*> all;
     ns.getTypeOwners(all);
+    init(all);
+}
+
+QoreTypeOwnerBatch::QoreTypeOwnerBatch(const std::vector<QoreTypeOwner*>& all) {
+    if (type_owner_cleanup.load(std::memory_order_acquire)) {
+        return;
+    }
+    init(all);
+}
+
+void QoreTypeOwnerBatch::init(const std::vector<QoreTypeOwner*>& all) {
+    std::set<QoreTypeOwner*> seen;
     owners.reserve(all.size());
     for (QoreTypeOwner* o : all) {
         if (seen.insert(o).second) {

@@ -339,6 +339,10 @@ reproduce the equality of the declaration (decision by prof, recorded for David)
   the Program is released, since a tombstone is made from what the declaration names (the bounds of its type
   parameters, for example), which can be freed before the declaration is retired.  The bounds and defaults of a
   class's type parameters are now also among the names that a surviving class keeps (`getTypeOwnerNames()`).
+  A parse that fails removes its declarations (`qore_program_private::internParseRollback()`) in a batch of the same
+  kind (`qore_ns_private::getRollbackTypeOwners()`: the pending declarations of the namespaces that existed, and every
+  declaration of the namespaces the parse added); they name each other's types without references as well, and the
+  lists free them in hash order.
 - What cannot be tombstoned (a type parameter of a function signature, an unknown kind of derived type that names a
   user declaration, nesting deeper than 64): no tombstone is made, the pointer is not orphaned, and the declaration is
   marked unfreeable (`type_owner_unfreeable`): it is kept until library cleanup, as before.

@@ -2435,7 +2435,15 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
     // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
     // other symbols inherited from its parent when it was created, which a new parse must still find
-    qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
+    {
+        // the declarations that the rollback removes name each other's types without references: they are destroyed
+        // together, as a deleted Program's are, and the tombstones of those that derived types name are made while
+        // all of them are alive (issue #6419)
+        std::vector<QoreTypeOwner*> owners;
+        qore_root_ns_private::get(*RootNS)->getRollbackTypeOwners(owners);
+        QoreTypeOwnerBatch type_owner_batch(owners);
+        qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
+    }
 
     // delete pending statements
     sb.parseRollback();

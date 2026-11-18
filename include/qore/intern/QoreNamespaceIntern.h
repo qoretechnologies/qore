@@ -502,6 +502,9 @@ public:
 
     //! Adds the user class, hashdecl and enum declarations of the namespace and its subnamespaces (issue #5790)
     DLLLOCAL void getTypeOwners(std::vector<QoreTypeOwner*>& owners);
+    //! Adds the user declarations that a rollback of the pending parse removes: the pending ones of the namespace tree
+    //! and every one of the namespaces it added (issue #6419)
+    DLLLOCAL void getRollbackTypeOwners(std::vector<QoreTypeOwner*>& owners);
     //! marks the class lists of the namespace tree as owned by a Program releasing its values; see QoreClassList::setVarsReleased()
     DLLLOCAL void setVarsReleased();
     //DLLLOCAL void deleteClearData(ExceptionSink* xsink);

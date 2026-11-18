@@ -304,11 +304,17 @@ public:
     //! Takes a reference to each user declaration of the namespace and of its subnamespaces
     DLLLOCAL QoreTypeOwnerBatch(qore_ns_private& ns);
 
+    //! Takes a reference to each of the given user declarations, which are destroyed together (the declarations that
+    //! a rollback of a parse removes)
+    DLLLOCAL QoreTypeOwnerBatch(const std::vector<QoreTypeOwner*>& all);
+
     //! Decides the fate of the declarations and releases the references
     DLLLOCAL ~QoreTypeOwnerBatch();
 
 private:
     std::vector<QoreTypeOwner*> owners;
+
+    DLLLOCAL void init(const std::vector<QoreTypeOwner*>& all);
 };
 
 //! Returns the number of declarations retired and not freed yet (see QoreTypeOwner)
