@@ -1771,7 +1771,16 @@ public class OracleCodeBase inherits SqlUtil::AbstractFunction {
         @param opt this option is ignored
         */
     softlist getRenameSql(string new_name, *hash opt) {
-        return sprintf("rename %s to %s", name, new_name);
+        # the names are identifiers (qore#6579)
+        return sprintf("rename %s to %s", oracle_get_sql_object_name(name), oracle_get_sql_identifier(new_name));
+    }
+
+    #! returns a string that can be used to drop the object from the database
+    /** @param opt this option is ignored
+    */
+    string getDropSql(*hash opt) {
+        # the name is an identifier (qore#6579)
+        return sprintf("drop %s %s", type, oracle_get_sql_object_name(name));
     }
 }
 
@@ -1808,7 +1817,7 @@ public class OracleType inherits OracleCodeBaseNoRename {
     /** @param opt drop options; if \a force is @ref True "True", then the \c FORCE option will be used in the drop statement
         */
     string getDropSql(*hash opt) {
-        return sprintf("drop %s %s%s", type, name, opt.force ? " force" : "");
+        return sprintf("drop %s %s%s", type, oracle_get_sql_object_name(name), opt.force ? " force" : "");
     }
 }
 
@@ -1891,7 +1900,7 @@ public class OracleMaterializedView inherits OracleCodeBaseNoRename {
 
     #! returns a string that can be used to create the object in the database
     softlist getCreateSql(*hash opt) {
-        string sql = sprintf("create %s %s", type, name);
+        string sql = sprintf("create %s %s", type, oracle_get_sql_object_name(name));
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts)
@@ -2283,7 +2292,8 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     private OracleType makeType(string name, string src, *hash opts) {
-        return new OracleType(name, sprintf("%s as %s", name, src));
+        # the name is an identifier (qore#6579)
+        return new OracleType(name, sprintf("%s as %s", oracle_get_sql_object_name(name), src));
     }
 
     private OracleMaterializedView makeMaterializedView(string name, string src, bool logging = True, bool use_index = True, *string tablespace, *hash opts) {
@@ -2414,7 +2424,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
         trim src;
 
         # ensure the name of the object is at the beginning of the string
-        if (!regex(src, "^(\")?" + name + "(\")?", RE_Caseless))
+        if (!regex(src, "^(\")?" + regex_escape(name) + "(\")?", RE_Caseless))
             throw "SOURCE-ERROR", sprintf("source to %s %y does not begin with the %s name %y; source: %y", type,
                 name, type, name, src.substr(0, 50));
     }
@@ -2856,8 +2866,10 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             # try to drop any table created to back the materialized view, ignoring ORA-00942
             # "table or view does not exist" errors but rethrowing all others
             # the name is in a string literal, where each single quote is doubled
-            AbstractSqlUtilBase::checkSqlStringValue(name);
-            ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when "
+            # the name is an identifier (qore#6579)
+            string drop_name = oracle_get_sql_object_name(name);
+            AbstractSqlUtilBase::checkSqlStringValue(drop_name);
+            ds.execRaw("begin execute immediate 'drop table " + replace(drop_name, "'", "''") + "'; exception when "
                 "others then if sqlcode != -942 then raise; end if; end;");
         }
     }

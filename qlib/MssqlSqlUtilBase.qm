@@ -1451,14 +1451,16 @@ public class MssqlFunction inherits SqlUtil::AbstractFunction {
 
     #! returns a string that can be used to create the function in the database
     softlist getCreateSql(*hash opt) {
-        return sprintf("create function %s %s", name, src);
+        # the name is an identifier (qore#6579)
+        return sprintf("create function %s %s", mssql_get_sql_object_name(name), src);
     }
 
     #! returns a string that can be used to drop the function from the database
     /** @param opt this argument is ignored
         */
     string getDropSql(*hash opt) {
-        return sprintf("drop function %s", name);
+        # the name is an identifier (qore#6579)
+        return sprintf("drop function %s", mssql_get_sql_object_name(name));
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1472,8 +1474,9 @@ public class MssqlFunction inherits SqlUtil::AbstractFunction {
         */
     softlist getRenameSql(string new_name, *hash opt) {
         # a function is defined by its SQL source, and its name is given as it is; the names are string literals
+        # the new name must be an identifier, as for the other objects (qore#6579)
         return sprintf("exec sp_rename %s, %s, 'OBJECT'", mssql_get_string_literal(name),
-            mssql_get_string_literal(new_name));
+            mssql_get_new_name_literal(new_name));
     }
 
     #! sets the new name of the function

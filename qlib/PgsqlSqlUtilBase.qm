@@ -692,6 +692,29 @@ string sub pgsql_get_sql_object_name(string nname) {
     return pgsql_get_sql_schema(on.sql_schema) + "." + sql_name;
 }
 
+# returns the name of a function or procedure with an optional argument list for SQL (qore#6579): the name, up to
+# the first "(" outside of double quotes, as pgsql_get_sql_object_name() returns it, and the argument list as given,
+# which must be one parenthesized list of types without a statement separator, comment or string literal
+string sub pgsql_get_sql_routine_name(string sig) {
+    int len = sig.length();
+    int i = 0;
+    bool quoted = False;
+    for (; i < len; ++i) {
+        string c = sig[i];
+        if (c == "\"") {
+            quoted = !quoted;
+        } else if (c == "(" && !quoted) {
+            break;
+        }
+    }
+    string name = trim(sig.substr(0, i));
+    string args = sig.substr(i);
+    if (args.val() && args !~ /\A\((?:[^;'"\-\/]|"(?:[^"]|"")*+"|-(?!-)|\/(?!\*))*\)\s*\z/) {
+        throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y is not a list of types", sig);
+    }
+    return pgsql_get_sql_object_name(name) + trim(args);
+}
+
 # returns a schema name as the name of an object gives it, as a double-quoted identifier or a name of word
 # characters, for SQL
 string sub pgsql_get_sql_schema(string sql_schema) {
@@ -864,34 +887,38 @@ public class PgsqlType inherits Qore::Serializable {
 
         # process differences in old attributes
         foreach hash oldh in (oldtl.iterator()) {
+            # the names of the type and of its attributes are identifiers (qore#6579)
             if ($# >= tl.size()) {
-                sqll += sprintf("alter type %s drop attribute %s", name, oldh.name);
+                sqll += sprintf("alter type %s drop attribute %s", pgsql_get_sql_object_name(name),
+                    pgsql_get_sql_identifier(oldh.name));
                 continue;
             }
             hash h = tl[$#];
             if (oldh.type != h.type)
-                sqll += sprintf("alter type %s alter attribute %s type %s%s", name, oldh.name, h.type,
-                    opt.force ? " cascade" : "");
+                sqll += sprintf("alter type %s alter attribute %s type %s%s", pgsql_get_sql_object_name(name),
+                    pgsql_get_sql_identifier(oldh.name), h.type, opt.force ? " cascade" : "");
             if (oldh.name != h.name)
-                sqll += sprintf("alter type %s rename attribute %s to %s", name, oldh.name, h.name);
+                sqll += sprintf("alter type %s rename attribute %s to %s", pgsql_get_sql_object_name(name),
+                    pgsql_get_sql_identifier(oldh.name), pgsql_get_sql_identifier(h.name));
         }
         # add any new attributes
         for (int i = oldtl.size(); i < tl.size(); ++i)
-            sqll += sprintf("alter type %s add attribute %s %s", name, tl[i].name, tl[i].type);
+            sqll += sprintf("alter type %s add attribute %s %s", pgsql_get_sql_object_name(name),
+                pgsql_get_sql_identifier(tl[i].name), tl[i].type);
 
         return sqll;
     }
 
     #! returns a string that can be used to create the type in the database
     string getCreateSql(*hash opt) {
-        return sprintf("create type %s as (%s)", name, src);
+        return sprintf("create type %s as (%s)", pgsql_get_sql_object_name(name), src);
     }
 
     #! returns a string that can be used to drop the function from the database
     /** @param opt drop options; if \a force is @ref True "True", then the \c CASCADE option will be used in the drop statement
         */
     string getDropSql(*hash opt) {
-        return sprintf("drop type %s%s", name, opt.force ? " cascade" : "");
+        return sprintf("drop type %s%s", pgsql_get_sql_object_name(name), opt.force ? " cascade" : "");
     }
 
     #! returns a string that can be used to rename a type
@@ -899,7 +926,8 @@ public class PgsqlType inherits Qore::Serializable {
         @param opt this argument is ignored
         */
     string getRenameSql(string new_name, *hash opt) {
-        return sprintf("alter type %s rename to %s", name, new_name);
+        return sprintf("alter type %s rename to %s", pgsql_get_sql_object_name(name),
+            pgsql_get_sql_identifier(new_name));
     }
 
     #! returns @ref True if the types are equal
@@ -2095,7 +2123,8 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
 
     #! returns a string that can be used to create the function in the database
     softlist<string> getCreateSql(*hash opt) {
-        return sprintf("create%s %s %s %s", opt.replace ? " or replace" : "", type, name, src);
+        return sprintf("create%s %s %s %s", opt.replace ? " or replace" : "", type, pgsql_get_sql_routine_name(name),
+            src);
     }
 
     #! returns a string that can be used to drop the function from the database
@@ -2103,7 +2132,7 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
         drop statement
     */
     string getDropSql(*hash opt) {
-        return sprintf("drop %s %s%s", type, name, opt.force ? " cascade" : "");
+        return sprintf("drop %s %s%s", type, pgsql_get_sql_routine_name(name), opt.force ? " cascade" : "");
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -2119,7 +2148,8 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
         # RENAME TO takes the new name only: the argument list, which identifies the function, is that of the name
         # renamed; an argument list given with the new name is ignored
         *string bare = (new_name =~ x/^([^(]+)\(/)[0];
-        return sprintf("alter %s %s rename to %s", type, name, pgsql_get_sql_identifier(trim(bare ?? new_name)));
+        return sprintf("alter %s %s rename to %s", type, pgsql_get_sql_routine_name(name),
+            pgsql_get_sql_identifier(trim(bare ?? new_name)));
     }
 
     #! sets the new name of the function
