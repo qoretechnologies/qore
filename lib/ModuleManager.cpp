@@ -2016,6 +2016,9 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     // A call-only context is not enough when a child Program loads a module from
     // a thread already running in its parent Program; getProgram() prefers
     // current_pgm over call_program_context.
+    // The module's namespace is merged into the Program, which is only made current, not entered: the Program is
+    // usually being parsed, and a module whose namespace initialization runs code of the Program enters it itself
+    // (qore#6185; an AOT module does, see qore_aot_module_ns_init_impl())
     QoreProgramContextHelper pcch(tpgm);
 
     RootQoreNamespace* rns = tpgm->getRootNS();
@@ -6826,7 +6829,9 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
         assert(mi);
     }
 
-    // ensure the program is in context
+    // the handler runs with the target Program current; the switch keeps the thread's local data consistent with it
+    // (qore#6185, qore#6537).  It is not an entry: the command is judged by the caller sandbox above, and a replayed
+    // command as the directive of its source
     QoreProgramContextHelper pch(pgm);
 
     // the handler gets the restrictions of the issuing code, not those of the target Program it runs in (issue #5699)

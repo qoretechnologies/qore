@@ -1601,6 +1601,42 @@ public:
             (int64)max_size, (int64)protected_size, (int64)size, (int64)usable);
     }
 #endif
+
+    //! the number of saved thread-local data pointers of QoreProgramContextHelper kept in the thread data itself
+    static constexpr unsigned PCH_SAVED_INLINE = 32;
+    //! the thread-local data that the active QoreProgramContextHelper objects replaced, innermost last
+    /** The helper's public layout has room for the Program that it replaces only (modules compiled against it
+        allocate it), so the data that it replaces is kept here; the helpers are stack objects, which nest.  The first
+        PCH_SAVED_INLINE levels need no allocation; deeper levels are kept in pch_saved_more, which grows as needed
+    */
+    ThreadLocalProgramData* pch_saved_tlpd[PCH_SAVED_INLINE];
+    //! the number of entries of pch_saved_tlpd in use
+    unsigned pch_saved_count = 0;
+    //! the thread-local data replaced by the helpers nested deeper than PCH_SAVED_INLINE, innermost last
+    std::vector<ThreadLocalProgramData*> pch_saved_more;
+
+    //! switches the thread's local data for QoreProgramContextHelper, saving the data that it replaces
+    /** If it throws (std::bad_alloc for a helper nested deeper than PCH_SAVED_INLINE), the thread is as it was
+    */
+    DLLLOCAL void pushProgramContextData(ThreadLocalProgramData* new_tlpd) {
+        if (pch_saved_count == PCH_SAVED_INLINE) {
+            pch_saved_more.push_back(tlpd);
+        } else {
+            pch_saved_tlpd[pch_saved_count++] = tlpd;
+        }
+        tlpd = new_tlpd;
+    }
+
+    //! restores the thread's local data that the innermost QoreProgramContextHelper replaced
+    DLLLOCAL void popProgramContextData() {
+        if (!pch_saved_more.empty()) {
+            tlpd = pch_saved_more.back();
+            pch_saved_more.pop_back();
+            return;
+        }
+        assert(pch_saved_count);
+        tlpd = pch_saved_tlpd[--pch_saved_count];
+    }
 };
 
 static QoreThreadLocalStorage<ThreadData> thread_data;
@@ -4018,8 +4054,8 @@ void thread_ensure_local_program_data() {
     if (td->tlpd || !td->current_pgm) {
         return;
     }
-    // A thread with no Program data yet (a binary module's initialization, which runs before any entry) has the
-    // current Program without td->tlpd.
+    // A thread with no Program data yet (a binary module's initialization, which runs before any entry; a switch of
+    // the current Program to one where the thread has no data, qore#6537) has the current Program without td->tlpd.
     // Set up td->tlpd so that runtime operations (e.g. object construction in AOT init functions) can instantiate
     // local variables on the thread's lvstack.  The data is created as an entry creates it (saveProgram()), so that
     // the thread and the Program record it consistently.  If it throws, td->tlpd is as it was
@@ -4237,6 +4273,25 @@ ProgramCallContextHelper::~ProgramCallContextHelper() {
     }
 }
 
+//! returns the thread's local data in the Program for a switch of the current Program to it, or nullptr
+/** The data is never created here, and the Program's thread initialization code is not run.  Data is returned only
+    where it cannot be cleared while the thread uses it: if \a held, the caller keeps the Program's data from being
+    cleared (it holds the Program's thread count or its parse lock); otherwise only if the thread is in the Program
+    (qore#6537)
+*/
+static ThreadLocalProgramData* get_program_context_tlpd(ThreadData* td, QoreProgram* pgm, bool held) {
+    // the thread's data is that of the current Program
+    if (pgm == td->current_pgm) {
+        return td->tlpd;
+    }
+    if (!td->tpd) {
+        return nullptr;
+    }
+    return held
+        ? qore_program_private::findThreadVarData(pgm, td->tpd)
+        : qore_program_private::findThreadVarDataIfEntered(pgm, td->tpd, td->tid);
+}
+
 QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     // allow the program context to be skipped with a nullptr arg
     if (!pgm) {
@@ -4244,6 +4299,11 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
         return;
     }
     ThreadData* td  = thread_data.get();
+    ThreadLocalProgramData* new_tlpd = get_program_context_tlpd(td, pgm, false);
+    // the thread's local data is switched with the current Program; the data replaced is kept in the thread, as the
+    // helper's public layout has room for the Program only (qore#6537).  First, as it can throw: the thread is then
+    // as it was
+    td->pushProgramContextData(new_tlpd);
     old_pgm = td->current_pgm;
     td->current_pgm = pgm;
     sync_runtime_config_program(td);
@@ -4255,6 +4315,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
     }
     ThreadData* td  = thread_data.get();
     td->current_pgm = old_pgm;
+    td->popProgramContextData();
     sync_runtime_config_program(td);
 }
 
@@ -5089,6 +5150,9 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         ThreadData* td = thread_data.get();
         if (pgm == td->current_pgm && td->tlpd && td->entry_pgm == pgm && !td->cancel_defer_count
                 && !td->dtor_cancel_defer_count) {
+            // the Program's code runs with the thread's local data of the Program (qore#6185, qore#6537; see
+            // setRethrow())
+            assert(td->tlpd->pgm == pgm);
             assert(!old_pgm);
             assert(!entry_frame.isActive());
             ctx_td = td;
@@ -5131,11 +5195,14 @@ void ProgramThreadCountContextHelper::setRethrow(ExceptionSink* xsink, QoreProgr
 
     ThreadData* td = thread_data.get();
     ctx_td = td;
-    // ProgramRuntimeParseContextHelper can set current_pgm without setting
-    // tlpd.  User-code execution still needs tlpd for local and closure
-    // variable access, so only skip setup when the current program already has
-    // a live thread-local program data frame.
-    if (pgm == td->current_pgm && td->tlpd) {
+    // A thread can have the current program without tlpd (see thread_ensure_local_program_data(); qore#6537).
+    // User-code execution still needs tlpd for local and closure variable access, so a runtime entry only skips setup
+    // when the current program already has a live thread-local program data frame; a parse-time entry uses no local
+    // data, and needs none to stay in the current Program (a call, which has the data, makes the same comparisons as
+    // before)
+    if (pgm == td->current_pgm && (td->tlpd || !runtime)) {
+        // the thread's local data is that of the current Program (qore#6185, qore#6537)
+        assert(!td->tlpd || td->tlpd->pgm == pgm);
         // sandboxed code never runs with cancellation deferred, also when it is called in its own Program from
         // code that defers it (a builtin class's destructor runs in its caller's Program; thread teardown)
         if ((td->cancel_defer_count || td->dtor_cancel_defer_count) && qore_program_private::isSandboxed(pgm)) {
@@ -5182,8 +5249,8 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
         old_frameCount);
     qore_program_private* pp = qore_program_private::get(*pgm);
     this->xsink = xsink;
-    // ProgramRuntimeParseContextHelper locks a program for parsing without
-    // creating tlpd. Nested cross-program calls can temporarily switch away
+    // ProgramRuntimeParseContextHelper locks a program for parsing (with the thread's tlpd there, if it has one, which
+    // it does not create). Nested cross-program calls can temporarily switch away
     // from that program while module init is still running; re-entering the
     // same-thread parse-locked program only needs a local frame. Calling
     // incThreadCount() is invalid while parsing_in_progress is set.
@@ -6712,11 +6779,19 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     if (qore_program_private::lockParsing(*pgm, xsink))
         return;
 
-    restore = true;
+    switchTo(pgm);
+}
 
+void ProgramRuntimeParseContextHelper::switchTo(QoreProgram* pgm) {
     ThreadData* td = thread_data.get();
+    // the thread's local data in the Program, if it has any; it is not created here (qore#6537).  The parse lock keeps
+    // the Program's data from being cleared
+    ThreadLocalProgramData* new_tlpd = get_program_context_tlpd(td, pgm, true);
     old_pgm = td->current_pgm;
+    old_tlpd = td->tlpd;
     td->current_pgm = pgm;
+    td->tlpd = new_tlpd;
+    restore = true;
     sync_runtime_config_program(td);
 }
 
@@ -6739,12 +6814,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
         return;
     }
 
-    restore = true;
-
-    ThreadData* td = thread_data.get();
-    old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
-    sync_runtime_config_program(td);
+    switchTo(pgm);
 }
 
 ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
@@ -6754,6 +6824,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
     td->current_pgm = old_pgm;
+    td->tlpd = old_tlpd;
     sync_runtime_config_program(td);
     // last: the Program is cleared and dereferenced here if code run while it was locked deleted it
     qore_program_private::unlockParsing(*pgm);
@@ -6823,6 +6894,10 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
 
         restore = true;
         old_pgm = td->current_pgm;
+        old_tlpd = td->tlpd;
+        // the thread's local data is switched with the current Program; the thread count taken above keeps the
+        // Program's data from being cleared (qore#6537)
+        td->tlpd = get_program_context_tlpd(td, pgm, true);
         td->current_pgm = pgm;
         sync_runtime_config_program(td);
     }
@@ -6835,6 +6910,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
     td->current_pgm = old_pgm;
+    td->tlpd = old_tlpd;
     sync_runtime_config_program(td);
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }

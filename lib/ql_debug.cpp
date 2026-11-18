@@ -20176,6 +20176,7 @@ static void ut_parse_find_variant_no_args_type_param_inst(UnitTestCounters& c) {
     UT_ASSERT(c, ext, "the generic function is found");
     if (ext) {
         const QoreFunction* func = reinterpret_cast<const QoreFunction*>(ext);
+        // a lookup, which runs no code of the Program, so the Program is only made current (qore#6185)
         QoreProgramContextHelper pch(pgm);
         QoreTypeParamInstantiation inst;
         const AbstractQoreFunctionVariant* variant = func->parseFindVariantNoDiagnostics(type_vec_t(), nullptr,

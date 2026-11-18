@@ -2130,6 +2130,8 @@ void qore_program_private_base::newProgram() {
         featureList.insert(i.c_str());
     }
 
+    // the namespaces are set up in the new Program, which is only made current: no code of the Program runs here
+    // (qore#6185)
     QoreProgramContextHelper pch(pgm);
 
     // setup namespaces

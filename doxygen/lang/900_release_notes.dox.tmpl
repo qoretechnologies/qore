@@ -3268,6 +3268,16 @@
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
       raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
+    - code of a @ref Qore::Program "Program" could be associated with the thread-local data of another Program in
+      some cases; the thread-local data is now kept consistent with the current Program, and a closure-bound variable
+      is never created in the thread-local data of another Program (\c PROGRAM-THREAD-LOCAL-ERROR).  The C++ API
+      documentation states that code that runs a Program's code must enter it with
+      \c QoreExternalProgramContextHelper
+      (<a href="https://github.com/qoretechnologies/qore/issues/6185">issue 6185</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
+    - the C++ API's \c QoreProgramContextHelper switches the thread-local data of the Program with the current
+      Program; it never creates the data or runs the Program's thread initialization code
+      (<a href="https://github.com/qoretechnologies/qore/issues/6537">issue 6537</a>)
 
     @section qore_2_2_1 Qore 2.2.1
 

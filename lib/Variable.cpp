@@ -4936,6 +4936,18 @@ void LocalVarValue::TypeSubstitutionCache::set(const QoreTypeInfo* typeInfo, con
     this->resolvedRefTypeInfo = resolvedRefTypeInfo;
 }
 
+int LocalVar::checkThreadLocalDataOwner(ExceptionSink* xsink) const {
+    const ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    QoreProgram* pgm = getProgram();
+    // a variable can be created only in the thread-local data of the current Program
+    if (tlpd && tlpd->pgm == pgm) {
+        return 0;
+    }
+    xsink->raiseException("PROGRAM-THREAD-LOCAL-ERROR", "local variable '%s' is not available in the thread-local "
+        "data of Program " QLLD, name.c_str(), pgm ? static_cast<int64>(pgm->getProgramId()) : -1LL);
+    return -1;
+}
+
 //! Only generic storage needs to retain a runtime-selected declaration; ordinary storage has no extra state.
 class GenericClosureVarValue : private QoreExternalTypeDeclRefs, public ClosureVarValue {
 public:
