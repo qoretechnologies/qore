@@ -77,6 +77,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QC_Expression.h"
 #include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
@@ -26488,6 +26489,56 @@ static QoreValue f_dbg_set_next_program_id(const QoreListNode* params, RuntimeCo
     return static_cast<int64>(qore_program_private::setNextProgramId(static_cast<qore_program_id_t>(id)));
 }
 
+//! Checks that the diagnostic recorded for an exception of a parse is not used once the diagnostics were cleared
+/** The Program collects and accumulates its diagnostics, as the Programs of the AOT compiler do; the hook parses
+    \c first (which must fail), looks up the diagnostic of its first exception, turns the collection of diagnostics off
+    and on again, parses \c second (which must fail too) and looks up the diagnostic of the first exception again
+    (issue #6555)
+
+    @param pgm the Program
+    @param first code with a parse error
+    @param second code with another parse error
+
+    @return a hash with the keys \c before and \c after: the code of the diagnostic found for the first exception
+    before and after the diagnostics were cleared, or no value if none was found
+*/
+static QoreValue f_dbg_check_parse_diagnostic_lookup(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const QoreStringNode* first = get_param_value(params, 1).get<const QoreStringNode>();
+    const QoreStringNode* second = get_param_value(params, 2).get<const QoreStringNode>();
+    qore_set_program_parse_diagnostics_accumulated(**pgm);
+
+    ExceptionSink first_xsink;
+    pgm->parse(first->c_str(), "first", &first_xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreException* e = qore_es_private::get(first_xsink)->head;
+    if (!e) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first code has no parse error");
+        return QoreValue();
+    }
+    QoreDiagnostic d("", std::string(), std::string(), QoreProgramLineLocation(), nullptr);
+    if (qore_get_exception_parse_diagnostic(*e, d)) {
+        rv->setKeyValue("before", new QoreStringNode(d.code.c_str()), xsink);
+    }
+
+    qore_program_private::get(**pgm)->setParseDiagnosticsCollected(false);
+    qore_program_private::get(**pgm)->setParseDiagnosticsAccumulated();
+    ExceptionSink second_xsink;
+    pgm->parse(second->c_str(), "second", &second_xsink);
+    second_xsink.clear();
+    if (qore_get_exception_parse_diagnostic(*e, d)) {
+        rv->setKeyValue("after", new QoreStringNode(d.code.c_str()), xsink);
+    }
+    first_xsink.clear();
+    return rv.release();
+}
+
 namespace {
 //! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
 //! and a thread creating a c-ares channel hold and wait for
@@ -27718,6 +27769,9 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_set_next_program_id", f_dbg_set_next_program_id, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
+    qns.addBuiltinVariant("dbg_check_parse_diagnostic_lookup", f_dbg_check_parse_diagnostic_lookup, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "first", stringTypeInfo, QORE_PARAM_NO_ARG, "second");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,

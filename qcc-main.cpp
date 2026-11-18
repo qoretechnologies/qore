@@ -10105,11 +10105,6 @@ int main(int argc, char** argv) {
         QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
         const char* df = df_holder.c_str();
         const bool json = df && !strcmp(df, "json");
-        // the Programs that the compiler creates keep their diagnostics, with their hints and possible fixes, for
-        // the reports in these forms
-        if (json || SystemEnvironment::isSet("QORE_CODE_FRAMES")) {
-            qore_set_new_programs_collect_parse_diagnostics(true);
-        }
         if (json) {
             fflush(stdout);
             // not inherited by the processes that qcc starts (the linker)
@@ -11754,6 +11749,8 @@ int main(int argc, char** argv) {
         // flags; options are never forced, as that would silently change the script's parse semantics.
         // QoreAOT::compile() then rejects code that is not %modern (see qore_parse_options_support_ir()).
         QoreProgram* qpgm = new QoreProgram(compile_po);
+        // its parse diagnostics are kept for the report of the compiler (issue #6555)
+        qore_aot_prepare_compile_program(*qpgm);
         ExceptionSink xsink;
         ExceptionSink wsink;
 

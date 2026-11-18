@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DiagLookupGenerationTest
+
+#! The diagnostic recorded for an exception of a parse is not used once the diagnostics were cleared (issue #6555)
+/** A Program that accumulates its diagnostics (as those of the AOT compiler do) keeps them for its exceptions, which
+    refer to them by their index; when the collection is turned off and on again, the diagnostics are cleared, and the
+    index of an earlier exception refers to another diagnostic, or none: it is not used.
+    dbg_check_parse_diagnostic_lookup() (debug builds) checks it with the library's lookup.
+*/
+class DiagLookupGenerationTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DiagLookupGenerationTest", "1.0", \ARGV) {
+        addTestCase("a diagnostic is not found once the diagnostics were cleared", \clearedTest());
+        set_return_value(main());
+    }
+
+    clearedTest() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the check needs a debug build");
+        }
+        Program p(PO_NEW_STYLE);
+        # the first parse error is a missing constructor, the second (with the same index) another one
+        hash<auto> h = call_function("dbg_check_parse_diagnostic_lookup", p,
+            "class TrapCtor {}\nsub f() { TrapCtor(); }\n", "sub g() { no_such_function(); }\n");
+        assertEq("PARSE-EXCEPTION", h.before, "the diagnostic is found before the diagnostics are cleared");
+        assertEq(NOTHING, h.after, "the index is not used once the diagnostics were cleared");
+    }
+}
