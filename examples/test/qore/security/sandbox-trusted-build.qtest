@@ -1012,6 +1012,17 @@ sub clear() {
             assertThrows("SANDBOX-MEMORY-LIMIT", \keeping.callFunction(), ("call", run_cap, keeps));
             assertLt(cs_before + 1024 * 1024, cs.getMemoryUsage());
         }
+
+        # a tenant whose limit allows it keeps what the creator's code returns through the build: the data is charged
+        # to the tenant, and not to the creator (or a tenant could fill the creator's limit)
+        SandboxManager large = newManager(256 * 1024 * 1024);
+        Program large_tenant(PO_MODERN);
+        large_tenant.setSandboxManager(large);
+        large_tenant.parse(TenantSource, "creator-code-large-tenant");
+        code large_keeps = large_tenant.callFunction("keeps", creator.getCallReference("make"), 60000);
+        assertEq(60000, large_tenant.callFunction("call", run_cap, large_keeps));
+        assertGt(1024 * 1024, large.getMemoryUsage());
+        assertLt(cs_before + 1024 * 1024, cs.getMemoryUsage());
     }
 
     stackInBuildThread() {
