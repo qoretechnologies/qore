@@ -4353,6 +4353,35 @@ private:
         return why;
     }
 
+    //! Adds the locals of \a fn that the handler \a handler and the handlers nested in it reference to \a locals
+    static void collectHandlerLocals(const QoreIRFunction& fn, const QoreIRFunction& handler,
+            std::unordered_set<const LocalVar*>& locals, std::unordered_set<const QoreIRFunction*>& visited) {
+        // each handler function once: they can be shared (#6087)
+        if (!visited.insert(&handler).second) {
+            return;
+        }
+        for (const auto& block : handler.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                const QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst) {
+                    continue;
+                }
+                aotOutlineForEachLocalRef(inst, [&](const AOTOutlineLocalRef& ref) {
+                    if (ref.local && !handler.handler_own_locals.count(ref.local)
+                            && fn.local_var_slots.count(ref.local)) {
+                        locals.insert(ref.local);
+                    }
+                });
+                if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                    const auto* obe = static_cast<const QoreIROnBlockExitInstruction*>(inst);
+                    if (obe->handler_ir) {
+                        collectHandlerLocals(fn, *obe->handler_ir, locals, visited);
+                    }
+                }
+            }
+        }
+    }
+
     //! Returns the exception target of \a inst (nullptr if an exception leaves the function)
     static QoreIRBasicBlock* exceptionTargetOf(const QoreIRInstruction* inst) {
         if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
@@ -4588,6 +4617,73 @@ private:
         return false;
     }
 
+    //! Returns true if a scope of \a scopes entered in the region [\a first..\a last] can be open on an edge to its
+    //! exit block
+    /** A forward dataflow over the region's blocks of the scopes entered and not yet exited (a trim leaves the scope
+        open); the region's entry has none of them open
+    */
+    static bool handlerScopeOpenAtExit(const QoreIRFunction& fn, size_t first, size_t last,
+            const std::unordered_set<uint32_t>& scopes) {
+        const size_t count = last - first + 1;
+        std::unordered_map<const QoreIRBasicBlock*, size_t> region_idx;
+        region_idx.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            region_idx[fn.blocks[first + i].get()] = i;
+        }
+        const QoreIRBasicBlock* exit = fn.blocks[last + 1].get();
+        std::vector<std::set<uint32_t>> open_in(count);
+        std::vector<bool> queued(count, false);
+        std::vector<bool> visited(count, false);
+        std::vector<size_t> work{0};
+        queued[0] = visited[0] = true;
+        bool open_at_exit = false;
+        while (!work.empty() && !open_at_exit) {
+            size_t bi = work.back();
+            work.pop_back();
+            queued[bi] = false;
+            std::set<uint32_t> open = open_in[bi];
+            for (const auto& inst_ptr : fn.blocks[first + bi]->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst || inst->opcode == QoreIROpcode::Phi) {
+                    continue;
+                }
+                if (inst->opcode == QoreIROpcode::ScopeEnter) {
+                    uint32_t id = static_cast<const QoreIRScopeEnterInstruction*>(inst)->scope_id;
+                    if (scopes.count(id)) {
+                        open.insert(id);
+                    }
+                } else if (inst->opcode == QoreIROpcode::ScopeExit) {
+                    const auto* sx = static_cast<const QoreIRScopeExitInstruction*>(inst);
+                    if (!sx->trim) {
+                        open.erase(sx->scope_id);
+                    }
+                }
+                aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& target) {
+                    if (!target || open_at_exit) {
+                        return;
+                    }
+                    if (target == exit) {
+                        open_at_exit = !open.empty();
+                        return;
+                    }
+                    auto it = region_idx.find(target);
+                    if (it == region_idx.end()) {
+                        return;
+                    }
+                    size_t ti = it->second;
+                    size_t before = open_in[ti].size();
+                    open_in[ti].insert(open.begin(), open.end());
+                    if ((open_in[ti].size() != before || !visited[ti]) && !queued[ti]) {
+                        visited[ti] = true;
+                        queued[ti] = true;
+                        work.push_back(ti);
+                    }
+                });
+            }
+        }
+        return open_at_exit;
+    }
+
     bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
             const std::unordered_set<const void*>& body_local_set, bool dbg) {
         const size_t first = region.first;
@@ -4627,8 +4723,12 @@ private:
             }
         }
         std::unordered_set<const LocalVar*> region_locals;
+        // the scopes of the on_exit, on_error and on_success handlers registered in the region
+        std::unordered_set<uint32_t> handler_scopes;
         // true if the region opens or closes a catch block
         bool has_catch_ops = false;
+        // the locals of the function that the handlers registered in the region reference
+        std::unordered_set<const LocalVar*> handler_locals;
         // true if the region has a Return with a value
         bool has_value_return = false;
         // the locals that an instruction of the region can write (qore#6314)
@@ -4663,6 +4763,14 @@ private:
                         if (!obe->owner_scope_id || it == scope_enter_idx.end()
                                 || !in_region(it->second)) {
                             return fail("on-block-exit owner scope crosses region boundary");
+                        }
+                        handler_scopes.insert(obe->owner_scope_id);
+                        // a handler registered in the region runs in the helper, and can assign the locals of the
+                        // function that it references, which the coordinator must not keep a reference to the old
+                        // value of across the call (qore#6652)
+                        if (obe->handler_ir) {
+                            std::unordered_set<const QoreIRFunction*> visited;
+                            collectHandlerLocals(fn, *obe->handler_ir, handler_locals, visited);
                         }
                         break;
                     }
@@ -4738,6 +4846,10 @@ private:
                 });
             }
         }
+        for (const LocalVar* lv : handler_locals) {
+            region_locals.insert(lv);
+            region_written.insert(lv);
+        }
         // Temp-mark pairing: every paired DiscardTemps in the region must
         // discard a mark pushed in the region and vice versa; unpaired
         // (id 0) marks must balance by count.
@@ -4775,6 +4887,13 @@ private:
             if (in_region(i) != enter_in) {
                 return fail("scope enter/exit crosses region boundary");
             }
+        }
+        // A scope with handlers that is still open where the region exits would have its handlers run by the
+        // helper's return, which runs the handlers registered in the helper, and not where the scope ends in the
+        // coordinator, with the exception or the return that ends it.  Such a scope has no ScopeExit when all of its
+        // paths end in a return or an exception, after the block split that ends the region (qore#6652).
+        if (!handler_scopes.empty() && handlerScopeOpenAtExit(fn, first, last, handler_scopes)) {
+            return fail("handler scope open at region exit");
         }
         if (has_value_return && interruptedReturnLeavesRegion(fn, first, last)) {
             return fail("interrupted return value can leave the function from the region");
@@ -4825,7 +4944,11 @@ private:
         for (const LocalVar* lv : region_locals) {
             auto it = local_info.find(lv);
             if (it == local_info.end()) {
-                return fail("local reference without info");
+                // a local that only the handlers of the region reference
+                if (!handler_locals.count(lv)) {
+                    return fail("local reference without info");
+                }
+                it = local_info.emplace(lv, LocalInfo{0, SIZE_MAX, false, false}).first;
             }
             const LocalInfo& info = it->second;
             bool outside_refs = info.min_ref < first || info.max_ref > last;
