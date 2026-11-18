@@ -2233,6 +2233,8 @@
       output: such text is a parse error (issue #6512)
     - an @ref include "%include" of a file that does not exist raises \c PARSE-EXCEPTION at the directive, with its
       location, instead of \c PARSE-ERROR without one (issue #6509)
+    - a declaration on the first line of a file included with @ref include "%include", and the first one after the
+      included file in the including file, are reported at their own locations in diagnostics (issue #6561)
     - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
       object of a subclass, so the class's methods read no value, and was serialized without its value (see
       @ref private_members; issue #6402)
