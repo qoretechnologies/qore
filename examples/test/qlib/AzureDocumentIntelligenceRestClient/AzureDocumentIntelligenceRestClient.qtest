@@ -229,11 +229,11 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
     */
     private defaultSleeperTest() {
         FakeAzureDocIntelClient fake(True);
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         hash<auto> result = fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"},
             {"poll_interval": 50ms, "analysis_timeout": 1m});
         assertEq("Hello world.", result.content);
         assertEq(3, (select fake.calls, $1.method == "GET").size());
-        assertGe(100, get_duration_milliseconds(now_us() - start));
+        assertGe(100, (clock_get_monotonic_us() - start) / 1000);
     }
 }
