@@ -243,8 +243,8 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
-    - a request whose target (the path or the query, which must decode to valid UTF-8 text) or whose method, HTTP
-      version or header names are not valid text, or whose body (with a \c Content-Length, or buffered over HTTP/2 or
+    - a request whose target (the path or the query, which must be and decode to valid UTF-8 text) or whose method or
+      HTTP version is not valid text, whose HTTP/1.x header names have a byte above 0x7f, or whose body (with a \c Content-Length, or buffered over HTTP/2 or
       HTTP/3) is not valid text in its encoding, is answered with @c 400 before any handler sees it, over HTTP/1.x,
       HTTP/2 and HTTP/3; a header value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes
       unchanged, as obs-text (RFC 9110 section 5.5) (issue #6554)
