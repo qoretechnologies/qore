@@ -146,12 +146,15 @@ static inline bool isoctaldigit(const char x) {
 #if defined(__GNUC__) || defined(__clang__)
 #define QORE_INTERN_ALWAYS_INLINE __attribute__((always_inline)) inline
 #define QORE_INTERN_NOINLINE __attribute__((noinline))
+#define QORE_INTERN_COLD __attribute__((cold))
 #elif defined(_MSC_VER)
 #define QORE_INTERN_ALWAYS_INLINE __forceinline
 #define QORE_INTERN_NOINLINE __declspec(noinline)
+#define QORE_INTERN_COLD
 #else
 #define QORE_INTERN_ALWAYS_INLINE inline
 #define QORE_INTERN_NOINLINE
+#define QORE_INTERN_COLD
 #endif
 
 // here we define virtual types

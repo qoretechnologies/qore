@@ -170,10 +170,10 @@
     @ref Qore::Program::getDefine() "Program::getDefine()" returns it: it was a float (\c 12.0), and a number is decimal,
     also with a leading zero (see @ref define_values "%define"; issue #6530).
 
-    @par The Length of a String Not Valid in Its Encoding Counts Each Invalid Byte as One Character
+    @par Character Counts Validate the String Encoding
     @ref Qore::length(softstring) "length()", @ref Qore::zzz8stringzzz9::length() "<string>::length()" and the
-    @ref elements "elements operator" count each byte of a string that does not start a complete character as one
-    character, in every execution mode; before, the count stopped at the first such byte (issue #6597).
+    @ref elements "elements operator" now raise \c INVALID-ENCODING when a string is invalid in its declared
+    encoding (issue #6655).
 
     @par UTF-8 Strings Are Valid Only as RFC 3629 Defines Them
     A continuation byte on its own, an overlong form, a surrogate, a code point above U+10FFFF and the bytes

@@ -1237,13 +1237,13 @@ static LocalVar* qoreIrGetHoistableListSizeLocal(const QoreValue& expr) {
 }
 
 static bool qoreIrIsHoistableStringNoArgMethodName(const char* name) {
-    return name && (!strcmp(name, "size") || !strcmp(name, "strlen") || !strcmp(name, "length")
+    return name && (!strcmp(name, "size") || !strcmp(name, "strlen")
         || !strcmp(name, "empty") || !strcmp(name, "val") || !strcmp(name, "sizep")
         || !strcmp(name, "strp") || !strcmp(name, "intp"));
 }
 
 static bool qoreIrIsGlobalStringLengthName(const char* name) {
-    return name && (!strcmp(name, "strlen") || !strcmp(name, "length"));
+    return name && !strcmp(name, "strlen");
 }
 
 static LocalVar* qoreIrGetHoistableStringNoArgLocal(const QoreValue& expr) {
@@ -17607,7 +17607,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     // only a call of the Qore builtin, never a user or module function with the same name
-    if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
+    if (func_name && !strcmp(func_name, "strlen")
             && !call->hasExplicitTypeArgs() && qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();

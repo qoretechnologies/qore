@@ -276,8 +276,6 @@ static const char* qore_ir_get_string_pseudo_noguard_helper(QoreIRIntrinsic intr
             return "qore_rt_pseudo_string_size_noguard";
         case QoreIRIntrinsic::StringStrlen:
             return base_never_nothing ? "qore_rt_pseudo_string_size_noguard" : nullptr;
-        case QoreIRIntrinsic::StringLength:
-            return base_never_nothing ? "qore_rt_pseudo_string_length_noguard" : nullptr;
         case QoreIRIntrinsic::StringSizeP:
             return "qore_rt_pseudo_string_sizep_noguard";
         case QoreIRIntrinsic::StringIntP:
@@ -318,6 +316,8 @@ static QoreIRPseudoHelperInfo qore_ir_get_string_pseudo_xsink_helper(QoreIRIntri
         return {};
     }
     switch (intrinsic) {
+        case QoreIRIntrinsic::StringLength:
+            return {"qore_fast_length", false, true};
         case QoreIRIntrinsic::StringLower:
             return {"qore_rt_pseudo_string_lwr_noguard", true, true};
         case QoreIRIntrinsic::StringUpper:

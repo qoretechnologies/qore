@@ -92,6 +92,9 @@ struct qore_encoding_private {
     */
     bool needs_boundary_check = false;
 
+    //! A tag unknown to iconv has the historical single-byte character semantics.
+    bool opaque_single_byte = false;
+
     //! true if iconv decodes the "-" that ends a UTF-7 base64 run as a character at the end of its input
     /** (Apple's libiconv: "+AOk-" gives "é-"); see IconvHelper::iconvUtf7()
     */

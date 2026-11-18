@@ -7196,8 +7196,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                         && call->pseudo_base_known_assigned_string
                         && call->operands.size() == 1
                         && (call->intrinsic == QoreIRIntrinsic::Size
-                            || call->intrinsic == QoreIRIntrinsic::StringStrlen
-                            || call->intrinsic == QoreIRIntrinsic::StringLength);
+                            || call->intrinsic == QoreIRIntrinsic::StringStrlen);
                     if (!context_free_string_size) {
                         return false;
                     }
@@ -7540,12 +7539,6 @@ static bool qore_aot_get_string_op(const QoreIRFunction& func,
                 return false;
             }
             result.kind = AOTStringOpKind::Size;
-            break;
-        case QoreIRIntrinsic::StringLength:
-            if (operation->operands.size() != 1) {
-                return false;
-            }
-            result.kind = AOTStringOpKind::Length;
             break;
         case QoreIRIntrinsic::StringStartsWith:
         case QoreIRIntrinsic::StringEndsWith:
@@ -11048,8 +11041,6 @@ static bool qore_aot_get_composed_int(const QoreIRFunction& func,
                 if (intrinsic == QoreIRIntrinsic::Size
                         || intrinsic == QoreIRIntrinsic::StringStrlen) {
                     source_kind = AOTComposedIntSourceKind::StringSize;
-                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                    source_kind = AOTComposedIntSourceKind::StringLength;
                 } else {
                     return false;
                 }
@@ -12153,8 +12144,6 @@ static bool qore_aot_collect_int_expression_summaries(
                 if (intrinsic == QoreIRIntrinsic::Size
                         || intrinsic == QoreIRIntrinsic::StringStrlen) {
                     kind = AOTIntExpressionNodeKind::HashKeyStringSize;
-                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                    kind = AOTIntExpressionNodeKind::HashKeyStringLength;
                 } else {
                     return false;
                 }
@@ -12186,11 +12175,6 @@ static bool qore_aot_collect_int_expression_summaries(
                         return false;
                     }
                     source_kind = AOTIntExpressionNodeKind::StringSize;
-                } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-                    if (inst->operands.size() != 1) {
-                        return false;
-                    }
-                    source_kind = AOTIntExpressionNodeKind::StringLength;
                 } else {
                     auto arg = inst->operands.size() >= 2
                         ? boxed_values.find(inst->operands[1].id) : boxed_values.end();

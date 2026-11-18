@@ -163,19 +163,19 @@ int len = str.length();
     @endcode
 
     @note
-    - this operation has <i>O(n)</i> complexity if the string has a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
+    - counting takes linear time when the encoding requires validation; a UTF-8 string caches its ASCII prefix,
+      so repeated counts of all-ASCII UTF-8 text take constant time
     - equivalent to @ref Qore::length(softstring)
-    - in a string that is not valid in its encoding, each byte that does not start a complete character counts as one
-      character, so the count is not less than the number of characters of its text (since %Qore 3.0; before, the
-      count stopped at the first such byte)
+
+    @throw INVALID-ENCODING the string is not valid in its declared encoding
 
     @see
     - <string>::strlen()
     - <string>::size()
     - <string>::width()
 */
-int <string>::length() [const;flags=CONSTANT] {
-    return str->length();
+int <string>::length() [const;flags=RET_VALUE_ONLY] {
+    return qore_string_private::characterCount(*str, xsink);
 }
 
 //! Returns the width of characters in the string; some unicode characters take up multiple spaces on output

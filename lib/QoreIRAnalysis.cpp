@@ -3353,14 +3353,13 @@ static bool qore_ir_is_hoistable_read_only_query(
             || !direct.pseudo_base_known_assigned_string) {
         return false;
     }
-    // LICM can execute the query before a zero-trip loop, so admit only
-    // assigned operands and pseudo operations that cannot throw or mutate.
+    // LICM can execute the query before a zero-trip loop. Character length can raise
+    // INVALID-ENCODING even for an assigned operand; byte length cannot.
     switch (direct.intrinsic) {
         case QoreIRIntrinsic::Size:
         case QoreIRIntrinsic::Empty:
         case QoreIRIntrinsic::Val:
         case QoreIRIntrinsic::StringStrlen:
-        case QoreIRIntrinsic::StringLength:
         case QoreIRIntrinsic::StringSizeP:
         case QoreIRIntrinsic::StringStrP:
         case QoreIRIntrinsic::StringIntP:
@@ -18401,11 +18400,6 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 return false;
             }
             kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Size;
-        } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-            if (consumer->operands.size() != 1) {
-                return false;
-            }
-            kind = QoreIRCallDirectInstruction::AOTStringConsumerKind::Length;
         } else if (intrinsic == QoreIRIntrinsic::StringStartsWith
                 || intrinsic == QoreIRIntrinsic::StringEndsWith
                 || intrinsic == QoreIRIntrinsic::StringContains) {
@@ -19743,13 +19737,6 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                 }
                 kind = QoreIRDotEvalMethodDirectInstruction::
                     AOTStringTransformConsumerKind::Size;
-            } else if (method_consumer->intrinsic
-                    == QoreIRIntrinsic::StringLength) {
-                if (method_consumer->operands.size() != 1) {
-                    continue;
-                }
-                kind = QoreIRDotEvalMethodDirectInstruction::
-                    AOTStringTransformConsumerKind::Length;
             } else if (method_consumer->intrinsic
                     == QoreIRIntrinsic::StringStartsWith
                     || method_consumer->intrinsic
