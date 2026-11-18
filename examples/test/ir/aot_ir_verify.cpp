@@ -31,6 +31,8 @@ using Mutate = std::function<void(QoreIRFunction&)>;
 static const char* const BlockBeyond = "beyond the";
 //! the message of a missing target
 static const char* const NoTarget = "malformed IR: the instruction has no";
+//! the message of a use of a value that its definition does not dominate
+static const char* const NotDominated = "which is not defined on every path to it";
 
 //! returns the first instruction with the given opcode
 template <typename T = QoreIRInstruction>
@@ -322,7 +324,134 @@ static void switchString(QoreIRFunction& fn, QoreIRBuilder& b) {
     b.createReturnNothing();
 }
 
+//! a handler reached from an instruction that can raise an exception; the handler returns the value given
+static void handler(QoreIRFunction& fn, QoreIRBuilder& b, bool use_result) {
+    QoreIRValue before = b.createConstInt(1)->result;
+    QoreIRBasicBlock* h = fn.createBlock("handler");
+    QoreIRBasicBlock* next = fn.createBlock("next");
+    // an instruction that can raise an exception into the handler
+    QoreIRInstruction* raising = b.createConstInt(2);
+    raising->exception_target = h;
+    b.createBranch(next);
+    b.setBlock(next);
+    b.createReturn(before);
+    b.setBlock(h);
+    b.createReturn(use_result ? raising->result : before);
+}
+
+//! returns a new constant with a value id of its own
+static std::unique_ptr<QoreIRConstInstruction> newConst(QoreIRFunction& fn) {
+    auto c = std::make_unique<QoreIRConstInstruction>();
+    c->result = QoreIRValue(++fn.max_value_id);
+    return c;
+}
+
+//! a release of a temporary on a path on which the temporary may not have been created, as the lowering of a
+//! statement that leaves on several paths gives (\a kept: the release keeps a value, as a fused pipeline's stage)
+static void releaseMaybe(QoreIRFunction& fn, QoreIRBuilder& b, bool kept) {
+    QoreIRValue cond = b.createConstBool(true)->result;
+    QoreIRValue k = b.createConstInt(0)->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* join = fn.createBlock("join");
+    b.createBranchIf(cond, a, join);
+    b.setBlock(a);
+    QoreIRValue temp = b.createConstString("t")->result;
+    b.createBranch(join);
+    b.setBlock(join);
+    if (kept) {
+        b.createReleaseStageInput(temp, k);
+    } else {
+        b.createReleaseOwnedTemp(temp);
+    }
+    b.createReturnNothing();
+}
+
+//! a block that an instruction that can raise an exception reaches both by its exception edge and by the branch at
+//! the end of its block, with a phi of the value given (\a after: the value of the raising instruction)
+static void handlerPhi(QoreIRFunction& fn, QoreIRBuilder& b, bool after) {
+    QoreIRValue before = b.createConstInt(1)->result;
+    QoreIRBasicBlock* h = fn.createBlock("handler");
+    QoreIRInstruction* raising = b.createConstInt(2);
+    raising->exception_target = h;
+    b.createBranch(h);
+    b.setBlock(h);
+    QoreIRValue v = b.createPhi({{after ? raising->result : before, fn.blocks[0].get()}})->result;
+    b.createReturn(v);
+}
+
+//! a throw to a handler that returns a value defined before the throw
+static void throwHandler(QoreIRFunction& fn, QoreIRBuilder& b) {
+    QoreIRValue before = b.createConstInt(1)->result;
+    QoreIRBasicBlock* h = fn.createBlock("handler");
+    b.createThrow(before, h);
+    b.setBlock(h);
+    b.createReturn(before);
+}
+
+//! an iterator released on a path on which it may not have been created (\a dominated: on the path that creates it)
+static void iteratorRelease(QoreIRFunction& fn, QoreIRBuilder& b, bool dominated) {
+    QoreIRValue cond = b.createConstBool(true)->result;
+    QoreIRValue list = b.createConstNothing()->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* join = fn.createBlock("join");
+    b.createBranchIf(cond, a, join);
+    b.setBlock(a);
+    QoreIRValue it = b.createIteratorCreate(list)->result;
+    if (dominated) {
+        b.createIteratorRelease(it);
+    }
+    b.createBranch(join);
+    b.setBlock(join);
+    if (!dominated) {
+        b.createIteratorRelease(it);
+    }
+    b.createReturnNothing();
+}
+
+//! the loop of the fold of a fused pipeline (qore#6549): the flag that the loop carries is merged by a phi of the
+//! constant True from the block that starts the accumulator and from the block that adds to it; \a fixed: the
+//! constant is defined before the branch to the two blocks, otherwise in the block that starts the accumulator only
+static void foldFlag(QoreIRFunction& fn, QoreIRBuilder& b, bool fixed) {
+    QoreIRValue initial = b.createConstBool(false)->result;
+    QoreIRBasicBlock* entry = fn.blocks[0].get();
+    QoreIRBasicBlock* header = fn.createBlock("header");
+    QoreIRBasicBlock* step = fn.createBlock("step");
+    QoreIRBasicBlock* init = fn.createBlock("init");
+    QoreIRBasicBlock* fold = fn.createBlock("fold");
+    QoreIRBasicBlock* cont = fn.createBlock("cont");
+    QoreIRBasicBlock* done = fn.createBlock("done");
+    b.createBranch(header);
+    // the header: the flag, and whether there is another element
+    b.setBlock(header);
+    QoreIRPhiInstruction* flag = b.createPhi({{initial, entry}});
+    QoreIRValue more = b.createConstBool(true)->result;
+    QoreIRValue true_val;
+    if (fixed) {
+        true_val = b.createConstBool(true)->result;
+    }
+    b.createBranchIf(more, step, done);
+    // the element: the flag decides between starting the accumulator and adding to it
+    b.setBlock(step);
+    b.createBranchIf(flag->result, fold, init);
+    b.setBlock(init);
+    if (!fixed) {
+        true_val = b.createConstBool(true)->result;
+    }
+    b.createBranch(cont);
+    b.setBlock(fold);
+    b.createBranch(cont);
+    b.setBlock(cont);
+    QoreIRValue next = b.createPhi({{true_val, init}, {true_val, fold}})->result;
+    b.createBranch(header);
+    flag->incoming.push_back({next, cont});
+    flag->operands.push_back(next);
+    b.setBlock(done);
+    b.createReturn(flag->result);
+}
+
 int main(int argc, char** argv) {
+    // the fixtures write malformed IR, which the writer refuses in a debug build otherwise
+    setenv("QORE_AOT_TEST_NO_WRITE_VERIFY", "1", 1);
     reseal_helper = argc > 1 ? argv[1] : nullptr;
     // the signal thread must stay disabled for valgrind, just as for qore -b
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
@@ -364,7 +493,8 @@ int main(int argc, char** argv) {
         find<QoreIRPhiInstruction>(fn, QoreIROpcode::Phi)->incoming[0].block = to;
     });
     runIndex("exception target beyond", loop, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
-        find(fn, QoreIROpcode::ConstBool)->exception_target = to;
+        // the branch of the entry block, after the value that the targets use
+        find(fn, QoreIROpcode::Br)->exception_target = to;
     });
 
     // a patch whose checksum is not written again is refused at the checksum, before the IR is read
@@ -406,6 +536,206 @@ int main(int argc, char** argv) {
     run("SwitchString without case target", switchString, [none](QoreIRFunction& fn) {
         find<QoreIRSwitchStringInstruction>(fn, QoreIROpcode::SwitchString)->cases[0].target = none;
     }, NoTarget);
+
+    // the structure of the blocks
+    run("block without terminator", loop, [](QoreIRFunction& fn) {
+        // the entry block ends with its constant
+        fn.blocks[0]->instructions.pop_back();
+    }, "has no terminator");
+    // the instructions after the terminator of a block never run, and their values are not defined
+    run("instructions after the terminator of a block", loop, [](QoreIRFunction& fn) {
+        fn.blocks[2]->instructions.push_back(newConst(fn));
+    });
+    run("use of a value defined after the terminator of a block", loop, [](QoreIRFunction& fn) {
+        auto c = newConst(fn);
+        find<QoreIRBranchIfInstruction>(fn, QoreIROpcode::BrIf)->condition = c->result;
+        fn.blocks[0]->instructions.push_back(std::move(c));
+    }, "which no instruction that can run defines");
+    run("empty block", loop, [](QoreIRFunction& fn) {
+        fn.blocks[2]->instructions.clear();
+    }, "has no instructions");
+    run("phi after another instruction", phi, [](QoreIRFunction& fn) {
+        auto& insts = fn.blocks[3]->instructions;
+        // the phi is the first instruction of the join block: an instruction is put before it
+        insts.insert(insts.begin(), newConst(fn));
+    }, "a phi follows another instruction");
+    run("phi with an invalid value kind", phi, [](QoreIRFunction& fn) {
+        find<QoreIRPhiInstruction>(fn, QoreIROpcode::Phi)->value_kind = static_cast<QoreIRPhiValueKind>(9);
+    }, "invalid value kind");
+
+    // values used where their definitions do not dominate the use
+    run("use of a value of another path", phi, [](QoreIRFunction& fn) {
+        // the join block returns the value of one of its predecessors instead of the phi
+        find<QoreIRReturnInstruction>(fn, QoreIROpcode::Return)->value = find(fn, QoreIROpcode::ConstInt)->result;
+    }, NotDominated);
+    run("use before the definition", loop, [](QoreIRFunction& fn) {
+        // the branch of block a uses a value that a later block defines
+        auto c = newConst(fn);
+        find<QoreIRBranchIfInstruction>(fn, QoreIROpcode::BrIf)->condition = c->result;
+        auto& insts = fn.blocks[2]->instructions;
+        insts.insert(insts.begin(), std::move(c));
+    }, NotDominated);
+    run("use of a value of a block that never runs", loop, [](QoreIRFunction& fn) {
+        QoreIRBasicBlock* dead = fn.createBlock("dead");
+        auto c = newConst(fn);
+        find<QoreIRBranchIfInstruction>(fn, QoreIROpcode::BrIf)->condition = c->result;
+        dead->instructions.push_back(std::move(c));
+        auto br = std::make_unique<QoreIRBranchInstruction>();
+        br->target = fn.blocks[3].get();
+        dead->instructions.push_back(std::move(br));
+    }, "which no instruction that can run defines");
+    run("phi incoming value of another predecessor", phi, [](QoreIRFunction& fn) {
+        auto* p = find<QoreIRPhiInstruction>(fn, QoreIROpcode::Phi);
+        std::swap(p->incoming[0].value, p->incoming[1].value);
+        p->operands = {p->incoming[0].value, p->incoming[1].value};
+    }, "which is not defined at the end of that block");
+
+    // the release of a temporary that the function owns may be on a path on which it was not created, but the
+    // temporary must be defined by an instruction that can run, and the value that the release keeps must be defined
+    // on every path
+    run("release of a temporary that may not have been created", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        releaseMaybe(fn, b, false);
+    });
+    run("release of a temporary that no instruction that can run defines",
+        [](QoreIRFunction& fn, QoreIRBuilder& b) { releaseMaybe(fn, b, false); }, [](QoreIRFunction& fn) {
+        // the temporary is defined in a block that never runs
+        QoreIRBasicBlock* dead = fn.createBlock("dead");
+        auto c = newConst(fn);
+        find(fn, QoreIROpcode::ReleaseOwnedTemp)->operands[0] = c->result;
+        dead->instructions.push_back(std::move(c));
+        dead->instructions.push_back(std::make_unique<QoreIRReturnInstruction>());
+    }, "which no instruction that can run defines");
+    run("release keeping a value that may not be defined", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        releaseMaybe(fn, b, true);
+    }, [](QoreIRFunction& fn) {
+        // the kept value is the temporary of the other path
+        auto* rel = find(fn, QoreIROpcode::ReleaseOwnedTemp);
+        rel->operands[1] = find(fn, QoreIROpcode::ConstString)->result;
+    }, NotDominated);
+
+    // the values that a step of an iterator releases (those that the loop derived from the previous element) may
+    // not be defined at the first step, but must be defined by an instruction that can run
+    run("iterator step releasing a value of the loop body", iterator, [](QoreIRFunction& fn) {
+        // the body block defines a value that the next step releases
+        auto c = newConst(fn);
+        find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext)->release_values.push_back(c->result);
+        auto& insts = fn.blocks[2]->instructions;
+        insts.insert(insts.begin(), std::move(c));
+    });
+    run("iterator step releasing a value that no instruction that can run defines", iterator, [](QoreIRFunction& fn) {
+        QoreIRBasicBlock* dead = fn.createBlock("dead");
+        auto c = newConst(fn);
+        find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext)->release_values.push_back(c->result);
+        dead->instructions.push_back(std::move(c));
+        dead->instructions.push_back(std::make_unique<QoreIRReturnInstruction>());
+    }, "which no instruction that can run defines");
+
+    // the element of a step of an iterator is defined on its continue edge only
+    run("iterator element used in the loop body", iterator, [](QoreIRFunction& fn) {
+        auto* next = find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext);
+        next->result = QoreIRValue(++fn.max_value_id);
+        auto ret = std::make_unique<QoreIRReturnInstruction>();
+        ret->opcode = QoreIROpcode::Return;
+        ret->has_value = true;
+        ret->value = next->result;
+        // the body returns the element instead of branching back
+        fn.blocks[2]->instructions.back() = std::move(ret);
+    });
+    run("iterator element used after the iterator is done", iterator, [](QoreIRFunction& fn) {
+        auto* next = find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext);
+        next->result = QoreIRValue(++fn.max_value_id);
+        auto ret = std::make_unique<QoreIRReturnInstruction>();
+        ret->opcode = QoreIROpcode::Return;
+        ret->has_value = true;
+        ret->value = next->result;
+        fn.blocks[3]->instructions.back() = std::move(ret);
+    }, NotDominated);
+
+    // the list of a step of a typed foreach is its operand
+    run("typed foreach list that is not its operand", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        QoreIRValue list = b.createConstNothing()->result;
+        QoreIRValue other = b.createConstNothing()->result;
+        QoreIRValue index = b.createConstInt(0)->result;
+        QoreIRValue limit = b.createConstInt(3)->result;
+        QoreIRBasicBlock* loop = fn.createBlock("loop");
+        QoreIRBasicBlock* body = fn.createBlock("body");
+        QoreIRBasicBlock* done = fn.createBlock("done");
+        b.createBranch(loop);
+        b.setBlock(loop);
+        b.createTypedForeachNext(list, index, limit, bigIntTypeInfo, done, body)->iterator = other;
+        b.setBlock(body);
+        b.createBranch(done);
+        b.setBlock(done);
+        b.createReturnNothing();
+    }, nullptr, "that is not its operand");
+
+    // a phi has an incoming value for each predecessor
+    run("phi without the incoming value of a predecessor", phi, [](QoreIRFunction& fn) {
+        auto* p = find<QoreIRPhiInstruction>(fn, QoreIROpcode::Phi);
+        p->incoming.pop_back();
+        p->operands.pop_back();
+    }, "has no incoming value from its predecessor");
+
+    // an iterator released on a path on which it may not exist is refused: only the releases of temporaries and of
+    // the values of an iterator step are released if the frame holds them
+    run("iterator released on its path", [](QoreIRFunction& fn, QoreIRBuilder& b) { iteratorRelease(fn, b, true); });
+    run("iterator released on a path on which it may not exist", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        iteratorRelease(fn, b, false);
+    }, nullptr, NotDominated);
+
+    // a throw to its handler, and a block reached by an exception edge and a branch from the same block
+    run("throw", throwHandler);
+    run("handler phi of a value defined before the raising instruction", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        handlerPhi(fn, b, false);
+    });
+    run("handler phi of the value of the raising instruction", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        handlerPhi(fn, b, true);
+    }, nullptr, "which is not defined at the end of that block");
+
+    // the fold of a fused pipeline (qore#6549): the fixed shape is accepted, the old one refused
+    run("fold flag of a fused pipeline", [](QoreIRFunction& fn, QoreIRBuilder& b) { foldFlag(fn, b, true); });
+    run("fold flag of a fused pipeline (qore#6549)", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        foldFlag(fn, b, false);
+    }, nullptr, "which is not defined at the end of that block");
+
+    // a raising instruction that is the first of its block: its exception edge leaves from the entry of the block
+    run("handler uses the value of the first instruction of its block, which raises", [](QoreIRFunction& fn,
+            QoreIRBuilder& b) {
+        QoreIRBasicBlock* h = fn.createBlock("handler");
+        QoreIRBasicBlock* next = fn.createBlock("next");
+        QoreIRInstruction* raising = b.createConstInt(2);
+        raising->exception_target = h;
+        b.createBranch(next);
+        b.setBlock(next);
+        b.createReturnNothing();
+        b.setBlock(h);
+        b.createReturn(raising->result);
+    }, nullptr, NotDominated);
+    // an iterator step whose done and continue targets are the same block: the element is not defined on the done
+    // edge
+    run("iterator element used in a block that is also the done target", iterator, [](QoreIRFunction& fn) {
+        auto* next = find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext);
+        next->result = QoreIRValue(++fn.max_value_id);
+        next->done_target = next->continue_target;
+        auto ret = std::make_unique<QoreIRReturnInstruction>();
+        ret->opcode = QoreIROpcode::Return;
+        ret->has_value = true;
+        ret->value = next->result;
+        fn.blocks[2]->instructions.back() = std::move(ret);
+    }, NotDominated);
+    // a phi with an incoming value from a block that is not a predecessor of its block
+    run("phi incoming value from a block that is not a predecessor", phi, [](QoreIRFunction& fn) {
+        auto* p = find<QoreIRPhiInstruction>(fn, QoreIROpcode::Phi);
+        p->incoming.push_back({find(fn, QoreIROpcode::ConstBool)->result, fn.blocks[0].get()});
+        p->operands.push_back(p->incoming.back().value);
+    }, "which is not a predecessor of its block");
+
+    // the handler of an exception: a value defined before the instruction that raises it is available, the value of
+    // the instruction is not
+    run("handler", [](QoreIRFunction& fn, QoreIRBuilder& b) { handler(fn, b, false); });
+    run("handler uses the value of the raising instruction", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        handler(fn, b, true);
+    }, nullptr, NotDominated);
 
     qore_destroy_program(pgm);
     qore_cleanup();

@@ -15830,6 +15830,23 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         return false;
     }
 
+    // the IR that qcc writes passes the verification of the reader, which would refuse the module (qore#6468): in a
+    // debug build always, otherwise with QORE_AOT_VERIFY_WRITTEN_IR set; the tests of the verification write
+    // malformed IR with QORE_AOT_TEST_NO_WRITE_VERIFY set
+#ifdef DEBUG
+    bool verify_written = !getenv("QORE_AOT_TEST_NO_WRITE_VERIFY");
+#else
+    bool verify_written = getenv("QORE_AOT_VERIFY_WRITTEN_IR");
+#endif
+    if (verify_written) {
+        std::string verify_error;
+        if (!QoreIRVerifier::verifyModuleIR(func, verify_error)) {
+            qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' fails the verification of IR "
+                "read from an AOT module: " + verify_error);
+            return false;
+        }
+    }
+
     // The counts of the IR have fixed widths in the AOT format; a count that does not fit would wrap and make the
     // reader decode a different function than was written, so the function is refused instead (qore#6127)
     {

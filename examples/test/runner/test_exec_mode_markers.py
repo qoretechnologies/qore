@@ -302,7 +302,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution mode
         # - DeserializationSizes (#6502): each case is deserialized in a child process started without an execution mode
         # - FtpPortAcceptUnreferenced (#6525): each case runs in a child process started without an execution mode
+        # - AOTFusedFoldVerify (#6549): its checks compile with qcc and run the module in a child process started
+        #   without an execution mode
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
+                                 "examples/test/ir/AOTFusedFoldVerify.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
                                  "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
