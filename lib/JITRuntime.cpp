@@ -14204,6 +14204,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_immediate_closure_aot_consume_args(
 
 // --- Fast function call with explicit target (multi-function module compilation) ---
 
+//! Calls a function of a batch module through the call path while a debugger is attached (issue #6289)
+/** UserVariantBase::evalTiered() runs the callee on the AST tier (or on the IR read from the AOT image), which makes
+    the function entry and the block step events that the debugger expects before those of the statements.  Cold and
+    out of line, so that the fast path keeps its code.
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) uint64_t qore_rt_fast_call_debugger_function(
+        const UserVariantBase* uvb, const AbstractQoreFunctionVariant* variant, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_function_direct_impl(uvb->getSourceFunction(), variant, nullptr, args, arg_cleanups, nargs,
+        xsink);
+}
+
 //! calls the native code of a function compiled in the caller's batch module
 /** @param arg_cleanups see qore_rt_call_fast_t()
 */
@@ -14220,6 +14232,14 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
         clearGivenArgCleanups<CONSUME>(arg_cleanups, nargs, xsink);
         xsink->raiseException("JIT-ERROR", "non-user variant in fast call with target");
         return toBits(QoreValue());
+    }
+
+    // with a debugger attached, the call is made through the call path, as qore_rt_call_fast_t() makes it: the
+    // callee's native code makes only the step events of its statements, not its function entry and block events
+    // (issue #6289)
+    if (qore_rt_debugger_attached(uvb)) {
+        return qore_rt_fast_call_debugger_function(uvb, variant, args, CONSUME ? arg_cleanups : nullptr, nargs,
+            xsink);
     }
 
     const UserSignature* sig = uvb->getUserSignature();
@@ -14408,6 +14428,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target_consume_args(uint64_
     then runs on the function's current tier.  The variant's body alone (UserVariantBase::evalTiered()) expects the
     parameters to have been bound (qore#6317).
 
+    A recursive call made while a debugger is attached is made here as well, so that it runs on the tier that
+    UserVariantBase::evalTiered() chooses with a debugger attached, which makes the function entry and block step
+    events of the call (issue #6289).
+
     Outside of qore_rt_call_self_recursive_t(), whose frame and code are on the path of every native self-recursive
     call.
 
@@ -14452,7 +14476,7 @@ static QORE_INTERN_NOINLINE uint64_t qore_rt_call_self_recursive_fallback(const 
 
 //! Self-recursive call helper: sets up params, argv, body locals, and deopt handling
 /** Falls back to a call made as an AST call makes it if the native code of the function was removed while it is
-    recompiled (see qore_rt_call_self_recursive_fallback()).
+    recompiled or if a debugger is attached (see qore_rt_call_self_recursive_fallback()).
 
     @param arg_cleanups see qore_rt_call_fast_t()
 */
@@ -14475,8 +14499,9 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         return toBits(QoreValue());
     }
 
-    // Fall back to slow path if JIT function was invalidated by recompilation
-    if (!uvb->hasCachedFunction()) {
+    // Fall back to slow path if JIT function was invalidated by recompilation, or if a debugger is attached, as for
+    // a call of another function (see qore_rt_call_fast_with_target_t(), issue #6289)
+    if (!uvb->hasCachedFunction() || qore_rt_debugger_attached(uvb)) {
         return qore_rt_call_self_recursive_fallback<CONSUME>(variant, uvb, args, arg_cleanups, nargs, xsink);
     }
 
