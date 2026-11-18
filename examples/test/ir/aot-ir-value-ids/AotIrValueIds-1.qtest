@@ -1,0 +1,24 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every run is a child process that sets its own execution mode
+# test-platform: macos - the AOT module loader and the IR interpreter run patched, ad hoc re-signed modules
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%include AotIrValueIds.qc
+
+%exec-class AotIrValueIdsPart1
+
+#! runs part 1 of 4 of the cases of AotIrValueIdsBase
+class AotIrValueIdsPart1 inherits AotIrValueIdsBase {
+    constructor() : AotIrValueIdsBase("AotIrValueIdsPart1", 1) {
+    }
+}
