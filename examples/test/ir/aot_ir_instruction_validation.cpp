@@ -253,6 +253,51 @@ int main() {
     run("valid nothing constant", O::ConstNothing, G::Const, {}, [](QoreAOTBinaryWriter& w) {
         w.writeU8(static_cast<uint8_t>(QoreIRConstant::Kind::Nothing));
     });
+    // the paths of a debugger's flow requests of a step event and of a ScopeExit (#6200, #6201): an image of an
+    // earlier version has none, and a mask with an unknown bit or a block that does not exist is rejected
+    auto debug_step = [](int mask, std::vector<uint16_t> blocks) -> Payload {
+        return [mask, blocks](QoreAOTBinaryWriter& w) {
+            w.writeU16(0); // nest depth
+            w.writeU8(0); // nest flags
+            if (mask >= 0) {
+                w.writeU8(static_cast<uint8_t>(mask));
+                for (uint16_t b : blocks) {
+                    w.writeU16(b);
+                }
+            }
+        };
+    };
+    run("step event without paths before the flow version", O::DebugStatement, G::DebugStatement, {},
+        debug_step(-1, {}), nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+    run("step event without paths", O::DebugStatement, G::DebugStatement, {}, debug_step(0, {}), nullptr,
+        false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+    run("step event with paths", O::DebugStatement, G::DebugStatement, {}, debug_step(7, {0, 0, 0}), nullptr,
+        false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+    for (int mask : {0x08, 0x10, 0x80, 0xff}) {
+        run("step event flow mask", O::DebugStatement, G::DebugStatement, {}, debug_step(mask, {0, 0, 0}),
+            "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+    }
+    run("step event flow block", O::DebugStatement, G::DebugStatement, {}, debug_step(1, {5}),
+        "invalid debugger flow path block", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+    auto scope_exit = [](int mask, std::vector<uint16_t> blocks) -> Payload {
+        return [mask, blocks](QoreAOTBinaryWriter& w) {
+            w.writeU32(1); // scope id
+            w.writeU8(0); // is_error
+            w.writeU8(0); // flags
+            if (mask >= 0) {
+                w.writeU8(static_cast<uint8_t>(mask));
+                for (uint16_t b : blocks) {
+                    w.writeU16(b);
+                }
+            }
+        };
+    };
+    run("ScopeExit without paths before the flow version", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}),
+        nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), nullptr, false, false,
+        QORE_AOT_DEBUG_FLOW_VERSION, 0);
+    run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
+        "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
     qore_destroy_program(pgm);
     qore_cleanup();
     if (ok) {

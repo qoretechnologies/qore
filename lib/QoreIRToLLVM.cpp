@@ -1621,7 +1621,9 @@ bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const Qor
     QoreIRClassContextHelper class_ctx(func);
     return_type = func.specializeType(return_type);
     size_t check_count = 0;
-    for (const auto& block : func.blocks) {
+    // the returns of the code (QoreIRCodeBlocks): the return of the path of a debugger's request raises the error of a
+    // missing value where the type needs a conversion (#6201)
+    for (QoreIRBasicBlock* block : qore_ir_code_blocks(func)) {
         for (const auto& inst : block->instructions) {
             // a cancelled scan reports a converting return, which only prevents a summary; the caller aborts on its
             // own cancellation check
@@ -3865,6 +3867,12 @@ static bool qore_ir_exception_reaches_catch(const QoreIRBasicBlock* target) {
                 qore_ir_visit_successors(*inst, [&work](QoreIRBasicBlock* succ) {
                     work.push_back(succ);
                 });
+            }
+            // the paths of the debugger's flow requests at a step event on the way (#6201)
+            if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get())) {
+                for (QoreIRBasicBlock* target : flow->targets()) {
+                    work.push_back(target);
+                }
             }
         }
     }
@@ -7687,6 +7695,10 @@ llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock
                 qore_ir_visit_successors(*block->instructions.back(),
                     [&targets](QoreIRBasicBlock* target) { targets.insert(target); });
             }
+            // the paths of the debugger's flow requests at the block's step events (#6201)
+            qore_ir_visit_debug_flow_targets(*block, [&targets](size_t, QoreIRBasicBlock* target) {
+                targets.insert(target);
+            });
             for (const QoreIRBasicBlock* target : targets) {
                 ++ir_block_predecessor_counts[target];
             }
@@ -15475,6 +15487,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             error = "cancelled during LLVM native PHI predeclaration";
             return false;
         }
+        // native code has no paths of the debugger's flow requests: their blocks are erased with what they hold
+        // when the blocks are lowered, so they get no PHIs, which the PHI fixup pass would read freed (#6201)
+        if (block->debug_flow) {
+            continue;
+        }
         auto llvm_block_it = block_map.find(block.get());
         if (llvm_block_it == block_map.end()) {
             error = "missing LLVM basic block mapping during native PHI predeclaration";
@@ -17185,6 +17202,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Lower each block
     for (const auto& block : func.blocks) {
+        // native code takes no debugger's flow requests (emitDebugStepHook()): the blocks of their paths get no code
+        // (see below)
+        if (block->debug_flow) {
+            continue;
+        }
         aot_hash_string_extraction_cache.clear();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
@@ -17217,7 +17239,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     && hash_string_extraction_cfg
                             ->reachable[block_id->second]
                     && hash_string_extraction_cfg
-                            ->predecessors[block_id->second].size() == 1) {
+                            ->predecessors[block_id->second].size() == 1
+                    // the block that a debugger's flow request at a step event enters is entered from inside its
+                    // predecessor (#6201)
+                    && !hash_string_extraction_cfg->getDebugFlowSource(block_id->second)) {
                 size_t predecessor_id = hash_string_extraction_cfg
                     ->predecessors[block_id->second].front();
                 const QoreIRBasicBlock* predecessor =
@@ -17561,6 +17586,34 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    // only the debug IR of AOT code has the paths of a debugger's flow requests (QoreIRFunction::hasDebugFlowPaths()),
+    // for the IR interpreter that runs it under a debugger, so their blocks get no native code, in AOT code and in the
+    // closures of AOT code that the JIT compiles from that IR (#6201): they are erased once every block is lowered, so
+    // that a branch to one from any block, also one lowered after it, is found; only the step events of the IR enter
+    // them, so no code branches to one: if the code of a JIT function did, its compilation fails (fail closed: the
+    // function stays on its tier), and AOT code makes the block unreachable
+    for (const auto& block : func.blocks) {
+        if (!block->debug_flow) {
+            continue;
+        }
+        auto it = block_map.find(block.get());
+        llvm::BasicBlock* unused = it == block_map.end() ? nullptr : it->second;
+        if (!unused) {
+            continue;
+        }
+        if (unused->use_empty()) {
+            unused->eraseFromParent();
+        } else if (!aot_mode) {
+            error = "the code of IR function '" + func.name + "' branches to block '" + block->name
+                + "' of the paths of a debugger's flow requests, which native code does not have";
+            return false;
+        } else {
+            llvm::IRBuilder<> ub(unused);
+            ub.CreateUnreachable();
+        }
+        it->second = nullptr;
+    }
+
     // PHI fixup pass: add incoming values now that all blocks are lowered
     for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind, phi_temp_cleanup] : pending_phis) {
         llvm::BasicBlock* phi_bb = phi_node->getParent();
@@ -17576,6 +17629,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         for (const auto& inc : phi_inst->incoming) {
+            // native code has no paths of the debugger's flow requests (see above)
+            if (inc.block && inc.block->debug_flow) {
+                continue;
+            }
             llvm::Value* val = getVal(inc.value.id, error);
             if (!val) {
                 return false;
@@ -38043,6 +38100,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // exception through the same xsink-based mechanism used by
         // other AOT helper calls.
         case QoreIROpcode::CallAOTHelper: {
+            // outlined code is AOT native code only, which takes no debugger's flow requests (#6201)
+            assert(aot_mode);
             const auto* cah = static_cast<const QoreIRCallAOTHelperInstruction*>(inst);
             auto* helper_ft = llvm::FunctionType::get(i64_type,
                     {ptr_type, ptr_type}, false);

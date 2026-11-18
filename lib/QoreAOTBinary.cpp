@@ -14866,6 +14866,13 @@ static bool serializeCallRelocations(QoreAOTBinaryWriter& writer,
     return true;
 }
 
+//! Returns true if QORE_AOT_DEBUG_IR_DIGEST is set: the compiler prints the digest of the debug IR of each function
+static bool aotDebugIRDigestRequested() {
+    static const bool requested = q_env_is_set("QORE_AOT_DEBUG_IR_DIGEST");
+    return requested;
+}
+
+
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const AOTConstantReverseMap* const_reverse_map, std::string& error, QoreProgram* pgm) {
     struct ValueTypeProgramScope {
@@ -15260,6 +15267,19 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
             uint32_t payload_offset = writer.position() - debug_section_start;
             uint32_t payload_start = writer.position();
+            // the positions of the string references of the payload for its digest (see aotDebugIRDigestRequested())
+            std::vector<uint32_t> payload_string_refs;
+            std::vector<uint32_t>* string_refs = aotDebugIRDigestRequested() ? &payload_string_refs : nullptr;
+            struct StringRefTracking {
+                QoreAOTBinaryWriter& writer;
+                DLLLOCAL StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
+                        : writer(writer) {
+                    writer.string_ref_positions = positions;
+                }
+                DLLLOCAL ~StringRefTracking() {
+                    writer.string_ref_positions = nullptr;
+                }
+            } string_ref_tracking(writer, string_refs);
             const auto& parent_locals = func.slot_ids.locals;
             const auto& parent_globals = func.slot_ids.globals;
             auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
@@ -15270,6 +15290,18 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             // debug IR is serialized against the function's own complete slot table
             QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, nullptr);
             qoreAOTClearExprSerializationError();
+#ifndef NDEBUG
+            // the debug IR is that of the function as it was before it was outlined (AOTFunctionOutliner::undo()): it
+            // has no call of an outlined helper and no return of one, and its paths of the debugger's flow requests
+            // are those of the function (#6201)
+            for (const auto& block : func.debug_ir->blocks) {
+                for (const auto& inst : block->instructions) {
+                    assert(inst->opcode != QoreIROpcode::CallAOTHelper);
+                    assert(!qore_ir_inst_cast<const QoreIRReturnInstruction*>(inst.get())
+                        || !static_cast<const QoreIRReturnInstruction*>(inst.get())->outline_signal);
+                }
+            }
+#endif
             bool debug_ir_ok = serializeIRFunction(writer, *func.debug_ir, writeExpr);
             std::string expr_error;
             bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
@@ -15287,6 +15319,35 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     error += ": serializeIRFunction returned false without a nested expression diagnostic";
                 }
                 return false;
+            }
+            // the digest of the serialized debug IR of each function, for the tests that compare it (#6201): of its
+            // bytes, with the strings of its string references for their offsets in the pool, which depend on the
+            // strings written before
+            if (string_refs) {
+                const std::vector<uint8_t>& buf = writer.getBuffer();
+                uint64_t digest = 14695981039346656037ull;
+                auto add = [&digest](uint8_t b) {
+                    digest = (digest ^ b) * 1099511628211ull;
+                };
+                size_t ref = 0;
+                for (uint32_t b = payload_start; b < writer.position(); ++b) {
+                    if (ref < string_refs->size() && (*string_refs)[ref] == b && b + 4 <= writer.position()) {
+                        uint32_t offset = buf[b] | (buf[b + 1] << 8) | (buf[b + 2] << 16)
+                            | (static_cast<uint32_t>(buf[b + 3]) << 24);
+                        const char* str = writer.getPoolString(offset);
+                        for (const char* p = str ? str : ""; *p; ++p) {
+                            add(static_cast<uint8_t>(*p));
+                        }
+                        add(0);
+                        ++ref;
+                        b += 3;
+                        continue;
+                    }
+                    add(buf[b]);
+                }
+                fprintf(stderr, "AOT-DEBUG-IR: %s %u %016llx\n", func.name.c_str(), writer.position() - payload_start,
+                    static_cast<unsigned long long>(digest));
+                string_refs->clear();
             }
             writer.patchU32(debug_ir_patches[i].offset_pos, payload_offset);
             writer.patchU32(debug_ir_patches[i].size_pos, writer.position() - payload_start);
@@ -16126,9 +16187,10 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     // 5. Serialize blocks
     for (auto& block : func.blocks) {
         writer.writeStringRef(block->name.c_str());
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see deserializeIRFunction())
         writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
-            | (static_cast<uint8_t>(block->loop_cancel) << 1)));
+            | (static_cast<uint8_t>(block->loop_cancel) << 1) | (block->debug_flow ? 0x10 : 0)));
         // a PushTempMarkPair is written as the two PushTempMark instructions that it stands for (qore#6444)
         size_t inst_count = block->instructions.size();
         for (const auto& inst_ptr : block->instructions) {
