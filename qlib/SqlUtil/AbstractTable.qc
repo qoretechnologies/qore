@@ -449,7 +449,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
               input data matches, then nothing more is done, otherwise, every row of the table is iterated and
               compared to the primary key hash; if a row does not match a primary key value, then it is deleted.
               This operation allows tables to be completely synchronized by removing rows in the target table not
-              present in the source table. This operation is expensive for large data sets.
+              present in the source table. This operation is expensive for large data sets.  The table must have a primary
+              key, or \c UPSERT-ERROR is raised.
             - \c info_callback: see @ref upsert_info_callback
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
@@ -5060,6 +5061,14 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
 
         # primary key value hash for "delete_others"
         hash<string, bool> pkh;
+        # the primary key is read from the database if it is not yet known
+        *list<string> pkl = opt.delete_others ? getPrimaryKey().keys() : NOTHING;
+        if (opt.delete_others && !pkl) {
+            # there is no key to match the rows by; the delete step raised RUNTIME-TYPE-ERROR after the input was
+            # upserted
+            throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a primary key, which the table does "
+                "not have", getDesc());
+        }
 
         hash<auto> row = i.getValue();
         code upsert = getUpsertClosure(row, upsert_strategy, opt);
@@ -5081,7 +5090,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
 
             # save primary key value in primary key hash if "delete_others" is set
             if (opt.delete_others) {
-                pkh{foldl $1 + "-" + $2, (map row.$1.toString(), primaryKey.keyIterator())} = True;
+                pkh{getDeleteOthersKey(row, pkl)} = True;
             }
         } while (i.next() && (row = i.getValue()));
 
@@ -5092,15 +5101,28 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         return rh;
     }
 
+    #! returns the key of the primary key values of a row for the "delete_others" upsert option
+    /** each value is given with its length, so that different values cannot give the same key: values joined with a
+        separator, as before, did ("a-b", "c" and "a", "b-c"; issue #6580)
+    */
+    private static string getDeleteOthersKey(hash<auto> row, *list<string> pkl) {
+        string key;
+        foreach string col in (pkl) {
+            string val = row{col}.toString();
+            key += sprintf("%d:%s;", val.length(), val);
+        }
+        return key;
+    }
+
     private *hash<string, int> doDeleteOthersIntern(hash<auto> pkh, *hash<auto> opt) {
         hash<string, int> rh;
 
         # iterate through the table to find rows that do not belong and delete them
         list<string> pkl = primaryKey.keys();
         foreach hash<auto> row in (getStatement()) {
-            string k = foldl $1 + "-" + $2, (map row.$1.toString(), pkl);
-            if (pkh{k})
+            if (pkh{getDeleteOthersKey(row, pkl)}) {
                 continue;
+            }
 
             hash<auto> h = row{pkl};
             self.del(h);
