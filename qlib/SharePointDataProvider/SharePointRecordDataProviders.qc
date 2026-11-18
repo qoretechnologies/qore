@@ -128,16 +128,26 @@ public class SharePointRecordTableDataProvider inherits SharePointDataProviderBa
     #! Returns an iterator over the records matching the given condition
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        # a lookup by key is a direct read rather than a filtered list
-        if (where_cond.size() == 1 && exists where_cond{RecordKeyField} && !where_cond.exp) {
+        # a lookup by key is a direct read rather than a filtered list; a list item ID is an integer, so a key value
+        # that is not one matches no item, and no request is made for it
+        auto key = where_cond{RecordKeyField};
+        if (where_cond.size() == 1 && !where_cond.exp
+            && (key.typeCode() == NT_STRING || key.typeCode() == NT_INT)) {
+            if (key.typeCode() == NT_STRING) {
+                # a string that is not valid is refused as in a filter
+                SharePointRecordTableDataProvider::getODataStringLiteral(key);
+            }
             list<hash<auto>> rv = ();
-            try {
-                hash<auto> item = doRestCommand("GET", getListBasePath(getListOptions()) + "/items/"
-                    + where_cond{RecordKeyField} + "?$expand=fields").body;
-                rv += SharePointRecordTableDataProvider::flattenItem(item);
-            } catch (hash<ExceptionInfo> ex) {
-                if (!SharePointRecordTableDataProvider::isNotFound(ex)) {
-                    rethrow;
+            *string item_id = SharePointRecordTableDataProvider::getItemIdPathValue(key);
+            if (exists item_id) {
+                try {
+                    hash<auto> item = doRestCommand("GET", getListBasePath(getListOptions()) + "/items/"
+                        + item_id + "?$expand=fields").body;
+                    rv += SharePointRecordTableDataProvider::flattenItem(item);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (!SharePointRecordTableDataProvider::isNotFound(ex)) {
+                        rethrow;
+                    }
                 }
             }
             return new DefaultRecordIterator<hash<auto>>(new ListIterator<hash<auto>>(rv));
@@ -232,14 +242,44 @@ public class SharePointRecordTableDataProvider inherits SharePointDataProviderBa
         return rv;
     }
 
+    #! Returns the value of a list item ID as it is written in a request path, or @ref nothing if it is not one
+    /** A list item ID is a non-negative integer; an integer, or a string of the digits of one, is written as the
+        integer
+
+        @param value the value of the key
+
+        @return the list item ID as it is written in a request path, or @ref nothing if the value is not a list item ID
+    */
+    static *string getItemIdPathValue(auto value) {
+        switch (value.typeCode()) {
+            case NT_INT:
+                if (value >= 0) {
+                    return string(value);
+                }
+                break;
+            case NT_STRING:
+                # only a string that is exactly the digits of the integer it converts to is accepted
+                if (value.val() && int(value) >= 0 && string(int(value)) == value) {
+                    return value;
+                }
+                break;
+        }
+    }
+
     #! Returns an OData filter for the given condition, or @ref nothing if it cannot express it
     /** Only conditions that Graph can evaluate itself are translated; anything else returns
         @ref nothing so that the caller evaluates the condition locally instead of silently
         returning the wrong rows.
 
+        A key that is not a column name that OData can write (a letter or an underscore followed by letters, digits
+        and underscores, as the internal names of SharePoint columns are) and a value that has no OData literal that
+        Graph compares (see @ref getODataLiteral()) are evaluated locally.
+
         @param where_cond the condition
 
         @return the OData \c $filter expression, or @ref nothing
+
+        @throw VALUE-ERROR a string value has an invalid encoding or a NUL character
     */
     static *string getODataFilter(*hash<auto> where_cond) {
         if (!where_cond || where_cond.exp) {
@@ -247,43 +287,100 @@ public class SharePointRecordTableDataProvider inherits SharePointDataProviderBa
         }
         list<string> parts = ();
         foreach hash<auto> p in (where_cond.pairIterator()) {
-            # a hash or list value is an operator expression, not a literal to compare against
-            if (p.value.typeCode() == NT_HASH || p.value.typeCode() == NT_LIST) {
+            # the key is a field path: only a key that is one column without a dot can be named in OData, where a
+            # dot in a property path is a cast to a type, and a column name is an identifier; any other is evaluated
+            # locally; an identifier is ASCII, and a key with an invalid encoding does not match
+            if (!AbstractDataProvider::isPlainFieldPath(p.key) || p.key !~ /^[A-Za-z_][A-Za-z0-9_]*\z/) {
                 return;
             }
-            # the key is a field path: only a key that is one column without a dot can be named in OData, where a
-            # dot in a property path is a cast to a type; any other is evaluated locally
-            if (!AbstractDataProvider::isPlainFieldPath(p.key)) {
+            # a value with no OData literal (such as a hash or a list, which is an operator expression) is evaluated
+            # locally
+            *string literal = SharePointRecordTableDataProvider::getODataLiteral(p.value);
+            if (!exists literal) {
                 return;
             }
             string field = p.key == RecordKeyField ? "id" : "fields/" + p.key;
-            parts += sprintf("%s eq %s", field,
-                SharePointRecordTableDataProvider::getODataLiteral(p.value));
+            parts += sprintf("%s eq %s", field, literal);
         }
         return parts ? parts.join(" and ") : NOTHING;
     }
 
-    #! Returns the OData literal for the given value
-    /** @param value the value
+    #! Returns the OData literal for the given value, or @ref nothing if it has none that Graph compares
+    /** - a string is in single quotes, with each single quote doubled
+        - an integer, a floating-point number or an arbitrary-precision number is a number
+        - a boolean is \c true or \c false
+        - @ref nothing and @ref null are \c null
 
-        @return the value as an OData literal
+        Any other value (a date, a binary, a hash, a list or an object), and a floating-point value that is not a
+        finite number, returns @ref nothing.
+
+        @param value the value
+
+        @return the value as an OData literal, or @ref nothing
+
+        @throw VALUE-ERROR a string has an invalid encoding or a NUL character; such a string is refused before any
+        query is made with it
     */
-    static string getODataLiteral(auto value) {
+    static *string getODataLiteral(auto value) {
         switch (value.typeCode()) {
             case NT_INT:
-            case NT_FLOAT:
-            case NT_NUMBER:
                 return string(value);
+            case NT_FLOAT: {
+                float f = value;
+                # NaN and the infinite values are evaluated locally; only an infinite value is not zero when
+                # multiplied by zero
+                if (f != f || f * 0.0 != 0.0) {
+                    return;
+                }
+                return string(f);
+            }
+            case NT_NUMBER: {
+                string str = string(value);
+                # NaN and the infinite numbers are written with "@"
+                if (str.find("@") >= 0) {
+                    return;
+                }
+                return str;
+            }
             case NT_BOOLEAN:
                 return value ? "true" : "false";
             case NT_NOTHING:
             case NT_NULL:
                 return "null";
+            case NT_STRING:
+                return SharePointRecordTableDataProvider::getODataStringLiteral(value);
         }
-        # a single quote is escaped by doubling it
-        string str = string(value);
-        str =~ s/'/''/g;
-        return "'" + str + "'";
+    }
+
+    #! Returns the OData string literal of a string: in single quotes, with each single quote doubled
+    /** A string whose encoding is invalid or that has a NUL character is refused first; the literal is in UTF-8
+
+        @param str the string
+
+        @return the OData string literal
+
+        @throw VALUE-ERROR the string's encoding is invalid, or it has a NUL character
+    */
+    static string getODataStringLiteral(string str) {
+        try {
+            if (str.encoding() == "UTF-8") {
+                # a conversion to the same encoding would not check it
+                string check = convert_encoding(str, "UTF-16BE");
+                remove check;
+            } else {
+                # the conversion refuses a string whose encoding is invalid
+                str = convert_encoding(str, "UTF-8");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            throw "VALUE-ERROR", sprintf("a string given to an OData query is not valid in its encoding (%s): %s: %s",
+                str.encoding(), ex.err, ex.desc);
+        }
+        # checked after the encoding, as a search in a string with an invalid encoding raises another error
+        if (str.find(chr(0)) >= 0) {
+            throw "VALUE-ERROR", "a string with a NUL character cannot be given in an OData query";
+        }
+        # the string is valid in its encoding, so replace() processes all of it
+        return "'" + replace(str, "'", "''") + "'";
     }
 
     #! Returns True if the exception reports that the object does not exist

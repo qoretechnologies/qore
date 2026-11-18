@@ -165,7 +165,8 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
             throw "SHAREPOINT-LIST-ERROR", sprintf("no list named; set the 'list_id' option to the ID of "
                 "the list to use (the 'list-lists' action lists the lists in a site)");
         }
-        return getSiteBasePath(req) + "/lists/" + list_id;
+        # a list is named by its ID or its title, which is one segment of the path
+        return getSiteBasePath(req) + "/lists/" + encode_url(list_id, True);
     }
 
     #! Retrieves every page of a Graph collection, following \c "@odata.nextLink"

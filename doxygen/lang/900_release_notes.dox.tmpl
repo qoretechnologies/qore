@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par CdsRestDataProvider Queries Refuse Values and Names That OData Cannot Write
+    In a query of the @ref cdsrestdataproviderintro "CdsRestDataProvider" module, a string whose encoding is invalid
+    or that has a NUL character, or a value with no OData literal of its field's type, raises \c VALUE-ERROR, and a
+    field or column name that is not an OData identifier raises \c WHERE-ERROR or \c COLUMN-ERROR (see
+    @ref cdsrestdataprovider_v2_2; <a href="https://github.com/qoretechnologies/qore/issues/6596">issue 6596</a>).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
@@ -1491,6 +1497,9 @@
       - API calls are made with an asynchronous @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo", and searches
         return the records of every page
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - query values are written as OData literals of their type in percent-encoded query options, and fields and
+        columns must be OData identifiers
+        (<a href="https://github.com/qoretechnologies/qore/issues/6596">issue 6596</a>)
       - see @ref cdsrestdataprovider_v2_2 for all changes
 
     - @ref csvutilintro "CsvUtil" module
