@@ -106,6 +106,7 @@
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
     \c on_error statement) is a parse error, as its scope was unclear; put it in braces (see
     @ref on_block_exit_in_block "on_exit statements"; issue #240).
+
     @par A Regular Expression Substitution Raises INVALID-ENCODING for a String Not Valid in Its Encoding
     The @ref regex_subst_operator "=~ s///" operator and @ref Qore::regex_subst() "regex_subst()" raise an
     \c INVALID-ENCODING exception for a string that is not valid in its encoding, which cannot be matched; before,
