@@ -1303,9 +1303,21 @@ public class FtpPoller {
                 try {
                     interval = p.pollOnce();
                 } catch (hash<ExceptionInfo> ex) {
-                    # the poller was deleted while it polled
+                    # the poller was deleted while it polled; an error of another deleted object (in the post-transfer
+                    # code) stops polling as any error of that code does
                     if (ex.err == "OBJECT-ALREADY-DELETED") {
-                        break;
+                        bool deleted = False;
+                        try {
+                            p.getPollCount();
+                        } catch (hash<ExceptionInfo> ex1) {
+                            if (ex1.err != "OBJECT-ALREADY-DELETED") {
+                                rethrow;
+                            }
+                            deleted = True;
+                        }
+                        if (deleted) {
+                            break;
+                        }
                     }
                     rethrow;
                 }

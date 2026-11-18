@@ -6755,6 +6755,9 @@ QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool modul
     program_ids = src->program_ids;
     budgets = src->budgets;
     pgm_id = src->pgm_id;
+    // a continuation of code in a trusted build stays one, and keeps the restrictions of the code that created it
+    in_build = src->in_build;
+    origin_restrictions = src->origin_restrictions;
     for (QoreSandboxCallBudget* budget : budgets) {
         budget->ref();
     }

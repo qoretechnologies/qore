@@ -112,6 +112,8 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("regex mask test", \regexMaskTest());
         addTestCase("an observer refusal keeps the file and polling", \observerRefusalTest());
         addTestCase("a post-transfer error stops polling", \postTransferErrorStopsTest());
+        addTestCase("a deleted object in the post-transfer code stops a started poller, which can be started again",
+            \deletedObjectPostTransferTest());
         addTestCase("relative paths", \relativePathTest());
         addTestCase("a failed setup of a new connection is retried", \newConnectionSetupRetryTest());
         addTestCase("a failed setup of a new connection is retried by a started poller",
@@ -569,6 +571,32 @@ class FtpPollerTest inherits QUnit::Test {
         assertEq(0, (select msgs.getAll(), $1 =~ /polling stopped|polling terminated/).size(), "polling went on");
     }
 
+    # an error of another deleted object in the post-transfer code of a started poller stops polling as any error of that
+    # code does: the poller is stopped, and start() starts a new polling thread
+    private deletedObjectPostTransferTest() {
+        FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir tmp_dir();
+        serv.setPwd(tmp_dir.path);
+        int port = serv.getPort();
+
+        TmpFile tf("ftp_deleted_post_", NOTHING, tmp_dir.path);
+
+        DeletedObjectPostFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {
+            "path": tmp_dir.path,
+            "poll_interval": 1,
+            "error_delay": 1,
+        });
+        int tid1 = poller.start();
+        on_exit poller.stop();
+        poller.waitStop();
+        assertEq((basename(tf.path),), poller.files);
+        int tid2 = poller.start();
+        assertNeq(tid1, tid2, "a new polling thread was started");
+        poller.waitStop();
+    }
+
     # an error after a file was handled is fatal: polling stops, so the file is not handled more than once
     private postTransferErrorStopsTest() {
         FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
@@ -818,6 +846,28 @@ class FailingPostFtpPoller inherits FtpPoller {
 
     postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
         throw "POST-ERROR", sprintf("cannot dispose of %y", fih.name);
+    }
+}
+
+#! a poller whose post-transfer code uses an object that has been deleted
+class DeletedObjectPostFtpPoller inherits FtpPoller {
+    public {
+        list<string> files();
+    }
+
+    constructor(FtpClient ftp, hash<auto> opts) : FtpPoller(ftp, opts) {
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        files += fih.name;
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        Mutex gone();
+        Mutex alias = gone;
+        delete gone;
+        # raises OBJECT-ALREADY-DELETED for the mutex, not for the poller
+        alias.lock();
     }
 }
 
