@@ -1028,6 +1028,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     if (old.members.isFrozen()) {
         members.freeze();
     }
+    // a copy of a reachable class is reachable: a module cannot give it members either (#6422)
+    if (old.reachable.load(std::memory_order_acquire)) {
+        reachable.store(true, std::memory_order_release);
+    }
 }
 #endif
 
@@ -1201,6 +1205,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
     // a copy of a class whose members are frozen is complete when it is made (#6272)
     if (old.members.isFrozen()) {
         members.freeze();
+    }
+    // a copy of a reachable class is reachable: a module cannot give it members either (#6422)
+    if (old.reachable.load(std::memory_order_acquire)) {
+        reachable.store(true, std::memory_order_release);
     }
 }
 
@@ -2486,8 +2494,10 @@ void qore_class_private::parseCommit() {
     if (!has_public_memdecl && (scl ? scl->parseHasPublicMembersInHierarchy() : false)) {
         has_public_memdecl = true;
     }
-    // the committed class is visible to running code, which reads its members without a lock (#6272)
+    // the committed class is visible to running code, which reads its members without a lock (#6272); a module cannot
+    // add members to it (#6422)
     members.freeze();
+    markReachable();
 }
 
 void qore_class_private::addLocalMembersForInit() {
@@ -2950,8 +2960,23 @@ int BCNode::initializeHierarchy(QoreClass* cls, qcp_set_t& qcp_set) {
             rc = -1;
         }
 
-        if (sclass->priv->scl && sclass->priv->initializeHierarchy(qcp_set) && !rc) {
-            rc = -1;
+        // a class being parsed initializes its hierarchy once, as parseResolveHierarchy() does: another subclass of the
+        // same class, or the class's own resolution, must not add the base class methods to the inheritance lists of
+        // its methods again (issue #6466); a committed class adds nothing, as its methods are not new
+        qore_class_private* spriv = sclass->priv;
+        if (spriv->scl) {
+            if (spriv->committed || !spriv->parse_resolve_hierarchy) {
+                if (!spriv->committed) {
+                    spriv->parse_resolve_hierarchy = true;
+                }
+                if (spriv->initializeHierarchy(qcp_set) && !rc) {
+                    rc = -1;
+                }
+            } else if (!spriv->scl->valid && !rc) {
+                // the class's hierarchy was rejected when it was initialized (ex: a circular hierarchy): the subclass
+                // fails too, so that it does not walk the invalid hierarchy to set up its own inheritance lists
+                rc = -1;
+            }
         }
     }
     return rc;
@@ -3573,6 +3598,7 @@ void BCList::parseAddAncestors(QoreMethod* m) {
     // the hierarchy is walked iteratively, depth first in the order of the base classes, as it can be as long as the
     // code declares it (issue #6047)
     HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
     stack.push({this, 0});
     while (!stack.empty()) {
         HierarchyWalkFrame& f = stack.back();
@@ -3585,6 +3611,11 @@ void BCList::parseAddAncestors(QoreMethod* m) {
         // if there was a parse error finding the base class, then skip
         QoreClass* qc = n.sclass;
         if (!qc) {
+            continue;
+        }
+        // each ancestor is visited once: a class reached through another path of a diamond hierarchy has been added
+        // with its own ancestors already, at its first position (issue #6488)
+        if (!visited.insert(qc->priv).second) {
             continue;
         }
 
@@ -3606,6 +3637,7 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
     const char* name = m->getName();
     // the hierarchy is walked iteratively, as for parseAddAncestors()
     HierarchyWalkStack<HierarchyWalkFrame> stack;
+    qcp_set_t visited;
     stack.push({this, 0});
     while (!stack.empty()) {
         HierarchyWalkFrame& f = stack.back();
@@ -3617,6 +3649,10 @@ void BCList::parseAddStaticAncestors(QoreMethod* m) {
         QoreClass* qc = n.sclass;
         // qc may be 0 if there were a parse error with an unknown class earlier
         if (!qc) {
+            continue;
+        }
+        // each ancestor is visited once, as in parseAddAncestors() (issue #6488)
+        if (!visited.insert(qc->priv).second) {
             continue;
         }
 
@@ -4204,6 +4240,10 @@ void QoreClass::addBuiltinVirtualBaseClass(QoreClass* qc) {
     priv->addBaseClass(qc, true);
 }
 
+#ifdef DEBUG
+std::atomic<int64> qore_param_class_check_steps{0};
+#endif
+
 namespace {
 //! A level of the walk of qore_class_private::findParameterizedBaseTypeInfo()
 struct ParameterizedBaseWalkFrame {
@@ -4245,8 +4285,13 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
     // and is inherited without type arguments is that instance on the path that inherits it so, as in a class loaded
     // from compiled code (see getParameterizedParentTypeInfo())
     HierarchyWalkStack<ParameterizedBaseWalkFrame> stack;
-    // a class without type arguments in the walk has the same answer on every path to it: one that a path through a
-    // class with more than one parent class (a diamond) reaches again is not walked again
+    // the classes whose walk ended without an answer: whether the walk of a class finds the target class depends
+    // only on the class, not on the type arguments of the path to it (a substitution in the specialization of a
+    // parent class gives a specialization of the same class), and the walk ends at the first answer, so a class that a
+    // path through a class with more than one parent class (a diamond, or a lattice of them, with as many paths as 2^n
+    // to a class n levels down) reaches again is not walked again, with type arguments or without: each class is
+    // walked once (qore#6449); a class popped before a class with more than one parent class is walked cannot be
+    // reached again
     std::set<const qore_class_private*> walked;
     bool multiple = false;
     stack.push({this, 0, source});
@@ -4254,12 +4299,16 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
         ParameterizedBaseWalkFrame& f = stack.back();
         // a class hierarchy with an error (such as a circular one) is not walked further
         if (!f.cls->scl || !f.cls->scl->valid || f.next == f.cls->scl->size()) {
+            if (multiple && f.cls != this) {
+                walked.insert(f.cls);
+            }
             stack.pop();
             continue;
         }
         if (!f.next && f.cls->scl->size() > 1) {
             multiple = true;
         }
+        QORE_PARAM_CLASS_CHECK_STEP();
         const BCNode& n = *(*f.cls->scl)[f.next++];
         // if there was a parse error finding the base class, then skip
         if (!n.sclass) {
@@ -4281,7 +4330,7 @@ const QoreTypeInfo* qore_class_private::findParameterizedBaseTypeInfo(const Qore
             continue;
         }
         const qore_class_private* parent = qore_class_private::get(*n.sclass);
-        if (!parent_pti && multiple && !walked.insert(parent).second) {
+        if (multiple && walked.count(parent)) {
             continue;
         }
         stack.push({parent, 0, parent_pti});
@@ -4995,14 +5044,85 @@ static const QoreClass* getStackClass() {
     return qc ? qc->cls : nullptr;
 }
 
+//! serializes the API's member additions with the marking of classes as reachable (issue #6422)
+static std::mutex qore_class_member_add_lock;
+
+//! the builtin classes committed into a namespace during the module initialization running in this thread, which
+//! become reachable when it returns (QoreModuleInitClassesHelper), or nullptr outside a module's initialization
+static thread_local std::vector<qore_class_private*>* qore_module_init_classes = nullptr;
+
+QoreModuleInitClassesHelper::QoreModuleInitClassesHelper() : prev(qore_module_init_classes) {
+    qore_module_init_classes = &classes;
+}
+
+QoreModuleInitClassesHelper::~QoreModuleInitClassesHelper() {
+    qore_module_init_classes = prev;
+}
+
+void QoreModuleInitClassesHelper::commit() {
+    for (qore_class_private* qc : classes) {
+        qc->markReachable();
+    }
+    classes.clear();
+}
+
+void qore_class_private::markReachable() {
+    std::lock_guard<std::mutex> l(qore_class_member_add_lock);
+    reachable.store(true, std::memory_order_release);
+}
+
+void qore_class_private::systemClassCommitted() {
+    if (qore_module_init_classes) {
+        qore_module_init_classes->push_back(this);
+    } else {
+        markReachable();
+    }
+}
+
+int qore_class_private::addMemberApi(const char* mem, ExceptionSink* xsink, const std::function<void()>& add) {
+    std::lock_guard<std::mutex> l(qore_class_member_add_lock);
+    if (reachable.load(std::memory_order_relaxed)) {
+        xsink->raiseException("CLASS-MEMBER-ADD-ERROR", "cannot add member '%s' to class '%s': the class has been "
+            "published, and code in other threads can read its members", mem, name.c_str());
+        return -1;
+    }
+    add();
+    return 0;
+}
+
+int QoreClass::addMember(const char* mname, ClassAccess access, const QoreTypeInfo* n_typeInfo,
+        QoreValue initial_value, ExceptionSink* xsink) {
+    return priv->addMemberApi(mname, xsink, [&] () {
+        priv->addMember(mname, access, n_typeInfo, initial_value);
+    });
+}
+
 void QoreClass::addMember(const char* mname, ClassAccess access, const QoreTypeInfo* n_typeInfo,
         QoreValue initial_value) {
-    priv->addMember(mname, access, n_typeInfo, initial_value);
+    // no sink: a refusal is reported on the standard error output
+    ExceptionSink xsink;
+    addMember(mname, access, n_typeInfo, initial_value, &xsink);
+    xsink.handleExceptions();
+}
+
+int QoreClass::addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
+        q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del, ExceptionSink* xsink) {
+    int rc = priv->addMemberApi(name, xsink, [&] () {
+        priv->addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del);
+    });
+    // the class takes ownership of the module data only if the member is added
+    if (rc && del) {
+        del(ptr);
+    }
+    return rc;
 }
 
 void QoreClass::addBuiltinMemberWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
         q_member_get_t get, q_member_set_t set, const void* ptr, q_member_del_t del) {
-    priv->addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del);
+    // no sink: a refusal is reported on the standard error output
+    ExceptionSink xsink;
+    addBuiltinMemberWithAccessors(name, access, typeInfo, get, set, ptr, del, &xsink);
+    xsink.handleExceptions();
 }
 
 BCSMList::BCSMList(const BCSMList& old) {
@@ -5667,7 +5787,7 @@ int qore_class_private::checkMethodForEval(const QoreObject* self, const char* n
         }
         return 0;
     }
-    if (const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx)) {
+    if (const QoreMemberInfo* mi = runtimeGetCallableMemberInfo(nme, class_ctx)) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*const_cast<QoreObject*>(self));
         QoreAutoVarRWReadLocker al(obj_priv->rml);
@@ -5722,7 +5842,7 @@ QoreValue qore_class_private::evalMethodGivenArgs(QoreObject* self, const char* 
 
 QoreValue qore_class_private::getMemberCode(QoreObject* self, const char* nme, const qore_class_private* class_ctx,
         ExceptionSink* xsink) const {
-    const QoreMemberInfo* mi = runtimeGetMemberInfo(nme, class_ctx);
+    const QoreMemberInfo* mi = runtimeGetCallableMemberInfo(nme, class_ctx);
     if (!mi) {
         return QoreValue();
     }
@@ -5777,7 +5897,7 @@ template <bool Lexical>
 static QORE_INTERN_NOINLINE QoreValue qore_eval_missing_method(const qore_class_private& qcp,
         LexicalSemanticPolicy policy, QoreObject* self, const char* nme, const QoreListNode* args,
         const qore_class_private* class_ctx, RuntimeConfig& rc, ExceptionSink* xsink) {
-    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
+    const QoreMemberInfo* mi = qcp.runtimeGetCallableMemberInfo(nme, class_ctx);
     if (mi) {
         const qore_class_private* member_class_ctx = mi->getClassContext(class_ctx);
         qore_object_private* obj_priv = qore_object_private::get(*self);
@@ -9260,15 +9380,19 @@ void qore_raise_deleted_missing_method_call_after_args(QoreObject* self, const c
     const qore_class_private* qcp = qore_class_private::get(*self->getClass());
     bool gate = qcp->methodGate && !qcp->methodGate->inMethod(self);
     if (gate) {
+        // the class context that a read of the member would use (runtimeGetCallableMemberInfo() clears it if it
+        // cannot access the private members of the object's class)
+        const qore_class_private* member_ctx = class_ctx;
         QoreClass* pseudo_qc = nullptr;
         if (pseudo_classes_find_method(NT_OBJECT, name, pseudo_qc)) {
             gate = false;
-        } else if (const QoreMemberInfo* mi = qcp->runtimeGetMemberInfo(name, class_ctx)) {
+        } else if (const QoreMemberInfo* mi = qcp->runtimeGetCallableMemberInfo(name, member_ctx)) {
             // the value of the member is gone with the object: a member that can hold a call reference is taken to
-            // be the target, if the call can read it: qore_eval_missing_method() reads an internal member only from a
-            // class context with access to it (a private member is read from any context, as the call reads it)
+            // be the target, if the call can read it: qore_eval_missing_method() uses only a member accessible from
+            // the call's class context, as a read of the member (runtimeGetCallableMemberInfo(), issue #6487), and
+            // reads an internal member only from a class context with access to it (issue #6056)
             const QoreTypeInfo* mti = mi->getTypeInfo();
-            if ((mi->access != Internal || mi->getClassContext(class_ctx))
+            if ((mi->access != Internal || mi->getClassContext(member_ctx))
                     && (!QoreTypeInfo::hasType(mti) || QoreTypeInfo::parseAcceptsReturns(mti, NT_RUNTIME_CLOSURE)
                         || QoreTypeInfo::parseAcceptsReturns(mti, NT_FUNCREF))) {
                 gate = false;

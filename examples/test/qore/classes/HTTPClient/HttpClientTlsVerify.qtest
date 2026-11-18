@@ -15,6 +15,7 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires RestClientIo
+%requires ../../../RefusedQuicPort.qm
 
 %exec-class HttpClientTlsVerifyTest
 
@@ -727,8 +728,10 @@ WKEuKQ7xuGuAiIESuSDBsSg=
         request timeout leaves room for two handshake timeouts.
     */
     http3ConnectFailureTest() {
-        # nothing receives datagrams on this port
-        string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
+        # the system refuses the datagrams on this port, which the test holds (issue #6461)
+        RefusedUdpPort refused();
+        on_exit refused.close();
+        string url = sprintf("https://127.0.0.1:%d", refused.port);
         foreach string api in (Apis) {
             foreach int retries in (0, 1) {
                 string msg = sprintf("%s retries=%d", api, retries);

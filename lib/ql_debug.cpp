@@ -49,6 +49,7 @@
 #include "qore/intern/ql_type.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
@@ -11602,8 +11603,6 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
     UT_ASSERT_EQ(c, allow_debugger, static_cast<bool>(pgm->getParseOptions64() & PO_ALLOW_DEBUGGER),
         "the folded debug step target program allows a debugger as requested");
     pgm->setExecMode(mode, true);
-    // the code is parsed as at the top level, with no return type of running code (see ut_self_call_without_method())
-    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
     pgm->parse("%modern\n"
         "class Q {\n"                                       // 2
         "    public { static Queue qin(); static Queue qout(); static Queue qready(); }\n" // 3
@@ -11635,7 +11634,6 @@ static void ut_debug_step_folded_statements_mode(UnitTestCounters& c, qore_exec_
         "    return Q::qout.get();\n"
         "}\n",
         "debug-step-folded-test", &xsink, nullptr, 0);
-    saveReturnTypeInfo(old_return_type);
     UT_ASSERT(c, !xsink, "folded debug step target program parses");
     if (xsink) {
         xsink.handleExceptions();
@@ -21193,11 +21191,6 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
         pgm->waitForTerminationAndDeref(&xs);
         xs.clear();
     });
-    // the code is parsed as at the top level, with no return type of running code: StatementBlock::parseCheckReturn()
-    // reads the return type of the running code (getReturnTypeInfo()), here hash for run_debug_unit_tests(), and not
-    // the one of the code being parsed (parse_get_return_type_info()), so the blocks of the methods were refused
-    // (issue #5940)
-    const QoreTypeInfo* old_return_type = saveReturnTypeInfo(nullptr);
     pgm->parse("%modern\n"
         "class UtBgBase {\n"
         "    public { static Queue q(); }\n"
@@ -21213,7 +21206,6 @@ static void ut_self_call_without_method(UnitTestCounters& c, QoreProgram* parent
         "UtBgChild sub ut_make() { return new UtBgChild(); }\n"
         "string sub ut_take() { return UtBgBase::q.get(10s); }\n",
         "ut-self-call-without-method", &xsink, nullptr, 0);
-    saveReturnTypeInfo(old_return_type);
     UT_ASSERT(c, !xsink, "the self call test program parses");
     if (xsink) {
         xsink.handleExceptions();
@@ -23111,6 +23103,14 @@ static QoreValue f_dbg_get_lvalue_removal_probe_count(const QoreListNode* params
 static QoreValue f_dbg_get_lvalue_removal_allocation_count(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return q_get_lvalue_removal_allocation_count();
+}
+
+//! returns the number of parent class edges that the lookups of parameterized base types have visited
+/** In all threads, since the library was loaded: a test takes the difference over its checks, so that it can require
+    a bound on the steps of the run-time checks of objects against parameterized class types (qore#6449)
+*/
+static QoreValue f_dbg_param_class_check_steps(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_param_class_check_steps.load(std::memory_order_relaxed);
 }
 
 //! returns the number of old values of number lvalues copied by post-increments and post-decrements in this thread
@@ -25365,6 +25365,8 @@ std::mutex dbg_http_hold_m;
 DbgHttpHold dbg_http_holds[static_cast<int>(QoreDbgHttpHoldPoint::Count)];
 }
 
+std::atomic<bool> qore_dbg_continue_poll_hold_armed{false};
+
 void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target) {
     DbgHttpHold h;
     {
@@ -25377,6 +25379,9 @@ void qore_dbg_http_hold(QoreDbgHttpHoldPoint point, const void* target) {
         // one-shot: the hold is taken over by this thread
         h = armed;
         armed = DbgHttpHold();
+        if (point == QoreDbgHttpHoldPoint::ContinuePoll) {
+            qore_dbg_continue_poll_hold_armed.store(false, std::memory_order_relaxed);
+        }
     }
     ExceptionSink xsink;
     h.reached->dec(&xsink);
@@ -25488,12 +25493,14 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     client ping poll operation) has taken it, and is about to use it; \c "stream-end-dispatched": an HTTP/1.1 or
     HTTP/3 client poll operation dispatched the end of a request's response and released the reference to the
     request's action that the dispatch held, on the I/O thread or, for an HTTP/3 response that arrived before its
-    request was registered, on the thread that registered it (with a release Counter of 0, the point only reports it)
+    request was registered, on the thread that registered it (with a release Counter of 0, the point only reports it);
+    \c "continue-poll": an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on
+    the thread (to call its continuePoll()), armed for the operation's object
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
     \c "error-record", \c "error-read", \c "value-record", \c "value-read", \c "teardown-read" and
-    \c "stream-end-dispatched" points (the object is compared, not referenced)
+    \c "stream-end-dispatched" and \c "continue-poll" points (the object is compared, not referenced)
 
     @throw DBG-ARGUMENT-ERROR unknown point, or the point is already armed
 */
@@ -25530,6 +25537,8 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::TeardownRead);
     } else if (!strcmp(name->c_str(), "stream-end-dispatched")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::StreamEndDispatched);
+    } else if (!strcmp(name->c_str(), "continue-poll")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::ContinuePoll);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -25553,6 +25562,9 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
     h.release = release.release();
     QoreValue target = get_param_value(params, 3);
     h.target = target.getType() == NT_OBJECT ? static_cast<const void*>(target.get<const QoreObject>()) : nullptr;
+    if (point == static_cast<int>(QoreDbgHttpHoldPoint::ContinuePoll)) {
+        qore_dbg_continue_poll_hold_armed.store(true, std::memory_order_relaxed);
+    }
     return QoreValue();
 }
 
@@ -25587,6 +25599,84 @@ static QoreValue f_dbg_http_concurrent_closes(const QoreListNode* params, Runtim
     return dbg_http_concurrent_closes.load(std::memory_order_relaxed);
 }
 
+thread_local int qore_dbg_async_action_locks_held = 0;
+
+//! returns the number of locks of completion actions of the asynchronous I/O API that the calling thread holds
+/** Called by user code that a completion action can run (the destructor of a user EventNotifier class that it
+    releases): such code must run without the action's lock (issue #6465)
+*/
+static QoreValue f_dbg_async_action_locks_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return static_cast<int64>(qore_dbg_async_action_locks_held);
+}
+
+//! returns True if a deferred release of only the C++ poll operation of the given object runs in the object's Program
+/** The async I/O controller releases such a reference (the one of a CancelDeletedOp command, or the one taken for the
+    release of a step's result) on a callback worker, whose Program is the one that the release reports; the
+    release can run the operation's cleanup (issue #6464).  The reference released here is not the last one.
+*/
+static QoreValue f_dbg_poll_op_release_program(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreValue v = get_param_value(params, 0);
+    QoreObject* obj = const_cast<QoreObject*>(v.get<const QoreObject>());
+    SocketPollOperationBase* op = static_cast<SocketPollOperationBase*>(
+        obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!op) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_poll_op_release_program(): the object of class '%s' is "
+                "not a C++ poll operation", obj->getClassName());
+        }
+        return QoreValue();
+    }
+    AsyncIoDeferredRelease refs;
+    refs.spop_base = op;
+    bool rv = refs.getProgram() == obj->getProgram() && obj->getProgram();
+    refs.release(xsink);
+    return rv;
+}
+
+//! releases the release item of a reference to the object while its Program is marked as being destroyed
+static QoreValue f_dbg_async_io_park_program_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    return AsyncIoControllerPriv::dbgParkProgramReleaseTest(obj, xsink);
+}
+
+//! deletes the object of a C++ poll operation and releases the last reference to its operation with
+//! qore_socket_poll_op_deref_off_thread(), as a reader of an HTTP connection or a scan of the garbage collector does
+/** @return a hash: \c controller_before and \c controller_after: True if the global async I/O controller existed
+    before and after the release (which must not create it)
+*/
+static QoreValue f_dbg_poll_op_release_last_off_thread(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreObject* obj = const_cast<QoreObject*>(get_param_value(params, 0).get<const QoreObject>());
+    SocketPollOperationBase* op = static_cast<SocketPollOperationBase*>(
+        obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!op) {
+        if (!*xsink) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_poll_op_release_last_off_thread(): the object of class "
+                "'%s' is not a C++ poll operation", obj->getClassName());
+        }
+        return QoreValue();
+    }
+    auto exists = [] () -> bool {
+        AsyncIoControllerPriv* ctrl = qore_get_async_io_controller_if_exists();
+        if (!ctrl) {
+            return false;
+        }
+        ExceptionSink cxsink;
+        ctrl->deref(&cxsink);
+        return true;
+    };
+    bool before = exists();
+    // the object's reference is released by the deletion; this one is then the last
+    obj->doDelete(xsink);
+    qore_socket_poll_op_deref_off_thread(op);
+    bool after = exists();
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("controller_before", before, xsink);
+    rv->setKeyValue("controller_after", after, xsink);
+    return rv.release();
+}
+
 //! disarms the points armed by dbg_http_hold_at() that were not reached
 static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> l(dbg_http_hold_m);
@@ -25597,6 +25687,7 @@ static QoreValue f_dbg_http_hold_clear(const QoreListNode* params, RuntimeConfig
             h = DbgHttpHold();
         }
     }
+    qore_dbg_continue_poll_hold_armed.store(false, std::memory_order_relaxed);
     return QoreValue();
 }
 
@@ -26730,6 +26821,24 @@ static QoreValue f_dbg_wait_thread_counter_at_most(const QoreListNode* params, R
         static_cast<int>(timeout_ms));
 }
 
+//! Holds the next thread that is started, before it registers, for up to the given milliseconds or until
+//! dbg_release_thread_start() (qore#6469)
+static QoreValue f_dbg_hold_next_thread_start(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_hold_next_thread_start(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+    return QoreValue();
+}
+
+//! Waits until a starting thread is held by dbg_hold_next_thread_start(); returns False on timeout
+static QoreValue f_dbg_wait_thread_start_held(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return qore_dbg_wait_thread_start_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
+}
+
+//! Releases the starting thread held by dbg_hold_next_thread_start(), and returns when it has continued
+static QoreValue f_dbg_release_thread_start(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    qore_dbg_release_thread_start();
+    return QoreValue();
+}
+
 static QoreValue f_dbg_fail_next_program_entry(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     qore_dbg_fail_next_program_entry(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
@@ -26960,6 +27069,12 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_wait_thread_counter_at_most", f_dbg_wait_thread_counter_at_most, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", bigIntTypeInfo,
         QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_hold_next_thread_start", f_dbg_hold_next_thread_start, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_wait_thread_start_held", f_dbg_wait_thread_start_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_release_thread_start", f_dbg_release_thread_start, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_fail_next_program_entry", f_dbg_fail_next_program_entry,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "site");
@@ -27249,6 +27364,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_allocation_count", f_dbg_get_lvalue_removal_allocation_count,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_param_class_check_steps", f_dbg_param_class_check_steps, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_probe_count", f_dbg_get_lvalue_removal_probe_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_number_old_value_copy_count", f_dbg_get_number_old_value_copy_count,
@@ -27430,6 +27547,14 @@ void init_debug_functions(QoreNamespace& qns) {
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_http_hold_clear", f_dbg_http_hold_clear, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_async_action_locks_held", f_dbg_async_action_locks_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_poll_op_release_program", f_dbg_poll_op_release_program, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
+    qns.addBuiltinVariant("dbg_async_io_park_program_release", f_dbg_async_io_park_program_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "obj");
+    qns.addBuiltinVariant("dbg_poll_op_release_last_off_thread", f_dbg_poll_op_release_last_off_thread,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "op");
     qns.addBuiltinVariant("dbg_http_concurrent_closes", f_dbg_http_concurrent_closes, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_stream_credit_stats", f_dbg_http_stream_credit_stats, QCF_NO_FLAGS,

@@ -694,6 +694,18 @@ DLLLOCAL bool qore_module_init_untrusted_loader();
 */
 DLLLOCAL bool qore_module_init_library();
 
+//! records \a pgm as the Program of the library module whose initialization the innermost barrier is for
+/** Called when the Program of a library module is created under its barrier (see
+    QoreModuleInitSandboxBarrierHelper); the first one created is the module's (qore#6337)
+*/
+DLLLOCAL void qore_module_init_set_program(const QoreProgram* pgm);
+
+//! returns true if a closure of \a pgm created now is created by the initialization of its library module
+/** That is, the innermost module initialization barrier is the one of the library module whose Program is \a pgm;
+    such a closure can be run later as deferred module initialization (call_module_init_closure(), qore#6337)
+*/
+DLLLOCAL bool qore_module_init_closure_creation(const QoreProgram* pgm);
+
 //! Returns the sandbox that governs a module that is not library code, loaded while library code is initialized
 /** That is the sandbox of the code that loaded the library code, if it is not trusted; the caller owns the
     reference returned; see QoreModuleInitSandboxBarrierHelper
@@ -732,6 +744,11 @@ public:
     //! returns true if a lift was needed and could not be recorded
     DLLLOCAL bool failed() const {
         return failed_lift;
+    }
+
+    //! returns true if the helper recorded a barrier or a lift (it is restored when the helper is destroyed)
+    DLLLOCAL bool recorded() const {
+        return pushed;
     }
 
 private:
@@ -941,6 +958,13 @@ DLLLOCAL void qore_dbg_release_thread_finish_hold();
     (qore#6433)
 */
 DLLLOCAL bool qore_dbg_wait_thread_counter_at_most(int count, int timeout_ms);
+//! Holds the next thread that is started, before it registers, for up to \a ms milliseconds or until
+//! qore_dbg_release_thread_start() (qore#6469)
+DLLLOCAL void qore_dbg_hold_next_thread_start(int ms);
+//! Waits until a starting thread is held; returns false on timeout
+DLLLOCAL bool qore_dbg_wait_thread_start_held(int timeout_ms);
+//! Releases the starting thread held, and waits until it has continued
+DLLLOCAL void qore_dbg_release_thread_start();
 
 //! Returns true, and disarms the site, if the next step at \a site is armed to fail
 DLLLOCAL bool qore_dbg_program_entry_fails(int site);
@@ -1276,11 +1300,13 @@ struct QoreThreadRuntimeParseOptions {
         while the options can be installed, which would make an unrelated Program match them
     */
     QoreCallParseOptionsOverride override;
+    //! the functional-domain restrictions of the calling code (see ThreadData::thread_caller_restrictions)
+    QoreParseOptions caller_domain_restrictions;
 
     DLLLOCAL QoreThreadRuntimeParseOptions() = default;
 
     DLLLOCAL QoreThreadRuntimeParseOptions(const QoreThreadRuntimeParseOptions& old) : po(old.po),
-            override(old.override) {
+            override(old.override), caller_domain_restrictions(old.caller_domain_restrictions) {
         refPrograms();
     }
 
@@ -1290,6 +1316,7 @@ struct QoreThreadRuntimeParseOptions {
             QoreThreadRuntimeParseOptions copy(other);
             std::swap(po, copy.po);
             std::swap(override, copy.override);
+            std::swap(caller_domain_restrictions, copy.caller_domain_restrictions);
         }
         return *this;
     }
@@ -1337,11 +1364,16 @@ public:
     DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptions* o);
 
     //! restores the options in effect before, if they have not been restored yet
-    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() = default;
+    DLLLOCAL ~QoreThreadRuntimeParseOptionsHelper() {
+        reset();
+    }
 
     //! restores the options in effect before the helper was created; called before the thread's data is deleted
     DLLLOCAL void reset() {
-        override_helper.reset();
+        if (override_helper) {
+            override_helper.reset();
+            restoreCallerRestrictions();
+        }
     }
 
     DLLLOCAL QoreThreadRuntimeParseOptionsHelper(const QoreThreadRuntimeParseOptionsHelper&) = delete;
@@ -1351,6 +1383,11 @@ private:
     //! sets the override and the options, and restores those in effect before (RuntimeParseOptionsOverrideHelper
     //! restores the run-time parse options too)
     std::optional<RuntimeParseOptionsOverrideHelper> override_helper;
+    //! the restrictions of the code that started the thread in effect before (ThreadData::thread_caller_restrictions)
+    QoreParseOptions old_caller_restrictions;
+
+    //! restores old_caller_restrictions
+    DLLLOCAL void restoreCallerRestrictions();
 };
 
 DLLLOCAL RootQoreNamespace* getRootNS();
@@ -1580,6 +1617,18 @@ DLLLOCAL int qore_sandbox_manager_check_change(const QoreSandboxManager* sm, con
     Fails closed: true if the governing sandbox cannot be resolved for lack of memory.
 */
 DLLLOCAL bool qore_caller_is_sandboxed();
+
+//! returns the domains of \a domain that the code calling a module's user variant that declares them is restricted from
+/** As qore_caller_restricts_domain(), but the initialization of library module code is not a call by the code that
+    loads the module; only the restricting functional domains are returned, not the positive options (qore#6337)
+*/
+DLLLOCAL int64 qore_caller_denied_user_domains(int64 domain);
+
+//! returns true if \a pgm is the Program of a library module (one found in the process-wide module path)
+/** Only such a module's code acts for its caller: a module that is not library code (one loaded by its path, for
+    example) has the restrictions of the Program that loaded it and is calling code (qore#6337)
+*/
+DLLLOCAL bool qore_program_is_library_module(const QoreProgram* pgm);
 
 //! Keeps the code that parses code or loads a module in another Program the caller of what runs there (issue #5659)
 /** Parsing code in a Program and loading a module into it (Program::parse(), Program::loadModule(), and their

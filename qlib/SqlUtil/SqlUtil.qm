@@ -8291,14 +8291,54 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         }
 
         #! Returns the cached table for the given connection description and table name, if any
-        static *AbstractTable get(string dsdesc, string name) {
+        /** Declares the \c PROCESS_CONTROL domain as put() does: the table holds the connection of the code that
+            cached it, and a description can be given for any connection; code restricted from the domain gets cached
+            tables only through getCached(), for its own datasource (qore#6337)
+        */
+        static *AbstractTable get(string dsdesc, string name) [dom=PROCESS_CONTROL] {
+            return TableCache::getIntern(dsdesc, name);
+        }
+
+        #! Returns the cached table for the given connection description and table name, if any
+        private:internal static *AbstractTable getIntern(string dsdesc, string name) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             return TableCache::cache{dsdesc}{name};
         }
 
+        #! Returns the cached table for the given connection, resolving and caching it first if needed
+        /** The key is the description of the connection given; used by
+            @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()", which resolves tables for the code
+            that generates SQL, also for code restricted from the \c PROCESS_CONTROL domain of put(): such code
+            gets a table from the cache only if its datasource is the one given, and a table that it resolves is
+            not cached, as the key is the description that the datasource gives (qore#6337)
+
+            @since %SqlUtil 3.2.0
+        */
+        static AbstractTable getCached(AbstractDatasource ds, string name) {
+            string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
+            *AbstractTable cached = TableCache::getIntern(dsdesc, name);
+            # the key is the description that the datasource gives, which a subclass of AbstractDatasource chooses:
+            # code restricted from the PROCESS_CONTROL domain of put() gets only a table of its own datasource from
+            # the cache, and does not fill it (qore#6337)
+            bool restricted = SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL);
+            if (cached && (!restricted || cached.getDatasource() == ds)) {
+                return cached;
+            }
+
+            # resolve outside the lock; this loads the driver-specific module and can contact the server, and
+            # another thread resolving the same name at the same time is resolved by putIntern()
+            AbstractTable t = new Table(ds, name).getTable();
+            return restricted ? t : TableCache::putIntern(dsdesc, name, t);
+        }
+
         #! Caches the given table unless another thread cached one first; returns the table in the cache
         static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
+            return TableCache::putIntern(dsdesc, name, t);
+        }
+
+        #! Caches the given table unless another thread cached one first; returns the table in the cache
+        private:internal static AbstractTable putIntern(string dsdesc, string name, AbstractTable t) {
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
             *AbstractTable cached = TableCache::cache{dsdesc}{name};
@@ -8415,15 +8455,7 @@ sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         @since %SqlUtil 3.2.0
     */
     public AbstractTable sub sqlutil_get_cached_table(AbstractDatasource ds, string name) {
-        string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
-        *AbstractTable cached = TableCache::get(dsdesc, name);
-        if (cached) {
-            return cached;
-        }
-
-        # resolve outside the lock; this loads the driver-specific module and can contact the server, and
-        # another thread resolving the same name at the same time is resolved by put()
-        return TableCache::put(dsdesc, name, new Table(ds, name).getTable());
+        return TableCache::getCached(ds, name);
     }
 
     #! Discards tables cached by sqlutil_get_cached_table()

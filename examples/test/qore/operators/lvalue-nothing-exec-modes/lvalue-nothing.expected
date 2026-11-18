@@ -1,0 +1,34 @@
+function trim: null
+function chomp: null
+function pop: null
+function shift: null
+function push: null
+function unshift: null
+function remove: null
+function delete: null
+function subst: null
+function trans: null
+function trim paren: null
+function assign: null
+function list assign: [1, 2, 3]
+function list a: 1
+function list b: 3
+function typed list assign: ["x", 2, "z"]
+function typed list: ["x", "z"]
+function foreach ref: 0
+top trim: null
+top chomp: null
+top pop: null
+top shift: null
+top push: null
+top unshift: null
+top remove: null
+top delete: null
+top subst: null
+top trans: null
+top assign: null
+top list assign: [1, 2, 3]
+top list a: 1
+top list b: 3
+top foreach ref: 0
+calls: 6

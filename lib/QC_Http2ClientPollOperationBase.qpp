@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/HttpClientDrainDebug.h"
@@ -728,6 +729,13 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         setError(*err_str ? err_str->c_str() : "HTTP2-READ-ERROR",
             *desc_str ? desc_str->c_str() : "HTTP/2 read error", xsink);
         poll_xsink.clear();
+        // the error ends the operation (no exception is raised: it is recorded above); a poll info that the step
+        // returned with its exception is released here, before the reference to the step's operation: its socket is
+        // the operation's own socket object, which this operation still references then, so the release runs no
+        // destructor on the I/O thread
+        if (poll_info) {
+            poll_info->deref(xsink);
+        }
         op->deref(xsink);
         return nullptr;
     }
@@ -2261,7 +2269,9 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
 */
 Http2ClientPollOperationBase::destructor() {
     qore_object_private::get(*self)->decScanPrivateData();
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

@@ -354,6 +354,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
       terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -6416,7 +6418,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
             };
         }
         if (logger) {
-            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", base_url);
+            # the URL is logged without its password
+            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", get_masked_url(base_url));
         }
     }
 

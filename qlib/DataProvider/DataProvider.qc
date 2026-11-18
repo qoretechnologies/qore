@@ -2096,32 +2096,7 @@ if (action.data_provider_info) {
 
     #! Try to load the given module
     private static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
-        int sp = ImplicitModuleTransaction::savepoint();
-        try {
-            if (logger) {
-                logger.info("DataProvider loading module: %y", module_str);
-            }
-            load_module(module_str);
-            ImplicitModuleTransaction::commit(sp);
-            return True;
-        } catch (hash<ExceptionInfo> ex) {
-            # roll back any partial registrations from the failed module
-            ImplicitModuleTransaction::rollback(sp);
-            if (rethrow_exception) {
-                rethrow;
-            }
-            string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
-            if (logger) {
-                if (init) {
-                    logger.debug("INIT: %s", err);
-                } else {
-                    logger.error("%s", err);
-                }
-            } else if (!init && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
-                stderr.print(err + "\n");
-            }
-        }
-        return False;
+        return DataProviderModuleLoader::tryLoad(module_str, init, rethrow_exception);
     }
 
     #! Loads modules from the QORE_DATA_PROVIDERS environment variable
@@ -2409,6 +2384,72 @@ if (action.data_provider_info) {
             }
             return True;
         });
+    }
+}
+
+#! Loads modules for the lookups of the DataProvider module (not public: only the module's own code uses it)
+/** The public APIs that load every known factory module declare the \c PROCESS_CONTROL domain
+    (DataProvider::registerKnownFactories()); a lookup that loads them for its caller, as DataProvider::getFactory()
+    loads the module of a factory, uses this, also for code that is restricted from the domain (qore#6337)
+*/
+class DataProviderModuleLoader {
+    #! Loads every known data provider factory module, as DataProvider::registerKnownFactories() does
+    static loadKnownFactories() {
+        map DataProviderModuleLoader::tryLoad($1, True), DataProvider::FactoryModuleList;
+    }
+
+    #! Loads a module and rolls back the registrations that its initialization made if loading it fails
+    /** The rollback closures added since the load started are run (all of them, even if one raises an exception) and
+        the exception of the load is raised again.  The public ImplicitModuleTransaction API, which acts on the
+        rollback closures of other loads too, declares \c PROCESS_CONTROL; the module's own loads for a lookup use
+        this (qore#6337)
+
+        @throw any exception raised while loading the module
+    */
+    static loadModule(string module_str) {
+        if (!Priv::rb) {
+            Priv::rb = new ImplicitModuleTransaction();
+        }
+        int sp = Priv::rb.savepointImpl();
+        try {
+            load_module(module_str);
+            Priv::rb.commitImpl(sp);
+        } catch (hash<ExceptionInfo> ex) {
+            # the error of the load is the one raised
+            try {
+                Priv::rb.rollbackImpl(sp);
+            } catch (hash<ExceptionInfo> rex) {
+            }
+            rethrow;
+        }
+    }
+
+    #! Try to load the given module; see DataProvider::tryLoad()
+    static bool tryLoad(string module_str, *bool init, *bool rethrow_exception) {
+        *LoggerInterface logger = DataProvider::getGlobalLogger();
+        try {
+            if (logger) {
+                logger.info("DataProvider loading module: %y", module_str);
+            }
+            # any partial registrations from the failed module are rolled back
+            DataProviderModuleLoader::loadModule(module_str);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            if (rethrow_exception) {
+                rethrow;
+            }
+            string err = sprintf("DataProvider load module %y: %s", module_str, get_exception_string(ex));
+            if (logger) {
+                if (init) {
+                    logger.debug("INIT: %s", err);
+                } else {
+                    logger.error("%s", err);
+                }
+            } else if (!init && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.print(err + "\n");
+            }
+        }
+        return False;
     }
 }
 

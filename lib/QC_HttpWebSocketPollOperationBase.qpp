@@ -1163,7 +1163,9 @@ HttpWebSocketPollOperationBase::constructor(Socket[QoreSocketObject] socket) [fl
 /** Releases all internal references.
 */
 HttpWebSocketPollOperationBase::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

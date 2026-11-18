@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcResolverMod.qm - test module that registers the caching SqlUtil table resolver in its initialization (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires SqlUtil
+
+module RcResolverMod {
+    version = "1.0";
+    desc = "test module that registers the caching SqlUtil table resolver";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
+    };
+    domains = "PROCESS";
+}
+
+#! The public definitions of the test module
+public namespace RcResolverMod {
+}

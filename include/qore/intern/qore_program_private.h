@@ -42,6 +42,7 @@ extern QoreHashNode* ENV;
 #include <new>
 
 #include "qore/intern/ParserSupport.h"
+#include "qore/intern/QoreCompletionAnalysis.h"
 #include "qore/intern/ProgramThreadHub.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
@@ -6624,6 +6625,17 @@ public:
 
     DLLLOCAL int initDeferredCode();
 
+    //! Makes the missing return check of the variant wait for the end of the initialization of the code of the
+    //! parse, if the parse is initializing it; returns true if the check waits (issue #5940)
+    DLLLOCAL bool deferMissingReturnCheck(const UserVariantBase* uvb) {
+        return missing_return_checks.defer(uvb);
+    }
+
+    //! Returns the missing return checks of the Program and the analysis of its code that they keep (issue #5940)
+    DLLLOCAL QoreMissingReturnChecks& getMissingReturnChecks() {
+        return missing_return_checks;
+    }
+
     //! returns new ProgramControl objects for all Programs that have references
     DLLLOCAL static QoreListNode* getAllQoreObjects(ExceptionSink *xsink) {
         std::vector<QoreProgram*> programs;
@@ -6691,6 +6703,9 @@ private:
     // for deferred code initialization while parsing constants
     typedef std::set<DeferredCodeObject*> dset_t;
     dset_t dset;
+
+    //! the missing return checks of the code that the parse is initializing (issue #5940)
+    QoreMissingReturnChecks missing_return_checks;
 
     /**
         get safely debug program pointer. The debug program instance itself must exist. It's not a matter of

@@ -184,6 +184,16 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
 
     @section connectionprovider_3_1 ConnectionProvider 3.1
+    - @ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions() "ConnectionSchemeCache::validateConnectionOptions()"
+      checks the elements of a list option against the values of its allowed element values; it refused every
+      non-empty list, its allowed elements too (issue #6490)
+    - the errors of the validation of connection options
+      (@ref ConnectionProvider::ConnectionSchemeCache::validateConnectionOptions()
+      "ConnectionSchemeCache::validateConnectionOptions()") name the options; they no longer contain the options
+      provided, unknown options or a value of a wrong type, nor any value of an option marked \c sensitive, which can
+      be a credential; for an option that is not sensitive, a value that is not allowed or a string that is not a
+      date is still given, and a string that is not a date raises \c CONNECTION-OPTION-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
       output of @ref ConnectionProvider::get_connections() "get_connections()" is left out when the module's code has no
       terminal I/O (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

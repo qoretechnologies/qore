@@ -468,6 +468,26 @@ public:
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -687,5 +707,12 @@ private:
 };
 
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& qorens);
+
+//! Holds a reference to an HTTP/3 client poll operation taken by a reader of its connection
+/** The connection releases the operation in a teardown that can run at any time, so a reader takes a reference of its
+    own; a reader holds it while it runs in the connection's method (under its method guard, or under a lock of the
+    caller), so its release must not run the operation's cleanup in the reader's thread
+*/
+typedef QorePollOpOffThreadRef<Http3ClientPollOperationPriv> Http3PollOperationReaderRef;
 
 #endif // _QORE_CLASS_HTTP3CLIENTPOLLOPERATIONBASE_H

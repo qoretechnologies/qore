@@ -891,7 +891,7 @@ QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
 bool qore_object_has_pseudo_or_member_method(const qore_class_private* cls, const char* method,
         const qore_class_private* class_ctx) {
     QoreClass* pqc;
-    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetMemberInfo(method, class_ctx);
+    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetCallableMemberInfo(method, class_ctx);
 }
 
 // out of line: needs_scan() calls it only for call references, and inlined there it makes needs_scan() too large to be
@@ -1017,7 +1017,7 @@ QoreFunction* RunTimePseudoMethodReferenceNode::getFunction() const {
 //! of the name calls when the class has no method of the name (see qore_class_private::checkMethodForEval())
 static bool qore_object_member_holds_code(const qore_class_private* cls, QoreObject* obj, const char* name,
         const qore_class_private* class_ctx) {
-    const QoreMemberInfo* mi = cls->runtimeGetMemberInfo(name, class_ctx);
+    const QoreMemberInfo* mi = cls->runtimeGetCallableMemberInfo(name, class_ctx);
     if (!mi) {
         return false;
     }

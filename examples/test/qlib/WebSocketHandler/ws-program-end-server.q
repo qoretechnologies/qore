@@ -8,8 +8,11 @@
 # program has returned, "connection closed" when a connection's connectionClosed() runs and "server destroyed" when
 # the HttpServer is destroyed.
 #
-# usage: ws-program-end-server.q [release]
+# usage: ws-program-end-server.q [release|release-in-request]
 #   release: the main program releases the server before it returns, while the connection is open
+#   release-in-request: as release, while the handler thread of the request that opened the connection still runs it
+#     (the handler's start holds the request until the main program has released the server), so that the request
+#     releases the last reference to the server
 
 %modern
 
@@ -34,8 +37,26 @@ class EchoConnection inherits WebSocketConnection {
 }
 
 class EchoHandler inherits WebSocketHandler {
+    private {
+        #! if set, the request that opens a connection waits for it to reach zero once the connection is set up
+        *Counter hold;
+    }
+
+    constructor(*Counter hold) {
+        self.hold = hold;
+    }
+
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
         return new EchoConnection(self);
+    }
+
+    bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
+        bool rv = WebSocketHandler::startImpl(lid, cx, hdr, sock);
+        # the connection is open and served; the request that opened it is still running in the server
+        if (hold) {
+            hold.waitForZero();
+        }
+        return rv;
     }
 }
 
@@ -55,7 +76,8 @@ class WsProgramEndServer {
 
     constructor() {
         server = new EchoServer(<HttpServerOptionInfo>{});
-        EchoHandler handler();
+        *Counter hold = ARGV[0] == "release-in-request" ? new Counter(1) : NOTHING;
+        EchoHandler handler(hold);
         server.setHandler("ws", "", MimeTypeHtml, handler);
         server.setDefaultHandler("ws", handler);
         int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
@@ -65,6 +87,13 @@ class WsProgramEndServer {
         if (ARGV[0] == "release") {
             # the program releases the server while the connection is open
             server = NOTHING;
+        } else if (hold) {
+            # the program releases the server while the request that opened the connection still runs in it, so the
+            # request holds the last reference to the server; the request ends once this has been written
+            server = NOTHING;
+            out("main returned");
+            hold.dec();
+            return;
         }
         out("main returned");
     }

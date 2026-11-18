@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - the checksum of AOT metadata read from the data of a Mach-O symbol with padding after it
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+
+%exec-class AOTMetadataChecksumTest
+
+#! qore#6451: the checksum of AOT metadata is found after the metadata also when padding follows it
+/** Runs qore-aot-metadata-checksum-test (aot_metadata_checksum.cpp): sealed metadata, uncompressed and compressed
+    with zlib and Zstandard, opens as written and with padding or other data after its checksum, as the data of a
+    symbol of a Mach-O object file has, and the input that the reader keeps is the metadata and its checksum, which
+    opens again without verification; a changed byte or checksum is refused, with and without padding, and so is
+    metadata cut before its checksum.
+*/
+class AOTMetadataChecksumTest inherits QUnit::Test {
+    constructor() : Test("AOT metadata checksum", "1.0", \ARGV) {
+        addTestCase("sealed metadata with and without padding", \nativeTest());
+        set_return_value(main());
+    }
+
+    private nativeTest() {
+        string native = ENV.QORE_AOT_METADATA_CHECKSUM_TEST
+            ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-aot-metadata-checksum-test";
+        if (!is_file(native)) {
+            testSkip("the native AOT metadata checksum test executable is not available");
+            return;
+        }
+        string prefix;
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        int rc;
+        string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 42 AOT metadata checksum checks\n", output);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

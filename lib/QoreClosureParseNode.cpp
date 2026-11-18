@@ -36,6 +36,18 @@
 
 #include <mutex>
 
+bool QoreClosureBase::createdByModuleInit(const QoreClosureParseNode* n) {
+    // only while library module code is initialized
+    if (!qore_module_init_library()) {
+        return false;
+    }
+    // the Program that defines the closure's code
+    const UserClosureFunction* f = n->getFunction();
+    const AbstractQoreFunctionVariant* v = f ? f->first() : nullptr;
+    const UserVariantBase* uvb = v ? v->getUserVariantBase() : nullptr;
+    return uvb && qore_module_init_closure_creation(uvb->pgm);
+}
+
 static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
     if (!vlist) {
         return nullptr;

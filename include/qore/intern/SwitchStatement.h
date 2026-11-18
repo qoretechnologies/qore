@@ -176,16 +176,22 @@ public:
         return head;
     }
 
-    // fake it here and let it be checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
+    //! Returns true if the value of the switch expression can certainly match none of the cases
+    /** This is the case if there is no default case, every case compares a value, and the switch expression has a
+        known type with more values than the cases can have: not an enum and not boolean (issue #5940)
+    */
+    DLLLOCAL bool noMatchIsPossible() const {
+        return no_match_possible;
     }
+
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 private:
     CaseNode* head = nullptr, *tail = nullptr;
     QoreValue sexp{};
     CaseNode* deflt = nullptr;
+    //! see noMatchIsPossible(); set when the statement is parse-initialized
+    bool no_match_possible = false;
 
     DLLLOCAL virtual int parseInitImpl(QoreParseContext& parse_context0);
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink* xsink);

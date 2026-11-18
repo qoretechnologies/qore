@@ -182,6 +182,8 @@ module EmpathicBuildingDataProvider {
     @section empathicbuildingdataprovider_relnotes Release Notes
 
     @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - fixed \c EmpathicBuildingSensorDataProvider::getSensorData() and sensor requests to accept a sensor record
       whose values, or whose measurement values, are all integers, such as a literal
       \c {"last_measurement": {"time": 1700000000123}}; converting the epoch offsets to dates raised
