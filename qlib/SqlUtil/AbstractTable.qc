@@ -6012,6 +6012,23 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
+    #! Returns the text of a comment or hint of a select, which is written into an SQL comment (qore#6574)
+    /** The text cannot end the comment (\c "*" followed by \c "/") or open another one (\c "/" followed by \c "*",
+        as comments nest in some databases), and cannot have the placeholder character \c "%", as some database
+        drivers (ex: sqlite3) read placeholders in comments; a text with any of them is refused, as is a text with a
+        NUL character
+
+        @throw OPTION-ERROR the text has a character or a character sequence that is not allowed in a comment
+    */
+    private static string checkCommentText(string option, string text) {
+        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0 || text.find("%") >= 0) {
+            throw "OPTION-ERROR", sprintf("the %y select option cannot contain the character sequences \"/*\" or "
+                "\"*/\", the placeholder character \"%%\", or a NUL character, as it is written into an SQL comment",
+                option);
+        }
+        return text;
+    }
+
     private string getSelectSqlStringIntern(*hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
         if (!columns) {
             l.lock();
@@ -6432,18 +6449,20 @@ string sql = table.getSelectSql(sh, \args);
             }
         }
 
-        # issue #4206: splice comments and hints into the SQL query string last
+        # issue #4206: splice comments and hints into the SQL query string last, right after the select keyword, where a
+        # hint must be, and where no text of the query can be (qore#6574: the first " from " could be in a literal)
         if (info.query_hash.comment || info.query_hash.hint) {
+            # a hint is first, as the databases that read hints (Oracle, PostgreSQL with pg_hint_plan) read only the
+            # first comment after the select keyword
             string comment;
-            if (info.query_hash.comment) {
-                comment = sprintf("/* %s */ ", replace(info.query_hash.comment, "*/", ""));
-            }
             if (info.query_hash.hint) {
-                comment += sprintf("/*+ %s */ ", replace(info.query_hash.hint, "*/", ""));
+                comment = sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
             }
-            # splice comment / hint test right before the " from " text in the query
-            int i = sql.find(" from ");
-            splice sql, i + 1, 0, comment;
+            if (info.query_hash.comment) {
+                comment += sprintf("/* %s */ ", AbstractTable::checkCommentText("comment", info.query_hash.comment));
+            }
+            # every query starts with the select keyword here; any other query would have the comment at its start
+            splice sql, (sql =~ /^select /) ? 7 : 0, 0, comment;
         }
 
         if (setop_keys) {
@@ -7399,9 +7418,12 @@ string sql = table.getSelectSql(sh, \args);
             arg = getSqlValue(arg);
         } else if (cmd.argcolumn) {
             if (!cmd.argoptional || arg) {
-                # issue #2555: allow the use of literal with other column operators
+                # issue #2555: allow the use of literal with other column operators; the value is written as an SQL
+                # literal of the database, as cop_value() gives it in the select list, never as its text (qore#6574);
+                # it is not bound, as the SQL of a column expression is also copied (an alias in a where clause, a
+                # group by or order by position) and rendered out of the order of its text (a superquery)
                 if (arg.cop == COP_VALUE) {
-                    arg = arg.arg.toString();
+                    arg = getSqlValue(arg.arg);
                 } else {
                     if (arg.typeCode() != NT_STRING) {
                         throw "SELECT-ERROR", sprintf("%s: expecting a string column designation for column "
@@ -7501,6 +7523,10 @@ string sql = table.getSelectSql(sh, \args);
                 if (column_name =~ /^distinct\s+/i) {
                     return regex_subst(column_name, "^distinct\\s+", "", RE_Caseless);
                 }
+            } else if (!getPseudoColumnHash(){column_name}) {
+                # a reference to an alias is the alias as an SQL identifier, as the select list gives it, never its
+                # text (qore#6574); a pseudocolumn of the database (ex: rownum) is given as the driver names it
+                column_name = getAliasSqlName(column_name);
             }
             # issue #4214: use table prefixes in a join for pseudocolumns
             return use_prefix ? sprintf("%s.%s", getSqlName(), column_name) : column_name;
