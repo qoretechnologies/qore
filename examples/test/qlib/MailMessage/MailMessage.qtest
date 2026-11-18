@@ -613,6 +613,9 @@ lorem ipsum\r
         {
             string filename = binary_to_string(parse_hex_string("2e2e2fff2f706173737764"), "UTF-8");
             assertEq("attachment", sanitize_filename(filename));
+            # a name in another encoding that is not valid in it, as decode_mime_filename() can give
+            string sjis = binary_to_string(parse_hex_string("2e2e2f82ff2f78"), "SHIFT_JIS");
+            assertEq("attachment", sanitize_filename(sjis));
         }
 
         # Test sanitize_filename removes path separators

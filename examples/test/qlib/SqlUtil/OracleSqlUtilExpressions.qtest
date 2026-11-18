@@ -500,6 +500,11 @@ class OracleExpressionTest inherits QUnit::Test {
         # test the date format conversion - no DB needed
         # HH -> HH24
         assertEq("HH24:MI:SS", OracleTable::convertDateFormat("HH:mm:SS"));
+        # a format that is not valid in its encoding is not written into an SQL string literal (qore#6553)
+        assertThrows("VALUE-ERROR", \OracleTable::convertDateFormat(),
+            (binary_to_string(parse_hex_string("59ff27"), "UTF-8"),));
+        assertThrows("VALUE-ERROR", \OracleTable::convertDateFormat(),
+            (binary_to_string(parse_hex_string("82ff"), "SHIFT_JIS"),));
         # mm -> MI
         assertEq("YYYY-MM-DD HH24:MI:SS", OracleTable::convertDateFormat("YYYY-MM-DD HH:mm:SS"));
         # us -> FF6

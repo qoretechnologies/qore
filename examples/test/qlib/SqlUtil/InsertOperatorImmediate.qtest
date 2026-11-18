@@ -122,6 +122,11 @@ class InsertOperatorImmediateTest inherits QUnit::Test {
             ({"id": 3, "v": iop_seq(invalidHostileSequence())},));
         assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
             ({"id": 3, "v": iop_seq_currval(invalidHostileSequence())},));
+        # letters that case-fold to ASCII letters (the Kelvin sign, the long s) are not ASCII letters
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq("sKq")},));
+        assertThrows("INSERT-OPERATOR-ERROR", "illegal characters", \t.insert(),
+            ({"id": 3, "v": iop_seq("ſeq")},));
     }
 
     mssqlSql() {
