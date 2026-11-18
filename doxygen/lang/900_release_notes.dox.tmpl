@@ -2339,6 +2339,12 @@
     - creating an @ref Qore::Expression "Expression" in a %Program with code pending, or whose parse was rolled back
       without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", raises \c EXPRESSION-ERROR; it let threads enter the
       %Program before its code was committed, and could refer to code that a rollback deleted (issue #6353)
+    - threads that create, run and delete the @ref Qore::Expression "Expression" objects of a %Program at the same
+      time no longer corrupt the %Program's set of expressions, which ended the process with a segmentation fault or
+      a heap error (issue #6493)
+    - while a thread creates an @ref Qore::Expression "Expression" in a %Program, other threads can call into the
+      %Program and run its expressions; they were refused with \c PROGRAM-ERROR, as during a parse of code
+      (see @ref Qore::Expression::constructor() "Expression::constructor()"; issue #6518)
     - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
       %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
       did the same, or when the %Program was destroyed (issue #6403)
