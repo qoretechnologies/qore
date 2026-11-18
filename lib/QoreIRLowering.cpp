@@ -986,9 +986,10 @@ static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
 //! Returns the runtime location of a statement whose location is \a loc in the code of the statement whose runtime
 //! location is \a outer (see QoreIRInstruction::stmt_loc)
 /** A statement on the lines of the statement that contains it, such as the body of a loop written on one line, takes
-    the location of the containing statement: an exception gives the same file and lines with either (the columns of a
-    location are not part of an exception's location), and the IR interpreter and native code then do not store the
-    location at each change between the two statements (qore#6646)
+    the location of the containing statement: an exception gives the same file and lines with either, and the IR
+    interpreter and native code then do not store the location at each change between the two statements (qore#6646);
+    the columns of the location, which the call stack entry of a rethrow and of a frame without a call site give,
+    are the containing statement's
 */
 static const QoreProgramLocation* qore_ir_statement_location(const QoreProgramLocation* outer,
         const QoreProgramLocation* loc) {

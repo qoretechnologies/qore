@@ -14614,7 +14614,8 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     // the operation then runs in its own runtime location if it differs, as after a DebugStatement instruction
     if (folded_host && folded_host->stmt_loc && inst->loc && folded_host->stmt_loc != inst->loc) {
         emitRuntimeLocationStore(folded_host->stmt_loc);
-    } else if (event_loc && last_runtime_loc && event_loc != last_runtime_loc) {
+    } else if (!folded_host && last_runtime_loc) {
+        // the event stores the statement's location (qore_rt_dbg_step()): the code's is restored
         emitRuntimeLocationStore(last_runtime_loc);
     }
     builder->CreateBr(cont);
@@ -14635,10 +14636,30 @@ void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_fun
         return st && st->getPointerOperand() == loc_inst && llvm::isa<llvm::Constant>(st->getValueOperand())
             ? st : nullptr;
     };
-    // a store of a value that is not a constant location (none is emitted) makes the location unknown
+    // the location is unknown after a store of a value that is not a constant location (none is emitted), and after
+    // a call of code that stores locations of its own and does not restore the caller's: native code of the module
+    // (an outlined region of the function, a function compiled with it), a call through a pointer and the step events
+    // of the debugger; the runtime functions that native code calls restore the location of their caller
     auto clobbers = [loc_inst](const llvm::Instruction& i) {
-        auto* st = llvm::dyn_cast<llvm::StoreInst>(&i);
-        return st && st->getPointerOperand() == loc_inst && !llvm::isa<llvm::Constant>(st->getValueOperand());
+        if (auto* st = llvm::dyn_cast<llvm::StoreInst>(&i)) {
+            return st->getPointerOperand() == loc_inst && !llvm::isa<llvm::Constant>(st->getValueOperand());
+        }
+        auto* call = llvm::dyn_cast<llvm::CallBase>(&i);
+        if (!call) {
+            return false;
+        }
+        const llvm::Function* callee = call->getCalledFunction();
+        if (!callee) {
+            return !call->isInlineAsm();
+        }
+        if (callee->isIntrinsic()) {
+            return false;
+        }
+        if (!callee->isDeclaration()) {
+            return true;
+        }
+        llvm::StringRef name = callee->getName();
+        return name == "qore_rt_dbg_step" || name == "qore_rt_dbg_synthetic_block_step";
     };
     std::unordered_set<const llvm::BasicBlock*> unknown_exit;
     for (llvm::BasicBlock& bb : *llvm_func) {
