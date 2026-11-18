@@ -2304,6 +2304,9 @@
     - an argument of the constructor of a @ref list_complex_type "typed list" that is not a valid element of the list
       raises an error that names the argument and the element type, the same at parse time and at run time, instead
       of naming the type of the argument as the value type of the list (issue #6172)
+    - a static method call reference to a method of a class that a Program imported
+      (@ref Qore::Program::importClass() "Program::importClass()") raises \c PROGRAM-ERROR when it is called after the
+      Program is deleted; the call could read memory that was released with the Program (issue #6622)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

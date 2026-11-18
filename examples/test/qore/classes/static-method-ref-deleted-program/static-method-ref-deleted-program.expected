@@ -1,0 +1,18 @@
+before: m:x
+written in code: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+before: m:x
+get_call_reference(): PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+before: m:x
+made in a method of the imported class: m:y
+before: m:x
+made in a method of a class of the Program: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+before: d:x
+a method of a class of the Program: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+before: m:x
+through a subclass of the imported class: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+before: s:x
+held by a static variable of its class: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+before: m:x
+first call: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+second call: PROGRAM-ERROR: the Program accessed has already been deleted and therefore cannot be accessed at runtime
+done
