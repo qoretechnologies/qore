@@ -1362,9 +1362,11 @@ public:
 
     //! Replaces the handed-over return with \a v, whose reference it takes, releasing the value before (#6137)
     /** The value that a handler run out of line past the inline cap hands over in the block cleanups of a return
-        statement (QoreIRScopeExitInstruction::hand_over_return), which the return takes (takeHandedOverReturn())
+        statement (QoreIRScopeExitInstruction::hand_over_return), which the return takes (takeHandedOverReturn()).
+        The handed-over return's functions are out of line and cold, so that they add nothing to the frame of
+        QoreIRInterpreter::execute(), which runs them only past the cap
     */
-    DLLLOCAL void handOverReturn(QoreValue v, ExceptionSink* xsink) {
+    DLLLOCAL __attribute__((noinline, cold)) void handOverReturn(QoreValue v, ExceptionSink* xsink) {
         QoreValue prev = handed_over;
         handed_over = v;
         bool had = handed_over_set;
@@ -1376,7 +1378,7 @@ public:
 
     //! Returns the handed-over return, whose reference passes to the caller, and clears it, if one was handed over,
     //! or a reference of its own to \a value otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
-    DLLLOCAL QoreValue takeHandedOverReturn(QoreValue value) {
+    DLLLOCAL __attribute__((noinline, cold)) QoreValue takeHandedOverReturn(QoreValue value) {
         if (!handed_over_set) {
             return value.refSelf();
         }
@@ -1387,7 +1389,7 @@ public:
     }
 
     //! Releases the handed-over return, if any (QoreIROpcode::ReleaseHandedOverReturn, #6137)
-    DLLLOCAL void releaseHandedOverReturn(ExceptionSink* xsink) {
+    DLLLOCAL __attribute__((noinline, cold)) void releaseHandedOverReturn(ExceptionSink* xsink) {
         if (handed_over_set) {
             QoreValue v = handed_over;
             handed_over = QoreValue();
