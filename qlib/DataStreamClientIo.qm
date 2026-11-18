@@ -86,9 +86,9 @@ ds.recvDataStream(
 #! the DataStreamClient namespace contains all the public objects in the DataStreamClientIo module
 namespace DataStreamClientIoPrivate {
     # private function
-    # returns True if the string is valid in its encoding: a regular expression matches every valid string; a string in
-    # UTF-8 that is not valid raises INVALID-ENCODING, and one in another encoding that cannot be converted to UTF-8
-    # raises a conversion error
+    # returns True if the string is valid in its encoding: a regular expression matches every valid string, and no
+    # string in UTF-8 that is not valid; one in another encoding that cannot be converted to UTF-8 raises a conversion
+    # error
     bool sub ds_string_valid(string str) {
         try {
             return str =~ /^/;
