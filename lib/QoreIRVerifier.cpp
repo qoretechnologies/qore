@@ -1959,6 +1959,7 @@ static int qore_ir_opcode_forwarded_operand(QoreIROpcode op) {
 // documented in QoreIR.h
 void QoreIRFunction::computeReferenceStoreLocals() {
     reference_store_locals.clear();
+    reference_element_locals.clear();
     non_reference_values.clear();
     // the instruction that defines each value
     std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
@@ -2042,9 +2043,8 @@ void QoreIRFunction::computeReferenceStoreLocals() {
             non_reference_values[id] = 1;
         }
     }
-    // the variables of foreach loops that can be given a reference element, and the locals that a store other
-    // than that of a foreach loop assigns
-    std::unordered_set<const void*> reference_element_locals;
+    // the variables of foreach loops that can be given a reference element (reference_element_locals), and the
+    // locals that a store other than that of a foreach loop assigns
     std::unordered_set<const void*> normal_store_locals;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {

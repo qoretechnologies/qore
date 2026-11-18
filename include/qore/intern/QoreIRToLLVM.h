@@ -453,9 +453,14 @@ private:
         variable is set (see element_local_read_flags), or for a node held by an untyped variable; with
         \a load_builder, which inserts outside the current block (as in the entry block), it is called for any value,
         since no block can be split there.
+
+        The value that a reference held by an untyped variable reads as is owned by the read, which holds it in a
+        slot of the read site (qore_rt_read_element_local_held()), released as the slots of emitReferenceLocalRead()
+        are; \a reference_read_slot, if not null, is set to that slot (for reference_read_slots), or to nullptr.
     */
     DLLLOCAL llvm::Value* loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
-            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "");
+            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "",
+            llvm::AllocaInst** reference_read_slot = nullptr);
 
     //! Emits the call that raises the error of a return statement that returns no value
     /** The error is the one the AST interpreter raises for such a return statement ("<return statement> expects
@@ -929,6 +934,15 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! The slots of the reads through references of the variables of foreach loops (see loadLocalCacheValue()),
+    //! which hold a value only if element_read_held_flag is set: the end of a statement releases them behind one test
+    //! of the flag (emitDiscardTemps())
+    std::unordered_set<llvm::Value*> rarely_held_cleanup_allocas;
+    //! The flag of the frame that qore_rt_read_element_local_held() sets when it holds a value read through a
+    //! reference by the variable of a foreach loop; it is never cleared, or nullptr if the function has no such read
+    llvm::AllocaInst* element_read_held_flag = nullptr;
+    //! Emits the inline release of the cleanup slot \a alloca_ptr with \a decref, which leaves NOTHING in it
+    DLLLOCAL void emitCleanupSlotRelease(llvm::Value* alloca_ptr, llvm::FunctionCallee decref);
     //! The function-lifetime slots of the results of the slow paths of the unary operations (see
     //! emitAnyUnaryFastPath()), which hold NOTHING unless the slow path ran: an exit releases them only if they hold a
     //! value (issue #6132)

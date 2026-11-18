@@ -36,6 +36,7 @@
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreIRPointerSlot.h"
+#include "qore/intern/QoreValueEncoding.h"
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -239,6 +240,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_value_is_reference", reinterpret_cast<void*>(&qore_rt_value_is_reference) },
     { "qore_rt_strip_any_param", reinterpret_cast<void*>(&qore_rt_strip_any_param) },
     { "qore_rt_read_reference_local", reinterpret_cast<void*>(&qore_rt_read_reference_local) },
+    { "qore_rt_read_element_local_held", reinterpret_cast<void*>(&qore_rt_read_element_local_held) },
     { "qore_rt_reference_slot_write", reinterpret_cast<void*>(&qore_rt_reference_slot_write) },
     { "qore_rt_element_local_replace", reinterpret_cast<void*>(&qore_rt_element_local_replace) },
     { "qore_rt_element_local_replace_real", reinterpret_cast<void*>(&qore_rt_element_local_replace_real) },
@@ -2971,6 +2973,42 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local(uint64_t val, Exception
         return toBits(qore_rt_get_weak_reference_target(v));
     }
     return type == NT_REFERENCE ? qore_rt_deref_if_reference(val, xsink) : val;
+}
+
+//! The read through a reference of qore_rt_read_element_local_held(), out of its fast path for any other value
+static __attribute__((noinline)) uint64_t qore_rt_read_element_local_held_reference(uint64_t val, uint64_t* current,
+        uint64_t* previous, uint8_t* held, ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_deref_if_reference(val, xsink);
+    uint64_t old_previous = *previous;
+    *previous = *current;
+    *current = rv;
+    *held = 1;
+    qore_rt_decref(old_previous, xsink);
+    return rv;
+}
+
+//! As qore_rt_read_element_local(), for an untyped variable: the value read through a reference is held by the read
+/** The value that a reference held by the variable reads as is owned by the read: it is stored in \a current, whose
+    value moves to \a previous, and the value that \a previous held is released, as for a read through a reference by
+    a local with a reference flag (QoreIRToLLVM::emitReferenceLocalRead()).  Native code releases the slots at the
+    end of the statement and at the exit of the function, or gives \a current to a call that takes the value as an
+    argument (issue #6441: the value was never released).  A weak reference reads as its target, borrowed, and any
+    other value is returned as it is.  \a held, the flag of the frame, is set when the slots are given a value, so
+    that the end of a statement tests the slots only in a frame that has read a reference.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint64_t* current, uint64_t* previous,
+        uint8_t* held, ExceptionSink* xsink) {
+    // the fast path decodes the value itself, with no QoreValue on the stack: a reference is a plain pointer to a node
+    // (an opaque reference refers to an object); any other value that qore_rt_read_element_local() reads (a weak
+    // reference) is given to it, and every other value is read as it is
+    if ((val & TAG_MASK) != TAG_POINTER || !(val & PAYLOAD_MASK)) {
+        return qore_rt_read_element_local(val, xsink);
+    }
+    qore_type_t type = reinterpret_cast<const AbstractQoreNode*>(val & PAYLOAD_MASK)->getType();
+    if (type == NT_REFERENCE) {
+        return qore_rt_read_element_local_held_reference(val, current, previous, held, xsink);
+    }
+    return qore_rt_is_weak_reference_type(type) ? qore_rt_read_element_local(val, xsink) : val;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
