@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par The Integer Value of a Parse Define Is an Integer
+    A parse define with an integer value (<tt>%%define X 12</tt>, <tt>qore -DX=12</tt>) has an integer value, as
+    @ref Qore::Program::getDefine() "Program::getDefine()" returns it: it was a float (\c 12.0), and a number is decimal,
+    also with a leading zero (see @ref define_values "%define"; issue #6530).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was

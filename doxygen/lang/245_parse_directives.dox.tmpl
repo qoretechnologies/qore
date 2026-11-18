@@ -1179,6 +1179,12 @@ i+ =4;
     @par Description:
     Creates and optionally sets a value for a @ref conditional_parsing "parse define"
 
+    @anchor define_values
+    The value is a string in single or double quotes, \c true or \c false (case-insensitive), or a number: a
+    @ref float "float" if it has a decimal point, otherwise an @ref integer "integer".  A number is decimal, also with
+    a leading zero (<tt>%%define X 010</tt> sets \c X to \c 10), unlike an integer literal with a leading zero in code,
+    which is octal.  A value given with \c -D or \c --define on the command line of \c qore is read in the same way.
+
     @since %Qore 0.8.3
 
     <hr>
