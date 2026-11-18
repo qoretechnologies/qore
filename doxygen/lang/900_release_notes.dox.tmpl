@@ -169,6 +169,7 @@
     A parse define with an integer value (<tt>%%define X 12</tt>, <tt>qore -DX=12</tt>) has an integer value, as
     @ref Qore::Program::getDefine() "Program::getDefine()" returns it: it was a float (\c 12.0), and a number is decimal,
     also with a leading zero (see @ref define_values "%define"; issue #6530).
+
     @par The Length of a String Not Valid in Its Encoding Counts Each Invalid Byte as One Character
     @ref Qore::length(softstring) "length()", @ref Qore::zzz8stringzzz9::length() "<string>::length()" and the
     @ref elements "elements operator" count each byte of a string that does not start a complete character as one
