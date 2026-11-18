@@ -19760,10 +19760,15 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
         assert(pos < answers.size());
         return answers[pos];
     };
-    // The results of holds_observable() by value id: a value is walked once, however many containers hold it
-    // (qore#6515).  An exact result is kept; one that the depth limit decided (true) is kept as the least depth at
-    // which it was found, and holds for any visit at that depth or deeper, as a deeper visit has less depth left
-    enum : uint8_t { HoldsUnknown = 0, HoldsNo = 1, HoldsYes = 2 };
+    // The results of holds_observable() by value id, so that a value that several containers hold is not walked once
+    // for each path to it (qore#6515), with the answers of the depth-limited walk: a value found to hold an observable
+    // value within the limit holds one at any depth; one that the depth limit decided (true) is kept as the least
+    // depth at which it was found, and holds for any visit at that depth or deeper, which has less depth left; one
+    // found to hold none (false, the limit not reached) is kept as the greatest depth at which it was found, and holds
+    // for any visit at that depth or shallower, which has more depth left - a deeper visit walks it again.  A value is
+    // so walked at most once for each depth.
+    enum : uint8_t { HoldsUnknown = 0, HoldsYes = 2 };
+    std::vector<int16_t> holds_no_depth(max_id + 1, -1);
     // whether the function can create a reference to a local (QoreIRFunction::detectCreatesReference(), which walks
     // the whole function): asked once, when a read of a local is first walked, not for each read (qore#6515)
     enum : uint8_t { RefUnknown = 0, RefNo = 1, RefYes = 2 };
@@ -19788,8 +19793,11 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
             return true;
         }
         assert(value.id <= max_id);
-        if (holds_result[value.id] != HoldsUnknown) {
-            return holds_result[value.id] == HoldsYes;
+        if (holds_result[value.id] == HoldsYes) {
+            return true;
+        }
+        if (static_cast<int>(depth) <= holds_no_depth[value.id]) {
+            return false;
         }
         if (depth >= holds_limit_depth[value.id]) {
             limited = true;
@@ -19805,7 +19813,11 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
                 holds_limit_depth[value.id] = static_cast<uint8_t>(depth);
             }
         } else {
-            holds_result[value.id] = rv ? HoldsYes : HoldsNo;
+            if (rv) {
+                holds_result[value.id] = HoldsYes;
+            } else if (static_cast<int>(depth) > holds_no_depth[value.id]) {
+                holds_no_depth[value.id] = static_cast<int16_t>(depth);
+            }
         }
         return rv;
     };
