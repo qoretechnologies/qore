@@ -4981,13 +4981,7 @@ void LocalVarValue::resolveLValueTypeInfo(const QoreTypeInfo*& typeInfo, const Q
 }
 
 // documented in LocalVar.h
-std::atomic<bool> qore_ir_reference_read_seen{false};
-
-// documented in LocalVar.h
 QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink) {
-    if (!qore_ir_reference_read_seen.load(std::memory_order_relaxed)) {
-        qore_ir_reference_read_seen.store(true, std::memory_order_relaxed);
-    }
     LocalRefHelper<LocalVarValue> helper(nullptr, const_cast<ReferenceNode&>(ref), xsink);
     if (!helper) {
         return QoreValue();

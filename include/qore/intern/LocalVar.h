@@ -74,13 +74,6 @@ public:
 */
 DLLLOCAL QoreValue qore_local_reference_eval(const ReferenceNode& ref, bool& needs_deref, ExceptionSink* xsink);
 
-//! Set once a value has been read through a reference held by a local (qore_local_reference_eval()), never cleared
-/** A hint for the IR interpreter: until then no call can have a read of the variable of a foreach loop through a
-    reference to give (QORE_IR_GIVES_CALL_REFERENCE_READS, issue #6441); a call that it lets through looks for the
-    arguments to give
-*/
-DLLLOCAL extern std::atomic<bool> qore_ir_reference_read_seen;
-
 template <class T>
 class LValueRefHelper : public LocalRefHelper<T> {
 protected:

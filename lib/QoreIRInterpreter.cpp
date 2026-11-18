@@ -2794,19 +2794,6 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
 // reads its element slot again
-//! Returns true if \a local is the untyped variable of a foreach loop, which can hold a reference given by an element
-/** Such a variable reads as the referenced lvalue: it does not hold the value read, which the read owns, so a call
-    that writes the referenced lvalue and its parameter must be given it, to destroy it at the parameter's write as
-    the AST interpreter does (c.m(r) in foreach auto r in ((\o,)); issue #6441)
-*/
-static bool qore_ir_element_local_may_read_reference(const QoreIRFunction& func, const LocalVar* local) {
-    // a variable that no element and no store that can be a reference is assigned to (a loop over a list of ints)
-    // is not one
-    const void* key = reinterpret_cast<const void*>(local);
-    return func.element_store_locals.count(key)
-        && (func.reference_element_locals.count(key) || func.reference_store_locals.count(key));
-}
-
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::LoadLocal:
@@ -3140,9 +3127,6 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 || !func.ir_only_locals.count(reinterpret_cast<const void*>(load->local))) {
             return true;
         }
-        if (qore_ir_element_local_may_read_reference(func, load->local)) {
-            return true;
-        }
         const auto& insts = call_block[id]->instructions;
         const uint32_t scope = insts[call_pos[id]]->temp_scope_id;
         if (!scope) {
@@ -3427,8 +3411,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 return false;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
-            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()
-                    || qore_ir_element_local_may_read_reference(func, load->local)) {
+            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
                 return false;
             }
             const auto& insts = call_block->instructions;
@@ -3451,17 +3434,10 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     const QoreIRValue& operand = call_inst->operands[i];
                     if (operand.isValid() && operand.id < consumed_call_args.size()
                             && consumed_call_args[operand.id]) {
-                        // a read of the variable of a foreach loop that can hold a reference owns its value only if
-                        // it reads through a reference, which the frame records (QORE_IR_GIVES_CALL_REFERENCE_READS)
-                        const QoreIRInstruction* def = operand.id < value_defs.inst.size()
-                            ? value_defs.inst[operand.id] : nullptr;
-                        bool element_read = def && def->opcode == QoreIROpcode::LoadLocal
-                            && qore_ir_element_local_may_read_reference(func,
-                                static_cast<const QoreIRLocalInstruction*>(def)->local);
-                        call_inst->interpreter_gives_call_args |= element_read
-                            ? QORE_IR_GIVES_CALL_REFERENCE_READS : QORE_IR_GIVES_CALL_ARGS;
+                        call_inst->interpreter_gives_call_args |= QORE_IR_GIVES_CALL_ARGS;
                         if (!is_held_local_read(operand.id, block.get(), pos)) {
                             call_inst->interpreter_gives_call_args |= QORE_IR_GIVES_CALL_TEMPS;
+                            break;
                         }
                     }
                 }
@@ -10876,24 +10852,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Returns true if a call whose instruction has QoreIRInstruction::interpreter_gives_call_args set has a temporary
     // argument to give to the callee now (see IRConsumedCallArgs::give()), with the test of releaseConsumedCallArgs():
     // a call that has none (a value that holds no reference, such as an int) is made with the code of a call that
-    // gives nothing (IRNoGivenCallArgs); a given argument has a cleanup entry, so the calls test that the frame has one
-    // before they call it (an int read by the variable of a foreach loop, issue #6441)
+    // gives nothing (IRNoGivenCallArgs)
     auto hasConsumedCallArgs = [&](const QoreIRInstruction* call_inst) -> bool {
-        // a given argument has a cleanup entry; a call whose only consumed arguments are reads of the variables of
-        // foreach loops (QORE_IR_GIVES_CALL_REFERENCE_READS) has one to give only once a frame has read a value
-        // through a reference (qore_ir_reference_read_seen, issue #6441).  The test is here, out of the interpreter's
-        // loop, so that the code of the calls in the loop is as before
-        if (cleanup.empty() || (!(call_inst->interpreter_gives_call_args & QORE_IR_GIVES_CALL_ARGS)
-                && !qore_ir_reference_read_seen.load(std::memory_order_relaxed))) {
-            return false;
-        }
         int arg_start = qore_ir_call_arg_start(call_inst);
         for (size_t i = call_inst->operands.size(); i > static_cast<size_t>(arg_start); --i) {
             uint32_t id = call_inst->operands[i - 1].id;
-            // a value that holds no reference (an int read by the variable of a foreach loop that holds no reference)
-            // has nothing to give, which is tested before the lookups (issue #6441)
             if (!call_inst->operands[i - 1].isValid() || id >= values.size() || id >= consumed_call_args.size()
-                    || !consumed_call_args[id] || !values[id].needsRef()
+                    || !consumed_call_args[id]
                     || !hasCleanupEntry(cleanup, id) || weak_load_temp_slots.count(id)
                     || (id < borrowed_temp_remaining.size() && borrowed_temp_remaining[id] > 0)) {
                 continue;

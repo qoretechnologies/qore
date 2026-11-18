@@ -229,25 +229,20 @@ The AST interpreter gives a parameter these arguments with no other reference, s
   directly (`qore_ir_native_closure_call_eligible()`).
 
 The untyped variable of a foreach loop is assigned each element as it is, so it can hold a reference given by an
-element, and it reads as the referenced lvalue too (issue #6441).  Native code keeps such an IR-only variable as an
+element, and it reads as the referenced lvalue too (issue #6441). Native code keeps such an IR-only variable as an
 element local (`QoreIRToLLVM::loadLocalCacheValue()`), whose read through the reference owned its value and never
 released it, so the object was leaked: the read now holds the value in the slots of its read site
-(`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are.
-The helper also sets a flag of the frame (`element_read_held_flag`), and the end of a statement releases these slots
-behind one test of the flag, so that a frame that never reads a reference through such a variable pays one load and
-one branch per statement.  Only a variable that an element or a store that can be a reference is assigned to
+(`qore_rt_read_element_local_held()`), released and given to calls as the slots of `emitReferenceLocalRead()` are. The
+helper also sets a flag of the frame (`element_read_held_flag`), and the end of a statement releases these slots behind
+one test of the flag, so that a frame that never reads a reference through such a variable pays one load and one branch
+per statement. Only a variable that an element or a store that can be a reference is assigned to
 (`QoreIRFunction::reference_element_locals`, `reference_store_locals`) has these slots: the variable of a loop over a
-list of ints reads its cache as before.  The
-IR interpreter gives such a read to every call (`qore_ir_element_local_may_read_reference()` in
-`buildValueUseCounts()` and in the test of `QORE_IR_GIVES_CALL_TEMPS`): the variable does not hold the value read, so
-a method that writes the referenced variable and its parameter destroys the object at the write, as in the AST
-interpreter.  Whether the call gives an argument is decided when it is made: such a call has
-`QORE_IR_GIVES_CALL_REFERENCE_READS` rather than `QORE_IR_GIVES_CALL_ARGS`, and looks for an argument to give
-(`hasConsumedCallArgs()`) only once a frame has read a value through a reference (`qore_ir_reference_read_seen`, a
-process-wide hint set by `qore_local_reference_eval()`, which costs the frames and the interpreter's loop no
-code), tested in `hasConsumedCallArgs()` so that the code of the calls in the interpreter's loop is as before.  Native code makes a call that may give such a read in both forms and makes the call that
-gives nothing when no slot holds its value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after
-the call only if it holds the value, tested inline.  A typed variable is never assigned a reference.
+list of ints reads its cache as before. The IR interpreter does not give such a read to a call: it releases the value
+read at the end of the statement, so a method that writes the referenced variable and its parameter destroys the object
+after the call, not at the write as in the AST interpreter (as on develop; a follow-up, #TBD-IR-METHOD-ORDER). Native
+code makes a call that may give such a read in both forms and makes the call that gives nothing when no slot holds its
+value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after the call only if it holds the value,
+tested inline. A typed variable is never assigned a reference.
 
 The value of a cast is not one of them: the AST interpreter holds a temporary operand of a cast until the statement
 ends (issue #5712), and so do the other modes.

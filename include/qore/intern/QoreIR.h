@@ -1451,10 +1451,6 @@ struct QoreIRPhiIncoming;
 static constexpr uint8_t QORE_IR_GIVES_CALL_ARGS = 1;
 //! QoreIRInstruction::interpreter_gives_call_args: one of them can be taken over observably by a parameter (#5958)
 static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
-//! QoreIRInstruction::interpreter_gives_call_args: the call consumes reads of the variables of foreach loops that can
-//! hold references given by elements, which own their values only when they are read through a reference (#6441): the
-//! call looks for them only once a frame has read a value through a reference (qore_ir_reference_read_seen)
-static constexpr uint8_t QORE_IR_GIVES_CALL_REFERENCE_READS = 4;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
@@ -4752,7 +4748,7 @@ public:
 
     //! The variables of foreach loops (AssignmentMode::Element) that an element that can be a reference can be
     //! assigned to (see computeReferenceStoreLocals()): only their reads can read through a reference that they hold,
-    //! which the engines hold and give to calls (issue #6441); the variable of a loop over a list of ints is not one
+    //! which native code holds and gives to calls (issue #6441); the variable of a loop over a list of ints is not one
     std::unordered_set<const void*> reference_element_locals;
 
     //! The values known never to be a reference, indexed by value id (1 if known; see computeReferenceStoreLocals())
