@@ -1,0 +1,26 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain, requires DdXa before its
+# header and DdXe (through an included file) and DdXd after it; DdXe's initialization loads DdXd through DdXa's Program,
+# with the restrictions in effect before the header, before DdXm's own request (qore#6351)
+
+%modern
+%requires DdXa
+
+module DdXm {
+    version = "1.0";
+    desc = "a module whose dependency another module loads first";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%include DdXm.inc
+%requires DdXd
+
+public namespace DdXm {
+    public string sub run() {
+        return DdXd::run();
+    }
+}

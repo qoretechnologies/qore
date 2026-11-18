@@ -1,0 +1,25 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of set-time-zone-compiled.qtest: a module that declares the locale control domain and restricts locale
+# control itself after its header, before it sets its time zone: the restriction applies (qore#6352)
+
+%modern
+
+module TzOwnAfter {
+    version = "1.0";
+    desc = "module TzOwnAfter";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%no-locale-control
+
+%set-time-zone Asia/Tokyo
+
+public namespace TzOwnAfter {
+    public string sub tz_region() {
+        return TimeZone::get().region();
+    }
+}

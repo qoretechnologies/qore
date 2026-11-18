@@ -1,0 +1,27 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain, restricts it again after
+# its header where signal handling is disabled (HAVE_SIGNAL_HANDLING depends on the process: qore -b), and requires
+# DdSxI: DdSxI keeps the restriction there (qore#6351)
+
+%modern
+
+module DdSig {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%ifndef HAVE_SIGNAL_HANDLING
+%no-locale-control
+%endif
+%requires DdSxI
+
+public namespace DdSig {
+    public string sub run() {
+        return DdSxI::run();
+    }
+}

@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of set-time-zone-compiled.qtest: the same as TzOwnBefore, loaded by a path outside the module path, which is
+# not library code: the restriction applies (qore#6352)
+
+%modern
+%no-locale-control
+
+module TzOwnUntrusted {
+    version = "1.0";
+    desc = "module TzOwnUntrusted";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%set-time-zone Asia/Tokyo
+
+public namespace TzOwnUntrusted {
+    public string sub tz_region() {
+        return TimeZone::get().region();
+    }
+}

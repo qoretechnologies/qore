@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that requires DdPrEx; DdPrM and DdPrT request it before their headers
+# in a way that is not a dependency of theirs (qore#6351)
+
+%modern
+%requires DdPrEx
+
+module DdPrB {
+    version = "1.0";
+    desc = "a module that requires DdPrEx";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DdPrB {
+}

@@ -702,12 +702,12 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
         RuntimeConfig& rc;
         QoreParseOptions old_po;
 
-        DLLLOCAL ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
+        ConstantInitRcParseOptionsHelper(RuntimeConfig& rc, const QoreParseOptions& po) : rc(rc),
                 old_po(rc.getParseOptions()) {
             rc.setParseOptions(po);
         }
 
-        DLLLOCAL ~ConstantInitRcParseOptionsHelper() {
+        ~ConstantInitRcParseOptionsHelper() {
             rc.setParseOptions(old_po);
         }
     } init_rc_po(rc_get_tls_ref(), pwo.parse_options);

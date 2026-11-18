@@ -162,6 +162,8 @@ struct QoreParseState {
    bool line_start_directive_active = false;
    //! Provenance of the current legacy options; tokens copy it before later directives can restore %modern.
    QoreNativeParseInfo native_parse_info;
+   //! the line of the last text that no scanner rule matched, which is reported once per line (issue #6512)
+   int unexpected_text_line = 0;
    //! the extent of the last expression in parentheses that the parser reduced ('(' exp ')'): an operand of the
    //! chomp, trim or splice operator with this extent is in parentheses of its own (issue #1867)
    int paren_first_line = 0, paren_first_col = 0, paren_last_line = 0, paren_last_col = 0;

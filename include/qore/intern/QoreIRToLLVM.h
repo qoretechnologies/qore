@@ -453,9 +453,14 @@ private:
         variable is set (see element_local_read_flags), or for a node held by an untyped variable; with
         \a load_builder, which inserts outside the current block (as in the entry block), it is called for any value,
         since no block can be split there.
+
+        The value that a reference held by an untyped variable reads as is owned by the read, which holds it in a
+        slot of the read site (qore_rt_read_element_local_held()), released as the slots of emitReferenceLocalRead()
+        are; \a reference_read_slot, if not null, is set to that slot (for reference_read_slots), or to nullptr.
     */
     DLLLOCAL llvm::Value* loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
-            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "");
+            llvm::IRBuilder<>* load_builder = nullptr, const char* name = "",
+            llvm::AllocaInst** reference_read_slot = nullptr);
 
     //! Emits the call that raises the error of a return statement that returns no value
     /** The error is the one the AST interpreter raises for such a return statement ("<return statement> expects
@@ -929,6 +934,15 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! The slots of the reads through references of the variables of foreach loops (see loadLocalCacheValue()),
+    //! which hold a value only if element_read_held_flag is set: the end of a statement releases them behind one test
+    //! of the flag (emitDiscardTemps())
+    std::unordered_set<llvm::Value*> rarely_held_cleanup_allocas;
+    //! The flag of the frame that qore_rt_read_element_local_held() sets when it holds a value read through a
+    //! reference by the variable of a foreach loop; it is never cleared, or nullptr if the function has no such read
+    llvm::AllocaInst* element_read_held_flag = nullptr;
+    //! Emits the inline release of the cleanup slot \a alloca_ptr with \a decref, which leaves NOTHING in it
+    DLLLOCAL void emitCleanupSlotRelease(llvm::Value* alloca_ptr, llvm::FunctionCallee decref);
     //! The function-lifetime slots of the results of the slow paths of the unary operations (see
     //! emitAnyUnaryFastPath()), which hold NOTHING unless the slow path ran: an exit releases them only if they hold a
     //! value (issue #6132)
@@ -1995,6 +2009,24 @@ private:
     // active; no-op for functions without catch blocks.
     void emitCatchUnwind(llvm::Module& module);
 
+    //! Keeps the slots of the frame that only catch blocks and exception paths use in memory
+    /** The catch depth of the frame (catch_depth_saved) and the caches of the catch variables are set in catch blocks
+        and read there and on the exception exits of the frame, which release the catch variables: promoted to SSA
+        values, each would be a web of PHI nodes across the whole function, merging at the shared exception exit with
+        one incoming value for each exception edge of the function, whose coalescing in register allocation takes time
+        in the product of the number of catch blocks and the size of the function (qore#6392).  Their loads and stores
+        are made volatile, which keeps them out of SSA; they run only on those paths.
+    */
+    DLLLOCAL void keepCatchFrameSlotsInMemory(const QoreIRFunction& func);
+
+    //! True once keepCatchFrameSlotsInMemory() has marked the slots of the function being lowered
+    /** It must run before finalizeCleanupFrame(), which replaces the allocas of the slots of the cleanup frame and
+        erases them: the allocas that it marks (the caches of the catch variables, local_allocas) would be dangling
+        afterwards.  finalizeCleanupFrame() refuses the function if it has not run, so that a change of their order
+        fails every compile instead of reading freed memory now and then (qore#6392).
+    */
+    bool catch_frame_slots_kept = false;
+
     // Update specialized runtime catch-scope state around CatchException,
     // CatchCleanup, and Rethrow lowering.
     void emitCatchScopeEnter(llvm::Module& module);
@@ -2112,6 +2144,11 @@ private:
     //! storage is released for handlers run out of line; when handler_locals_known is false, every local's
     std::unordered_set<const void*> handler_locals;
     bool handler_locals_known = false;
+    //! The locals that the handlers of the function can write (qore_ir_collect_handler_written_locals()): a local
+    //! that the handlers only read keeps its reload storage across a handler run (qore#6314)
+    std::unordered_set<const void*> handler_written_locals;
+    //! true if handler_written_locals is complete
+    bool handler_written_locals_known = false;
 
     //! Returns the keys of a map of locals in reverse declaration order (their IR slot ids, highest first)
     template <typename Map>

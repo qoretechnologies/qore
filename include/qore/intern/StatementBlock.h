@@ -337,12 +337,14 @@ protected:
     QoreNativeParseInfo committed_native_parse_info;
     // iterator to last commit element in statement list (for parsing)
     statement_list_t::iterator hwm;
-    // iterator to last executed element in statement list (for REPARSE mode execution)
+    // iterator to the last element of the statement list that a run has executed or is executing (for REPARSE mode
+    // execution, where a run claims each statement before it executes it: issue #6511)
     statement_list_t::iterator ehwm;
-    //! serializes the changes of ehwm by the threads that run the top-level code (issue #6475)
+    //! serializes the changes of ehwm by the threads that run the top-level code (issues #6475, #6511)
     std::mutex ehwm_lock;
     //! true once the top-level code compiled ahead of time has run in REPARSE mode, which runs it once (issue #6474)
-    std::atomic<bool> aot_toplevel_ran{false};
+    //! guarded by ehwm_lock (see claimAOTToplevelRun())
+    bool aot_toplevel_ran = false;
 
     //! Records the statements that the code has when a run starts as executed (issue #6475)
     /** A run outside of REPARSE mode executes all of them, so a run after PO_ALLOW_REPARSE is set later executes only
@@ -355,6 +357,24 @@ protected:
             std::lock_guard<std::mutex> lg(ehwm_lock);
             ehwm = statement_list.last();
         }
+    }
+
+    //! Claims the run of the top-level code compiled ahead of time in REPARSE mode, which runs it once (issue #6474)
+    /** The statements that the code has are recorded as executed in the same step, under the lock that the runs that
+        execute the statements claim them with, so that a run in another thread that does not run the compiled code
+        does not execute them too (issue #6511).
+        @return true if this run runs the compiled code
+    */
+    DLLLOCAL bool claimAOTToplevelRun() {
+        std::lock_guard<std::mutex> lg(ehwm_lock);
+        if (aot_toplevel_ran) {
+            return false;
+        }
+        aot_toplevel_ran = true;
+        if (!statement_list.empty()) {
+            ehwm = statement_list.last();
+        }
+        return true;
     }
     // true only the first time parseInit() is called
     bool first;

@@ -127,6 +127,12 @@
     names are not valid text with \c 400 before any handler sees it, and gives a header value that is not valid UTF-8
     to the handler in ISO-8859-1, as RFC 9110 obs-text (issue #6554).
 
+    @par on_exit, on_success and on_error Must Be Statements of a Block
+    An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
+    \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
+    \c on_error statement) is a parse error, as its scope was unclear; put it in braces (see
+    @ref on_block_exit_in_block "on_exit statements"; issue #240).
+
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
     (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a
@@ -155,9 +161,10 @@
     <tt>i.next</tt> for <tt>i.next()</tt>, is now a parse exception in every mode, also without type declarations
     (see @ref member_method_names; issue #2967).
 
-    @par Parse Directives Are Not Allowed in an Expression
-    A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
-    applied; it changed the parse state of the Program that the expression was created in (see
+    @par Parse Directives and Declarations Are Not Allowed in an Expression
+    A parse directive, a declaration after code that ends the expression or a global variable that is declared or
+    created implicitly in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
+    applied; it changed the parse state of the Program that the expression was created in or added code to it (see
     @ref Qore::Expression::constructor() "Expression::constructor()").
 
     @par A Locked Program Keeps Its Restrictions
@@ -973,6 +980,10 @@
     "PO_NO_FILESYSTEM" cannot call them; index lookups are unchanged (issue #6500).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Testing Whether a String Is Valid in Its Encoding
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
+    encoding (strict UTF-8 as RFC 3629 defines it), without raising an exception (issue #6554).
+
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
     @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises
@@ -2230,6 +2241,9 @@
     - deleting a submitted @ref Qore::Socket "Socket", @ref Qore::File "File", FTP or @ref Qore::HTTPClient "HTTPClient"
       poll operation cancels it as well, and an FTP poll operation keeps its sockets until its state is released, so
       deleting one during a step can no longer crash the process (issue #6505)
+    - deleting a submitted poll operation implemented in %Qore (a subclass of
+      @ref Qore::AbstractPollOperation "AbstractPollOperation") cancels it as well, instead of ending it with
+      \c OBJECT-ALREADY-DELETED at its next step (issue #6531)
     - an FTP PORT accept poll operation keeps the accept operation that it is given, so one created with a temporary
       accept operation accepts a connection instead of failing its first step, and a socket accept or HTTP keep-alive
       poll operation step no longer returns poll information together with an exception (issue #6525)
@@ -2244,6 +2258,9 @@
       interpreters, instead of \c NOTHING (issue #6244)
     - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
       its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
+    - the conditional parse directives (<tt>%%ifdef</tt>, <tt>%%ifndef</tt>, <tt>%%if</tt>, <tt>%%elif</tt>) on a line
+      that ends with CRLF are read, and the scanner no longer writes source text that it cannot read to standard
+      output: such text is a parse error (issue #6512)
     - an @ref include "%include" of a file that does not exist raises \c PARSE-EXCEPTION at the directive, with its
       location, instead of \c PARSE-ERROR without one (issue #6509)
     - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
@@ -2352,6 +2369,12 @@
     - creating an @ref Qore::Expression "Expression" in a %Program with code pending, or whose parse was rolled back
       without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", raises \c EXPRESSION-ERROR; it let threads enter the
       %Program before its code was committed, and could refer to code that a rollback deleted (issue #6353)
+    - threads that create, run and delete the @ref Qore::Expression "Expression" objects of a %Program at the same
+      time no longer corrupt the %Program's set of expressions, which ended the process with a segmentation fault or
+      a heap error (issue #6493)
+    - while a thread creates an @ref Qore::Expression "Expression" in a %Program, other threads can call into the
+      %Program and run its expressions; they were refused with \c PROGRAM-ERROR, as during a parse of code
+      (see @ref Qore::Expression::constructor() "Expression::constructor()"; issue #6518)
     - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
       %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
       did the same, or when the %Program was destroyed (issue #6403)
@@ -3388,8 +3411,6 @@
       raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
     - the @ref push "push" and @ref unshift "unshift" operators on a member or list element that is not a list report
       the same error message in every execution mode, as in the AST interpreter
-    - threads that create, run and delete @ref Qore::Expression "Expression" objects of the same Program at the same
-      time no longer crash the process (issue #6493)
     - the internal threads that join ended threads no longer receive process signals meant for the application or for
       Qore's signal thread, and a thread whose thread-local destructors block no longer delays the end of the threads
       that end after it, for which @ref Qore::exit() "exit()" waited too (issue #6433)

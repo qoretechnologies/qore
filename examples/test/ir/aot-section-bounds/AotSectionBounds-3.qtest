@@ -1,0 +1,25 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - every load runs in a child process; the hand-picked cases set their own execution modes
+# test-platform: macos - the AOT module loader reads the sections of patched, ad hoc re-signed modules
+# test-timeout: 240
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%requires ../../ExecModeHarness.qm
+
+%include AotSectionBounds.qc
+
+%exec-class AotSectionBoundsPart3
+
+#! runs part 3 of 4 of the cases of AotSectionBoundsBase
+class AotSectionBoundsPart3 inherits AotSectionBoundsBase {
+    constructor() : AotSectionBoundsBase("AotSectionBoundsPart3", 3) {
+    }
+}

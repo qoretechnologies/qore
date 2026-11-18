@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncIoTimerHoldTest
+
+#! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
+const HangGuard = 60s;
+
+#! tests the dbg_async_io_hold_timer_callbacks() test hook of a debug build
+/** A held timer callback runs only when it is released; a callback that cannot be held (the memory for it cannot be
+    allocated, simulated with dbg_async_io_fail_next_timer_hold()) is dispatched as usual instead of being lost, and
+    the next callback is held again
+*/
+class AsyncIoTimerHoldTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoTimerHoldTest", "1.0") {
+        addTestCase("a held timer callback runs when it is released", \testHeld());
+        addTestCase("a timer callback that cannot be held is dispatched as usual", \testFailedHold());
+        set_return_value(main());
+    }
+
+    testHeld() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the timer callbacks are held with a test hook of a debug build");
+        }
+        Queue q();
+        call_function("dbg_async_io_hold_timer_callbacks", True);
+        bool released;
+        on_exit if (!released) {
+            call_function("dbg_async_io_hold_timer_callbacks", False);
+            call_function("dbg_async_io_release_held_timer_callbacks");
+        }
+        AsyncIoController::addTimer(now_us(), sub () { q.push("held"); });
+        assertTrue(call_function("dbg_async_io_wait_held_timer_callbacks", 1, HangGuard), "the callback is held");
+        assertEq(0, q.size(), "a held callback does not run");
+        call_function("dbg_async_io_hold_timer_callbacks", False);
+        released = True;
+        assertEq(1, call_function("dbg_async_io_release_held_timer_callbacks"), "the callback is released");
+        assertEq("held", q.get(HangGuard), "the released callback runs");
+    }
+
+    testFailedHold() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the timer callbacks are held with a test hook of a debug build");
+        }
+        Queue q();
+        call_function("dbg_async_io_hold_timer_callbacks", True);
+        on_exit call_function("dbg_async_io_hold_timer_callbacks", False);
+        call_function("dbg_async_io_fail_next_timer_hold");
+        AsyncIoController::addTimer(now_us(), sub () { q.push("dispatched"); });
+        assertEq("dispatched", q.get(HangGuard), "the callback that could not be held runs as usual");
+        call_function("dbg_async_io_hold_timer_callbacks", False);
+        assertEq(0, call_function("dbg_async_io_release_held_timer_callbacks"), "nothing is held");
+        # the next callback is held again: the failure is taken by one hold only
+        call_function("dbg_async_io_hold_timer_callbacks", True);
+        AsyncIoController::addTimer(now_us(), sub () { q.push("held"); });
+        assertTrue(call_function("dbg_async_io_wait_held_timer_callbacks", 1, HangGuard),
+            "the next callback is held");
+        call_function("dbg_async_io_hold_timer_callbacks", False);
+        assertEq(1, call_function("dbg_async_io_release_held_timer_callbacks"), "the next callback is released");
+        assertEq("held", q.get(HangGuard), "the released callback runs");
+    }
+}
