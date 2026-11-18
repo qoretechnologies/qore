@@ -4244,11 +4244,11 @@ table.insert(row);
                 if (cmd.immediate) {
                     # make sure only identifiers are given to the operator's code, as the SQL that it returns from
                     # the argument is inserted directly into the query; the value must match the allowed characters
-                    # as a whole, so that a string that cannot be matched (one that is not valid UTF-8) is refused
-                    if (v !~ /\A[A-Za-z\._0-9]*\z/) {
+                    # as a whole; a string that is not valid in its encoding, which cannot be matched, is refused first
+                    if ((v.typeCode() == NT_STRING && !v.isEncodingValid()) || v !~ /\A[A-Za-z\._0-9]*\z/) {
                         # a value that is not valid in its encoding is not given in the message (qore#6553)
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s which "
-                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !(v =~ /^/)
+                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !v.isEncodingValid()
                                 ? sprintf("a string of %d bytes not valid in its encoding", v.size())
                                 : sprintf("%y", v));
                     }

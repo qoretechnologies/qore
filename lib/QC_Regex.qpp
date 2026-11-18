@@ -108,6 +108,8 @@ if (r.match("555-1234")) {
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool Regex::match(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->match(subject, xsink);
@@ -125,6 +127,8 @@ Regex r("(\\w+)@(\\w+)\\.(\\w+)");
     @endcode
 
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 *list<*string> Regex::extractGroups(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extract(subject, xsink);
@@ -171,6 +175,8 @@ int n = r.count("abc 123 def 456"); # returns 2
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 3.0
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
 */
 int Regex::count(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->countMatches(subject, xsink);
@@ -199,6 +205,8 @@ auto h = r.extractNamedGroups("2026-04-08");
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 3.0
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
 */
 auto Regex::extractNamedGroups(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractNamedGroups(subject, xsink);
@@ -225,6 +233,8 @@ Regex r("(?<word>\\w+)", RE_Global);
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 3.0
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
 */
 *list<hash<RegexMatchInfo>> Regex::extractDetailed(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->extractDetailed(subject, xsink);

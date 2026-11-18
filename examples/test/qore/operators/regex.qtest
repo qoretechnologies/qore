@@ -1182,9 +1182,10 @@ class RegexTest inherits QUnit::Test {
         });
         assertEq(bad, s, "invalid UTF-8: s/// leaves the string unchanged");
 
-        # =~ // (match) — must not crash
-        assertFalse(bad =~ /password/, "invalid UTF-8: =~ // returns false, does not crash");
-        assertTrue(bad !~ /password/, "invalid UTF-8: !~ // returns true, does not crash");
+        # =~ // and !~ // (match): a match cannot tell whether such a string matches, and raises INVALID-ENCODING
+        # instead of taking it as one that does not match (qore#6554)
+        assertThrows("INVALID-ENCODING", sub () { bool b = (bad =~ /password/); });
+        assertThrows("INVALID-ENCODING", sub () { bool b = (bad !~ /password/); });
 
         # regex_subst function form — also goes through QoreRegexSubst::exec
         assertThrows("INVALID-ENCODING", \regex_subst(), (bad, "password", "<masked>"));
@@ -1199,8 +1200,7 @@ class RegexTest inherits QUnit::Test {
         assertThrows("INVALID-ENCODING", \regex_subst(), (mixed, "(password[=:])", "$1<masked>"));
 
         # regex_extract on invalid UTF-8
-        assertEq(NOTHING, regex_extract(bad, "(password)"),
-            "invalid UTF-8: regex_extract returns NOTHING, does not crash");
+        assertThrows("INVALID-ENCODING", \regex_extract(), (bad, "(password)"));
     }
 
     # the URI-userinfo pattern that triggered the original hang; unanchored, and its required

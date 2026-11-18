@@ -112,6 +112,40 @@
     an arithmetic column operator is an SQL literal, an alias referenced in a superquery or a window is an identifier,
     and a string first argument of the Oracle \c in expression is bound (issue #6574).
 
+    @par A Regular Expression Match Raises INVALID-ENCODING for a String Not Valid in Its Encoding
+    Every regular expression match (the @ref regex_match_operator "=~", @ref regex_no_match_operator "!~" and
+    @ref regex_extract_operator "=~ x//" operators, @ref Qore::regex() "regex()", @ref Qore::regex_extract()
+    "regex_extract()", @ref Qore::Regex "Regex", @ref Qore::RegexMatchIterator "RegexMatchIterator" and
+    @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator") raises an \c INVALID-ENCODING exception for a
+    string that is not valid in its encoding, which it took as one that does not match; the new
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests a string without an exception, and a
+    pattern with \c \\C, which matches one byte and so can match a part of a character, raises
+    \c REGEX-COMPILATION-ERROR (issue #6554).
+
+    @par URL Decoding Refuses a Result That Is Not Valid UTF-8
+    @ref Qore::decode_url() "decode_url()" and @ref Qore::decode_uri_request() "decode_uri_request()" raise
+    \c URL-ENCODING-ERROR when the decoded string is not valid UTF-8 (ex: from \c "%C0%AF", a lone \c "%80" or an
+    encoded surrogate), which they returned (issue #6554).
+
+    @par HttpServer Refuses a Request Head That Is Not Valid Text
+    The @ref httpserverintro "HttpServer" module answers a request whose path or query does not decode to valid UTF-8
+    text (ex: \c "?q=caf%E9" from a Latin-1 form), whose method or HTTP version is not valid text, whose HTTP/1.x
+    header names have a byte above 0x7f (they are tokens), or whose body is not valid text in its encoding with \c 400
+    before any handler sees it; a header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110 obs-text,
+    also by @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()" (issue #6554).
+
+    @par HTTP Clients Check a Response Body's Encoding
+    A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
+    text, as a page's declared charset is often wrong, and fails with \c INVALID-ENCODING when it is JSON, YAML, XML or
+    another structured type, with @ref Qore::HTTPClient "HTTPClient", also for an error status, which raised
+    \c HTTP-CLIENT-RECEIVE-ERROR; a response header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110
+    obs-text (issue #6554).
+
+    @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
+    A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)
+    before the connection's code sees it, in @ref websockethandlerintro "WebSocketHandler" over HTTP/1.1, HTTP/2 and
+    HTTP/3 (issue #6554).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
@@ -1006,6 +1040,10 @@
     "PO_NO_FILESYSTEM" cannot call them; index lookups are unchanged (issue #6500).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Testing Whether a String Is Valid in Its Encoding
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
+    encoding (strict UTF-8 as RFC 3629 defines it), without raising an exception (issue #6554).
+
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
     @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises

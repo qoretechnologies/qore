@@ -2042,6 +2042,8 @@ bool b = regex("hello", "^hel"); # returns True
     @note equivalent to <string>::regex(string, int)
 
     @see @ref qore_regex for more information about regular expression support in Qore
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool regex(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    QoreRegex qr(*pattern, options, xsink);
@@ -2193,6 +2195,8 @@ string regex_subst(string str, string pattern, code<string(hash<RegexMatchInfo>)
     @see @ref qore_regex for more information about regular expression support in Qore
 
     @since %Qore 0.8.8 this function accepts the @ref Qore::RE_Global option to extract all occurrences of the pattern(s) in a string
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 *list<*string> regex_extract(string str, string pattern, int options = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    QoreRegex qr(*pattern, options, xsink);

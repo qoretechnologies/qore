@@ -52,6 +52,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/qore_string_private.h"
 
 #include <unordered_set>
 #include <set>
@@ -4336,6 +4337,8 @@ bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
     view.has_transfer_encoding = find("transfer-encoding") != nullptr;
     view.has_expect = find("expect") != nullptr;
     view.has_upgrade = find("upgrade") != nullptr || find("http2-settings") != nullptr;
+    // a target that the normal path refuses with 400 (qore#6554)
+    view.invalid_text = !qore_http_target_text_valid(stream.path.data(), stream.path.size());
 
     HttpFastFallback why;
     std::shared_ptr<const HttpFastResponse> response = fast.routes->matchH2(view, why);
@@ -4391,11 +4394,13 @@ QoreHashNode* QuicSession::getStreamTrailers(int64_t stream_id) const {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& i : it->second->trailers) {
         if (i.second.size() == 1) {
-            rv->setKeyValue(i.first.c_str(), new QoreStringNode(i.second[0]), nullptr);
+            // a field value that is not valid UTF-8 is obs-text, given in ISO-8859-1 (qore#6554)
+            rv->setKeyValue(i.first.c_str(), qore_http_field_value_string(i.second[0].data(), i.second[0].size()),
+                nullptr);
         } else {
             QoreListNode* l = new QoreListNode(stringTypeInfo);
             for (const auto& v : i.second) {
-                l->push(new QoreStringNode(v), nullptr);
+                l->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             rv->setKeyValue(i.first.c_str(), l, nullptr);
         }
