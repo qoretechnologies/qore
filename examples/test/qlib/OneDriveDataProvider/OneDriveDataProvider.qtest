@@ -202,6 +202,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         addTestCase("update item", \updateItemTest());
         addTestCase("copy item", \copyItemTest());
         addTestCase("search items", \searchItemsTest());
+        addTestCase("item path segments", \itemPathSegmentTest());
         addTestCase("reference data", \referenceDataTest());
         addTestCase("connection scheme", \connectionSchemeTest());
         addTestCase("api profile resolution", \apiProfileTest());
@@ -433,7 +434,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
 
         # the path form is redirected too, not just the id form
         dp.doRequest({"path": "/Shared Documents/spec.docx"});
-        assertEq(RedirectedGetItemDataProvider::RedirectedBase + "/root:/Shared Documents/spec.docx",
+        assertEq(RedirectedGetItemDataProvider::RedirectedBase + "/root:/Shared%20Documents/spec.docx",
             rest.last_path);
 
         # and the unmodified provider is unaffected: the default is still the personal drive
@@ -729,6 +730,90 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         # test with search_query
         dp.searchRecords(NOTHING, {"search_query": "budget"});
         assertRegex("me/drive/root/search", rest.last_path);
+    }
+
+    #! Item IDs, names and paths are written into request paths only as the segments Graph documents
+    itemPathSegmentTest() {
+        checkModule();
+        # the documented forms
+        assertEq("0123456789AB!123", OneDriveDataProviderBase::getItemIdPathSegment("0123456789AB!123"));
+        assertEq("01BYE5RZ6QN3ZWBTUFOFD3GSPGOHDJD36K",
+            OneDriveDataProviderBase::getItemIdPathSegment("01BYE5RZ6QN3ZWBTUFOFD3GSPGOHDJD36K"));
+        assertEq("/Documents/My%20File%23%3F%25.xlsx",
+            OneDriveDataProviderBase::getItemPathSegments("Documents/My File#?%.xlsx"));
+        assertEq("/Documents/Zo%C3%AB:", OneDriveDataProviderBase::getItemPathSegments("/Documents/Zoë", True));
+        assertEq("a%20b%3F%23", OneDriveDataProviderBase::getItemNameSegment("a b?#"));
+        assertEq("'it''s'", OneDriveDataProviderBase::getODataStringLiteral("it's"));
+
+        # anything else is refused
+        foreach string v in (("", ".", "..", "x/../y", "x?$select=y", "x#", "x y", "x\n", "x%2F", "x:")) {
+            assertThrows("ONEDRIVE-ITEM-ERROR", "is not a drive item ID",
+                \OneDriveDataProviderBase::getItemIdPathSegment(), (v,));
+        }
+        foreach string v in (("", "/", "a//b", "a/../b", "./a", "a/", "a/..")) {
+            assertThrows("ONEDRIVE-ITEM-ERROR", "is not a drive item path",
+                \OneDriveDataProviderBase::getItemPathSegments(), (v,));
+        }
+        foreach string v in (("", ".", "..", "a/b", "a\\b")) {
+            assertThrows("ONEDRIVE-ITEM-ERROR", "is not a drive item name",
+                \OneDriveDataProviderBase::getItemNameSegment(), (v,));
+        }
+        string bad = binary_to_string(<41ff27>, "UTF-8");
+        string nul = binary_to_string(<410027>, "UTF-8");
+        foreach code f in ((\OneDriveDataProviderBase::getItemIdPathSegment(),
+                \OneDriveDataProviderBase::getItemPathSegments(), \OneDriveDataProviderBase::getItemNameSegment(),
+                \OneDriveDataProviderBase::getODataStringLiteral())) {
+            assertThrows("VALUE-ERROR", "not valid in its encoding", f, (bad,));
+            assertThrows("VALUE-ERROR", "NUL", f, (nul,));
+        }
+
+        # the actions write them so, and make no request with a value that is refused
+        FakeOneDriveRestClientIo rest();
+        rest.response_body = {"id": "x", "name": "x", "value": ()};
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        prov.getChildProvider("get-item").doRequest({"path": "Docs/a b.txt"});
+        assertEq("me/drive/root:/Docs/a%20b.txt", rest.last_path);
+        prov.getChildProvider("upload-file").doRequest({
+            "file": {"name": "a b#.txt", "content": make_base64_string("x"), "mime_type": "text/plain"},
+            "parent_id": "F1!2",
+        });
+        assertEq("me/drive/items/F1!2:/a%20b%23.txt:/content", rest.last_path);
+        map $1, prov.getChildProvider("items").searchRecords(NOTHING, {"search_query": "it's & co"});
+        assertEq("me/drive/root/search(q=%27it%27%27s%20%26%20co%27)", rest.last_path);
+        prov.getChildProvider("copy-item").doRequest({"id": "A!1", "conflict_behavior": "rename"});
+        assertEq("me/drive/items/A!1/copy?@microsoft.graph.conflictBehavior=rename", rest.last_path);
+
+        rest.last_path = "";
+        string evil = "x/../../users/someone/drive/root";
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("get-item").doRequest(), ({"id": evil},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("get-item").doRequest(),
+            ({"path": "a/../../me"},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("delete-item").doRequest(),
+            ({"id": evil},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("download-file").doRequest(),
+            ({"id": evil},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("update-item").doRequest(),
+            ({"id": evil, "name": "n"},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("copy-item").doRequest(),
+            ({"id": evil},));
+        # the request type refuses a conflict behavior that it does not allow
+        assertThrows("TYPE-VALUE-ERROR", NOTHING, \prov.getChildProvider("copy-item").doRequest(),
+            ({"id": "A!1", "conflict_behavior": "fail&x=y"},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("create-sharing-link").doRequest(),
+            ({"id": evil, "type": "view"},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("create-folder").doRequest(),
+            ({"name": "n", "parent_id": evil},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("create-upload-session").doRequest(),
+            ({"filename": "../x"},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, \prov.getChildProvider("upload-file").doRequest(),
+            ({"file": {"name": "..", "content": make_base64_string("x"), "mime_type": "text/plain"}},));
+        assertThrows("ONEDRIVE-ITEM-ERROR", NOTHING, sub () {
+            map $1, prov.getChildProvider("items").searchRecords(NOTHING, {"folder_id": evil});
+        });
+        assertThrows("VALUE-ERROR", NOTHING, sub () {
+            map $1, prov.getChildProvider("items").searchRecords(NOTHING, {"search_query": bad});
+        });
+        assertEq("", rest.last_path);
     }
 
     referenceDataTest() {
