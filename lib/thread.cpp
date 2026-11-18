@@ -4018,11 +4018,12 @@ void thread_ensure_local_program_data() {
     if (td->tlpd || !td->current_pgm) {
         return;
     }
-    // ProgramRuntimeParseContextHelper set td->current_pgm without
-    // td->tlpd. Set up td->tlpd via setThreadVarData so that runtime
-    // operations (e.g. object construction in AOT init functions) can
-    // instantiate local variables on the thread's lvstack.
-    qore_program_private::setThreadVarData(td->current_pgm, td->tpd, td->tlpd, false);
+    // A thread with no Program data yet (a binary module's initialization, which runs before any entry) has the
+    // current Program without td->tlpd.
+    // Set up td->tlpd so that runtime operations (e.g. object construction in AOT init functions) can instantiate
+    // local variables on the thread's lvstack.  The data is created as an entry creates it (saveProgram()), so that
+    // the thread and the Program record it consistently.  If it throws, td->tlpd is as it was
+    td->tpd->saveProgram(false);
     // the thread's RuntimeConfig carries the thread-local data with the Program (see
     // sync_runtime_config_program())
     sync_runtime_config_program(td);
