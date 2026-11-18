@@ -18805,6 +18805,11 @@ void QoreIRLowering::releaseStoredOperatorValue(QoreIRValue value, const QoreTyp
             || qore_ir_type_is_immediate_scalar(builder.getFunction(), ti)) {
         return;
     }
+    // the index of the loop ($# in the virtual implicit context) is a native int that holds no reference, which the
+    // loop increments after the value is stored: it is never released (qore#6641)
+    if (virtual_implicit.active && virtual_implicit.element.isValid() && value.id == virtual_implicit.element.id) {
+        return;
+    }
     QoreIRBasicBlock* block = builder.getBlock();
     if (!block || (!block->instructions.empty() && isTerminator(block->instructions.back()->opcode))) {
         return;
