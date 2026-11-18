@@ -14735,6 +14735,59 @@ void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_fun
             }
         }
     }
+    // a block entered in different locations that stores one location first, as the condition of a loop, which is
+    // entered from the code before the loop and from the loop's next iteration: if the predecessors that leave
+    // another location only go to the block, the store is moved to their ends, where it runs once before a loop, and
+    // the block is entered in the location that it stores (qore#6646)
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        if (&bb == entry_bb || bb.isEHPad() || bb.hasAddressTaken() || entry_loc[&bb]) {
+            continue;
+        }
+        llvm::StoreInst* first = nullptr;
+        for (llvm::Instruction& i : bb) {
+            if (llvm::StoreInst* st = is_loc_store(i)) {
+                first = st;
+                break;
+            }
+            if (clobbers(i)) {
+                break;
+            }
+        }
+        if (!first) {
+            continue;
+        }
+        llvm::Value* v = first->getValueOperand();
+        std::vector<llvm::BasicBlock*> store_preds;
+        bool same = false;
+        bool ok = true;
+        for (llvm::BasicBlock* pred : llvm::predecessors(&bb)) {
+            bool known;
+            llvm::Value* pv = exit_loc(pred, known);
+            if (known && pv == v) {
+                same = true;
+                continue;
+            }
+            if (pred == &bb || pred->getSingleSuccessor() != &bb
+                    || !llvm::isa<llvm::BranchInst>(pred->getTerminator())) {
+                ok = false;
+                break;
+            }
+            if (std::find(store_preds.begin(), store_preds.end(), pred) == store_preds.end()) {
+                store_preds.push_back(pred);
+            }
+        }
+        if (!ok || !same) {
+            continue;
+        }
+        for (llvm::BasicBlock* pred : store_preds) {
+            new llvm::StoreInst(v, loc_inst, pred->getTerminator()->getIterator());
+            last_store[pred] = v;
+            unknown_exit.erase(pred);
+        }
+        first->eraseFromParent();
+        entry_loc[&bb] = v;
+    }
+
     // the stores of the location that the thread holds are removed
     for (llvm::BasicBlock& bb : *llvm_func) {
         llvm::Value* cur = entry_loc[&bb];
