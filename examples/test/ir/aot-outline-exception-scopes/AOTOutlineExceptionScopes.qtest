@@ -1,0 +1,87 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in qcc executables and in children that run the AST
+# test-platform: macos - the AOT code generation and linking of qcc executables with outlined function-body helpers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class AOTOutlineExceptionScopesTest
+
+#! qcc compiles the exception paths of functions outlined with low thresholds as the AST runs them
+/** Each script of this directory has functions whose try statements, catch blocks and \c on_exit, \c on_error and
+    \c on_success handlers end up in the outlined helpers of a function when the outliner's thresholds are forced low
+    (\c QORE_AOT_OUTLINE_FN_MIN_INSTS, \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS and \c QORE_AOT_OUTLINE_FN_TARGET_INSTS):
+    - an exception leaving outlined code released the locals, the temporaries and the value of an interrupted return
+      after the catch block or the handler instead of before (qore#6650).
+
+    The test compiles each script at -O0 and -O3 with several region sizes and checks that the executables print what
+    the AST prints.
+*/
+class AOTOutlineExceptionScopesTest inherits QUnit::Test {
+    public {
+        #! the region sizes forced
+        const Targets = (4, 8, 16, 32);
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTOutlineExceptionScopesTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("exception scopes with the outliner's thresholds forced low", \testScripts());
+        set_return_value(main());
+    }
+
+    testScripts() {
+        TmpDir dir("qore-aot-outline-exc-");
+        list<string> scripts = sort(glob(get_script_dir() + "/*.q") ?? ());
+        assertTrue(scripts.size() > 0, "the scripts are found");
+        foreach string src in (scripts) {
+            string name = basename(src);
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --exec-mode=ast %s",
+                qore_bin, src));
+            assertEq(0, r.rc, sprintf("%s: AST exit status (output: %y)", name, r.out));
+            string expected = r.stdout;
+            assertTrue(expected.size() > 0, sprintf("%s: the AST prints something", name));
+            foreach string opt in (OptLevels) {
+                foreach int target in (Targets) {
+                    string what = sprintf("%s %s target %d", name, opt, target);
+                    string exe = join_paths(dir.path, sprintf("%s%s-%d", name, opt, target));
+                    int rc;
+                    string out = backquote(sprintf("%s QORE_AOT_OUTLINE_FN_MIN_INSTS=1 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 "
+                        "QORE_AOT_OUTLINE_FN_TARGET_INSTS=%d %s %s -o %s %s 2>&1", lib_env, target, qcc_bin, opt, exe,
+                        src), \rc);
+                    assertEq(0, rc, sprintf("%s: qcc exit status (output: %s)", what, out.substr(-2000)));
+                    if (rc) {
+                        continue;
+                    }
+                    # -b must be the first argument of a compiled program
+                    out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+                    assertEq(0, rc, sprintf("%s: exit status (output: %y)", what, out));
+                    assertEq(expected, out, what);
+                }
+            }
+        }
+    }
+}
