@@ -8520,7 +8520,7 @@ void QoreIRToLLVM::consumeValueUse(uint32_t value_id, llvm::Module& module,
         --uses_it->second;
     }
 
-    if (!release_weak_load || !weak_load_result_ids.count(value_id)) {
+    if (!release_weak_load || !weak_load_result_ids.count(value_id) || receiver_value_ids.count(value_id)) {
         return;
     }
 
@@ -8530,25 +8530,36 @@ void QoreIRToLLVM::consumeValueUse(uint32_t value_id, llvm::Module& module,
     }
 }
 
-void QoreIRToLLVM::releaseDotEvalBaseIfCurrentUseIsLast(
-        const QoreIRInstruction* inst, llvm::Module& module) {
-    if (!inst || inst->operands.empty()) {
-        return;
+//! Returns the id of the receiver of a dot-eval call (a method call through an expression) or of the called value of
+//! a call through a call reference or closure, or 0
+static uint32_t qore_ir_call_receiver_id(const QoreIRInstruction* inst) {
+    if (inst->operands.empty()) {
+        return 0;
     }
-
-    // only the strong reference that a load of a weak reference took is released at its last use; a temporary
-    // receiver lives until the end of the statement, as in the AST interpreter
-    uint32_t base_id = inst->operands[0].id;
-    if (!weak_load_result_ids.count(base_id)) {
-        return;
+    QoreIROpcode op = inst->opcode;
+    if (op == QoreIROpcode::Invoke) {
+        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+        if (isDotEvalInvokeOpcode(op)) {
+            return inst->operands[0].id;
+        }
     }
-    auto uses_it = operand_remaining_uses.find(base_id);
-    if (uses_it == operand_remaining_uses.end() || uses_it->second > 1) {
-        return;
+    switch (op) {
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallClosureDirect:
+            return inst->operands[0].id;
+        default:
+            return 0;
     }
-
-    releaseCleanupForValueId(base_id, module);
-    weak_load_result_ids.erase(base_id);
 }
 
 bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module,
@@ -15685,6 +15696,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     ir_only_element_locals.clear();
     element_local_read_flags.clear();
     weak_load_result_ids.clear();
+    receiver_value_ids.clear();
     native_boolean_result_values.clear();
     consumable_phis.clear();
     owning_phis.clear();
@@ -15892,6 +15904,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
                 value_operand_users[op.id].push_back(inst_ptr->opcode);
+            }
+            if (uint32_t receiver_id = qore_ir_call_receiver_id(inst_ptr.get())) {
+                receiver_value_ids.insert(receiver_id);
             }
             if (inst_ptr->result.isValid()) {
                 value_def_block[inst_ptr->result.id] = block.get();
@@ -17381,8 +17396,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // referent alive and weak refs never observe deletion.
             if (!weak_load_result_ids.empty()
                     && !qoreGetTerminator(builder->GetInsertBlock())) {
+                // a receiver lives until the end of its statement (receiver_value_ids)
                 for (const auto& op : inst->operands) {
-                    if (!weak_load_result_ids.count(op.id)) {
+                    if (!weak_load_result_ids.count(op.id) || receiver_value_ids.count(op.id)) {
                         continue;
                     }
                     auto uses_it = operand_remaining_uses.find(op.id);
@@ -24921,7 +24937,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             values[inst->result.id] = call_result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(call_result, inst->result.id, llvm_func);
-            releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -27654,7 +27669,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {base_boxed, xsink_arg});
                 }
                 values[inst->result.id] = projected;
-                releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
                 if (!direct_inst->aot_object_scalar_receiver_valid) {
                     emitExceptionCheck(module, llvm_func, inst);
                 }
@@ -27693,7 +27707,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         i64_type, {i64_type}, false));
                 values[inst->result.id] =
                     builder->CreateCall(measure, {input});
-                releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
                 emitExceptionCheck(module, llvm_func, inst);
                 return true;
             }
@@ -28333,7 +28346,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     endAotInlineCallFrame(frame, call_result && !summary_nothrow, module);
                     if (call_result) {
                         clear_fast_path_arg_cleanups();
-                        releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
                         call_may_throw =
                             !(summary_nothrow && !has_arg_cleanups);
                         call_may_modify_runtime_locals = false;
@@ -29391,7 +29403,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (object_summary && object_summary->never_returns_nothing) {
                 known_not_nothing_values.insert(inst->result.id);
             }
-            releaseDotEvalBaseIfCurrentUseIsLast(inst, module);
 
             auto normal_it = block_map.find(invoke_inst->normal_target);
             auto except_it = block_map.find(invoke_inst->exception_target);
