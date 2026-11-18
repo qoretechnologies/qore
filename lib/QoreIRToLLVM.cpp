@@ -4998,6 +4998,13 @@ bool QoreIRToLLVM::finalizeCleanupFrameTable(llvm::Function* llvm_func, CleanupF
 
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::finalizeCleanupFrame(llvm::Function* llvm_func, const std::string& fn_name, std::string& error) {
+    // the slots that keepCatchFrameSlotsInMemory() marks are allocas that this function can erase (qore#6392)
+    if (!catch_frame_slots_kept) {
+        assert(false && "keepCatchFrameSlotsInMemory() must run before finalizeCleanupFrame()");
+        error = "internal error: the catch slots of '" + fn_name + "' were not marked before its cleanup frame was "
+            "made";
+        return false;
+    }
     cleanup_frame_slots.clear();
     cleanup_frame_index.clear();
     // the reload chain slots are the first slots of the frame, at the indexes that the tables of the flushes give
@@ -7253,6 +7260,7 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::keepCatchFrameSlotsInMemory(const QoreIRFunction& func) {
+    catch_frame_slots_kept = true;
     std::vector<llvm::AllocaInst*> slots;
     if (auto* depth = llvm::dyn_cast_or_null<llvm::AllocaInst>(catch_depth_saved)) {
         slots.push_back(depth);
@@ -15461,6 +15469,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     handler_locals_known = has_on_block_exit_handlers && func.collectHandlerLocals(handler_locals);
     handler_sites.clear();
     catch_depth_saved = nullptr;
+    catch_frame_slots_kept = false;
     catch_scope_count = nullptr;
     catch_entry_blocks.clear();
 

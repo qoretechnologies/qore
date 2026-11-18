@@ -2005,6 +2005,14 @@ private:
     */
     DLLLOCAL void keepCatchFrameSlotsInMemory(const QoreIRFunction& func);
 
+    //! True once keepCatchFrameSlotsInMemory() has marked the slots of the function being lowered
+    /** It must run before finalizeCleanupFrame(), which replaces the allocas of the slots of the cleanup frame and
+        erases them: the allocas that it marks (the caches of the catch variables, local_allocas) would be dangling
+        afterwards.  finalizeCleanupFrame() refuses the function if it has not run, so that a change of their order
+        fails every compile instead of reading freed memory now and then (qore#6392).
+    */
+    bool catch_frame_slots_kept = false;
+
     // Update specialized runtime catch-scope state around CatchException,
     // CatchCleanup, and Rethrow lowering.
     void emitCatchScopeEnter(llvm::Module& module);
