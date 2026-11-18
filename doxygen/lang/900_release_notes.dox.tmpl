@@ -2214,6 +2214,9 @@
     - deleting a submitted @ref Qore::Socket "Socket", @ref Qore::File "File", FTP or @ref Qore::HTTPClient "HTTPClient"
       poll operation cancels it as well, and an FTP poll operation keeps its sockets until its state is released, so
       deleting one during a step can no longer crash the process (issue #6505)
+    - deleting a submitted poll operation implemented in %Qore (a subclass of
+      @ref Qore::AbstractPollOperation "AbstractPollOperation") cancels it as well, instead of ending it with
+      \c OBJECT-ALREADY-DELETED at its next step (issue #6531)
     - an FTP PORT accept poll operation keeps the accept operation that it is given, so one created with a temporary
       accept operation accepts a connection instead of failing its first step, and a socket accept or HTTP keep-alive
       poll operation step no longer returns poll information together with an exception (issue #6525)

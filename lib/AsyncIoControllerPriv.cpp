@@ -568,6 +568,114 @@ void AsyncIoControllerPriv::detachOp(SocketPollOperationBase* op, uint64_t attac
     op->io_sock_obj = nullptr;
 }
 
+namespace {
+//! a submitted poll operation without a C++ poll operation, by its Qore object (qore#6531)
+struct QoreQopEntry {
+    //! the controller that the operation was submitted to
+    AsyncIoControllerPriv* ctrl = nullptr;
+    //! the number of registrations (submissions whose cache entry or command exists)
+    unsigned count = 0;
+    //! the object was deleted
+    bool deleted = false;
+};
+
+//! one stripe of the registry of the operations without a C++ poll operation
+struct QoreQopStripe {
+    QoreThreadLock lock;
+    std::unordered_map<const QoreObject*, QoreQopEntry> entries;
+};
+
+//! the number of objects in the registry: the deletion of a poll operation's object takes no lock while it is 0, as
+//! for the operations that are not submitted, and those of the C++ poll operations, which are never registered
+std::atomic<size_t> qore_qop_count{0};
+
+QoreQopStripe& qore_qop_stripe(const QoreObject* obj) {
+    // never freed: poll operations can be released in the exit of the process
+    static QoreQopStripe* stripes = new QoreQopStripe[QoreSpopLockCount];
+    uintptr_t a = reinterpret_cast<uintptr_t>(obj);
+    return stripes[((a >> 4) ^ (a >> 10)) % QoreSpopLockCount];
+}
+}
+
+void AsyncIoControllerPriv::registerQoreOp(const QoreObject* obj) {
+    QoreQopStripe& stripe = qore_qop_stripe(obj);
+    AutoLocker al(stripe.lock);
+    QoreQopEntry& e = stripe.entries[obj];
+    e.ctrl = this;
+    if (!e.count++) {
+        qore_qop_count.fetch_add(1, std::memory_order_release);
+    }
+}
+
+void AsyncIoControllerPriv::unregisterQoreOp(const QoreObject* obj) {
+    QoreQopStripe& stripe = qore_qop_stripe(obj);
+    AutoLocker al(stripe.lock);
+    auto i = stripe.entries.find(obj);
+    if (i != stripe.entries.end() && !--i->second.count) {
+        stripe.entries.erase(i);
+        qore_qop_count.fetch_sub(1, std::memory_order_release);
+    }
+}
+
+bool AsyncIoControllerPriv::isQoreOpDeleted(const QoreObject* obj) {
+    if (!qore_qop_count.load(std::memory_order_acquire)) {
+        return false;
+    }
+    QoreQopStripe& stripe = qore_qop_stripe(obj);
+    AutoLocker al(stripe.lock);
+    auto i = stripe.entries.find(obj);
+    return i != stripe.entries.end() && i->second.deleted;
+}
+
+void AsyncIoControllerPriv::qoreOpObjectDeleted(const QoreObject* obj) {
+    // the common case: no operation without a C++ poll operation is submitted
+    if (!qore_qop_count.load(std::memory_order_acquire)) {
+        return;
+    }
+    QoreQopStripe& stripe = qore_qop_stripe(obj);
+    AutoLocker al(stripe.lock);
+    auto i = stripe.entries.find(obj);
+    if (i == stripe.entries.end() || i->second.deleted) {
+        return;
+    }
+    i->second.deleted = true;
+    // the controller cannot go away while the operation is registered: its cache entries, and its commands, end the
+    // registration before it is released
+    i->second.ctrl->postDeletedObjCancel(obj);
+}
+
+void AsyncIoControllerPriv::postDeletedObjCancel(const QoreObject* obj, int only_idx) {
+    if (forked()) {
+        return;
+    }
+    AutoLocker al(m);
+    if (!anyThreadRunning()) {
+        return;
+    }
+    for (size_t i = 0; i < io_threads.size(); ++i) {
+        if (only_idx >= 0 && static_cast<int>(i) != only_idx) {
+            continue;
+        }
+        IoThreadContext& tp = *io_threads[i];
+        if (!readsCommands(tp)) {
+            continue;
+        }
+        Command cmd;
+        cmd.cmd = IoCommand::CancelDeletedObj;
+        cmd.deleted_spop_obj = const_cast<QoreObject*>(obj);
+        tp.cmdq.push(std::move(cmd));
+        // the command's reference, which keeps the address from being reused for another object
+        const_cast<QoreObject*>(obj)->ref();
+        ++submit_seq;
+        ++tp.submit_seq;
+        tp.notifier->notify();
+    }
+}
+
+void qore_poll_op_qore_object_deleted(const QoreObject* obj) {
+    AsyncIoControllerPriv::qoreOpObjectDeleted(obj);
+}
+
 void AsyncIoControllerPriv::postDeletedOpCancel(SocketPollOperationBase* op, int only_idx) {
     if (forked()) {
         return;
@@ -810,6 +918,11 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     if (spop_base && spop_attach_id) {
         AsyncIoControllerPriv::detachOp(spop_base, spop_attach_id);
         spop_attach_id = 0;
+    }
+    // the registration of an operation without a C++ poll operation by its object (qore#6531)
+    if (qop_registered) {
+        AsyncIoControllerPriv::unregisterQoreOp(spop_obj);
+        qop_registered = false;
     }
     if (controller && submit_route_thread_idx >= 0 && !submit_route_sock_hash.empty()) {
         controller->clearProvisionalSocketRoute(submit_route_sock_hash, sock_obj,
@@ -1691,6 +1804,11 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 cmd.submit_route_thread_idx = -1;
                 cmd.submit_route_sock_hash.clear();
             }
+            if (cmd.submit_qop_registered) {
+                // the registration of the abandoned submission by its object (qore#6531)
+                AsyncIoControllerPriv::unregisterQoreOp(cmd.submit_spop_obj);
+                cmd.submit_qop_registered = false;
+            }
             {
                 // an abandoned submission can hold the last references to its poll operation; see
                 // PollInfo::cleanup()
@@ -1766,6 +1884,16 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             AsyncIoDeferredRelease refs;
             refs.spop_base = cmd.cancel_spop_base;
             cmd.cancel_spop_base = nullptr;
+            releaseOffIoThread(refs, xsink);
+            AutoLocker al(m);
+            completeAbandonedLocked(cmd);
+            break;
+        }
+        case IoCommand::CancelDeletedObj: {
+            // the reference can be the last one of the object (qore#6531)
+            AsyncIoDeferredRelease refs;
+            refs.spop_obj = cmd.deleted_spop_obj;
+            cmd.deleted_spop_obj = nullptr;
             releaseOffIoThread(refs, xsink);
             AutoLocker al(m);
             completeAbandonedLocked(cmd);
@@ -2763,6 +2891,13 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                             }
                         } cp_context_guard(async_item.owner);
 
+#ifdef DEBUG
+                        // a test holds the worker here, committed to the step, while another thread deletes the
+                        // operation (qore#6531), as the I/O thread for a C++ operation
+                        if (qore_dbg_continue_poll_hold_armed.load(std::memory_order_relaxed)) {
+                            qore_dbg_http_hold(QoreDbgHttpHoldPoint::ContinuePoll, async_item.spop_obj);
+                        }
+#endif
                         ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
                             &work_xsink);
                         if (work_xsink) {
@@ -3699,6 +3834,20 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // spop_base is nullptr for Qore-language poll operations;
     // in that case continuePoll() is called via evalMethod on the I/O thread
     ReferenceHolder<SocketPollOperationBase> spop_base_holder(spop_base, xsink);
+    // an operation without a C++ poll operation is registered by its object, so that the deletion of the object
+    // cancels it (qore#6531); the registration passes to the cache entry or the submit command, or ends here
+    struct QopRegistration {
+        const QoreObject* obj = nullptr;
+        ~QopRegistration() {
+            if (obj) {
+                AsyncIoControllerPriv::unregisterQoreOp(obj);
+            }
+        }
+    } qop_reg;
+    if (!spop_base) {
+        registerQoreOp(spop_obj);
+        qop_reg.obj = spop_obj;
+    }
 
     v = info->getKeyValue("owner");
     std::string owner;
@@ -4016,6 +4165,13 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             if (attachOp(pinfo.spop_base, pinfo.sock_obj, pinfo.spop_attach_id)) {
                 postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
             }
+        } else if (qop_reg.obj) {
+            // the registration by the operation's object passes to the entry (qore#6531)
+            pinfo.qop_registered = true;
+            qop_reg.obj = nullptr;
+            if (isQoreOpDeleted(pinfo.spop_obj)) {
+                postDeletedObjCancel(pinfo.spop_obj, t.thread_idx);
+            }
         }
 
         // Queue for first continuePoll + timeout arming in Phase 1 Step A.
@@ -4064,6 +4220,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_sock = sock; sock_holder.release();
         cmd.submit_spop_obj = spop_obj; spop_obj->ref();
         cmd.submit_spop_base = spop_base; spop_base_holder.release();
+        // the registration by the operation's object passes to the command (qore#6531)
+        cmd.submit_qop_registered = qop_reg.obj != nullptr;
+        qop_reg.obj = nullptr;
         cmd.submit_poll_info = res.poll_info_hash; res.poll_info_hash = nullptr;
         cmd.submit_other = res.other_hash; res.other_hash = nullptr;
         cmd.submit_queue = res.result_queue; res.result_queue = nullptr;
@@ -6944,6 +7103,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 postDeletedOpCancel(op.spop_base, t.thread_idx);
                 continue;
             }
+            // likewise an operation without a C++ poll operation whose object was deleted (qore#6531)
+            if (!op.spop_base && node->second.qop_registered && isQoreOpDeleted(op.spop_obj)) {
+                postDeletedObjCancel(op.spop_obj, t.thread_idx);
+                continue;
+            }
             PollResult result;
             result.op_id = op.op_id;
             result.spop_obj = op.spop_obj;
@@ -8239,7 +8403,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 } else if (pending_cmd.cmd == IoCommand::CancelSocket
                         || pending_cmd.cmd == IoCommand::CancelAndCloseSocket
                         || pending_cmd.cmd == IoCommand::CloseSocket
-                        || pending_cmd.cmd == IoCommand::CancelDeletedOp) {
+                        || pending_cmd.cmd == IoCommand::CancelDeletedOp
+                        || pending_cmd.cmd == IoCommand::CancelDeletedObj) {
                     abandoned_cmds.push_back(std::move(pending_cmd));
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
                             || pending_cmd.cmd == IoCommand::CancelOwner
@@ -8557,6 +8722,43 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // AsyncIoDeferredRelease::getProgram()), and under the sandbox of its submission, if found
                     AsyncIoDeferredRelease refs;
                     refs.spop_base = spop_base;
+                    if (found) {
+                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(pinfo_copy.sandbox_ctx);
+                        if (pinfo_copy.continue_poll_in_flight) {
+                            // a step runs on a worker: the cancellation waits for its result, as for a Cancel
+                            uint64_t op_id = pinfo_copy.op_id;
+                            t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
+                        } else {
+                            doCancelIntern(pinfo_copy, xsink);
+                            pinfo_copy.cleanup(xsink);
+                        }
+                    }
+                    releaseOffIoThread(refs, xsink);
+                    break;
+                }
+
+                case IoCommand::CancelDeletedObj: {
+                    // the operation without a C++ poll operation whose Qore object was deleted (qore#6531): found by
+                    // its object, which the command's reference keeps from being reused; an operation that has
+                    // completed, or that runs on another I/O thread, is not found
+                    QoreObject* obj = cmd.deleted_spop_obj;
+                    cmd.deleted_spop_obj = nullptr;
+                    PollInfo pinfo_copy;
+                    bool found = false;
+                    for (auto it = t.cache.begin(), e = t.cache.end(); it != e; ++it) {
+                        if (!it->second.spop_base && it->second.spop_obj == obj) {
+                            found = true;
+                            ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL_DELETED_OBJ key='%s' owner='%s'\n",
+                                it->first.c_str(), it->second.owner.c_str());
+                            std::string key = it->first;
+                            pinfo_copy = retireOp(t, it, xsink);
+                            AutoLocker al(m);
+                            signalCancelLocked(key);
+                            break;
+                        }
+                    }
+                    AsyncIoDeferredRelease refs;
+                    refs.spop_obj = obj;
                     if (found) {
                         refs.module_cleanup_delegate = async_io_module_cleanup_delegate(pinfo_copy.sandbox_ctx);
                         if (pinfo_copy.continue_poll_in_flight) {
@@ -9078,6 +9280,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     if (pinfo.spop_base) {
                         if (attachOp(pinfo.spop_base, pinfo.sock_obj, pinfo.spop_attach_id)) {
                             postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+                        }
+                    } else if (cmd.submit_qop_registered) {
+                        // the registration by the operation's object passes to the entry (qore#6531)
+                        pinfo.qop_registered = true;
+                        cmd.submit_qop_registered = false;
+                        if (isQoreOpDeleted(pinfo.spop_obj)) {
+                            postDeletedObjCancel(pinfo.spop_obj, t.thread_idx);
                         }
                     }
 
