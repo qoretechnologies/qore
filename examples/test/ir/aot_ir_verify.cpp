@@ -449,6 +449,232 @@ static void foldFlag(QoreIRFunction& fn, QoreIRBuilder& b, bool fixed) {
     b.createReturn(flag->result);
 }
 
+static const char* const Released = "which is released on a path to it";
+static const char* const Freed = "whose object is released on a path to it";
+static const char* const NotInnermost = "that is not the innermost one open on every path to it";
+static const char* const Differ = "open differ on the paths into block";
+
+//! an iterator created on either of two paths, whose handle a phi merges and the join releases (\a original: the
+//! iterator of the first path is released through its own handle before the phi copies it)
+static void iteratorPhi(QoreIRFunction& fn, QoreIRBuilder& b, bool original) {
+    QoreIRValue cond = b.createConstBool(true)->result;
+    QoreIRValue list = b.createConstNothing()->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    QoreIRBasicBlock* join = fn.createBlock("join");
+    b.createBranchIf(cond, a, c);
+    b.setBlock(a);
+    QoreIRValue it1 = b.createIteratorCreate(list)->result;
+    if (original) {
+        b.createIteratorRelease(it1);
+    }
+    b.createBranch(join);
+    b.setBlock(c);
+    QoreIRValue it2 = b.createIteratorCreate(list)->result;
+    b.createBranch(join);
+    b.setBlock(join);
+    QoreIRValue p = b.createPhi({{it1, a}, {it2, c}})->result;
+    b.createIteratorRelease(p);
+    b.createReturnNothing();
+}
+
+//! an iterator whose handle a phi copies, released through the copy; \a use_original: the iterator is then stepped
+//! through its original handle
+static void iteratorCopy(QoreIRFunction& fn, QoreIRBuilder& b, bool use_original) {
+    QoreIRValue list = b.createConstNothing()->result;
+    QoreIRValue it = b.createIteratorCreate(list)->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* body = fn.createBlock("body");
+    QoreIRBasicBlock* done = fn.createBlock("done");
+    b.createBranch(a);
+    b.setBlock(a);
+    QoreIRValue copy = b.createPhi({{it, fn.blocks[0].get()}})->result;
+    b.createIteratorRelease(copy);
+    if (use_original) {
+        b.createIteratorNext(it, done, body);
+    } else {
+        b.createBranch(done);
+    }
+    b.setBlock(body);
+    b.createBranch(done);
+    b.setBlock(done);
+    b.createReturnNothing();
+}
+
+//! a temp scope opened and closed in a block of its own, or (\a branch) on one path only
+static void tempScope(QoreIRFunction& fn, QoreIRBuilder& b, bool branch) {
+    QoreIRValue cond = b.createConstBool(true)->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* join = fn.createBlock("join");
+    b.createBranchIf(cond, a, join);
+    b.setBlock(a);
+    b.createPushTempMark();
+    b.createConstString("t");
+    if (!branch) {
+        b.createDiscardTemps();
+    }
+    b.createBranch(join);
+    b.setBlock(join);
+    b.createReturnNothing();
+}
+
+//! a temp scope opened before a loop and closed in its body (\a in_body: opened in the body, as the lowering does)
+static void tempScopeLoop(QoreIRFunction& fn, QoreIRBuilder& b, bool in_body) {
+    QoreIRValue list = b.createConstNothing()->result;
+    QoreIRValue it = b.createIteratorCreate(list)->result;
+    QoreIRBasicBlock* loop = fn.createBlock("loop");
+    QoreIRBasicBlock* body = fn.createBlock("body");
+    QoreIRBasicBlock* done = fn.createBlock("done");
+    QoreIRInstruction* mark = nullptr;
+    if (!in_body) {
+        mark = b.createPushTempMark();
+    }
+    b.createBranch(loop);
+    b.setBlock(loop);
+    b.createIteratorNext(it, done, body);
+    b.setBlock(body);
+    if (in_body) {
+        b.createPushTempMark();
+    }
+    b.createConstString("t");
+    QoreIRInstruction* discard = b.createDiscardTemps();
+    if (mark) {
+        discard->temp_scope_id = mark->temp_scope_id;
+    }
+    b.createBranch(loop);
+    b.setBlock(done);
+    b.createReturnNothing();
+}
+
+//! a raising instruction in a temp scope nested in the temp scope of its handler, and in a scope that the handler's
+//! landing pad leaves (\a landing_pad: the handler starts with a landing pad); the handler's path meets the normal
+//! path in the outer temp scope
+static void scopeHandler(QoreIRFunction& fn, QoreIRBuilder& b, bool landing_pad) {
+    QoreIRBasicBlock* h = fn.createBlock("handler");
+    QoreIRBasicBlock* next = fn.createBlock("next");
+    QoreIRBasicBlock* join = fn.createBlock("join");
+    b.createPushTempMark();
+    b.createScopeEnter(1);
+    b.createPushTempMark();
+    QoreIRInstruction* raising = b.createConstInt(2);
+    raising->exception_target = h;
+    b.createDiscardTemps();
+    b.createScopeExit(1);
+    b.createBranch(next);
+    b.setBlock(next);
+    b.createBranch(join);
+    b.setBlock(h);
+    if (landing_pad) {
+        b.createLandingPad(0);
+    }
+    b.createBranch(join);
+    b.setBlock(join);
+    b.createDiscardTemps();
+    b.createReturnNothing();
+}
+
+//! two nested implicit arguments, restored innermost first (\a swapped: outermost first)
+static void implicitArgs(QoreIRFunction& fn, QoreIRBuilder& b, bool swapped) {
+    QoreIRValue v1 = b.createConstInt(1)->result;
+    QoreIRValue v2 = b.createConstInt(2)->result;
+    QoreIRValue outer = b.createPushImplicitArg(v1)->result;
+    QoreIRValue inner = b.createPushImplicitArg(v2)->result;
+    b.createPopImplicitArg(swapped ? outer : inner);
+    b.createPopImplicitArg(swapped ? inner : outer);
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    b.createBranch(a);
+    b.setBlock(a);
+    b.createBranch(c);
+    b.setBlock(c);
+    b.createReturnNothing();
+}
+
+//! two nested contexts, destroyed innermost first (\a swapped: outermost first)
+static void contexts(QoreIRFunction& fn, QoreIRBuilder& b, bool swapped) {
+    QoreIRValue outer = b.createContext("a", QoreValue(), QoreValue(), QoreValue(), 0)->result;
+    QoreIRValue inner = b.createContext("b", QoreValue(), QoreValue(), QoreValue(), 0)->result;
+    b.createContextDestroy(swapped ? outer : inner);
+    b.createContextDestroy(swapped ? inner : outer);
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    b.createBranch(a);
+    b.setBlock(a);
+    b.createBranch(c);
+    b.setBlock(c);
+    b.createReturnNothing();
+}
+
+//! a value used in the block after the one that releases it (\a decref: released with Decref, ReleaseOwnedTemp
+//! otherwise)
+static void releaseThenUse(QoreIRFunction& fn, QoreIRBuilder& b, bool decref) {
+    QoreIRValue t = b.createConstString("t")->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    b.createBranch(a);
+    b.setBlock(a);
+    if (decref) {
+        b.createDecref(t);
+    } else {
+        b.createReleaseOwnedTemp(t);
+    }
+    b.createBranch(c);
+    b.setBlock(c);
+    b.createReturn(t);
+}
+
+//! exceptions set aside and raised again (\a twice: raised again twice)
+static void resumeTwice(QoreIRFunction& fn, QoreIRBuilder& b, bool twice) {
+    QoreIRValue h = b.createExceptionSuspend()->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    b.createBranch(a);
+    b.setBlock(a);
+    b.createExceptionResume(h);
+    b.createBranch(c);
+    b.setBlock(c);
+    if (twice) {
+        b.createExceptionResume(h);
+    }
+    b.createReturnNothing();
+}
+
+//! a step of an iterator in the entry block, whose targets return (the done target and the continue target can be
+//! any of the other blocks)
+static void iteratorStep(QoreIRFunction& fn, QoreIRBuilder& b) {
+    QoreIRValue list = b.createConstNothing()->result;
+    QoreIRValue it = b.createIteratorCreate(list)->result;
+    QoreIRBasicBlock* a = fn.createBlock("a");
+    QoreIRBasicBlock* c = fn.createBlock("c");
+    QoreIRBasicBlock* d = fn.createBlock("d");
+    b.createIteratorNext(it, d, a);
+    for (QoreIRBasicBlock* block : {a, c, d}) {
+        b.setBlock(block);
+        b.createIteratorRelease(it);
+        b.createReturnNothing();
+    }
+}
+
+//! a value released in a loop: defined in the body before its release (\a before_loop: defined before the loop)
+static void releaseInLoop(QoreIRFunction& fn, QoreIRBuilder& b, bool before_loop) {
+    QoreIRValue list = b.createConstNothing()->result;
+    QoreIRValue it = b.createIteratorCreate(list)->result;
+    QoreIRValue outer = b.createConstString("o")->result;
+    QoreIRBasicBlock* loop = fn.createBlock("loop");
+    QoreIRBasicBlock* body = fn.createBlock("body");
+    QoreIRBasicBlock* done = fn.createBlock("done");
+    b.createBranch(loop);
+    b.setBlock(loop);
+    b.createIteratorNext(it, done, body);
+    b.setBlock(body);
+    QoreIRValue t = before_loop ? outer : b.createConstString("t")->result;
+    b.createListSize(t);
+    b.createReleaseOwnedTemp(t);
+    b.createBranch(loop);
+    b.setBlock(done);
+    b.createReturnNothing();
+}
+
 int main(int argc, char** argv) {
     // the fixtures write malformed IR, which the writer refuses in a debug build otherwise
     setenv("QORE_AOT_TEST_NO_WRITE_VERIFY", "1", 1);
@@ -483,10 +709,10 @@ int main(int argc, char** argv) {
     runIndex("BrIf false target beyond", loop, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
         find<QoreIRBranchIfInstruction>(fn, QoreIROpcode::BrIf)->false_target = to;
     });
-    runIndex("IteratorNext done target beyond", iterator, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
+    runIndex("IteratorNext done target beyond", iteratorStep, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
         find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext)->done_target = to;
     });
-    runIndex("IteratorNext continue target beyond", iterator, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
+    runIndex("IteratorNext continue target beyond", iteratorStep, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
         find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext)->continue_target = to;
     });
     runIndex("phi incoming block beyond", phi, [](QoreIRFunction& fn, QoreIRBasicBlock* to) {
@@ -736,6 +962,165 @@ int main(int argc, char** argv) {
     run("handler uses the value of the raising instruction", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         handler(fn, b, true);
     }, nullptr, NotDominated);
+
+    // the ownership of the values: no use of a value after its release on any path; a release that clears the slot
+    // of the value may be repeated, a release of its object may not; a phi's copy of the handle of an object
+    // releases the object with the handle
+    run("temporary released in a loop that defines it", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        releaseInLoop(fn, b, false);
+    });
+    run("temporary released in a loop that uses it again", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        releaseInLoop(fn, b, true);
+    }, nullptr, Released);
+    run("use of a temporary after its release", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        releaseThenUse(fn, b, false);
+    }, nullptr, Released);
+    run("iterator released twice", iterator, [](QoreIRFunction& fn) {
+        // the second release finds the slot cleared
+        auto& insts = fn.blocks[3]->instructions;
+        auto rel = std::make_unique<QoreIRInstruction>(QoreIROpcode::IteratorRelease);
+        rel->operands.push_back(insts[0]->operands[0]);
+        insts.insert(insts.begin(), std::move(rel));
+    });
+    run("iterator stepped after it is done", iterator, [](QoreIRFunction& fn) {
+        // the done block steps the iterator again
+        auto* next = find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext);
+        auto again = std::make_unique<QoreIRIteratorNextInstruction>(next->iterator, next->done_target,
+            next->continue_target);
+        again->result = QoreIRValue(++fn.max_value_id);
+        // the done block steps it again instead of releasing it
+        auto& done_insts = fn.blocks[3]->instructions;
+        done_insts.erase(done_insts.begin());
+        done_insts.back() = std::move(again);
+    }, Released);
+    run("iterator stepped after its release", iterator, [](QoreIRFunction& fn) {
+        auto& insts = fn.blocks[1]->instructions;
+        auto rel = std::make_unique<QoreIRInstruction>(QoreIROpcode::IteratorRelease);
+        rel->operands.push_back(find<QoreIRIteratorNextInstruction>(fn, QoreIROpcode::IteratorNext)->iterator);
+        insts.insert(insts.begin(), std::move(rel));
+    }, Released);
+    run("suspended exceptions resumed", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        resumeTwice(fn, b, false);
+    });
+    run("suspended exceptions resumed twice", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        resumeTwice(fn, b, true);
+    }, nullptr, Freed);
+    run("use of a value after its decref", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        releaseThenUse(fn, b, true);
+    }, nullptr, Freed);
+    run("iterator copied by a phi, released once on each path", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        iteratorPhi(fn, b, false);
+    });
+    run("iterator released, then copied by a phi", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        iteratorPhi(fn, b, true);
+    }, nullptr, Released);
+    run("iterator released through a copy", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        iteratorCopy(fn, b, false);
+    });
+    run("iterator released through a copy, then stepped", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        iteratorCopy(fn, b, true);
+    }, nullptr, Freed);
+
+    // the stacks: the same entries are open on every path into a point, and each pop is of the innermost entry
+    run("temp scope", [](QoreIRFunction& fn, QoreIRBuilder& b) { tempScope(fn, b, false); });
+    run("temp scope open on one path", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        tempScope(fn, b, true);
+    }, nullptr, Differ);
+    run("temp scope of a loop body", [](QoreIRFunction& fn, QoreIRBuilder& b) { tempScopeLoop(fn, b, true); });
+    run("temp scope closed in each iteration of a loop", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        tempScopeLoop(fn, b, false);
+    }, nullptr, Differ);
+    run("temp scope closed twice", [](QoreIRFunction& fn, QoreIRBuilder& b) { tempScope(fn, b, false); },
+            [](QoreIRFunction& fn) {
+        auto& insts = fn.blocks[1]->instructions;
+        auto discard = std::make_unique<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
+        discard->temp_scope_id = find(fn, QoreIROpcode::PushTempMark)->temp_scope_id;
+        insts.insert(insts.end() - 1, std::move(discard));
+    }, NotInnermost);
+    run("handler with a landing pad", [](QoreIRFunction& fn, QoreIRBuilder& b) { scopeHandler(fn, b, true); });
+    run("handler without a landing pad", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        // the scopes are not known on the path from the exception edge: it meets the normal path
+        scopeHandler(fn, b, false);
+    });
+    run("scope closed twice", [](QoreIRFunction& fn, QoreIRBuilder& b) { scopeHandler(fn, b, true); },
+            [](QoreIRFunction& fn) {
+        auto* exit = find<QoreIRScopeExitInstruction>(fn, QoreIROpcode::ScopeExit);
+        auto again = std::make_unique<QoreIRScopeExitInstruction>(exit->scope_id);
+        auto& insts = fn.blocks[0]->instructions;
+        for (size_t i = 0; i < insts.size(); ++i) {
+            if (insts[i].get() == exit) {
+                insts.insert(insts.begin() + i + 1, std::move(again));
+                break;
+            }
+        }
+    }, NotInnermost);
+    run("implicit argument restored twice", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        implicitArgs(fn, b, false);
+    }, [](QoreIRFunction& fn) {
+        // the inner restore is made again after the outer one
+        auto* pop = find(fn, QoreIROpcode::PopImplicitArg);
+        auto again = std::make_unique<QoreIRInstruction>(QoreIROpcode::PopImplicitArg);
+        again->operands = pop->operands;
+        auto& insts = fn.blocks[1]->instructions;
+        insts.insert(insts.begin(), std::move(again));
+    }, Freed);
+    run("handler with a landing pad of more scopes than are open", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        scopeHandler(fn, b, true);
+    }, [](QoreIRFunction& fn) {
+        find<QoreIRLandingPadInstruction>(fn, QoreIROpcode::LandingPad)->scope_depth = 2;
+    }, "fewer are open");
+    run("scope exit of another scope", [](QoreIRFunction& fn, QoreIRBuilder& b) { scopeHandler(fn, b, true); },
+            [](QoreIRFunction& fn) {
+        find<QoreIRScopeExitInstruction>(fn, QoreIROpcode::ScopeExit)->scope_id = 2;
+    }, NotInnermost);
+    run("scope closed by a cleanup block whose handlers can raise", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        // the scope is closed before its handlers run: the exception edge of its exit leaves it closed
+        QoreIRBasicBlock* h = fn.createBlock("cleanup");
+        QoreIRBasicBlock* next = fn.createBlock("next");
+        QoreIRBasicBlock* cont = fn.createBlock("cont");
+        b.createScopeEnter(1);
+        QoreIRInstruction* raising = b.createConstInt(2);
+        raising->exception_target = h;
+        b.createBranch(next);
+        b.setBlock(next);
+        b.createScopeExit(1);
+        b.createBranch(cont);
+        b.setBlock(h);
+        b.createScopeExit(1, true)->exception_target = cont;
+        b.createBranch(cont);
+        b.setBlock(cont);
+        b.createReturnNothing();
+    });
+    run("implicit arguments", [](QoreIRFunction& fn, QoreIRBuilder& b) { implicitArgs(fn, b, false); });
+    run("implicit arguments restored outermost first", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        implicitArgs(fn, b, true);
+    }, nullptr, NotInnermost);
+    run("implicit argument restored from another value", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        implicitArgs(fn, b, false);
+    }, [](QoreIRFunction& fn) {
+        find(fn, QoreIROpcode::PopImplicitArg)->operands[0] = find(fn, QoreIROpcode::ConstInt)->result;
+    }, NotInnermost);
+    run("contexts", [](QoreIRFunction& fn, QoreIRBuilder& b) { contexts(fn, b, false); });
+    run("context destroyed with an exception target", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        contexts(fn, b, false);
+    }, [](QoreIRFunction& fn) {
+        find(fn, QoreIROpcode::ContextDestroy)->exception_target = fn.blocks[1].get();
+    }, "has an exception target");
+    run("landing pad after another instruction", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        scopeHandler(fn, b, true);
+    }, [](QoreIRFunction& fn) {
+        auto* lp = find(fn, QoreIROpcode::LandingPad);
+        for (auto& block : fn.blocks) {
+            auto& insts = block->instructions;
+            if (!insts.empty() && insts[0].get() == lp) {
+                std::swap(insts[0], insts[1]);
+            }
+        }
+    }, "a landing pad is not the first instruction of its block");
+
+    run("contexts destroyed outermost first", [](QoreIRFunction& fn, QoreIRBuilder& b) {
+        contexts(fn, b, true);
+    }, nullptr, NotInnermost);
 
     qore_destroy_program(pgm);
     qore_cleanup();
