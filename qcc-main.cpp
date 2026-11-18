@@ -1451,7 +1451,7 @@ static void print_version() {
 
 static bool qccHandleWarnings(ExceptionSink& wsink) {
     bool has_warnings = wsink.isException();
-    wsink.handleWarnings();
+    qore_aot_report_parse_diagnostics(wsink, true);
     if (!has_warnings || !warnings_are_errors) {
         return false;
     }
@@ -11691,7 +11691,9 @@ int main(int argc, char** argv) {
         qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
 
         if (xsink.isException()) {
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors, as diagnostics (issue #6555)
+            qore_aot_report_parse_diagnostics(wsink, true);
+            qore_aot_report_parse_diagnostics(xsink, false);
             rc = 1;
         } else if (qccHandleWarnings(wsink)) {
             rc = 1;

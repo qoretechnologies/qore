@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc compiles the sources ahead of time
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class QccParseDiagnosticsTest
+
+#! qcc reports the parse diagnostics of the code it compiles as diagnostics (issue #6555)
+/** A parse error (of the parse or of the commit) or warning of the compiled code is reported in one line on stderr,
+    <file>:<line>[:<col>]: error|warning: <code>: <message>, in every compile mode, not as an unhandled exception.
+*/
+class QccParseDiagnosticsTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        TmpDir tmp("qore-qcc-parse-diagnostics-");
+        string missing_return;
+        string syntax_error;
+        string other_missing_return;
+        string good;
+        string warns;
+        string warns_and_fails;
+        string module;
+        string warn_module;
+        string not_modern;
+    }
+
+    constructor() : QUnit::Test("QccParseDiagnosticsTest", "1.0", \ARGV) {
+        qcc_bin = TestInterpreter::qcc_compiler();
+        missing_return = writeFile("missing-return.q", "%modern\nint sub f() {\n}\n");
+        other_missing_return = writeFile("other-missing-return.q", "%modern\nstring sub g() {\n}\n");
+        syntax_error = writeFile("syntax-error.q", "%modern\nint sub f( {\n");
+        good = writeFile("good.q", "%modern\nint sub h() { return 1; }\n");
+        # a warning that qcc reports (QP_WARN_DEFAULT)
+        warns = writeFile("warns.q", "%modern\n%enable-warning no-such-warning\nsub w() {}\n");
+        warns_and_fails = writeFile("warns-and-fails.q", "%modern\n%enable-warning no-such-warning\n"
+            "sub w() { no_such_function(); }\n");
+        module = writeFile("DiagModule.qm", "%modern\nmodule DiagModule {\n    version = \"1.0\";\n"
+            "    desc = \"test\";\n    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public int sub mf() {\n}\n");
+        warn_module = writeFile("WarnModule.qm", "%modern\n%enable-warning no-such-warning\nmodule WarnModule {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public sub mw() { no_such_function(); }\n");
+        # parses with a warning, then fails the %modern check of the compiler
+        not_modern = writeFile("not-modern.q", "%enable-warning no-such-warning\nsub nm() {}\n");
+        addTestCase("a commit-time error of a single source", \singleCommitTest());
+        addTestCase("a parse error of a single source", \singleParseTest());
+        addTestCase("a commit-time error of a batch compile", \batchCommitTest());
+        addTestCase("an error of an executable compile", \executableTest());
+        addTestCase("an error of a module compile", \moduleTest());
+        addTestCase("a warning", \warningTest());
+        addTestCase("a warning of a compile that fails", \warningAndErrorTest());
+        addTestCase("a warning and an error of a module with warnings as errors", \moduleWarningsAsErrorsTest());
+        addTestCase("a warning of a compile that fails after the parse", \warningThenFailureTest());
+        set_return_value(main());
+    }
+
+    private string writeFile(string name, string src) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(src);
+        f.close();
+        return path;
+    }
+
+    #! runs qcc with \a args; returns stdout, stderr and the exit status
+    private hash<auto> qcc(string args) {
+        string err_file = tmp.path + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("%s %s 2>%s", qcc_bin, args, err_file), \rc);
+        return {"out": out, "err": ReadOnlyFile::readTextFile(err_file), "status": rc};
+    }
+
+    #! the output has no unhandled-exception or warning banner
+    private checkNoBanner(hash<auto> r) {
+        assertFalse(r.err =~ /unhandled QORE/, r.err);
+        assertFalse(r.err =~ /warning encountered/, r.err);
+    }
+
+    singleCommitTest() {
+        hash<auto> r = qcc(sprintf("-c -o %s/out.qo %s", tmp.path, missing_return));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(missing_return) + ":2: error: MISSING-RETURN: this code block has declared return "
+            "type 'int'", r.err);
+    }
+
+    singleParseTest() {
+        hash<auto> r = qcc(sprintf("-c -o %s/out.qo %s", tmp.path, syntax_error));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(syntax_error) + ":2:[0-9]+: error: PARSE-EXCEPTION: syntax error", r.err);
+    }
+
+    batchCommitTest() {
+        string out_dir = tmp.path + DirSep + "batch";
+        mkdir(out_dir);
+        hash<auto> r = qcc(sprintf("-c --output-dir %s %s %s %s", out_dir, missing_return, good, other_missing_return));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(missing_return) + ":2: error: MISSING-RETURN: ", r.err);
+        assertRegex("(^|\n)" + quote(other_missing_return) + ":2: error: MISSING-RETURN: ", r.err);
+    }
+
+    executableTest() {
+        hash<auto> r = qcc(sprintf("-o %s/exe %s", tmp.path, missing_return));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(missing_return) + ":2: error: MISSING-RETURN: ", r.err);
+    }
+
+    moduleTest() {
+        hash<auto> r = qcc(sprintf("--module -o %s/DiagModule.qmod %s", tmp.path, module));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(module) + ":8: error: MISSING-RETURN: ", r.err);
+    }
+
+    warningTest() {
+        hash<auto> r = qcc(sprintf("-c -o %s/warns.qo %s", tmp.path, warns));
+        assertEq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(warns) + ":2:[0-9]+: warning: UNKNOWN-WARNING: cannot enable unknown warning",
+            r.err);
+    }
+
+    #! the warning is reported before the error, in the same form
+    warningAndErrorTest() {
+        foreach string mode in (("-c -o " + tmp.path + "/wf.qo", "-o " + tmp.path + "/wf")) {
+            hash<auto> r = qcc(sprintf("%s %s", mode, warns_and_fails));
+            assertNeq(0, r.status, r.err);
+            checkNoBanner(r);
+            assertRegex("(^|\n)" + quote(warns_and_fails) + ":2:[0-9]+: warning: UNKNOWN-WARNING: .*\n"
+                + quote(warns_and_fails) + ":3:[0-9]+: error: PARSE-EXCEPTION: ", r.err, mode);
+        }
+    }
+
+    #! with warnings treated as errors, the error of the module is reported too, in the same form
+    moduleWarningsAsErrorsTest() {
+        hash<auto> r = qcc(sprintf("-r --module -o %s/WarnModule.qmod %s", tmp.path, warn_module));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(warn_module) + ":2:[0-9]+: warning: UNKNOWN-WARNING: ", r.err);
+        assertRegex("(^|\n)" + quote(warn_module) + ":9:[0-9]+: error: PARSE-EXCEPTION: ", r.err);
+    }
+
+    #! the warning of a parse that succeeded is reported when the compile fails afterwards
+    warningThenFailureTest() {
+        hash<auto> r = qcc(sprintf("-c -o %s/not-modern.qo %s", tmp.path, not_modern));
+        assertNeq(0, r.status, r.err);
+        checkNoBanner(r);
+        assertRegex("(^|\n)" + quote(not_modern) + ":1:[0-9]+: warning: UNKNOWN-WARNING: ", r.err);
+    }
+
+    #! escapes \a str for a regular expression
+    private static string quote(string str) {
+        return regex_subst(str, "([.+*?^$(){}\\[\\]|\\\\])", "\\\\$1", RE_Global);
+    }
+}

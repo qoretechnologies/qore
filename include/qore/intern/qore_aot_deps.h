@@ -119,6 +119,10 @@ DLLLOCAL const QoreAOTBodyContractDependencyMap*
 */
 DLLEXPORT void qore_aot_set_compiler_process();
 
+//! Reports the exceptions in \a sink, the parse errors (or warnings if \a warnings) of code that the compiler
+//! compiles, as diagnostics, one line each on stderr, and clears it (issue #6555)
+DLLEXPORT void qore_aot_report_parse_diagnostics(ExceptionSink& sink, bool warnings);
+
 //! Returns true if qore_aot_set_compiler_process() was called in this process
 DLLLOCAL bool qore_aot_is_compiler_process();
 
