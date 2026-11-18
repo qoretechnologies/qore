@@ -69,7 +69,7 @@ class StringInvalidEncodingTest inherits QUnit::Test {
     #! a string in another multi-byte encoding is checked in its encoding
     replaceOtherEncodings() {
         string sj = binary_to_string(parse_hex_string("8227ff27"), "SHIFT_JIS");
-        assertThrows("INVALID-ENCODING", "replace\\(\\): the subject string is not valid SHIFT_JIS", \replace(),
+        assertThrows("INVALID-ENCODING", "replace\\(\\): the subject string is not valid Shift_JIS", \replace(),
             (sj, "'", "''"));
         # a string in a single-byte encoding has no invalid bytes
         string l = binary_to_string(parse_hex_string("27e927ff"), "ISO-8859-1");
