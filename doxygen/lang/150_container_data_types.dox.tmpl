@@ -140,6 +140,11 @@ printf("%y\n", l[2,4,6]);
     @code{.py}
 list<int> l(2, 3);
     @endcode \n
+    The arguments of the constructor are the elements of the list; a list of elements is assigned to the variable
+    instead:
+    @code{.py}
+list<int> l = (2, 3);
+    @endcode \n
     This type is supported at parse-time and at runtime; to convert such values to an untyped list, assign it
     to a @ref list_type "list" lvalue, use @ref cast "cast<list>(...)" on the value, or call the @ref Qore::list() "list()" function on the value.  Each of these options can be used to convert a type-safe list to an untyped list.
 
