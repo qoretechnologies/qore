@@ -128,6 +128,11 @@ class TestHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         list<string> parts = hdr.path.split("/");
+        if (parts[0] == "obs-header") {
+            # a header value that is not valid UTF-8 (obs-text, RFC 9110 section 5.5; qore#6554)
+            return <HttpResponseInfo>{"code": 200, "hdr": {"Content-Type": MimeTypeText,
+                "X-Obs": binary_to_string(<61e462>, "UTF-8")}, "body": "ok"};
+        }
         *hash<CharsetCase> c = Cases{parts[0]};
         if (!c) {
             return <HttpResponseInfo>{"code": 404, "hdr": {"Content-Type": MimeTypeText}, "body": "not found"};
@@ -241,6 +246,7 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         addTestCase("HTTPClient over HTTP/1.1", \httpClientHttp1Test());
         addTestCase("HTTPClient over HTTP/2", \httpClientHttp2Test());
         addTestCase("HTTPClient bodies that are not valid in their encoding", \invalidBodyTest());
+        addTestCase("HTTPClient header values that are not valid UTF-8", \obsHeaderTest());
         addTestCase("HTTPClient receive callback", \httpClientRecvCallbackTest());
         addTestCase("HTTPClient poll operation", \httpClientPollTest());
         addTestCase("HttpClientIo over HTTP/1.1", \httpClientIoHttp1Test());
@@ -350,6 +356,23 @@ class HttpBodyCharsetTest inherits QUnit::Test {
                     }
                 }
             }
+        }
+    }
+
+    obsHeaderTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "opts": {"http_version": "1.1"}, "label": "h1"},
+                {"url": getTlsUrl(), "opts": {"http_version": "2.0"}, "label": "h2"}) {
+            HTTPClient hc = getHttpClient(i.url, i.opts);
+            hc.setHttp3Mode("disabled");
+            hash<auto> info;
+            hash<auto> h = hc.send(NOTHING, "GET", "/obs-header", NOTHING, NOTHING, \info);
+            # the value is given in ISO-8859-1 with its bytes unchanged
+            assertEq("ISO-8859-1", h."x-obs".encoding(), i.label);
+            assertEq(<61e462>, binary(h."x-obs"), i.label);
+            assertTrue(h."x-obs".isEncodingValid(), i.label);
+            assertEq("aäb", h."x-obs", i.label);
+            # a valid value keeps the default encoding
+            assertEq("UTF-8", h."content-type".encoding(), i.label);
         }
     }
 
