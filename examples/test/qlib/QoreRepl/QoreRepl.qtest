@@ -29,6 +29,7 @@
 %requires ../../TestInterpreter.qm
 %requires QoreCodeFormat
 %requires QoreRepl
+%requires FsUtil
 %requires HttpServerUtil
 
 %exec-class QoreReplTest
@@ -88,6 +89,7 @@ public class QoreReplTest inherits QUnit::Test {
         addTestCase("Error: parse error", \testParseError());
         addTestCase("Error: runtime exception", \testRuntimeError());
         addTestCase("Exception handling in REPARSE mode", \testExceptionHandling());
+        addTestCase("an input after one that raises an exception", \testInputAfterException());
         addTestCase("Parse failure behavior", \testParseFailureBehavior());
 
         # Result formatting tests
@@ -1171,6 +1173,38 @@ public class QoreReplTest inherits QUnit::Test {
         pgm.parse("our int y = 2;", "after");
         pgm.run();
         assertEq(2, pgm.getGlobalVariable("y"), "y should be 2 after recovery");
+    }
+
+    #! The statements of an input or a loaded file after one that raises an exception are skipped (issue #6511)
+    /** A run of a Program with PO_ALLOW_REPARSE does not execute a statement that raised an exception again; the REPL
+        treats an input as one unit and skips the statements after it, so that the next input does not run them.
+    */
+    testInputAfterException() {
+        QoreRepl repl();
+        *hash<auto> result = repl.eval("our int n = 0");
+        assertFalse(exists result.error, sprintf("%y", result.error));
+        result = repl.eval("throw \"X\"; n = 5;");
+        assertEq("X", result.error.err);
+        result = repl.eval("n");
+        assertFalse(exists result.error, sprintf("%y", result.error));
+        assertEq(0, result.value, "the statement after the exception was skipped");
+        # a later input runs normally
+        result = repl.eval("n = 2");
+        assertFalse(exists result.error, sprintf("%y", result.error));
+        result = repl.eval("n");
+        assertEq(2, result.value);
+
+        # the same for a file loaded with /load
+        TmpDir tmp("qore-repl-input-");
+        string path = tmp.path + DirSep + "throws.q";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("throw \"Y\";\nn = 7;\n");
+        f.close();
+        result = repl.eval("/load " + path);
+        assertEq("Y", result.error.err);
+        result = repl.eval("n");
+        assertEq(2, result.value, "the statement of the file after the exception was skipped");
     }
 
     #! Test /load command with active threads

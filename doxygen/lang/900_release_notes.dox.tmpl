@@ -101,17 +101,58 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par SqlUtil Casts Accept Only Type Names
+    A cast in @ref sqlutilintro "SqlUtil" (@ref SqlUtil::cop_cast() "cop_cast()" and the cast data provider
+    expression) raises \c OPERATOR-ERROR for a type that is not a type name, as checked by
+    @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"; the type is written into the SQL (issue #6572).
+
+    @par SqlUtil Writes No Caller Text Into the SQL of a Select
+    In @ref sqlutilintro "SqlUtil", a \c "comment" or \c "hint" select option that could end its SQL comment or that has
+    a \c "%" placeholder character raises \c OPTION-ERROR; a value given with @ref SqlUtil::cop_value() "cop_value()" to
+    an arithmetic column operator is an SQL literal, an alias referenced in a superquery or a window is an identifier,
+    and a string first argument of the Oracle \c in expression is bound (issue #6574).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
     \c on_error statement) is a parse error, as its scope was unclear; put it in braces (see
     @ref on_block_exit_in_block "on_exit statements"; issue #240).
 
+    @par A Regular Expression Substitution Raises INVALID-ENCODING for a String Not Valid in Its Encoding
+    The @ref regex_subst_operator "=~ s///" operator and @ref Qore::regex_subst() "regex_subst()" raise an
+    \c INVALID-ENCODING exception for a string that is not valid in its encoding, which cannot be matched,
+    and previously returned such a string unchanged (issue #6553).
+
+    @par Database Connections Are Checked Against the Sandbox
+    A database connection chosen by code whose sandbox restricts network or filesystem access is checked against that
+    sandbox before the DBI driver connects, and a driver that cannot report the destinations of its connections is
+    refused for it with \c NETWORK-ACCESS-DENIED (see @ref sandbox_dbi_connections; issue #5747).
+
+    @par SqlUtil Refuses Strings with an Invalid Encoding in SQL Values
+    A string given in an SQL string literal by @ref sqlutilintro "SqlUtil" and its drivers (a default value, a
+    comment, or a value of an operator) whose encoding is invalid or that has a NUL character raises
+    \c VALUE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>).
+
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
     (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a
     64-bit integer, which was read as the largest integer (see
     @ref octal_integer_literals "octal integer literals"; issue #504).
+
+    @par Implicit Argument Numbers Are Decimal
+    The number of an implicit argument reference is decimal: <tt>$010</tt> is the tenth argument, where it was the
+    eighth (octal), and <tt>$08</tt> is the eighth, where it was a parse error (see
+    @ref implicit_argument_offsets "implicit argument references"; issue #6529).
+
+    @par Parse Define Values Are Validated
+    A parse define value that is not a quoted string, \c true, \c false or a decimal number is a parse error, as is a
+    number too large (<tt>1-2</tt> was \c 1, a large number was clamped), and a <tt>qore -D</tt> define without a value
+    (<tt>-DX</tt>, <tt>-DX=</tt>) has no value, where it was \c 0.0 (see @ref define_values "%define"; issue #6564).
+
+    @par The Integer Value of a Parse Define Is an Integer
+    A parse define with an integer value (<tt>%%define X 12</tt>, <tt>qore -DX=12</tt>) has an integer value, as
+    @ref Qore::Program::getDefine() "Program::getDefine()" returns it: it was a float (\c 12.0), and a number is decimal,
+    also with a leading zero (see @ref define_values "%define"; issue #6530).
 
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
@@ -124,6 +165,12 @@
     (<tt>remove NOTHING.a</tt>, <tt>trim NOTHING[i]</tt>) is a parse error: such an operator removed nothing or raised
     an exception at run time; \c NOTHING by itself is still an lvalue that the operators do not change, and a cast of
     it that allows \c NOTHING (<tt>cast<*string>(NOTHING)</tt>) is \c NOTHING (issue #6480).
+
+    @par A Typed List Whose Value Type Does Not Accept NOTHING Cannot Hold NOTHING
+    Assigning past the end of such a list (ex: <tt>list&lt;int&gt;</tt>, also held by \c auto) so that a gap would be
+    left raises a \c RUNTIME-TYPE-ERROR exception, as does @ref delete "delete" or @ref remove "remove" of an element
+    when the declared type of the lvalue holding the list requires its value type; otherwise the list becomes a
+    <tt>list&lt;*int&gt;</tt> (see @ref list_holes; issues #6435 and #6437).
 
     @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
     @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
@@ -290,6 +337,11 @@
     other module code (\c INVALID-FUNCTION-ACCESS), and the qlib APIs that act for any caller (such as SqlUtil's
     TableCache::get()) declare \c PROCESS_CONTROL; see @ref sandbox_caller_domains and @ref sandbox_module_init
     (issue #6337).
+
+    @par Library State That Restricted Code Creates Keeps Its Restrictions
+    An object, call reference or closure of library module code that restricted code creates runs with the
+    restrictions of that code also when a library module's initialization runs it from a registry; see
+    @ref sandbox_caller_domains (issue #6520).
 
     @par Modules May Not Declare Public thread_local Variables
     A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
@@ -1695,6 +1747,9 @@
         alignment, which failed with \c ORA-03050
       - fixed a column declared with \c "default null", which was described with the default value \c null
         (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+      - a create-as-select gives the values of its select in the SQL as literals that give them exactly, as Oracle
+        refuses bind values in it
+        (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
 
     - @ref pgsqlsqlutilbaseintro "PgsqlSqlUtilBase" module
       - tables, sequences, and materialized views are listed only from the schemas of the connection's
@@ -1864,6 +1919,10 @@
       - @ref WebUtil::FileHandler "FileHandler" sends caching headers, answers conditional and range requests, and
         serves pre-compressed files
       - see @ref webutil_v1_8_1 for all changes
+
+    - @ref xdbcfirebirdsqlutilbaseintro "XdbcFirebirdSqlUtilBase" module
+      - a create-as-select, which Firebird does not support, raises \c OPTION-ERROR instead of giving SQL that the
+        database refuses (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
 
     - @ref zeyosrestclientintro "ZeyosRestClient" module
       - see @ref Zeyosrestclientv1_2 for all changes
@@ -2194,6 +2253,11 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
+      value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
+    - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
+      so that two redirects between the same files in opposite directions at the same time can no longer deadlock
+      (issue #6567)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)
@@ -2233,6 +2297,10 @@
       output: such text is a parse error (issue #6512)
     - an @ref include "%include" of a file that does not exist raises \c PARSE-EXCEPTION at the directive, with its
       location, instead of \c PARSE-ERROR without one (issue #6509)
+    - a declaration on the first line of a file included with @ref include "%include", and the first one after the
+      included file in the including file, are reported at their own locations in diagnostics (issue #6561)
+    - code that runs in a @ref Qore::Program "Program" and parses code in the same Program takes the Program's parse
+      lock; it parsed without it, racing with other parse actions (issue #6568)
     - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
       object of a subclass, so the class's methods read no value, and was serialized without its value (see
       @ref private_members; issue #6402)
@@ -2316,10 +2384,9 @@
     - with @ref broken-list-range "%broken-list-range", a range past the end of a list whose element type does not
       allow @ref nothing (ex: \c list<int>) gives @ref nothing for the elements outside of the list in a list with the
       or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception (issue #5757)
-    - a range of the @ref list_element_operator "[] operator" over a typed list holding @ref nothing in the range (a
-      hole left by @ref delete "delete" or @ref remove "remove", or a gap filled by an assignment past the end of the
-      list) gives a list with the or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception, which
-      failed an assertion in debug builds (issue #6435)
+    - with @ref broken-list-range "%broken-list-range", @ref remove "remove" of a range past the end of a list whose
+      element type does not allow @ref nothing gives a list with the or-nothing element type for the @ref nothing of
+      the elements outside of the list; it gave a list of the element type holding @ref nothing (issue #6434)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its

@@ -1525,7 +1525,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Returns the target URL with any password masked for safe display/logging
         string getSafeUrl() {
-            return regex_subst(url, "://([^:/@]+):([^@]+)@", "://$1:***@");
+            # a URL that is not valid in its encoding cannot be processed; it is not given, as it can hold credentials (qore#6553)
+            try {
+                return regex_subst(url, "://([^:/@]+):([^@]+)@", "://$1:***@");
+            } catch () {
+                return sprintf("<URL of %d bytes not valid in its encoding>", url.size());
+            }
         }
 
         #! Returns the underlying connection manager

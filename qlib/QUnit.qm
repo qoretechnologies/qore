@@ -1333,6 +1333,10 @@ public class TestReporter {
 
     #! returns the string without the characters that XML 1.0 does not allow
     private:internal static string xmlText(string str) {
+        # a string that is not valid in its encoding cannot be processed or written to XML (qore#6553)
+        if (!(str =~ /^/)) {
+            return sprintf("<string of %d bytes not valid in its encoding>", str.size());
+        }
         str =~ s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g;
         return str;
     }
@@ -1599,6 +1603,11 @@ addTestCase(obj);
     }
 
     private bool diffInSpecialCharsOnly(string a, string b) {
+        # a string that is not valid in its encoding cannot be processed by the substitutions below (qore#6553); the
+        # report of a failed assertion does not raise an exception for it
+        if (!(a =~ /^/) || !(b =~ /^/)) {
+            return False;
+        }
         a =~ s/[[:space:]]//;
         a =~ s/[[:cntrl:]]//;
         b =~ s/[[:space:]]//;
@@ -1749,7 +1758,8 @@ addTestCase(obj);
 
     private string shorten(auto value) {
         # issue #2680: convert special whitespace in strings to escaped chars
-        if (value.typeCode() == NT_STRING) {
+        # a string that is not valid in its encoding cannot be processed by the substitutions (qore#6553)
+        if (value.typeCode() == NT_STRING && value =~ /^/) {
             value =~ s/\n/\n/g;
             value =~ s/\r/\r/g;
             value =~ s/\t/\t/g;

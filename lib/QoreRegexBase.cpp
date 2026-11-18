@@ -159,6 +159,17 @@ int qore_pcre2_match(const pcre2_code* code, PCRE2_SPTR8 subject, PCRE2_SIZE len
     return rc;
 }
 
+void qore_pcre2_raise_invalid_subject(int rc, pcre2_match_data* md, const char* op, ExceptionSink* xsink) {
+    assert(qore_pcre2_invalid_utf_error(rc));
+    PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
+    const char* msg = pcre2_get_error_message(rc, buffer, sizeof(buffer)) < 0
+        ? "unknown error"
+        : reinterpret_cast<const char*>(buffer);
+    // for a UTF error, the start character is the offset of the invalid byte sequence
+    xsink->raiseException("INVALID-ENCODING", "%s: the subject string is not valid UTF-8: invalid byte sequence at "
+        "byte offset %zu (PCRE2 error %d: %s)", op, static_cast<size_t>(pcre2_get_startchar(md)), rc, msg);
+}
+
 int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink) {
     assert(rc < 1);
     if (qore_pcre2_expected_match_error(rc)) {

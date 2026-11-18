@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SelfParseTest
+
+#! Code that runs in a Program and parses code in it (issue #6568)
+/** The parse of code in the Program that the running code is in takes the parse lock of the Program as the parse of
+    code in another Program does; a debug build asserted that the thread held it already, as it does in the code that
+    a commit runs.
+*/
+public class SelfParseTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SelfParseTest", "1.0", \ARGV) {
+        addTestCase("a Program with PO_ALLOW_REPARSE parsed by its own code", \reparseTest());
+        addTestCase("a Program parsed by its own code", \onceTest());
+        addTestCase("an expression of the Program created by its own code", \expressionTest());
+        set_return_value(main());
+    }
+
+    #! runs \a code in a new Program that holds itself in the global variable \c self, and returns the variable \c rv
+    private auto runSelf(int po, string code) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | po);
+        p.parse("our auto self;\nour auto rv;\nsub f() {\n" + code + "\n}\n", "setup");
+        p.setGlobalVarValue("self", p);
+        on_exit p.setGlobalVarValue("self", NOTHING);
+        p.callFunction("f");
+        return p.getGlobalVariable("rv");
+    }
+
+    reparseTest() {
+        auto rv = runSelf(PO_ALLOW_REPARSE, "try { self.parse(\"our int n = 1;\", \"inner\"); rv = \"parsed\"; } "
+            "catch (hash<ExceptionInfo> ex) { rv = ex.err + \": \" + ex.desc; }");
+        assertRegex("^PARSE-ERROR: cannot parse while threads are active", rv);
+    }
+
+    onceTest() {
+        auto rv = runSelf(0, "try { self.parse(\"our int n = 1;\", \"inner\"); rv = \"parsed\"; } "
+            "catch (hash<ExceptionInfo> ex) { rv = ex.err; }");
+        assertEq("PARSE-ERROR", rv);
+    }
+
+    expressionTest() {
+        auto rv = runSelf(0, "Expression e(self, \"1 + 2\", \"expr\"); rv = e.eval();");
+        assertEq(3, rv);
+    }
+}

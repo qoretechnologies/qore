@@ -1460,7 +1460,8 @@ target.createAsSelectCommit(source, {
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1470,6 +1471,10 @@ target.createAsSelectCommit(source, {
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1488,7 +1493,8 @@ target.createAsSelect(source, {"columns": ("id", "name")});
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1498,6 +1504,10 @@ target.createAsSelect(source, {"columns": ("id", "name")});
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1519,7 +1529,8 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1530,6 +1541,10 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1553,7 +1568,8 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param args an optional reference to a list for any bind arguments
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
@@ -1564,6 +1580,10 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1592,7 +1612,8 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1602,6 +1623,10 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -4218,10 +4243,14 @@ table.insert(row);
 
                 if (cmd.immediate) {
                     # make sure only identifiers are given to the operator's code, as the SQL that it returns from
-                    # the argument is inserted directly into the query
-                    if (v =~ /[^a-z\._0-9]/i) {
-                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y which "
-                            "contains illegal characters", getDesc(), iop, v);
+                    # the argument is inserted directly into the query; the value must match the allowed characters
+                    # as a whole, so that a string that cannot be matched (one that is not valid UTF-8) is refused
+                    if (v !~ /\A[A-Za-z\._0-9]*\z/) {
+                        # a value that is not valid in its encoding is not given in the message (qore#6553)
+                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s which "
+                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !(v =~ /^/)
+                                ? sprintf("a string of %d bytes not valid in its encoding", v.size())
+                                : sprintf("%y", v));
                     }
                     phl += cmd.code ? cmd.code(key, v) : v;
                     continue;
@@ -4261,7 +4290,8 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
+        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for
+        information about this argument; for a recursive query, see @ref select_option_recursive_insert_create
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
 
@@ -4271,6 +4301,8 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         @throw COLUMN-ERROR unknown or invalid column in insert list
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @note this method does not take insert options because it is executed entirely in the database server; use insertFromIterator() or insertFromIteratorCommit() to insert arbitrary data with insert options
     */
@@ -4322,7 +4354,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
+        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for
+        information about this argument; for a recursive query, see @ref select_option_recursive_insert_create
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
 
@@ -4332,6 +4365,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @throw COLUMN-ERROR unknown or invalid column in insert list
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @note this method does not take insert options because it is executed entirely in the database server; use insertFromIterator() or insertFromIteratorCommit() to insert arbitrary data with insert options
     */
@@ -4364,7 +4399,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
         more info
 
@@ -4376,6 +4412,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         projection cardinality mismatch
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @since SqlUtil 1.7
     */
@@ -4402,7 +4440,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
 
         @param cols the ordered target column names
         @param source the source table; it must use the exact same datasource object as the target table
-        @param select_hash source select options; see @ref select_option_hash
+        @param select_hash source select options; see @ref select_option_hash, and
+        @ref select_option_recursive_insert_create for a recursive query
         @param args an optional reference receiving the ordered bind arguments
         @param opt optional SQL data operation options used while resolving the structured source select; see
         @ref AbstractTable::SqlDataCallbackOptions
@@ -4414,6 +4453,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
         projection cardinality mismatch
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @since SqlUtil 3.0.0
     */
@@ -4428,7 +4469,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
     #! returns insert-select SQL and bind arguments without executing the statement
     /** @param cols the ordered target column names
         @param source the source table; it must use the exact same datasource object as the target table
-        @param select_hash source select options; see @ref select_option_hash
+        @param select_hash source select options; see @ref select_option_hash, and
+        @ref select_option_recursive_insert_create for a recursive query
         @param opt optional SQL data operation options used while resolving the structured source select; see
         @ref AbstractTable::SqlDataCallbackOptions
 
@@ -4439,6 +4481,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
         projection cardinality mismatch
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @since SqlUtil 3.0.0
     */
@@ -4492,9 +4536,15 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
         }
 
         validateInsertFromSelectCardinality(cols, source, select_hash);
-        string select_sql = getSetOperationSelectSql(source, select_hash, \args, opt, "insert-select");
-        return sprintf("insert into %s (%s) %s", getSqlName(),
-            (foldl $1 + "," + $2, getColumnSqlNames(cols)), select_sql);
+        hash<auto> select_parts = getSetOperationSelectSqlParts(source, select_hash, \args, opt, "insert-select");
+        string insert_sql = sprintf("insert into %s (%s)", getSqlName(),
+            (foldl $1 + "," + $2, getColumnSqlNames(cols)));
+        # issue #6495: a recursive query is placed in the statement as the database needs it
+        if (select_parts.rq) {
+            return getRecursiveInsertSelectSqlImpl(insert_sql, select_parts.with_sql, select_parts.select_sql,
+                select_parts.rq);
+        }
+        return insert_sql + " " + select_parts.select_sql;
     }
 
     private validateInsertFromSelectCardinality(list<auto> target_columns, AbstractTable source,
@@ -4513,6 +4563,21 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
             if (source_columns.size() != target_columns.size()) {
                 throw "COLUMN-ERROR", sprintf("%s: insert-select has %d target columns but %d source select "
                     "expressions", getDesc(), target_columns.size(), source_columns.size());
+            }
+            return;
+        }
+
+        # issue #6495: the outer select of a recursive query selects the columns of its common table expression
+        if (exists select_hash.recursive) {
+            if (!select_hash.join && select_hash.recursive.typeCode() == NT_HASH
+                    && select_hash.recursive.columns.typeCode() == NT_LIST) {
+                int cte_column_count = select_hash.recursive.columns.size()
+                    + (exists select_hash.recursive.depth ? 1 : 0);
+                if (cte_column_count != target_columns.size()) {
+                    throw "COLUMN-ERROR", sprintf("%s: insert-select has %d target columns but the common table "
+                        "expression of the recursive query has %d columns", getDesc(), target_columns.size(),
+                        cte_column_count);
+                }
             }
             return;
         }
@@ -5947,6 +6012,23 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
+    #! Returns the text of a comment or hint of a select, which is written into an SQL comment (qore#6574)
+    /** The text cannot end the comment (\c "*" followed by \c "/") or open another one (\c "/" followed by \c "*",
+        as comments nest in some databases), and cannot have the placeholder character \c "%", as some database
+        drivers (ex: sqlite3) read placeholders in comments; a text with any of them is refused, as is a text with a
+        NUL character
+
+        @throw OPTION-ERROR the text has a character or a character sequence that is not allowed in a comment
+    */
+    private static string checkCommentText(string option, string text) {
+        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0 || text.find("%") >= 0) {
+            throw "OPTION-ERROR", sprintf("the %y select option cannot contain the character sequences \"/*\" or "
+                "\"*/\", the placeholder character \"%%\", or a NUL character, as it is written into an SQL comment",
+                option);
+        }
+        return text;
+    }
+
     private string getSelectSqlStringIntern(*hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
         if (!columns) {
             l.lock();
@@ -6367,18 +6449,20 @@ string sql = table.getSelectSql(sh, \args);
             }
         }
 
-        # issue #4206: splice comments and hints into the SQL query string last
+        # issue #4206: splice comments and hints into the SQL query string last, right after the select keyword, where a
+        # hint must be, and where no text of the query can be (qore#6574: the first " from " could be in a literal)
         if (info.query_hash.comment || info.query_hash.hint) {
+            # a hint is first, as the databases that read hints (Oracle, PostgreSQL with pg_hint_plan) read only the
+            # first comment after the select keyword
             string comment;
-            if (info.query_hash.comment) {
-                comment = sprintf("/* %s */ ", replace(info.query_hash.comment, "*/", ""));
-            }
             if (info.query_hash.hint) {
-                comment += sprintf("/*+ %s */ ", replace(info.query_hash.hint, "*/", ""));
+                comment = sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
             }
-            # splice comment / hint test right before the " from " text in the query
-            int i = sql.find(" from ");
-            splice sql, i + 1, 0, comment;
+            if (info.query_hash.comment) {
+                comment += sprintf("/* %s */ ", AbstractTable::checkCommentText("comment", info.query_hash.comment));
+            }
+            # every query starts with the select keyword here; any other query would have the comment at its start
+            splice sql, (sql =~ /^select /) ? 7 : 0, 0, comment;
         }
 
         if (setop_keys) {
@@ -6617,6 +6701,46 @@ string sql = table.getSelectSql(sh, \args);
         return with_sql + " " + select_sql;
     }
 
+    #! Returns the SQL of an insert-select whose select is a recursive query
+    /** The default implementation places the recursive query after the insert, as in
+        <tt>insert into t (c1, c2) with recursive ... select ...</tt>, with the recursion limit clause of
+        getRecursiveQuerySqlImpl(); a driver whose database needs the WITH clause or a recursion limit elsewhere
+        overrides it
+
+        @param insert_sql the start of the insert, with the target table and its columns
+        @param with_sql the WITH clause, with the common table expression
+        @param select_sql the select from the common table expression
+        @param rq the prepared recursive query; \c max_depth is the depth limit of the query, if any
+
+        @return the SQL of the insert-select
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveInsertSelectSqlImpl(string insert_sql, string with_sql, string select_sql,
+            hash<auto> rq) {
+        return insert_sql + " " + getRecursiveQuerySqlImpl(with_sql, select_sql, rq);
+    }
+
+    #! Returns the SQL of a create-as-select whose select is a recursive query
+    /** The default implementation gives the recursive query, with the recursion limit clause of
+        getRecursiveQuerySqlImpl(), to getCreateAsSelectSqlImpl(), as in
+        <tt>create table t as with recursive ... select ...</tt>; a driver whose database needs the WITH clause or a
+        recursion limit elsewhere overrides it
+
+        @param with_sql the WITH clause, with the common table expression
+        @param select_sql the select from the common table expression
+        @param rq the prepared recursive query; \c max_depth is the depth limit of the query, if any
+        @param opt the create-as-select options
+
+        @return the SQL of the create-as-select
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveCreateAsSelectSqlImpl(string with_sql, string select_sql, hash<auto> rq,
+            *hash<auto> opt) {
+        return getCreateAsSelectSqlImpl(getRecursiveQuerySqlImpl(with_sql, select_sql, rq), opt);
+    }
+
     #! the prefix of the key of the depth limit in the where hash of the step of a recursive query
     /** a disposable unique prefix, which is removed from the column name (see @ref where_clauses)
     */
@@ -6629,6 +6753,19 @@ string sql = table.getSelectSql(sh, \args);
 
     #! Returns the SQL of a recursive query (issue #3544)
     private string getRecursiveSelectSqlIntern(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
+        hash<auto> parts = getRecursiveSelectSqlPartsIntern(qh, \args, opt);
+        return getRecursiveQuerySqlImpl(parts.with_sql, parts.select_sql, parts.rq);
+    }
+
+    #! Returns the parts of the SQL of a recursive query (issues #3544, #6495)
+    /** Column information must be retrieved before calling this method
+
+        @return a hash with the following keys:
+        - \c with_sql: the WITH clause, with the common table expression
+        - \c select_sql: the select from the common table expression
+        - \c rq: the prepared recursive query (see prepareRecursiveQueryIntern())
+    */
+    private hash<auto> getRecursiveSelectSqlPartsIntern(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
         foreach string key in (RecursiveQueryRefusedOptions) {
             if (exists qh{key}) {
                 throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y select option cannot be combined with the "
@@ -6649,7 +6786,11 @@ string sql = table.getSelectSql(sh, \args);
         string with_sql = sprintf("%s %s (%s) as (%s %s %s)", getRecursiveWithSqlImpl(), cte.getSqlName(),
             (foldl $1 + ", " + $2, (map cte.getColumnSqlName($1), rq.columns)), anchor_sql,
             rq.union_all ? "union all" : "union", step_sql);
-        return getRecursiveQuerySqlImpl(with_sql, select_sql, rq);
+        return {
+            "with_sql": with_sql,
+            "select_sql": select_sql,
+            "rq": rq,
+        };
     }
 
     #! Validates a recursive query and prepares its parts (issue #3544)
@@ -7277,9 +7418,12 @@ string sql = table.getSelectSql(sh, \args);
             arg = getSqlValue(arg);
         } else if (cmd.argcolumn) {
             if (!cmd.argoptional || arg) {
-                # issue #2555: allow the use of literal with other column operators
+                # issue #2555: allow the use of literal with other column operators; the value is written as an SQL
+                # literal of the database, as cop_value() gives it in the select list, never as its text (qore#6574);
+                # it is not bound, as the SQL of a column expression is also copied (an alias in a where clause, a
+                # group by or order by position) and rendered out of the order of its text (a superquery)
                 if (arg.cop == COP_VALUE) {
-                    arg = arg.arg.toString();
+                    arg = getSqlValue(arg.arg);
                 } else {
                     if (arg.typeCode() != NT_STRING) {
                         throw "SELECT-ERROR", sprintf("%s: expecting a string column designation for column "
@@ -7379,6 +7523,10 @@ string sql = table.getSelectSql(sh, \args);
                 if (column_name =~ /^distinct\s+/i) {
                     return regex_subst(column_name, "^distinct\\s+", "", RE_Caseless);
                 }
+            } else if (!getPseudoColumnHash(){column_name}) {
+                # a reference to an alias is the alias as an SQL identifier, as the select list gives it, never its
+                # text (qore#6574); a pseudocolumn of the database (ex: rownum) is given as the driver names it
+                column_name = getAliasSqlName(column_name);
             }
             # issue #4214: use table prefixes in a join for pseudocolumns
             return use_prefix ? sprintf("%s.%s", getSqlName(), column_name) : column_name;
@@ -13790,27 +13938,133 @@ on_exit printf("SQL> %s\n", sql);
         }
         validateOptionsIntern("OPTION-ERROR", getCreateAsSelectOptions(), \opt);
 
-        string select_sql = getSetOperationSelectSql(source, select_hash, \args, opt, "create-as-select");
-        string sql = AbstractDatabase::doCallback(opt, getCreateAsSelectSqlImpl(select_sql, opt),
-            AbstractDatabase::AC_Create, "table", name);
+        hash<auto> select_parts = getSetOperationSelectSqlParts(source, select_hash, \args, opt,
+            "create-as-select");
+        # issue #6495: a recursive query is placed in the statement as the database needs it
+        string create_sql = select_parts.rq
+            ? getRecursiveCreateAsSelectSqlImpl(select_parts.with_sql, select_parts.select_sql, select_parts.rq,
+                opt)
+            : getCreateAsSelectSqlImpl(select_parts.select_sql, opt);
+        # issue #6495: a database that does not bind values in a create-as-select gets them in the SQL
+        if (args && !createAsSelectBindsValuesImpl()) {
+            create_sql = inlineBindValues(create_sql, \args);
+        }
+        string sql = AbstractDatabase::doCallback(opt, create_sql, AbstractDatabase::AC_Create, "table", name);
         if (opt.sqlarg_callback) {
             opt.sqlarg_callback(sql, args);
         }
         return sql;
     }
 
-    private string getSetOperationSelectSql(AbstractTable source, *hash<auto> select_hash,
+    #! Returns the SQL of the select of an insert-select or a create-as-select
+    /** @return a hash with a \c select_sql key giving the SQL of the select, or, for a recursive query (issue #6495),
+        the parts of its SQL as getRecursiveSelectSqlPartsIntern() gives them
+    */
+    private hash<auto> getSetOperationSelectSqlParts(AbstractTable source, *hash<auto> select_hash,
             reference<list<auto>> args, *hash<auto> opt, string operation) {
         validateSetOperationDatasource(source, operation);
 
         source.validateOptionsIntern("OPTION-ERROR", source.getSelectOptions(), \select_hash);
-        # issue #3544: not yet supported; see issue #6495
+        args = ();
         if (exists select_hash.recursive) {
-            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option is not supported by "
-                "%s", getDesc(), operation);
+            return source.getRecursiveSelectSqlParts(select_hash, \args, opt);
+        }
+        return {"select_sql": source.getSelectSqlStringIntern(select_hash, \args, opt)};
+    }
+
+    #! Returns the parts of the SQL of a recursive query, after retrieving the table's column information
+    private hash<auto> getRecursiveSelectSqlParts(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+            getColumnsUnlocked();
+        }
+        return getRecursiveSelectSqlPartsIntern(qh, \args, opt);
+    }
+
+    #! Returns @ref True if the database binds values in a create-as-select statement
+    /** A driver whose database refuses bind values in a create-as-select, which is a DDL statement, returns
+        @ref False and implements getCreateAsSelectInlineValueImpl(): the values are then given in the SQL of the
+        statement, so they appear in its text (in the SQL that the create-as-select methods return, in callbacks,
+        in logs and in the database's statement cache)
+
+        @since %SqlUtil 3.11.0
+    */
+    private bool createAsSelectBindsValuesImpl() {
+        return True;
+    }
+
+    #! Returns the SQL literal of a value of a create-as-select of a database that does not bind values in it
+    /** Called only when createAsSelectBindsValuesImpl() returns @ref False; a driver that returns @ref False gives a
+        literal that cannot change the statement for any value (as \c OracleTable::getInlineSqlValue() in the
+        \c OracleSqlUtilBase module does), and raises \c VALUE-ERROR for a value that it cannot give exactly
+
+        @param v the value
+
+        @return the SQL literal of the value
+
+        @throw VALUE-ERROR the value cannot be given in the SQL
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getCreateAsSelectInlineValueImpl(auto v) {
+        throw "VALUE-ERROR", sprintf("%s: the %s driver cannot give the values of a create-as-select in its SQL",
+            getDesc(), ds.getDriverName());
+    }
+
+    #! Replaces the \c %v bind placeholders of an SQL statement with the literals of the values
+    /** The placeholders in quoted strings and identifiers and in comments (such as the text of the \c "comment" and
+        \c "hint" select options) are not replaced; SQL with an unterminated quoted string, identifier or comment, or
+        with an Oracle alternative quoting literal (<tt>q'[...]'</tt>), which SqlUtil does not give, is refused
+
+        @param sql the SQL with \c %v placeholders
+        @param args the bind values, in the order of the placeholders; empty on return
+
+        @return the SQL with the literals of the values (see getCreateAsSelectInlineValueImpl())
+
+        @throw VALUE-ERROR a value cannot be given in SQL, the SQL cannot be read, or the placeholders and the values
+        do not match
+    */
+    private string inlineBindValues(string sql, reference<list<auto>> args) {
+        # the SQL as tokens: quoted strings and identifiers (a doubled quote is part of them), comments,
+        # placeholders, and the text between them; the text stops before a character that can start another token
+        *list<string> tokens = regex_extract(sql, "('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|/\\*(?:[^*]|\\*(?!/))*\\*/"
+            "|--[^\\r\\n]*|%v|[^'\"%/\\-]+|[%/\\-])", Qore::RE_Global);
+        if (!tokens || (foldl $1 + $2, tokens) != sql) {
+            throw "VALUE-ERROR", sprintf("%s: the values cannot be given in the SQL, which has an unterminated quoted "
+                "string, identifier or comment", getDesc());
+        }
+        string rv;
+        int arg = 0;
+        *string prev;
+        foreach string token in (tokens) {
+            # an Oracle alternative quoting literal (q'[...]'), whose text can have quotes
+            if (token[0] == "'" && prev =~ /(^|[^A-Za-z0-9_$#])[nN]?[qQ]$/) {
+                throw "VALUE-ERROR", sprintf("%s: the values cannot be given in SQL with an alternative quoting "
+                    "literal", getDesc());
+            }
+            # the start of a comment that does not end
+            if (prev == "/" && token[0] == "*") {
+                throw "VALUE-ERROR", sprintf("%s: the values cannot be given in the SQL, which has an unterminated "
+                    "comment", getDesc());
+            }
+            prev = token;
+            if (token == "%v") {
+                if (arg == args.size()) {
+                    throw "VALUE-ERROR", sprintf("%s: the SQL has more bind placeholders than the %d value(s) given",
+                        getDesc(), args.size());
+                }
+                rv += getCreateAsSelectInlineValueImpl(args[arg++]);
+            } else {
+                rv += token;
+            }
+        }
+        if (arg != args.size()) {
+            throw "VALUE-ERROR", sprintf("%s: the SQL has %d bind placeholder(s) for %d values", getDesc(), arg,
+                args.size());
         }
         args = ();
-        return source.getSelectSqlStringIntern(select_hash, \args, opt);
+        return rv;
     }
 
     private validateSetOperationDatasource(AbstractTable source, string operation) {

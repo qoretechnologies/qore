@@ -1,0 +1,98 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RoLib.qm - test library module with a registry of listeners and held objects (qore#6520)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module RoLib {
+    version = "1.0";
+    desc = "test library module with a registry of listeners and held objects";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The registry
+class RoLibState {
+    public {
+        static list<code> listeners = ();
+        static list<object> held = ();
+        static list<string> fired = ();
+        static list<string> destroyed = ();
+        static list<string> methods = ();
+    }
+}
+
+#! The public definitions of the test module
+public namespace RoLib {
+#! Code that a restricted caller may not run
+public string sub ro_dangerous() [dom=PROCESS_CONTROL] {
+    return "ran";
+}
+
+#! An object whose destructor runs the code that a restricted caller may not run
+public class RoHolder {
+    #! runs the code that a restricted caller may not run
+    string run() {
+        return ro_dangerous();
+    }
+
+    destructor() {
+        try {
+            RoLibState::destroyed += ro_dangerous();
+        } catch (hash<ExceptionInfo> ex) {
+            RoLibState::destroyed += ex.err;
+        }
+    }
+}
+
+#! Registers a call reference to ro_dangerous(), created for the caller
+public sub ro_register_ref() {
+    RoLibState::listeners += \ro_dangerous();
+}
+
+#! Registers a closure that calls ro_dangerous(), created for the caller
+public sub ro_register_closure() {
+    RoLibState::listeners += string sub () { return ro_dangerous(); };
+}
+
+#! Keeps an object of RoHolder, created for the caller
+public sub ro_hold() {
+    RoLibState::held += new RoHolder();
+}
+
+#! Runs the listeners and releases the held objects
+public sub ro_fire() {
+    foreach code c in (RoLibState::listeners) {
+        try {
+            RoLibState::fired += c();
+        } catch (hash<ExceptionInfo> ex) {
+            RoLibState::fired += ex.err;
+        }
+    }
+    foreach object o in (RoLibState::held) {
+        try {
+            RoLibState::methods += o.run();
+        } catch (hash<ExceptionInfo> ex) {
+            RoLibState::methods += ex.err;
+        }
+    }
+    RoLibState::listeners = ();
+    RoLibState::held = ();
+}
+
+#! Returns the results of the listeners
+public list<string> sub ro_fired() {
+    return RoLibState::fired;
+}
+
+#! Returns the results of the method calls
+public list<string> sub ro_methods() {
+    return RoLibState::methods;
+}
+
+#! Returns the results of the destructors
+public list<string> sub ro_destroyed() {
+    return RoLibState::destroyed;
+}
+}

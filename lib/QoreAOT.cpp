@@ -981,10 +981,164 @@ static bool qoreAotWarningsAreErrors() {
     return env && *env && strcmp(env, "0");
 }
 
+//! the form in which the compiler reports the diagnostics of the parse of the code it compiles (issue #6555)
+enum class QoreAotDiagFormat {
+    //! one line per diagnostic on stderr: <file>:<line>[:<col>]: error|warning: <code>: <message>
+    TEXT,
+    //! one JSON array of all of the diagnostics of the run, at its end (QORE_DIAG_FORMAT=json)
+    JSON,
+    //! a code frame per diagnostic on stderr (QORE_CODE_FRAMES)
+    FRAMES,
+};
+
+static QoreAotDiagFormat qoreAotDiagFormat() {
+    QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
+    const char* df = df_holder.c_str();
+    if (df && !strcmp(df, "json")) {
+        return QoreAotDiagFormat::JSON;
+    }
+    if (SystemEnvironment::isSet("QORE_CODE_FRAMES")) {
+        return QoreAotDiagFormat::FRAMES;
+    }
+    return QoreAotDiagFormat::TEXT;
+}
+
+//! the diagnostics reported in JSON form, printed at the end of the run (qore_aot_flush_parse_diagnostics())
+static std::mutex aot_json_diag_lock;
+static std::vector<QoreDiagnostic> aot_json_diags;
+static bool aot_json_diags_flushed = false;
+
+//! Reports the exceptions in \a sink, those of the parse of code being compiled, as diagnostics, and clears it
+/** In the form that QORE_DIAG_FORMAT / QORE_CODE_FRAMES select; by default each is one line on stderr, in the form of
+    other compilers (issue #6555): <file>:<line>[:<col>]: error|warning: <code>: <message>; the column is 1-based.
+    The diagnostic of an exception is the one that its Program recorded, with its hints and possible fixes, if it
+    kept it (the Programs that the compiler creates do with QORE_DIAG_FORMAT / QORE_CODE_FRAMES); otherwise it is made
+    from the exception.
+
+    @param sink the exceptions: parse errors, or parse warnings if \a warnings
+    @param warnings true if the sink holds warnings
+*/
+static void qoreAotReportParseDiagnostics(ExceptionSink& sink, bool warnings) {
+    if (!sink) {
+        return;
+    }
+    std::vector<QoreDiagnostic> diags;
+    for (QoreException* e = qore_es_private::get(sink)->head; e; e = e->next) {
+        QoreDiagnostic d("", std::string(), std::string(), QoreProgramLineLocation(), nullptr);
+        if (!qore_get_exception_parse_diagnostic(*e, d)) {
+            QoreStringValueHelper err(e->err);
+            QoreStringValueHelper desc(e->desc);
+            // an exception without a source location (raised by builtin code) has no file
+            d = QoreDiagnostic(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e, desc->c_str());
+        }
+        d.error = !warnings;
+        diags.push_back(std::move(d));
+    }
+    sink.clear();
+    switch (qoreAotDiagFormat()) {
+        case QoreAotDiagFormat::JSON: {
+            std::lock_guard<std::mutex> lg(aot_json_diag_lock);
+            aot_json_diags.insert(aot_json_diags.end(), diags.begin(), diags.end());
+            break;
+        }
+        case QoreAotDiagFormat::FRAMES: {
+            // the source of each file is read once
+            std::map<std::string, std::string> sources;
+            qore_render_diagnostic_frames(diags, [&sources] (const QoreDiagnostic& d) -> const char* {
+                if (d.file.empty()) {
+                    return nullptr;
+                }
+                auto i = sources.find(d.file);
+                if (i == sources.end()) {
+                    std::string text;
+                    if (FILE* f = fopen(d.file.c_str(), "r")) {
+                        char buf[4096];
+                        size_t n;
+                        while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+                            text.append(buf, n);
+                        }
+                        fclose(f);
+                    }
+                    i = sources.emplace(d.file, std::move(text)).first;
+                }
+                return i->second.empty() ? nullptr : i->second.c_str();
+            }, stderr);
+            break;
+        }
+        case QoreAotDiagFormat::TEXT:
+            for (const QoreDiagnostic& d : diags) {
+                const char* sev = d.error ? "error" : "warning";
+                if (d.file.empty() || d.start_line < 0) {
+                    // no source location: the file, if known, or the compiler
+                    fprintf(stderr, "%s: %s: %s: %s\n", d.file.empty() ? "qcc" : d.file.c_str(), sev, d.code.c_str(),
+                        d.message.c_str());
+                } else if (d.start_column >= 0) {
+                    fprintf(stderr, "%s:%d:%d: %s: %s: %s\n", d.file.c_str(), d.start_line, d.start_column + 1, sev,
+                        d.code.c_str(), d.message.c_str());
+                } else {
+                    fprintf(stderr, "%s:%d: %s: %s: %s\n", d.file.c_str(), d.start_line, sev, d.code.c_str(),
+                        d.message.c_str());
+                }
+            }
+            break;
+    }
+}
+
+void qore_aot_prepare_compile_program(QoreProgram& pgm) {
+    if (qoreAotDiagFormat() != QoreAotDiagFormat::TEXT) {
+        qore_set_program_parse_diagnostics_accumulated(pgm);
+    }
+}
+
+void qore_aot_flush_parse_diagnostics(FILE* out) {
+    if (qoreAotDiagFormat() != QoreAotDiagFormat::JSON) {
+        return;
+    }
+    std::lock_guard<std::mutex> lg(aot_json_diag_lock);
+    if (aot_json_diags_flushed) {
+        return;
+    }
+    aot_json_diags_flushed = true;
+    if (!out) {
+        out = stdout;
+    }
+    fprintf(out, "%s\n", qore_diagnostics_json(aot_json_diags).c_str());
+    fflush(out);
+}
+
+void qore_aot_report_parse_diagnostics(ExceptionSink& sink, bool warnings) {
+    qoreAotReportParseDiagnostics(sink, warnings);
+}
+
+//! Reports the warnings that are left in the warning sink of a parse when it goes out of scope
+/** A compile that fails after its parse succeeded (ex: the code is not %modern) returns before the warnings are
+    reported; they are reported then, as diagnostics, before the sink would print them as an unhandled exception
+    (issue #6555).  Declared after the sink, so that it is destroyed first.
+*/
+class QoreAotWarningReportHelper {
+public:
+    DLLLOCAL QoreAotWarningReportHelper(ExceptionSink& wsink) : wsink(wsink) {
+    }
+
+    DLLLOCAL ~QoreAotWarningReportHelper() {
+        if (!wsink) {
+            return;
+        }
+        try {
+            qoreAotReportParseDiagnostics(wsink, true);
+        } catch (...) {
+            // the sink prints what is left
+        }
+    }
+
+private:
+    ExceptionSink& wsink;
+};
+
 static bool qoreAotHandleWarnings(ExceptionSink& wsink, std::string& error,
         const char* context) {
     bool has_warnings = wsink.isException();
-    wsink.handleWarnings();
+    qoreAotReportParseDiagnostics(wsink, true);
     if (!has_warnings || !qoreAotWarningsAreErrors()) {
         return false;
     }
@@ -3979,6 +4133,18 @@ public:
                     info.weak_store |= ref.weak_store;
                     info.parse_reference |= ref.parse_reference;
                 });
+                // the locals that an on_exit, on_error or on_success handler references are referenced where the
+                // handler is declared: the helper that holds the block runs the handler, which can assign them
+                // (qore#6545); a region cannot hold a handler whose locals cannot be collected (see validateRegion())
+                if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                    std::unordered_set<const void*> locals;
+                    if (!QoreIRFunction::collectOnBlockExitLocals(
+                            *static_cast<const QoreIROnBlockExitInstruction*>(inst), locals)) {
+                        unknown_handler_locals.insert(inst);
+                    } else if (!locals.empty()) {
+                        handler_refs.push_back({inst, i, std::move(locals)});
+                    }
+                }
                 if (inst->exception_target) {
                     has_exception_paths = true;
                 }
@@ -4033,6 +4199,23 @@ public:
                     default:
                         break;
                 }
+            }
+        }
+        // a handler's references count for the locals of the function that have a place in its frame: those that its
+        // code references directly and its pre-instantiated locals (parameters, and the body locals, also those that
+        // the handler declares itself, which are then contained in the region); not a closure-use local, whose value
+        // is kept on the closure variable stack rather than in reload storage, nor a local that the function's frame
+        // has no place for (a variable that a closure function captures)
+        for (HandlerRefs& refs : handler_refs) {
+            for (const void* key : refs.locals) {
+                const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
+                if ((!local_info.count(lv) && !fn.pre_instantiated_locals.count(key)) || lv->closureUse()) {
+                    continue;
+                }
+                auto& info = local_info[lv];
+                info.min_ref = std::min(info.min_ref, refs.idx);
+                info.max_ref = std::max(info.max_ref, refs.idx);
+                handler_locals[refs.inst].push_back(lv);
             }
         }
         if (poisoned) {
@@ -4199,6 +4382,17 @@ private:
     std::unordered_map<const QoreIRBasicBlock*, size_t> block_idx;
     std::unordered_map<uint32_t, ValueInfo> value_info;
     std::unordered_map<const LocalVar*, LocalInfo> local_info;
+    //! the locals that the handler of an on-block-exit instruction references, at the block of the instruction
+    struct HandlerRefs {
+        const QoreIRInstruction* inst;
+        size_t idx;
+        std::unordered_set<const void*> locals;
+    };
+    std::vector<HandlerRefs> handler_refs;
+    //! the locals of the function that the handler of each on-block-exit instruction references (see analyze())
+    std::unordered_map<const QoreIRInstruction*, std::vector<const LocalVar*>> handler_locals;
+    //! the on-block-exit instructions whose handler references locals that cannot be collected
+    std::unordered_set<const QoreIRInstruction*> unknown_handler_locals;
     std::unordered_map<uint32_t, size_t> scope_enter_idx;
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
     std::unordered_map<uint32_t, size_t> temp_mark_idx;
@@ -4278,6 +4472,9 @@ private:
                                 || !in_region(it->second)) {
                             return fail("on-block-exit owner scope crosses region boundary");
                         }
+                        if (unknown_handler_locals.count(inst)) {
+                            return fail("on-block-exit handler references locals that cannot be collected");
+                        }
                         break;
                     }
                     default:
@@ -4343,6 +4540,15 @@ private:
                 aotOutlineForEachLocalWrite(inst, [&](const LocalVar* lv) {
                     region_written.insert(lv);
                 });
+                // the locals that a handler declared in the region references: the helper runs the handler, which
+                // can assign them, so they count as written: the coordinator releases its references to the values
+                // of the shared ones before the call, so that a value that the handler replaces is released at its
+                // assignment (qore#6545)
+                auto handler_it = handler_locals.find(inst);
+                if (handler_it != handler_locals.end()) {
+                    region_locals.insert(handler_it->second.begin(), handler_it->second.end());
+                    region_written.insert(handler_it->second.begin(), handler_it->second.end());
+                }
             }
         }
         // Temp-mark pairing: every paired DiscardTemps in the region must
@@ -27205,7 +27411,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for module parsing";
@@ -27257,12 +27466,14 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         mod_ctx.close();
     }
 
-    if (qoreAotHandleWarnings(wsink, error, "module parsing")) {
+    if (xsink.isException()) {
+        // the warnings of the parse, then its errors (issue #6555)
+        qoreAotReportParseDiagnostics(wsink, true);
+        qoreAotReportParseDiagnostics(xsink, false);
+        error = "module parsing failed";
         return false;
     }
-    if (xsink.isException()) {
-        xsink.handleExceptions();
-        error = "module parsing failed";
+    if (qoreAotHandleWarnings(wsink, error, "module parsing")) {
         return false;
     }
     if (!qore_aot_check_parse_options(parsed_po, label ? label : "", error, *qpgm)) {
@@ -27675,7 +27886,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for split module parsing";
@@ -27702,7 +27916,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         qpgm->parsePending(main_source.c_str(), qm_path.c_str(), &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse error in main module file: " + qm_path;
             return false;
         }
@@ -27759,7 +27975,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 qpgm->parsePending(file_source.c_str(), file_path.c_str(), &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
-                    xsink.handleExceptions();
+                    // the warnings of the parse, then its errors (issue #6555)
+                    qoreAotReportParseDiagnostics(wsink, true);
+                    qoreAotReportParseDiagnostics(xsink, false);
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
@@ -27786,7 +28004,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse commit failed for split module: " + mod_name;
             return false;
         }
@@ -28845,13 +29065,16 @@ static bool parseStubFiles(QoreProgram* pgm,
         }
         ExceptionSink xsink;
         ExceptionSink wsink;
+        QoreAotWarningReportHelper wsink_report(wsink);
         {
             ParseStubDeclarationModeHelper h(pgm);
             pgm->parsePending(src.c_str(), canon.c_str(),
                 &xsink, &wsink, QP_WARN_DEFAULT);
         }
         if (xsink.isException()) {
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse error in stub file: " + canon;
             return false;
         }
@@ -28905,21 +29128,44 @@ static bool resolveParseOptionFlag(const std::string& name,
     return false;
 }
 
-static void apply_parse_defines(QoreProgram* pgm,
-        const std::vector<std::string>& parse_defines) {
+//! Sets the parse defines given to qcc (--define NAME[=VALUE]); returns false and sets \a error if a value is invalid
+/** A define without a value is True; a value is read as by qore's -D (QoreProgram::parseCmdLineDefines(): a quoted
+    string, true, false or a decimal number), not kept as a string (issue #6564)
+*/
+static bool apply_parse_defines(QoreProgram* pgm, const std::vector<std::string>& parse_defines, std::string& error) {
+    // the last definition of a name counts, in declaration order: a name without a value is True
+    std::map<std::string, std::pair<bool, std::string>> last;
     for (const std::string& def : parse_defines) {
-        std::string name;
-        QoreValue val;
         size_t eq = def.find('=');
         if (eq == std::string::npos) {
-            name = def;
-            val = QoreValue(true);
+            last[def] = {false, std::string()};
         } else {
-            name = def.substr(0, eq);
-            val = QoreValue::makeStringValue(def.substr(eq + 1));
+            last[def.substr(0, eq)] = {true, def.substr(eq + 1)};
         }
-        pgm->parseDefine(name.c_str(), val);
     }
+    std::map<std::string, std::string> values;
+    for (const auto& [name, val] : last) {
+        if (val.first) {
+            values[name] = val.second;
+        } else {
+            pgm->parseDefine(name.c_str(), QoreValue(true));
+        }
+    }
+    if (values.empty()) {
+        return true;
+    }
+    ExceptionSink xsink, wsink;
+    pgm->parseCmdLineDefines(xsink, wsink, 0, values);
+    if (xsink) {
+        QoreValue desc = xsink.getExceptionDesc();
+        QoreStringValueHelper desc_str(desc);
+        error = "invalid value of a --define: ";
+        error += desc_str->c_str();
+        xsink.clear();
+        return false;
+    }
+    wsink.clear();
+    return true;
 }
 
 // Choose the maximum AOT batch worker-thread count. An explicit
@@ -29588,7 +29834,10 @@ bool QoreAOT::compileScriptFilesBatch(
     }
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for batch compile";
@@ -29606,7 +29855,9 @@ bool QoreAOT::compileScriptFilesBatch(
     // from the oracle module we haven't loaded).  Default value is
     // the Qore literal `True` to mirror bin/qdsp-style
     // `qpgm->parseDefine("NAME", true)` idioms.
-    apply_parse_defines(*qpgm, parse_defines);
+    if (!apply_parse_defines(*qpgm, parse_defines, error)) {
+        return false;
+    }
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.
@@ -29719,7 +29970,9 @@ bool QoreAOT::compileScriptFilesBatch(
             file_po = qpgm->getParseOptions();
         }
         if (xsink.isException()) {
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse error in target file: " + e.canon;
             return false;
         }
@@ -29762,7 +30015,9 @@ bool QoreAOT::compileScriptFilesBatch(
     }
     if (xsink.isException()) {
         aot_compile_failed_in_preload = qore_aot_commit_failed_in_preload(xsink, (bool)sibling_preload.mdes);
-        xsink.handleExceptions();
+        // the warnings of the parse, then its errors (issue #6555)
+        qoreAotReportParseDiagnostics(wsink, true);
+        qoreAotReportParseDiagnostics(xsink, false);
         error = "parse commit failed in batch compile";
         return false;
     }
@@ -30395,10 +30650,13 @@ bool QoreAOT::compileScriptAggregate(
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     std::unique_ptr<QoreProgramHelper> owned_qpgm;
     QoreProgram* qpgm = parsed_program;
     if (!qpgm) {
         owned_qpgm = std::make_unique<QoreProgramHelper>(po, xsink);
+        // its parse diagnostics are kept for the report of the compiler (issue #6555)
+        qore_aot_prepare_compile_program(***owned_qpgm);
         if (xsink.isException()) {
             xsink.handleExceptions();
             error = "failed to create QoreProgram for script aggregate compile";
@@ -30407,7 +30665,9 @@ bool QoreAOT::compileScriptAggregate(
         qpgm = **owned_qpgm;
         qpgm->setScriptPath(entries.front().canon.c_str());
 
-        apply_parse_defines(qpgm, parse_defines);
+        if (!apply_parse_defines(qpgm, parse_defines, error)) {
+            return false;
+        }
 
         if (!loadRequireModules(qpgm, require_modules, error)) {
             return false;
@@ -30433,7 +30693,9 @@ bool QoreAOT::compileScriptAggregate(
                 file_po = qpgm->getParseOptions();
             }
             if (xsink.isException()) {
-                xsink.handleExceptions();
+                // the warnings of the parse, then its errors (issue #6555)
+                qoreAotReportParseDiagnostics(wsink, true);
+                qoreAotReportParseDiagnostics(xsink, false);
                 error = "parse error in target file: " + e.canon;
                 return false;
             }
@@ -30443,7 +30705,9 @@ bool QoreAOT::compileScriptAggregate(
         }
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse commit failed in aggregate compile";
             return false;
         }
@@ -30900,7 +31164,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for script-context compile";
@@ -30908,7 +31175,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
     qpgm->setScriptPath(target_canon.c_str());
 
-    apply_parse_defines(*qpgm, parse_defines);
+    if (!apply_parse_defines(*qpgm, parse_defines, error)) {
+        return false;
+    }
 
     // Phase 4 slice 11a: preload external modules before parsing so
     // sources that reference their types without `%requires` compile.
@@ -30953,7 +31222,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         QoreProgramHelper probe_pgm(probe_po, probe_xsink);
         if (!probe_xsink.isException()) {
             probe_pgm->setScriptPath(target_canon.c_str());
-            apply_parse_defines(*probe_pgm, parse_defines);
+            // best-effort as the probe parse: the real compile below reports an invalid value
+            std::string probe_error;
+            apply_parse_defines(*probe_pgm, parse_defines, probe_error);
             // Best-effort: collect whatever declarations were registered,
             // even if the parse reports errors (an unresolved type, a
             // missing `%include`, …).  The real compile below reports the
@@ -31041,7 +31312,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
-        xsink.handleExceptions();
+        // the warnings of the parse, then its errors (issue #6555)
+        qoreAotReportParseDiagnostics(wsink, true);
+        qoreAotReportParseDiagnostics(xsink, false);
         error = "parse error in target file: " + target_canon;
         return false;
     }
@@ -31083,7 +31356,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
     if (xsink.isException()) {
         aot_compile_failed_in_preload = qore_aot_commit_failed_in_preload(xsink, (bool)sibling_mdes);
-        xsink.handleExceptions();
+        // the warnings of the parse, then its errors (issue #6555)
+        qoreAotReportParseDiagnostics(wsink, true);
+        qoreAotReportParseDiagnostics(xsink, false);
         error = "parse commit failed: " + target_canon;
         return false;
     }
@@ -31579,7 +31854,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for per-file split module parsing";
@@ -31602,7 +31880,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse error in main module file: " + qm_path;
             return false;
         }
@@ -31670,7 +31950,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 file_warn_mask);
             if (xsink.isException()) {
                 mod_ctx.close();
-                xsink.handleExceptions();
+                // the warnings of the parse, then its errors (issue #6555)
+                qoreAotReportParseDiagnostics(wsink, true);
+                qoreAotReportParseDiagnostics(xsink, false);
                 error = "parse error in component file: " + file_path;
                 return false;
             }
@@ -31719,7 +32001,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse commit failed for split module: " + mod_name;
             return false;
         }
@@ -32155,7 +32439,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for aggregator parsing";
@@ -32178,7 +32465,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse error in main module file: " + qm_path;
             return false;
         }
@@ -32227,7 +32516,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                     &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
-                    xsink.handleExceptions();
+                    // the warnings of the parse, then its errors (issue #6555)
+                    qoreAotReportParseDiagnostics(wsink, true);
+                    qoreAotReportParseDiagnostics(xsink, false);
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
@@ -32246,7 +32537,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse commit failed: " + mod_name;
             return false;
         }
@@ -32726,7 +33019,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
     ExceptionSink xsink;
     ExceptionSink wsink;
+    QoreAotWarningReportHelper wsink_report(wsink);
     QoreProgramHelper qpgm(mod_po, xsink);
+    // its parse diagnostics are kept for the report of the compiler (issue #6555)
+    qore_aot_prepare_compile_program(**qpgm);
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "failed to create QoreProgram for archive parsing";
@@ -32749,7 +33045,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse error in main module file: " + qm_path;
             return false;
         }
@@ -32798,7 +33096,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                     &xsink, &wsink, file_warn_mask);
                 if (xsink.isException()) {
                     mod_ctx.close();
-                    xsink.handleExceptions();
+                    // the warnings of the parse, then its errors (issue #6555)
+                    qoreAotReportParseDiagnostics(wsink, true);
+                    qoreAotReportParseDiagnostics(xsink, false);
                     error = "parse error in component file: " + file_path;
                     return false;
                 }
@@ -32817,7 +33117,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
             mod_ctx.close();
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors (issue #6555)
+            qoreAotReportParseDiagnostics(wsink, true);
+            qoreAotReportParseDiagnostics(xsink, false);
             error = "parse commit failed: " + mod_name;
             return false;
         }

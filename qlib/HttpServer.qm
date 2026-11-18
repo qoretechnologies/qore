@@ -7563,7 +7563,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         } catch () {
             # Keep log masking best-effort; request validation happens on the handler-visible path.
         }
-        return serv.maskData(path);
+        # the mask code can be user code, which can raise an exception for a path that it cannot process (one that is
+        # not valid in its encoding, which a regular expression substitution refuses); the request is not refused for
+        # it, and the path is not given unmasked (qore#6553)
+        try {
+            return serv.maskData(path);
+        } catch () {
+            return sprintf("<masked: request path of %d bytes>", path.size());
+        }
     }
 
     #! Processes an HTTP request natively for async I/O

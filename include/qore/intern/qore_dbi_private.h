@@ -106,6 +106,8 @@ struct DBIDriverFunctions {
     q_dbi_bulk_load_begin_t bulk_load_begin = nullptr;
     q_dbi_bulk_load_rows_t bulk_load_rows = nullptr;
     q_dbi_bulk_load_end_t bulk_load_end = nullptr;
+    //! the destinations of a connection, for the sandbox (qore#5747)
+    q_dbi_get_connect_targets_t get_connect_targets = nullptr;
 
     dbi_driver_stmt stmt;
     dbi_driver_opt opt;

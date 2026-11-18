@@ -44,6 +44,10 @@ empty int list: [null, null] list<*int>
 or-nothing list across end: [13, null] list<*int>
 in range to list<int>: [11, 12] list<int>
 across end to list<int>: RUNTIME-TYPE-ERROR
+remove across end: [[12, 13, null, null], [10, 11], \"list<*int>\"] list<auto>
+remove reverse across end: [null, null, 13, 12] list<*int>
+remove in range: [11, 12] list<int>
+remove across end to list<int>: RUNTIME-TYPE-ERROR
 ";
     }
 

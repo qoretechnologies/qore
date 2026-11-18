@@ -475,7 +475,6 @@ class SqlUtilRecursiveQueryTest inherits QUnit::Test {
         Datasource ds("sqlite3:x@:memory:");
         on_exit ds.rollback();
         AbstractTable emp = createTable(ds, "rq_emp", EmpDesc, EmpRows);
-        AbstractTable other = createTable(ds, "rq_other", EmpDesc, ());
 
         list<auto> errors = (
             ({"recursive": subtree(1) + {"bad": 1}}, "unknown key"),
@@ -500,8 +499,6 @@ class SqlUtilRecursiveQueryTest inherits QUnit::Test {
         foreach list<auto> e in (errors) {
             assertThrows("RECURSIVE-QUERY-ERROR", e[1], \emp.selectRows(), e[0]);
         }
-        # not yet supported in insert-select and create-as-select (issue #6495)
-        assertThrows("RECURSIVE-QUERY-ERROR", "not supported by insert-select", \other.insertFromSelect(),
-            (("id", "manager_id", "name"), emp, {"recursive": subtree(1), "columns": ("id", "manager_id", "name")}));
+        # insert-select and create-as-select: see SqlUtilRecursiveInsertCreate.qtest (issue #6495)
     }
 }

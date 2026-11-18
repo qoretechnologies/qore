@@ -493,6 +493,8 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     |\c --jobs=N|Parallel backend-codegen threads for the parts of a split module (split-after-opt); default CPU count, throttled by the GNU make jobserver; does not change the output
     |\c -e, \c --entry=FN|Entry function for generated one-shot or link-mode \c main()
     |\c -r, \c --warnings-are-errors|Treat Qore parser warnings as fatal compile errors
+    |\c --diag-format=json|Report the parse errors and warnings of the compiled code as one JSON array on stdout at the end of the run, in the form of <tt>qore --diag-format=json</tt> (also with the environment variable \c QORE_DIAG_FORMAT=json); the other output of the run goes to stderr
+    |\c --code-frames|Report the parse errors and warnings of the compiled code as code frames on stderr (also with the environment variable \c QORE_CODE_FRAMES)
     |\c --dump-info|Inspect embedded AOT metadata without executing code
     |\c --dump-symbols|Include an nm-like symbol table in dump output
     |\c --dump-sections|Include object and AOT section tables in dump output

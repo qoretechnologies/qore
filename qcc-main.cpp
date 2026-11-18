@@ -704,6 +704,33 @@ static std::vector<std::string> stub_files;
 // AOT-compiled sources honor the same `%ifdef` / `%ifndef` surface
 // the runtime sees.  Repeatable; applied in declaration order.
 static std::vector<std::string> parse_defines;
+
+//! Sets the parse defines (--define NAME[=VALUE]) on \a pgm before it parses: a define without a value is True, and a
+//! value is read as by qore's -D (QoreProgram::parseCmdLineDefines()); an invalid value is raised in \a xsink
+//! (issue #6564)
+static void qcc_apply_parse_defines(QoreProgram* pgm, ExceptionSink& xsink, ExceptionSink& wsink) {
+    // the last definition of a name counts, in declaration order: a name without a value is True
+    std::map<std::string, std::pair<bool, std::string>> last;
+    for (const std::string& def : parse_defines) {
+        size_t eq = def.find('=');
+        if (eq == std::string::npos) {
+            last[def] = {false, std::string()};
+        } else {
+            last[def.substr(0, eq)] = {true, def.substr(eq + 1)};
+        }
+    }
+    std::map<std::string, std::string> values;
+    for (const auto& [name, val] : last) {
+        if (val.first) {
+            values[name] = val.second;
+        } else {
+            pgm->parseDefine(name.c_str(), QoreValue(true));
+        }
+    }
+    if (!values.empty()) {
+        pgm->parseCmdLineDefines(xsink, wsink, QP_WARN_DEFAULT, values);
+    }
+}
 // --parse-option=NAME OR's a `PO_*` flag into the
 // compile program's parse options.  Mirrors the runtime
 // `qpgm->parseSetParseOptions(QORUS_PARSE_OPTIONS)` pattern Qorus
@@ -745,6 +772,10 @@ static bool include_source = false;
 static const char* metadata_compression = nullptr;
 static bool verbose = false;
 static bool warnings_are_errors = false;
+//! the form of the parse diagnostics: "json" (--diag-format=json), or nullptr (issue #6555)
+static const char* diag_format = nullptr;
+//! true for --code-frames (issue #6555)
+static bool code_frames = false;
 static bool show_help = false;
 static bool show_version = false;
 static bool dump_info = false;
@@ -1408,6 +1439,12 @@ static void print_usage(const char* prog) {
            "                         `.qo` link mode.\n");
     printf("  -r, --warnings-are-errors\n"
            "                         Treat Qore parser warnings as fatal compile errors\n");
+    printf("      --diag-format=json Report the parse errors and warnings of the compiled\n"
+           "                         code as one JSON array on stdout at the end of the run\n"
+           "                         (also QORE_DIAG_FORMAT=json); by default each is one\n"
+           "                         line on stderr: FILE:LINE[:COL]: error|warning: CODE: MSG\n");
+    printf("      --code-frames      Report the parse errors and warnings of the compiled\n"
+           "                         code as code frames on stderr (also QORE_CODE_FRAMES)\n");
     printf("  -v, --verbose          Verbose output\n");
     printf("  -h, --help             Show this help message\n");
     printf("  -V, --version          Show version information\n");
@@ -1451,7 +1488,7 @@ static void print_version() {
 
 static bool qccHandleWarnings(ExceptionSink& wsink) {
     bool has_warnings = wsink.isException();
-    wsink.handleWarnings();
+    qore_aot_report_parse_diagnostics(wsink, true);
     if (!has_warnings || !warnings_are_errors) {
         return false;
     }
@@ -1521,6 +1558,8 @@ static struct option long_options[] = {
     {"body-contract-stamp", required_argument, nullptr, 0x129},
     {"file-prefix-map", required_argument, nullptr, 0x12a},
     {"declaration-contract-stamp", required_argument, nullptr, 0x12b},
+    {"diag-format",       required_argument, nullptr, 0x12c},
+    {"code-frames",       no_argument,       nullptr, 0x12d},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1764,6 +1803,16 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 'e':
                 entry_fn = optarg;
+                break;
+            case 0x12c:  // --diag-format
+                if (strcmp(optarg, "json")) {
+                    fprintf(stderr, "error: invalid --diag-format '%s' (must be 'json')\n", optarg);
+                    return 1;
+                }
+                diag_format = optarg;
+                break;
+            case 0x12d:  // --code-frames
+                code_frames = true;
                 break;
             case 'r':
                 warnings_are_errors = true;
@@ -9939,6 +9988,13 @@ int main(int argc, char** argv) {
     if (metadata_compression) {
         SystemEnvironment::set("QORE_AOT_METADATA_COMPRESSION", metadata_compression, 1);
     }
+    // the form of the parse diagnostics of the compiled code (issue #6555)
+    if (diag_format) {
+        SystemEnvironment::set("QORE_DIAG_FORMAT", diag_format, 1);
+    }
+    if (code_frames) {
+        SystemEnvironment::set("QORE_CODE_FRAMES", "1", 1);
+    }
     // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
     // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when
     // the user explicitly passed --big-fn-threshold on the command line;
@@ -10056,6 +10112,41 @@ int main(int argc, char** argv) {
         }
         qore_cleanup();
         return rc;
+    }
+
+    // the diagnostics collected in JSON form are printed when the run ends, also when it fails; in JSON form,
+    // stdout carries only the JSON array: the other output of the run goes to stderr; set up for the modes that
+    // compile code only, after the ones that report something else on stdout (--help, --version, --dump-*) have
+    // returned
+    struct DiagnosticsFlushHelper {
+        FILE* json_out = nullptr;
+
+        ~DiagnosticsFlushHelper() {
+            qore_aot_flush_parse_diagnostics(json_out);
+            if (json_out) {
+                fclose(json_out);
+            }
+        }
+    } diagnostics_flush;
+    {
+        QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
+        const char* df = df_holder.c_str();
+        const bool json = df && !strcmp(df, "json");
+        if (json) {
+            fflush(stdout);
+            // not inherited by the processes that qcc starts (the linker)
+            int json_fd = fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0);
+            if (json_fd >= 0) {
+                diagnostics_flush.json_out = fdopen(json_fd, "w");
+                if (diagnostics_flush.json_out) {
+                    dup2(STDERR_FILENO, STDOUT_FILENO);
+                    // the other output keeps its order with what is written to stderr
+                    setvbuf(stdout, nullptr, _IOLBF, 0);
+                } else {
+                    close(json_fd);
+                }
+            }
+        }
     }
 
     if ((link_aggregate_symbol || qolink_map_path) && !link_qo) {
@@ -11685,13 +11776,22 @@ int main(int argc, char** argv) {
         // flags; options are never forced, as that would silently change the script's parse semantics.
         // QoreAOT::compile() then rejects code that is not %modern (see qore_parse_options_support_ir()).
         QoreProgram* qpgm = new QoreProgram(compile_po);
+        // its parse diagnostics are kept for the report of the compiler (issue #6555)
+        qore_aot_prepare_compile_program(*qpgm);
         ExceptionSink xsink;
         ExceptionSink wsink;
 
-        qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        // the parse defines (--define) apply to this parse as to the other compile paths: they were not set for an
+        // executable (issue #6564)
+        qcc_apply_parse_defines(qpgm, xsink, wsink);
+        if (!xsink.isException()) {
+            qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        }
 
         if (xsink.isException()) {
-            xsink.handleExceptions();
+            // the warnings of the parse, then its errors, as diagnostics (issue #6555)
+            qore_aot_report_parse_diagnostics(wsink, true);
+            qore_aot_report_parse_diagnostics(xsink, false);
             rc = 1;
         } else if (qccHandleWarnings(wsink)) {
             rc = 1;

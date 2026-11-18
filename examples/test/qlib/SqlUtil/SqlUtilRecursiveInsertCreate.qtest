@@ -1,0 +1,679 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires JdbcFirebirdSqlUtil
+%requires PgsqlSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires Sqlite3SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
+
+%exec-class SqlUtilRecursiveInsertCreateTest
+
+#! A datasource that does not connect: it gives a driver name and a server version, and records the SQL it is given
+class OfflineDatasource inherits Qore::SQL::AbstractDatasource {
+    public {
+        list<string> log = ();
+        #! the value of the "timezone" option, if any
+        *string timezone;
+    }
+
+    private {
+        string driver;
+        auto version;
+        *string real_driver;
+    }
+
+    constructor(string driver, auto version, *string real_driver) {
+        self.driver = driver;
+        self.version = version;
+        self.real_driver = real_driver;
+    }
+
+    # the jdbc driver gives the name of the database's driver
+    string getDriverRealName() { return real_driver ?? driver; }
+
+    *string getPassword() {}
+    *string getOSEncoding() {}
+    *string getDBName() { return "testdb"; }
+    *string getUserName() { return "testuser"; }
+    *string getHostName() {}
+    *int getPort() {}
+    *string getDBEncoding() {}
+    string getDriverName() { return driver; }
+    auto getServerVersion() { return version; }
+    auto getClientVersion() {}
+    string getConfigString() { return driver + ":testuser@testdb"; }
+    hash<auto> getConfigHash() { return {"type": driver, "user": "testuser", "db": "testdb"}; }
+    auto getOption(string opt) { return opt == "timezone" ? timezone : NOTHING; }
+    bool inTransaction() { return False; }
+    bool currentThreadInTransaction() { return False; }
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+
+    auto exec(string sql, ...) { log += sql; return 0; }
+    auto vexec(string sql, *softlist<auto> vargs) { log += sql; return 0; }
+    auto execRaw(string sql) { log += sql; return 0; }
+    auto select(string sql, ...) { log += sql; }
+    auto vselect(string sql, *softlist<auto> vargs) { log += sql; }
+    # SQL Server's table reads the user's default schema
+    auto selectRow(string sql, ...) { log += sql; return sql =~ /schema_name\(\)/ ? {"schema": "dbo"} : NOTHING; }
+    auto vselectRow(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectRows(string sql, ...) { log += sql; }
+    auto vselectRows(string sql, *softlist<auto> vargs) { log += sql; }
+    auto selectTyped(string sql, ...) {}
+    auto vselectTyped(string sql, *softlist<auto> vargs) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> vargs) {}
+}
+
+#! A SQLite table that gives the values of a create-as-select in its SQL with Oracle's literals, as Oracle's table
+#! does; its SQL is only checked, as SQLite has no UNISTR()
+class InlineSqlite3Table inherits Sqlite3SqlUtil::Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    private bool createAsSelectBindsValuesImpl() {
+        return False;
+    }
+
+    private string getCreateAsSelectInlineValueImpl(auto v) {
+        return OracleTable::getInlineSqlValue(v, new TimeZone("UTC"));
+    }
+
+    #! gives the values of the SQL with the tokenizer of the create-as-select
+    string inline(string sql, list<auto> args) {
+        return inlineBindValues(sql, \args);
+    }
+}
+
+#! A SQLite table that does not bind the values of a create-as-select and has no renderer of its own for them
+class UnboundSqlite3Table inherits Sqlite3SqlUtil::Sqlite3Table {
+    constructor(AbstractDatasource ds, string name) : Sqlite3Table(ds, name) {
+    }
+
+    private bool createAsSelectBindsValuesImpl() {
+        return False;
+    }
+}
+
+#! Tests recursive queries in insert-select and create-as-select (issue #6495)
+/** The SQL of an insert-select and a create-as-select whose select is a recursive query is checked for each
+    database except Oracle, whose table reads the database's catalog, with datasources that do not connect.  The
+    statements run on SQLite and, each in a schema or database of its own, on PostgreSQL, MySQL or MariaDB, Oracle,
+    SQL Server and Firebird (through JDBC) when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL,
+    \c QORE_DB_CONNSTR_ORACLE, \c QORE_DB_CONNSTR_FREETDS and \c QORE_DB_CONNSTR_JDBC_FIREBIRD are set (an Oracle
+    schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS).
+*/
+class SqlUtilRecursiveInsertCreateTest inherits QUnit::Test {
+    public {
+        #! the table of a tree of employees
+        const EmpDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "manager_id": {"qore_type": "integer"},
+                "name": {"qore_type": "string", "size": 30},
+            },
+        };
+
+        #! the table that the rows of the tree are inserted into
+        const TreeDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "name": {"qore_type": "string", "size": 30},
+                "lvl": {"qore_type": "integer"},
+            },
+        };
+
+        #! the employees: 1 manages 2 and 3, 2 manages 4, 4 manages 5
+        const EmpRows = (
+            {"id": 1, "manager_id": NULL, "name": "root"},
+            {"id": 2, "manager_id": 1, "name": "a"},
+            {"id": 3, "manager_id": 1, "name": "b"},
+            {"id": 4, "manager_id": 2, "name": "c"},
+            {"id": 5, "manager_id": 4, "name": "d"},
+        );
+
+        #! the rows of the tree under employee 1 to a depth of 2
+        const TreeRows = (
+            {"id": 1, "name": "root", "lvl": 0},
+            {"id": 2, "name": "a", "lvl": 1},
+            {"id": 3, "name": "b", "lvl": 1},
+            {"id": 4, "name": "c", "lvl": 2},
+        );
+
+        #! a table with values of different types
+        const ValDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "s": {"qore_type": "string", "size": 30},
+                "f": {"qore_type": "float"},
+                "d": {"qore_type": "date"},
+            },
+        };
+
+        #! all the rows of the tree under employee 1
+        const AllTreeRows = TreeRows + ({"id": 5, "name": "d", "lvl": 3},);
+
+        #! a depth limit above the default recursion limit of MySQL, MariaDB and SQL Server, which the SQL raises
+        const DeepLimit = 1500;
+
+        #! the offline datasources: driver, server version, table class
+        const Dialects = {
+            "pgsql": ("pgsql", 170000),
+            "mysql": ("mysql", 80400),
+            "mariadb": ("mysql", 110402),
+            "mssql": ("freetds", "Microsoft SQL Server 2022 (RTM) - 16.0.1000.6"),
+            "sqlite3": ("sqlite3", "3.45.1"),
+            "firebird": ("jdbc", "5.0", "firebird"),
+        };
+    }
+
+    private {
+        #! connections by driver
+        hash<string, Datasource> dsh;
+        #! why a database is skipped, by driver
+        hash<string, string> skip = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "freetds": "QORE_DB_CONNSTR_FREETDS is not set",
+            "jdbc": "no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD",
+        };
+    }
+
+    constructor() : Test("SqlUtilRecursiveInsertCreate", "1.0", \ARGV) {
+        addTestCase("SQL of each database", \sqlTest());
+        addTestCase("errors", \errorTest());
+        addTestCase("SQLite: insert-select and create-as-select", \sqliteTest());
+        addTestCase("PostgreSQL: insert-select and create-as-select", sub () { checkDriver("pgsql"); });
+        addTestCase("MySQL: insert-select and create-as-select", sub () { checkDriver("mysql"); });
+        addTestCase("Oracle: insert-select and create-as-select", sub () { checkDriver("oracle"); });
+        addTestCase("SQL Server: insert-select and create-as-select", sub () { checkDriver("freetds"); });
+        addTestCase("Firebird: insert-select", sub () { checkDriver("jdbc"); });
+        addTestCase("Oracle literals", \oracleLiteralTest());
+        addTestCase("values in the SQL of a create-as-select", \inlineTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        connect("pgsql", ENV.QORE_DB_CONNSTR_PGSQL, *string sub (string connstr) {
+            PgsqlRunSchema::setup(connstr, "SqlUtilRecursiveInsertCreate");
+            return connstr;
+        });
+        connect("mysql", ENV.QORE_DB_CONNSTR_MYSQL, *string sub (string connstr) {
+            return MysqlRunDatabase::getConnectionString(connstr, "SqlUtilRecursiveInsertCreate");
+        });
+        connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
+            return OracleRunSchema::getConnectionString(connstr, "SqlUtilRecursiveInsertCreate");
+        });
+        connect("freetds", ENV.QORE_DB_CONNSTR_FREETDS, *string sub (string connstr) {
+            return MssqlRunDatabase::getConnectionString(connstr, "SqlUtilRecursiveInsertCreate");
+        });
+%ifdef NoJni
+        skip.jdbc = "no jni module";
+%else
+        connect("jdbc", ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, *string sub (string connstr) {
+            return FirebirdRunDatabase::getConnectionString(connstr, "SqlUtilRecursiveInsertCreate");
+        });
+        if (dsh.jdbc && dsh.jdbc.getDriverRealName() !~ /^firebird/i) {
+            skip.jdbc = "not a Firebird connection";
+            remove dsh.jdbc;
+        }
+%endif
+    }
+
+    globalTearDown() {
+        foreach hash<auto> i in (dsh.pairIterator()) {
+            i.value.rollback();
+        }
+        remove dsh;
+        if (PgsqlRunSchema::getName()) {
+            PgsqlRunSchema::teardown();
+        }
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+        FirebirdRunDatabase::teardown();
+    }
+
+    #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
+    private connect(string driver, *string connstr, code isolate) {
+        if (!connstr) {
+            return;
+        }
+        try {
+            Datasource ds(isolate(connstr));
+            if (ds.getDriverName() != driver) {
+                skip{driver} = sprintf("the connection uses driver %y", ds.getDriverName());
+                return;
+            }
+            ds.open();
+            dsh{driver} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skip{driver} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! runs the round trip on a database
+    private checkDriver(string driver) {
+        if (!dsh{driver}) {
+            testSkip(skip{driver});
+        }
+        Datasource ds = dsh{driver};
+        on_exit ds.rollback();
+        checkRoundTrip(ds, driver);
+        if (driver == "oracle") {
+            checkOracleValues(ds);
+        }
+    }
+
+    #! returns the select option hash of the tree under employee 1, to the given depth
+    private static hash<auto> getTreeSelect(int max_depth = 2) {
+        return {
+            "recursive": {
+                "name": "tree",
+                "columns": ("id", "manager_id", "name"),
+                "anchor": {"columns": ("id", "manager_id", "name"), "where": {"id": 1}},
+                "step": {"alias": "e", "columns": ("e.id", "e.manager_id", "e.name"),
+                         "join": join_inner_recursive("t", {"manager_id": "id"})},
+                "depth": "lvl",
+                "max_depth": max_depth,
+            },
+            "columns": ("id", "name", "lvl"),
+        };
+    }
+
+    #! returns a table of a dialect
+    private static AbstractTable getTable(AbstractDatasource ds, string dialect, string name, hash<auto> desc) {
+        AbstractTable t;
+        switch (dialect) {
+            case "pgsql": t = new PgsqlTable(ds, name); break;
+            case "mysql":
+            case "mariadb": t = new MysqlTable(ds, name); break;
+            case "mssql": t = new MssqlTable(ds, name); break;
+            case "sqlite3": t = new Sqlite3Table(ds, name); break;
+            case "firebird": t = new XdbcFirebirdTable(ds, name); break;
+        }
+        t.setupTable(desc);
+        return t;
+    }
+
+    #! returns the SQL of an insert-select and a create-as-select of the tree for a dialect
+    private static hash<auto> getSql(string dialect, int max_depth = 2) {
+        OfflineDatasource ds(Dialects{dialect}[0], Dialects{dialect}[1], Dialects{dialect}[2]);
+        AbstractTable emp = getTable(ds, dialect, "emp", EmpDesc);
+        AbstractTable tree = getTable(ds, dialect, "tree_rows", TreeDesc);
+        hash<auto> rv = {};
+        list<auto> args;
+        rv.insert = tree.getInsertFromSelectSql(("id", "name", "lvl"), emp, getTreeSelect(max_depth), \args);
+        rv.insert_args = args;
+        try {
+            AbstractTable ctas = getTable(ds, dialect, "tree_copy", TreeDesc);
+            ctas.setInDb(False);
+            rv.create = ctas.getCreateAsSelectSql(emp, getTreeSelect(max_depth), \args);
+            rv.create_args = args;
+        } catch (hash<ExceptionInfo> ex) {
+            rv.create_error = ex;
+        }
+        return rv;
+    }
+
+    sqlTest() {
+        hash<auto> h;
+
+        # PostgreSQL, SQLite: the recursive query follows the insert and the create
+        foreach string dialect in ("pgsql", "sqlite3") {
+            h = getSql(dialect);
+            assertRegex("^insert into [^ ]*tree_rows \\(id,name,lvl\\) with recursive [^ ]*tree "
+                "\\(id, manager_id, name, lvl\\) as \\(select ", h.insert, dialect);
+            assertRegex("^create table [^ ]*tree_copy as with recursive [^ ]*tree ", h.create, dialect);
+            # the anchor's value and the depth limit are bound in the order of the SQL
+            assertEq((1, 2), h.insert_args, dialect);
+            assertEq((1, 2), h.create_args, dialect);
+        }
+
+        # SQL Server: the WITH clause starts the statement, and the recursion limit ends it
+        h = getSql("mssql");
+        assertRegex("^with [^ ]*tree \\(.*\\) insert into [^ ]*tree_rows \\(id,name,lvl\\) select .* "
+            "option \\(maxrecursion 2\\)$", h.insert);
+        assertRegex("^with [^ ]*tree \\(.*\\) select .* into [^ ]*tree_copy from [^ ]*tree.* "
+            "option \\(maxrecursion 2\\)$", h.create);
+        assertEq((1, 2), h.insert_args);
+
+        # MySQL: no hint for a depth below the server's limit
+        h = getSql("mysql");
+        assertRegex("^insert into [^ ]*tree_rows \\(id,name,lvl\\) with recursive ", h.insert);
+        assertRegex("^create table [^ ]*tree_copy as with recursive ", h.create);
+        # the SET_VAR hint after the INSERT keyword for a depth of 1000 or more
+        h = getSql("mysql", 1500);
+        assertRegex("^insert /\\*\\+ SET_VAR\\(cte_max_recursion_depth = 1501\\) \\*/ into [^ ]*tree_rows "
+            "\\(id,name,lvl\\) with recursive ", h.insert);
+        assertFalse(h.insert =~ /select \/\*\+/);
+        assertEq("RECURSIVE-QUERY-ERROR", h.create_error.err);
+        assertRegex("insert-select", h.create_error.desc);
+
+        # MariaDB: SET STATEMENT ... FOR before the statement for a depth above 1000
+        h = getSql("mariadb", 1500);
+        assertRegex("^set statement max_recursive_iterations = 1500 for insert into [^ ]*tree_rows ", h.insert);
+        assertRegex("^set statement max_recursive_iterations = 1500 for create table [^ ]*tree_copy as with "
+            "recursive ", h.create);
+        h = getSql("mariadb", 1000);
+        assertRegex("^insert into ", h.insert);
+
+        # Firebird: insert-select; create-as-select is not supported
+        h = getSql("firebird");
+        assertRegex("^insert into [^ ]*tree_rows \\(id,name,lvl\\) with recursive ", h.insert);
+        assertEq("OPTION-ERROR", h.create_error.err);
+    }
+
+    errorTest() {
+        # the target columns of an insert-select without "columns" in the outer select are those of the CTE
+        OfflineDatasource ds("pgsql", 170000);
+        AbstractTable emp = getTable(ds, "pgsql", "emp", EmpDesc);
+        AbstractTable tree = getTable(ds, "pgsql", "tree_rows", TreeDesc);
+        hash<auto> sh = getTreeSelect() - "columns";
+        assertThrows("COLUMN-ERROR", "common table expression of the recursive query has 4 columns",
+            \tree.getInsertFromSelectSql(), (("id", "name", "lvl"), emp, sh));
+        # an invalid recursive query
+        sh = getTreeSelect();
+        remove sh.recursive.anchor;
+        assertThrows("RECURSIVE-QUERY-ERROR", \tree.getInsertFromSelectSql(), (("id", "name", "lvl"), emp, sh));
+        # a database without recursive queries
+        OfflineDatasource old("mysql", 50744);
+        emp = getTable(old, "mysql", "emp", EmpDesc);
+        tree = getTable(old, "mysql", "tree_rows", TreeDesc);
+        assertThrows("RECURSIVE-QUERY-ERROR", "MySQL 8.0",
+            \tree.getInsertFromSelectSql(), (("id", "name", "lvl"), emp, getTreeSelect()));
+    }
+
+    #! the SQL literals of the values of a create-as-select on Oracle
+    oracleLiteralTest() {
+        TimeZone utc("UTC");
+        code lit = string sub (auto v) { return OracleTable::getInlineSqlValue(v, utc); };
+
+        # strings: only ASCII letters, digits and safe punctuation as they are, every other character escaped
+        assertEq("UNISTR('abc 123')", lit("abc 123"));
+        assertEq("UNISTR('a\\0027b\\005Cc\\0022d \\00E4\\000A\\0009')", lit("a'b\\c\"d ä\n\t"));
+        # the characters of bind placeholders are escaped too
+        assertEq("UNISTR('\\0025v\\003A1 \\0025s')", lit("%v:1 %s"));
+        assertEq("UNISTR('\\D83D\\DE00')", lit("😀"));
+        assertEq("UNISTR('')", lit(""));
+        # a string in another encoding
+        assertEq("UNISTR('\\00E4')", lit(convert_encoding("ä", "ISO-8859-1")));
+        foreach string str in (lit("a'b ä"), lit("x\\y'z")) {
+            assertEq(-1, str.substr(8, -2).find("'"), "no quote in the literal but its own: " + str);
+            assertTrue(str =~ /^[\x20-\x7e]*$/, "only ASCII: " + str);
+        }
+        # a string with an invalid encoding, also with a quote, a NUL character, or too long
+        string invalid = binary_to_string(binary("x' or 'a'='a") + <ff>, "UTF-8");
+        assertThrows("VALUE-ERROR", "invalid", lit, invalid);
+        assertThrows("VALUE-ERROR", "invalid", lit, binary_to_string(<ff27>, "UTF-8"));
+        assertThrows("VALUE-ERROR", "NUL", lit, binary_to_string(<610062>, "UTF-8"));
+        # a lone surrogate in a UTF-16 string
+        assertThrows("VALUE-ERROR", "surrogate", lit, binary_to_string(<d8000061>, "UTF-16BE"));
+        assertThrows("VALUE-ERROR", "surrogate", lit, binary_to_string(<dc00>, "UTF-16BE"));
+        assertThrows("VALUE-ERROR", lit, binary_to_string(<d800>, "UTF-16BE"));
+        assertEq("UNISTR('\\D83D\\DE00')", lit(binary_to_string(<d83dde00>, "UTF-16BE")));
+        assertEq(2010, lit(strmul("a", 2000)).size());
+        assertThrows("VALUE-ERROR", "2000", lit, strmul("a", 2001));
+        assertThrows("VALUE-ERROR", "4000", lit, strmul("ä", 900));
+
+        # numbers: exact
+        assertEq("1", lit(1));
+        # a negative number in parentheses
+        assertEq("(-42)", lit(-42));
+        string f = lit(0.1);
+        assertRegex("^[-0-9.e+]+d$", f);
+        assertEq(0.1, float(f.substr(0, -1)));
+        f = lit(-1.2345678901234567e-30);
+        assertRegex("^\\(-[0-9.e+-]+d\\)$", f);
+        assertEq(-1.2345678901234567e-30, float(f.substr(1, -2)));
+        assertEq("(-0e0d)", lit(-0.0));
+        assertEq("(-1.5)", lit(-1.5n));
+        assertEq("1.25", lit(1.25n));
+        assertEq("123456789012345678901234567890.5", lit(123456789012345678901234567890.5n));
+        foreach auto v in (@nan@, @inf@, -@inf@, @nan@n, @inf@n, 1e126n, -1e130n) {
+            assertThrows("VALUE-ERROR", lit, v);
+        }
+
+        # dates: in the time zone of the datasource
+        date d = 2026-01-02T03:04:05.123456Z;
+        assertEq("to_timestamp('20260102030405123456', 'YYYYMMDDHH24MISSFF6')", lit(d));
+        assertEq("to_timestamp('20260102040405123456', 'YYYYMMDDHH24MISSFF6')",
+            OracleTable::getInlineSqlValue(d, new TimeZone("Europe/Prague")));
+        # the time zone of the oracle driver's "timezone" option: a region or a UTC offset
+        assertEq(3600, OracleTable::getTimeZone("+01:00").UTCOffset());
+        # the driver reports a whole-hour offset without its minutes
+        assertEq(3600, OracleTable::getTimeZone("+01").UTCOffset());
+        assertEq(-5 * 3600, OracleTable::getTimeZone("-05").UTCOffset());
+        assertEq(5 * 3600 + 30 * 60 + 15, OracleTable::getTimeZone("+05:30:15").UTCOffset());
+        assertEq(-(5 * 3600 + 30 * 60), OracleTable::getTimeZone("-0530").UTCOffset());
+        assertEq("Europe/Prague", OracleTable::getTimeZone("Europe/Prague").region());
+        assertThrows("VALUE-ERROR", "time zone", \OracleTable::getTimeZone(), "No/Such_Zone");
+        # the time zone of a datasource
+        OfflineDatasource ods("oracle", "Oracle Database 23ai Free Release 23.0.0.0.0");
+        assertNothing(OracleTable::getDatasourceTimeZone(ods));
+        # as the driver reports an option of "+01:00"
+        ods.timezone = "+01";
+        assertEq(3600, OracleTable::getDatasourceTimeZone(ods).UTCOffset());
+        assertEq("to_timestamp('20260102040405123456', 'YYYYMMDDHH24MISSFF6')",
+            OracleTable::getInlineSqlValue(d, OracleTable::getDatasourceTimeZone(ods)));
+        assertThrows("VALUE-ERROR", "relative", lit, 1D);
+        assertThrows("VALUE-ERROR", "9999", lit, 9999-12-31T23:59:59Z + 1D);
+        assertThrows("VALUE-ERROR", "9999", lit, 0001-01-01T00:00:00Z - 1D);
+
+        # other values
+        assertEq("1", lit(True));
+        assertEq("0", lit(False));
+        assertEq("null", lit(NULL));
+        assertEq("null", lit());
+        assertThrows("VALUE-ERROR", lit, <0102>);
+        assertThrows("VALUE-ERROR", lit, {"a": 1});
+    }
+
+    #! values given in the SQL of a create-as-select of a database that does not bind them there (as Oracle)
+    inlineTest() {
+        string name = "a'b %v ä";
+        hash<auto> sh = getTreeSelect();
+        sh.recursive.anchor.where = {"name": name};
+        sh.columns = ("id", cop_as("name", "näme"), "lvl");
+        # a comment with a quote is not changed (a placeholder character in a comment is refused since #6574)
+        sh.comment = "x'";
+
+        OfflineDatasource ods("sqlite3", "3.45.1");
+        AbstractTable emp = getTable(ods, "sqlite3", "emp", EmpDesc);
+        InlineSqlite3Table copy(ods, "tree_copy");
+        copy.setupTable(TreeDesc);
+        list<auto> args;
+        string sql = copy.getCreateAsSelectSql(emp, sh, \args);
+        assertEq((), args);
+        assertRegex("where name = UNISTR\\('a\\\\0027b \\\\0025v \\\\00E4'\\)", sql);
+        assertRegex("< 2\\)", sql);
+        assertRegex("näme", sql);
+        assertRegex("/\\* x' \\*/", sql);
+        assertEq(0, (select regex_extract(sql, "(%v)", Qore::RE_Global) ?? (), True).size(),
+            "no placeholder remains: " + sql);
+
+        # the tokenizer: placeholders in comments, quoted strings and identifiers are not replaced
+        assertEq("select 1 -- %v\nfrom x where a = 2", copy.inline("select %v -- %v\nfrom x where a = %v", (1, 2)));
+        assertEq("select 1 -- %v\r2", copy.inline("select %v -- %v\r%v", (1, 2)));
+        assertEq("select 1 /* %v ' */ '%v' \"%v\" /***/ 2", copy.inline("select %v /* %v ' */ '%v' \"%v\" /***/ %v",
+            (1, 2)));
+        assertEq("select 'a''%v' x", copy.inline("select 'a''%v' x", ()));
+        # SQL that it cannot read, and placeholders that do not match the values
+        foreach string bad in ("select 'abc %v", "select /* %v", "select \"x %v", "select q'[%v]' x",
+                "select nq'[%v]' x", "select Q'{%v}' x") {
+            assertThrows("VALUE-ERROR", \copy.inline(), (bad, (1,)), bad);
+        }
+        assertThrows("VALUE-ERROR", "placeholder", \copy.inline(), ("select %v, %v", (1,)));
+        assertThrows("VALUE-ERROR", "placeholder", \copy.inline(), ("select %v", (1, 2)));
+
+        # a value that cannot be given exactly is refused, also with a quote
+        sh.recursive.anchor.where = {"name": binary_to_string(binary("x' or 'a'='a") + <ff>, "UTF-8")};
+        assertThrows("VALUE-ERROR", \copy.getCreateAsSelectSql(), (emp, sh));
+
+        # a table without a renderer of its own does not give values in the SQL
+        UnboundSqlite3Table unbound(ods, "tree_unbound");
+        unbound.setupTable(TreeDesc);
+        assertThrows("VALUE-ERROR", "cannot give the values", \unbound.getCreateAsSelectSql(), (emp, getTreeSelect()));
+
+        # a create-as-select without a recursive query
+        AbstractTable vals = getTable(ods, "sqlite3", "vals", ValDesc);
+        copy = new InlineSqlite3Table(ods, "vals_copy");
+        copy.setupTable(ValDesc);
+        sql = copy.getCreateAsSelectSql(vals, {"where": {"s": "x'y", "f": 0.1, "d": 2026-01-02T03:04:05Z, "id": 1}},
+            \args);
+        assertEq((), args);
+        assertRegex("UNISTR\\('x\\\\0027y'\\)", sql);
+        assertRegex("1e-1d", sql);
+        assertRegex("to_timestamp\\('20260102030405000000', 'YYYYMMDDHH24MISSFF6'\\)", sql);
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        TmpDir tmp("qore-sqlutil-recursive-insert-");
+        Datasource ds({"type": "sqlite3", "db": tmp.path + DirSep + "test.db"});
+        on_exit ds.rollback();
+        checkRoundTrip(ds, "sqlite3");
+    }
+
+    #! checks a create-as-select with values of different types on Oracle, which gives them in the SQL
+    private checkOracleValues(Datasource ds) {
+        Database db(ds);
+        AbstractTable vals = db.makeTable("rq_vals", ValDesc);
+        vals.create();
+        on_exit {
+            ds.rollback();
+            foreach string t in ("rq_vals", "rq_vals_copy", "rq_emp2", "rq_tree_named") {
+                try {
+                    ds.exec("drop table " + t);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                }
+            }
+        }
+        string s = "a'b \\ %v ä 😀";
+        # whole seconds, as a DATE column has them
+        date d = 2026-01-02T03:04:05Z;
+        list<hash<auto>> rows = (
+            {"id": 1, "s": s, "f": 0.1, "d": d},
+            {"id": 2, "s": "other", "f": 0.2, "d": d + 1D},
+        );
+        map vals.insert($1), rows;
+        ds.commit();
+
+        AbstractTable copy = db.makeTable("rq_vals_copy", ValDesc);
+        string sql;
+        list<auto> args;
+        sql = copy.getCreateAsSelectSql(vals, {"where": {"s": s, "f": 0.1, "d": d}}, \args);
+        assertEq((), args);
+        copy.createAsSelect(vals, {"where": {"s": s, "f": 0.1, "d": d}});
+        list<hash<auto>> copied = ds.selectRows("select id, s, f, d from rq_vals_copy order by id");
+        assertEq(1, copied.size(), sql);
+        assertEq(1, copied[0].id);
+        assertEq(s, copied[0].s);
+        # a float column is a NUMBER, which gives a number
+        assertEq(0.1, float(copied[0].f));
+        assertEq(d, copied[0].d);
+        ds.commit();
+
+        # a recursive query whose anchor selects by a string
+        AbstractTable emp = db.makeTable("rq_emp2", EmpDesc);
+        emp.create();
+        map emp.insert($1), EmpRows + ({"id": 6, "manager_id": NULL, "name": s},
+            {"id": 7, "manager_id": 6, "name": "e"});
+        ds.commit();
+        hash<auto> sh = getTreeSelect();
+        sh.recursive.anchor.where = {"name": s};
+        AbstractTable named = db.makeTable("rq_tree_named", TreeDesc);
+        named.createAsSelect(emp, sh);
+        assertEq(({"id": 6, "name": s, "lvl": 0}, {"id": 7, "name": "e", "lvl": 1}),
+            ds.selectRows("select id, name, lvl from rq_tree_named order by lvl, id"));
+        ds.commit();
+    }
+
+    #! creates the tables, and checks the rows that the insert-select and the create-as-select give
+    private checkRoundTrip(Datasource ds, string driver) {
+        Database db(ds);
+        AbstractTable emp = db.makeTable("rq_emp", EmpDesc);
+        emp.create();
+        AbstractTable tree = db.makeTable("rq_tree", TreeDesc);
+        tree.create();
+        # Firebird cannot write to a table in the transaction that creates it
+        ds.commit();
+        map emp.insert($1), EmpRows;
+        on_exit {
+            ds.rollback();
+            foreach string t in ("rq_emp", "rq_tree", "rq_tree_copy", "rq_tree_deep") {
+                try {
+                    ds.exec("drop table " + t);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                }
+            }
+        }
+        ds.commit();
+
+        string sql;
+        assertEq(4, tree.insertFromSelect(("id", "name", "lvl"), emp, getTreeSelect(), \sql));
+        assertRegex("insert into ", sql);
+        assertEq(TreeRows, tree.selectRows({"orderby": ("lvl", "id")}));
+
+        AbstractTable copy = db.makeTable("rq_tree_copy", TreeDesc);
+        if (driver == "jdbc") {
+            # Firebird has no create-as-select
+            assertThrows("OPTION-ERROR", \copy.createAsSelect(), (emp, getTreeSelect()));
+        } else {
+            copy.createAsSelect(emp, getTreeSelect());
+            assertEq(TreeRows, ds.selectRows("select id, name, lvl from rq_tree_copy order by lvl, id"));
+        }
+        ds.commit();
+
+        # a depth limit above the default recursion limit of the database: the SQL that raises it is accepted;
+        # Firebird runs a recursive query to a depth of at most 1023
+        int deep_limit = driver == "jdbc" ? 1023 : DeepLimit;
+        tree.del();
+        assertEq(5, tree.insertFromSelect(("id", "name", "lvl"), emp, getTreeSelect(deep_limit), \sql));
+        assertEq(AllTreeRows, tree.selectRows({"orderby": ("lvl", "id")}), sql);
+        AbstractTable deep = db.makeTable("rq_tree_deep", TreeDesc);
+        if (driver == "jdbc") {
+            assertThrows("OPTION-ERROR", \deep.createAsSelect(), (emp, getTreeSelect(deep_limit)));
+        } else if (driver == "mysql" && ds.getServerVersion() < 100000) {
+            # MySQL cannot raise the recursion limit of a create-as-select
+            assertThrows("RECURSIVE-QUERY-ERROR", \deep.createAsSelect(), (emp, getTreeSelect(DeepLimit)));
+        } else {
+            deep.createAsSelect(emp, getTreeSelect(DeepLimit));
+            assertEq(AllTreeRows, ds.selectRows("select id, name, lvl from rq_tree_deep order by lvl, id"));
+        }
+        ds.commit();
+    }
+}

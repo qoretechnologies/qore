@@ -470,8 +470,10 @@ class MssqlExpressionTest inherits QUnit::Test {
         assertEq("MM-dd", MssqlTable::convertDateFormat("MM-DD"));
         # ensure HH stays as HH
         assertEq("HH:mm:ss", MssqlTable::convertDateFormat("HH:mm:SS"));
-        # ensure single quotes are escaped for SQL safety
-        assertEq("yyyy''MM''dd", MssqlTable::convertDateFormat("YYYY'MM'DD"));
+        # the format is converted without quoting; getDateFormatLiteral() gives it as an SQL string literal (qore#6557)
+        assertEq("yyyy'MM'dd", MssqlTable::convertDateFormat("YYYY'MM'DD"));
+        assertEq("'yyyy''MM''dd'", MssqlTable::getDateFormatLiteral("YYYY'MM'DD"));
+        assertEq("'yyyy\\MM'", MssqlTable::getDateFormatLiteral("YYYY\\MM"));
     }
 
     testExpressionMapKeys() {

@@ -156,6 +156,25 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - a string that is not valid in its encoding is refused with a \c VALUE-ERROR exception when it would be written into
+      an SQL string literal, with every driver; added @ref SqlUtil::sql_literal_check_encoding()
+      "sql_literal_check_encoding()", which the driver modules use for it, and the check of the value of an immediate
+      insert operator refuses such a string (<a href="https://github.com/qoretechnologies/qore/issues/6553">issue 6553</a>)
+    - a cast (@ref SqlUtil::cop_cast() "cop_cast()" and the cast data provider expression) accepts only a type name
+      (see @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"), as the type is written into the SQL; any
+      other value raises \c OPERATOR-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6572">issue
+      6572</a>)
+    - no text given to a select is written into its SQL where it could change the query: a
+      @ref select_option_comment "comment" or @ref select_option_hint "hint" that could end its SQL comment or that
+      has a \c "%" placeholder character raises \c OPTION-ERROR (it is written right after the \c select keyword,
+      a hint first), a value given with
+      @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is an SQL literal of the database, as
+      in the select list, and an alias referenced in a superquery or a window is given as an identifier (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
+    - added @ref SqlUtil::AbstractSqlUtilBase::getSqlStringLiteral() "AbstractSqlUtilBase::getSqlStringLiteral()" and
+      @ref SqlUtil::AbstractSqlUtilBase::checkSqlStringValue() "AbstractSqlUtilBase::checkSqlStringValue()": a string
+      given in an SQL string literal whose encoding is invalid or that has a NUL character is refused with
+      \c VALUE-ERROR, and its quotes are doubled without a regular expression; the drivers use them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
       an existing constraint name is raised without also printing its message, and a debug print of update operators was
       removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -235,6 +254,9 @@ module SqlUtil {
       @ref SqlUtil::AbstractTable::supportsRecursiveQueries() "AbstractTable::supportsRecursiveQueries()" and
       @ref SqlUtil::AbstractTable::getRecursiveQueryRecordType() "AbstractTable::getRecursiveQueryRecordType()"
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select or a create-as-select, placed in the statement as each
+      database needs it (see @ref select_option_recursive_insert_create)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - a template table built from a description (the @ref SqlUtil::Table "Table" constructor with a description,
       @ref SqlUtil::AbstractDatabase::makeTable() "AbstractDatabase::makeTable()" and
       @ref SqlUtil::Tables::populate() "Tables::populate()") is created by the driver as a template, which reads
@@ -949,6 +971,9 @@ table.selectRows({"comment": "foo bar"});
 select /* foo bar *<!--%%-->/ ...
     @endcode
     @warning Oracle: using different comments in the same SQL can lead to new optimizer statement hard parsing.
+    @note The comment is written into an SQL comment right after the \c select keyword, so a comment that contains
+    \c "/<!--%%-->*", \c "*<!--%%-->/", \c "%" (which some database drivers read as a placeholder) or a NUL
+    character raises an \c OPTION-ERROR exception
 
     @subsubsection select_option_hint Select Option "hint"
     In database query operations, various SQL implementations use hints as additions to the SQL standard that instruct the database engine on how to execute the query. For example, a hint may tell the engine to use as little memory as possible (even if the query will run slowly), or to use or not to use an index (even if the query optimizer would decide otherwise).
@@ -961,7 +986,10 @@ table.selectRows(("hint": "full(t1)"));
     @code{.py}
 select /*+ full(a) *<!--%%-->/ ...
     @endcode
-    The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.
+    The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.; as it is
+    written into an SQL comment right after the \c select keyword, a hint that contains \c "/<!--%%-->*",
+    \c "*<!--%%-->/", \c "%" or a NUL character raises an \c OPTION-ERROR exception; a hint is written before a
+    comment
     @note Hints are platform dependent. Curently only Oracle and some versions of PostgreSQL hints are supported in Sqlutil module.
     @warning Use hints only when you know what you are doing.
 
@@ -1368,14 +1396,40 @@ reaches 1024 levels; a \c max_depth above 1023 raises \c RECURSIVE-QUERY-ERROR
       8.0, MariaDB before 10.2.2, Oracle before 11.2, SQLite before 3.8.3, and any driver without an implementation),
       with an invalid \c "recursive" option, with \c "union": \c "distinct" on Oracle, SQL Server and Firebird, and
       with the \c "superquery", \c "forupdate", \c "forupdate_no_key" and \c "partition" options
-    - a recursive query cannot be a subquery, a select of a set operator or of a superquery, or the select of
-      @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()" and
-      @ref SqlUtil::AbstractTable::createAsSelect() "AbstractTable::createAsSelect()", which raise
-      \c RECURSIVE-QUERY-ERROR for it
+    - a recursive query cannot be a subquery or a select of a set operator or of a superquery, which raise
+      \c RECURSIVE-QUERY-ERROR for it; it can be the select of an insert-select or a create-as-select (see
+      @ref select_option_recursive_insert_create)
     - the outer select of a recursive query with an \c "offset" needs the \c "orderby_no_unique" option, as the CTE
       has no unique key
 
     @since %SqlUtil 3.11.0
+
+    @par Recursive Queries in Insert-Select and Create-As-Select
+    @anchor select_option_recursive_insert_create
+    A select option hash with the \c "recursive" option can be given to
+    @ref SqlUtil::AbstractTable::insertFromSelect() "AbstractTable::insertFromSelect()" and the other insert-select
+    methods, and to @ref SqlUtil::AbstractTable::createAsSelect() "AbstractTable::createAsSelect()" and the other
+    create-as-select methods; the target columns of an insert-select without a \c "columns" option in the outer
+    select are those of the CTE, with its depth column.  Each database places the WITH clause and the recursion limit
+    of the query in the statement as it needs:
+    |!Database|!Insert-select|!Create-as-select
+    |PostgreSQL, SQLite|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>|\
+<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>
+    |Oracle|<tt>INSERT INTO t (...) WITH ... SELECT ...</tt>|<tt>CREATE TABLE t AS WITH ... SELECT ...</tt>, with \
+the values of the query given as literals in the SQL, as Oracle refuses bind values in a create-as-select (see \
+\c OracleTable::getInlineSqlValue() in the \c OracleSqlUtilBase module for the literals and the values that it \
+refuses); the values then appear in the text of the statement
+    |MySQL|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>, with the \c SET_VAR hint of a \c max_depth \
+of 1000 or more after the \c INSERT keyword|<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>; a \
+\c max_depth of 1000 or more raises \c RECURSIVE-QUERY-ERROR, as the statement cannot raise the recursion limit
+    |MariaDB|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>, after the <tt>SET STATEMENT ... FOR</tt> of \
+a \c max_depth above 1000|<tt>CREATE TABLE t AS WITH RECURSIVE ... SELECT ...</tt>, after the \
+<tt>SET STATEMENT ... FOR</tt> of a \c max_depth above 1000
+    |SQL Server|<tt>WITH ... INSERT INTO t (...) SELECT ...</tt>, with the <tt>OPTION (MAXRECURSION n)</tt> of a \
+\c max_depth at its end|<tt>WITH ... SELECT ... INTO t FROM ...</tt>, with the <tt>OPTION (MAXRECURSION n)</tt> \
+of a \c max_depth at its end
+    |Firebird|<tt>INSERT INTO t (...) WITH RECURSIVE ... SELECT ...</tt>|not supported: Firebird has no \
+create-as-select statement, and create-as-select raises \c OPTION-ERROR
 
     @subsubsection select_option_forupdate Select Option "forupdate"
     <b>For Update Example:</b>
@@ -3808,16 +3862,53 @@ public namespace SqlUtil {
         @endcode
 
         @param column the column specification for the column (string name or dot notation for use in joins) or any other column "cop_..." function
-        @param arg the new datatype to cast the column value(s) to
+        @param arg the new datatype to cast the column value(s) to: a %Qore type name (ex: \c "string") or a type name
+        of the database, as sql_check_cast_type() accepts it
         @param arg1 optional, type dependent, specification (e.g. size or precision)
         @param arg2 optional, type dependent, specification (e.g. scale)
 
         @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
+        @throw OPERATOR-ERROR \a arg is not a type name (see sql_check_cast_type())
+
         @see SqlUtil::cop_value for SQL literals handling
     */
     public hash<ColumnOperatorInfo> sub cop_cast(auto column, string arg, auto arg1, auto arg2) {
-        return make_cop(COP_CAST, column, (arg, arg1, arg2));
+        return make_cop(COP_CAST, column, (sql_check_cast_type(arg), arg1, arg2));
+    }
+
+    #! the regular expression of a type name for a cast (see sql_check_cast_type())
+    const CastTypeNameRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*(?:\\.[A-Za-z_][A-Za-z0-9_$]*)?" + CastTypeSizeRegex
+        + "(?: [A-Za-z_][A-Za-z0-9_$]*" + CastTypeSizeRegex + ")*(?:\\[\\])*\\z";
+
+    #! the optional size of a word of a type name for a cast: digits, \c max or \c *, an optional scale and an optional
+    #! length unit (ex: \c "(max)", \c "(10,2)", \c "(*,2)", \c "(10 char)")
+    const CastTypeSizeRegex = "(?:\\((?:[0-9]+|(?i:max)|\\*)(?:, ?[0-9]+)?(?: (?i:char|byte))?\\))?";
+
+    #! Checks that a string is a type name for a cast and returns it
+    /** A cast writes its type name into the SQL, so only a type name is accepted: one or more words of ASCII letters,
+        digits, \c "_" and \c "$" (the first character of each word not a digit) separated by single spaces (ex:
+        \c "double precision", \c "timestamp with time zone"), with an optional schema prefix (\c "schema.type"),
+        an optional size after each word (digits, \c max or \c *, an optional scale and an optional \c char or
+        \c byte unit: ex: \c "numeric(10,2)", \c "nvarchar(max)", \c "timestamp(3) with time zone",
+        \c "varchar2(10 char)") and optional array brackets (\c "[]"); quotes (so quoted identifiers), comments,
+        statement separators and any other character are refused
+
+        @param type the type name
+
+        @return \a type
+
+        @throw OPERATOR-ERROR \a type is not a type name
+
+        @since SqlUtil 3.11
+    */
+    public string sub sql_check_cast_type(string type) {
+        if (!type.isDataAscii() || !regex(type, CastTypeNameRegex)) {
+            throw "OPERATOR-ERROR", sprintf("invalid cast type name %y: only a type name is accepted (letters, digits, "
+                "\"_\" and \"$\" in words separated by single spaces, an optional schema prefix, size and array "
+                "brackets)", type.isDataAscii() ? type : sprintf("<%d bytes>", type.size()));
+        }
+        return type;
     }
 
     #! returns a @ref ColumnOperatorInfo hash for the \c "prepend" operator with the given argument
@@ -6331,6 +6422,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                         }
                         # a column is an identifier in SQL
                         partitionby = info.table.getColumnSqlName(partitionby);
+                    } else {
+                        # an alias is an identifier in SQL, as the select list gives it, never its text (qore#6574)
+                        partitionby = info.table.getAliasSqlName(partitionby);
                     }
                     sql += sprintf("partition by %s", partitionby);
                 }
@@ -6344,6 +6438,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                                 "accessible column", orderby);
                         }
                         orderby = info.table.getColumnSqlName(orderby);
+                    } else {
+                        # an alias is an identifier in SQL (qore#6574)
+                        orderby = info.table.getAliasSqlName(orderby);
                     }
                     sql += sprintf(" order by %s", orderby);
                 }
