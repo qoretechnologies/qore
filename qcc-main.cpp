@@ -683,7 +683,8 @@ static std::vector<std::string> script_lib_dirs;
 // matches `qore -l <mod>` CLI convention.  Types from these modules
 // become visible to the parser so sources that reference them
 // without %requires directives compile cleanly.  Repeatable;
-// loaded in declaration order via MM.parseLoadModule.
+// loaded in declaration order (qore_aot_load_required_modules());
+// refused when compiling a module, which uses %requires.
 static std::vector<std::string> load_modules;
 // --stub=<file> declarative-only sources parsed
 // into the compile program before target sources.  The host
@@ -1212,7 +1213,9 @@ static void print_usage(const char* prog) {
     printf("  -l, --load=MOD         Load Qore module MOD into the compile program\n"
            "                         before parsing sources.  Use when sources reference\n"
            "                         types from external modules without %%requires\n"
-           "                         directives (the host loads the module at runtime).\n"
+           "                         directives (the host, or an executable when it\n"
+           "                         starts, loads the module at runtime).  Not for a\n"
+           "                         module, which uses %%requires.\n"
            "                         May be repeated; modules load in declaration order.\n"
            "                         Matches `qore -l <mod>` CLI convention.\n");
     printf("      --stub=FILE        Preload a declarative Qore source file into the\n"
@@ -11326,6 +11329,13 @@ int main(int argc, char** argv) {
         }
     }
 
+    // a module states the modules it needs with %requires: -l, which loads modules into the Program of the compiled
+    // code, is refused for it rather than ignored (issue #6585)
+    if (!load_modules.empty() && module_mode) {
+        fprintf(stderr, "error: -l/--load cannot be used when compiling a module; use %%requires in the module\n");
+        return 1;
+    }
+
     // Warn about ignored options
     if (static_link && module_mode) {
         fprintf(stderr, "warning: --static is ignored when compiling modules\n");
@@ -11754,9 +11764,18 @@ int main(int argc, char** argv) {
         ExceptionSink xsink;
         ExceptionSink wsink;
 
-        qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        // the modules given with -l are loaded before the code is parsed, as in the other compile modes
+        // (issue #6585)
+        if (!load_modules.empty() && !qore_aot_load_required_modules(qpgm, load_modules, error)) {
+            fprintf(stderr, "error: %s\n", error.c_str());
+            rc = 1;
+        } else {
+            qpgm->parseFile(source_file, &xsink, &wsink, QP_WARN_DEFAULT);
+        }
 
-        if (xsink.isException()) {
+        if (rc) {
+            // the module was not loaded
+        } else if (xsink.isException()) {
             // the warnings of the parse, then its errors, as diagnostics (issue #6555)
             qore_aot_report_parse_diagnostics(wsink, true);
             qore_aot_report_parse_diagnostics(xsink, false);
