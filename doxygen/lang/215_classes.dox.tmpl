@@ -499,8 +499,8 @@ string s = a.create(1);
     in the child class has to simply be compatible with the return type of the abstract method in the parent
     class.\n\n
     An abstract method can also be defined by another parent class of a class that inherits more than one class; a
-    call of the method, also an unqualified or qualified call through \c self, then calls that definition (when all
-    of the variants of the method in the class that declares it are abstract).\n\n
+    call of the method, also an unqualified or qualified call through \c self, then calls that definition, also when
+    the class that declares the abstract variant has concrete variants of the method as well.\n\n
     Classes with undefined abstract methods cannot be instantiated.  Abstract methods cannot have a method body; an
     abstract method's declaration must be terminated with a semicolon (\c ";").  Furthermore, abstract methods cannot
     be also @ref static_methods "static".\n\n

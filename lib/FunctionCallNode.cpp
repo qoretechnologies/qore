@@ -1350,8 +1350,13 @@ int SelfFunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_
     if (method) {
         printd(5, "SelfFunctionCallNode::parseInitCall() this: %p resolved '%s' to %p (abstract: %d)\n", this,
             method->getName(), method, qore_method_private::get(*method)->isAbstract());
-        // issue #3070: make sure that abstract method calls are resolved at runtime
-        if (qore_method_private::get(*method)->isAbstract()) {
+        // issue #3070: make sure that abstract method calls are resolved at runtime; also a call of a method that has
+        // concrete variants beside abstract variants that the class of the method does not implement, unless the call
+        // was resolved to a concrete variant at parse time: another parent class of the class of the object can
+        // implement the abstract variants (issue #6161)
+        if (qore_method_private::get(*method)->isAbstract()
+            || (!variant && qore_class_private::get(*method->getClass())->hasUnimplementedAbstractVariants(
+                method->getName()))) {
             assert(!variant);
             is_abstract = true;
             // the class of the object implements the method, also when it inherits the implementation from another

@@ -3587,6 +3587,15 @@ public:
         return !ahm.empty();
     }
 
+    //! returns true if the class has abstract variants of the given method that it does not implement
+    /** A call of such a method whose variant is not a concrete variant resolved at parse time is resolved at run time
+        by name on the class of the object, which can inherit the implementation of an abstract variant from another
+        parent class than this one (issue #6161)
+    */
+    DLLLOCAL bool hasUnimplementedAbstractVariants(const char* mname) const {
+        return ahm.find(mname) != ahm.end();
+    }
+
     //! records a public member declaration in the class: the class then declares its members (see
     //! hasPublicMembersInHierarchy())
     DLLLOCAL void parseSetPublicMemberDeclaration() {
