@@ -1306,6 +1306,10 @@ private:
     // statement (DiscardTemps), as in the AST interpreter, also the value of a load of a weak-assigned local, which
     // owns a reference when the local holds a reference or a value rather than a weak reference (qore#6559)
     std::unordered_set<uint32_t> receiver_value_ids;
+    // The loads of weak-assigned locals that are the receiver of a call (receiver_value_ids) and keep the object of a
+    // weak reference for the call (qore_rt_load_local_weak_receiver()): the cleanup slot of the value and the flag of
+    // the load, which qore_rt_end_weak_receiver_call() reads when the call returns (endWeakReceiverCall(), qore#6590)
+    std::unordered_map<uint32_t, std::pair<llvm::Value*, llvm::AllocaInst*>> weak_receiver_holds;
 
     // Allocas tracking active iterator pointers from IteratorCreate/IteratorCreateReverse.
     // On normal exit (IteratorNext done), the alloca is nulled out.
@@ -2791,6 +2795,18 @@ private:
     // is true when the uses of the call's operands have not been consumed yet (in an invoke lowerer).  Returns true
     // if any was released, as releasing can raise an exception
     bool releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module, bool use_pending);
+
+    // Releases the object that the load of a weak-assigned local kept for the call \a inst whose receiver it is
+    // (weak_receiver_holds) when the call returns, after its arguments, as the AST interpreter releases the object of a
+    // method call; on the exception edge of a call that is no invoke, the cleanup slot releases it as a temporary of
+    // the statement.  Returns true if a release was emitted, as releasing can raise an exception
+    bool endWeakReceiverCall(const QoreIRInstruction* inst, llvm::Module& module);
+
+    // Sets the cleanup slot of the load of a weak-assigned local \a result_id, which holds the value only if the load
+    // owns it (\a owned_flag non-zero); a load that is the receiver of a call (\a receiver_hold, with the load of
+    // qore_rt_load_local_weak_receiver()) is added to weak_receiver_holds
+    void setWeakLoadCleanup(uint32_t result_id, llvm::Value* result, llvm::AllocaInst* owned_flag,
+            bool receiver_hold, llvm::Module& module, llvm::Function* llvm_func);
 
     // Build an entry-block alloca'd array of NaN-boxed args from operands[arg_start..].
     // Sets args_array and nargs.  Returns false on error.

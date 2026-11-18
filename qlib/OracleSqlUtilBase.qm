@@ -399,6 +399,9 @@ hash schema = (
       column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
       with \c VALUE-ERROR, and its quotes are doubled without a regular expression
       (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - fixed the \c in expression with the values as the arguments after the field, as the DPQL parser gives them
+      (ex: <tt>\@id in (1, 4)</tt>), which raised \c DATA-PROVIDER-EXPRESSION-ERROR or \c RUNTIME-OVERLOAD-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6581">issue 6581</a>)
     - fixed a column declared with \c "default null", which was described with the default value \c null, so
       table alignment set it again every time
       (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
@@ -3354,20 +3357,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                 },
             },
             OP_IN: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": OP_IN,
-                    "display_name": OP_IN,
-                    "short_desc": "Returns True if the first argument is found in the second argument",
-                    "desc": "Returns True if the first argument is found in the second argument",
-                    "symbol": OP_IN,
-                    "groups": "Comparison",
-                    "args": (
-                        DataProviderSignatureAnyType,
-                        DataProviderSignatureAnyType,
-                    ),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+                # the generic description, which accepts the values as a list or as the other arguments (issue #6581)
+                "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN},
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     auto val = args[0];
                     # make a copy of "info" before modifying
@@ -3377,7 +3368,13 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     # bound, as in the default expression map, and never written into the SQL (qore#6574)
                     string exp0 = info.table.getExpressionArg(\info, role, val, AbstractDataProviderTypeMap."any");
 
-                    *string sql = OracleTable::getInSql(\info, exp0, args[1] ?? (), "ORACLE-IN-OPERATOR-ERROR");
+                    # the values are a list (field, list), or the other arguments in the varargs form of DPQL (field, v1,
+                    # v2, ...), as in the generic "in" operator (issue #6581)
+                    list<auto> in_vals = args[1..];
+                    if (in_vals.size() == 1 && in_vals[0].typeCode() == NT_LIST) {
+                        in_vals = in_vals[0];
+                    }
+                    *string sql = OracleTable::getInSql(\info, exp0, in_vals, "ORACLE-IN-OPERATOR-ERROR");
                     if (sql) {
                         return sql;
                     }

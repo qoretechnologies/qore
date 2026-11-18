@@ -572,6 +572,14 @@ module SqlUtil {
       @ref sql_cop_funcs "column operator" applied to the joined table's columns (see @ref join_column_operators);
       it raised \c RUNTIME-TYPE-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/738">issue 738</a>)
+    - fixed a column alias (@ref SqlUtil::cop_as() "cop_as()") in the columns of a
+      @ref select_option_superquery "superquery", which raised \c RUNTIME-TYPE-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6592">issue 6592</a>)
+    - fixed the \c delete_others upsert option, which matched the values of a composite primary key joined with
+      \c "-", so that a row whose key gave the same text was kept (ex: <tt>("a", "b-c")</tt> for
+      <tt>("a-b", "c")</tt>); a table without a primary key raises \c UPSERT-ERROR before any change, where it raised
+      \c RUNTIME-TYPE-ERROR after the input was upserted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6580">issue 6580</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index

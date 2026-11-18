@@ -10,11 +10,15 @@
 #
 # A budget that is exceeded is a frame to shrink: move the large locals of rarely-used paths into QORE_INTERN_NOINLINE
 # helpers.  If the growth is needed, raise the budget here and give the reason and the measured bytes per level
-# (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit.  A function that is MISSING was renamed or
-# inlined into its callers: update its name here, or move its budget to the caller that its frame is now part of.
+# (examples/test/qore/stack/recursion-frame-budget.qtest) in the commit, and raise the release budgets of that test by
+# the measured bytes per level, so that the two checks agree (issue #6540: the growths of #5824 and #6074 were accepted
+# here only, and a later growth of 64 bytes within the budget of QoreIRInterpreter::execute failed the test).  A
+# function that is MISSING was renamed or inlined into its callers: update its name here, or move its budget to the
+# caller that its frame is now part of.
 #
 # The budgets are for Release builds only; debug builds are not checked here (their per-level growth is covered by
-# examples/test/qore/stack/recursion-frame-budget.qtest, which CI's debug test jobs run on every target).
+# examples/test/qore/stack/recursion-frame-budget.qtest, which CI's debug test jobs run on every target, and its
+# performance job on its x86_64 release build).
 #
 # Format: "@setting value" lines, then "<budget bytes> <qualified function name>"; a name matches every overload of
 # the function, not the lambdas and local classes inside it.  Its frame is the largest of its records (GCC records its
@@ -53,7 +57,12 @@
 #   debug:   ir function 5011 (1653) -> 5023 (1648), method 6393 (1293) -> 6423 (1289),
 #            static method 4975 (1663) -> 4993 (1657)
 # (0.4-0.8% of the depth; the AST recursions do not change; at least 67 B to the test's budgets)
-4352 QoreIRInterpreter::execute
+# #6540: 4240 B on develop 54285687c5 with the parent slot count error of #6451 raised out of line (#6451 had made it
+# 4288 B); the budget is 64 B over it, and the x86_64 release budgets of recursion-frame-budget.qtest are 56 bytes per
+# level over the measured 5102 / 6078 / 5077 (ir function / method / static method), so a growth of 64 B, which
+# costs 62-68 bytes per level, fails the test even within this budget: raise both, by the measured growth, when a
+# growth is accepted
+4304 QoreIRInterpreter::execute
 928 tryExecuteInterpreterInlineIRFunction
 880 tryExecuteInterpreterInlineIRStaticMethod
 96 evalAndRef

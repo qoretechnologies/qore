@@ -109,6 +109,395 @@ struct HierarchyWalkFrame {
     const BCList* list;
     size_t next;
 };
+
+//! The classes visited by the walk of a lookup in a class hierarchy (qore#6522)
+/** The first classes are kept in place, so that a walk of the common, small hierarchy does not allocate; a filter of
+    one bit for each class recorded answers most checks of a class that was not visited without a search
+*/
+class HierarchyVisitedSet {
+public:
+    //! returns true if the class was not visited before, and records it
+    bool insert(const qore_class_private* c) {
+        uint64_t bit = filterBit(c);
+        if (filter & bit) {
+            size_t n = count < InPlace ? count : InPlace;
+            for (size_t i = 0; i < n; ++i) {
+                if (in_place[i] == c) {
+                    return false;
+                }
+            }
+            if (count > InPlace && overflow->count(c)) {
+                return false;
+            }
+        }
+        add(c, bit);
+        return true;
+    }
+
+    //! records a class that is known not to have been visited
+    void insertNew(const qore_class_private* c) {
+        add(c, filterBit(c));
+    }
+
+private:
+    //! the number of classes kept in place
+    static constexpr size_t InPlace = 16;
+    //! not initialized: only the first count entries are read
+    const qore_class_private* in_place[InPlace];
+    std::unique_ptr<std::unordered_set<const qore_class_private*>> overflow;
+    size_t count = 0;
+    //! a bit for each class recorded, from its address: a class whose bit is not set was not visited
+    uint64_t filter = 0;
+
+    //! the bit of a class in the filter: the class objects are larger than 64 bytes
+    static uint64_t filterBit(const qore_class_private* c) {
+        return uint64_t(1) << ((reinterpret_cast<uintptr_t>(c) >> 6) & 63);
+    }
+
+    void add(const qore_class_private* c, uint64_t bit) {
+        filter |= bit;
+        if (count < InPlace) {
+            in_place[count++] = c;
+            return;
+        }
+        if (!overflow) {
+            overflow.reset(new std::unordered_set<const qore_class_private*>);
+        }
+        overflow->insert(c);
+        ++count;
+    }
+};
+
+//! what the walk of a lookup does with a class that it visits (qore#6522)
+enum class LookupVisit {
+    //! the class has no match: its base classes are searched
+    Descend,
+    //! the class has no match and its base classes are not searched
+    Skip,
+    //! the class has the match: the walk ends
+    Found,
+};
+
+//! A level of the walk of a lookup: the parent class edges of the class \a parent
+struct LookupWalkFrame {
+    const BCList* list;
+    size_t next;
+    //! the class whose base classes these are, or nullptr for the list where the walk starts
+    const qore_class_private* parent;
+    //! the most restrictive access of the parent class edges from the list where the walk starts to this list
+    ClassAccess access;
+};
+
+/*  The lookups of a class hierarchy (BCList::getClass(), BCList::runtimeFindCommittedMethod(), ...; qore#6522)
+
+    A lookup searches the base classes of a class depth first, in the order in which they are declared, and stops at
+    the first match.  It is a recursion over every path (BCList -> BCNode -> qore_class_private::*Intern() -> BCList),
+    so that in a hierarchy with a diamond a lookup that found nothing reached a class once for each path to it, which
+    is exponential in the depth of a chain of diamonds.  The recursion is kept for a hierarchy without a diamond
+    (BCList::diamond_free), where it visits each class once; a hierarchy with a diamond, or one not known to have none,
+    is searched by a walk (lookup_walk()) that searches each class once: the search of a class and its ancestors
+    gives the same answer on every path that enters it (the access of an edge only decides whether the walk enters
+    the class at its end, and the toplevel and allow_internal flags of the recursion apply to the first level only),
+    so a class reached again had no match.  A class is recorded when the walk enters it, not when an edge that the
+    lookup does not follow reaches it.
+
+    The walk first follows the first base class of each class (lookup_first_path()), without a stack or a record of
+    the classes: before the first miss, no class can be reached again.  After the first miss, the walk goes on in
+    lookup_after_first_miss(): a small hierarchy is searched as the recursion does, with a bound on its steps, and
+    otherwise lookup_full_after_first_miss() rebuilds the levels of that path and records the classes.
+
+    A lookup is given by a visitor with:
+    - bool cut(const BCNode& n, const qore_class_private* parent) const: true if the lookup does not follow the edge
+      \a n from the class \a parent (nullptr: from the class where the lookup starts, with the flags of the call)
+    - LookupVisit visit(const BCNode& n, qore_class_private& priv): the search of a class itself, which keeps the
+      match
+    - ClassAccess* access: if not nullptr, raised to the most restrictive access of the edges of the path to the
+      match, as the recursion does on its way back
+    - static constexpr bool CheckValid: if true, the base classes of a class whose list is not valid are not searched
+*/
+
+//! follows the first base class of each class from \a list; returns true if a match was found (qore#6522)
+/** @param depth set on a miss to the number of lists of the path followed
+    @param entered set on a miss to true if the class where the path ends was entered
+*/
+template <typename V>
+QORE_INTERN_ALWAYS_INLINE bool lookup_first_path(const BCList& list, V& v, size_t& depth, bool& entered) {
+    const BCList* l = &list;
+    const qore_class_private* parent = nullptr;
+    ClassAccess path_access = Public;
+    size_t d = 0;
+    while (true) {
+        ++d;
+        if (l->empty()) {
+            break;
+        }
+        const BCNode& n = *l->front();
+        // sclass can be 0 if the class could not be found during parse initialization
+        if (!n.sclass) {
+            break;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (v.cut(n, parent)) {
+            break;
+        }
+        qore_class_private* priv = qore_class_private::get(*n.sclass);
+        ClassAccess access = path_access < n.access ? n.access : path_access;
+        LookupVisit r = v.visit(n, *priv);
+        if (r == LookupVisit::Found) {
+            if (v.access && *v.access < access) {
+                *v.access = access;
+            }
+            return true;
+        }
+        if (r == LookupVisit::Skip || !priv->scl || (V::CheckValid && !priv->scl->valid)) {
+            depth = d;
+            entered = true;
+            return false;
+        }
+        parent = priv;
+        path_access = access;
+        l = priv->scl;
+    }
+    depth = d;
+    entered = false;
+    return false;
+}
+
+//! continues a lookup after the miss at the end of the path of lookup_first_path(), recording each class that it
+//! enters, so that it enters each once; returns true if a match was found (qore#6522)
+template <typename V>
+QORE_INTERN_NOINLINE bool lookup_full_after_first_miss(const BCList& list, V& v, size_t depth, bool entered) {
+    // nothing is left if each list of the path has one base class
+    {
+        const BCList* l = &list;
+        size_t i = 0;
+        while (l->size() <= 1) {
+            if (++i == depth) {
+                return false;
+            }
+            l = qore_class_private::get(*l->front()->sclass)->scl;
+        }
+    }
+
+    HierarchyWalkStack<LookupWalkFrame> stack;
+    HierarchyVisitedSet visited;
+    // the levels of the path, each after its first base class, and the classes that the path entered
+    {
+        const BCList* l = &list;
+        const qore_class_private* parent = nullptr;
+        ClassAccess path_access = Public;
+        for (size_t i = 0; i < depth; ++i) {
+            stack.push({l, 1, parent, path_access});
+            if (i + 1 < depth || entered) {
+                const BCNode& n = *l->front();
+                qore_class_private* priv = qore_class_private::get(*n.sclass);
+                // the classes of a path are distinct
+                visited.insertNew(priv);
+                if (path_access < n.access) {
+                    path_access = n.access;
+                }
+                parent = priv;
+                l = priv->scl;
+            }
+        }
+    }
+    while (!stack.empty()) {
+        LookupWalkFrame& f = stack.back();
+        if (f.next >= f.list->size()) {
+            stack.pop();
+            continue;
+        }
+        const BCNode& n = *(*f.list)[f.next++];
+        // sclass can be 0 if the class could not be found during parse initialization
+        if (!n.sclass) {
+            continue;
+        }
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (v.cut(n, f.parent)) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*n.sclass);
+        if (!visited.insert(priv)) {
+            continue;
+        }
+        ClassAccess access = f.access < n.access ? n.access : f.access;
+        LookupVisit r = v.visit(n, *priv);
+        if (r == LookupVisit::Found) {
+            if (v.access && *v.access < access) {
+                *v.access = access;
+            }
+            return true;
+        }
+        if (r == LookupVisit::Descend && priv->scl && (!V::CheckValid || priv->scl->valid)) {
+            stack.push({priv->scl, 0, priv, access});
+        }
+    }
+    return false;
+}
+
+//! the most levels of the first path, and the most steps, of the search of lookup_plain_after_first_miss()
+static constexpr size_t LookupPlainMax = 64;
+
+//! searches the base classes of \a l from \a start as the recursion does, without recording
+//! the classes, with at most \a budget steps (qore#6522)
+/** @return 1 if a match was found, 0 if none was found, -1 if the budget was spent first
+*/
+template <typename V>
+int lookup_plain(const BCList& l, size_t start, const qore_class_private* parent, ClassAccess path_access, V& v,
+        size_t& budget) {
+    for (size_t i = start, e = l.size(); i < e; ++i) {
+        const BCNode& n = *l[i];
+        // sclass can be 0 if the class could not be found during parse initialization
+        if (!n.sclass) {
+            continue;
+        }
+        if (!budget) {
+            return -1;
+        }
+        --budget;
+        QORE_CLASS_HIERARCHY_WALK_STEP();
+        if (v.cut(n, parent)) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*n.sclass);
+        ClassAccess access = path_access < n.access ? n.access : path_access;
+        LookupVisit r = v.visit(n, *priv);
+        if (r == LookupVisit::Found) {
+            if (v.access && *v.access < access) {
+                *v.access = access;
+            }
+            return 1;
+        }
+        if (r == LookupVisit::Descend && priv->scl && (!V::CheckValid || priv->scl->valid)) {
+            int rc = lookup_plain(*priv->scl, 0, priv, access, v, budget);
+            if (rc) {
+                return rc;
+            }
+        }
+    }
+    return 0;
+}
+
+//! continues a lookup after the miss at the end of the path of lookup_first_path(); returns true if a match was
+//! found (qore#6522)
+/** A small hierarchy is searched as the recursion does, without recording the classes,
+    with at most as many steps as the class where the lookup starts has ancestors (its sml), which is enough to visit
+    each edge of a hierarchy without a diamond once; a lookup that needs more steps, or whose first path is longer
+    than LookupPlainMax, is searched again by lookup_full_after_first_miss(), which records the classes (a class that
+    the first search visited had no match, and the searches of a class have no effect that a second search changes)
+*/
+template <typename V>
+QORE_INTERN_ALWAYS_INLINE bool lookup_after_first_miss(const BCList& list, V& v, size_t depth, bool entered) {
+    // the common case: the first base class of the class where the lookup starts had no match
+    if (depth == 1) {
+        if (list.size() <= 1) {
+            return false;
+        }
+        size_t budget = list.sml.size() + 1;
+        if (budget > LookupPlainMax) {
+            budget = LookupPlainMax;
+        }
+        int rc = lookup_plain(list, 1, nullptr, Public, v, budget);
+        if (rc >= 0) {
+            return rc;
+        }
+        return lookup_full_after_first_miss(list, v, depth, entered);
+    }
+    if (depth <= LookupPlainMax) {
+        //! a level of the first path: its list, the class whose list it is, and the access of the path to it
+        struct {
+            const BCList* list;
+            const qore_class_private* parent;
+            ClassAccess access;
+        } path[LookupPlainMax];
+        const BCList* l = &list;
+        const qore_class_private* parent = nullptr;
+        ClassAccess path_access = Public;
+        bool more = false;
+        for (size_t i = 0; i < depth; ++i) {
+            path[i] = {l, parent, path_access};
+            if (l->size() > 1) {
+                more = true;
+            }
+            if (i + 1 < depth) {
+                const BCNode& n = *l->front();
+                if (path_access < n.access) {
+                    path_access = n.access;
+                }
+                parent = qore_class_private::get(*n.sclass);
+                l = parent->scl;
+            }
+        }
+        // nothing is left if each list of the path has one base class
+        if (!more) {
+            return false;
+        }
+        size_t budget = list.sml.size() + 1;
+        if (budget > LookupPlainMax) {
+            budget = LookupPlainMax;
+        }
+        // the levels of the path from the deepest one, each after its first base class
+        size_t i = depth;
+        while (i--) {
+            int rc = lookup_plain(*path[i].list, 1, path[i].parent, path[i].access, v, budget);
+            if (rc > 0) {
+                return true;
+            }
+            if (rc < 0) {
+                break;
+            }
+        }
+        if (i == size_t(-1)) {
+            return false;
+        }
+    }
+    return lookup_full_after_first_miss(list, v, depth, entered);
+}
+
+//! the edge cut of the lookups that do not follow a private:internal edge below the first level (qore#6522)
+/** As BCNode::getClass() and the others with a \a toplevel argument: the first level follows such an edge only
+    if \a toplevel is true
+*/
+struct InternalEdgeCut {
+    bool toplevel;
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return n.access >= Internal && (parent || !toplevel);
+    }
+};
+
+//! the edge cut of the lookups with an \a allow_internal argument (qore#6522)
+/** A private:internal edge is followed only from the class context itself (the first level: if \a allow_internal is
+    true)
+*/
+struct InternalEdgeCutForContext {
+    const qore_class_private* class_ctx;
+    bool allow_internal;
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return n.access >= Internal && !(parent ? class_ctx == parent : allow_internal);
+    }
+};
+
+//! the edge cut of the parse-time method lookups (qore#6522)
+/** Without a class context, no private edge is followed
+*/
+struct ParseMethodEdgeCut {
+    const qore_class_private* class_ctx;
+    bool allow_internal;
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return n.access > Public && (!class_ctx
+            || (n.access == Internal && !(parent ? class_ctx == parent : allow_internal)));
+    }
+};
+
+//! the edge cut of the lookups that follow every edge (qore#6522)
+struct NoEdgeCut {
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return false;
+    }
+};
 }
 
 
@@ -3182,7 +3571,6 @@ const QoreVarInfo* BCNode::parseFindVar(const char* name, const qore_class_priva
     return vi;
 }
 
-
 const QoreClass* BCNode::getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const {
     // sclass can be 0 if the class could not be found during parse initialization
     if (!sclass)
@@ -3315,6 +3703,11 @@ QoreVarInfo* BCNode::parseFindStaticVar(const char* vname, const QoreClass*& qc,
     return vi;
 }
 
+const ConstantEntry* BCNode::findConstantEntry(const char* name) const {
+    assert(sclass);
+    return sclass->priv->findConstantEntry(name);
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE void BCNode::execConstructorsImpl(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
     //printd(5, "BCNode::execConstructors() %s::constructor() o: %p (for subclass %s) virtual: %d\n", sclass->getName(), o, o->getClass()->getName(), is_virtual);
@@ -3342,11 +3735,6 @@ void BCNode::initializeBuiltin() {
     }
 }
 
-const ConstantEntry* BCNode::findConstantEntry(const char* name) const {
-    assert(sclass);
-    return sclass->priv->findConstantEntry(name);
-}
-
 void BCList::parseResolveAbstract() {
     for (auto& i : *this) {
         if (i->sclass) {
@@ -3370,13 +3758,613 @@ void BCList::rescanParents(QoreClass* cls) {
     }
 }
 
+// the visitors of the walks of the lookups of a hierarchy with a diamond (qore#6522, see lookup_first_path()): each
+// searches a class as the recursion does in the class itself (BCNode and qore_class_private::*Intern())
+namespace {
+//! BCList::isBaseClass()
+struct IsBaseClassLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access = nullptr;
+    QoreClass* qc;
+    bool rv = false;
+
+    IsBaseClassLookup(QoreClass* qc, bool toplevel) : InternalEdgeCut{toplevel}, qc(qc) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        if (qc->getID() == n.sclass->getID()) {
+            rv = true;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseFindMember(): as qore_class_private::parseFindMemberNoInit(), which searches the base classes of a
+//! class with toplevel = true, so that only the first level can cut an edge
+struct ParseFindMemberLookup {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access;
+    const char* mem;
+    const qore_class_private*& qc;
+    bool toplevel;
+    const QoreMemberInfo* rv = nullptr;
+
+    ParseFindMemberLookup(const char* mem, const qore_class_private*& qc, ClassAccess& access, bool toplevel)
+            : access(&access), mem(mem), qc(qc), toplevel(toplevel) {
+    }
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return !parent && !toplevel && n.access >= Internal;
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        const QoreMemberInfo* mi = priv.members.find(mem);
+        if (mi) {
+            ClassAccess ma = mi->getAccess();
+            if (ma < Internal) {
+                if (*access < ma) {
+                    *access = ma;
+                }
+                qc = mi->getClass();
+                rv = mi;
+                return LookupVisit::Found;
+            }
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseFindVar(): as qore_class_private::parseFindVar()
+struct ParseFindVarLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access;
+    const char* name;
+    const qore_class_private*& qc;
+    const QoreVarInfo* rv = nullptr;
+
+    ParseFindVarLookup(const char* name, const qore_class_private*& qc, ClassAccess& access, bool toplevel)
+            : InternalEdgeCut{toplevel}, access(&access), name(name), qc(qc) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        QoreVarInfo* vi = priv.vars.find(const_cast<char*>(name));
+        if (vi) {
+            qc = &priv;
+            *access = vi->getAccess();
+            rv = vi;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::runtimeFindCommittedMethod() and BCList::runtimeFindCommittedStaticMethod(): as
+//! qore_class_private::runtimeFindCommittedMethodIntern() and runtimeFindCommittedStaticMethodIntern()
+template <bool Static>
+struct RuntimeFindCommittedMethodLookup : InternalEdgeCutForContext {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    RuntimeFindCommittedMethodLookup(const char* name, ClassAccess& access, const qore_class_private* class_ctx,
+            bool allow_internal) : InternalEdgeCutForContext{class_ctx, allow_internal}, access(&access), name(name) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        const QoreMethod* m = Static ? priv.findLocalCommittedStaticMethod(name) : priv.findLocalCommittedMethod(name);
+        if (m && (class_ctx == &priv || priv.doRuntimeMethodAccess(m, *access, m->getAccess(), class_ctx))) {
+            rv = m;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseFindNormalMethod() and BCList::parseFindStaticMethod(): as
+//! qore_class_private::parseFindNormalMethodIntern() and parseFindStaticMethodIntern(), which initialize each class
+//! that they search
+template <bool Static>
+struct ParseFindMethodLookup : ParseMethodEdgeCut {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    ParseFindMethodLookup(const char* name, const qore_class_private* class_ctx, bool allow_internal)
+            : ParseMethodEdgeCut{class_ctx, allow_internal}, name(name) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        priv.initialize();
+        const QoreMethod* m = Static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
+        if (m && qore_class_private::doParseMethodAccess(m, class_ctx)) {
+            rv = m;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseResolveSelfMethod(): as BCNode::parseResolveSelfMethod() and
+//! qore_class_private::parseResolveSelfMethodIntern()
+struct ParseResolveSelfMethodLookup : InternalEdgeCutForContext {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    ParseResolveSelfMethodLookup(const char* name, const qore_class_private* class_ctx, bool allow_internal)
+            : InternalEdgeCutForContext{class_ctx, allow_internal}, name(name) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        priv.initialize();
+        const QoreMethod* m = priv.parseFindLocalMethod(name);
+        if (m && qore_class_private::doMethodAccess(m, qore_method_private::getAccess(*m), class_ctx)) {
+            rv = m;
+            return LookupVisit::Found;
+        }
+        m = priv.parseFindLocalStaticMethod(name);
+        if (m && qore_class_private::doMethodAccess(m, qore_method_private::getAccess(*m), class_ctx)) {
+            rv = m;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::runtimeIsPrivateMember(): as qore_class_private::runtimeIsPrivateMemberIntern() with toplevel = false:
+//! a class with the member answers for its base classes
+struct RuntimeIsPrivateMemberLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access = nullptr;
+    const char* str;
+    bool rv = false;
+
+    RuntimeIsPrivateMemberLookup(const char* str, bool toplevel) : InternalEdgeCut{toplevel}, str(str) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        if (!priv.initialized) {
+            return LookupVisit::Skip;
+        }
+        QoreMemberInfo* info = priv.members.find(str);
+        if (info && !info->isLocalInternal()) {
+            if (info->getAccess() > Public) {
+                rv = true;
+                return LookupVisit::Found;
+            }
+            return LookupVisit::Skip;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseCheckHierarchy(): as qore_class_private::parseCheckHierarchyIntern()
+struct ParseCheckHierarchyLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access;
+    const qore_class_private& cls;
+    bool rv = false;
+
+    ParseCheckHierarchyLookup(const QoreClass* cls, ClassAccess& access, bool toplevel) : InternalEdgeCut{toplevel},
+            access(&access), cls(*qore_class_private::get(*cls)) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        if (priv.parseEqual(cls)) {
+            rv = true;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseFindConstantValue(): as qore_class_private::parseFindConstantValueIntern()
+struct ParseFindConstantValueLookup : InternalEdgeCutForContext {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access = nullptr;
+    const char* cname;
+    const QoreTypeInfo*& typeInfo;
+    bool& found;
+    const QoreProgramLocation* consumer_loc;
+    QoreValue rv;
+
+    ParseFindConstantValueLookup(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+            const qore_class_private* class_ctx, bool allow_internal, const QoreProgramLocation* consumer_loc)
+            : InternalEdgeCutForContext{class_ctx, allow_internal}, cname(cname), typeInfo(typeInfo), found(found),
+            consumer_loc(consumer_loc) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        QoreValue v = priv.parseFindLocalAccessibleConstantValue(cname, typeInfo, found, class_ctx, consumer_loc);
+        if (found) {
+            rv = v;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::parseFindStaticVar(): as qore_class_private::parseFindStaticVarIntern() with toplevel = false
+struct ParseFindStaticVarLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = true;
+    ClassAccess* access;
+    const char* vname;
+    const QoreClass*& qc;
+    bool check;
+    QoreVarInfo* rv = nullptr;
+
+    ParseFindStaticVarLookup(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check,
+            bool toplevel) : InternalEdgeCut{toplevel}, access(&access), vname(vname), qc(qc), check(check) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        bool stop = false;
+        if (QoreVarInfo* vi = priv.parseFindLocalStaticVarIntern(vname, qc, *access, check, false, stop)) {
+            rv = vi;
+            return LookupVisit::Found;
+        }
+        return stop ? LookupVisit::Skip : LookupVisit::Descend;
+    }
+};
+
+//! BCList::getClass(qore_classid_t, ...): as BCNode::getClass()
+struct GetClassIdLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access;
+    qore_classid_t cid;
+    const QoreClass* rv = nullptr;
+
+    GetClassIdLookup(qore_classid_t cid, ClassAccess& access, bool toplevel) : InternalEdgeCut{toplevel},
+            access(&access), cid(cid) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        if (n.sclass->getID() == cid) {
+            rv = n.sclass;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::getClass(const qore_class_private&, ...) and BCList::parseGetClass(): as
+//! qore_class_private::getClassIntern() and parseGetClassIntern()
+template <bool Parse>
+struct GetClassLookup : InternalEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access;
+    const qore_class_private& qc;
+    const QoreClass* rv = nullptr;
+
+    GetClassLookup(const qore_class_private& qc, ClassAccess& access, bool toplevel) : InternalEdgeCut{toplevel},
+            access(&access), qc(qc) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        if (Parse ? priv.parseEqual(qc) : priv.equal(qc)) {
+            rv = priv.cls;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::inHierarchy() and BCList::inHierarchyStrict(): as qore_class_private::inHierarchy() and
+//! inHierarchyStrict(), which follow every edge
+template <bool Strict>
+struct InHierarchyLookup : NoEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access;
+    const qore_class_private& qc;
+    bool rv = false;
+
+    InHierarchyLookup(const qore_class_private& qc, ClassAccess& access) : access(&access), qc(qc) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        if (Strict ? priv.strictEqual(qc) : priv.equal(qc)) {
+            rv = true;
+            return LookupVisit::Found;
+        }
+        return LookupVisit::Descend;
+    }
+};
+
+//! BCList::findConstantEntry(): as qore_class_private::findConstantEntry()
+struct FindConstantEntryLookup : NoEdgeCut {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const ConstantEntry* rv = nullptr;
+
+    FindConstantEntryLookup(const char* name) : name(name) {
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        rv = priv.constlist.findEntry(name);
+        return rv ? LookupVisit::Found : LookupVisit::Descend;
+    }
+};
+
+//! the lookup of a hierarchy with a diamond (or not known to have none): not inlined, so that the lookups of the
+//! common hierarchy without one run the recursion as before
+template <typename V, typename... Args>
+QORE_INTERN_NOINLINE auto lookup_walk(const BCList& list, Args... args) -> decltype(V(args...).rv) {
+    V v(args...);
+    size_t depth;
+    bool entered;
+    if (lookup_first_path(list, v, depth, entered)) {
+        return v.rv;
+    }
+    lookup_after_first_miss(list, v, depth, entered);
+    return v.rv;
+}
+}
+
 bool BCList::isBaseClass(QoreClass* qc, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<IsBaseClassLookup>(*this, qc, toplevel);
+    }
     for (auto& i : *this) {
         if ((*i).isBaseClass(qc, toplevel))
             return true;
     }
     //printd(5, "BCList::isBaseClass() %p %s (%d) FALSE\n", this, qc->getName(), qc->getID());
     return false;
+}
+
+const QoreMemberInfo* BCList::parseFindMember(const char* mem, const qore_class_private*& qc, ClassAccess& access,
+        bool toplevel) const {
+    if (!valid) {
+        return nullptr;
+    }
+    if (!diamond_free) {
+        return lookup_walk<ParseFindMemberLookup, const char*, const qore_class_private*&, ClassAccess&, bool>(*this,
+            mem, qc, access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreMemberInfo* mi = (*i).parseFindMember(mem, qc, access, toplevel);
+        if (mi) {
+            return mi;
+        }
+    }
+    return nullptr;
+}
+
+const QoreVarInfo* BCList::parseFindVar(const char* name, const qore_class_private*& qc, ClassAccess& n_access,
+        bool toplevel) const {
+    if (!valid) {
+        return nullptr;
+    }
+    if (!diamond_free) {
+        return lookup_walk<ParseFindVarLookup, const char*, const qore_class_private*&, ClassAccess&, bool>(*this,
+            name, qc, n_access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreVarInfo* rv = (*i).parseFindVar(name, qc, n_access, toplevel);
+        if (rv)
+            return rv;
+    }
+    return nullptr;
+}
+
+// called at run time
+const QoreMethod* BCList::runtimeFindCommittedMethod(const char* name, ClassAccess& access,
+        const qore_class_private* class_ctx, bool allow_internal) const {
+    if (!diamond_free) {
+        return lookup_walk<RuntimeFindCommittedMethodLookup<false>, const char*, ClassAccess&,
+            const qore_class_private*, bool>(*this, name, access, class_ctx, allow_internal);
+    }
+    for (auto& i : *this) {
+        const QoreMethod* m = (*i).runtimeFindCommittedMethod(name, access, class_ctx, allow_internal);
+        if (m)
+            return m;
+    }
+    return nullptr;
+}
+
+// called at run time
+const QoreMethod* BCList::runtimeFindCommittedStaticMethod(const char* name, ClassAccess& access,
+        const qore_class_private* class_ctx, bool allow_internal) const {
+    if (!diamond_free) {
+        return lookup_walk<RuntimeFindCommittedMethodLookup<true>, const char*, ClassAccess&,
+            const qore_class_private*, bool>(*this, name, access, class_ctx, allow_internal);
+    }
+    for (auto& i : *this) {
+        const QoreMethod* m = (*i).runtimeFindCommittedStaticMethod(name, access, class_ctx, allow_internal);
+        if (m)
+            return m;
+    }
+    return nullptr;
+}
+
+const QoreMethod* BCList::parseFindNormalMethod(const char* name, const qore_class_private* class_ctx,
+        bool allow_internal) {
+    if (!valid) {
+        return nullptr;
+    }
+    if (!diamond_free) {
+        return lookup_walk<ParseFindMethodLookup<false>>(*this, name, class_ctx, allow_internal);
+    }
+    for (auto& i : *this) {
+        const QoreMethod* m = (*i).parseFindNormalMethod(name, class_ctx, allow_internal);
+        if (m)
+            return m;
+    }
+    return nullptr;
+}
+
+const QoreMethod* BCList::parseFindStaticMethod(const char* name, const qore_class_private* class_ctx,
+        bool allow_internal) {
+    if (!valid) {
+        return nullptr;
+    }
+    if (!diamond_free) {
+        return lookup_walk<ParseFindMethodLookup<true>>(*this, name, class_ctx, allow_internal);
+    }
+    for (auto& i : *this) {
+        const QoreMethod* m = (*i).parseFindStaticMethod(name, class_ctx, allow_internal);
+        if (m)
+            return m;
+    }
+    return nullptr;
+}
+
+const QoreMethod* BCList::parseResolveSelfMethod(const QoreProgramLocation* loc, const char* name,
+        const qore_class_private* class_ctx, bool allow_internal) {
+    if (!diamond_free) {
+        return lookup_walk<ParseResolveSelfMethodLookup>(*this, name, class_ctx, allow_internal);
+    }
+    for (auto& i : *this) {
+        const QoreMethod* m = (*i).parseResolveSelfMethod(loc, name, class_ctx, allow_internal);
+        if (m)
+            return m;
+    }
+    return nullptr;
+}
+
+bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<RuntimeIsPrivateMemberLookup>(*this, str, toplevel);
+    }
+    for (auto& i : *this) {
+        if ((*i).runtimeIsPrivateMember(str, toplevel))
+            return true;
+    }
+    return false;
+}
+
+bool BCList::parseCheckHierarchy(const QoreClass* cls, ClassAccess& access, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<ParseCheckHierarchyLookup, const QoreClass*, ClassAccess&, bool>(*this,
+            cls, access, toplevel);
+    }
+    for (auto& i : *this) {
+        if ((*i).parseCheckHierarchy(cls, access, toplevel))
+            return true;
+    }
+    return false;
+}
+
+QoreValue BCList::parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+        const qore_class_private* class_ctx, bool allow_internal, const QoreProgramLocation* consumer_loc) const {
+    if (!valid) {
+        return QoreValue();
+    }
+    if (!diamond_free) {
+        return lookup_walk<ParseFindConstantValueLookup, const char*, const QoreTypeInfo*&, bool&,
+            const qore_class_private*, bool, const QoreProgramLocation*>(*this, cname, typeInfo, found, class_ctx,
+            allow_internal, consumer_loc);
+    }
+    for (auto& i : *this) {
+       QoreValue rv = (*i).parseFindConstantValue(cname, typeInfo, found, class_ctx, allow_internal, consumer_loc);
+       if (found)
+           return rv;
+    }
+    return QoreValue();
+}
+
+QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check,
+        bool toplevel) const {
+    if (!valid) {
+        return nullptr;
+    }
+    if (!diamond_free) {
+        return lookup_walk<ParseFindStaticVarLookup, const char*, const QoreClass*&, ClassAccess&, bool, bool>(*this,
+            vname, qc, access, check, toplevel);
+    }
+    for (auto& i : *this) {
+        QoreVarInfo* vi = (*i).parseFindStaticVar(vname, qc, access, check, toplevel);
+        if (vi)
+            return vi;
+    }
+    return nullptr;
+}
+
+const QoreClass* BCList::getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<GetClassIdLookup, qore_classid_t, ClassAccess&, bool>(*this, cid, n_access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreClass* qc = (*i).getClass(cid, n_access, toplevel);
+        if (qc)
+            return qc;
+    }
+
+    return nullptr;
+}
+
+const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<GetClassLookup<false>, const qore_class_private&, ClassAccess&, bool>(*this,
+            qc, n_access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreClass* rv = (*i).getClass(qc, n_access, toplevel);
+        if (rv)
+            return rv;
+    }
+
+    return nullptr;
+}
+
+const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
+    if (!diamond_free) {
+        return lookup_walk<GetClassLookup<true>, const qore_class_private&, ClassAccess&, bool>(*this,
+            qc, n_access, toplevel);
+    }
+    for (auto& i : *this) {
+        const QoreClass* rv = (*i).parseGetClass(qc, n_access, toplevel);
+        if (rv)
+            return rv;
+    }
+
+    return nullptr;
+}
+
+bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
+    if (!diamond_free) {
+        return lookup_walk<InHierarchyLookup<false>, const qore_class_private&, ClassAccess&>(*this, qc, n_access);
+    }
+    for (auto& i : *this) {
+        bool b = (*i).inHierarchy(qc, n_access);
+        if (b) {
+            return b;
+        }
+    }
+
+    return false;
+}
+
+bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const {
+    if (!diamond_free) {
+        return lookup_walk<InHierarchyLookup<true>, const qore_class_private&, ClassAccess&>(*this, qc, n_access);
+    }
+    for (auto& i : *this) {
+        bool b = (*i).inHierarchyStrict(qc, n_access);
+        if (b) {
+            return b;
+        }
+    }
+
+    return false;
+}
+
+const ConstantEntry* BCList::findConstantEntry(const char* name) const {
+    if (!diamond_free) {
+        return lookup_walk<FindConstantEntryLookup>(*this, name);
+    }
+    for (auto& i : *this) {
+        const ConstantEntry* ce = (*i).findConstantEntry(name);
+        if (ce) {
+            return ce;
+        }
+    }
+    return nullptr;
 }
 
 int BCList::initializeHierarchy(QoreClass* cls, qcp_set_t& qcp_set) {
@@ -3433,6 +4421,16 @@ void BCList::setSmlComplete() {
             return;
         }
     }
+    // sml holds each ancestor once: the hierarchy reaches each through one path if it has as many parent class edges
+    // as ancestors, as each ancestor is the end of at least one edge (qore#6522)
+    size_t edges = size();
+    for (auto& i : sml) {
+        const BCList* l = i.first->priv->scl;
+        if (l) {
+            edges += l->size();
+        }
+    }
+    diamond_free = edges == sml.size();
     sml_complete = true;
 }
 
@@ -3481,88 +4479,6 @@ bool BCList::parseHasPublicMembersInHierarchy() const {
     return false;
 }
 
-const QoreMemberInfo* BCList::parseFindMember(const char* mem, const qore_class_private*& qc, ClassAccess& access, bool toplevel) const {
-    if (!valid) {
-        return nullptr;
-    }
-
-    for (auto& i : *this) {
-        const QoreMemberInfo* mi = (*i).parseFindMember(mem, qc, access, toplevel);
-        if (mi) {
-            return mi;
-        }
-    }
-    return nullptr;
-}
-
-const QoreVarInfo* BCList::parseFindVar(const char* name, const qore_class_private*& qc, ClassAccess& n_access, bool toplevel) const {
-    if (!valid) {
-        return nullptr;
-    }
-
-    for (auto& i : *this) {
-        const QoreVarInfo* rv = (*i).parseFindVar(name, qc, n_access, toplevel);
-        if (rv)
-            return rv;
-    }
-    return nullptr;
-}
-
-// called at run time
-const QoreMethod* BCList::runtimeFindCommittedMethod(const char* name, ClassAccess& access, const qore_class_private* class_ctx, bool allow_internal) const {
-    for (auto& i : *this) {
-        const QoreMethod* m = (*i).runtimeFindCommittedMethod(name, access, class_ctx, allow_internal);
-        if (m)
-            return m;
-    }
-    return nullptr;
-}
-
-// called at run time
-const QoreMethod* BCList::runtimeFindCommittedStaticMethod(const char* name, ClassAccess& access, const qore_class_private* class_ctx, bool allow_internal) const {
-    for (auto& i : *this) {
-        const QoreMethod* m = (*i).runtimeFindCommittedStaticMethod(name, access, class_ctx, allow_internal);
-        if (m)
-            return m;
-    }
-    return nullptr;
-}
-
-const QoreMethod* BCList::parseFindNormalMethod(const char* name, const qore_class_private* class_ctx, bool allow_internal) {
-    if (!valid) {
-        return nullptr;
-    }
-
-    for (auto& i : *this) {
-        const QoreMethod* m = (*i).parseFindNormalMethod(name, class_ctx, allow_internal);
-        if (m)
-            return m;
-    }
-    return nullptr;
-}
-
-const QoreMethod* BCList::parseFindStaticMethod(const char* name, const qore_class_private* class_ctx, bool allow_internal) {
-    if (!valid) {
-        return nullptr;
-    }
-
-    for (auto& i : *this) {
-        const QoreMethod* m = (*i).parseFindStaticMethod(name, class_ctx, allow_internal);
-        if (m)
-            return m;
-    }
-    return nullptr;
-}
-
-const QoreMethod* BCList::parseResolveSelfMethod(const QoreProgramLocation* loc, const char* name, const qore_class_private* class_ctx, bool allow_internal) {
-    for (auto& i : *this) {
-        const QoreMethod* m = (*i).parseResolveSelfMethod(loc, name, class_ctx, allow_internal);
-        if (m)
-            return m;
-    }
-    return nullptr;
-}
-
 bool BCList::match(const QoreClass* cls) {
     // NOTE: classes are identified by their private data and not by the QoreClass pointer, as the same class can be
     // addressed through multiple QoreClass wrappers (one per Program importing the class); BCNode stores the
@@ -3572,14 +4488,6 @@ bool BCList::match(const QoreClass* cls) {
         if (qc && (*i).sclass && qc == qore_class_private::get(*(*i).sclass)) {
             return true;
         }
-    }
-    return false;
-}
-
-bool BCList::runtimeIsPrivateMember(const char* str, bool toplevel) const {
-    for (auto& i : *this) {
-        if ((*i).runtimeIsPrivateMember(str, toplevel))
-            return true;
     }
     return false;
 }
@@ -3602,14 +4510,6 @@ void BCList::execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc,
 
 void BCList::execConstructors(LexicalSemanticPolicy policy, QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const {
     return execConstructorsImpl<true>(policy, o, bceal, rc, xsink);
-}
-
-bool BCList::parseCheckHierarchy(const QoreClass* cls, ClassAccess& access, bool toplevel) const {
-    for (auto& i : *this) {
-        if ((*i).parseCheckHierarchy(cls, access, toplevel))
-            return true;
-    }
-    return false;
 }
 
 void BCList::addNewAncestors(QoreMethod* m) {
@@ -3797,31 +4697,6 @@ void BCList::resolveCopy() {
     sml.resolveCopy();
 }
 
-QoreValue BCList::parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
-        const qore_class_private* class_ctx, bool allow_internal, const QoreProgramLocation* consumer_loc) const {
-    if (!valid)
-        return QoreValue();
-
-    for (auto& i : *this) {
-       QoreValue rv = (*i).parseFindConstantValue(cname, typeInfo, found, class_ctx, allow_internal, consumer_loc);
-       if (found)
-           return rv;
-    }
-    return QoreValue();
-}
-
-QoreVarInfo* BCList::parseFindStaticVar(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check, bool toplevel) const {
-    if (!valid)
-        return nullptr;
-
-    for (auto& i : *this) {
-        QoreVarInfo* vi = (*i).parseFindStaticVar(vname, qc, access, check, toplevel);
-        if (vi)
-            return vi;
-    }
-    return nullptr;
-}
-
 const QoreClass* BCList::findInSml(const qore_class_private& qc) const {
     for (auto& i : sml) {
         QORE_CLASS_HIERARCHY_STEP();
@@ -3875,58 +4750,6 @@ const QoreClass* BCList::findInHierarchy(const qore_class_private& qc) {
         }
     }
     return nullptr;
-}
-
-const QoreClass* BCList::getClass(qore_classid_t cid, ClassAccess& n_access, bool toplevel) const {
-    for (auto& i : *this) {
-        const QoreClass* qc = (*i).getClass(cid, n_access, toplevel);
-        if (qc)
-            return qc;
-    }
-
-    return nullptr;
-}
-
-const QoreClass* BCList::getClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
-    for (auto& i : *this) {
-        const QoreClass* rv = (*i).getClass(qc, n_access, toplevel);
-        if (rv)
-            return rv;
-    }
-
-    return nullptr;
-}
-
-const QoreClass* BCList::parseGetClass(const qore_class_private& qc, ClassAccess& n_access, bool toplevel) const {
-    for (auto& i : *this) {
-        const QoreClass* rv = (*i).parseGetClass(qc, n_access, toplevel);
-        if (rv)
-            return rv;
-    }
-
-    return nullptr;
-}
-
-bool BCList::inHierarchy(const qore_class_private& qc, ClassAccess& n_access) const {
-    for (auto& i : *this) {
-        bool b = (*i).inHierarchy(qc, n_access);
-        if (b) {
-            return b;
-        }
-    }
-
-    return false;
-}
-
-bool BCList::inHierarchyStrict(const qore_class_private& qc, ClassAccess& n_access) const {
-    for (auto& i : *this) {
-        bool b = (*i).inHierarchyStrict(qc, n_access);
-        if (b) {
-            return b;
-        }
-    }
-
-    return false;
 }
 
 MethodVariantBase* BCList::matchNonAbstractVariant(const std::string& name, MethodVariantBase* v,
@@ -4918,8 +5741,9 @@ const QoreMethod* qore_class_private::parseResolveSelfMethodIntern(const QorePro
     return nullptr;
 }
 
-QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo,
-        bool& found, const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc) {
+QoreValue qore_class_private::parseFindLocalAccessibleConstantValue(const char* cname,
+        const QoreTypeInfo*& cTypeInfo, bool& found, const qore_class_private* class_ctx,
+        const QoreProgramLocation* consumer_loc) {
     // issue #4967: initializing all class constants here would result in recursive constant definition exceptions
     // being raised
     // check constant list
@@ -4942,6 +5766,15 @@ QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, co
         } else {
             return rv;
         }
+    }
+    return QoreValue();
+}
+
+QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo,
+        bool& found, const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc) {
+    QoreValue rv = parseFindLocalAccessibleConstantValue(cname, cTypeInfo, found, class_ctx, consumer_loc);
+    if (found) {
+        return rv;
     }
 
     return scl

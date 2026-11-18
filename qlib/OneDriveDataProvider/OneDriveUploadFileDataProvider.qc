@@ -83,9 +83,10 @@ public class OneDriveUploadFileDataProvider inherits OneDriveDataProviderBase {
 
         string path;
         if (req.parent_id) {
-            path = getDriveBasePath(req) + "/items/" + req.parent_id + ":/" + encode_url(filename, True) + ":/content";
+            path = getDriveBasePath(req) + "/items/" + getItemIdPathSegment(req.parent_id, "parent ID")
+                + ":/" + getItemNameSegment(filename) + ":/content";
         } else {
-            path = getDriveBasePath(req) + "/root:/" + encode_url(filename, True) + ":/content";
+            path = getDriveBasePath(req) + "/root:/" + getItemNameSegment(filename) + ":/content";
         }
 
         # the file bytes must reach Graph unchanged; the connection's "json" serialization would

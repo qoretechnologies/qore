@@ -2233,6 +2233,30 @@ QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const Cas
     return inst;
 }
 
+// documented in QoreIR.h
+const QoreIRBasicBlock* QoreIRDebugFlowTargets::qore_ir_debug_flow_entry_path(const QoreIRBasicBlock* entry) {
+    // an entry block has one Br to its path (see QoreIRLowering::setDebugFlowTargets())
+    if (entry->instructions.size() != 1 || entry->instructions.front()->opcode != QoreIROpcode::Br) {
+        return entry;
+    }
+    return static_cast<const QoreIRBranchInstruction*>(entry->instructions.front().get())->target;
+}
+
+//! the request that the handler running in the thread ended with (#6201)
+static thread_local int qore_ir_handler_flow_rc = 0;
+
+// documented in QoreIR.h
+void qore_ir_set_handler_flow(int rc) {
+    qore_ir_handler_flow_rc = rc;
+}
+
+// documented in QoreIR.h
+int qore_ir_take_handler_flow() {
+    int rc = qore_ir_handler_flow_rc;
+    qore_ir_handler_flow_rc = 0;
+    return rc;
+}
+
 // documented in QoreIRBuilder.h
 bool qore_ir_takes_region_exception_target(QoreIROpcode opcode) {
     switch (opcode) {

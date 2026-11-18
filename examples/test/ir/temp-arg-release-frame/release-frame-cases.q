@@ -157,6 +157,25 @@ class M {
     }
 }
 
+#! callees that write the parameter that takes their argument over: the argument is released at the write (#5958),
+#! with positional and with named arguments (qore#6486)
+class W {
+    mw(auto a) {
+        a = NOTHING;
+        log.add("after write");
+    }
+
+    static smw(auto a) {
+        a = NOTHING;
+        log.add("after write");
+    }
+}
+
+sub fw(auto a) {
+    a = NOTHING;
+    log.add("after write");
+}
+
 sub catch_log(hash<ExceptionInfo> ex) {
     log.add(sprintf("catch %s %y", ex.err, frames(ex.callstack)));
 }
@@ -198,6 +217,13 @@ sub case_polymorphic_loop() { foreach B o in ((new B(), new D(), new B(), new D(
 sub case_local_closure() { code f = sub (auto a) {}; f(new Rec("a")); f(new Rec("b")); }
 sub case_immediate_closure() { (sub (auto a) {})(new Rec("a")); }
 sub case_member_closure() { M mm(); mm.f(new Rec("a")); }
+# a parameter written by the callee (qore#6486)
+sub case_method_write() { W w(); w.mw(new Rec("a")); }
+sub case_named_method_write() { W w(); w.mw(a: new Rec("a")); }
+sub case_static_method_write() { W::smw(new Rec("a")); }
+sub case_named_static_method_write() { W::smw(a: new Rec("a")); }
+sub case_function_write() { fw(new Rec("a")); }
+sub case_named_function_write() { fw(a: new Rec("a")); }
 
 sub case_try_function() { try { nocall(new Dtor()); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } }
 sub case_try_method() { try { c.m(new Dtor()); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } }
@@ -273,6 +299,16 @@ sub main() {
     begin(); try { case_immediate_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
     end("immediate closure");
     begin(); try { case_member_closure(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("member closure");
+    begin(); try { case_method_write(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("method write");
+    begin(); try { case_named_method_write(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("named method write");
+    begin(); try { case_static_method_write(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("static method write");
+    begin(); try { case_named_static_method_write(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("named static method write");
+    begin(); try { case_function_write(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); } end("function write");
+    begin(); try { case_named_function_write(); } catch (hash<ExceptionInfo> ex) { catch_log(ex); }
+    end("named function write");
     begin(); case_try_function(); end("try function");
     begin(); case_try_method(); end("try method");
     begin(); case_try_static_method(); end("try static method");

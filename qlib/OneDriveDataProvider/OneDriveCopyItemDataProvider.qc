@@ -144,8 +144,17 @@ public class OneDriveCopyItemDataProvider inherits OneDriveDataProviderBase {
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string path = getDriveBasePath(req) + "/items/" + req.id + "/copy";
+        string path = getDriveBasePath(req) + "/items/" + getItemIdPathSegment(req.id) + "/copy";
         if (req.conflict_behavior) {
+            switch (req.conflict_behavior) {
+                case "rename":
+                case "replace":
+                case "fail":
+                    break;
+                default:
+                    throw "ONEDRIVE-ITEM-ERROR", sprintf("conflict behavior %y is unknown; expecting 'rename', "
+                        "'replace' or 'fail'", req.conflict_behavior);
+            }
             path += "?@microsoft.graph.conflictBehavior=" + req.conflict_behavior;
         }
 
