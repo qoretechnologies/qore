@@ -1300,7 +1300,15 @@ public class FtpPoller {
                     }
                     rethrow;
                 }
-                interval = p.pollOnce();
+                try {
+                    interval = p.pollOnce();
+                } catch (hash<ExceptionInfo> ex) {
+                    # the poller was deleted while it polled
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        break;
+                    }
+                    rethrow;
+                }
                 sleep_code = p.sleep;
             }
             try {
@@ -1348,9 +1356,7 @@ public class FtpPoller {
             # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
             get_files = True;
             in_event = False;
-            if (new_ftp.val()) {
-                setup(remove new_ftp);
-            }
+            setupNewConnection();
             runOnce();
             return poll_interval;
         } catch (hash<ExceptionInfo> ex) {
@@ -1368,6 +1374,36 @@ public class FtpPoller {
             # error thrown in "post transfer" code
             logError("error in post transfer code; polling terminated: %s: %s", ex.err, ex.desc);
             rethrow;
+        }
+    }
+
+    #! sets up the new FTP connection that updateOptions() gave, if any, for the polling thread and run()
+    /** The new client is kept until its setup succeeds, so that a failed setup is retried after the error delay like
+        any FTP error (issue #6456)
+    */
+    private setupNewConnection() {
+        *FtpClient nftp;
+        {
+            AutoLock al(new_ftp_m);
+            nftp = new_ftp;
+        }
+        if (!nftp) {
+            return;
+        }
+        try {
+            setup(nftp);
+        } catch (hash<ExceptionInfo> ex) {
+            # the retry logs in again
+            try {
+                nftp.disconnect();
+            } catch () {
+            }
+            rethrow;
+        }
+        # updateOptions() may have given another client meanwhile
+        AutoLock al(new_ftp_m);
+        if (new_ftp == nftp) {
+            remove new_ftp;
         }
     }
 
@@ -1422,30 +1458,7 @@ public class FtpPoller {
                 # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
                 get_files = True;
                 in_event = False;
-                *FtpClient nftp;
-                {
-                    AutoLock al(new_ftp_m);
-                    nftp = new_ftp;
-                }
-                if (nftp) {
-                    # the new client is kept until its setup succeeds, so that a failed setup is retried after the
-                    # error delay like any FTP error (issue #6456)
-                    try {
-                        setup(nftp);
-                    } catch (hash<ExceptionInfo> ex) {
-                        # the retry logs in again
-                        try {
-                            nftp.disconnect();
-                        } catch () {
-                        }
-                        rethrow;
-                    }
-                    # updateOptions() may have given another client meanwhile
-                    AutoLock al(new_ftp_m);
-                    if (new_ftp == nftp) {
-                        remove new_ftp;
-                    }
-                }
+                setupNewConnection();
                 runOnce();
                 ftpSleep(poll_interval);
             } catch (hash<ExceptionInfo> ex) {

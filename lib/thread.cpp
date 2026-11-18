@@ -6289,8 +6289,9 @@ void qore_module_init_set_program(const QoreProgram* pgm) {
         return;
     }
     ThreadData::ModuleInitBarrier& mib = td->module_init_barriers.back();
-    // the first library Program created under the barrier is the module's
-    if (!mib.lift && !mib.module_pgm) {
+    // the first library Program created under the barrier is the module's; a trusted build's barrier is not a module
+    // initialization, so a Program created directly under it is not a module's
+    if (!mib.lift && !mib.build && !mib.module_pgm) {
         mib.module_pgm = pgm;
     }
 }

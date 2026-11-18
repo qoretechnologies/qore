@@ -114,6 +114,8 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("a post-transfer error stops polling", \postTransferErrorStopsTest());
         addTestCase("relative paths", \relativePathTest());
         addTestCase("a failed setup of a new connection is retried", \newConnectionSetupRetryTest());
+        addTestCase("a failed setup of a new connection is retried by a started poller",
+            \newConnectionSetupRetryStartedTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -484,6 +486,15 @@ class FtpPollerTest inherits QUnit::Test {
     # issue #6456: a failed setup of a new FtpClient given with updateOptions() is retried after the error delay, and
     # the state of the previous connection (login directory, user, URL) is not kept for the new one
     private newConnectionSetupRetryTest() {
+        newConnectionSetupRetry(True);
+    }
+
+    # the same with the poller's own polling thread (start()), which polls as startInline() does
+    private newConnectionSetupRetryStartedTest() {
+        newConnectionSetupRetry(False);
+    }
+
+    private newConnectionSetupRetry(bool inline) {
         # PORT only supports IPv4, so we can't use "localhost", which may resolve to an IPv6 address
         FtpServer serv1(getPort(), m_options.verbose - 1, "127.0.0.1");
         on_exit serv1.shutdown();
@@ -509,20 +520,29 @@ class FtpPollerTest inherits QUnit::Test {
             "log_info": sub (string msg) { msgs.add(msg); },
         });
 
-        # runs the poller inline in another thread, which ends when polling stops
+        # runs the poller inline in another thread, which ends when polling stops, or in its own polling thread
         Counter done(1);
-        background sub () {
-            on_exit done.dec();
-            try {
-                poller.startInline();
-            } catch (hash<ExceptionInfo> ex) {
-                msgs.add(sprintf("polling stopped: %s: %s", ex.err, ex.desc));
-            }
-        }();
+        if (inline) {
+            background sub () {
+                on_exit done.dec();
+                try {
+                    poller.startInline();
+                } catch (hash<ExceptionInfo> ex) {
+                    msgs.add(sprintf("polling stopped: %s: %s", ex.err, ex.desc));
+                }
+            }();
+        } else {
+            done.dec();
+            poller.start();
+        }
         on_exit {
-            poller.stopNoWait();
-            # only a guard against a hang
-            done.waitForZero(30s);
+            if (inline) {
+                poller.stopNoWait();
+                # only a guard against a hang
+                done.waitForZero(30s);
+            } else {
+                poller.stop();
+            }
         }
 
         poller.waitFor("first.txt");

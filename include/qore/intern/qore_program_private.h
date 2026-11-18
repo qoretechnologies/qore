@@ -3914,6 +3914,15 @@ public:
         NonStandardParseFlagHelper nspfh(*this);
         startParsing(xsink, wS, wm);
 
+        // the strings and locations that exist now were not added by the expression's parse: earlier expressions and
+        // the Program's code refer to them, so a rollback of the expression's definitions (below) must not delete
+        // them, as for the rollback of a parse (beginParse(), issue #6354); nothing is pending
+        {
+            std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+            str_vec_hwm = str_vec.size();
+            pgmloc_hwm = pgmloc.size();
+        }
+
         // parse text given; the Program had no code pending, so the parse state ends with the expression's parse
         if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
