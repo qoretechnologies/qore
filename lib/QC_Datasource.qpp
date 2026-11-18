@@ -309,16 +309,6 @@ const DBI_CAP_HAS_COLUMNAR_SELECT = DBI_CAP_HAS_COLUMNAR_SELECT;
     @since %Qore 3.0
 */
 const DBI_CAP_HAS_BULK_LOAD = DBI_CAP_HAS_BULK_LOAD;
-
-//! DBI capability constant: the driver makes no network connection; its connections reach local resources only, which it checks against the sandbox itself
-/** A connection of a driver without this capability that code governed by a sandbox restricting network or
-    filesystem access chose is checked against the sandbox before the driver connects: the driver reports the
-    destinations of the connection, or it cannot be used for such a connection (\c NETWORK-ACCESS-DENIED); see
-    @ref sandbox_dbi_connections
-
-    @since %Qore 3.0
-*/
-const DBI_CAP_LOCAL_ONLY = DBI_CAP_LOCAL_ONLY;
 ///@}
 
 /** @defgroup sql_mutation_effects SQL Mutation Declared Effect Constants

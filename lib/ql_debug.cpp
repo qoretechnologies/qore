@@ -10755,9 +10755,7 @@ DBIDriver* ut_dsopt_driver() {
         methods.registerOption("opt2", "an option of the test-only unit-test driver", stringTypeInfo);
         methods.registerOption("opt3", "an option of the test-only unit-test driver that can be unset",
             stringOrNothingTypeInfo);
-        // it connects to nothing, so sandboxed code can use it whatever the sandbox's network and filesystem policy
-        // (qore#5747)
-        return DBI.registerDriver("qore-ut-dsopt", methods, DBI_CAP_LOCAL_ONLY);
+        return DBI.registerDriver("qore-ut-dsopt", methods, 0);
     }();
     return driver;
 }

@@ -60,16 +60,6 @@
 #define DBI_CAP_HAS_TYPED_SELECT         (1 << 19) //!< provides native typed select APIs (set automatically by the Qore library)
 #define DBI_CAP_HAS_COLUMNAR_SELECT      (1 << 20) //!< provides native columnar select/fetch APIs (set automatically by the Qore library)
 #define DBI_CAP_HAS_BULK_LOAD            (1 << 21) //!< provides the native bulk-load API (set automatically by the Qore library)
-//! the driver makes no network connection: its connections reach local resources only, which it checks itself
-/** A driver whose connections reach no network destination (an embedded database in a local file, for example)
-    declares this capability; the Qore library then does not ask it for the destinations of its connections when the
-    code that chose a connection is governed by a sandbox that restricts network or filesystem access (see
-    @ref QDBI_METHOD_GET_CONNECT_TARGETS), and the driver checks the files that it opens itself
-    (qore_dbi_check_connect_path())
-
-    @since %Qore 3.0
-*/
-#define DBI_CAP_LOCAL_ONLY               (1 << 22)
 
 #define BN_PLACEHOLDER  0
 #define BN_VALUE        1
@@ -122,12 +112,8 @@
 /** @since %Qore 3.0
 */
 #define QDBI_METHOD_CLOSE_SINK               42
-//! the method that gives the destinations of a connection, which are checked against the sandbox; see q_dbi_get_connect_targets_t
-/** @since %Qore 3.0
-*/
-#define QDBI_METHOD_GET_CONNECT_TARGETS      43
 
-#define QDBI_VALID_CODES 43
+#define QDBI_VALID_CODES 42
 
 /* DBI EVENT Types
    all DBI events must have the following keys:
@@ -428,31 +414,6 @@ typedef int (*q_dbi_bulk_load_rows_t)(Datasource* ds, const QoreHashNode* rows, 
 */
 typedef int (*q_dbi_bulk_load_end_t)(Datasource* ds, bool success, ExceptionSink* xsink);
 
-//! returns the destinations that a connection of the datasource would reach, for the sandbox
-/** Registered with @ref QDBI_METHOD_GET_CONNECT_TARGETS.  The Qore library calls it before it opens a connection
-    whose connection values were chosen by code that a sandbox restricting network or filesystem access governs (see
-    Datasource::getConnectChoosers()), and checks every destination against the policy of each such sandbox before the
-    driver connects; see Datasource::getCheckedConnectTargets().  It is not called for other connections, and a driver
-    that does not register it (and does not declare @ref DBI_CAP_LOCAL_ONLY) cannot be used for such connections: the
-    Qore library raises \c NETWORK-ACCESS-DENIED for them.
-
-    The destinations are determined exactly as the client library of the driver would determine them, including the
-    defaults that it reads from the environment and its configuration; a connection whose destinations cannot be
-    determined (a destination chosen by a service or configuration file, or by the server during the connection, for
-    example) must be refused by the function with \c NETWORK-ACCESS-DENIED.
-
-    @param ds the datasource, with the connection values that the connection is opened with
-    @param xsink if an error occurs, the error must be added to this object
-
-    @return a list of hashes, one for each destination in the order in which the driver tries them: either a hash
-    with a \c "socket" key (a string: the path of a UNIX socket), or a hash with a \c "host" key (a string: a host
-    name or a numeric address) and a \c "port" key (an int: the TCP port); the caller owns the reference; nullptr
-    if an exception was raised
-
-    @since %Qore 3.0
-*/
-typedef QoreListNode* (*q_dbi_get_connect_targets_t)(Datasource* ds, ExceptionSink* xsink);
-
 //! signature for the DBI "describe" method
 /**
     @param ds the Datasource for the connection
@@ -486,41 +447,6 @@ DLLEXPORT QoreHashNode* qore_dbi_make_typed_select_result(Datasource* ds, const 
 */
 DLLEXPORT QoreListNode* qore_dbi_make_typed_select_rows_result(Datasource* ds, const QoreListNode* rows,
     const QoreHashNode* desc, ExceptionSink* xsink);
-
-//! defined if qore_dbi_check_connect_path() and qore_dbi_connect_restricted() are available
-/** @since %Qore 3.0
-*/
-#define QORE_HAS_DBI_CHECK_CONNECT_PATH 1
-
-//! checks a local path that a connection of the datasource opens against the sandbox of the code that chose it
-/** For a driver whose connections open local files (see @ref DBI_CAP_LOCAL_ONLY): the path is checked against the
-    filesystem policy of every sandbox that governed the code that chose the connection values of the datasource (its
-    creators and the setters of the values that the connection uses; see Datasource::getConnectChoosers()), not
-    against the policy of the code that opens the connection
-
-    @param ds the datasource whose connection is being opened
-    @param path the path that the connection opens
-    @param mode the access mode (\c QSEC_READ, \c QSEC_WRITE, \c QSEC_CREATE, ...)
-    @param xsink a denial is raised here (\c FILESYSTEM-ACCESS-DENIED)
-
-    @return 0 if every policy allows the access, -1 if an exception was raised
-
-    @since %Qore 3.0
-*/
-DLLEXPORT int qore_dbi_check_connect_path(Datasource* ds, const char* path, int mode, ExceptionSink* xsink);
-
-//! returns true if a sandbox that restricts network or filesystem access governed the code that chose the connection values of the datasource
-/** A driver that cannot check a resource of a connection (such as a URI that names options and files) refuses it if
-    this function returns true
-
-    @param ds the datasource whose connection is being opened
-
-    @return true if a sandbox that restricts network or filesystem access governed a creator of the datasource or the
-    setter of a connection value that the connection uses; true also if the record of these cannot be read
-
-    @since %Qore 3.0
-*/
-DLLEXPORT bool qore_dbi_connect_restricted(Datasource* ds);
 
 //! numeric/decimal/number values converted to optimal Qore type (either int or number)
 #define DBI_OPT_NUMBER_OPT "optimal-numbers"
@@ -593,11 +519,6 @@ public:
     DLLEXPORT void add(int code, q_dbi_bulk_load_rows_t method);
     // covers native bulk-load end
     DLLEXPORT void add(int code, q_dbi_bulk_load_end_t method);
-
-    //! covers @ref QDBI_METHOD_GET_CONNECT_TARGETS
-    /** @since %Qore 3.0
-    */
-    DLLEXPORT void add(int code, q_dbi_get_connect_targets_t method);
 
     // covers set option
     DLLEXPORT void add(int code, q_dbi_option_set_t method);
