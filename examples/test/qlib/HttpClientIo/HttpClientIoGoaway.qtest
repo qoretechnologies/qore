@@ -410,6 +410,9 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         # which then stores the state at the armed point; a response read before the registration would be buffered
         # and dispatched by the submitting thread, past the armed point (issue #6533)
         HttpCancellableFuture f = mgr.requestAsync(ctx.url, "GET", "/second");
+        # the request is submitted and its stream registered on the connection when requestAsync() returns; the stream
+        # acquired above has submitted nothing
+        assertEq(1, mgr.getStats().total_active_streams, "the request is on the connection");
         hash<auto> req2 = getQuicRequest(ctx);
         assertEq(req.session_id, req2.session_id, "the request is on the connection of the stream");
         call_function("dbg_poll_close_before_open_state", op, "response-dispatched");
