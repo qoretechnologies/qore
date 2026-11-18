@@ -1739,11 +1739,38 @@ StaticMethodCallReferenceNode::StaticMethodCallReferenceNode(const QoreProgramLo
     // make a weak reference to the Program - a strong reference (QoreProgram::ref()) could cause a recursive
     // reference
     pgm->depRef();
+    // the classes are referenced, as the Program's copies of the classes that it imported are released with it
+    // (qore#6622); a class can refer to the reference (from a static variable or a constant), but the deletion of
+    // the Program releases those values with their own reference counts, so this does not make a recursive reference
+    const qore_class_private* receiver_cls = nullptr;
+    if (receiver_type_info) {
+        if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info)) {
+            receiver_cls = qore_class_private::get(*pti->getBaseClass());
+        } else if (const QoreClass* rcls = QoreTypeInfo::getUniqueReturnClass(receiver_type_info)) {
+            receiver_cls = qore_class_private::get(*rcls);
+        }
+    }
+    const qore_class_private* classes[3] = {
+        method->getClass() ? qore_class_private::get(*method->getClass()) : nullptr,
+        class_ctx,
+        receiver_cls,
+    };
+    for (unsigned i = 0; i < 3; ++i) {
+        if (classes[i]) {
+            classes[i]->ref();
+            held_classes[i] = classes[i];
+        }
+    }
 }
 
 bool StaticMethodCallReferenceNode::derefImpl(ExceptionSink* xsink) {
     //printd(5, "StaticMethodCallReferenceNode::deref() this: %p pgm: %p refs: %d -> %d\n", this, pgm,
     //  reference_count(), reference_count() - 1);
+    for (const qore_class_private* cls : held_classes) {
+        if (cls) {
+            const_cast<qore_class_private*>(cls)->deref(false, false, false);
+        }
+    }
     pgm->depDeref();
 #ifdef DEBUG
     pgm = nullptr;

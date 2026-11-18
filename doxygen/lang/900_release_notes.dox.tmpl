@@ -2253,6 +2253,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a static method call reference to a method of a class that a Program imported
+      (@ref Qore::Program::importClass() "Program::importClass()") raises \c PROGRAM-ERROR when it is called after the
+      Program is deleted; the call could read memory that was released with the Program (issue #6622)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
