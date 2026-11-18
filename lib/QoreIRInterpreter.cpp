@@ -8494,6 +8494,22 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, Qo
     h.frame->locals_slot_cache.handOverReturn(value.refSelf(), xsink);
 }
 
+// The IR interpreter's QoreIROpcode::TakeHandedOverReturn and ReleaseHandedOverReturn (#6137): the value that handlers
+// run out of line past the inline cap handed over to the return, if any, or the value of the return, is its result;
+// a return in a handler replaces the value handed over, which is released, and an exception that a destructor raises
+// is pending for the instructions after it, as with ReleaseOwnedTemp.  Out of line and cold, so that
+// QoreIRInterpreter::execute(), which runs it only past the cap, keeps its code and frame
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handed_over_return_op(IRCallFrame& frame,
+        IRValueSlots& values, IRCleanupSlots& cleanup, const QoreIRInstruction* inst, ExceptionSink* xsink) {
+    if (inst->opcode == QoreIROpcode::ReleaseHandedOverReturn) {
+        frame.locals_slot_cache.releaseHandedOverReturn(xsink);
+        return;
+    }
+    QoreValue rv = frame.locals_slot_cache.takeHandedOverReturn(inst->operands.empty() ? QoreValue()
+        : getIRValue(values, inst->operands.front()));
+    setOwnedValueSlot(values, cleanup, inst->result.id, rv, xsink);
+}
+
 // The IR interpreter's QoreIROpcode::HandlerReturn: hands the value of a return statement of a handler run out of line
 // to the function that it runs for (see QoreHandlerRunContext); returns true if the release of a replaced value
 // raised an exception
@@ -8505,13 +8521,17 @@ static QORE_INTERN_NOINLINE bool qore_ir_handler_return(QoreValue value, Excepti
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
 // The handler hands the values of its return statements to \a parent_frame (see qore_ir_handler_hand_over()) while it
-// runs during an unwind (\a unwinding: an exception or a thread_exit), or, with \a returning, in the block cleanups of a
-// return statement past the inline cap (the ScopeExit of the cleanups), to the return (see
-// qore_ir_handler_hand_over_return(), #6137)
+// runs during an unwind (\a unwinding: an exception or a thread_exit), or, if \a scope_exit, the ScopeExit that runs it,
+// is one in the block cleanups of a return statement past the inline cap (hand_over_return), to the return (see
+// qore_ir_handler_hand_over_return(), #6137); \a try_returns does not apply then
 static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
         IRCallFrame* parent_frame = nullptr, const StatementBlock* dbg_statements = nullptr,
         QoreProgram* dbg_pgm = nullptr, bool unwinding = false, const std::vector<uint32_t>* try_returns = nullptr,
-        const QoreIRScopeExitInstruction* returning = nullptr) {
+        const QoreIRScopeExitInstruction* scope_exit = nullptr) {
+    const QoreIRScopeExitInstruction* returning = scope_exit && scope_exit->hand_over_return ? scope_exit : nullptr;
+    if (returning) {
+        try_returns = nullptr;
+    }
     std::vector<QoreValue>* parent_slot_cache = parent_frame ? &parent_frame->locals_slot_cache.vector() : nullptr;
     // Every on_block_exit handler must have been compiled to IR by
     // QoreIRLowering::compileAllHandlerIRs/compileBlockHandlerIRs before
@@ -17609,19 +17629,10 @@ load_local_done:
                 ++ip;
                 break;
             }
-            case QoreIROpcode::TakeHandedOverReturn: {
-                // the value that handlers run out of line past the inline cap handed over to the return, if any, or
-                // the value of the return (#6137)
-                QoreValue rv = frame.locals_slot_cache.takeHandedOverReturn(inst->operands.empty() ? QoreValue()
-                    : getIRValue(values, inst->operands.front()));
-                setOwnedValueSlot(values, cleanup, inst->result.id, rv, xsink);
-                ++ip;
-                break;
-            }
+            case QoreIROpcode::TakeHandedOverReturn:
             case QoreIROpcode::ReleaseHandedOverReturn:
-                // a return in a handler replaces the value that handlers run out of line handed over; an exception
-                // that a destructor raises is pending for the instructions after it, as with ReleaseOwnedTemp (#6137)
-                frame.locals_slot_cache.releaseHandedOverReturn(xsink);
+                // the value that handlers run out of line past the inline cap handed over to the return (#6137)
+                qore_ir_handed_over_return_op(frame, values, cleanup, inst, xsink);
                 ++ip;
                 break;
             case QoreIROpcode::HandlerReturn: {
@@ -17866,10 +17877,10 @@ load_local_done:
                                         error || (xsink && xsink->isThreadExit()),
                                         // where a try statement of the function catches the exception, a handler's
                                         // return replaces the value of its try block's return (#6074); in the
-                                        // cleanups of a return past the inline cap, the value of the return (#6137)
-                                        scope_inst->hand_over_return ? nullptr
-                                            : qore_ir_exception_catch_returns(func, scope_inst->exception_target),
-                                        scope_inst->hand_over_return ? scope_inst : nullptr);
+                                        // cleanups of a return past the inline cap, the value of the return (#6137,
+                                        // see executeHandlerBody())
+                                        qore_ir_exception_catch_returns(func, scope_inst->exception_target),
+                                        scope_inst);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
