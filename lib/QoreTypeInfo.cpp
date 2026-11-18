@@ -5442,6 +5442,27 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
     return false;
 }
 
+// A parameterized class type is built once for each class and type arguments, so that the copy of a generic class in
+// another Program (an imported class) has types of its own: they are the same type if the classes are the same class
+// and the type arguments are the same types (qore#6575)
+static __attribute__((noinline)) bool qore_parameterized_class_types_equal(const QoreParameterizedClassTypeInfo* a,
+        const QoreParameterizedClassTypeInfo* b) {
+    if (a->isOrNothing() != b->isOrNothing() || a->getArgCount() != b->getArgCount()) {
+        return false;
+    }
+    if (!qore_class_private::get(*a->getBaseClass())->equal(*qore_class_private::get(*b->getBaseClass()))) {
+        return false;
+    }
+    const std::vector<const QoreTypeInfo*>& aargs = a->getTypeArgs();
+    const std::vector<const QoreTypeInfo*>& bargs = b->getTypeArgs();
+    for (size_t i = 0, e = aargs.size(); i < e; ++i) {
+        if (!QoreTypeInfo::equal(aargs[i], bargs[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
     if (typespec != other.typespec)
         return false;
@@ -5463,6 +5484,9 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXBUFFER:
             return u.ti == other.u.ti;
         case QTS_PARAMCLASS:
+            return u.ti == other.u.ti || qore_parameterized_class_types_equal(
+                static_cast<const QoreParameterizedClassTypeInfo*>(u.ti),
+                static_cast<const QoreParameterizedClassTypeInfo*>(other.u.ti));
         case QTS_TYPEPARAM:
         case QTS_WILDCARD:
         case QTS_INITIALIZER_FILTER:
