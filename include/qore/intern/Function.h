@@ -2670,6 +2670,20 @@ public:
         noteAncestor(*ancestor);
     }
 
+    //! gives an ancestor in the inheritance list the access of another path to its class if it is less restrictive
+    /** A class reached through several paths of the hierarchy has the access of the least restrictive one (qore#6498)
+    */
+    DLLLOCAL void lowerAncestorAccess(const QoreFunction* ancestor, ClassAccess access) {
+        for (INode& i : ilist) {
+            if (i.func == ancestor) {
+                if (access < i.access) {
+                    i.access = access;
+                }
+                return;
+            }
+        }
+    }
+
     // resolves all types in signatures and return types in pending variants; called during the "parseInit" phase
     //! resolves the signatures of the pending variants
     /** A plain function's signatures (their default argument values) are resolved with no class context, a new local
