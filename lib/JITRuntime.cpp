@@ -515,6 +515,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_pop_closure_var", reinterpret_cast<void*>(&qore_rt_pop_closure_var) },
     { "qore_rt_load_local_weak", reinterpret_cast<void*>(&qore_rt_load_local_weak) },
     { "qore_rt_load_local_weak_aot", reinterpret_cast<void*>(&qore_rt_load_local_weak_aot) },
+    { "qore_rt_load_local_weak_receiver", reinterpret_cast<void*>(&qore_rt_load_local_weak_receiver) },
+    { "qore_rt_load_local_weak_receiver_aot", reinterpret_cast<void*>(&qore_rt_load_local_weak_receiver_aot) },
+    { "qore_rt_end_weak_receiver_call", reinterpret_cast<void*>(&qore_rt_end_weak_receiver_call) },
     { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
     { "qore_rt_load_global_int_aot", reinterpret_cast<void*>(&qore_rt_load_global_int_aot) },
     { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
@@ -2793,6 +2796,43 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak(LocalVar* var, int8_t* own
         *owned_out = 1;
     }
     return toBits(rv);
+}
+
+//! Loads a weak-assigned local that is the receiver of a method call: the object of a weak reference is kept
+/** As qore_rt_load_local_weak(), except that the object that a weak reference held by the local refers to is
+    returned with a reference of its own, and \a owned_out is set to 2: the receiver of a method call is kept until
+    the call returns, as the AST interpreter keeps the object of a call (qore_object_private::startCall()), so that a
+    method that removes the last strong reference to its object can still use it (qore#6590);
+    qore_rt_end_weak_receiver_call() releases it when the call returns.  Any other value (the target of a weak
+    reference to a hash or a list) is returned as qore_rt_load_local_weak() returns it.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_receiver(LocalVar* var, int8_t* owned_out,
+        ExceptionSink* xsink) {
+    uint64_t rv = qore_rt_load_local_weak(var, owned_out, xsink);
+    if (!*owned_out) {
+        QoreValue val = fromBits(rv);
+        if (val.getType() == NT_OBJECT) {
+            val.refSelf();
+            *owned_out = 2;
+        }
+    }
+    return rv;
+}
+
+//! Releases the object that qore_rt_load_local_weak_receiver() kept for a method call, when the call returns
+/** @param slot the cleanup slot of the value loaded, which holds it if the load owns it
+    @param owned_flag the flag set by the load: only an object of a weak reference (2) is released here and its slot
+    cleared; a value that the local held itself (1) is a temporary of the statement, released at its end
+*/
+extern "C" DLLEXPORT void qore_rt_end_weak_receiver_call(uint64_t* slot, int8_t* owned_flag, ExceptionSink* xsink) {
+    if (*owned_flag != 2) {
+        return;
+    }
+    *owned_flag = 0;
+    QoreValue val = fromBits(*slot);
+    *slot = toBits(QoreValue());
+    // an exception raised by the destructor is added to any exception raised by the call, as in the AST
+    val.discard(xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
@@ -15674,6 +15714,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_aot(QoreAOTContext* ctx, i
         int8_t* owned_out, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     return qore_rt_load_local_weak(ctx->locals[idx], owned_out, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_receiver_aot(QoreAOTContext* ctx, int32_t idx,
+        int8_t* owned_out, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_load_local_weak_receiver(ctx->locals[idx], owned_out, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx,
