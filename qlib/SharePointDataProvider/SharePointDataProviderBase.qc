@@ -162,19 +162,24 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
     }
 
     #! Returns a site as it is written in a request path
-    /** A site is named in one of the forms that Graph documents:
+    /** A site is named in one of the forms that Graph documents (see
+        <a href="https://learn.microsoft.com/en-us/graph/api/resources/sharepoint?view=graph-rest-1.0">Working with
+        SharePoint sites in Microsoft Graph</a>):
         - \c root: the tenant's root site
-        - a site ID: <em>hostname</em><tt>,</tt><em>site-collection-id</em><tt>,</tt><em>web-id</em>, where the
-          two IDs are GUIDs (as the \c list-sites action returns it)
+        - a site ID: <em>hostname</em><tt>,</tt><em>site-collection-id</em><tt>,</tt><em>web-id</em> (as the
+          \c list-sites action returns it), <em>hostname</em><tt>,</tt><em>site-collection-id</em>, or
+          <em>site-collection-id</em>, where the IDs are GUIDs
         - a host name: the root site of that host (<tt>contoso.sharepoint.com</tt>)
         - a host name and a server-relative path: <em>hostname</em><tt>:/</tt><em>path</em>, with or without a
           closing \c ":" (<tt>contoso.sharepoint.com:/sites/team</tt>); the path is given decoded (\c "Team Site",
-          not \c "Team%20Site"), each segment of it is percent-encoded, and it is closed with \c ":", so that
-          further segments can follow it
+          not \c "Team%20Site"), each segment of it is percent-encoded, and it is closed with \c ":" only when
+          another segment follows it (<tt>contoso.sharepoint.com:/sites/team:/drive</tt>), as Graph documents it
 
         Any other value is refused rather than written into the path, where it could address another resource.
 
         @param site the site
+        @param followed @ref True if another segment of the path follows the site, so that a server-relative path
+        is closed with \c ":"; @ref False if the site ends the path (a query may follow)
 
         @return the site as it is written in a request path
 
@@ -183,13 +188,15 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
 
         @par Example:
         @code{.py}
+# "contoso.sharepoint.com:/sites/Team%20Site"
 string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.com:/sites/Team Site");
-# seg: "contoso.sharepoint.com:/sites/Team%20Site:"
+# "contoso.sharepoint.com:/sites/Team%20Site:"
+string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.com:/sites/Team Site", True);
         @endcode
 
         @since SharePointDataProvider 1.0
     */
-    static string getSitePathSegment(string site) {
+    static string getSitePathSegment(string site, bool followed = False) {
         SharePointDataProviderBase::checkPathValue(site, "site");
         if (site == "root") {
             return site;
@@ -197,13 +204,14 @@ string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.
         # a host name: labels of letters, digits and hyphens separated by dots
         string host_re = "[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+";
         string guid_re = "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}";
-        if (regex(site, "^" + host_re + "(," + guid_re + "," + guid_re + ")?\\z")) {
+        if (regex(site, "^" + host_re + "(," + guid_re + "(," + guid_re + ")?)?\\z")
+            || regex(site, "^" + guid_re + "\\z")) {
             return site;
         }
         int colon = site.find(":/");
         if (colon > 0 && regex(site.substr(0, colon), "^" + host_re + "\\z")) {
             string path = site.substr(colon + 2);
-            # a closing colon is optional in the value; it is always written
+            # a closing colon is optional in the value; it is written only when another segment follows
             if (path.val() && path[path.length() - 1] == ":") {
                 splice path, -1;
             }
@@ -217,7 +225,8 @@ string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.
                 }
             }
             if (ok) {
-                return site.substr(0, colon) + ":/" + (map encode_url($1, True), segs).join("/") + ":";
+                return site.substr(0, colon) + ":/" + (map encode_url($1, True), segs).join("/")
+                    + (followed ? ":" : "");
             }
         }
         throw "SHAREPOINT-SITE-ERROR", sprintf("%y is not a site: a site is 'root', a site ID "
@@ -248,6 +257,8 @@ string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.
 
     #! Returns the Graph path prefix for the site the given request addresses
     /** @param req the request, search options, or reference-data options for the call being built
+        @param followed @ref True if another segment of the path follows the prefix (see
+        @ref getSitePathSegment())
 
         @return the Graph path prefix for the site, with no trailing slash
 
@@ -255,13 +266,13 @@ string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.
         @ref getSitePathSegment())
         @throw VALUE-ERROR the site's encoding is invalid, or it has a NUL character
     */
-    private string getSiteBasePath(*hash<auto> req) {
+    private string getSiteBasePath(*hash<auto> req, bool followed = True) {
         *string site = req.site_id ?? default_site_id;
         if (!site.val()) {
             throw "SHAREPOINT-SITE-ERROR", sprintf("no site named; set the 'site_id' option to the ID of "
                 "the site to use (the 'list-sites' action lists the sites available)");
         }
-        return "sites/" + SharePointDataProviderBase::getSitePathSegment(site);
+        return "sites/" + SharePointDataProviderBase::getSitePathSegment(site, followed);
     }
 
     #! Returns the Graph path prefix for the list the given request addresses

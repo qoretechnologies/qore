@@ -459,7 +459,7 @@ public class SharePointRecordsDataProvider inherits SharePointDataProviderBase {
         foreach hash<auto> site in (getRecordSites()) {
             list<hash<auto>> lists;
             try {
-                lists = getAllPages("sites/" + SharePointDataProviderBase::getSitePathSegment(site.id) + "/lists?"
+                lists = getAllPages("sites/" + SharePointDataProviderBase::getSitePathSegment(site.id, True) + "/lists?"
                     + ListSelect + "&$top=" + MaxPageSize);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG, "getTableMap: site %y: %s: %s", site.id, ex.err, ex.desc);
