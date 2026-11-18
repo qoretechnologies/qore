@@ -4282,23 +4282,15 @@ void QuicSession::recordResponseHeaderEvent(const QuicStreamInfo& stream) {
     pending_header_events_.push_back({stream.stream_id, stream.status_code, stream.headers});
 }
 
-void QuicSession::takeResponseHeaderEvents(const std::unordered_set<int64_t>& stream_ids,
-        std::vector<QuicResponseHeaderEvent>& out) {
+void QuicSession::takeResponseHeaderEvents(std::vector<QuicResponseHeaderEvent>& out) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (pending_header_events_.empty()) {
         return;
     }
-    std::vector<QuicResponseHeaderEvent> keep;
     for (auto& event : pending_header_events_) {
-        if (stream_ids.count(event.stream_id)) {
-            out.push_back(std::move(event));
-        } else if (streams_.find(event.stream_id) != streams_.end()) {
-            // the request is still registering itself; take the header on a later call
-            keep.push_back(std::move(event));
-        }
-        // a header recorded for a stream that is gone and unclaimed is discarded here
+        out.push_back(std::move(event));
     }
-    pending_header_events_ = std::move(keep);
+    pending_header_events_.clear();
 }
 
 bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {

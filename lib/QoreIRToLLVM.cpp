@@ -1621,7 +1621,9 @@ bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const Qor
     QoreIRClassContextHelper class_ctx(func);
     return_type = func.specializeType(return_type);
     size_t check_count = 0;
-    for (const auto& block : func.blocks) {
+    // the returns of the code (QoreIRCodeBlocks): the return of the path of a debugger's request raises the error of a
+    // missing value where the type needs a conversion (#6201)
+    for (QoreIRBasicBlock* block : qore_ir_code_blocks(func)) {
         for (const auto& inst : block->instructions) {
             // a cancelled scan reports a converting return, which only prevents a summary; the caller aborts on its
             // own cancellation check
@@ -3867,6 +3869,12 @@ static bool qore_ir_exception_reaches_catch(const QoreIRBasicBlock* target) {
                 qore_ir_visit_successors(*inst, [&work](QoreIRBasicBlock* succ) {
                     work.push_back(succ);
                 });
+            }
+            // the paths of the debugger's flow requests at a step event on the way (#6201)
+            if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get())) {
+                for (QoreIRBasicBlock* target : flow->targets()) {
+                    work.push_back(target);
+                }
             }
         }
     }
@@ -7689,6 +7697,10 @@ llvm::BasicBlock* QoreIRToLLVM::getInvokeResultDeferBlock(const QoreIRBasicBlock
                 qore_ir_visit_successors(*block->instructions.back(),
                     [&targets](QoreIRBasicBlock* target) { targets.insert(target); });
             }
+            // the paths of the debugger's flow requests at the block's step events (#6201)
+            qore_ir_visit_debug_flow_targets(*block, [&targets](size_t, QoreIRBasicBlock* target) {
+                targets.insert(target);
+            });
             for (const QoreIRBasicBlock* target : targets) {
                 ++ir_block_predecessor_counts[target];
             }
@@ -8608,36 +8620,62 @@ void QoreIRToLLVM::consumeValueUse(uint32_t value_id, llvm::Module& module,
     }
 }
 
-//! Returns the id of the receiver of a dot-eval call (a method call through an expression) or of the called value of
-//! a call through a call reference or closure, or 0
-static uint32_t qore_ir_call_receiver_id(const QoreIRInstruction* inst) {
-    if (inst->operands.empty()) {
-        return 0;
-    }
-    QoreIROpcode op = inst->opcode;
-    if (op == QoreIROpcode::Invoke) {
-        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
-        if (isDotEvalInvokeOpcode(op)) {
-            return inst->operands[0].id;
+void QoreIRToLLVM::setWeakLoadCleanup(uint32_t result_id, llvm::Value* result, llvm::AllocaInst* owned_flag,
+        bool receiver_hold, llvm::Module& module, llvm::Function* llvm_func) {
+    // A borrowed value must not be dereferenced.  The cleanup slot holds the value only in the owning fallback; for a
+    // borrow it holds NOTHING, so the pending release becomes a no-op while the value itself stays usable.  This is
+    // emitted as a select rather than a branch: trackResultForCleanup() may have registered the current basic block
+    // for SSA-direct cleanup, and splitting that block here would leave the cleanup registered against a block that
+    // no longer ends the value's live range.
+    llvm::Value* cleanup_alloca = nullptr;
+    auto alloca_it = invoke_alloca_map.find(result_id);
+    if (alloca_it != invoke_alloca_map.end()) {
+        cleanup_alloca = alloca_it->second
+            ? alloca_it->second
+            : promoteSsaEntryToAlloca(result_id, module, llvm_func);
+        if (cleanup_alloca) {
+            llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+            llvm::Value* owned = builder->CreateLoad(i8_type, owned_flag);
+            llvm::Value* is_owned = builder->CreateICmpNE(owned, llvm::ConstantInt::get(i8_type, 0));
+            llvm::Value* cleanup_val = builder->CreateSelect(is_owned, result,
+                llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+            builder->CreateStore(cleanup_val, cleanup_alloca);
         }
     }
-    switch (op) {
-        case QoreIROpcode::DotEvalAny:
-        case QoreIROpcode::DotEvalInt:
-        case QoreIROpcode::DotEvalFloat:
-        case QoreIROpcode::DotEvalString:
-        case QoreIROpcode::DotEvalDate:
-        case QoreIROpcode::DotEvalList:
-        case QoreIROpcode::DotEvalHash:
-        case QoreIROpcode::DotEvalObject:
-        case QoreIROpcode::DotEvalMethodDirect:
-        case QoreIROpcode::InvokeDotEvalMethodDirect:
-        case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallClosureDirect:
-            return inst->operands[0].id;
-        default:
-            return 0;
+    if (!receiver_hold) {
+        return;
     }
+    if (cleanup_alloca) {
+        // the call releases the object when it returns (endWeakReceiverCall()); the exception edge of a call that is
+        // no invoke, the end of the statement and the exit of the function release the cleanup slot
+        weak_receiver_holds[result_id] = {cleanup_alloca, owned_flag};
+        return;
+    }
+    // no cleanup slot can release the object on an exception: it is borrowed, as any other load of the local; an
+    // object always has a cleanup slot (only a value without a reference has none)
+    assert(false && "the load of a weak receiver has no cleanup slot");
+    llvm::BasicBlock* entry_bb = &llvm_func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry_bb, entry_bb->begin());
+    llvm::AllocaInst* slot = alloca_builder.CreateAlloca(i64_type, nullptr, "weak_receiver_slot");
+    builder->CreateStore(result, slot);
+    auto end_fn = module.getOrInsertFunction("qore_rt_end_weak_receiver_call",
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+    builder->CreateCall(end_fn, {slot, owned_flag, xsink_arg});
+}
+
+bool QoreIRToLLVM::endWeakReceiverCall(const QoreIRInstruction* inst, llvm::Module& module) {
+    if (weak_receiver_holds.empty()) {
+        return false;
+    }
+    uint32_t receiver_id = qore_ir_call_receiver_id(inst);
+    auto it = receiver_id ? weak_receiver_holds.find(receiver_id) : weak_receiver_holds.end();
+    if (it == weak_receiver_holds.end()) {
+        return false;
+    }
+    auto end_fn = module.getOrInsertFunction("qore_rt_end_weak_receiver_call",
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+    builder->CreateCall(end_fn, {it->second.first, it->second.second, xsink_arg});
+    return true;
 }
 
 bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module,
@@ -15479,6 +15517,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             error = "cancelled during LLVM native PHI predeclaration";
             return false;
         }
+        // native code has no paths of the debugger's flow requests: their blocks are erased with what they hold
+        // when the blocks are lowered, so they get no PHIs, which the PHI fixup pass would read freed (#6201)
+        if (block->debug_flow) {
+            continue;
+        }
         auto llvm_block_it = block_map.find(block.get());
         if (llvm_block_it == block_map.end()) {
             error = "missing LLVM basic block mapping during native PHI predeclaration";
@@ -15806,6 +15849,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     element_local_read_flags.clear();
     weak_load_result_ids.clear();
     receiver_value_ids.clear();
+    weak_receiver_holds.clear();
     native_boolean_result_values.clear();
     consumable_phis.clear();
     owning_phis.clear();
@@ -17189,6 +17233,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Lower each block
     for (const auto& block : func.blocks) {
+        // native code takes no debugger's flow requests (emitDebugStepHook()): the blocks of their paths get no code
+        // (see below)
+        if (block->debug_flow) {
+            continue;
+        }
         aot_hash_string_extraction_cache.clear();
         llvm::BasicBlock* llvm_block = block_map[block.get()];
         if (!llvm_block) {
@@ -17221,7 +17270,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     && hash_string_extraction_cfg
                             ->reachable[block_id->second]
                     && hash_string_extraction_cfg
-                            ->predecessors[block_id->second].size() == 1) {
+                            ->predecessors[block_id->second].size() == 1
+                    // the block that a debugger's flow request at a step event enters is entered from inside its
+                    // predecessor (#6201)
+                    && !hash_string_extraction_cfg->getDebugFlowSource(block_id->second)) {
                 size_t predecessor_id = hash_string_extraction_cfg
                     ->predecessors[block_id->second].front();
                 const QoreIRBasicBlock* predecessor =
@@ -17493,10 +17545,18 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // interpreter releases the argument list of a call; an invoke lowerer releases them before its
             // terminator.  A call path that passed the cleanups to its callee has released them already: the
             // release of a cleared slot is a no-op
-            if (!qoreGetTerminator(builder->GetInsertBlock())
-                    && releaseConsumedCallArgs(inst, module, false)) {
-                // the destructor of an argument can raise
-                emitExceptionCheck(module, llvm_func, inst);
+            // the object that the load of a weak-assigned local kept for the call whose receiver it is is
+            // released when the call returns, after the call's arguments, as the AST interpreter releases the
+            // object of a method call (qore#6590); an invoke lowerer releases it before its terminator
+            if (!qoreGetTerminator(builder->GetInsertBlock())) {
+                bool released = releaseConsumedCallArgs(inst, module, false);
+                if (endWeakReceiverCall(inst, module)) {
+                    released = true;
+                }
+                if (released) {
+                    // the destructor of the receiver or of an argument can raise
+                    emitExceptionCheck(module, llvm_func, inst);
+                }
             }
 
             // Weak-assigned LoadLocal resolves a WeakReferenceNode to a
@@ -17565,6 +17625,34 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         }
     }
 
+    // only the debug IR of AOT code has the paths of a debugger's flow requests (QoreIRFunction::hasDebugFlowPaths()),
+    // for the IR interpreter that runs it under a debugger, so their blocks get no native code, in AOT code and in the
+    // closures of AOT code that the JIT compiles from that IR (#6201): they are erased once every block is lowered, so
+    // that a branch to one from any block, also one lowered after it, is found; only the step events of the IR enter
+    // them, so no code branches to one: if the code of a JIT function did, its compilation fails (fail closed: the
+    // function stays on its tier), and AOT code makes the block unreachable
+    for (const auto& block : func.blocks) {
+        if (!block->debug_flow) {
+            continue;
+        }
+        auto it = block_map.find(block.get());
+        llvm::BasicBlock* unused = it == block_map.end() ? nullptr : it->second;
+        if (!unused) {
+            continue;
+        }
+        if (unused->use_empty()) {
+            unused->eraseFromParent();
+        } else if (!aot_mode) {
+            error = "the code of IR function '" + func.name + "' branches to block '" + block->name
+                + "' of the paths of a debugger's flow requests, which native code does not have";
+            return false;
+        } else {
+            llvm::IRBuilder<> ub(unused);
+            ub.CreateUnreachable();
+        }
+        it->second = nullptr;
+    }
+
     // PHI fixup pass: add incoming values now that all blocks are lowered
     for (auto& [phi_node, phi_inst, phi_ir_block, phi_value_kind, phi_temp_cleanup] : pending_phis) {
         llvm::BasicBlock* phi_bb = phi_node->getParent();
@@ -17580,6 +17668,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             fflush(stderr);
         }
         for (const auto& inc : phi_inst->incoming) {
+            // native code has no paths of the debugger's flow requests (see above)
+            if (inc.block && inc.block->debug_flow) {
+                continue;
+            }
             llvm::Value* val = getVal(inc.value.id, error);
             if (!val) {
                 return false;
@@ -19531,8 +19623,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // (which do their own refSelf) leave the LoadLocal ref leaked.  For
             // weak-assigned closure locals, also release the temp at last use; keeping
             // it until function exit can run the referent's destructor before on_exit
-            // cleanup in the same frame.
-            if (linst->local && linst->local->closureUse()) {
+            // cleanup in the same frame.  A weak-assigned one that is the receiver of a call is read as any
+            // weak-assigned local below, which keeps the object of a weak reference for the call only (qore#6590)
+            if (linst->local && linst->local->closureUse()
+                    && !(weak_assigned_locals.count(key) && receiver_value_ids.count(inst->result.id))) {
                 if (borrowed_load) {
                     return emitBorrowedLoad();
                 }
@@ -19601,8 +19695,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     owned_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "weak_load_owned");
                     alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), owned_flag);
                 }
+                // the receiver of a call keeps the object of a weak reference until the call returns, as the AST
+                // interpreter keeps the object of a method call (qore_rt_load_local_weak_receiver(), qore#6590)
+                const bool receiver_hold = receiver_value_ids.count(inst->result.id) > 0;
                 if (aot_mode) {
-                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_aot",
+                    auto load_fn = module.getOrInsertFunction(receiver_hold
+                            ? "qore_rt_load_local_weak_receiver_aot" : "qore_rt_load_local_weak_aot",
                         llvm::FunctionType::get(i64_type,
                             {ptr_type, i32_type, ptr_type, ptr_type}, false));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -19614,7 +19712,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // holder and run the target's destructor.  qore_rt_load_local_weak() hands back
                     // the borrowed target and reports through owned_flag whether an owning value had
                     // to be returned instead (the local did not hold a weak reference).
-                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak",
+                    auto load_fn = module.getOrInsertFunction(receiver_hold
+                            ? "qore_rt_load_local_weak_receiver" : "qore_rt_load_local_weak",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
                     llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(linst->local));
@@ -19624,29 +19723,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
-                if (owned_flag) {
-                    // A borrowed value must not be dereferenced.  The cleanup slot holds the value
-                    // only in the owning fallback; for a borrow it holds NOTHING, so the pending
-                    // release becomes a no-op while the value itself stays usable.  This is emitted
-                    // as a select rather than a branch: trackResultForCleanup() above may have
-                    // registered the current basic block for SSA-direct cleanup, and splitting that
-                    // block here would leave the cleanup registered against a block that no longer
-                    // ends the value's live range.
-                    auto alloca_it = invoke_alloca_map.find(inst->result.id);
-                    if (alloca_it != invoke_alloca_map.end()) {
-                        llvm::Value* cleanup_alloca = alloca_it->second
-                            ? alloca_it->second
-                            : promoteSsaEntryToAlloca(inst->result.id, module, llvm_func);
-                        if (cleanup_alloca) {
-                            llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
-                            llvm::Value* owned = builder->CreateLoad(i8_type, owned_flag);
-                            llvm::Value* is_owned = builder->CreateICmpNE(owned,
-                                llvm::ConstantInt::get(i8_type, 0));
-                            llvm::Value* cleanup_val = builder->CreateSelect(is_owned, result,
-                                llvm::ConstantInt::get(i64_type, VAL_NOTHING));
-                            builder->CreateStore(cleanup_val, cleanup_alloca);
-                        }
-                    }
+                setWeakLoadCleanup(inst->result.id, result, owned_flag, receiver_hold, module, llvm_func);
+                // a closure-bound local read here (a receiver, see above) is checked as the closure path checks it
+                if (may_hold_reference && linst->local->closureUse()) {
+                    emitExceptionCheck(module, llvm_func, inst);
                 }
                 weak_load_result_ids.insert(inst->result.id);
                 return true;
@@ -24673,7 +24753,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "invoke exception target block not found";
                 return false;
             }
-            if (result_proven_nothrow) {
+            // the release of the object kept for the call can raise (endWeakReceiverCall())
+            if (result_proven_nothrow && !weak_receiver_holds.count(qore_ir_call_receiver_id(inst))) {
                 if (q_env_is_set("QORE_AOT_DEBUG")) {
                     fprintf(stderr,
                         "AOT: eliding exception edge for imported pure"
@@ -24691,9 +24772,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
             llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
                     llvm::ConstantInt::get(i64_type, 0));
-            // a temporary argument of the call is released when the call returns, on both edges, as in the AST; the
-            // release can raise, so the exception is checked after it
-            if (releaseConsumedCallArgs(inst, module, true)) {
+            // a temporary argument of the call, then the object that the load of a weak-assigned local kept for the
+            // call whose receiver it is (endWeakReceiverCall(), qore#6590), are released when the call returns, on
+            // both edges, as in the AST; the release can raise, so the exception is checked after it
+            bool call_temps_released = releaseConsumedCallArgs(inst, module, true);
+            if (endWeakReceiverCall(inst, module)) {
+                call_temps_released = true;
+            }
+            if (call_temps_released) {
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
@@ -27411,9 +27497,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "invoke.method.direct exception target block not found";
                 return false;
             }
-            // a temporary argument of the call is released when the call returns, on both edges, as in the AST; the
-            // release can raise, so the exception is checked after it
-            if (releaseConsumedCallArgs(inst, module, true)) {
+            // a temporary argument of the call, then the object that the load of a weak-assigned local kept for the
+            // call whose receiver it is (endWeakReceiverCall(), qore#6590), are released when the call returns, on
+            // both edges, as in the AST; the release can raise, so the exception is checked after it
+            bool call_temps_released = releaseConsumedCallArgs(inst, module, true);
+            if (endWeakReceiverCall(inst, module)) {
+                call_temps_released = true;
+            }
+            if (call_temps_released) {
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
@@ -29574,7 +29665,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "invoke.dot.eval.method.direct exception target block not found";
                 return false;
             }
-            if (!call_may_throw) {
+            // the release of the object kept for the call can raise (endWeakReceiverCall())
+            if (!call_may_throw && !weak_receiver_holds.count(qore_ir_call_receiver_id(inst))) {
                 builder->CreateBr(normal_it->second);
                 return true;
             }
@@ -29585,9 +29677,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* ex_check = builder->CreateCall(has_ex, {xsink_arg});
             llvm::Value* has_exception = builder->CreateICmpNE(ex_check,
                     llvm::ConstantInt::get(i64_type, 0));
-            // a temporary argument of the call is released when the call returns, on both edges, as in the AST; the
-            // release can raise, so the exception is checked after it
-            if (releaseConsumedCallArgs(inst, module, true)) {
+            // a temporary argument of the call, then the object that the load of a weak-assigned local kept for the
+            // call whose receiver it is (endWeakReceiverCall(), qore#6590), are released when the call returns, on
+            // both edges, as in the AST; the release can raise, so the exception is checked after it
+            bool call_temps_released = releaseConsumedCallArgs(inst, module, true);
+            if (endWeakReceiverCall(inst, module)) {
+                call_temps_released = true;
+            }
+            if (call_temps_released) {
                 ex_check = builder->CreateCall(has_ex, {xsink_arg});
                 has_exception = builder->CreateICmpNE(ex_check, llvm::ConstantInt::get(i64_type, 0));
             }
@@ -32654,6 +32751,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
             llvm::Value* result;
+            // a weak-assigned local that is the receiver of a call keeps the object of a weak reference until the
+            // call returns, and only then: it is read as LoadLocal reads a weak-assigned local (qore#6590)
+            llvm::AllocaInst* receiver_flag = nullptr;
+            if (weak_assigned_locals.count(key) && receiver_value_ids.count(inst->result.id)) {
+                llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                receiver_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "weak_receiver_owned");
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), receiver_flag);
+            }
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                 if (linst->local && linst->local->closureUse()
@@ -32665,6 +32771,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(inst_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot)});
                 }
+            }
+            if (receiver_flag && aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_receiver_aot",
+                    llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type, ptr_type}, false));
+                result = builder->CreateCall(load_fn,
+                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), receiver_flag, xsink_arg});
+            } else if (aot_mode) {
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                 auto lc_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_load_closure_aot", lc_ft);
@@ -32687,16 +32802,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::FunctionType::get(void_type, {ptr_type}, false));
                     builder->CreateCall(instantiate, {var_as_ptr});
                 }
-                auto ll_ft = llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction("qore_rt_load_local", ll_ft);
-                auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_load_local_throwing", ll_ft);
-                result = emitMaybeInvoke(helper, helper_throwing,
-                        {var_as_ptr, xsink_arg}, module, llvm_func, inst);
+                if (receiver_flag) {
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_receiver",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+                    result = builder->CreateCall(load_fn, {var_as_ptr, receiver_flag, xsink_arg});
+                } else {
+                    auto ll_ft = llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction("qore_rt_load_local", ll_ft);
+                    auto helper_throwing = module.getOrInsertFunction(
+                            "qore_rt_load_local_throwing", ll_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {var_as_ptr, xsink_arg}, module, llvm_func, inst);
+                }
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
+            if (receiver_flag) {
+                setWeakLoadCleanup(inst->result.id, result, receiver_flag, true, module, llvm_func);
+            }
             if (weak_assigned_locals.count(key)) {
                 weak_load_result_ids.insert(inst->result.id);
             }
@@ -38080,6 +38204,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // exception through the same xsink-based mechanism used by
         // other AOT helper calls.
         case QoreIROpcode::CallAOTHelper: {
+            // outlined code is AOT native code only, which takes no debugger's flow requests (#6201)
+            assert(aot_mode);
             const auto* cah = static_cast<const QoreIRCallAOTHelperInstruction*>(inst);
             auto* helper_ft = llvm::FunctionType::get(i64_type,
                     {ptr_type, ptr_type}, false);

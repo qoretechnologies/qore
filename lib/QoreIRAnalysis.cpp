@@ -850,12 +850,17 @@ void qore_ir_find_open_implicit_contexts(const QoreIRFunction& func,
                 work.push_back(target);
             }
         };
+        // the paths of the debugger's flow requests leave the block with the state before an instruction (#6201)
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst_ptr : block->instructions) {
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!(++count % 100) && qore_check_cancel(nullptr, "IR open implicit context analysis")) {
                 open.clear();
                 return;
             }
+            flow_cursor.visit(inst, [&](QoreIRBasicBlock* target) {
+                enqueue(target);
+            });
             if ((inst->opcode == QoreIROpcode::PushImplicitArg || inst->opcode == QoreIROpcode::SetImplicitArgv
                     || inst->opcode == QoreIROpcode::PushImplicitElement)
                     && inst->restore_on_exception_exit) {
@@ -1069,6 +1074,8 @@ bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
     {
         // the successors of each block, with the handlers of its instructions
         std::vector<std::vector<size_t>> successors(func.blocks.size());
+        // the paths of the debugger's flow requests of each block: the index of the step event and the target
+        std::vector<std::vector<std::pair<size_t, size_t>>> flow_successors(func.blocks.size());
         for (size_t b = 0; b < func.blocks.size(); ++b) {
             auto add = [&](QoreIRBasicBlock* succ) {
                 auto it = block_ids.find(succ);
@@ -1086,6 +1093,14 @@ bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
                     add(inst->exception_target);
                 }
             }
+            // the paths of the debugger's flow requests at the block's step events (#6201), which leave the block at
+            // their events
+            qore_ir_visit_debug_flow_targets(*func.blocks[b], [&](size_t index, QoreIRBasicBlock* target) {
+                auto it = block_ids.find(target);
+                if (it != block_ids.end()) {
+                    flow_successors[b].emplace_back(index, it->second);
+                }
+            });
         }
         // the blocks visited by the path searches; above the budget, a path is assumed to exist
         size_t search_budget = 1u << 22;
@@ -1096,9 +1111,15 @@ bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
         // true if a path from the end of block from (through its successors) reaches block to without entering block
         // avoid, which is the block of the read: a path through it executes the read again, giving a new value; the
         // block of the read is reached itself when it is the target
-        auto reaches_avoiding = [&](size_t from, size_t to, size_t avoid) -> bool {
+        // the paths of a debugger's flow requests from block from are those of its step events after from_index
+        auto reaches_avoiding = [&](size_t from, size_t from_index, size_t to, size_t avoid) -> bool {
             ++search;
             stack.assign(successors[from].begin(), successors[from].end());
+            for (const auto& [index, target] : flow_successors[from]) {
+                if (index > from_index) {
+                    stack.push_back(target);
+                }
+            }
             while (!stack.empty()) {
                 if (!search_budget) {
                     return true;
@@ -1114,6 +1135,9 @@ bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
                 }
                 visited[b] = search;
                 stack.insert(stack.end(), successors[b].begin(), successors[b].end());
+                for (const auto& flow_successor : flow_successors[b]) {
+                    stack.push_back(flow_successor.second);
+                }
             }
             return false;
         };
@@ -1122,15 +1146,15 @@ bool qore_ir_find_local_reads_overwritten_before_use(const QoreIRFunction& func,
             if (write.block == def.block) {
                 // a write before the read in its block is followed by the read again; one after it is executed on
                 // every path leaving the block
-                return write.index > def.index && reaches_avoiding(def.block, use.block, def.block);
+                return write.index > def.index && reaches_avoiding(def.block, write.index, use.block, def.block);
             }
-            if (!reaches_avoiding(def.block, write.block, def.block)) {
+            if (!reaches_avoiding(def.block, def.index, write.block, def.block)) {
                 return false;
             }
             if (write.block == use.block && write.index < use.index) {
                 return true;
             }
-            return reaches_avoiding(write.block, use.block, def.block);
+            return reaches_avoiding(write.block, write.index, use.block, def.block);
         };
         // the writes of each local, and the writes through a reference, by block, in instruction order (they are
         // collected in that order), so that a write between a read and a use in one block is found by a binary search
@@ -1849,7 +1873,8 @@ bool qore_ir_compute_function_effect_summaries(
                         };
                     }
                 }
-                if (inst && inst->opcode == QoreIROpcode::Return) {
+                if (inst && QoreIRCodeBlocks::isCodeBlock(block.get())
+                        && inst->opcode == QoreIROpcode::Return) {
                     auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
                     effect.saw_return = true;
                     const QoreIRValueFacts* facts = ret->has_value
@@ -1859,8 +1884,13 @@ bool qore_ir_compute_function_effect_summaries(
                         effect.local_never_returns_nothing = false;
                     }
                 } else if (inst && inst->opcode == QoreIROpcode::ReturnNothing) {
-                    effect.saw_return = true;
-                    effect.local_never_returns_nothing = false;
+                    // the return facts are those of the code (QoreIRCodeBlocks): only the debug IR of AOT code has the
+                    // paths of a debugger's requests, which runs in the IR interpreter, and AOT native code has no
+                    // paths (#6201)
+                    if (QoreIRCodeBlocks::isCodeBlock(block.get())) {
+                        effect.saw_return = true;
+                        effect.local_never_returns_nothing = false;
+                    }
                 }
                 bool has_ref_args = true;
                 const AbstractQoreFunctionVariant* callee =
@@ -2388,16 +2418,32 @@ static bool qore_ir_visit_exception_targets(const QoreIRBasicBlock& block, const
 }
 
 QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
-        bool include_exception_edges) {
-    blocks.reserve(func.blocks.size());
+        bool include_exception_edges, const QoreIRCodeBlocks* code) {
+    blocks.reserve(code ? code->size() : func.blocks.size());
     size_t check_count = 0;
-    for (const auto& block : func.blocks) {
+    auto add_block = [&](QoreIRBasicBlock* block) {
         if (qore_ir_analysis_cancelled(check_count, "IR control-flow analysis")) {
             cancelled = true;
-            return;
+            return false;
         }
-        block_ids.emplace(block.get(), blocks.size());
-        blocks.push_back(block.get());
+        block_ids.emplace(block, blocks.size());
+        blocks.push_back(block);
+        return true;
+    };
+    // the graph of the code only has no edges to the paths of the debugger's flow requests, as their blocks have no
+    // id (#6201)
+    if (code) {
+        for (QoreIRBasicBlock* block : *code) {
+            if (!add_block(block)) {
+                return;
+            }
+        }
+    } else {
+        for (const auto& block : func.blocks) {
+            if (!add_block(block.get())) {
+                return;
+            }
+        }
     }
 
     successors.resize(blocks.size());
@@ -2421,6 +2467,23 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
             predecessors[it->second].push_back(block_id);
         };
         qore_ir_visit_successors(*block->instructions.back(), add_successor);
+        // the paths of the debugger's flow requests at the block's step events: edges from inside the block, each to
+        // a block that has no other predecessor (#6201)
+        qore_ir_visit_debug_flow_targets(*block, [&](size_t index, QoreIRBasicBlock* target) {
+            auto it = block_ids.find(target);
+            if (it == block_ids.end()) {
+                return;
+            }
+            if (debug_flow_sources.empty()) {
+                debug_flow_sources.resize(blocks.size());
+            }
+            DebugFlowSource& source = debug_flow_sources[it->second];
+            // each path of an event has an entry block of its own (QoreIRVerifier)
+            assert(source.block == SIZE_MAX);
+            source.block = block_id;
+            source.index = index;
+            add_successor(target);
+        });
         // the exception edges are always collected, for exception_entry and exception_only; they are edges of the
         // graph only with include_exception_edges
         std::unordered_set<size_t> successor_ids;
@@ -2809,6 +2872,10 @@ bool qore_ir_find_reused_call_args(const QoreIRFunction& func, std::vector<uint8
         if (!qore_ir_visit_exception_targets(*block, add, check_count, operation)) {
             return false;
         }
+        // the paths of the debugger's flow requests (#6201): a continue path is in the cycle of its loop
+        qore_ir_visit_debug_flow_targets(*block, [&](size_t, QoreIRBasicBlock* target) {
+            add(target);
+        });
         for (const auto& inst : block->instructions) {
             if (inst->result.isValid() && inst->result.id < def_block.size()) {
                 def_block[inst->result.id] = static_cast<uint32_t>(i);
@@ -2979,6 +3046,10 @@ QoreIRBlockReachability::QoreIRBlockReachability(const QoreIRFunction& func) {
                 }
             }
         }
+        // the paths of the debugger's flow requests at the block's step events (#6201)
+        qore_ir_visit_debug_flow_targets(*func.blocks[b], [&](size_t, QoreIRBasicBlock* target) {
+            add(target);
+        });
     }
     // Tarjan's algorithm, iteratively
     constexpr uint32_t unvisited = UINT32_MAX;
@@ -3095,37 +3166,40 @@ std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlo
     }
     std::unordered_map<size_t, std::unordered_set<size_t>> loops_by_header;
     size_t check_count = 0;
-    for (size_t tail = 0; tail < cfg.blocks.size(); ++tail) {
-        if (qore_ir_analysis_cancelled(check_count, "IR natural-loop analysis")) {
-            return {};
-        }
-        if (!cfg.reachable[tail]) {
-            continue;
-        }
-        for (size_t header : cfg.successors[tail]) {
-            if (!cfg.dominates(header, tail)) {
+    // the back edges of the paths of the debugger's flow requests (a continue path) only add their blocks to a loop
+    // that the code has without them: they are visited after the others, and make no loop of their own (#6201)
+    for (int pass = 0; pass < 2; ++pass) {
+        for (size_t tail = 0; tail < cfg.blocks.size(); ++tail) {
+            if (qore_ir_analysis_cancelled(check_count, "IR natural-loop analysis")) {
+                return {};
+            }
+            if (!cfg.reachable[tail] || cfg.blocks[tail]->debug_flow != (pass == 1)) {
                 continue;
             }
-            auto& loop_blocks = loops_by_header[header];
-            loop_blocks.insert(header);
-            if (loop_blocks.insert(tail).second && tail != header) {
-                std::vector<size_t> worklist{tail};
-                while (!worklist.empty()) {
-                    if (qore_ir_analysis_cancelled(check_count, "IR natural-loop analysis")) {
-                        return {};
-                    }
-                    size_t block = worklist.back();
-                    worklist.pop_back();
-                    for (size_t predecessor : cfg.predecessors[block]) {
-                        if (loop_blocks.insert(predecessor).second && predecessor != header) {
-                            worklist.push_back(predecessor);
+            for (size_t header : cfg.successors[tail]) {
+                if (!cfg.dominates(header, tail) || (pass == 1 && !loops_by_header.count(header))) {
+                    continue;
+                }
+                auto& loop_blocks = loops_by_header[header];
+                loop_blocks.insert(header);
+                if (loop_blocks.insert(tail).second && tail != header) {
+                    std::vector<size_t> worklist{tail};
+                    while (!worklist.empty()) {
+                        if (qore_ir_analysis_cancelled(check_count, "IR natural-loop analysis")) {
+                            return {};
+                        }
+                        size_t block = worklist.back();
+                        worklist.pop_back();
+                        for (size_t predecessor : cfg.predecessors[block]) {
+                            if (loop_blocks.insert(predecessor).second && predecessor != header) {
+                                worklist.push_back(predecessor);
+                            }
                         }
                     }
                 }
             }
         }
     }
-
     std::vector<QoreIRNaturalLoop> loops;
     for (auto& [header, loop_blocks] : loops_by_header) {
         if (qore_ir_analysis_cancelled(check_count, "IR natural-loop analysis")) {
@@ -3141,7 +3215,9 @@ std::vector<QoreIRNaturalLoop> qore_ir_find_natural_loops(const QoreIRControlFlo
             continue;
         }
         size_t preheader = outside_predecessors.front();
-        if (cfg.successors[preheader].size() != 1 || cfg.successors[preheader].front() != header) {
+        // the paths of the debugger's flow requests at the step events of the preheader leave it before its end, where
+        // the hoisted code goes, and do not enter the loop (#6201)
+        if (cfg.getOnlyNormalSuccessor(preheader) != header) {
             continue;
         }
         QoreIRBasicBlock* preheader_block = cfg.blocks[preheader];
@@ -5099,6 +5175,9 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 std::vector<std::vector<QoreIRValue>> output(
                     func.blocks.size());
                 std::vector<uint8_t> output_valid(func.blocks.size(), 0);
+                // for the block that a debugger's flow request at a step event enters: the state at the event, its
+                // input (#6201)
+                std::unordered_map<size_t, std::vector<QoreIRValue>> flow_input;
                 std::vector<std::vector<size_t>> block_phi_indexes(
                     func.blocks.size());
                 for (size_t block_id : order) {
@@ -5163,6 +5242,14 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             candidate_aggregate_phis.push_back(std::move(phi));
                             state[value_index] = result;
                         }
+                    } else if (cfg.getDebugFlowSource(block_id)) {
+                        auto input = flow_input.find(block_id);
+                        if (input == flow_input.end()
+                                || input->second.size() != aggregate_values.size()) {
+                            invalid = true;
+                            break;
+                        }
+                        state = input->second;
                     } else {
                         const auto& predecessors = cfg.predecessors[block_id];
                         if (predecessors.size() != 1
@@ -5180,16 +5267,47 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                                 const InstructionPosition* right) {
                             return left->offset < right->offset;
                     });
+                    // the step events of the debugger's flow requests of the block, whose paths start with the state
+                    // before the operations after them
+                    std::vector<std::pair<size_t, size_t>> flow_events;
+                    if (!cfg.debug_flow_sources.empty()) {
+                        qore_ir_visit_debug_flow_targets(*func.blocks[block_id],
+                                [&](size_t index, QoreIRBasicBlock* target) {
+                            auto it = cfg.block_ids.find(target);
+                            if (it != cfg.block_ids.end() && required[it->second]) {
+                                flow_events.emplace_back(index, it->second);
+                            }
+                        });
+                    }
+                    size_t next_flow_event = 0;
+                    // a path that leaves the block of the store before it does not have the aggregate
+                    if (block_id == store_pos->block) {
+                        for (; next_flow_event < flow_events.size()
+                                && flow_events[next_flow_event].first < store_pos->offset; ++next_flow_event) {
+                            invalid = true;
+                        }
+                        if (invalid) {
+                            break;
+                        }
+                    }
                     for (const InstructionPosition* operation_pos
                             : block_operations) {
                         if (qore_ir_analysis_cancelled(check_count,
                                 "IR fixed-aggregate cross-block mutation scalar analysis")) {
                             return {};
                         }
+                        while (next_flow_event < flow_events.size()
+                                && flow_events[next_flow_event].first < operation_pos->offset) {
+                            flow_input[flow_events[next_flow_event].second] = state;
+                            ++next_flow_event;
+                        }
                         if (!process_operation(operation_pos->inst, state)) {
                             invalid = true;
                             break;
                         }
+                    }
+                    for (; !invalid && next_flow_event < flow_events.size(); ++next_flow_event) {
+                        flow_input[flow_events[next_flow_event].second] = state;
                     }
                     if (!invalid) {
                         output[block_id] = std::move(state);
@@ -6733,6 +6851,7 @@ static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
     for (size_t round = 0; round < max_rounds; ++round) {
         std::unordered_map<uint32_t, QoreIRValue> replacements;
         std::unordered_set<const QoreIRInstruction*> removed;
+        size_t uncounted = 0;
         for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
             for (const auto& inst : cfg.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count, "IR redundant phi analysis")) {
@@ -6771,6 +6890,13 @@ static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
                 }
                 replacements.emplace(inst->result.id, single);
                 removed.insert(inst.get());
+                // a Phi of the paths of a debugger's flow requests, or one that only their incomings made, is not
+                // counted: the count is that of the code (QoreIRCodeBlocks, #6201)
+                if (!QoreIRCodeBlocks::isCodeBlock(cfg.blocks[block_id])
+                        || (QoreIRCodeBlocks::countIncomings(phi) < phi.incoming.size()
+                            && QoreIRCodeBlocks::countIncomings(phi) <= 1)) {
+                    ++uncounted;
+                }
             }
         }
         if (replacements.empty()) {
@@ -6822,7 +6948,8 @@ static size_t qore_ir_eliminate_redundant_phis(QoreIRFunction& func,
                 ++it;
             }
         }
-        eliminated += removed.size();
+        eliminated += removed.size() - uncounted;
+        uncounted = 0;
     }
     return eliminated;
 }
@@ -7325,8 +7452,10 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
         }
         QoreIRBasicBlock* block = worklist.back();
         worklist.pop_back();
-        // DebugFlowBreak can branch directly to the enclosing loop exit.
-        add_reachable(block->enclosing_loop_exit);
+        // the paths of the debugger's flow requests at the block's step events (#6201)
+        qore_ir_visit_debug_flow_targets(*block, [&](size_t, QoreIRBasicBlock* target) {
+            add_reachable(target);
+        });
         if (!block->instructions.empty()) {
             qore_ir_visit_successors(*block->instructions.back(), add_reachable);
         }
@@ -7399,7 +7528,6 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
             kept->exception_target = nullptr;
             block->instructions.clear();
             block->instructions.push_back(std::move(kept));
-            block->enclosing_loop_exit = nullptr;
             continue;
         }
         removed.insert(block.get());
@@ -7420,9 +7548,12 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
             continue;
         }
         (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
-        if (removed.count(block->enclosing_loop_exit)) {
-            block->enclosing_loop_exit = nullptr;
-        }
+        // the paths of the flow requests of a kept block are reachable from it, so they are kept too
+#ifndef NDEBUG
+        qore_ir_visit_debug_flow_targets(*block, [&](size_t, QoreIRBasicBlock* target) {
+            assert(!removed.count(target));
+        });
+#endif
         // the releases of values that a removed block defined: a functional operator releases the values that its
         // loop derived from an element (the values of its map stages, a fold's accumulator and the incoming values of
         // its Phi) after the loop, before the next element (QoreIRIteratorNextInstruction::release_values) and in its
@@ -7525,6 +7656,50 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         LoadMap loads;
     };
     std::vector<AvailableState> block_outputs(func.blocks.size());
+    // for a block with the step event of a debugger's flow request: what is available at its first such event, which
+    // the blocks that it dominates get, as the paths of the requests leave the block there (#6201)
+    std::vector<AvailableState> flow_outputs;
+    std::vector<uint8_t> has_flow_output;
+    if (!cfg.debug_flow_sources.empty()) {
+        flow_outputs.resize(func.blocks.size());
+        has_flow_output.assign(func.blocks.size(), 0);
+    }
+    // the blocks that the paths of the debugger's flow requests of a block reach before the block runs again, by
+    // block; computed when needed: a block that the block dominates and that a path reaches gets only what is
+    // available at the block's first step event with a flow request
+    std::unordered_map<size_t, std::vector<uint8_t>> flow_reach;
+    auto flow_path_reaches = [&](size_t source, size_t block_id) -> bool {
+        auto it = flow_reach.find(source);
+        if (it == flow_reach.end()) {
+            std::vector<uint8_t> reached(func.blocks.size(), 0);
+            std::vector<size_t> work;
+            qore_ir_visit_debug_flow_targets(*func.blocks[source], [&](size_t, QoreIRBasicBlock* target) {
+                auto id = cfg.block_ids.find(target);
+                if (id != cfg.block_ids.end() && !reached[id->second]) {
+                    reached[id->second] = 1;
+                    work.push_back(id->second);
+                }
+            });
+            // above the budget, every block is taken as reached, which only makes less available
+            size_t budget = 1u << 16;
+            while (!work.empty()) {
+                if (!budget--) {
+                    std::fill(reached.begin(), reached.end(), 1);
+                    break;
+                }
+                size_t b = work.back();
+                work.pop_back();
+                for (size_t successor : cfg.successors[b]) {
+                    if (successor != source && !reached[successor]) {
+                        reached[successor] = 1;
+                        work.push_back(successor);
+                    }
+                }
+            }
+            it = flow_reach.emplace(source, std::move(reached)).first;
+        }
+        return it->second[block_id];
+    };
     std::vector<uint8_t> processed(func.blocks.size(), 0);
     std::vector<size_t> immediate_dominators(
         func.blocks.size(), std::numeric_limits<size_t>::max());
@@ -7551,8 +7726,15 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             outline_threshold("QORE_AOT_OUTLINE_FN_MIN_BLOCKS", 500);
         size_t min_instructions =
             outline_threshold("QORE_AOT_OUTLINE_FN_MIN_INSTS", 3000);
+        // the paths of a debugger's flow requests at step events do not count (#6201)
+        size_t block_count = 0;
+        for (const auto& block : func.blocks) {
+            if (!block->debug_flow) {
+                ++block_count;
+            }
+        }
         bool outline_candidate =
-            outline_enabled && func.blocks.size() >= min_blocks;
+            outline_enabled && block_count >= min_blocks;
         if (outline_enabled && !outline_candidate) {
             size_t instructions = 0;
             for (const auto& block : func.blocks) {
@@ -7560,7 +7742,9 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                         "IR dominance CSE outline interaction analysis")) {
                     return {};
                 }
-                instructions += block->instructions.size();
+                if (!block->debug_flow) {
+                    instructions += block->instructions.size();
+                }
             }
             outline_candidate = instructions >= min_instructions;
         }
@@ -7654,12 +7838,17 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         ExpressionMap scoped_expressions;
         LoadMap scoped_loads;
         bool block_has_exception_edge = false;
-        if (cross_block && cfg.reachable[block_id]
+        // the block that a debugger's flow request at a step event enters starts with nothing available: it is
+        // entered from inside its predecessor (#6201)
+        const bool flow_entry = cfg.getDebugFlowSource(block_id) != nullptr;
+        if (flow_entry) {
+        } else if (cross_block && cfg.reachable[block_id]
                 && cfg.predecessors[block_id].size() == 1) {
             size_t predecessor = cfg.predecessors[block_id][0];
             if (predecessor != block_id && processed[predecessor]
                     && cfg.dominates(predecessor, block_id)) {
-                if (cfg.successors[predecessor].size() == 1) {
+                // the blocks that the paths of the debugger's flow requests enter take nothing from it (#6201)
+                if (cfg.getOnlyNormalSuccessor(predecessor) != SIZE_MAX) {
                     available = std::move(block_outputs[predecessor].expressions);
                     available_loads = std::move(block_outputs[predecessor].loads);
                 } else {
@@ -7670,9 +7859,12 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         } else if (dominance_cse && cfg.reachable[block_id]) {
             size_t dominator = immediate_dominators[block_id];
             if (dominator < block_outputs.size() && processed[dominator]) {
-                available = block_outputs[dominator].expressions;
+                const AvailableState& dominator_output = !has_flow_output.empty() && has_flow_output[dominator]
+                        && flow_path_reaches(dominator, block_id)
+                    ? flow_outputs[dominator] : block_outputs[dominator];
+                available = dominator_output.expressions;
                 for (const auto& [local, value] :
-                        block_outputs[dominator].loads) {
+                        dominator_output.loads) {
                     if (!written_locals.count(local)) {
                         available_loads.emplace(local, value);
                     }
@@ -7680,11 +7872,22 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
         }
         const auto& block = func.blocks[block_id];
+        // the paths of the debugger's flow requests leave the block before an instruction
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst_ptr : block->instructions) {
             if (qore_ir_analysis_cancelled(check_count, "IR scalar common-expression elimination")) {
                 return {};
             }
             QoreIRInstruction& inst = *inst_ptr;
+            if (!has_flow_output.empty()) {
+                flow_cursor.visit(&inst, [&](QoreIRBasicBlock*) {
+                    if (!has_flow_output[block_id]) {
+                        has_flow_output[block_id] = 1;
+                        flow_outputs[block_id].expressions = available;
+                        flow_outputs[block_id].loads = available_loads;
+                    }
+                });
+            }
             const auto* throw_inst =
                 qore_ir_inst_cast<const QoreIRThrowInstruction*>(&inst);
             block_has_exception_edge = block_has_exception_edge
@@ -7764,6 +7967,10 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         if (!block_has_exception_edge) {
             block_outputs[block_id].expressions = std::move(available);
             block_outputs[block_id].loads = std::move(available_loads);
+        } else if (!has_flow_output.empty() && has_flow_output[block_id]) {
+            // nothing is published, also for the paths of its flow requests
+            has_flow_output[block_id] = 0;
+            flow_outputs[block_id] = AvailableState();
         }
         processed[block_id] = 1;
     }
@@ -8569,14 +8776,17 @@ static size_t qore_ir_specialize_bounded_typed_list_reads(QoreIRFunction& func,
                 break;
             }
         }
+        // the paths of the debugger's flow requests at the block's step events do not count: a continue that skips
+        // the increment repeats the iteration with the same index, which the condition checked (#6201)
         if (invalidated || increments != 1
-                || cfg.successors[induction_block].size() != 1
-                || cfg.successors[induction_block].front() != loop.header) {
+                || cfg.getOnlyNormalSuccessor(induction_block) != loop.header) {
             continue;
         }
 
         for (size_t block_id : loop.blocks) {
-            if (!cfg.dominates(true_id->second, block_id)) {
+            // the paths of the debugger's flow requests can run after the increment, with the index past the bound
+            // (#6201)
+            if (!cfg.dominates(true_id->second, block_id) || cfg.blocks[block_id]->debug_flow) {
                 continue;
             }
             const auto& instructions = cfg.blocks[block_id]->instructions;
@@ -8847,6 +9057,28 @@ public:
         }
     }
 
+    //! records the state at a step event of a debugger's flow request whose path enters \a target (#6201)
+    /** The block of the path's entry has the block of the event as its only predecessor, and the state at the event
+        as its input (QoreIRControlFlowGraph::debug_flow_sources)
+    */
+    DLLLOCAL void recordFlow(const QoreIRBasicBlock* target, const QoreIRLocalBitSet& state) {
+        auto it = cfg.block_ids.find(target);
+        if (it == cfg.block_ids.end()) {
+            return;
+        }
+        size_t entry = it->second;
+        if (flow_in.empty()) {
+            flow_in.assign(cfg.blocks.size(), QoreIRLocalBitSet(candidate_count, true));
+            flow_seen.assign(cfg.blocks.size(), 0);
+        }
+        if (flow_seen[entry] && flow_in[entry] == state) {
+            return;
+        }
+        flow_seen[entry] = 1;
+        flow_in[entry] = state;
+        enqueue(entry);
+    }
+
     //! runs the dataflow to its fixed point; returns false if cancelled
     /** @param transfer called as transfer(block_id, input, *this) and returns the state at the end of the block or
         nothing if cancelled; it must call recordException() for each instruction with exception targets
@@ -8869,7 +9101,13 @@ public:
             worklist.pop_back();
             queued[block_id] = 0;
             QoreIRLocalBitSet input(candidate_count, false);
-            if (block_id) {
+            if (block_id && cfg.getDebugFlowSource(block_id)) {
+                // the entry of the path of a debugger's flow request: the state at the request's step event, or
+                // nothing fresh until the event has been seen (#6201)
+                if (!flow_in.empty() && flow_seen[block_id]) {
+                    input = flow_in[block_id];
+                }
+            } else if (block_id) {
                 bool first = true;
                 if (cfg.exception_entry[block_id]) {
                     // nothing fresh until the instructions that throw to the handler have been seen
@@ -8933,6 +9171,9 @@ private:
     //! the meet of the states recorded for each handler entry
     std::vector<QoreIRLocalBitSet> handler_in;
     std::vector<uint8_t> handler_seen;
+    //! the state at the step event of a debugger's flow request for the entry block of its path (#6201)
+    std::vector<QoreIRLocalBitSet> flow_in;
+    std::vector<uint8_t> flow_seen;
     std::vector<uint8_t> visited;
     std::vector<uint8_t> queued;
     std::vector<size_t> worklist;
@@ -9140,7 +9381,14 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
             size_t& changed, QoreIRFreshLocalDataflow* flow) -> FreshLocalSet {
         FreshLocalSet before;
+        // the paths of the debugger's flow requests leave the block before an instruction (#6201)
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            if (flow && !cfg.debug_flow_sources.empty()) {
+                flow_cursor.visit(inst_ptr.get(), [&](QoreIRBasicBlock* target) {
+                        flow->recordFlow(target, state);
+                    });
+            }
             // the state before an instruction that can throw to a handler, for the handler's entry state
             const bool records_exception = flow && QoreIRFreshLocalDataflow::hasExceptionTarget(*inst_ptr);
             if (records_exception) {
@@ -9431,7 +9679,14 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
             size_t& changed, QoreIRFreshLocalDataflow* flow) -> FreshLocalSet {
         FreshLocalSet before;
+        // the paths of the debugger's flow requests leave the block before an instruction (#6201)
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
+            if (flow && !cfg.debug_flow_sources.empty()) {
+                flow_cursor.visit(inst_ptr.get(), [&](QoreIRBasicBlock* target) {
+                        flow->recordFlow(target, state);
+                    });
+            }
             // the state before an instruction that can throw to a handler, for the handler's entry state
             const bool records_exception = flow && QoreIRFreshLocalDataflow::hasExceptionTarget(*inst_ptr);
             if (records_exception) {
@@ -9684,6 +9939,8 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         QoreIRPhiValueKind phi_kind = QoreIRPhiValueKind::QoreValue;
         std::vector<size_t> phi_blocks;
         std::vector<QoreIRNativeSSAValue> output;
+        //! for the block that a debugger's flow request at a step event enters: the value at the event (#6201)
+        std::vector<QoreIRNativeSSAValue> flow_input;
         bool eliminate_stores = true;
     };
     std::vector<Promotion> promotions;
@@ -9777,12 +10034,27 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         // the pre-join value can actually reach a load.
         std::vector<uint8_t> use_before_def(func.blocks.size(), 0);
         std::vector<uint8_t> has_def(func.blocks.size(), 0);
+        // for the block that a debugger's flow request at a step event enters: true if the block of the event defines
+        // the local before the event (#6201)
+        std::vector<uint8_t> flow_def_before(cfg.debug_flow_sources.empty() ? 0 : func.blocks.size(), 0);
         for (size_t block_id = 0; block_id < func.blocks.size(); ++block_id) {
             bool defined = false;
-            for (const auto& inst : func.blocks[block_id]->instructions) {
+            const auto& block_insts = func.blocks[block_id]->instructions;
+            // the paths of the debugger's flow requests leave the block before an instruction
+            QoreIRDebugFlowCursor flow_cursor;
+            for (size_t inst_index = 0; inst_index < block_insts.size(); ++inst_index) {
+                const auto& inst = block_insts[inst_index];
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA liveness setup")) {
                     return {};
+                }
+                if (!flow_def_before.empty()) {
+                    flow_cursor.visit(inst.get(), [&](QoreIRBasicBlock* target) {
+                            auto it = defined && target ? cfg.block_ids.find(target) : cfg.block_ids.end();
+                            if (it != cfg.block_ids.end()) {
+                                flow_def_before[it->second] = 1;
+                            }
+                        });
                 }
                 if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::UninstantiateLocal)
@@ -9815,18 +10087,27 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
             liveness_worklist.pop_back();
             liveness_queued[block_id] = 0;
             bool next_out = false;
+            // a debugger's flow request at a step event of the block leaves it at the event: the local is live there
+            // if its path needs it and the block does not define it before the event (#6201)
+            bool flow_in = false;
             for (size_t successor : cfg.successors[block_id]) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA liveness analysis")) {
                     return {};
                 }
-                if (live_in[successor]) {
-                    next_out = true;
-                    break;
+                if (!live_in[successor]) {
+                    continue;
                 }
+                if (cfg.getDebugFlowSource(successor)) {
+                    if (!flow_def_before[successor]) {
+                        flow_in = true;
+                    }
+                    continue;
+                }
+                next_out = true;
             }
             bool next_in =
-                use_before_def[block_id] || (next_out && !has_def[block_id]);
+                use_before_def[block_id] || (next_out && !has_def[block_id]) || flow_in;
             if (live_out[block_id] == next_out
                     && live_in[block_id] == next_in) {
                 continue;
@@ -9873,6 +10154,21 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
         std::unordered_set<size_t> phi_blocks(
             promotion.phi_blocks.begin(), promotion.phi_blocks.end());
         promotion.output.resize(func.blocks.size());
+        if (!cfg.debug_flow_sources.empty()) {
+            promotion.flow_input.resize(func.blocks.size());
+        }
+        // the value of the local where a block starts: its Phi, the value at the end of its only predecessor, or for
+        // the block that a debugger's flow request at a step event enters, the value at the event (#6201)
+        auto entry_value = [&](size_t block_id) -> QoreIRNativeSSAValue {
+            QoreIRNativeSSAValue value;
+            if (phi_blocks.count(block_id)) {
+                value.phi_block = block_id;
+            } else if (block_id && cfg.predecessors[block_id].size() == 1) {
+                value = cfg.getDebugFlowSource(block_id) ? promotion.flow_input[block_id]
+                    : promotion.output[cfg.predecessors[block_id].front()];
+            }
+            return value;
+        };
         std::vector<size_t> value_worklist;
         std::vector<uint8_t> value_queued(func.blocks.size(), 1);
         value_worklist.reserve(func.blocks.size());
@@ -9890,17 +10186,26 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
             if (!cfg.reachable[block_id]) {
                 continue;
             }
-            QoreIRNativeSSAValue current;
-            if (phi_blocks.count(block_id)) {
-                current.phi_block = block_id;
-            } else if (block_id && cfg.predecessors[block_id].size() == 1) {
-                current = promotion.output[
-                    cfg.predecessors[block_id].front()];
-            }
+            QoreIRNativeSSAValue current = entry_value(block_id);
+            // the paths of the debugger's flow requests leave the block before an instruction
+            QoreIRDebugFlowCursor flow_cursor;
             for (const auto& inst : func.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA value analysis")) {
                     return {};
+                }
+                // the value at a step event is the input of the paths of its flow requests (#6201)
+                if (!promotion.flow_input.empty()) {
+                    flow_cursor.visit(inst.get(), [&](QoreIRBasicBlock* target) {
+                            auto it = target ? cfg.block_ids.find(target) : cfg.block_ids.end();
+                            if (it != cfg.block_ids.end() && promotion.flow_input[it->second] != current) {
+                                promotion.flow_input[it->second] = current;
+                                if (!value_queued[it->second]) {
+                                    value_queued[it->second] = 1;
+                                    value_worklist.push_back(it->second);
+                                }
+                            }
+                        });
                 }
                 if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::UninstantiateLocal)
@@ -9956,12 +10261,7 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
             if (!cfg.reachable[block_id]) {
                 continue;
             }
-            QoreIRNativeSSAValue current;
-            if (phi_blocks.count(block_id)) {
-                current.phi_block = block_id;
-            } else if (block_id && cfg.predecessors[block_id].size() == 1) {
-                current = promotion.output[cfg.predecessors[block_id].front()];
-            }
+            QoreIRNativeSSAValue current = entry_value(block_id);
             for (const auto& inst : func.blocks[block_id]->instructions) {
                 if (qore_ir_analysis_cancelled(check_count,
                         "IR native local SSA load validation")) {
@@ -10058,8 +10358,9 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
             if (phi != phis.end()) {
                 current.value = phi->second->result;
             } else if (block_id && cfg.predecessors[block_id].size() == 1) {
-                current = promotion.output[
-                    cfg.predecessors[block_id].front()];
+                // the block that a debugger's flow request at a step event enters has the value at the event (#6201)
+                current = cfg.getDebugFlowSource(block_id) ? promotion.flow_input[block_id]
+                    : promotion.output[cfg.predecessors[block_id].front()];
                 current.value = resolve(current);
                 current.phi_block = std::numeric_limits<size_t>::max();
             }
@@ -10372,9 +10673,25 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
         }
         return true;
     };
+    // for the block that a debugger's flow request at a step event enters: the locals known at the event, the input of
+    // the block (#6201)
+    std::vector<std::unordered_set<const LocalVar*>> flow_out(
+        cfg.debug_flow_sources.empty() ? 0 : func.blocks.size(), universe);
+    bool flow_changed = false;
     auto transfer = [&](size_t block_id,
             std::unordered_set<const LocalVar*>& known) -> bool {
+        // the paths of the debugger's flow requests leave the block before an instruction
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!flow_out.empty()) {
+                flow_cursor.visit(inst.get(), [&](QoreIRBasicBlock* target) {
+                        auto it = target ? cfg.block_ids.find(target) : cfg.block_ids.end();
+                        if (it != cfg.block_ids.end() && flow_out[it->second] != known) {
+                            flow_out[it->second] = known;
+                            flow_changed = true;
+                        }
+                    });
+            }
             if (!transfer_instruction(inst.get(), known)) {
                 return false;
             }
@@ -10395,9 +10712,13 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             }
             std::unordered_set<const LocalVar*> next = block_id == 0
                 ? initially_known : std::unordered_set<const LocalVar*>();
+            if (block_id && cfg.getDebugFlowSource(block_id)) {
+                // the only predecessor of the block that a debugger's flow request enters, with the state at the
+                // request's step event
+                next = flow_out[block_id];
             // a handler entry, which an exception enters from anywhere in the blocks that it handles, starts with
             // nothing known whatever its predecessors (issue #6334)
-            if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
+            } else if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
                         pred_index < cfg.predecessors[block_id].size();
@@ -10430,6 +10751,10 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             }
             if (out[block_id] != next) {
                 out[block_id] = std::move(next);
+                changed = true;
+            }
+            if (flow_changed) {
+                flow_changed = false;
                 changed = true;
             }
         }
@@ -10685,9 +11010,25 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
         }
         return true;
     };
+    // for the block that a debugger's flow request at a step event enters: the locals known at the event, the input of
+    // the block (#6201)
+    std::vector<std::unordered_set<const LocalVar*>> flow_out(
+        cfg.debug_flow_sources.empty() ? 0 : func.blocks.size(), universe);
+    bool flow_changed = false;
     auto transfer_block = [&](size_t block_id,
             std::unordered_set<const LocalVar*>& known) -> bool {
+        // the paths of the debugger's flow requests leave the block before an instruction
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!flow_out.empty()) {
+                flow_cursor.visit(inst.get(), [&](QoreIRBasicBlock* target) {
+                        auto it = target ? cfg.block_ids.find(target) : cfg.block_ids.end();
+                        if (it != cfg.block_ids.end() && flow_out[it->second] != known) {
+                            flow_out[it->second] = known;
+                            flow_changed = true;
+                        }
+                    });
+            }
             if (!transfer_instruction(inst.get(), known)) {
                 return false;
             }
@@ -10730,8 +11071,12 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                         }
                         continue;
                     }
+                    // the only predecessor of the block that a debugger's flow request enters, with the state at
+                    // the request's step event
+                    const std::unordered_set<const LocalVar*>& pred_out = cfg.getDebugFlowSource(block_id)
+                        ? flow_out[block_id] : out[predecessor];
                     if (!have_predecessor) {
-                        next = out[predecessor];
+                        next = pred_out;
                         have_predecessor = true;
                         continue;
                     }
@@ -10742,7 +11087,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
                                     "IR point assigned-value set intersection")) {
                             return false;
                         }
-                        if (!out[predecessor].count(*it)) {
+                        if (!pred_out.count(*it)) {
                             it = next.erase(it);
                         } else {
                             ++it;
@@ -10759,6 +11104,10 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             }
             if (out[block_id] != next) {
                 out[block_id] = std::move(next);
+                changed = true;
+            }
+            if (flow_changed) {
+                flow_changed = false;
                 changed = true;
             }
         }
@@ -11101,9 +11450,25 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
         }
         return true;
     };
+    // for the block that a debugger's flow request at a step event enters: the locals known at the event, the input of
+    // the block (#6201)
+    std::vector<std::unordered_set<const LocalVar*>> flow_out(
+        cfg.debug_flow_sources.empty() ? 0 : func.blocks.size(), universe);
+    bool flow_changed = false;
     auto transfer = [&](size_t block_id,
             std::unordered_set<const LocalVar*>& known) -> bool {
+        // the paths of the debugger's flow requests leave the block before an instruction
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!flow_out.empty()) {
+                flow_cursor.visit(inst.get(), [&](QoreIRBasicBlock* target) {
+                        auto it = target ? cfg.block_ids.find(target) : cfg.block_ids.end();
+                        if (it != cfg.block_ids.end() && flow_out[it->second] != known) {
+                            flow_out[it->second] = known;
+                            flow_changed = true;
+                        }
+                    });
+            }
             if (!transfer_instruction(inst.get(), known)) {
                 return false;
             }
@@ -11123,9 +11488,13 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
                 return {};
             }
             std::unordered_set<const LocalVar*> next;
+            if (block_id && cfg.getDebugFlowSource(block_id)) {
+                // the only predecessor of the block that a debugger's flow request enters, with the state at the
+                // request's step event
+                next = flow_out[block_id];
             // a handler entry, which an exception enters from anywhere in the blocks that it handles, starts with
             // nothing known whatever its predecessors (issue #6334)
-            if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
+            } else if (block_id && !cfg.exception_entry[block_id] && !cfg.predecessors[block_id].empty()) {
                 next = out[cfg.predecessors[block_id].front()];
                 for (size_t pred_index = 1;
                         pred_index < cfg.predecessors[block_id].size();
@@ -11158,6 +11527,10 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             }
             if (out[block_id] != next) {
                 out[block_id] = std::move(next);
+                changed = true;
+            }
+            if (flow_changed) {
+                flow_changed = false;
                 changed = true;
             }
         }
@@ -12543,6 +12916,11 @@ static void qore_ir_optimize_intern(QoreIRFunction& func, QoreIROptimizationStat
         while (changed) {
             changed = false;
             for (size_t block_id : loop.blocks) {
+                // the code of the paths of the debugger's flow requests runs only on a request: none of it is moved to
+                // the preheader, where it would run on every entry into the loop (#6201)
+                if (cfg.blocks[block_id]->debug_flow) {
+                    continue;
+                }
                 for (const auto& inst_ptr : cfg.blocks[block_id]->instructions) {
                     if (qore_ir_analysis_cancelled(check_count, "IR loop-invariant code motion")) {
                         if (stats) {
@@ -16739,8 +17117,23 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
         }
         return true;
     };
+    // for the block that a debugger's flow request at a step event enters: the facts at the event, the input of the
+    // block (#6201); set before the fixed point below, which initializes it
+    std::vector<LocalFacts> flow_in;
+    bool flow_changed = false;
     auto transfer_block = [&](size_t block_id, LocalFacts& known) {
+        // the paths of the debugger's flow requests leave the block before an instruction
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst : func.blocks[block_id]->instructions) {
+            if (!flow_in.empty()) {
+                flow_cursor.visit(inst.get(), [&](QoreIRBasicBlock* target) {
+                        auto it = target ? cfg.block_ids.find(target) : cfg.block_ids.end();
+                        if (it != cfg.block_ids.end() && flow_in[it->second] != known) {
+                            flow_in[it->second] = known;
+                            flow_changed = true;
+                        }
+                    });
+            }
             if (!transfer_instruction(inst.get(), known)) {
                 return false;
             }
@@ -16785,6 +17178,9 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
     }
     std::vector<LocalFacts> in(func.blocks.size());
     std::vector<LocalFacts> out(func.blocks.size(), top);
+    if (!cfg.debug_flow_sources.empty()) {
+        flow_in.assign(func.blocks.size(), top);
+    }
     bool changed = true;
     while (changed) {
         changed = false;
@@ -16802,7 +17198,14 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             // a handler entry or a predecessor that runs only through exception edges, whose state this dataflow
             // does not compute, leaves nothing known (issue #6334)
             bool exception_only_predecessor = false;
-            if (block_id && !cfg.exception_entry[block_id]) {
+            if (block_id && cfg.getDebugFlowSource(block_id)) {
+                // the only predecessor of the block that a debugger's flow request enters, with the facts at the
+                // request's step event
+                if (cfg.reachable[cfg.getDebugFlowSource(block_id)->block]) {
+                    next = flow_in[block_id];
+                    have_predecessor = true;
+                }
+            } else if (block_id && !cfg.exception_entry[block_id]) {
                 for (size_t predecessor : cfg.predecessors[block_id]) {
                     if (qore_ir_analysis_cancelled(check_count,
                             "IR exact boxed local predecessor analysis")) {
@@ -16832,6 +17235,10 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             }
             if (out[block_id] != next) {
                 out[block_id] = std::move(next);
+                changed = true;
+            }
+            if (flow_changed) {
+                flow_changed = false;
                 changed = true;
             }
         }
@@ -19180,12 +19587,19 @@ size_t qore_ir_fuse_string_transform_consumers(QoreIRFunction& func) {
                     state[current_block] = 2;
                     return true;
                 };
+            // the paths of the debugger's flow requests of the producer's block leave it at step events before the
+            // producer, as the instructions after it are checked above, so they never run it (#6201)
+            bool any_successor = false;
             for (size_t successor : cfg->successors[block_id]) {
+                if (cfg->getDebugFlowSource(successor)) {
+                    continue;
+                }
+                any_successor = true;
                 if (!visit(successor)) {
                     return false;
                 }
             }
-            return !cfg->successors[block_id].empty();
+            return any_successor;
         };
         for (const auto& inst_ptr : instructions) {
             if (qore_ir_analysis_cancelled(check_count,
@@ -19602,7 +20016,7 @@ bool QoreIRFunction::statementWritesLocalAfter(const QoreIRBasicBlock* block, si
     constexpr size_t Budget = 64;
     std::vector<const QoreIRBasicBlock*> work;
     std::unordered_set<const QoreIRBasicBlock*> visited{block};
-    auto push_successors = [&](const QoreIRBasicBlock* b) {
+    auto push_successors = [&](const QoreIRBasicBlock* b, size_t from) {
         if (b->instructions.empty()) {
             return;
         }
@@ -19611,8 +20025,15 @@ bool QoreIRFunction::statementWritesLocalAfter(const QoreIRBasicBlock* block, si
                 work.push_back(succ);
             }
         });
+        // the paths of the debugger's flow requests at the step events of the blocks of the statement after the read
+        // (#6201)
+        qore_ir_visit_debug_flow_targets(*b, [&](size_t index, QoreIRBasicBlock* succ) {
+            if (index >= from && visited.insert(succ).second) {
+                work.push_back(succ);
+            }
+        });
     };
-    push_successors(block);
+    push_successors(block, start);
     size_t searched = 0;
     while (!work.empty()) {
         if (++searched > Budget) {
@@ -19625,7 +20046,7 @@ bool QoreIRFunction::statementWritesLocalAfter(const QoreIRBasicBlock* block, si
             return true;
         }
         if (!rc) {
-            push_successors(b);
+            push_successors(b, 0);
         }
     }
     return false;

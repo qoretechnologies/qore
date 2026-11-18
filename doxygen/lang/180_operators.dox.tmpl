@@ -306,7 +306,11 @@ string str = foldl $1 + ", " + $2, (map $1.desc, get_iterator(), $1.type == Exte
     |<em>@ref expressions "buffer_expression"</em>|If the expression evaluates to a buffer, then the <em>@ref expressions "index_expression"</em> will be used to return the given typed element(s) from the buffer.
     |<em>@ref expressions "index_expression"</em>|If the expression does not evaluate to a list or to an integer it is converted to an integer. Then the value(s) of the given element(s) are returned according to the type of the first expression (as listed above; elements start at position 0). If @ref negative-offsets "%negative-offsets" is enabled, negative integer indexes and explicit negative range endpoints are first resolved against the container size. If the expression is in the range form (e.g. [1..3], [2..], [-2..]) then the dereference operator supports @ref op_functional "lazy functional evaluation".
 
-    This operator does not throw any exceptions; if the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
+    If the first expression does not evaluate to either a list, string, binary, or buffer, then no value (@ref nothing) is returned.
+
+    <b>Exceptions Thrown by []</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the string is not valid in its encoding: its characters cannot be found, and no partial result is returned
 
     @note a slice (several values or a range between the square brackets, or a list given by an expression) is not an
     lvalue: it can be the whole lvalue of the @ref remove "remove" and @ref delete "delete" operators, and using it
@@ -563,7 +567,11 @@ delete bin[2..4,10,12];
 delete l[2,5..7,8];
     @endcode
 
-    This operator does not throw any exceptions, however exceptions could be thrown in an object's destructor method when deleted by this operator.
+    <b>Exceptions Thrown by delete</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|characters are deleted from a string that is not valid in its encoding: its characters cannot be found, and the string is not changed
+
+    Exceptions could also be thrown in an object's destructor method when deleted by this operator.
 
     <hr>
     @subsection remove Remove Operator (remove)
@@ -598,7 +606,11 @@ binary nbin = remove bin[2..4,10,12];
 list nlist = remove l[2,5..7,8];
     @endcode
 
-    This operator does not throw any exceptions, however exception could be thrown in an object's destructor if it goes out of scope due to the action of this operator.
+    <b>Exceptions Thrown by remove</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|characters are removed from a string that is not valid in its encoding: its characters cannot be found, and the string is not changed
+
+    Exceptions could also be thrown in an object's destructor if it goes out of scope due to the action of this operator.
 
     <hr>
     @subsection cast Cast Operator (cast<>())
@@ -1354,7 +1366,7 @@ sub legacy() {
     |!Argument|!Processing
     |\a expression @ref list_type "list"|Returns the number of elements in the list
     |\a expression @ref hash_type "hash"|Returns the number of keys in the hash
-    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8
+    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); in a string that is not valid in its encoding, each byte that does not start a complete character counts as one character
     |\a expression @ref binary_type "binary"|Returns the number of bytes in the binary object
 
     This operator does not throw any exceptions.
@@ -2520,6 +2532,9 @@ if (x || y)
     closures that capture the weak reference.  A weak reference held by a hash, a list or an object member reads as
     its target, also when the target is an object that has been destroyed: \c exists returns @ref True for the
     destroyed object, and calling a method on it raises \c OBJECT-ALREADY-DELETED.\n<br>
+    A method called through a weak reference keeps its object until the call returns, as any method call does
+    (see @ref running_call_receiver "object scope"): if the method releases the last strong reference to its own
+    object, the object is destroyed when the method returns.\n<br>
     When the rvalue is a variable (a local variable, a parameter, a global variable, a variable captured by a closure
     or a class static variable) that holds a hash or a list shared with another owner, such as a literal of the
     program or another variable, the variable first gets a copy of its own, so that the weak reference designates the
@@ -2635,9 +2650,19 @@ if (x || y)
     union with no value is therefore assigned the value of the \a expression, which the union must accept, or
     \c RUNTIME-TYPE-ERROR is raised; ex:
     - <tt>*union&lt;int, float&gt; u; u += 2.5;</tt> gives \c 2.5
-    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2.0
+    - <tt>*union&lt;float, int&gt; u; u += 2;</tt> gives \c 2 (the union keeps a value of a member type as it is: see
+      @ref union_type "union types")
     - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u += 2;</tt> gives \c 2
     - <tt>*union&lt;int, float&gt; u; u += 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
+    @note An int in a union \a lvalue and a float or number \a expression are added as the
+    @ref plus_operator "+ operator" adds them when a member of the union has the type of the result (ex: \c float or
+    \c softfloat for a float, \c number for a number), and the union keeps the result:
+    <tt>union&lt;float, int&gt; u = 1; u += 0.5;</tt> gives \c 1.5; otherwise the \a expression is added as an int,
+    as for an int \a lvalue: <tt>union&lt;int, string&gt; u = 1; u += 0.5;</tt> and
+    <tt>union&lt;int, float&gt; u = 1; u += 2.5n;</tt> give \c 1 and \c 3 (a union with no value is assigned the
+    \a expression instead, which the union must accept, as above); the same applies to the
+    @ref minus_equals_operator "-= operator"
 
     <hr>
     @subsection minus_equals_operator Minus Equals Operator (-=)
@@ -2678,6 +2703,11 @@ if (x || y)
     - <tt>*union&lt;int, float&gt; u; u -= 2.5;</tt> gives \c -2.5
     - <tt>*union&lt;hash&lt;auto&gt;, int&gt; u; u -= 2;</tt> gives \c -2
     - <tt>*union&lt;int, float&gt; u; u -= 2.5n;</tt> raises \c RUNTIME-TYPE-ERROR
+
+    @note An int in a union \a lvalue and a float or number \a expression are subtracted as the
+    @ref minus_operator "- operator" subtracts them when a member of the union has the type of the result, and as an
+    int otherwise (see @ref compound_assignment_union_nothing "+="): <tt>union&lt;float, int&gt; u = 1; u -= 0.5;</tt>
+    gives \c 0.5, and <tt>union&lt;int, string&gt; u = 1; u -= 0.5;</tt> gives \c 1
 
     <hr>
     @subsection and_equals_operator And Equals Operator (&=)

@@ -753,10 +753,7 @@ struct qore_list_private {
         @return -1 if an exception was raised, 0 if not
     */
     DLLLOCAL int checkAssignmentGap(size_t ind, ExceptionSink* xsink) const {
-        if (ind <= length || !complexTypeInfo) {
-            return 0;
-        }
-        return raiseAssignmentGapError(ind, xsink);
+        return ind <= length || !elementTypeRejectsNothing() ? 0 : raiseAssignmentGapError(ind, xsink);
     }
 
     //! raises RUNTIME-TYPE-ERROR for delete or remove of element \a ind of a list whose element type does not take
@@ -779,8 +776,8 @@ struct qore_list_private {
     }
 
 private:
-    //! raises the error of checkAssignmentGap() if the element type does not take NOTHING
-    DLLLOCAL int raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const;
+    //! raises the error of checkAssignmentGap() for a list whose element type does not take NOTHING
+    DLLLOCAL __attribute__((noinline, cold)) int raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const;
 
 
 public:

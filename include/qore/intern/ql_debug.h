@@ -321,6 +321,13 @@ enum class QoreDbgHttpHoldPoint : unsigned char {
     //! an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on the thread
     //! (call its continuePoll()); the point is armed for the operation's object
     ContinuePoll,
+    //! an HTTP/3 client poll operation submitted a request and is about to register it (the submitting thread); the
+    //! operation wakes its I/O thread first, so that the request is sent and its response can arrive before the
+    //! request is registered
+    Http3Register,
+    //! an HTTP/3 client poll operation received the response of a request that is not registered yet and kept it for
+    //! the registration (the I/O thread; armed with a release Counter of 0, the point only reports it)
+    Http3ResponseBuffered,
     //! the number of hold points
     Count,
 };

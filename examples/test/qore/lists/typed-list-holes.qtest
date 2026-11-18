@@ -110,6 +110,7 @@ delete in an object member through a reference<Holder>: [null, 2] list<*int>
   l: [1, 2] list<int>
 delete through nested references reference<auto> of reference<list<int>>: RUNTIME-TYPE-ERROR
 delete in a hash through a reference<hash<auto>> of auto: [{a: [null, 2]}, \"hash<string, list<*int>>\"] list<auto>
+typed reference passed on: [1, 2, 3] list<int>
 remove in a function: [2, [1, null, 3]] list<auto>
 delete member auto: [null, 2] list<*int>
 delete member declared: RUNTIME-TYPE-ERROR

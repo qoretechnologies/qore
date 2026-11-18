@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./MssqlTestIsolation.qm
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class MssqlLimitOnlyTest
+
+#! a SQL Server select with a limit and no offset or ordering (issue #6583)
+/** the limit was written as <tt>top N</tt> and also added as a bind argument that the SQL does not use; runs when
+    \c QORE_DB_CONNSTR_FREETDS is set for a SQL Server database
+*/
+class MssqlLimitOnlyTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        string skip = "QORE_DB_CONNSTR_FREETDS is not set";
+    }
+
+    constructor() : Test("MssqlLimitOnly", "1.0", \ARGV) {
+        addTestCase("limit without an offset", \limitTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoFreetds
+        if (!ENV.QORE_DB_CONNSTR_FREETDS) {
+            return;
+        }
+        try {
+            Datasource d(MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS, "MssqlLimitOnly"));
+            d.open();
+            ds = d;
+        } catch (hash<ExceptionInfo> ex) {
+            skip = sprintf("cannot connect to SQL Server: %s: %s", ex.err, ex.desc);
+        }
+%else
+        skip = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+            delete ds;
+        }
+        MssqlRunDatabase::teardown();
+    }
+
+    limitTest() {
+        if (!ds) {
+            testSkip(skip);
+        }
+        on_exit ds.rollback();
+        AbstractTable t = new Table(ds, "limit_only_6583").getTable();
+        t.addColumn("id", {"qore_type": Type::Int}, False);
+        t.addColumn("name", {"qore_type": Type::String, "size": 20}, False);
+        t.addPrimaryKey("pk_limit_only_6583", "id");
+        t.create();
+        foreach hash<auto> row in (({"id": 1, "name": "a"}, {"id": 2, "name": "b"}, {"id": 3, "name": "a"})) {
+            t.insert(row);
+        }
+
+        # without an ordering, the limit is written as top N, and nothing is bound
+        list<auto> args;
+        string sql = t.getSelectSql({"columns": ("id",), "limit": 2}, \args);
+        assertRegex("^select top 2 ", sql);
+        assertEq((), args);
+        assertEq(2, t.selectRows({"columns": ("id",), "limit": 2}).size());
+
+        # a where clause binds its values only
+        args = ();
+        sql = t.getSelectSql({"columns": ("id",), "where": {"name": "a"}, "limit": 1}, \args);
+        assertEq(("a",), args);
+        assertEq(1, t.selectRows({"columns": ("id",), "where": {"name": "a"}, "limit": 1}).size());
+
+        # a distinct select: top follows distinct
+        args = ();
+        sql = t.getSelectSql({"columns": cop_distinct("name"), "limit": 2}, \args);
+        assertRegex("^select distinct top 2 ", sql);
+        assertEq((), args);
+        assertEq(("a", "b"), sort(t.select({"columns": cop_distinct("name"), "limit": 2}).name));
+    }
+}

@@ -68,7 +68,7 @@ sinks on their own actions, so their events cannot cross.
 | Event | Reported by | When |
 |---|---|---|
 | `EVENT_HTTP_SEND_MESSAGE` | the client | before the request is handed to the connection manager; once per attempt, so a redirect or authentication retry reports its own |
-| `EVENT_HTTP_MESSAGE_RECEIVED` | H1: `Http1ClientPollOperationPriv::handleRecvHeader()`; H2/H3: the client poll operation's read cycle | when the response header has been parsed, before its body has been read |
+| `EVENT_HTTP_MESSAGE_RECEIVED` | H1: `Http1ClientPollOperationPriv::handleRecvHeader()`; H2/H3: the client poll operation's read cycle (H3: or the registration of a request whose header arrived before it; see below) | when the response header has been parsed, before its body has been read |
 | `EVENT_HTTP_CONTENT_LENGTH` | the sink, with the header event | when the response declares a content length |
 | `EVENT_HTTP_CHUNK_SIZE`, `EVENT_HTTP_CHUNKED_DATA_RECEIVED`, `EVENT_HTTP_CHUNKED_DATA_READ` | `Http1ClientPollOperationPriv` | as each chunk of a chunked HTTP/1.1 response is read; HTTP/2 and HTTP/3 have no chunked transfer encoding |
 | `EVENT_HTTP_REDIRECT` | the client | when a redirect response is followed |
@@ -91,8 +91,25 @@ is submitted), so a connection whose clients report no events copies nothing.
 
 A record is claimed only by a stream whose request has finished registering its action: a response
 header can arrive while the submitting thread is still inside `submitRequest()`, and claiming it
-then would drop it.  Such a record is kept for a later call while its stream still exists, and a
-record for a stream that is gone and unclaimed is discarded, so unclaimed records cannot accumulate.
+then would drop it.
+
+- HTTP/2: the read cycle holds the operation's submission lock, which `submitRequest()` holds until
+  the request is registered, so a read cycle never runs between the submission of a request and its
+  registration.  A record whose request is not registered is kept for a later call while its stream
+  still exists, and a record for a stream that is gone and unclaimed is discarded, so unclaimed
+  records cannot accumulate.
+- HTTP/3: a read cycle can run while a request is being registered, so the response of a request can
+  be complete — and its stream gone from the session — before the request is registered (the
+  operation buffers such a response for the registration).  The read cycle therefore takes every
+  record (`QuicSession::takeResponseHeaderEvents()`) and decides under the operation's stream lock:
+  the record of a registered request is reported, the record of a request that is still being
+  submitted or registered is kept by the operation (`pending_header_events`, the rule that buffers a
+  response), and any other record is discarded.  A kept record is reported, under the stream lock,
+  by whichever claims the request first: its registration (`registerStream()`), before a buffered
+  response is dispatched, or the dispatch of its response on the I/O thread
+  (`takeResponseAction()`).  The header event is therefore always queued before the response
+  completes the request (issue #6573: it was reported by a later read cycle, after the call that
+  made the request had returned, or never).
 
 HTTP/1.1 needs none of this: the connection is serial, the header is parsed in its own poll step,
 and the request being read is the one whose action the poll operation holds.

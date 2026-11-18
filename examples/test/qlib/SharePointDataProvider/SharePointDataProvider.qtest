@@ -114,6 +114,31 @@ class FakeSharePointRestClientIo inherits RestClientIo::RestClientIo {
     }
 }
 
+#! A REST client that records the path of every GET request
+class FakeSharePointRecordingRestClientIo inherits FakeSharePointRestClientIo {
+    public {
+        list<string> paths = ();
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        paths += path;
+        return FakeSharePointRestClientIo::restGet(path, hdr);
+    }
+}
+
+#! A REST client that answers a list's column request with one text column and records the other requests
+class FakeSharePointListRestClientIo inherits FakeSharePointRestClientIo {
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        if (path =~ /\/columns\?/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {"value": ({"name": "Title", "text": {}},)},
+                "headers": {},
+            };
+        }
+        return FakeSharePointRestClientIo::restGet(path, hdr);
+    }
+}
+
 #! Exposes the watch providers' change classification, which is an internal hook
 /** Subclassing is how the predicate is reached: it is deliberately not part of the module's public
     API, and widening it just to be testable would be the wrong trade.
@@ -189,6 +214,9 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         addTestCase("column type mapping", \columnTypeMappingTest());
         addTestCase("record flattening", \recordFlattenTest());
         addTestCase("OData filter translation", \odataFilterTest());
+        addTestCase("OData literals", \odataLiteralTest());
+        addTestCase("site and drive path segments", \sitePathSegmentTest());
+        addTestCase("lists with no columns and sites with no lists", \emptyListTest());
         addTestCase("graph url stripping", \graphUrlStripTest());
         addTestCase("event change filtering", \eventFilterTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
@@ -419,7 +447,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         assertEq(root + "/items/ITEM1", rest.last_path);
 
         prov.getChildProvider("get-item").doRequest(base + {"path": "/Shared Documents/spec.docx"});
-        assertEq(root + "/root:/Shared Documents/spec.docx", rest.last_path);
+        assertEq(root + "/root:/Shared%20Documents/spec.docx", rest.last_path);
 
         prov.getChildProvider("create-folder").doRequest(base + {"name": "Contracts"});
         assertEq("POST", rest.last_method);
@@ -768,6 +796,204 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         assertNothing(SharePointRecordTableDataProvider::getODataFilter({
             "Amount": {"op": ">", "value": 5}}));
         assertNothing(SharePointRecordTableDataProvider::getODataFilter());
+    }
+
+    #! Values are OData literals in a percent-encoded $filter, and strings that are not valid are refused
+    odataLiteralTest() {
+        checkModule();
+        # a quote is doubled, a backslash is not an escape in OData, and other characters are kept
+        assertEq("fields/Title eq 'a\\''''b'",
+            SharePointRecordTableDataProvider::getODataFilter({"Title": "a\\''b"}));
+        assertEq("fields/Title eq 'Zoë 中文 😀'",
+            SharePointRecordTableDataProvider::getODataFilter({"Title": "Zoë 中文 😀"}));
+        # a string in another encoding is written in UTF-8
+        string f = SharePointRecordTableDataProvider::getODataFilter({
+            "Title": convert_encoding("Zoë'", "ISO-8859-1"),
+        });
+        assertEq("UTF-8", f.encoding());
+        assertEq("fields/Title eq 'Zoë'''", f);
+        assertEq("fields/Amount eq 1.5 and fields/Big eq 12345678901234567890 and fields/Gone eq null",
+            SharePointRecordTableDataProvider::getODataFilter({"Amount": 1.5, "Big": 12345678901234567890n,
+                "Gone": NOTHING}));
+
+        # a string with an invalid encoding, also with a quote after the invalid byte, or with a NUL is refused
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \SharePointRecordTableDataProvider::getODataFilter(),
+            ({"Title": binary_to_string(<41ff2720>, "UTF-8")},));
+        assertThrows("VALUE-ERROR", "NUL", \SharePointRecordTableDataProvider::getODataFilter(),
+            ({"Title": binary_to_string(<41002720>, "UTF-8")},));
+
+        # a value with no literal that Graph compares, and a key that is not a column name, are evaluated locally
+        float inf = 1e308 * 10;
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Amount": inf}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Amount": inf - inf}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Due": 2024-01-02}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Data": <01>}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Title eq 'x' or Title": "y"}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Title)": "y"}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({"Title\n": "y"}));
+        assertNothing(SharePointRecordTableDataProvider::getODataFilter({binary_to_string(<41ff>, "UTF-8"): "y"}));
+
+        # the filter is percent-encoded as one query option
+        FakeSharePointListRestClientIo rest();
+        rest.response_body = {"value": ()};
+        SharePointRecordTableDataProvider table(rest, "Widgets", TestSite, TestList);
+        string lbase = "sites/" + TestSite + "/lists/" + TestList;
+        map $1, table.searchRecords({"Title": "A&B'+=#%é"});
+        assertEq(lbase + "/items?$expand=fields&$top=200&$filter=fields%2FTitle%20eq%20%27A%26B%27%27%2B%3D%23%25"
+            "%C3%A9%27", rest.last_path);
+
+        # an item ID is read directly, and any other key value is looked up with a filter
+        rest.response_body = {"id": "7", "fields": {"Title": "x"}};
+        map $1, table.searchRecords({"id": "7"});
+        assertEq(lbase + "/items/7?$expand=fields", rest.last_path);
+        assertEq("7", SharePointRecordTableDataProvider::getItemIdPathValue(7));
+        # a key value that is not an item ID matches no item, and no request is made for it
+        rest.last_path = "";
+        *list<auto> found = map $1, table.searchRecords({"id": "7?$select=x"});
+        assertEq(0, found.size());
+        assertEq("", rest.last_path);
+        assertThrows("VALUE-ERROR", "not valid in its encoding", sub () {
+            map $1, table.searchRecords({"id": binary_to_string(<37ff27>, "UTF-8")});
+        });
+        assertEq("", rest.last_path);
+        assertNothing(SharePointRecordTableDataProvider::getItemIdPathValue("../7"));
+        assertNothing(SharePointRecordTableDataProvider::getItemIdPathValue("07"));
+        assertNothing(SharePointRecordTableDataProvider::getItemIdPathValue(-1));
+        assertNothing(SharePointRecordTableDataProvider::getItemIdPathValue(binary_to_string(<37ff>, "UTF-8")));
+
+        # an item ID and a list ID or title given to an action are each one segment of the path
+        FakeSharePointRestClientIo arest();
+        SharePointDataProvider::SharePointDataProvider prov(arest);
+        arest.response_body = {"id": "1", "fields": {}};
+        prov.getChildProvider("get-list-item").doRequest({"site_id": TestSite, "list_id": "My List/x",
+            "item_id": "1?$select=x#"});
+        assertEq("sites/" + TestSite + "/lists/My%20List%2Fx/items/1%3F%24select%3Dx%23?$expand=fields",
+            arest.last_path);
+        prov.getChildProvider("delete-list-item").doRequest({"site_id": TestSite, "list_id": TestList,
+            "item_id": "1/../2"});
+        assertEq(lbase + "/items/1%2F..%2F2", arest.last_path);
+
+        # no request is made with a string that is not valid
+        rest.last_path = "";
+        assertThrows("VALUE-ERROR", "not valid in its encoding", sub () {
+            map $1, table.searchRecords({"Title": binary_to_string(<41ff2720>, "UTF-8")});
+        });
+        assertEq("", rest.last_path);
+    }
+
+    #! Sites and drives are written into request paths only in the forms Graph documents
+    sitePathSegmentTest() {
+        checkModule();
+        code site = \SharePointDataProviderBase::getSitePathSegment();
+        code drive = \SharePointDataProviderBase::getDrivePathSegment();
+
+        # the documented forms; a server-relative path is closed with ":" only when another segment follows it
+        assertEq("root", site("root"));
+        assertEq(TestSite, site(TestSite));
+        assertEq(TestSite, site(TestSite, True));
+        string guid = "4a1b2c3d-1111-2222-3333-444455556666";
+        assertEq("contoso.sharepoint.com," + guid, site("contoso.sharepoint.com," + guid));
+        assertEq(guid, site(guid));
+        assertEq("contoso.sharepoint.com", site("contoso.sharepoint.com"));
+        assertEq("contoso.sharepoint.com", site("contoso.sharepoint.com", True));
+        assertEq("contoso.sharepoint.com:/sites/team", site("contoso.sharepoint.com:/sites/team"));
+        assertEq("contoso.sharepoint.com:/sites/team", site("contoso.sharepoint.com:/sites/team:"));
+        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team", True));
+        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team:", True));
+        assertEq("contoso.sharepoint.com:/sites/Team%20Site%3F%23%25",
+            site("contoso.sharepoint.com:/sites/Team Site?#%"));
+        assertEq("contoso.sharepoint.com:/sites/Zo%C3%AB:", site("contoso.sharepoint.com:/sites/Zoë", True));
+        assertEq(TestSite.upr(), site(TestSite.upr()));
+        assertEq(TestDrive, drive(TestDrive));
+        assertEq("b!Ab-_c.d", drive("b!Ab-_c.d"));
+
+        # anything else is refused
+        foreach string v in (("", "roots", "../drives/x", "contoso.sharepoint.com/../me", "root?$select=x",
+                "contoso.sharepoint.com,x,y", TestSite + "/drives", TestSite + "\n", "contoso.sharepoint.com:/",
+                "contoso.sharepoint.com:/sites/../x", "contoso.sharepoint.com:/sites//x",
+                "contoso.sharepoint.com:/sites/a:/b", "contoso.sharepoint.com:/sites/team/", "-bad.example.com",
+                "host")) {
+            assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", site, (v,));
+        }
+        foreach string v in (("b!x/../y", "b!x?$top=1", "b!x#", "b x", ".", "..", "b!x\n", "b!x%2F")) {
+            assertThrows("SHAREPOINT-DRIVE-ERROR", "is not a drive ID", drive, (v,));
+        }
+        assertThrows("VALUE-ERROR", "not valid in its encoding", site, (binary_to_string(<41ff2f>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "NUL", site, (binary_to_string(<726f6f7400>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", drive, (binary_to_string(<62ff>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "NUL", drive, (binary_to_string(<620021>, "UTF-8"),));
+
+        # a request with a site or drive that is refused is not made
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        rest.response_body = {"id": "1", "fields": {}};
+        prov.getChildProvider("get-list-item").doRequest({"site_id": "contoso.sharepoint.com:/sites/a b",
+            "list_id": TestList, "item_id": "1"});
+        assertEq("sites/contoso.sharepoint.com:/sites/a%20b:/lists/" + TestList + "/items/1?$expand=fields",
+            rest.last_path);
+        # the site ends the path of a get-site request, so its server-relative path is not closed with ":"
+        rest.response_body = {"id": TestSite};
+        prov.getChildProvider("get-site").doRequest({"site_id": "contoso.sharepoint.com:/sites/a b:"});
+        assertEq("sites/contoso.sharepoint.com:/sites/a%20b", rest.last_path);
+        rest.last_path = "";
+        assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", \prov.getChildProvider("get-list-item").doRequest(),
+            ({"site_id": TestSite + "/../../me/drive", "list_id": TestList, "item_id": "1"},));
+        assertThrows("SHAREPOINT-DRIVE-ERROR", "is not a drive ID", sub () {
+            prov.getChildProvider("get-drive-info").doRequest({"site_id": TestSite,
+                "drive_id": TestDrive + "/root?$expand=children"});
+        });
+        assertEq("", rest.last_path);
+
+        # the record tables read the site option as a site, and a site option that is not one is an error rather
+        # than a site with no lists
+        FakeSharePointRecordingRestClientIo rrest();
+        rrest.response_body = {"id": TestSite, "value": ({"id": TestList, "displayName": "Widgets", "list": {}},)};
+        SharePointRecordsDataProvider records(rrest, {"site_id": "contoso.sharepoint.com:/sites/a b"});
+        assertEq(("Widgets",), (select records.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName));
+        assertEq(("sites/contoso.sharepoint.com:/sites/a%20b?$select=id,displayName,name",
+            "sites/" + TestSite + "/lists?$select=id,name,displayName,description,webUrl,list,system,"
+            "createdDateTime,lastModifiedDateTime&$top=200"), rrest.paths);
+        rrest.paths = ();
+        SharePointRecordsDataProvider bad_records(rrest, {"site_id": "root/../me"});
+        assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", \bad_records.getChildProviderNames());
+        assertEq((), rrest.paths);
+    }
+
+    #! A list with no writable columns has the item metadata fields only, and a site with no lists has no tables
+    emptyListTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest();
+        rest.response_body = {"value": ()};
+        SharePointRecordTableDataProvider table(rest, "Empty", TestSite, TestList);
+        assertEq(("createdDateTime", "id", "lastModifiedDateTime", "webUrl"), sort(keys table.getRecordType()));
+        *list<auto> found = map $1, table.searchRecords();
+        assertEq(0, found.size());
+        # columns that are all read-only or hidden are left out the same way
+        rest.response_body = {"value": ({"name": "X", "readOnly": True, "text": {}},
+            {"name": "Y", "hidden": True, "text": {}})};
+        assertEq(("createdDateTime", "id", "lastModifiedDateTime", "webUrl"), sort(keys table.getRecordType()));
+
+        # a record with no writable field has nothing to write: an update changes nothing and makes no request
+        assertEq({}, SharePointListItemWriteDataProviderBase::getWritableFields({"id": "1", "webUrl": "x"}));
+        assertEq({}, SharePointListItemWriteDataProviderBase::getWritableFields());
+        rest.response_body = {"value": ()};
+        rest.last_method = "";
+        assertEq(0, table.updateRecords({"webUrl": "x"}, {"id": "1"}));
+        assertNeq("PATCH", rest.last_method);
+
+        # an action whose request takes the list's columns keeps its own request type
+        FakeSharePointRestClientIo arest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\arest);
+        arest.response_body = {"value": ()};
+        AbstractDataProvider create = prov.getChildProvider("create-list-item");
+        assertEq(create.getRequestType().getName(), create.getRequestTypeWithOptions({"site_id": TestSite,
+            "list_id": TestList}).getName());
+
+        rest.response_body = {"id": TestSite, "value": ()};
+        SharePointRecordsDataProvider records(rest, {"site_id": TestSite});
+        assertEq((), (select records.getChildProviderNames(), $1 != AbstractDataProvider::GenericApiCallChildName)
+            ?? ());
     }
 
     graphUrlStripTest() {

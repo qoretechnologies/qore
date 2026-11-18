@@ -57,11 +57,71 @@ static inline bool qore_ir_is_exception_only_release(const QoreIRInstruction& in
     return inst.exception_cleanup_release && inst.opcode == QoreIROpcode::ReleaseOwnedTemp;
 }
 
+//! Visits the paths of the debugger's flow requests of a block (QoreIRDebugFlowTargets, #6200, #6201)
+/** Each edge leaves the block from inside it, not at its end: \a visitor gets the position of the edge, the index of
+    the instruction before which it leaves (that of a step event, or the one after a ScopeExit, see
+    qore_ir_debug_flow_after()), and the block that the request enters, which has the block as its only predecessor.
+    Each target is visited once: each path of an event has an entry block of its own, which the requests of the event
+    with that path share (QoreIRDebugFlowTargets::targets()).
+*/
+template <typename F>
+void qore_ir_visit_debug_flow_targets(const QoreIRBasicBlock& block, F&& visitor) {
+    for (size_t i = 0; i < block.instructions.size(); ++i) {
+        const QoreIRInstruction* inst = block.instructions[i].get();
+        if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst)) {
+            size_t pos = qore_ir_debug_flow_after(inst) ? i + 1 : i;
+            for (QoreIRBasicBlock* target : flow->targets()) {
+                if (target) {
+                    visitor(pos, target);
+                }
+            }
+        }
+    }
+}
+
+//! Visits the paths of the debugger's flow requests that leave a block before each of its instructions, for an
+//! analysis that walks the instructions of the block in order (see qore_ir_visit_debug_flow_targets())
+/** visit() is called for each instruction before the analysis takes it: the visitor gets the targets of the edges that
+    leave before it, which have the state of the analysis then (those of a step event at the instruction, and those of
+    a ScopeExit before it, which leave after the ScopeExit; a ScopeExit is never the last instruction of its block)
+*/
+class QoreIRDebugFlowCursor {
+public:
+    template <typename F>
+    void visit(const QoreIRInstruction* inst, F&& visitor) {
+        if (pending) {
+            for (QoreIRBasicBlock* target : pending->targets()) {
+                if (target) {
+                    visitor(target);
+                }
+            }
+            pending = nullptr;
+        }
+        if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst)) {
+            if (qore_ir_debug_flow_after(inst)) {
+                pending = flow;
+                return;
+            }
+            for (QoreIRBasicBlock* target : flow->targets()) {
+                if (target) {
+                    visitor(target);
+                }
+            }
+        }
+    }
+
+private:
+    const QoreIRDebugFlowTargets* pending = nullptr;
+};
+
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
     //! @param include_exception_edges include instruction exception-handler edges in the graph
-    explicit QoreIRControlFlowGraph(const QoreIRFunction& func, bool include_exception_edges = false);
+    //! @param code if not null, the graph is that of the code of the function, without the paths of the debugger's
+    //! flow requests (QoreIRCodeBlocks): its block ids are those of the blocks of \a code
+    explicit QoreIRControlFlowGraph(const QoreIRFunction& func, bool include_exception_edges = false,
+        const QoreIRCodeBlocks* code = nullptr);
 
     //! @param dominator candidate dominator block ID
     //! @param block candidate dominated block ID
@@ -74,6 +134,21 @@ struct QoreIRControlFlowGraph {
     std::vector<std::vector<size_t>> predecessors;
     std::vector<std::vector<uint64_t>> dominators;
     std::vector<uint8_t> reachable;
+    //! The step event whose flow request enters a block (see qore_ir_visit_debug_flow_targets())
+    struct DebugFlowSource {
+        //! the block of the step event
+        size_t block = SIZE_MAX;
+        //! the index of the step event's instruction in its block
+        size_t index = SIZE_MAX;
+    };
+    //! for each block, the step event whose flow request enters it, if any; empty if the function has no such
+    //! edges
+    /** The edge is in \a successors and \a predecessors as any other, with the block of the event as the only
+        predecessor of its target, but it leaves the block at the event: a forward analysis gives the target the state
+        before the event's instruction, and a backward analysis takes what is live at the target as live at the event
+        (#6201).
+    */
+    std::vector<DebugFlowSource> debug_flow_sources;
     //! 1 for each block that is the exception target of an instruction (or of a throw) of a block that runs: a handler
     //! entry, which control can enter in the middle of any block that it handles, whatever the graph's edges
     std::vector<uint8_t> exception_entry;
@@ -86,6 +161,30 @@ struct QoreIRControlFlowGraph {
     */
     std::vector<uint8_t> exception_only;
     bool cancelled = false;
+
+    //! Returns the only successor of \a block other than the paths of the debugger's flow requests at its step
+    //! events, or SIZE_MAX if it has none or more than one
+    size_t getOnlyNormalSuccessor(size_t block) const {
+        size_t only = SIZE_MAX;
+        for (size_t successor : successors[block]) {
+            if (getDebugFlowSource(successor)) {
+                continue;
+            }
+            if (only != SIZE_MAX) {
+                return SIZE_MAX;
+            }
+            only = successor;
+        }
+        return only;
+    }
+
+    //! Returns the step event whose flow request enters \a block, or nullptr if no flow request enters it
+    const DebugFlowSource* getDebugFlowSource(size_t block) const {
+        if (block >= debug_flow_sources.size() || debug_flow_sources[block].block == SIZE_MAX) {
+            return nullptr;
+        }
+        return &debug_flow_sources[block];
+    }
 };
 
 //! Answers whether a block of a function can reach any of a set of blocks without passing a given block
@@ -266,6 +365,7 @@ struct QoreIRFunctionEffectSummary {
     //! Exact runtime locals modified when may_modify_runtime_locals is false.
     //! Pointer identities are valid within one IR/JIT/AOT compilation group.
     std::vector<const void*> modified_runtime_locals;
+    //! True if every return of the code of the function (QoreIRCodeBlocks) has a value that is not NOTHING
     bool never_returns_nothing = false;
     //! True for parameters whose value is only observed during the call.
     //! A returned value is allowed because return lowering takes an owning ref.

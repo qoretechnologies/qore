@@ -80,7 +80,7 @@ class IsEncodingValidTest inherits QUnit::Test {
         assertTrue(binary_to_string(parse_hex_string("e9"), "ISO-8859-1").isEncodingValid());
         # Shift_JIS: a valid two-byte character, and a lead byte without a valid trail byte
         assertTrue(binary_to_string(parse_hex_string("82a0"), "SHIFT_JIS").isEncodingValid());
-        assertFalse(binary_to_string(parse_hex_string("82ff"), "SHIFT_JIS").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("817f"), "SHIFT_JIS").isEncodingValid());
         # UTF-16LE: an unpaired surrogate
         assertTrue(binary_to_string(parse_hex_string("6100"), "UTF-16LE").isEncodingValid());
         assertFalse(binary_to_string(parse_hex_string("00d8"), "UTF-16LE").isEncodingValid());

@@ -1,0 +1,256 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the paths of a debugger's requests
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%exec-class DebugFlowPathCodeTest
+
+#! code with step events runs as with the AST interpreter, and code lowered from the parse tree has no paths (#6201)
+/** Only the debug IR of AOT code has the paths of a debugger's return, break and continue requests at its step events
+    (QoreIRFunction::hasDebugFlowPaths()), which release the temporaries, the locals and the handlers of the blocks
+    that they leave; the native code of the AOT executables erases them, and the code after them has the lowering
+    state that the code before them left.  The probe runs as with the AST interpreter in every execution mode and as
+    qcc executables, whose debug IR has the paths; code lowered from the parse tree has none.
+*/
+class DebugFlowPathCodeTest inherits QUnit::Test {
+    public {
+        #! the blocks of the function with step events of sourceCodeHasNoPaths(), for each block without them
+        const MaxBlockRatio = 1.6;
+        #! the size of the function with step events, for each instruction without them
+        const MaxInstRatio = 1.25;
+    }
+
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = TestInterpreter::qcc_compiler() ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/DebugFlowPathCode/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("debug flow path code", "1.0", \ARGV) {
+        addTestCase("AST reference", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        addTestCase("the IR lowered from the parse tree has no paths of a debugger's requests", \irHasNoPaths());
+        addTestCase("code lowered from the parse tree is the size of the code without step events and its hooks",
+            \sourceCodeHasNoPaths());
+        set_return_value(main());
+    }
+
+    astReference() {
+        list<string> lines = getAst().split("\n");
+        foreach string line in (
+                'cases 3 a3b3c3d3',
+                'cases 12 ',
+                'loop_switch a0d0b0a1s1b1a2d2b2 ["~a0", "~d0", "~b0", "e0", "~a1", "~s1", "c1", "~b1", "e1", "~a2", "~d2", '
+                    '"~b2", "e2"]',
+                'block_locals ["a0", "b0", "~e0", "~d0", "c0", "a1", "b1", "~e1", "~d1", "c1", "end"]',
+                'locals_tries 50 23',
+                'nested_handlers ["h1", "h2", "h3", "~blk", "out:O"]',
+            ) {
+            # each case runs twice, so that the tiered mode runs compiled code on the second call
+            assertEq(2, (select lines, $1 == line).size(), line);
+        }
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run((qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode, probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-debug-flow-path-code-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    #! the IR lowered from the parse tree has the step events of a debugger but no paths of its requests (#6201)
+    /** Only the debug IR of AOT code has them (QoreIRFunction::hasDebugFlowPaths()): a call that starts while a
+        debugger is attached runs on the AST interpreter.  The IR of top-level code with loops, a try statement, a
+        catch block with a local and an on_exit handler, and break and continue statements (--ir-dump, which dumps
+        the IR of the top-level code as it is lowered) has the step events of its statements and blocks, and no block of
+        the paths (named "debug.flow...", QoreIRLowering::lowerDebugFlowPath())
+    */
+    irHasNoPaths() {
+        TmpFile tmp(NOTHING, ".q");
+        tmp.file.write("%modern
+int r = 0;
+for (int i = 0; i < 3; ++i) {
+    while (r < 100) {
+        try {
+            r += i;
+            if (i == 5) {
+                break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            int l = r;
+            on_exit { r += l; }
+            continue;
+        }
+        break;
+    }
+}
+printf(\"rv:%d\\n\", r);
+");
+        tmp.file.close();
+        string out = backquote("env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + quote(qore_bin) + " -b --ir-dump --exec-mode=ir " + quote(tmp.path) + " 2>&1");
+        list<string> lines = out.split("\n");
+        assertEq(1, (select lines, $1 == "rv:3").size(), "the code ran");
+        # the dump names the blocks and has the step events
+        assertGt(0, (select lines, $1 =~ /^try\.catch\.[0-9]+:/).size(), "named blocks in the dump");
+        assertGt(0, (select lines, $1 =~ /^  debug\.statement/).size(), "step events of statements");
+        assertGt(0, (select lines, $1 =~ /^  debug\.block/).size(), "step events of blocks");
+        assertEq((), (select lines, $1 =~ /debug\.flow/), "no blocks of the paths of a debugger's requests");
+    }
+
+    #! code lowered from the parse tree is the size of the same code without step events plus its step hooks (#6201)
+    /** The function with step events (the default) is the size of the same function without step events plus its
+        step hooks, with the code of
+        the handlers out of line and inline (QORE_JIT_OBE_TABLE_BUDGET): 1.52 times the blocks and 1.04 to 1.18 times
+        the instructions of the function without step events with 25 and 50 catch blocks; with the paths, it had 1.81
+        times the blocks and 1.11 times the instructions (inline handler code)
+    */
+    sourceCodeHasNoPaths() {
+        foreach int n in (25, 50) {
+            foreach bool inline_handlers in (False, True) {
+                hash<auto> dbg = compileHandlers(n, True, inline_handlers);
+                hash<auto> nd = compileHandlers(n, False, inline_handlers);
+                string what = sprintf("%d catch blocks%s", n, inline_handlers ? ", inline handler code" : "");
+                float block_ratio = float(dbg.blocks) / nd.blocks;
+                assertTrue(block_ratio <= MaxBlockRatio, sprintf("%s: the function has %0.2f times the blocks of the "
+                    "same function without step events (at most %0.2f): %d and %d", what, block_ratio, MaxBlockRatio,
+                    dbg.blocks, nd.blocks));
+                float inst_ratio = float(dbg.insts) / nd.insts;
+                assertTrue(inst_ratio <= MaxInstRatio, sprintf("%s: the function is %0.2f times the size of the same "
+                    "function without step events (at most %0.2f): %d and %d", what, inst_ratio, MaxInstRatio,
+                    dbg.insts, nd.insts));
+                if (ENV.DEBUG_FLOW_PATH_CODE_SIZES) {
+                    printf("%s: blocks %d/%d (%0.3f) insts %d/%d (%0.3f)\n", what, dbg.blocks, nd.blocks, block_ratio,
+                        dbg.insts, nd.insts, inst_ratio);
+                }
+            }
+        }
+    }
+
+    #! the function with \a n try statements whose catch blocks have a local and an on_exit handler
+    /** As JITLargeFunctionBlocks.qtest (qore#6104), with or without step events
+    */
+    private static string getHandlerCode(int n, bool debugging) {
+        string code = "%modern\n" + (debugging ? "" : "%no-debugging\n") + "
+int sub may_throw(int i) { if (i < 0) { throw \"NEG\", \"negative\"; } return i + 1; }
+
+int sub big(int n) {
+    int r = 0;
+";
+        for (int i = 0; i < n; ++i) {
+            code += sprintf("    try {
+        r += may_throw(n - %d);
+    } catch (hash<ExceptionInfo> ex) {
+        int l%d = r + %d;
+        on_exit { r += l%d; }
+        r += 1;
+    }
+", i % 7 == 3 ? 1000 : 0, i, i, i);
+        }
+        code += "    return r;
+}
+
+printf(\"rv:%d\\n\", big(1) + big(2) + big(3));
+";
+        return code;
+    }
+
+    #! returns the number of instructions and of blocks of the LLVM function of \c big, as lowered (not optimized)
+    private hash<auto> compileHandlers(int n, bool debugging, bool inline_handlers) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(getHandlerCode(n, debugging));
+        tmp.file.close();
+        list<string> args = ("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1",
+            "QORE_DUMP_LLVM_IR=1", "QORE_JIT_OPT_LEVEL=0", "QORE_JIT_MAX_IR_INSTRUCTIONS=0",
+            "QORE_JIT_MAX_HANDLER_COST=0");
+        if (inline_handlers) {
+            args += "QORE_JIT_OBE_TABLE_BUDGET=100000000";
+        }
+        args += (qore_bin, "-b", "--exec-mode=jit", tmp.path);
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ") + " 2>&1";
+        string out = backquote(command);
+        hash<auto> sizes = {"insts": 0, "blocks": 0};
+        bool in_big = False;
+        foreach string line in (out.split("\n")) {
+            if (!in_big) {
+                in_big = line =~ /^define .*@"?big/;
+                continue;
+            }
+            if (line =~ /^}/) {
+                break;
+            }
+            if (line =~ /^[A-Za-z0-9_.$"-]+:/) {
+                ++sizes.blocks;
+            } else if (line =~ /^  [^ ;]/) {
+                ++sizes.insts;
+            }
+        }
+        if (!sizes.insts) {
+            throw "NO-DUMP", sprintf("no LLVM function 'big' in the output (%d bytes) for %d catch blocks%s%s: the "
+                "function was not compiled", out.size(), n, debugging ? "" : " without step events",
+                inline_handlers ? " with the inline code of the handlers" : "");
+        }
+        return sizes;
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

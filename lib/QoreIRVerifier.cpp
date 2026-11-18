@@ -215,6 +215,14 @@ static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const Qo
             if (inst->exception_target) {
                 targets.insert(inst->exception_target);
             }
+            // the paths of the debugger's flow requests at a step event (#6201)
+            if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get())) {
+                for (QoreIRBasicBlock* target : flow->targets()) {
+                    if (target) {
+                        targets.insert(target);
+                    }
+                }
+            }
         }
     }
     return targets;
@@ -716,6 +724,62 @@ bool QoreIRVerifier::verifyModuleIR(const QoreIRFunction& func, std::string& err
     return true;
 }
 
+//! Checks the paths of the debugger's flow requests at the step events of a function (QoreIRDebugFlowTargets)
+/** Each path is entered from its step event only: a block of a path of its own (QoreIRBasicBlock::debug_flow) that
+    no other edge enters and that has no Phi, so that the state of the function at the event is its only input
+*/
+static bool verifyDebugFlowTargets(const QoreIRFunction& func,
+        const std::unordered_set<const QoreIRBasicBlock*>& block_set, std::string& error) {
+    std::unordered_map<const QoreIRBasicBlock*, const QoreIRBasicBlock*> entries;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get());
+            if (!flow) {
+                continue;
+            }
+            for (const QoreIRBasicBlock* target : flow->targets()) {
+                if (!target) {
+                    continue;
+                }
+                if (!block_set.count(target) || !target->debug_flow || target->instructions.empty()
+                        || target->instructions.front()->opcode == QoreIROpcode::Phi) {
+                    error = "invalid debugger flow path '" + target->name + "' in block '" + block->name + "'";
+                    return false;
+                }
+                if (!entries.emplace(target, block.get()).second) {
+                    error = "debugger flow path '" + target->name + "' entered by more than one step event";
+                    return false;
+                }
+            }
+        }
+    }
+    if (entries.empty()) {
+        return true;
+    }
+    // no other edge enters an entry block
+    for (const auto& block : func.blocks) {
+        if (block->instructions.empty()) {
+            continue;
+        }
+        bool bad = false;
+        qore_ir_visit_successors(*block->instructions.back(), [&](QoreIRBasicBlock* successor) {
+            if (entries.count(successor)) {
+                bad = true;
+            }
+        });
+        for (const auto& inst : block->instructions) {
+            if (inst->exception_target && entries.count(inst->exception_target)) {
+                bad = true;
+            }
+        }
+        if (bad) {
+            error = "debugger flow path in block '" + block->name + "' entered by another edge";
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
     const std::string& registry_error = getOpcodeRegistryValidationError();
     if (!registry_error.empty()) {
@@ -766,6 +830,9 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
             }
             return false;
         }
+    }
+    if (!verifyDebugFlowTargets(func, block_set, error)) {
+        return false;
     }
     std::unordered_set<uint32_t> value_ids;
     for (const auto& block : func.blocks) {

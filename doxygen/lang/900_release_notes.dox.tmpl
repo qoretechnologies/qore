@@ -101,6 +101,17 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Encoding That Is Not Predefined Has One Canonical Name
+    The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
+    \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used
+    it, which made the name depend on the order of use (see @ref character_encoding_overview; issue #6570).
+
+    @par CdsRestDataProvider Queries Refuse Values and Names That OData Cannot Write
+    In a query of the @ref cdsrestdataproviderintro "CdsRestDataProvider" module, a string whose encoding is invalid
+    or that has a NUL character, or a value with no OData literal of its field's type, raises \c VALUE-ERROR, and a
+    field or column name that is not an OData identifier raises \c WHERE-ERROR or \c COLUMN-ERROR (see
+    @ref cdsrestdataprovider_v2_2; <a href="https://github.com/qoretechnologies/qore/issues/6596">issue 6596</a>).
+
     @par SqlUtil Casts Accept Only Type Names
     A cast in @ref sqlutilintro "SqlUtil" (@ref SqlUtil::cop_cast() "cop_cast()" and the cast data provider
     expression) raises \c OPERATOR-ERROR for a type that is not a type name, as checked by
@@ -172,6 +183,11 @@
     64-bit integer, which was read as the largest integer (see
     @ref octal_integer_literals "octal integer literals"; issue #504).
 
+    @par String Replacement, Ranges and Character Removal Raise INVALID-ENCODING for a String Not Valid in Its Encoding
+    @ref Qore::replace() "replace()", a string range with the @ref list_element_operator "[] operator" and the
+    @ref remove "remove" and @ref delete "delete" operators with string indexes raise an \c INVALID-ENCODING exception
+    for a string in a multi-byte encoding that is not valid in it; before, they gave a partial result (issue #6595).
+
     @par Implicit Argument Numbers Are Decimal
     The number of an implicit argument reference is decimal: <tt>$010</tt> is the tenth argument, where it was the
     eighth (octal), and <tt>$08</tt> is the eighth, where it was a parse error (see
@@ -186,6 +202,11 @@
     A parse define with an integer value (<tt>%%define X 12</tt>, <tt>qore -DX=12</tt>) has an integer value, as
     @ref Qore::Program::getDefine() "Program::getDefine()" returns it: it was a float (\c 12.0), and a number is decimal,
     also with a leading zero (see @ref define_values "%define"; issue #6530).
+
+    @par The Length of a String Not Valid in Its Encoding Counts Each Invalid Byte as One Character
+    @ref Qore::length(softstring) "length()", @ref Qore::zzz8stringzzz9::length() "<string>::length()" and the
+    @ref elements "elements operator" count each byte of a string that does not start a complete character as one
+    character, in every execution mode; before, the count stopped at the first such byte (issue #6597).
 
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
@@ -418,9 +439,9 @@
 
     @par Temporary Values Live Until the End of Their Statement
     A temporary value, such as an object returned by a call in a chain of member accesses and method calls, the operand
-    of an operator or a value read through a reference, lives until the end of its statement; given to a call as an
-    argument, it is released when the call returns.  Code that relies on earlier destruction must assign the value to
-    a variable; see @ref temporary_lifetime.
+    of an operator or a value read through a reference, lives until the end of its statement; an argument that nothing
+    else holds is taken over by the parameter and released when the call returns, or earlier, when the callee
+    overwrites or removes the parameter; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
@@ -1541,6 +1562,9 @@
       @ref linenoiseintro "linenoise" module (arrow key navigation, command history recall, reverse
       search with Ctrl+R, tab completion). For a full-featured ncurses TUI REPL, see the
       <a href="https://github.com/qoretechnologies/module-ncurses">module-ncurses</a> \c qrepl application.
+    - In frames already running when a debugger attaches, return/break/continue requests are not always honored
+      under the IR, JIT and tiered modes; new calls run on the interpreter and honor them (see
+      @ref debugger_running_code).
 
     @subsection qore_3_0_0_updated_modules Updated Modules
     - @ref astparserintro "astparser" module
@@ -1580,6 +1604,9 @@
       - API calls are made with an asynchronous @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo", and searches
         return the records of every page
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - query values are written as OData literals of their type in percent-encoded query options, and fields and
+        columns must be OData identifiers
+        (<a href="https://github.com/qoretechnologies/qore/issues/6596">issue 6596</a>)
       - see @ref cdsrestdataprovider_v2_2 for all changes
 
     - @ref csvutilintro "CsvUtil" module
@@ -2047,6 +2074,8 @@
     - @ref connectdataproviderintro "ConnectDataProvider": data provider and connection APIs for Connect RPC
     - @ref constantcontactdataproviderintro "ConstantContactDataProvider": data provider for Constant Contact
     - @ref constantcontactrestclientintro "ConstantContactRestClient": REST client for the Constant Contact API
+    - @ref convertapidataproviderintro "ConvertApiDataProvider": data provider for ConvertAPI file conversion
+    - @ref convertapirestclientintro "ConvertApiRestClient": REST client for the ConvertAPI file conversion API
     - @ref customeriodataproviderintro "CustomerIoDataProvider": data provider for Customer.io marketing automation
     - @ref customeriorestclientintro "CustomerIoRestClient": REST client for the Customer.io App and Track APIs
     - @ref dataproviderdataframeintro "DataProviderDataFrame": data provider integration for the dataframe module
@@ -2301,6 +2330,9 @@
       parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
       response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
       @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
+    - \c UNREFERENCED-VARIABLE warnings ignored the code's own warning directives when the code was committed, and
+      qcc and qore could disagree; a @ref disable-warning "%disable-warning" or @ref enable-warning "%enable-warning"
+      directive now applies to the variables declared after it (issue #6589)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)
@@ -2355,6 +2387,10 @@
     - the creation of an object of a class whose hierarchy reaches a class without a constructor through more than
       one path walks the base classes of that class once, not once per path, which took exponential time in a chain
       of diamonds (see @ref inheritance; issue #6513)
+    - a lookup in a class hierarchy with diamonds that finds nothing (a missing method, member or constant,
+      \c instanceof an unrelated class, a failed cast or type check, at parse time or at run time) visits each
+      ancestor once, not once per path, which took exponential time in a chain of diamonds (see @ref inheritance;
+      issue #6522)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
@@ -3489,6 +3525,24 @@
       where clause or the \c "groupby" option, which gave invalid SQL such as <tt>order by distinct ddt_number</tt>
       (<a href="https://github.com/qoretechnologies/qore/issues/6331">issue 6331</a>,
       <a href="https://github.com/qoretechnologies/qore/issues/6332">issue 6332</a>)
+    - fixed a column alias (@ref SqlUtil::cop_as() "cop_as()") in the columns of a
+      @ref select_option_superquery "superquery" of @ref sqlutilintro "SqlUtil", which raised \c RUNTIME-TYPE-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6592">issue 6592</a>)
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil", which matched the values of a composite
+      primary key joined with \c "-", so that a row whose key gave the same text was kept (ex: <tt>("a", "b-c")</tt>
+      for <tt>("a-b", "c")</tt>); a table without a primary key raises \c UPSERT-ERROR before any change
+      (<a href="https://github.com/qoretechnologies/qore/issues/6580">issue 6580</a>)
+    - fixed the \c in expression of @ref sqlutilintro "SqlUtil" on Oracle tables with the values as the arguments after
+      the field, as the DPQL parser gives them (ex: <tt>\@id in (1, 4)</tt>), which raised
+      \c DATA-PROVIDER-EXPRESSION-ERROR or \c RUNTIME-OVERLOAD-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6581">issue 6581</a>)
+    - fixed @ref SqlUtil::cop_year() "cop_year()", @ref SqlUtil::cop_year_month() "cop_year_month()",
+      @ref SqlUtil::cop_year_day() "cop_year_day()" and @ref SqlUtil::cop_year_hour() "cop_year_hour()" of
+      @ref sqlutilintro "SqlUtil" on SQL Server, which used the column name \c dt instead of their column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6582">issue 6582</a>)
+    - fixed a select of @ref sqlutilintro "SqlUtil" on SQL Server with a limit and no offset or ordering, which wrote
+      <tt>top N</tt> and also bound the limit as an argument that the SQL does not use, and put \c top before
+      \c distinct (<a href="https://github.com/qoretechnologies/qore/issues/6583">issue 6583</a>)
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
