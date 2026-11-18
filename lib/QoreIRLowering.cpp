@@ -5362,6 +5362,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.temp_scope_depth = builder.getTempScopeDepth();
     entry.outer_exception_target = getCurrentExceptionTarget();
+    entry.exception_depth = exception_stack.size();
     entry.open_scopes = scope_stack.size();
     entry.open_catch_depth = catch_cleanup_depth;
     entry.open_try_depth = try_catch_cleanup_depth_stack.size();
@@ -5881,6 +5882,33 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // is the same after each entry.  See design/ir-loop-jump-temp-scope.md.
     assert(unwind_temp_depth == SIZE_MAX || unwind_temp_depth <= builder.getTempScopeDepth());
     size_t unwound_temp_depth = builder.getTempScopeDepth();
+    // The code lowered after an entry's cleanup has left it: its exceptions go to the handlers outside the entry, not
+    // to those of the blocks, implicit elements and loops that the exit has already closed, whose handlers would
+    // close them again (qore#6643).  The exception stack is cut back to its size when the entry was pushed, if it
+    // still holds the same targets there (a walk from the code of a handler lowered inline has a stack of its own,
+    // see lowerHandlersAtExit()), and restored once the walk ends, for the code that follows it in the lowering.
+    struct ExceptionStackRestore {
+        std::vector<QoreIRBasicBlock*>& stack;
+        std::vector<QoreIRBasicBlock*> saved;
+        bool cut = false;
+        DLLLOCAL ~ExceptionStackRestore() {
+            if (cut) {
+                stack.swap(saved);
+            }
+        }
+        DLLLOCAL void cutTo(const BlockCleanupEntry& entry) {
+            if (entry.exception_depth >= stack.size()
+                    || (entry.exception_depth ? stack[entry.exception_depth - 1] : nullptr)
+                        != entry.outer_exception_target) {
+                return;
+            }
+            if (!cut) {
+                saved = stack;
+                cut = true;
+            }
+            stack.resize(entry.exception_depth);
+        }
+    } exception_stack_restore{exception_stack, {}};
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
         // a handler lowered inline for an entry ended the block (a throw, a thread_exit or a return in it): the
         // cleanups of the remaining entries are unreachable here; the exception path of the block runs them (#6030)
@@ -6109,6 +6137,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             case BlockCleanupEntry::RefForeachRecord: {
                 // Pop implicit element ($#) and record modified loop variable value
                 builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
+                // the element is restored: the load of the variable has the handler outside the element (qore#6643)
+                exception_stack_restore.cutTo(entry);
                 std::string err;
                 QoreIRValue modified = lowerExpression(entry.var_expr, err);
                 if (modified.isValid()) {
@@ -6184,6 +6214,7 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
             handover_try_active = false;
         }
+        exception_stack_restore.cutTo(entry);
     }
     if (unwind_temp_depth != SIZE_MAX && unwind_temp_depth < unwound_temp_depth) {
         builder.createUnwindTemps(unwound_temp_depth, unwind_temp_depth, unwind_loc);
