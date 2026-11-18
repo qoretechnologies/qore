@@ -558,6 +558,12 @@ module SqlUtil {
       <tt>("a-b", "c")</tt>); a table without a primary key raises \c UPSERT-ERROR before any change, where it raised
       \c RUNTIME-TYPE-ERROR after the input was upserted
       (<a href="https://github.com/qoretechnologies/qore/issues/6580">issue 6580</a>)
+    - fixed the \c delete_others upsert option, which compared key values as text with those read from the database,
+      so that a value that the database stores in another form (ex: a date in another time zone, a float for an
+      integer column) deleted the row that the upsert had written, and which deleted rows while it read the table,
+      which lost the connection on SQL Server; an empty input now deletes every row, as documented, and an input row
+      without a value of the primary key raises \c UPSERT-ERROR, where every row was deleted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
