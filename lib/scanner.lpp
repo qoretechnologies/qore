@@ -2623,18 +2623,35 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                        yyin = save_yyin;
                                                        BEGIN(INITIAL);
                                                     } else {
-                                                       // save file name string in QoreProgram's list
-                                                       const char* str = qore_program_private::get(*pgm)->addString(fname->c_str());
-                                                       // and record the file as a source of what is parsed, for the
-                                                       // depfile of an AOT module
-                                                       qore_program_private::get(*pgm)->addIncludedFile(fn);
                                                        // the included file starts at its first line and column; the
                                                        // including file resumes at the end of its last token at the
-                                                       // end of it (issue #6561); recorded first, as it can raise
-                                                       // std::bad_alloc
-                                                       yyextra->include_resume_loc.emplace_back(yylloc->last_line,
-                                                          yylloc->last_col);
-                                                       beginParsing(str, (void*)YY_CURRENT_BUFFER);
+                                                       // end of it (issue #6561); the position is recorded and the
+                                                       // scan switches to the included file all or nothing: if a
+                                                       // step raises an exception (std::bad_alloc), the position is
+                                                       // removed again and the included file is closed, and the
+                                                       // exception leaves the scan of the including file as it was
+                                                       const char* str;
+                                                       try {
+                                                          // save file name string in QoreProgram's list
+                                                          str = qore_program_private::get(*pgm)->addString(fname->c_str());
+                                                          // and record the file as a source of what is parsed, for
+                                                          // the depfile of an AOT module
+                                                          qore_program_private::get(*pgm)->addIncludedFile(fn);
+                                                          yyextra->include_resume_loc.emplace_back(yylloc->last_line,
+                                                             yylloc->last_col);
+                                                          try {
+                                                             beginParsing(str, (void*)YY_CURRENT_BUFFER);
+                                                          } catch (...) {
+                                                             yyextra->include_resume_loc.pop_back();
+                                                             throw;
+                                                          }
+                                                       } catch (...) {
+                                                          fclose(yyin);
+                                                          yyin = save_yyin;
+                                                          throw;
+                                                       }
+                                                       // no exception after this: a failure of flex to allocate the
+                                                       // buffer is fatal (YY_FATAL_ERROR)
                                                        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE, yyscanner), yyscanner);
                                                        yylloc->last_line = 1;
                                                        yylloc->last_col = 0;
