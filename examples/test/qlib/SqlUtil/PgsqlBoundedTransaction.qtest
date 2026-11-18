@@ -92,11 +92,20 @@ class BoundedTransactionTest inherits QUnit::Test {
         f.ds.rollback();
     }
 
+    #! Returns the session's timeouts in milliseconds; a timeout that the server does not have is 0
+    /** The statement reads no catalog: current_setting() instead of the pg_settings view, which builds a row for
+        every setting of the server, so that it completes in a fraction of the shortest statement timeout that the
+        tests set (150 ms), which it runs under when it reads that timeout; a read of pg_settings was cancelled by
+        it when other tests loaded the server.
+    */
     private static hash<string, int> readSettings(AbstractDatasource ds) {
         hash<auto> row = ds.selectRow(
-            "select (select setting::bigint from pg_settings where name = 'lock_timeout') as l, "
-            "(select setting::bigint from pg_settings where name = 'statement_timeout') as s, "
-            "(select setting::bigint from pg_settings where name = 'transaction_timeout') as t");
+            "select coalesce(round(extract(epoch from current_setting('lock_timeout', true)::interval) * 1000), "
+            "0)::bigint as l, "
+            "coalesce(round(extract(epoch from current_setting('statement_timeout', true)::interval) * 1000), "
+            "0)::bigint as s, "
+            "coalesce(round(extract(epoch from current_setting('transaction_timeout', true)::interval) * 1000), "
+            "0)::bigint as t");
         return {"lock_timeout_ms": row.l.toInt(), "statement_timeout_ms": row.s.toInt(),
             "transaction_timeout_ms": row.t.toInt()};
     }
