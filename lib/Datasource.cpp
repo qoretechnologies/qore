@@ -1649,8 +1649,14 @@ Datasource::Datasource(DBIDriver* ndsl, DatasourceStatementHelper* dsh)
 }
 
 // the creators of a pool connection are those of the pool, not the code that grows the pool (qore#6142)
-Datasource::Datasource(DBIDriver* ndsl, DatasourceStatementHelper* dsh, const qore_ds_pool_record& rec)
-        : priv(new qore_ds_private(this, ndsl, dsh, qore_ds_creators_t(rec.creators))) {
+Datasource* qore_ds_private::createPoolConnection(DBIDriver* driver, DatasourceStatementHelper* dsh,
+        const qore_ds_pool_record& rec) {
+    std::unique_ptr<Datasource> ds(new Datasource(driver, dsh));
+    // the object is not shared yet; the creators that the constructor recorded for the calling code are replaced
+    QoreDsLock al(ds->priv->m);
+    qore_ds_pending_params::View v(ds->priv->pending, al);
+    v.creators() = rec.creators;
+    return ds.release();
 }
 
 Datasource::Datasource(const Datasource& old, DatasourceStatementHelper* dsh) : priv(new qore_ds_private(*old.priv, this, dsh)) {

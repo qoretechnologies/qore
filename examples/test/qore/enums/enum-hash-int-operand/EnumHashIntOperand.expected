@@ -1,0 +1,20 @@
+other bases: 83020 integer
+release member
+after member
+release member bit
+after member bit
+release reference
+after reference
+temporaries: 5 integer
+plus: 200 integer
+minus: 20 integer
+bit ops: 266 integer
+missing: 5 integer
+changing: 83 integer
+auto local: 40 enum<E>
+enum local: 40 enum<E>
+list element: 40 enum<E>
+argument: 40 enum<E>
+int sum: 80 integer
+string enum: "ax" string
+string enum value: "x" enum<ES>

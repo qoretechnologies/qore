@@ -485,8 +485,25 @@ public:
         indefinitely (OAuth2 refresh / happy-eyeballs via waitForNotifier())
         and is torn down via cancel()/cancelByOwner() + op completion, not via
         this barrier — waiting for it here deadlocks shutdown.
+
+        Called on a worker of this dispatcher (a callback that flushes the callbacks, or a destructor that its
+        release of an object runs, such as that of a server's async I/O controller stopped in a callback), it does
+        not wait for the callback that the worker runs, which ends only when this call has returned (qore#6508).
     */
     DLLLOCAL void waitForIdle();
+
+    //! Waits on idle_cond for waitForIdle(), with the dispatcher's lock held; counted for dbgWaitIdleWaiter() in a
+    //! debug build
+    DLLLOCAL void idleWait() {
+#ifdef DEBUG
+        ++dbg_idle_waiters;
+        dbg_idle_waiter_cond.broadcast();
+#endif
+        idle_cond.wait(m);
+#ifdef DEBUG
+        --dbg_idle_waiters;
+#endif
+    }
 
 #ifdef DEBUG
     //! Debug-only: the number of release items parked for the given Program (see parked_program_releases)
@@ -499,6 +516,13 @@ public:
         @return true if the dispatcher is idle, false if it was not when \a timeout_ms elapsed
     */
     DLLLOCAL bool dbgWaitAllIdle(int timeout_ms);
+
+    //! Debug-only: waits until a thread waits in waitForIdle() for a callback (the wait blocks)
+    /** For tests that must release a callback only once a flush waits for it (qore#6508)
+
+        @return true if a thread waits in waitForIdle(), false if none did when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
 
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
@@ -614,6 +638,10 @@ private:
 #ifdef DEBUG
     //! Debug-only: the number of onComplete() calls dispatched so far (see dbgOnCompleteDispatched())
     std::atomic<int64_t> dbg_on_complete_dispatched{0};
+    //! Debug-only: the number of threads blocked in waitForIdle() (see dbgWaitIdleWaiter())
+    int dbg_idle_waiters = 0;
+    //! Debug-only: signaled when a thread blocks in waitForIdle()
+    QoreCondition dbg_idle_waiter_cond;
 #endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
@@ -908,6 +936,9 @@ public:
     /** For tests of the work of an owner that is shutting down, which cannot otherwise hold the mark at a given point
     */
     DLLLOCAL void dbgSetOwnerShuttingDown(const std::string& owner, bool mark);
+
+    //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
+    DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
 #endif
 
     //! Wakes a socket operation by QoreObject identity

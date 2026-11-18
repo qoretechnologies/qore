@@ -4954,6 +4954,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(QoreAOTContex
     fcr->setExplicitTypeArgs(std::move(type_args));
     // a type parameter of the generic code that creates the reference is bound to the running instantiation
     fcr->bindExplicitTypeArgs();
+    // the reference can outlive the Program of a type argument (issue #6489)
+    fcr->holdExplicitTypeArgDecls();
     return toBits(QoreValue(fcr));
 }
 
@@ -18279,12 +18281,13 @@ static uint64_t qore_rt_lv_path_binary_mut_impl(QoreIRLValuePathInstruction* ins
                 }
             }
             if (lvh.getType() != NT_LIST) {
-                if (qore_compiled_code_strict_args()) {
-                    xsink->raiseException(
-                        inst->binary_mut_op == LVBinaryMutOp::Push
-                            ? "PUSH-ERROR" : "UNSHIFT-ERROR",
-                        "the lvalue argument is type \"%s\"; expecting \"list\"",
-                        lvh.getTypeName());
+                // as the AST interpreter's operators: unshift always raises the error, push only with strict
+                // argument handling, with their messages
+                bool push = inst->binary_mut_op == LVBinaryMutOp::Push;
+                if (!push || qore_compiled_code_strict_args()) {
+                    xsink->raiseException(push ? "PUSH-ERROR" : "UNSHIFT-ERROR",
+                        "the lvalue argument to %s is type \"%s\"; expecting \"list\"",
+                        push ? "push" : "unshift", lvh.getTypeName());
                 }
                 break;
             }

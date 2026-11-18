@@ -163,8 +163,7 @@ public namespace Schema {
             if (silent) {
                 return;
             }
-            printf("%s: %s\n", db.getDatasourceDesc(), vsprintf(fmt, argv));
-            flush();
+            schema_terminal_printf("%s: %s\n", db.getDatasourceDesc(), vsprintf(fmt, argv));
         }
 
         #! outputs a log message
@@ -175,8 +174,7 @@ public namespace Schema {
             if (silent) {
                 return;
             }
-            vprintf(fmt + "\n", argv);
-            flush();
+            schema_terminal_printf("%s\n", vsprintf(fmt, argv));
         }
 
         #! outputs a log message without any newline
@@ -186,8 +184,7 @@ public namespace Schema {
             if (silent) {
                 return;
             }
-            printf(str, argv);
-            flush();
+            schema_terminal_printf("%s", vsprintf(str, argv));
         }
 
         #! executes a schema alignment action on the database with the current schema template
@@ -333,7 +330,8 @@ public namespace Schema {
 
             if (al.size() != sch.sql_cache.size()) {
                 if (verbose >= 0) {
-                    printf("callback had %d lines, getAlignSql() had %d lines\n", sch.sql_cache.size(), al.size());
+                    schema_terminal_printf("callback had %d lines, getAlignSql() had %d lines\n", sch.sql_cache.size(),
+                        al.size());
                 }
 
                 hash<string, bool> schh;
@@ -344,7 +342,7 @@ public namespace Schema {
 
                     foreach string sql in (al) {
                         if (!schh{sql} && verbose >= 0) {
-                            printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
+                            schema_terminal_printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
                         }
                     }
                 } else {
@@ -352,7 +350,7 @@ public namespace Schema {
 
                     foreach string sql in (sch.sql_cache) {
                         if (!schh{sql} && verbose >= 0) {
-                            printf("MISSING IN ALIGN %d: %s\n", $#, sql);
+                            schema_terminal_printf("MISSING IN ALIGN %d: %s\n", $#, sql);
                         }
                     }
                 }
@@ -480,14 +478,15 @@ public namespace Schema {
             list<auto> al = db.getDropSchemaSql(schema, callback_opts);
 
             if (al.size() != sch.sql_cache.size()) {
-                printf("ERROR: callback had %d lines, getDropSchemaSql() had %d lines\n", sch.sql_cache.size(), al.size());
+                schema_terminal_printf("ERROR: callback had %d lines, getDropSchemaSql() had %d lines\n",
+                    sch.sql_cache.size(), al.size());
 
                 # make a hash of each
                 hash<string, bool> schh = map {$1: True}, sch.sql_cache;
 
                 foreach string sql in (al) {
                     if (!schh{sql})
-                        printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
+                        schema_terminal_printf("MISSING IN CALLBACK %d: %s\n", $#, sql);
                 }
                 throw "DROP-SCHEMA-DEBUG-ERROR", "unexpected result";
             }
@@ -696,9 +695,8 @@ public namespace Schema {
                 ddl_change_callback(ds, tables);
             } catch (hash<ExceptionInfo> ex) {
                 # an error that no exception reports is shown at any verbosity level
-                printf("%s: DDL metadata callback failed while preserving an active schema error: %s: %s\n",
-                    db.getDatasourceDesc(), ex.err, ex.desc);
-                flush();
+                schema_terminal_printf("%s: DDL metadata callback failed while preserving an active schema error: "
+                    "%s: %s\n", db.getDatasourceDesc(), ex.err, ex.desc);
             }
         }
 

@@ -1454,7 +1454,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "max_retries": 0,
             "timeout_ms": 4000,
         });
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         try {
             llm.chatCompletions({
                 "messages": ({"role": "user", "content": "Decompose the requirement."},),
@@ -1472,7 +1472,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # the repair's timeout may end the call or leave the malformed answer: either way it ends in time
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         # release the held repair reply and stop the server: every request that reached it has been handled
         release();
         assertEq(2, handler.requests.size(), "the repair was sent");

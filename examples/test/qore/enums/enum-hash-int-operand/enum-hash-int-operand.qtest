@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes and in programs compiled with qcc
+# test-platform: macos - JIT and AOT code generation of native int reads of hash values of enum types
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class EnumHashIntOperandTest
+
+#! Test for issue #6477: a value of an int enum type read from a hash is an int operand where it is converted to an int
+/** The compiled modes read a value of a hash with a constant key as a native int if the hash's value type is int; a
+    value of an int enum type is read so only where an int compound assignment (\c +=, \c -=, the bit operators)
+    converts it to its base value, and keeps its enum type where it is observed (a local, a list element, an argument),
+    as the AST interpreter does.
+
+    EnumHashIntOperand.q reads such values in loops and as observed values and prints the results and their types; its
+    output must be the one in EnumHashIntOperand.expected in every execution mode, on the IR tier and in programs
+    compiled with qcc -O0 and -O3.
+*/
+class EnumHashIntOperandTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string fixture = get_script_dir() + "/EnumHashIntOperand.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir() + "/EnumHashIntOperand.expected");
+    }
+
+    constructor() : QUnit::Test("int operands read from hashes of enum values", "1.0", \ARGV) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string execution_mode = mode;
+            addTestCase("execution mode " + mode, sub () {
+                assertEq(expected, ExecModeHarness::run(command(execution_mode)));
+            });
+        }
+        addTestCase("IR tier", sub () {
+            assertEq(expected, ExecModeHarness::run_ir_tier(command("tiered")));
+        });
+        addTestCase("qcc -O0", sub () { checkQcc(0); });
+        addTestCase("qcc -O3", sub () { checkQcc(3); });
+        addTestCase("the int operands use the int read", \checkIntReads());
+
+        set_return_value(main());
+    }
+
+    private string command(string mode) {
+        return sprintf("%s --enable-debug --exec-mode=%s %s", shellQuote(qore_bin), mode, shellQuote(fixture));
+    }
+
+    #! compiles the fixture with qcc and compares the output of the program
+    private checkQcc(int opt) {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string program = dir + "/enum-hash-int-operand";
+        string output = backquote(sprintf("%s -O%d -o %s %s 2>&1", shellQuote(qcc_bin), opt, shellQuote(program),
+            shellQuote(fixture)));
+        assertTrue(is_file(program), "the fixture compiled: " + output);
+        assertEq(expected, backquote(shellQuote(program) + " 2>&1"));
+    }
+
+    #! checks the IR of the functions: the int operands of the loops are read with the int read, which can be hoisted
+    #! and needs no reference, and the observed values are not (qore#6477)
+    private checkIntReads() {
+        string qcc_bin = ENV.QCC_BIN ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        # the IR of each function is written on stdout
+        string dump = backquote(sprintf("QORE_AOT_DUMP_IR=1 %s -O0 -o %s %s 2>&1", shellQuote(qcc_bin),
+            shellQuote(dir + "/enum-hash-int-operand"), shellQuote(fixture)));
+        hash<string, string> ir = getFunctionIr(dump);
+        foreach string name in (("sum_plus", "sum_minus", "bit_ops", "missing")) {
+            assertTrue(exists ir{name}, name + ": IR dumped");
+            assertRegex("hash\\.key\\.access\\.int ", ir{name} ?? "", name + ": the int read");
+            assertEq(-1, (ir{name} ?? "").find("hash.key.access.hash"), name + ": no value read");
+        }
+        assertTrue(exists ir.observe, "observe: IR dumped");
+        assertEq(-1, (ir.observe ?? "").find("hash.key.access.int"), "observe: the values are not read as ints");
+    }
+
+    #! returns the IR dumped for each function by its name
+    private static hash<string, string> getFunctionIr(string dump) {
+        hash<string, string> rv = {};
+        *string name;
+        foreach string line in (dump.split("\n")) {
+            *list<*string> m = (line =~ x/^=== IR for ([A-Za-z_0-9]+)\(/);
+            if (m) {
+                name = m[0];
+                rv{name} = "";
+                continue;
+            }
+            if (line =~ /^=+$/) {
+                remove name;
+                continue;
+            }
+            if (name) {
+                rv{name} += line + "\n";
+            }
+        }
+        return rv;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

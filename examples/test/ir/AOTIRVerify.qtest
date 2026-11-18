@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+
+%exec-class AOTIRVerifyTest
+
+#! qore#6468: IR read from an AOT module is verified before it is used
+/** Runs qore-aot-ir-verify-test (aot_ir_verify.cpp): the reader refuses a block index beyond the blocks of the
+    function in every field that holds one (in patched metadata whose checksum is written again with qore-aot-reseal),
+    and an instruction without a target that it always branches to (a branch, a conditional branch, a switch, an
+    iterator step, the blocks of the incoming values of a phi); patched metadata whose checksum is not written
+    again is refused at the checksum.
+*/
+class AOTIRVerifyTest inherits QUnit::Test {
+    constructor() : Test("AOT IR verification", "1.0", \ARGV) {
+        addTestCase("verification of IR read from an AOT module", \nativeValidation());
+        set_return_value(main());
+    }
+
+    private nativeValidation() {
+        string native = ENV.QORE_AOT_IR_VERIFY_TEST
+            ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-aot-ir-verify-test";
+        if (!is_file(native)) {
+            testSkip("the native AOT IR verification test executable is not available");
+            return;
+        }
+        # the helper that writes the checksum of patched metadata again
+        string reseal = ENV.QORE_AOT_RESEAL ?? dirname(TestInterpreter::qore_interpreter()) + "/qore-aot-reseal";
+        if (!is_file(reseal)) {
+            testSkip("the qore-aot-reseal helper is not available");
+            return;
+        }
+        string prefix;
+        foreach string name in (("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH")) {
+            if (ENV{name}) {
+                prefix += name + "=" + shellQuote(ENV{name}) + " ";
+            }
+        }
+        int rc;
+        string output = backquote(prefix + shellQuote(native) + " " + shellQuote(reseal) + " 2>&1", \rc);
+        assertEq(0, rc, output);
+        assertEq("PASS: 23 AOT IR verification checks\n", output);
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

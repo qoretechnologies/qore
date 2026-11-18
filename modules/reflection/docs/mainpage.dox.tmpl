@@ -168,10 +168,10 @@
     - the initializers of a typed hash (@ref Qore::Reflection::TypedHash::doCast() "TypedHash::doCast()" and member
       default values), also of a handle obtained from the type of a value
       (<tt>Type::getType(value).getTypedHash()</tt>), are evaluated only if the caller could name the typed hash in
-      the language: a system typed hash, or one that the caller's %Program declares, imports (a module's exported
-      typed hash) or inherits; they then run under the caller's sandbox and restrictions, as a cast by the caller
-      does; a typed hash that a module does not export, or a parent's that a child %Program does not inherit, is
-      refused
+      the language (a system typed hash, or one that the caller's %Program declares, imports or inherits) or a user
+      module exports it (a \c public typed hash in a namespace that the module exports, as for the classes that it
+      exports); they then run under the caller's sandbox and restrictions, as a cast by the caller does; a typed hash
+      that a module does not export, or a parent's that a child %Program does not inherit, is refused
     - a @ref call_reference "call reference" to a method of a reflection handle (<tt>\\f.call()</tt>) is checked
       as a direct call of the method by the code that created the reference
     - a class that the module does not export cannot be constructed, and its static methods, static members,

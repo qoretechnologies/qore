@@ -67,6 +67,7 @@
 #include "qore/intern/qore_glob.h"
 #endif
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdarg>
@@ -1886,6 +1887,35 @@ void QoreModuleManager::trySetUserBinaryModuleDependency(const char* name) {
     }
 }
 
+void QoreModuleManager::trySetModuleProgramUserDependencyLocked(const QoreProgram* pgm, const char* name) {
+    AutoLocker al(mutex);
+    for (module_map_t::const_iterator i = map.begin(), e = map.end(); i != e; ++i) {
+        if (i->second->getModuleProgram() != pgm) {
+            continue;
+        }
+        if (i->second->isUser()) {
+            // the original of a reinjected module is deleted with the module that replaced it (delOrig()), which
+            // releases only its own records: the module that replaced it is recorded as requiring the module
+            const QoreAbstractModule* m = i->second;
+            while (m->getPrev()) {
+                m = m->getPrev();
+            }
+            const char* requirer = m->getName();
+            if (!strcmp(requirer, name)) {
+                return;
+            }
+            // a user module that the loaded module requires is not recorded as requiring it: it would make a cycle,
+            // which delUser() breaks at one of its modules anyway
+            if (!hasUserModuleDependencyPath(requirer, name)) {
+                setUserModuleDependency(name, requirer);
+            }
+        } else if (strcmp(i->first, name)) {
+            aot_user_dep_map.addDep(name, i->first);
+        }
+        return;
+    }
+}
+
 void QoreModuleManager::trySetUserModuleDependency(const QoreAbstractModule* mi) {
     // the mutex must be held by this thread; trylock() only shows that it is locked, by any thread
     assert(mutex.trylock());
@@ -2277,6 +2307,8 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
 
     // a module is applied to a Program without the module manager's mutex, which the record takes (#5953)
     QMM.trySetUserModuleDependencyLocked(this);
+    // the module whose Program it is applied to at run time requires it too (issue #6501)
+    QMM.trySetModuleProgramUserDependencyLocked(tpgm, name.c_str());
 }
 
 // the context of the module command that the handler running on this thread is handling (issue #5699)
@@ -6429,6 +6461,19 @@ strset_t QoreModuleManager::getUserModulesLeftForCleanup(const strset_t& held) {
             pending.push_back(i->first);
         }
     }
+    // the user modules applied to the Programs of AOT user modules at run time (issue #6501)
+    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
+        module_map_t::iterator mi = map.find(i->first.c_str());
+        if (mi == map.end() || !mi->second->isUser()) {
+            continue;
+        }
+        for (const std::string& aot : i->second) {
+            if (map.find(aot.c_str()) != map.end()) {
+                pending.push_back(i->first);
+                break;
+            }
+        }
+    }
     // the user modules imported into Programs that still hold data
     for (const std::string& name : held) {
         module_map_t::iterator i = map.find(name.c_str());
@@ -6633,6 +6678,18 @@ void QoreModuleManager::cleanup() {
             }
         }
     }
+    // an AOT module requiring a user module applied to its Program at run time (issue #6501)
+    for (md_map_t::iterator i = aot_user_dep_map.begin(), e = aot_user_dep_map.end(); i != e; ++i) {
+        if (required_mods.find(i->first) == required_mods.end()) {
+            continue;
+        }
+        for (const std::string& aot : i->second) {
+            auto ri = required_mods.find(aot);
+            if (ri != required_mods.end()) {
+                ri->second.push_back(i->first);
+            }
+        }
+    }
     // module -> the number of modules left that require it
     std::map<std::string, int> dependents;
     for (auto& i : required_mods) {
@@ -6734,6 +6791,35 @@ void QoreModuleManager::cleanup() {
         }
         assert(i != map.end());
         printd(5, "QoreModuleManager::cleanup() deleting '%s' (rank %d)\n", i->first, static_cast<int>(rank));
+        // the modules left that require the module (when it is deleted to break a cycle) require the native modules
+        // that it requires in its place: their Programs hold the declarations that they imported from it, which can
+        // name the classes of those modules, so such a native module is not deleted before them (issue #6501); the
+        // other modules that it requires are not passed on, which would change the order in which the other cycles
+        // are broken
+        {
+            const std::string name = i->first;
+            auto di = required_mods.find(name);
+            if (di != required_mods.end() && !di->second.empty()) {
+                for (auto& ri : required_mods) {
+                    if (ri.first == name
+                            || std::find(ri.second.begin(), ri.second.end(), name) == ri.second.end()) {
+                        continue;
+                    }
+                    for (const std::string& dep : di->second) {
+                        if (dep == ri.first || dep == name || native_mods.find(dep) == native_mods.end()
+                                || std::find(ri.second.begin(), ri.second.end(), dep) != ri.second.end()) {
+                            continue;
+                        }
+                        auto ci = dependents.find(dep);
+                        if (ci == dependents.end()) {
+                            continue;
+                        }
+                        ri.second.push_back(dep);
+                        ++ci->second;
+                    }
+                }
+            }
+        }
         native_mods.erase(i->first);
         if (i->second->isUser()) {
             deleteUserModule(i);

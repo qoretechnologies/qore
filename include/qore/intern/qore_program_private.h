@@ -1075,7 +1075,13 @@ public:
     }
 
     typedef std::set<q_exp_t> q_exp_set_t;
+    //! the expressions of the Program (Expression objects), guarded by exp_set_lock
     q_exp_set_t exp_set;
+    //! guards exp_set, which threads change and read while they create, run and delete the expressions of the
+    //! Program; the parse of an expression is serialized by the parse lock, but its deletion and its run are not
+    //! (qore#6493); an expression is deleted after it is removed from the set, with the lock released, as its deletion
+    //! can run code
+    mutable std::mutex exp_set_lock;
     q_exp_t new_expression = nullptr;
 
     int tclear = 0;   // clearing thread-local variables in progress? if so, this is the TID
@@ -3149,7 +3155,19 @@ public:
         QoreParseState state;
         yylex_init_extra(&state, &lexer);
 
-        yy_scan_string(code, lexer);
+        // the rules of the parse directives end with a newline, which a directive on the last line of the code
+        // without one would not match: such code gets one at its end; other code is not changed, so that an error
+        // at its end keeps its location (issue #2740)
+        size_t code_len = strlen(code);
+        const char* last_nl = strrchr(code, '\n');
+        const char* last_line = last_nl ? last_nl + 1 : code;
+        if (*last_line == '%') {
+            std::string terminated(code, code_len);
+            terminated += '\n';
+            yy_scan_bytes(terminated.c_str(), terminated.size(), lexer);
+        } else {
+            yy_scan_string(code, lexer);
+        }
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
         {
@@ -3223,6 +3241,15 @@ public:
         QoreProgram.cpp.
     */
     DLLLOCAL void collectModuleLoadErrors(const QoreProgramLocation& loc, ExceptionSink& xsink);
+
+    //! records the exceptions of the parse that no error diagnostic stands for as error diagnostics
+    /** Called at the end of a parse action when diagnostics are collected: an exception can be raised in the parse
+        without a diagnostic (ex: in the initialization of a constant, by a module command, or by a parse directive),
+        and every exception that fails the parse must be a diagnostic of it (issue #6516).  An exception that is a
+        diagnostic of this Program is marked with its ID when it is raised (QoreExceptionBase::diagnostic_pgm_id), and
+        so is each exception added here, so that a later call does not add it again.
+    */
+    DLLLOCAL void addExceptionDiagnostics(ExceptionSink* xsink);
 
     //! returns the structured diagnostics collected during the last parse action as a
     //! list<hash<ParseDiagnosticInfo>> (implemented in QoreProgram.cpp); never returns nullptr
@@ -3363,6 +3390,7 @@ public:
 
         psg.handOver();
         int rc = internParsePending(xsink, code, label, orig_src, offset);
+        addExceptionDiagnostics(xsink);
         warnSink = nullptr;
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3433,6 +3461,7 @@ public:
         if (!*xsink) {
             ensureIrExecMode(this, xsink);
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3540,6 +3569,7 @@ public:
             if (!*xsink) {
                 ensureIrExecMode(this, xsink);
             }
+            addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
             parseSink = nullptr;
@@ -3613,6 +3643,7 @@ public:
         if (!*xsink) {
             ensureIrExecMode(this, xsink);
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3639,7 +3670,10 @@ public:
                 pp.warnSink = nullptr;
                 // an expression parsed before the exception is not returned
                 if (pp.new_expression) {
-                    pp.exp_set.erase(pp.new_expression);
+                    {
+                        std::lock_guard<std::mutex> el(pp.exp_set_lock);
+                        pp.exp_set.erase(pp.new_expression);
+                    }
                     delete pp.new_expression;
                     pp.new_expression = nullptr;
                 }
@@ -3704,6 +3738,7 @@ public:
         } else {
             parsing_in_progress = false;
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3788,6 +3823,7 @@ public:
             qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
             parsing_in_progress = false;
         }
+        addExceptionDiagnostics(xsink);
 
 #ifdef DEBUG
         parseSink = nullptr;
@@ -3798,7 +3834,10 @@ public:
         q_exp_t rv = new_expression;
         if (new_expression) {
             if (*xsink) {
-                exp_set.erase(new_expression);
+                {
+                    std::lock_guard<std::mutex> el(exp_set_lock);
+                    exp_set.erase(new_expression);
+                }
                 delete new_expression;
                 rv = nullptr;
             }
@@ -4506,6 +4545,7 @@ public:
             }
             if ((only_first_except && !exceptions_raised) || !only_first_except) {
                 QoreException *ne = new ParseException(loc, err, d.release());
+                ne->diagnostic_pgm_id = collect_diagnostics ? programId : 0;
                 sink->raiseException(ne);
             }
             exceptions_raised++;
@@ -5061,7 +5101,13 @@ public:
         if (*xsink) {
             return QoreValue();
         }
-        if (exp_set.find(exp) == exp_set.end()) {
+        // the expression is not deleted while it runs: its Expression object, which deletes it, is in use
+        bool registered;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            registered = exp_set.find(exp) != exp_set.end();
+        }
+        if (!registered) {
             xsink->raiseException("INVALID-EXPRESSION", "expression not registered to this Program object");
             return QoreValue();
         }
@@ -5096,12 +5142,14 @@ public:
     }
 
     DLLLOCAL void deleteExpression(q_exp_t exp) {
-        AutoLocker al(plock);
-        q_exp_set_t::iterator i = exp_set.find(exp);
-        if (i != exp_set.end()) {
-            exp_set.erase(exp);
-            delete exp;
+        {
+            std::lock_guard<std::mutex> el(exp_set_lock);
+            if (!exp_set.erase(exp)) {
+                return;
+            }
         }
+        // deleted with the lock released: its deletion can run code, which can create or delete expressions
+        delete exp;
     }
 
     DLLLOCAL void importClass(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
@@ -6049,6 +6097,7 @@ public:
             pgm.priv->diagnostics.push_back(QoreDiagnostic(false, err, -1, loc, desc->c_str()));
         }
         QoreException* ne = new ParseException(loc, err, desc_holder.release());
+        ne->diagnostic_pgm_id = pgm.priv->collect_diagnostics ? pgm.priv->programId : 0;
         ne->arg = arg_holder.release();
         wsink.raiseException(ne);
     }
@@ -6075,6 +6124,7 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
+        ne->diagnostic_pgm_id = pgm->priv->collect_diagnostics ? pgm->priv->programId : 0;
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6092,6 +6142,7 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
+        ne->diagnostic_pgm_id = pgm->priv->collect_diagnostics ? pgm->priv->programId : 0;
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -6107,6 +6158,7 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str(), &metadata));
         }
         QoreException* ne = new ParseException(loc, warn, desc);
+        ne->diagnostic_pgm_id = pgm->priv->collect_diagnostics ? pgm->priv->programId : 0;
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -7118,6 +7170,12 @@ DLLEXPORT std::string qore_get_parse_diagnostics_json(QoreProgram& pgm);
 //! renders the collected parse diagnostics as human-readable code frames; exported so the standalone
 //! interpreter (--code-frames) can render them.  Returns the number of error diagnostics rendered.
 DLLEXPORT unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* source_text, FILE* os);
+
+//! records the exceptions in \a xsink that are not diagnostics of the parse of the Program as error diagnostics
+/** For exceptions raised before a parse action starts (ex: a file that cannot be opened); exported so the standalone
+    interpreter (--diag-format=json, --code-frames) can report every exception that fails its parse (issue #6516)
+*/
+DLLEXPORT void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink);
 
 //! Registers code that the library calls before it waits for threads to end; see Qore::register_exit_hook()
 /** @return the hook's ID, or -1 if an exception was raised: the code is sandboxed, or the hooks of the process have

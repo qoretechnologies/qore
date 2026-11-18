@@ -103,6 +103,7 @@
 #include "qore/intern/QoreAOTBatchMemory.h"
 #include "qore/intern/FileStreamIo.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/TargetParser/Host.h>
@@ -389,6 +390,19 @@ static QoreValue f_dbg_type_retirement_blockers(const QoreListNode* params, Runt
         l->push(h.release(), xsink);
     }
     return l.release();
+}
+
+//! Returns the number of class, hashdecl and enum declarations of Programs that are not freed, or -1 if the library
+//! does not count them (release builds)
+/** A test can check that a holder of types keeps the declarations of a deleted Program for as long as it lives
+    (issue #6489)
+*/
+static QoreValue f_dbg_live_type_declarations(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+#ifdef DEBUG
+    return static_cast<int64>(qore_count_live_user_type_owners());
+#else
+    return static_cast<int64>(-1);
+#endif
 }
 
 //! Returns the declarations and derived types kept until library cleanup, by kind, and the sizes of the derived type
@@ -4755,8 +4769,8 @@ public:
             }
             ReferenceHolder<QoreSocketObject> socket(new QoreSocketObject, &xsink);
             int rv = protocol == 2
-                ? socket->sendHttp2StreamDataForAsyncPoll(1, nullptr, false, &xsink)
-                : socket->sendQuicClientStreamDataForAsyncPoll(0, nullptr, 0, false, &xsink);
+                ? qore_socket_object_private(socket).sendHttp2StreamDataForAsyncPoll(1, nullptr, false, &xsink)
+                : qore_socket_object_private(socket).sendQuicClientStreamDataForAsyncPoll(0, nullptr, 0, false, &xsink);
             {
                 std::lock_guard<std::mutex> lock(m);
                 done = true;
@@ -17446,7 +17460,7 @@ static QoreValue f_dbg_close_socket_at_next_ssl_io(const QoreListNode* params, R
     if (*xsink || !sock) {
         return QoreValue();
     }
-    sock->dbgCloseAtNextSslIo();
+    qore_socket_object_private(sock).dbgCloseAtNextSslIo();
     return QoreValue();
 }
 
@@ -17696,7 +17710,7 @@ static QoreValue f_dbg_reset_socket(const QoreListNode* params, RuntimeConfig& r
             return QoreValue();
         }
     }
-    sock->dbgResetOnClose();
+    qore_socket_object_private(sock).dbgResetOnClose();
     sock->close();
     return QoreValue();
 }
@@ -17716,7 +17730,7 @@ static QoreValue f_dbg_force_ssl_error_ssl(const QoreListNode* params, RuntimeCo
         }
         return QoreValue();
     }
-    sock->dbgForceSslErrorSslAtNextWrite();
+    qore_socket_object_private(sock).dbgForceSslErrorSslAtNextWrite();
     return QoreValue();
 }
 
@@ -17804,7 +17818,7 @@ static QoreValue f_dbg_socket_stream_records(const QoreListNode* params, Runtime
     if (*xsink || !sock) {
         return QoreValue();
     }
-    return sock->dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
+    return qore_socket_object_private(sock).dbgGetStreamRecordCounts(get_param_value(params, 1).getAsBigInt(), xsink);
 }
 
 //! Debug-only: stops one I/O thread of the global async I/O controller and waits until it has stopped
@@ -18059,6 +18073,27 @@ static QoreValue f_dbg_async_io_mark_owner_shutting_down(const QoreListNode* par
     return QoreValue();
 }
 
+//! Debug-only: waits until a thread waits in a flush of the callbacks of the global async I/O controller
+/** AsyncIoController::flushCallbacks() blocks for a callback that runs; a test releases the callback only once the
+    flush waits for it (qore#6508)
+
+    @return True if a thread waits in a flush, False if none did when the timeout elapsed
+*/
+static QoreValue f_dbg_async_io_wait_flush_blocked(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(static_cast<AsyncIoControllerPriv*>(
+        ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return QoreValue();
+    }
+    return ctrl->dbgWaitFlushBlocked(static_cast<int>(timeout_ms));
+}
+
 //! Debug-only: advances the QUIC test clock of the process; see qore_quic_test_advance_clock()
 static QoreValue f_dbg_quic_advance_clock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     int64_t total = qore_quic_test_advance_clock(get_param_value(params, 0).getAsBigInt(), xsink);
@@ -18247,7 +18282,7 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
     if (*xsink || !sock) {
         return QoreValue();
     }
-    sock->dbgForceFdSwapNextWait();
+    qore_socket_object_private(sock).dbgForceFdSwapNextWait();
     return QoreValue();
 }
 
@@ -21584,7 +21619,7 @@ static void ut_datasource_connect_choosers(UnitTestCounters& c) {
         qore_ds_pool_record rec{qore_ds_make_creators(pool_setter), pool_setter};
         std::unique_ptr<Datasource> ds;
         std::thread t([&ds, &rec, drv]() {
-            ds.reset(new Datasource(drv, nullptr, rec));
+            ds.reset(qore_ds_private::createPoolConnection(drv, nullptr, rec));
             qore_ds_setter_t s = rec.setter;
             qore_ds_private::get(*ds)->setPendingParam(QDCP_DB, "db", s);
         });
@@ -23138,6 +23173,15 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
 static QoreValue f_dbg_generic_parent_check_steps(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return qore_generic_parent_check_steps.load(std::memory_order_relaxed);
+}
+
+//! returns the number of parent class edges that the walks of class hierarchies that set up classes have visited
+/** In all threads, since the library was loaded: a test takes the difference over a parse, so that it can require a
+    bound on the steps of the walks for the classes that the parse declares (qore#6499)
+*/
+static QoreValue f_dbg_class_hierarchy_walk_steps(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return qore_class_hierarchy_walk_steps.load(std::memory_order_relaxed);
 }
 
 //! returns the number of values visited by removal bookkeeping in the current thread
@@ -26852,6 +26896,28 @@ static QoreValue f_dbg_wait_thread_finish_held(const QoreListNode* params, Runti
     return qore_dbg_wait_thread_finish_held(static_cast<int>(get_param_value(params, 0).getAsBigInt()));
 }
 
+//! Releases a thread held by dbg_hold_next_thread_tls_exit() (qore#6433)
+static QoreValue f_dbg_release_thread_finish_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_release_thread_finish_hold();
+    return QoreValue();
+}
+
+//! Waits until the background thread count is at most the given count, as a thread leaves it once it has been
+//! joined; returns False on timeout (qore#6433)
+static QoreValue f_dbg_wait_thread_counter_at_most(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 count = get_param_value(params, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(params, 1).getAsBigInt();
+    if (count < 0 || timeout_ms <= 0 || timeout_ms > INT_MAX) {
+        xsink->raiseException("DBG-ERROR", "dbg_wait_thread_counter_at_most(): count must not be negative and "
+            "timeout_ms must be positive; got %lld and %lld", (long long)count, (long long)timeout_ms);
+        return QoreValue();
+    }
+    return qore_dbg_wait_thread_counter_at_most(count > INT_MAX ? INT_MAX : static_cast<int>(count),
+        static_cast<int>(timeout_ms));
+}
+
 //! Holds the next thread that is started, before it registers, for up to the given milliseconds or until
 //! dbg_release_thread_start() (qore#6469)
 static QoreValue f_dbg_hold_next_thread_start(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -27044,6 +27110,8 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, listTypeInfo);
+    qns.addBuiltinVariant("dbg_live_type_declarations", f_dbg_live_type_declarations, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
@@ -27097,6 +27165,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_release_thread_finish_hold", f_dbg_release_thread_finish_hold, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo);
+    qns.addBuiltinVariant("dbg_wait_thread_counter_at_most", f_dbg_wait_thread_counter_at_most, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_hold_next_thread_start", f_dbg_hold_next_thread_start, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_start_held", f_dbg_wait_thread_start_held, QCF_NO_FLAGS,
@@ -27213,6 +27286,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_mark_owner_shutting_down", f_dbg_async_io_mark_owner_shutting_down,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "owner",
         boolTypeInfo, QORE_PARAM_NO_ARG, "mark");
+    qns.addBuiltinVariant("dbg_async_io_wait_flush_blocked", f_dbg_async_io_wait_flush_blocked,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolOrNothingTypeInfo, 1, timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_quic_advance_clock", f_dbg_quic_advance_clock,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
@@ -27398,6 +27473,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_generic_parent_check_steps", f_dbg_generic_parent_check_steps, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_class_hierarchy_walk_steps", f_dbg_class_hierarchy_walk_steps, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_lvalue_removal_visit_count", f_dbg_get_lvalue_removal_visit_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);

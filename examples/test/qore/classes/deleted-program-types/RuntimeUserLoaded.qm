@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%requires qore >= 2.0
+%requires reflection
+
+module RuntimeUserLoaded {
+    version = "1.0";
+    desc = "a user module loaded at run time by an AOT module, with a hashdecl naming a class of a native module "
+        "(issue #6501)";
+    author = "Qore Technologies";
+    url = "https://qoretechnologies.com";
+}
+
+%modern
+
+#! a hashdecl whose member type is a class of the native module \c reflection
+public hashdecl RuntimeUserLoadedInfo {
+    #! a class of the native module
+    Class cls;
+}

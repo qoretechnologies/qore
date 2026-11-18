@@ -395,6 +395,8 @@ hash schema = (
     - fixed a column declared with \c "default null", which was described with the default value \c null, so
       table alignment set it again every time
       (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
+    - implemented @ref select_option_recursive "recursive queries" with recursive subquery factoring, which needs
+      Oracle 11.2 or later (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - the \c "except" @ref select_option_set_operators "set operator" of a select is Oracle's \c MINUS
       (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
     - fixed the \c IN operator with a driver other than \c oracle (ex: \c jdbc), which cannot bind the collection of
@@ -4191,6 +4193,10 @@ public class OracleTable inherits SqlUtil::AbstractTable {
         @since OracleSqlUtilBase 1.7 a schema or table name that is not an ordinary name is quoted in upper case
     */
     string getSqlName() {
+        # issue #3544: the common table expression of a recursive query has no schema
+        if (recursive_cte) {
+            return oracle_get_sql_identifier(name);
+        }
         return oracle_get_sql_identifier(schema) + "." + oracle_get_sql_object_name(name)
             + (dblink ? "@" + dblink : "");
     }
@@ -6238,6 +6244,42 @@ group by p.index_name", schema.upr(), name.upr());
     */
     private string getSetOperatorSql(string op) {
         return op == "except" ? "minus" : AbstractTable::getSetOperatorSql(op);
+    }
+
+    #! Returns @ref nothing if the server supports recursive queries (recursive subquery factoring), which need Oracle 11.2
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private *string getRecursiveQueryUnsupportedReasonImpl() {
+        int major = oracle_get_server_major_version(ds);
+        if (major > 11) {
+            return;
+        }
+        if (major == 11) {
+            auto version = ds.getServerVersion();
+            # the oracle driver gives the release, such as "... Release 11.2.0.4.0"; the jdbc driver gives a hash
+            *int minor = version.typeCode() == NT_HASH
+                ? version.minor_version.toInt()
+                : (version =~ x/Release 11\.([0-9]+)/)[0].toInt();
+            if (minor >= 2) {
+                return;
+            }
+        }
+        return sprintf("recursive queries need Oracle 11.2 or later; the server's version is %y",
+            ds.getServerVersion());
+    }
+
+    #! Returns \c "with": Oracle has no \c RECURSIVE keyword
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private string getRecursiveWithSqlImpl() {
+        return "with";
+    }
+
+    #! Returns @ref False: a recursive query needs \c UNION \c ALL on Oracle
+    /** @since OracleSqlUtilBase 1.7
+    */
+    private bool recursiveQuerySupportsUnionDistinctImpl() {
+        return False;
     }
 
     private bool asteriskRequiresPrefix() {

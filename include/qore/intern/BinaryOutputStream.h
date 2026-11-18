@@ -73,6 +73,8 @@ public:
       assert(!isClosed());
       BinaryNode *ret = buf.release();
       buf = new BinaryNode();
+      // the data is complete: the capacity that it grew with is freed
+      ret->trim();
       return ret;
    }
 

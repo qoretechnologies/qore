@@ -1,0 +1,178 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# the "cppapiuser" test module is built into the build tree by examples/test/module-cpp-api/CMakeLists.txt and is not
+# installed, so QORE_MODULE_DIR must include the build tree (run_tests.sh does this)
+%requires cppapiuser
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StringOwnPartTest
+
+#! Tests QoreString operations whose source is part of the string's own text, in the C++ API
+/** A source that is part of the target's text (including a view) is handled when the operation changes the text
+    (issue #6312).  The strings are large enough that the growth reallocates
+    their buffers.
+*/
+class StringOwnPartTest inherits QUnit::Test {
+    public {
+        #! the text of the strings that are not views: 2 KB, so the operations reallocate the buffer
+        const Text = strmul("ab<c&d>e", 256);
+
+        #! the text of the strings that are views: 12 KB after the first 4 KB of 16 KB (a view is made from 4096 bytes)
+        const ViewSource = strmul("ABCDEFGH", 512) + strmul("ab<c&d>e", 1536);
+        const ViewFrom = 4096;
+
+        #! a text that the decoding operations change
+        const CodedText = strmul("a%20b&amp;c+d<e>", 256);
+
+        #! the operations of cpp_api_string_own_vs_copy()
+        const OwnVsCopyOps = ("encode", "decode", "html-encode", "decode-url", "encode-url", "encode-uri-request",
+            "decode-uri-request", "escape", "trim", "trim-leading", "trim-trailing", "trim-trailing-text",
+            "concat-pos", "concat-pos-len");
+    }
+
+    constructor() : QUnit::Test("StringOwnPartTest", "1.0", \ARGV) {
+        addTestCase("splice of a string's own text", \testSplice());
+        addTestCase("operations with a part of a string's own text", \testParts());
+        addTestCase("operations with a part of a view's own text", \testViewParts());
+        addTestCase("operations whose source string is the string itself", \testOwnVsCopy());
+        addTestCase("negative cases", \testNegative());
+        set_return_value(main());
+    }
+
+    #! returns \a s with the bytes at \a offset with length \a len replaced by \a repl
+    static string spliced(string s, int offset, int len, string repl) {
+        string rv = s.substr(0, offset) + repl;
+        if (offset + len < s.size()) {
+            rv += s.substr(offset + len);
+        }
+        return rv;
+    }
+
+    #! returns what an operation of cpp_api_string_own_part() makes of the text \a t
+    static string expected(string t, string op, int a, int b, int c) {
+        switch (op) {
+            case "splice": return spliced(t, a, b, t);
+            case "replace": return spliced(t, a, b, t.substr(c));
+            case "concat": return t + t.substr(a, b);
+            case "concat-text": return t + t.substr(a);
+            case "concat-string": return t + t.substr(0, a);
+            case "prepend": return t.substr(a, b) + t;
+            case "insert": return t.substr(0, b) + t.substr(a) + t.substr(b);
+            case "sprintf": {
+                string rv = t;
+                for (int i = 0; i < b; ++i) {
+                    rv += rv.substr(a);
+                }
+                return rv;
+            }
+            case "escape": return t + replace(t.substr(a), "a", "\\a");
+            case "html-encode": return t + html_encode(t.substr(a));
+            case "html-decode": return t + html_decode(t.substr(a));
+            case "decode-url": return t + decode_url(t.substr(a));
+            case "base64": return t + make_base64_string(binary(t.substr(a, b)));
+            case "hex": return t + make_hex_string(binary(t.substr(a, b)));
+            case "set": return t.substr(a, b);
+            case "set-view": return t.substr(a);
+            case "set-self": return t;
+        }
+        throw "UNKNOWN-OP", op;
+    }
+
+    #! the operations checked: operation, a, b, c
+    static list<list<auto>> cases(int size) {
+        return (
+            ("splice", size, 0, 0),         # appended: the string grows
+            ("splice", 8, 0, 0),            # inserted in the middle: the source is moved by the insertion
+            ("splice", 0, 0, 0),            # inserted at the start
+            ("splice", 4, 2, 0),            # replaces fewer bytes than it inserts
+            ("splice", 0, size, 0),         # replaces the whole string
+            ("replace", 8, 0, 4),
+            ("replace", 0, 2, size / 2),
+            ("concat", 3, size - 3, 0),
+            ("concat-text", 5, 0, 0),
+            ("concat-string", size - 1, 0, 0),
+            ("prepend", 5, size - 5, 0),
+            ("insert", 2, 16, 0),
+            ("sprintf", 1, 3, 0),
+            ("escape", 1, 0, 0),
+            ("html-encode", 2, 0, 0),
+            ("base64", 0, size, 0),
+            ("hex", 1, size - 1, 0),
+            ("set", 8, size - 16, 0),
+            ("set-view", 16, 0, 0),
+            ("set-self", 0, 0, 0),
+        );
+    }
+
+    testSplice() {
+        # a single-byte encoding and a multi-byte one
+        foreach string enc in ("ISO-8859-1", "UTF-8") {
+            string s = convert_encoding(Text, enc);
+            foreach list<auto> c in (cases(s.size())) {
+                if (c[0] != "splice") {
+                    continue;
+                }
+                string r = cpp_api_string_own_part(s, -1, c[0], c[1], c[2], c[3]);
+                assertEq(expected(Text, c[0], c[1], c[2], c[3]), convert_encoding(r, "UTF-8"),
+                    sprintf("%s: splice(%d, %d)", enc, c[1], c[2]));
+                assertEq(enc, r.encoding());
+            }
+        }
+        # a non-ASCII string in UTF-8 (the offsets are characters)
+        string u = strmul("éaébéc", 64);
+        assertEq(spliced(u, 1, 0, u), cpp_api_string_own_part(u, -1, "splice", 1, 0, 0));
+        assertEq(u + u, cpp_api_string_own_part(u, -1, "splice", u.length(), 0, 0));
+    }
+
+    testParts() {
+        foreach list<auto> c in (cases(Text.size())) {
+            assertEq(expected(Text, c[0], c[1], c[2], c[3]), cpp_api_string_own_part(Text, -1, c[0], c[1], c[2], c[3]),
+                sprintf("%s(%d, %d, %d)", c[0], c[1], c[2], c[3]));
+        }
+        # texts that the decoding operations change
+        string e = strmul("a&amp;b&lt;", 200);
+        assertEq(expected(e, "html-decode", 1, 0, 0), cpp_api_string_own_part(e, -1, "html-decode", 1, 0, 0));
+        string url = strmul("a%20b%2Fc", 200);
+        assertEq(expected(url, "decode-url", 2, 0, 0), cpp_api_string_own_part(url, -1, "decode-url", 2, 0, 0));
+        # replaceAll() of a text found in the string, with the string's own text
+        string m = Text + "#MARK#";
+        assertEq(Text + m, cpp_api_string_own_part(m, -1, "replace-all", Text.size(), 6, 0));
+    }
+
+    testViewParts() {
+        string t = ViewSource.substr(ViewFrom);
+        foreach list<auto> c in (cases(t.size())) {
+            assertEq(expected(t, c[0], c[1], c[2], c[3]),
+                cpp_api_string_own_part(ViewSource, ViewFrom, c[0], c[1], c[2], c[3]),
+                sprintf("view: %s(%d, %d, %d)", c[0], c[1], c[2], c[3]));
+        }
+    }
+
+    #! each operation with the string itself as its source gives what it gives with a copy of the string
+    testOwnVsCopy() {
+        foreach string op in (OwnVsCopyOps) {
+            foreach string t in (Text, CodedText) {
+                list<auto> r = cpp_api_string_own_vs_copy(t, -1, op);
+                assertEq(r[1], r[0], sprintf("%s of a %d-byte string", op, t.size()));
+            }
+            list<auto> r = cpp_api_string_own_vs_copy(ViewSource, ViewFrom, op);
+            assertEq(r[1], r[0], sprintf("%s of a view", op));
+        }
+        # set() with another view of the same text
+        list<auto> r = cpp_api_string_own_vs_copy(ViewSource, ViewFrom, "set-sibling");
+        assertEq(ViewSource.substr(ViewFrom), r[0]);
+        assertEq(r[1], r[0]);
+    }
+
+    testNegative() {
+        assertThrows("STRING-PART-ERROR", \cpp_api_string_own_part(), (Text, -1, "concat", Text.size() - 2, 3, 0));
+        assertThrows("STRING-PART-ERROR", \cpp_api_string_own_part(), (Text, -1, "concat-text", Text.size(), 0, 0));
+        assertThrows("STRING-PART-ERROR", \cpp_api_string_own_part(), (Text, -1, "unknown", 0, 0, 0));
+        assertThrows("STRING-PART-ERROR", \cpp_api_string_own_part(), (Text, -1, "concat", -1, 0, 0));
+    }
+}

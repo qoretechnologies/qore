@@ -364,6 +364,11 @@ public:
         return next;
     }
 
+    //! Returns the module that replaced this one (when it was reinjected), which deletes it, or nullptr
+    DLLLOCAL QoreAbstractModule* getPrev() const {
+        return prev;
+    }
+
     DLLLOCAL virtual bool isBuiltin() const = 0;
     DLLLOCAL virtual bool isUser() const = 0;
     DLLLOCAL virtual QoreHashNode* getHash(bool with_filename = true) const = 0;
@@ -1028,6 +1033,19 @@ public:
         }
     }
 
+    //! Records that the module whose own Program is \a pgm requires the user module \a name, which was applied to it
+    /** The user module counterpart of trySetModuleProgramBinaryDependencyLocked(): a module that loads a user module
+        at run time (ex: ProviderIndexUtil's load_module() calls) imports its declarations into the module's Program,
+        whose teardown reads the types that they name, also those of the modules that the loaded module requires; the
+        loaded module is deleted after it, and so are the native modules that it requires (issue #6501).  A user module
+        requiring it is recorded as for a %requires, unless the user module already requires it (directly or
+        indirectly), which would make a cycle; an AOT module requiring it is recorded in \c aot_user_dep_map.  Does
+        nothing if \a pgm is not the Program of a module.
+        @param pgm the Program that the module was applied to
+        @param name the name of the user module that was applied to it
+    */
+    DLLLOCAL void trySetModuleProgramUserDependencyLocked(const QoreProgram* pgm, const char* name);
+
     DLLLOCAL void trySetUserModule(const char* name) {
         md_map_t::iterator i = md_map.find(name);
         if (i == md_map.end()) {
@@ -1322,6 +1340,8 @@ protected:
     ModMap rmd_map;
     // binary module dependency map: binary module (AOT or native) -> the user modules that require it
     ModMap binary_user_dep_map;
+    // user module -> the AOT modules whose Programs it was applied to at run time, which require it (issue #6501)
+    ModMap aot_user_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper

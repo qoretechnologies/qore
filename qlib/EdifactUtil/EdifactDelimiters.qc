@@ -172,8 +172,8 @@ EdifactDelimiters delim(<EdifactDelimiterInfo>{
             una_present = True;
 
             @debug {
-                if (getenv("QORE_EDIFACT_DEBUG")) {
-                    printf("EdifactDelimiters::parseUna(): comp=%y elem=%y dec=%y rel=%y term=%y\n",
+                if (getenv("QORE_EDIFACT_DEBUG") && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stdout.printf("EdifactDelimiters::parseUna(): comp=%y elem=%y dec=%y rel=%y term=%y\n",
                         component_separator, element_separator, decimal_notation,
                         release_character, segment_terminator);
                 }
