@@ -862,36 +862,10 @@ qore_offset_t q_UTF8_get_char_len(const char* p, size_t len) {
 }
 
 static size_t UTF8_getLength(const char* p, const char* end, bool& invalid) {
-    constexpr size_t ascii_high_bit_mask = (~static_cast<size_t>(0) / 0xff) * 0x80;
-    size_t i = 0;
-    while (p < end) {
-        unsigned char c = static_cast<unsigned char>(*p);
-        if (c < 0x80) {
-            ++p;
-            ++i;
-            while (static_cast<size_t>(end - p) >= sizeof(size_t)) {
-                size_t word;
-                memcpy(&word, p, sizeof(word));
-                if (word & ascii_high_bit_mask) {
-                    break;
-                }
-                p += sizeof(size_t);
-                i += sizeof(size_t);
-            }
-            continue;
-        }
-
-        qore_offset_t l = q_utf8_char_len(p, end - p);
-        if (l <= 0) {
-            invalid = true;
-            return i;
-        }
-        p += l;
-        ++i;
-    }
-
-    invalid = false;
-    return i;
+    size_t partial_count;
+    size_t count = q_utf8_count_chars(p, end, &partial_count);
+    invalid = count == Q_UTF8_INVALID_COUNT;
+    return invalid ? partial_count : count;
 }
 
 static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {

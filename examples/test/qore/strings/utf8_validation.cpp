@@ -220,7 +220,8 @@ static void check_ascii_runs() {
                 }
                 bool invalid = false;
                 size_t chars = QCS_UTF8->getLength(in.data(), in.data() + in.size(), invalid);
-                require(invalid == (q.kind != 1) && (q.kind != 1 || chars == k + 1 + after), "getLength() of " + label);
+                size_t expected_chars = q.kind == 1 ? k + 1 + after : k;
+                require(invalid == (q.kind != 1) && chars == expected_chars, "getLength() of " + label);
             }
         }
     }

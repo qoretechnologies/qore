@@ -32,6 +32,8 @@
 #define INCLUDE_QORE_INTERN_QOREUTF8_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 //! Returns the byte length of the UTF-8 character at \a p, as RFC 3629 defines a valid character
 /** The one definition of a valid UTF-8 character in %Qore (qore#6604): the UTF-8 encoding's character functions
@@ -104,6 +106,45 @@ inline long q_utf8_char_len(const char* p, size_t len) {
         return -4;
     }
     return (u[3] & 0xc0) == 0x80 ? 4 : 0;
+}
+
+//! A valid count cannot exceed the byte length of the string, which has storage for a trailing NUL.
+constexpr size_t Q_UTF8_INVALID_COUNT = SIZE_MAX;
+
+//! Counts UTF-8 characters, returning Q_UTF8_INVALID_COUNT on a malformed or truncated sequence.
+/** On failure, \c partial_count receives the number of complete characters before the error if requested. */
+inline size_t q_utf8_count_chars(const char* p, const char* end, size_t* partial_count = nullptr) {
+    constexpr size_t ascii_high_bit_mask = (~static_cast<size_t>(0) / 0xff) * 0x80;
+    size_t i = 0;
+    while (p < end) {
+        unsigned char c = static_cast<unsigned char>(*p);
+        if (c < 0x80) {
+            ++p;
+            ++i;
+            while (static_cast<size_t>(end - p) >= sizeof(size_t)) {
+                size_t word;
+                std::memcpy(&word, p, sizeof(word));
+                if (word & ascii_high_bit_mask) {
+                    break;
+                }
+                p += sizeof(size_t);
+                i += sizeof(size_t);
+            }
+            continue;
+        }
+
+        long l = q_utf8_char_len(p, end - p);
+        if (l <= 0) {
+            if (partial_count) {
+                *partial_count = i;
+            }
+            return Q_UTF8_INVALID_COUNT;
+        }
+        p += l;
+        ++i;
+    }
+
+    return i;
 }
 
 #endif // INCLUDE_QORE_INTERN_QOREUTF8_H_

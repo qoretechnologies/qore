@@ -32,6 +32,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
+#include "qore/intern/QoreUtf8.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/IconvHelper.h"
 #include "qore/intern/Utf8OffsetDecoder.h"
@@ -3902,13 +3903,18 @@ size_t qore_string_private::characterCount(const QoreString& str, ExceptionSink*
     const qore_string_private* p = str.priv;
     const QoreEncoding* enc = p->getEncoding();
     if (enc == QCS_UTF8) {
-        bool invalid;
-        size_t count = p->getLengthFrom(p->effective_buf(), 0, invalid);
-        if (invalid) {
+        const char* b = p->effective_buf();
+        size_t prefix = p->getAsciiPrefix(b, p->len);
+        if (prefix == p->len) {
+            return prefix;
+        }
+        QORE_DBG_STRING_SCAN(p->len - prefix);
+        size_t count = q_utf8_count_chars(b + prefix, b + p->len);
+        if (count == Q_UTF8_INVALID_COUNT) [[unlikely]] {
             p->raiseInvalidEncoding(xsink);
             return 0;
         }
-        return count;
+        return prefix + count;
     }
     const qore_encoding_private* ep = qore_encoding_private::get(*enc);
     if (!p->len || enc == QCS_ISO_8859_1 || ep->opaque_single_byte) {
