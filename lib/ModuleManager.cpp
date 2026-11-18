@@ -1955,6 +1955,11 @@ void QoreUserModuleDefContextHelper::close() {
         qore_dbg_parse_scope_end(pgm->pgm, "header");
 #endif
     }
+    // the modules registered from now on are loaded by the code after the header (qore#6351); the context is closed
+    // again explicitly after the parse (by the compiler, for example), after those modules were loaded
+    if (!pgm->module_header_closed) {
+        pgm->module_header_close_seq = QMM.getModuleRegistrationSeq();
+    }
     // a %set-time-zone directive after the header is checked against these options (qore#6270)
     pgm->module_header_closed = true;
     // mod_header_dom stays set: the header's closures are parse-initialized after the header with the options that
@@ -2189,6 +2194,11 @@ void QoreModuleManager::addModule(QoreAbstractModule* m) {
         } else {
             m->trusted = isTrustedModulePath(m->getFileName());
         }
+    }
+    // the first registration numbers the module: one registered again later (reinjected, or loaded privately) keeps
+    // the number of its first load
+    if (!m->reg_seq) {
+        m->reg_seq = module_reg_seq.fetch_add(1, std::memory_order_acq_rel) + 1;
     }
     map.insert(module_map_t::value_type(m->getName(), m));
     // the Program of a registered user module (source or AOT) is deleted only by cleanup: it gets module lifetime,
@@ -4197,9 +4207,14 @@ static thread_local QoreParseOptions qore_module_dependency_restrictions;
 //! Adds restrictions that the modules loaded in its scope inherit (see qore_module_dependency_restrictions)
 class QoreModuleDependencyRestrictionHelper {
 public:
-    DLLLOCAL QoreModuleDependencyRestrictionHelper(const QoreParseOptions& restrictions)
+    /** @param restrictions the restrictions that the code of the module gives the dependency
+        @param relief the domains that the module's header removes from the restrictions of its own Program for the
+        dependency, as library code (qore#6351): the dependency inherits neither these restrictions of the modules
+        loading it nor those that the module's code recorded with them (see QoreAOTDependencyReliefHelper)
+    */
+    DLLLOCAL QoreModuleDependencyRestrictionHelper(const QoreParseOptions& restrictions, int64 relief = 0)
             : old(qore_module_dependency_restrictions) {
-        qore_module_dependency_restrictions = old | restrictions;
+        qore_module_dependency_restrictions = (old | restrictions) & ~QoreParseOptions(relief);
     }
 
     DLLLOCAL ~QoreModuleDependencyRestrictionHelper() {
@@ -4212,6 +4227,88 @@ public:
 private:
     QoreParseOptions old;
 };
+
+//! the domains that one dependency of an AOT module loaded as library code does not inherit as restrictions from the
+//! Program loading the module in this thread, while the dependency is loaded before the module's initialization:
+//! those that the module declares (qore#6351)
+/** The relief applies only to the load of that dependency itself (see aot_dependency_relief_applies()): the load
+    whose frame is a direct child of \c aot_dependency_relief_parent (the frame of the AOT module whose dependency it
+    is) and has the dependency's feature name.  Any other load that the Program's code makes while the dependency is
+    loaded (a callback or a constant of the dependency that runs the Program's code, for example) is nested in the
+    dependency's frame, or has another name, and inherits the Program's restrictions in full, as when the module's
+    source is loaded
+*/
+static thread_local const QoreProgram* aot_dependency_relief_pgm = nullptr;
+static thread_local int64 aot_dependency_relief_dom = 0;
+//! the load frame of the AOT module whose dependency is relieved (see aot_dependency_relief_pgm)
+static thread_local const QoreModuleLoadFrame* aot_dependency_relief_parent = nullptr;
+//! the feature name of the dependency that is relieved (see aot_dependency_relief_pgm)
+static thread_local std::string aot_dependency_relief_feature;
+
+//! returns true if the relief set for the Program loading an AOT module applies to the load with frame \a f: the
+//! load of the dependency that it was set for, not another load in it or beside it (qore#6351)
+static bool aot_dependency_relief_applies(const QoreModuleLoadFrame* f) {
+    return f && aot_dependency_relief_pgm && f->prev == aot_dependency_relief_parent && f->feature
+        && aot_dependency_relief_feature == f->feature;
+}
+
+//! removes domains from the restrictions that a dependency of an AOT module inherits from the Program loading the
+//! module while the dependency is loaded before the module's initialization (qore#6351)
+/** The domains are added to those of the AOT module whose dependencies this thread loads with the same Program, if
+    the module is itself a dependency that is relieved: a module that requires another after its header, which
+    requires a third one after its own, loads the third one with the domains of both headers removed, as their source
+    modules do.  The module's own initialization runs outside the helper: its code before its header has the
+    restrictions of the loading code.  The relief applies only to the load of the dependency (see
+    aot_dependency_relief_applies()).  Local to this file, as the load frames are (QoreModuleLoadFrame).
+*/
+namespace {
+class QoreAOTDependencyReliefHelper {
+public:
+    //! sets the relief for the load of dependency \a feature of the AOT module whose load is the current load frame,
+    //! by \a pgm: the relief in effect for the module's own load without \a remove (the domains that the module
+    //! restricts itself), with \a dom (the domains it declares, for a dependency it requires after its header)
+    QoreAOTDependencyReliefHelper(const QoreProgram* pgm, const std::string& feature, int64 dom, int64 remove = 0);
+    ~QoreAOTDependencyReliefHelper();
+
+    QoreAOTDependencyReliefHelper(const QoreAOTDependencyReliefHelper&) = delete;
+    QoreAOTDependencyReliefHelper& operator=(const QoreAOTDependencyReliefHelper&) = delete;
+
+private:
+    const QoreProgram* old_pgm;
+    int64 old_dom;
+    const QoreModuleLoadFrame* old_parent;
+    std::string old_feature;
+    bool set = false;
+};
+
+QoreAOTDependencyReliefHelper::QoreAOTDependencyReliefHelper(const QoreProgram* pgm, const std::string& feature,
+        int64 dom, int64 remove)
+        : old_pgm(aot_dependency_relief_pgm), old_dom(aot_dependency_relief_dom),
+        old_parent(aot_dependency_relief_parent) {
+    if (pgm) {
+        // the new feature name is copied before anything is changed: a failed allocation changes nothing
+        std::string new_feature(feature);
+        // the relief in effect for the module's own load, if it is a relieved dependency of a module loading it with
+        // the same Program
+        int64 base = (pgm == old_pgm && aot_dependency_relief_applies(module_load_frame)) ? old_dom : 0;
+        aot_dependency_relief_dom = (base & ~remove) | dom;
+        aot_dependency_relief_pgm = pgm;
+        aot_dependency_relief_parent = module_load_frame;
+        old_feature.swap(aot_dependency_relief_feature);
+        aot_dependency_relief_feature.swap(new_feature);
+        set = true;
+    }
+}
+
+QoreAOTDependencyReliefHelper::~QoreAOTDependencyReliefHelper() {
+    if (set) {
+        aot_dependency_relief_pgm = old_pgm;
+        aot_dependency_relief_dom = old_dom;
+        aot_dependency_relief_parent = old_parent;
+        aot_dependency_relief_feature.swap(old_feature);
+    }
+}
+} // anonymous namespace
 
 //! Returns the parse options a user module loaded by a Program inherits from it, with a parse option mask applied
 /** PO_ENABLE_DEBUG is inherited only from a Program that may control the process; the mask, which holds only
@@ -4232,6 +4329,13 @@ static QoreParseOptions get_masked_module_parse_options(QoreProgram* p, const Qo
         QoreParseOptions parent_po = p == target
             ? qore_program_private::getSharedParseOptions(*p)
             : p->getParseOptions();
+        // a dependency of an AOT module loaded as library code before the module's initialization inherits the
+        // restrictions without the domains that the module declares, as a dependency of its source does, which its
+        // Program loads after its header has removed them (qore#6351); only the dependency's own load, whose frame is
+        // the current one: not another load that the Program's code makes meanwhile
+        if (p == aot_dependency_relief_pgm && aot_dependency_relief_applies(module_load_frame)) {
+            parent_po &= ~QoreParseOptions(aot_dependency_relief_dom);
+        }
         // PO_ENABLE_DEBUG is not propagated automatically: only from a parent that may control the process
         inherited = get_inherited_module_parse_options(parent_po, exclude | PO_ENABLE_DEBUG);
         if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
@@ -4679,6 +4783,9 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
     }
 
     QoreAbstractModule* mod = nullptr;
+    // the last module registration before the load: the module is loaded by this request if it is registered after
+    // it (qore#6351)
+    uint64_t reg_seq_before = getModuleRegistrationSeq();
     {
         // the warnings of the module loader for this load are reported by the parse action of pgm (see
         // qore_report_module_load_warning())
@@ -4703,6 +4810,8 @@ int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsin
             pp->addParseModuleRestrictions(mod->getName(), get_inherited_module_parse_options(pgm->getParseOptions(),
                 PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG) & ~QoreParseOptions::POSITIVE_OPTIONS);
         }
+        // a request before or after the header of the module parsed (qore#6351)
+        pp->addModuleRequest(str.c_str(), mod->getName(), mod->getRegistrationSeq() > reg_seq_before);
     }
 
     if (loc && xsink && qore_has_thread_stack_error(xsink)) {
@@ -5638,7 +5747,63 @@ static qore_binary_module_desc_t get_binary_module_desc(void* ptr, const char* f
 
 int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
         const std::vector<std::string>& dependencies, QoreProgram* path_pgm,
-        const std::vector<QoreModuleDependencyRestriction>* restrictions) {
+        const std::vector<QoreModuleDependencyRestriction>* restrictions, int64 relief_dom,
+        const std::vector<std::string>* post_header_dependencies, int64 restricted_dom) {
+    // a record whose requests before the module's header could not be recorded exactly (QMDR_INEXACT) relieves no
+    // dependency, neither with the module's declared domains nor with a relief in effect from a module loading it,
+    // whatever its other fields say: what the module requests before its header can depend on where it is loaded
+    // (qore#6386, qore#6351; fail-closed)
+    if (restrictions) {
+        for (const QoreModuleDependencyRestriction& entry : *restrictions) {
+            if (entry.flags & QMDR_INEXACT) {
+                relief_dom = 0;
+                restricted_dom = static_cast<int64>(QDOM_ALL);
+                break;
+            }
+        }
+    }
+    // loads one dependency, with the restrictions that the module's code gives it, if known
+    auto load_dep = [&](const std::string& dep, const QoreParseOptions* dep_restrictions) -> int {
+        // a dependency that the module's source requires only after its header, which removes the domains that the
+        // header declares from the restrictions of the module's Program, inherits the restrictions without them; any
+        // other inherits them: one that it requires before its header, and one that its parse did not request (in
+        // code that a conditional excludes); the restrictions are those of the Program that the dependency inherits
+        // from: the one loading the module, or the current one for a run-time load (qore#6351)
+        // a module that the record lists as requested before the header (QMDR_BEFORE_HEADER) is never relieved, also
+        // if the list of post-header dependencies names it (qore#6386)
+        bool post_header = relief_dom && post_header_dependencies
+            && std::find(post_header_dependencies->begin(), post_header_dependencies->end(), dep)
+                != post_header_dependencies->end()
+            && (!restrictions || std::find_if(restrictions->begin(), restrictions->end(),
+                [&dep](const QoreModuleDependencyRestriction& r) {
+                    return r.module == dep && (r.flags & QMDR_BEFORE_HEADER);
+                }) == restrictions->end());
+        // a relief in effect from a module loading this one does not cover the domains that this module restricts
+        // itself; the relief applies to the load of the dependency only, which has its feature name: a request by
+        // path names the module's file
+        QoreString dep_feature(dep.c_str());
+        if (strchrs(dep.c_str(), "./\\")) {
+            get_feature_from_path(dep_feature);
+        }
+        QoreAOTDependencyReliefHelper dependency_relief(path_pgm ? path_pgm : getProgram(), dep_feature.c_str(),
+            post_header ? relief_dom : 0, restricted_dom);
+        // the restrictions that the module's code gives the dependency (qore#6406) and those that the modules loading
+        // this one give it, without the domains that its header removes from its Program's restrictions for the
+        // dependency (qore#6351); the restrictions of its own code after its header are not removed
+        QoreModuleDependencyRestrictionHelper restriction_helper(dep_restrictions ? *dep_restrictions
+            : QoreParseOptions(), post_header ? (relief_dom & ~restricted_dom) : 0);
+        // Resolve native symbols before dlopen without importing private
+        // dependencies into the host. A source module imports these into its
+        // own Program, not the caller; generated AOT init does the same.
+        // Importing here can collide with unrelated host declarations even
+        // when the dependency is absent from the module's public surface.
+        // Preserve the caller's module search path and sandbox context.
+        loadModuleIntern(xsink, xsink, dep.c_str(), nullptr, false,
+            MOD_OP_NONE, nullptr, nullptr, nullptr, QMLO_NONE, QP_WARN_MODULES,
+            nullptr, path_pgm);
+        return xsink ? -1 : 0;
+    };
+
     // the modules that the module's directives loaded first, in the order of the directives, each with the options
     // that the module's code gave it at its directive, as its source loads them (qore#6406): the modules that they
     // require are loaded by them, with the same options; a module that is loaded already is not loaded again,
@@ -5658,10 +5823,7 @@ int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
                     && std::find(dependencies.begin(), dependencies.end(), dep) == dependencies.end()) {
                 continue;
             }
-            QoreModuleDependencyRestrictionHelper restriction_helper(entry.options);
-            loadModuleIntern(xsink, xsink, dep.c_str(), nullptr, false, MOD_OP_NONE, nullptr, nullptr, nullptr,
-                QMLO_NONE, QP_WARN_MODULES, nullptr, path_pgm);
-            if (xsink) {
+            if (load_dep(dep, &entry.options)) {
                 return -1;
             }
         }
@@ -5670,16 +5832,7 @@ int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
         if (i && !(i % 10) && qore_check_cancel(&xsink, "AOT binary module dependency loading")) {
             return -1;
         }
-        // Resolve native symbols before dlopen without importing private
-        // dependencies into the host. A source module imports these into its
-        // own Program, not the caller; generated AOT init does the same.
-        // Importing here can collide with unrelated host declarations even
-        // when the dependency is absent from the module's public surface.
-        // Preserve the caller's module search path and sandbox context.
-        loadModuleIntern(xsink, xsink, dependencies[i].c_str(), nullptr, false,
-            MOD_OP_NONE, nullptr, nullptr, nullptr, QMLO_NONE, QP_WARN_MODULES,
-            nullptr, path_pgm);
-        if (xsink) {
+        if (load_dep(dependencies[i], nullptr)) {
             return -1;
         }
     }
@@ -5896,8 +6049,13 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         // Reserve the parent before recursively loading its dependency graph,
         // matching loadBinaryModuleFromDesc()'s cycle and waiter semantics.
         preload_guard = std::make_unique<ModuleLoadMapHelper>(feature, xsink, false);
+        // the dependencies are loaded with the restrictions that the module's code gives them (qore#6406); those of a
+        // module loaded as library code that its source requires after its header inherit the restrictions of the
+        // Program loading it without the domains that it declares in its header, as those of its source do, which its
+        // Program loads after the header has removed them (qore#6351)
         if (loadAOTBinaryModuleDependencies(xsink, aot_info.dependencies, path_pgm,
-                &aot_info.dependency_restrictions)) {
+                &aot_info.dependency_restrictions, trusted ? aot_info.declared_domains : 0,
+                &aot_info.post_header_dependencies, aot_info.restricted_domains)) {
             return nullptr;
         }
         // a module of a build tree is out of date when a module it was compiled with is loaded from another module
@@ -5953,6 +6111,13 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
                 "the AOT module metadata of module '%s' does not match its module descriptor", path);
             return nullptr;
+        }
+        // the dependencies were relieved with the domains that the module's metadata record declares (qore#6351):
+        // its initialization checks that they are those of its header
+        std::unique_ptr<QoreAOTModuleExpectedDomainsHelper> expected_domains;
+        if (have_aot_info) {
+            expected_domains = std::make_unique<QoreAOTModuleExpectedDomainsHelper>(feature,
+                aot_info.declared_domains);
         }
         return loadBinaryModuleFromDesc(xsink, &dlh, mod_info, path, feature, reexport, pholder.release(),
             path_pgm, load_opt, preload_guard.get());

@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain and requires DdMid after
+# its header (qore#6351)
+
+%modern
+
+module DdTop {
+    version = "1.0";
+    desc = "a module that requires a module that declares another domain";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%requires DdMid
+
+public namespace DdTop {
+    public string sub run() {
+        return DdMid::run();
+    }
+}

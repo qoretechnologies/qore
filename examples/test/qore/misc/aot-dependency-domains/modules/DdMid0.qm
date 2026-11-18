@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares no domain and requires a module that uses locale
+# control: loaded by DdTop0, whose header has removed the locale control restriction, the inner module inherits that
+# (qore#6351)
+
+%modern
+
+module DdMid0 {
+    version = "1.0";
+    desc = "a module that declares no domain";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+%requires DdInner
+
+public namespace DdMid0 {
+    public string sub run() {
+        return DdInner::run();
+    }
+}
