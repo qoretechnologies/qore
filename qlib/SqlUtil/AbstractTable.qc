@@ -5949,18 +5949,17 @@ string sql = table.getSelectSql(sh, \args);
 
     #! Returns the text of a comment or hint of a select, which is written into an SQL comment (qore#6574)
     /** The text cannot end the comment (\c "*" followed by \c "/") or open another one (\c "/" followed by \c "*",
-        as comments nest in some databases), and cannot have a placeholder character (\c "%" or \c ":"), as some
-        database drivers read placeholders in comments; a text with any of them is refused, as is a text with a NUL
-        character
+        as comments nest in some databases), and cannot have the placeholder character \c "%", as some database
+        drivers (ex: sqlite3) read placeholders in comments; a text with any of them is refused, as is a text with a
+        NUL character
 
         @throw OPTION-ERROR the text has a character or a character sequence that is not allowed in a comment
     */
     private static string checkCommentText(string option, string text) {
-        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0 || text.find("%") >= 0
-            || text.find(":") >= 0) {
+        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0 || text.find("%") >= 0) {
             throw "OPTION-ERROR", sprintf("the %y select option cannot contain the character sequences \"/*\" or "
-                "\"*/\", the placeholder characters \"%%\" and \":\", or a NUL character, as it is written into an SQL "
-                "comment", option);
+                "\"*/\", the placeholder character \"%%\", or a NUL character, as it is written into an SQL comment",
+                option);
         }
         return text;
     }
@@ -6388,15 +6387,16 @@ string sql = table.getSelectSql(sh, \args);
         # issue #4206: splice comments and hints into the SQL query string last, right after the select keyword, where a
         # hint must be, and where no text of the query can be (qore#6574: the first " from " could be in a literal)
         if (info.query_hash.comment || info.query_hash.hint) {
+            # a hint is first, as the databases that read hints (Oracle, PostgreSQL with pg_hint_plan) read only the
+            # first comment after the select keyword
             string comment;
-            if (info.query_hash.comment) {
-                comment = sprintf("/* %s */ ", AbstractTable::checkCommentText("comment", info.query_hash.comment));
-            }
             if (info.query_hash.hint) {
-                comment += sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
+                comment = sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
             }
-            # a query that does not start with the select keyword (ex: a recursive query, which starts with "with") has the
-            # comment at its start
+            if (info.query_hash.comment) {
+                comment += sprintf("/* %s */ ", AbstractTable::checkCommentText("comment", info.query_hash.comment));
+            }
+            # every query starts with the select keyword here; any other query would have the comment at its start
             splice sql, (sql =~ /^select /) ? 7 : 0, 0, comment;
         }
 

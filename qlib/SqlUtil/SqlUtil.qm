@@ -157,8 +157,9 @@ module SqlUtil {
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
     - no text given to a select is written into its SQL where it could change the query: a
-      @ref select_option_comment "comment" or @ref select_option_hint "hint" that could end its SQL comment raises
-      \c OPTION-ERROR (it is written right after the \c select keyword), a value given with
+      @ref select_option_comment "comment" or @ref select_option_hint "hint" that could end its SQL comment or that
+      has a \c "%" placeholder character raises \c OPTION-ERROR (it is written right after the \c select keyword,
+      a hint first), a value given with
       @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is an SQL literal of the database, as
       in the select list, and an alias referenced in a superquery or a window is given as an identifier (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
@@ -955,7 +956,7 @@ select /* foo bar *<!--%%-->/ ...
     @endcode
     @warning Oracle: using different comments in the same SQL can lead to new optimizer statement hard parsing.
     @note The comment is written into an SQL comment right after the \c select keyword, so a comment that contains
-    \c "/<!--%%-->*", \c "*<!--%%-->/", \c "%" or \c ":" (which some database drivers read as placeholders) or a NUL
+    \c "/<!--%%-->*", \c "*<!--%%-->/", \c "%" (which some database drivers read as a placeholder) or a NUL
     character raises an \c OPTION-ERROR exception
 
     @subsubsection select_option_hint Select Option "hint"
@@ -971,7 +972,8 @@ select /*+ full(a) *<!--%%-->/ ...
     @endcode
     The string is taken as-is and it's up to the caller to handle correct aliases in join functions etc.; as it is
     written into an SQL comment right after the \c select keyword, a hint that contains \c "/<!--%%-->*",
-    \c "*<!--%%-->/", \c "%" or \c ":" or a NUL character raises an \c OPTION-ERROR exception
+    \c "*<!--%%-->/", \c "%" or a NUL character raises an \c OPTION-ERROR exception; a hint is written before a
+    comment
     @note Hints are platform dependent. Curently only Oracle and some versions of PostgreSQL hints are supported in Sqlutil module.
     @warning Use hints only when you know what you are doing.
 
