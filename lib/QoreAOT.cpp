@@ -3945,6 +3945,18 @@ public:
                     info.weak_store |= ref.weak_store;
                     info.parse_reference |= ref.parse_reference;
                 });
+                // the locals that an on_exit, on_error or on_success handler references are referenced where the
+                // handler is declared: the helper that holds the block runs the handler, which can assign them
+                // (qore#6545); a region cannot hold a handler whose locals cannot be collected (see validateRegion())
+                if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                    std::unordered_set<const void*> locals;
+                    if (!QoreIRFunction::collectOnBlockExitLocals(
+                            *static_cast<const QoreIROnBlockExitInstruction*>(inst), locals)) {
+                        unknown_handler_locals.insert(inst);
+                    } else if (!locals.empty()) {
+                        handler_refs.push_back({inst, i, std::move(locals)});
+                    }
+                }
                 if (inst->exception_target) {
                     has_exception_paths = true;
                 }
@@ -3999,6 +4011,23 @@ public:
                     default:
                         break;
                 }
+            }
+        }
+        // a handler's references count for the locals of the function that have a place in its frame: those that its
+        // code references directly and its pre-instantiated locals (parameters, and the body locals, also those that
+        // the handler declares itself, which are then contained in the region); not a closure-use local, whose value
+        // is kept on the closure variable stack rather than in reload storage, nor a local that the function's frame
+        // has no place for (a variable that a closure function captures)
+        for (HandlerRefs& refs : handler_refs) {
+            for (const void* key : refs.locals) {
+                const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
+                if ((!local_info.count(lv) && !fn.pre_instantiated_locals.count(key)) || lv->closureUse()) {
+                    continue;
+                }
+                auto& info = local_info[lv];
+                info.min_ref = std::min(info.min_ref, refs.idx);
+                info.max_ref = std::max(info.max_ref, refs.idx);
+                handler_locals[refs.inst].push_back(lv);
             }
         }
         if (poisoned) {
@@ -4165,6 +4194,17 @@ private:
     std::unordered_map<const QoreIRBasicBlock*, size_t> block_idx;
     std::unordered_map<uint32_t, ValueInfo> value_info;
     std::unordered_map<const LocalVar*, LocalInfo> local_info;
+    //! the locals that the handler of an on-block-exit instruction references, at the block of the instruction
+    struct HandlerRefs {
+        const QoreIRInstruction* inst;
+        size_t idx;
+        std::unordered_set<const void*> locals;
+    };
+    std::vector<HandlerRefs> handler_refs;
+    //! the locals of the function that the handler of each on-block-exit instruction references (see analyze())
+    std::unordered_map<const QoreIRInstruction*, std::vector<const LocalVar*>> handler_locals;
+    //! the on-block-exit instructions whose handler references locals that cannot be collected
+    std::unordered_set<const QoreIRInstruction*> unknown_handler_locals;
     std::unordered_map<uint32_t, size_t> scope_enter_idx;
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
     std::unordered_map<uint32_t, size_t> temp_mark_idx;
@@ -4242,6 +4282,9 @@ private:
                                 || !in_region(it->second)) {
                             return fail("on-block-exit owner scope crosses region boundary");
                         }
+                        if (unknown_handler_locals.count(inst)) {
+                            return fail("on-block-exit handler references locals that cannot be collected");
+                        }
                         break;
                     }
                     default:
@@ -4304,6 +4347,13 @@ private:
                         region_locals.insert(ref.local);
                     }
                 });
+                // the locals that a handler declared in the region references: the coordinator releases its
+                // references to the values of the shared ones before the call, so that a value that the handler
+                // replaces is released at its assignment (qore#6545)
+                auto handler_it = handler_locals.find(inst);
+                if (handler_it != handler_locals.end()) {
+                    region_locals.insert(handler_it->second.begin(), handler_it->second.end());
+                }
             }
         }
         // Temp-mark pairing: every paired DiscardTemps in the region must

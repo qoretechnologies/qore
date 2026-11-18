@@ -216,7 +216,16 @@ This generalizes the existing Phase 1.5 init-expression outliner
    call that runs handlers out of line (`finalizeHandlerSites()`).
    Otherwise that storage kept the value that the helper replaced in a
    shared local alive until the coordinator next reloaded the local, and
-   its destructor ran late (qore#6300).
+   its destructor ran late (qore#6300).  The locals of the function that
+   the `on_exit`, `on_error` and `on_success` handlers of a block in a
+   region reference count as references at the block's `OnBlockExit`
+   instruction (`QoreIRFunction::collectOnBlockExitLocals()`; a region
+   cannot hold a handler whose locals cannot be collected).  So a local
+   declared before the region, or a parameter, that only a handler in
+   the region references there is shared: the coordinator releases its
+   storage of the local before the call, and the value that the handler
+   replaces is released at the assignment (qore#6545).  Closure-use
+   locals are left out, as their values are not in reload storage.
 8. **Self-recursive fast entry.** When the outliner fires, the
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a
