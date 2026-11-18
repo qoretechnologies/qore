@@ -560,10 +560,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        change with a SetCodeParseOptions instruction (QoreIROpcode::SetCodeParseOptions, 439: the options as four
 //!        32-bit ConstInt words), whose native code calls qore_rt_set_code_parse_options(); the AOT runtime identity
 //!        changes with the runtime entry (qore#6293)
-//! v43: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
+//! v43 (batch AC; one format version for the format changes of the batch, one line each):
+//!      - the encoded metadata is followed by the XXH64 checksum (seed 0, u64 little-endian) of all of its bytes,
+//!        and the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM; the reader checks it before it reads anything
+//!        else, so that metadata corrupted after it was written is refused (qore#6451)
+//! v44: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
-//!      v9-v42 image has none: a request at a step event of its code returns from the function.
+//!      v9-v43 image has none: a request at a step event of its code returns from the function.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -622,10 +626,20 @@ constexpr uint16_t QORE_AOT_SHARED_HANDLER_VERSION = 41;
 constexpr uint16_t QORE_AOT_LVPATH_REF_RV_VERSION = 42;
 //! First format version whose top-level code can set the parse options of its statements (see v42 above)
 constexpr uint16_t QORE_AOT_CODE_PARSE_OPTIONS_VERSION = 42;
-static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == 42 && QORE_AOT_CODE_PARSE_OPTIONS_VERSION == 42,
+static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_CODE_PARSE_OPTIONS_VERSION,
     "the format changes of batch AA share one format version (v42)");
-//! First format version whose debug IR has the paths of a debugger's flow requests (see v43 above).
-constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 43;
+//! First format version whose encoded metadata is followed by its checksum (see v43 above)
+/** The checksum is the XXH64 (seed 0) of all the bytes of the encoded metadata (compressed, if it is compressed),
+    written as a u64 little-endian after them; the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM.  The reader checks
+    it before it reads anything else (QoreAOTBinaryReader::open()), so that metadata corrupted after qcc wrote it is
+    refused as a whole: a module whose metadata does not match is not loaded, as a module whose metadata cannot be
+    read, and its source module is loaded instead when there is one (qore#6451)
+*/
+constexpr uint16_t QORE_AOT_METADATA_CHECKSUM_VERSION = 43;
+//! The size of the checksum that follows the encoded metadata (see QORE_AOT_METADATA_CHECKSUM_VERSION)
+constexpr uint32_t QORE_AOT_METADATA_CHECKSUM_SIZE = 8;
+//! First format version whose debug IR has the paths of a debugger's flow requests (see v44 above).
+constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 44;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
@@ -676,6 +690,35 @@ constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
 //! Binary header flags
 constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
 constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
+//! The encoded metadata is followed by its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION)
+constexpr uint16_t QORE_AOT_FLAG_METADATA_CHECKSUM = 0x0004;
+
+//! Returns the length of the encoded AOT metadata at \a data without its checksum, from its header
+/** The data can be longer than the metadata (\a avail): a symbol of an object file, whose size is taken up to the next
+    symbol in a format without symbol sizes; compressed metadata is decompressed to find its end.  Used by the reader to
+    find the checksum after the metadata in such data, and by the library and qcc to cut a symbol's data to its
+    metadata and checksum (qore#6451); exported for qcc
+
+    @param data the data
+    @param avail the size of \a data
+    @param len receives the length of the encoded metadata without its checksum
+    @param cancelled if not null, set to true if the scan was ended by a cancellation of the thread (qore_check_cancel())
+
+    @return true if \a data has the header of encoded AOT metadata that fits in \a avail bytes, with its length set
+*/
+bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len, bool* cancelled = nullptr);
+
+//! Returns the checksum of encoded AOT metadata: the XXH64 (seed 0) of its bytes (QORE_AOT_METADATA_CHECKSUM_VERSION)
+DLLLOCAL uint64_t qore_aot_metadata_checksum(const uint8_t* data, size_t size);
+
+//! Seals encoded AOT metadata whose format has a checksum: sets QORE_AOT_FLAG_METADATA_CHECKSUM in its header and
+//! appends its checksum (QORE_AOT_METADATA_CHECKSUM_VERSION); metadata of an earlier format is left as it is
+DLLLOCAL void qore_aot_seal_metadata(std::vector<uint8_t>& metadata);
+
+//! Removes the checksum of sealed AOT metadata, so that its encoding can be changed (it is sealed again after)
+/** @return true if the metadata was sealed
+*/
+DLLLOCAL bool qore_aot_unseal_metadata(std::vector<uint8_t>& metadata);
 
 //! Feature flags for binary compatibility (64-bit bitmask in header.feature_flags)
 constexpr uint64_t QORE_AOT_FEAT_FOREACH_REF    = 1ULL << 0;  //!< RefForeach* opcodes (323-328)
@@ -1682,6 +1725,8 @@ private:
 */
 class QoreAOTBinaryReader {
     const uint8_t* data = nullptr;
+    //! true if the last open() refused the metadata because it does not match its checksum
+    bool checksum_mismatch = false;
     uint32_t total_size = 0;
     const uint8_t* input_data = nullptr;
     uint32_t input_size = 0;
@@ -1780,9 +1825,13 @@ public:
     /** @param data pointer to the binary data
         @param size size of the binary data
         @param error receives error message on failure
+        @param verify_checksum false for metadata that a reader of the same load has already checked against its
+        checksum (QORE_AOT_METADATA_CHECKSUM_VERSION): the metadata that QoreAOTDebugMetadata keeps from the reader of
+        the module, or a copy of it that it makes; the checksum is then not computed again, but the metadata must
+        still have one (qore#6451)
         @return true on success, false on failure
     */
-    bool open(const uint8_t* data, uint32_t size, std::string& error);
+    bool open(const uint8_t* data, uint32_t size, std::string& error, bool verify_checksum = true);
 
     //! Get the parsed binary header
     const QoreAOTBinaryHeader& getHeader() const { return header; }
@@ -1790,6 +1839,13 @@ public:
     //! Original encoded metadata passed to open(); valid until the caller releases it.
     const uint8_t* getInputData() const { return input_data; }
     uint32_t getInputSize() const { return input_size; }
+
+    //! Returns true if the last open() refused the metadata because its checksum does not match or is missing
+    /** The metadata has the magic number and a supported version of a format with a checksum
+        (QORE_AOT_METADATA_CHECKSUM_VERSION), so it is most likely metadata that was changed after it was written
+        rather than other bytes (qore#6451)
+    */
+    bool checksumMismatch() const { return checksum_mismatch; }
 
     //! Returns the offset of a pointer into the (decompressed) metadata, or SIZE_MAX if it points elsewhere
     /** For metadata written uncompressed, it is the offset in the encoded metadata (QORE_AOT_TRACE_IR_DESER prints it

@@ -2861,12 +2861,20 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // initialized (qore#6288)
             QoreElementScopeParseHelper element_scope_helper;
 
+            // the missing return checks of the code wait until all of the code is initialized, as they analyze the
+            // code that it calls (issue #5940)
+            QoreMissingReturnCheckHelper mrch(missing_return_checks);
+
             // initialize new statements second (for "our" and "my" declarations)
             // also initializes namespaces, constants, etc
             sb.parseInit();
 
             // do the initial parse phase
             qore_root_ns_private::get(*RootNS)->parseInit();
+
+            if (!parseSink->isEvent()) {
+                missing_return_checks.run(pgm);
+            }
 
             printd(5, "QoreProgram::internParseCommit() this: %p RootNS: %p\n", pgm, RootNS);
         }

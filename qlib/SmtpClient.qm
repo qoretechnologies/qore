@@ -180,6 +180,8 @@ smtp.sendMessage(msg);@endcode
     @section smtpclient_relnotes SmtpClient Release Notes
 
     @subsection smtpclient_v2_2 SmtpClient 2.2
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - The \c ssl_verify_cert option is now honored for synchronous and asynchronous SMTP connections.
       Set it to \c True with \c smtptls:// or \c smtps:// to require a trusted server certificate
       matching the connection hostname before transmitting credentials or mail.
@@ -700,7 +702,7 @@ SmtpClient smtp("esmtptls://smtp.gmail.com", {
             *hash<auto> ph = Protocols.(uh.protocol);
             if (!ph) {
                 throw "SMTPCLIENT-UNKNOWN-PROTOCOL", sprintf("unsupported scheme %y in %y; known schemes: %y",
-                    uh.protocol, url, keys Protocols);
+                    uh.protocol, get_masked_url(url), keys Protocols);
             }
 
             if (!uh.port && uh.host[0] != "/") {
@@ -718,14 +720,15 @@ SmtpClient smtp("esmtptls://smtp.gmail.com", {
         if (uh.username) {
             if (!uh.password)
                 throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("username is set but password is missing in URL "
-                    "%y", url);
+                    "%y", get_masked_url(url));
             user = uh.username;
             pass = uh.password;
 
             logDbg("set authentication credentials to %s/xxx", user);
         } else if (uh.password) {
+            # the URL is given without its password
             throw "SMTPCLIENT-INVALID-AUTHENTICATION", sprintf("password is set but username is missing in URL %y",
-                url);
+                get_masked_url(url));
         }
     }
 

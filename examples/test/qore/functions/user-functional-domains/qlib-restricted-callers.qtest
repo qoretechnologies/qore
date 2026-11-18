@@ -1,0 +1,456 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode, whose restricted Programs set their own execution modes
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class QlibRestrictedCallersTest
+
+#! Tests the qlib paths that run module code with a functional domain for a restricted caller (qore#6337)
+/** The functional domains that a module's own code declares are checked against the calling code when it is
+    entered, so qlib's own work for a caller restricted like a Qorus interface (\c PO_NO_PROCESS_CONTROL and
+    \c PO_NO_THREAD_CONTROL) must not go through its public APIs that declare a domain.  These are the lookups and
+    deferred registrations that such a caller runs:
+    - lookups that load the modules that a data provider index names (a factory, an application and a connection
+      scheme)
+    - DPQL resolution of an application action, which loads the known factory modules when there is no index
+    - the rollback of a module load that a lookup made and that failed after registering a file API: no registration
+      is left, and the original error is reported
+    - the SqlUtil table resolver that an unrestricted Program or a library module registered, and the cache that it
+      fills on a miss; restricted code gets a cached table only if its datasource is the one that it gives, and the
+      tables that it resolves are not cached, as the key of the cache is the description that the datasource gives
+    - the deferred registrations that the initialization of a library module made (lazy application actions, a
+      pending application, a pending connection scheme), which run as deferred module initialization; a lazy
+      registration that is not deferred module initialization fails for a restricted reader without breaking the
+      application for the next reader
+    - restricted code cannot give its own code the exemption of deferred module initialization
+      (is_module_init_closure(), call_module_init_closure()), nor call the registration APIs; a closure that the
+      module's code creates for code of another Program that runs while a deferred initialization runs (a catalog
+      change listener) does not qualify; only the code of a library module can run a qualifying closure
+      (call_module_init_closure()); the code of a module that a restricted Program loads by its path is the calling
+      code, not module code; a module loaded by its path is one Program that every Program that loads it shares,
+      and its code is checked against the restrictions of the Program that calls it
+    - restricted code cannot run the rollback closures of other module loads on its thread
+      (ImplicitModuleTransaction::savepoint(), rollback(), commit()), nor load a module through DataProvider's own
+      loader; a failed module load that a lookup makes rolls back only that load's registrations
+    - restricted code cannot write the data provider index, which names the modules that lookups load
+
+    Each case runs in a child process of its own, which loads the modules freshly; the modules of the cases are in a
+    directory of the process-wide module path, so they are library code.  The children use only the module path of
+    the test (the cases' modules, qlib, and the binary modules that this process loads), so that the known factory
+    modules that DPQL resolution loads are those of this repository.  The deferred registrations and the closures
+    are run with the restricted Program in each execution mode, with and without a SandboxManager.
+*/
+class QlibRestrictedCallersTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qlib_dir;
+        #! the modules and the child script of the cases
+        string case_dir;
+        #! the child script
+        string child;
+
+        #! holds the module directory of the children, the data provider index and the SQLite databases
+        TmpDir tmp("qore-qlib-restricted-callers-");
+
+        #! the directory with links to the binary modules that the children may load
+        string binary_dir;
+
+        #! True if the sqlite3 driver can be loaded
+        bool have_sqlite3;
+
+        #! the execution modes of the restricted Program
+        const Modes = ("ast", "ir", "jit");
+
+        #! the output of the index case
+        const ExpectedIndex = "db module before: False
+factory db: DbDataProviderFactory
+db module after: True
+index module before: False
+app: \"QoreTestRcIndexApp\"
+scheme: \"Restricted caller index scheme\"
+index module after: True
+";
+
+        #! the output of the DPQL case
+        const ExpectedDpql = "db module before: False
+set context: CONTEXT-ERROR: Application \"QoreTestRcNoSuchApp\" is unknown
+db module after: True
+";
+
+        #! the output of the file API case
+        const ExpectedFileApi = "factory: null
+file api: False
+file api names: False
+factory again: null
+file api again: False
+trusted file api: False
+";
+
+        #! the output of the SqlUtil cases after the line of the unrestricted code
+        const ExpectedSql = "select: \"joined rc_t2\"
+cached: \"rc_t2\"
+not cached: \"rc_t3\"
+";
+
+        #! the output of the case of the deferred registrations of a library module's initialization
+        const ExpectedLazy = "lazy runs before: 0
+lazy actions: \"lazy-action\"
+lazy runs after: 1
+pending runs before: 0
+pending app: \"QoreTestRcPendingApp\"
+pending actions: \"pending-action\"
+pending runs after: 1
+scheme runs before: 0
+scheme: \"restricted caller test scheme\"
+scheme runs after: 1
+";
+
+        #! the output of the case of a lazy registration made after the module's initialization
+        const ExpectedLate = "late registered
+restricted read: INVALID-FUNCTION-ACCESS
+restricted read again: INVALID-FUNCTION-ACCESS
+late runs: 2
+failures: 0
+unrestricted read: late-action
+late runs: 3
+restricted read after: \"late-action\"
+";
+
+        #! the output of the late case for a restricted reader with a SandboxManager
+        /** For a sandboxed reader, the catalog runs the registrations that unrestricted code made on its worker, not
+            with the reader's restrictions
+        */
+        const ExpectedLateSandbox = "late registered
+restricted read: \"late-action\"
+restricted read again: \"late-action\"
+late runs: 1
+failures: 0
+unrestricted read: late-action
+late runs: 1
+restricted read after: \"late-action\"
+";
+
+        #! the output of the closure case
+        const ExpectedClosures = "own closure qualifies: False
+own closure run: MODULE-INIT-CLOSURE-ERROR
+own function reference qualifies: False
+own function reference run: MODULE-INIT-CLOSURE-ERROR
+late closure qualifies: False
+late closure run: MODULE-INIT-CLOSURE-ERROR
+late closure called: INVALID-FUNCTION-ACCESS
+init closure qualifies: True
+init closure run: MODULE-INIT-CLOSURE-ERROR
+init closure run by its module: 42
+init closure called: INVALID-FUNCTION-ACCESS
+module function reference qualifies: False
+register lazy actions: INVALID-FUNCTION-ACCESS
+register pending app: INVALID-FUNCTION-ACCESS
+lazy runs: 0
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+";
+
+        #! the output of the case of a closure that the module's code creates for a catalog change listener
+        const ExpectedListener = "lazy actions: \"lazy-action\"
+lazy runs: 1
+listener called: True
+closure kept: True
+kept closure qualifies: False
+kept closure run: MODULE-INIT-CLOSURE-ERROR
+kept closure called: INVALID-FUNCTION-ACCESS
+init closure qualifies: True
+init closure run: MODULE-INIT-CLOSURE-ERROR
+init closure run by its module: 42
+";
+
+        #! the output of the case of the rollback of module loads
+        const ExpectedTransaction = "loaded: True
+file api before: True
+savepoint: INVALID-FUNCTION-ACCESS
+rollback: INVALID-FUNCTION-ACCESS
+commit: INVALID-FUNCTION-ACCESS
+file api after: True
+lookup: null
+failed load file api: False
+file api kept: True
+trusted file api: True
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+transaction load: PARSE-EXCEPTION: cannot resolve call 'ImplicitModuleTransaction::loadModule()' to any reachable and callable object
+module loader: PARSE-EXCEPTION: cannot resolve call 'DataProviderModuleLoader::loadModule()' to any reachable and callable object
+";
+
+        #! the output of the case of a module that a restricted Program loads by its path
+        const ExpectedPathModule = "in-init tagged: INVALID-FUNCTION-ACCESS
+in-init closure called: INVALID-FUNCTION-ACCESS
+closure kept: True
+kept closure qualifies: False
+kept closure run: MODULE-INIT-CLOSURE-ERROR
+kept closure called: INVALID-FUNCTION-ACCESS
+";
+
+        #! the output of the case of a module loaded by its path by an unrestricted and a restricted Program
+        const ExpectedPathShared = "unrestricted first: declared: first
+wrapper: INVALID-FUNCTION-ACCESS
+declared: INVALID-FUNCTION-ACCESS
+library proxy: INVALID-FUNCTION-ACCESS
+unrestricted wrapper: declared: after
+unrestricted library proxy: tagged ran
+";
+
+        #! the output of the case of writing the data provider index
+        const ExpectedIndexWrite = "write: INVALID-FUNCTION-ACCESS
+write by app: INVALID-FUNCTION-ACCESS
+index written: False
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+";
+
+        #! the output of the case of the SqlUtil table cache and the datasource of restricted code
+        const ExpectedSqlIdentity = "trusted cached: True
+same description: True
+cached table: \"own datasource\"
+resolver table: \"own datasource\"
+resolved table: \"own datasource\"
+cache get: INVALID-FUNCTION-ACCESS
+trusted rc_t1: Datasource
+trusted rc_t2: not cached
+direct call: PARSE-EXCEPTION: functional domain: PROCESS_CONTROL
+";
+    }
+
+    constructor() : QUnit::Test("QlibRestrictedCallersTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qlib_dir = realpath(get_script_dir() + "/../../../../../qlib");
+        case_dir = get_script_dir() + "/qlib-restricted-callers";
+        child = case_dir + "/restricted-child.q";
+        binary_dir = tmp.path + "/binary-modules";
+        mkdir(binary_dir);
+        linkBinaryModules();
+
+        addTestCase("lookups load the modules that the data provider index names", \testIndex());
+        addTestCase("DPQL resolution loads the known factory modules", \testDpql());
+        addTestCase("a failed module load that a lookup made leaves no file API", \testFileApi());
+        addTestCase("the SqlUtil table resolver resolves tables for restricted code", \testSqlUtil());
+        addTestCase("deferred registrations of a library module's initialization run for a restricted reader",
+            \testLazy());
+        addTestCase("a lazy registration that a restricted reader cannot run is run by the next reader",
+            \testLate());
+        addTestCase("restricted code cannot give its own code the exemption of deferred module initialization",
+            \testClosures());
+        addTestCase("a closure that module code creates for code that a deferred initialization calls back does not "
+            "qualify", \testListener());
+        addTestCase("restricted code cannot roll back the registrations of other module loads", \testTransaction());
+        addTestCase("restricted code gets cached tables only for its own datasource and does not fill the cache",
+            \testSqlIdentity());
+        addTestCase("the code of a module loaded by its path is the calling code", \testPathModule());
+        addTestCase("restricted code cannot write the data provider index", \testIndexWrite());
+        addTestCase("the code of a module loaded by its path is checked against each calling Program",
+            \testPathShared());
+
+        set_return_value(main());
+    }
+
+    #! links the binary modules that the qlib modules of the cases load into the module directory of the children
+    private linkBinaryModules() {
+        foreach string mod in ("DataProvider", "DbDataProvider", "ConnectionProvider", "ProviderIndexUtil",
+                "SqlUtil") {
+            load_module(mod);
+        }
+        try {
+            load_module("sqlite3");
+            have_sqlite3 = True;
+        } catch (hash<ExceptionInfo> ex) {
+            have_sqlite3 = False;
+        }
+        foreach hash<auto> m in (get_module_hash().iterator()) {
+            if (!m.user && m.filename) {
+                symlink(m.filename, binary_dir + "/" + basename(m.filename));
+            }
+        }
+    }
+
+    private static string shellQuote(string str) {
+        return "'" + replace(str, "'", "'\\''") + "'";
+    }
+
+    #! runs a case in a child process; returns its standard output, and its standard error in \a err
+    private string run(string case_name, string mode = "ast", bool sandbox = False, *string arg,
+            *hash<string, string> env, *reference<string> err) {
+        string env_str = env ? (map sprintf("%s=%s ", $1.key, shellQuote($1.value)), env.pairIterator()).join("")
+            : "";
+        string err_path = sprintf("%s/%s-%s-%d.err", tmp.path, case_name, mode, sandbox ? 1 : 0);
+        string mod_dir = case_dir + ":" + qlib_dir + ":" + binary_dir;
+        string cmd = sprintf("env -u QORE_PROVIDER_INDEX_DIR -u QORE_DATA_PROVIDERS %sQORE_MODULE_DIR_ONLY=1 "
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s %s %s "
+            "%d %s 2>%s", env_str, shellQuote(libqore_dir), shellQuote(libqore_dir), shellQuote(libqore_dir),
+            shellQuote(mod_dir), shellQuote(qore_bin), shellQuote(child), case_name, mode, sandbox ? 1 : 0,
+            arg ? shellQuote(arg) : "", shellQuote(err_path));
+        string out = backquote(cmd);
+        err = ReadOnlyFile::readTextFile(err_path) ?? "";
+        return out;
+    }
+
+    #! runs a case and checks its output; the standard error of the child is given only if the output differs
+    private checkCase(string expected, string case_name, string mode = "ast", bool sandbox = False, *string arg,
+            *hash<string, string> env) {
+        string err;
+        string out = run(case_name, mode, sandbox, arg, env, \err);
+        string label = sprintf("%s: %s, sandbox: %y", case_name, mode, sandbox);
+        if (out != expected) {
+            label += sprintf("; stderr: %s", err.substr(0, 4000));
+        }
+        assertEq(expected, out, label);
+    }
+
+    testIndex() {
+        string index_dir = tmp.path + "/index";
+        mkdir(index_dir);
+        hash<string, string> env = {"QORE_PROVIDER_INDEX_DIR": index_dir};
+        # the index is written by an unrestricted Program
+        checkCase("index written\n", "build-index", "ast", False, NOTHING, env);
+        # a SandboxManager's default policy does not allow the index directory to be read, so the lookups are made
+        # without one
+        foreach string mode in (Modes) {
+            checkCase(ExpectedIndex, "index", mode, False, NOTHING, env);
+        }
+    }
+
+    testDpql() {
+        # loading the known factory modules takes most of the time of this test, so it runs only once
+        checkCase(ExpectedDpql, "dpql");
+    }
+
+    testFileApi() {
+        foreach string mode in (Modes) {
+            foreach bool sandbox in ((False, True)) {
+                string err;
+                string out = run("file-api", mode, sandbox, NOTHING, {"QORE_DATA_PROVIDERS": "RcProvMap"}, \err);
+                string label = sprintf("file-api: %s, sandbox: %y", mode, sandbox);
+                assertEq(ExpectedFileApi, out, label + (out != ExpectedFileApi ? "; stderr: " + err.substr(0, 4000)
+                    : ""));
+                # the error of the failed module load is reported, not one of its rollback
+                assertRegex("DataProvider load module \"RcFileApiFail\": .*RC-INIT-ERROR", err, label);
+                assertEq(-1, err.find("INVALID-FUNCTION-ACCESS"), label);
+            }
+        }
+    }
+
+    testSqlUtil() {
+        if (!have_sqlite3) {
+            testSkip("the sqlite3 driver is not available");
+        }
+        # a SandboxManager's default policy does not allow the database file to be opened, so the SQL is generated
+        # without one
+        foreach string mode in (Modes) {
+            foreach list<string> c in ((("sqlutil", "resolver registered\n"),
+                    ("sqlutil-module", "resolver registered by module: True\n"))) {
+                string db = sprintf("%s/%s-%s.db", tmp.path, c[0], mode);
+                checkCase(c[1] + ExpectedSql, c[0], mode, False, db);
+            }
+        }
+    }
+
+    testLazy() {
+        foreach string mode in (Modes) {
+            foreach bool sandbox in ((False, True)) {
+                checkCase(ExpectedLazy, "lazy", mode, sandbox);
+            }
+        }
+    }
+
+    testLate() {
+        foreach string mode in (Modes) {
+            checkCase(ExpectedLate, "late", mode, False);
+            checkCase(ExpectedLateSandbox, "late", mode, True);
+        }
+    }
+
+    testClosures() {
+        foreach string mode in (Modes) {
+            foreach bool sandbox in ((False, True)) {
+                checkCase(ExpectedClosures, "closures", mode, sandbox);
+            }
+        }
+    }
+
+    testListener() {
+        # code that a sandbox governs cannot add a catalog change listener
+        foreach string mode in (Modes) {
+            checkCase(ExpectedListener, "listener", mode);
+        }
+    }
+
+    testTransaction() {
+        foreach string mode in (Modes) {
+            foreach bool sandbox in ((False, True)) {
+                string err;
+                string out = run("transaction", mode, sandbox, NOTHING, {"QORE_DATA_PROVIDERS": "RcProvMap"}, \err);
+                string label = sprintf("transaction: %s, sandbox: %y", mode, sandbox);
+                assertEq(ExpectedTransaction, out, label + (out != ExpectedTransaction
+                    ? "; stderr: " + err.substr(0, 4000) : ""));
+                # the error of the failed module load that the lookup made is reported
+                assertRegex("DataProvider load module \"RcFileApiFail\": .*RC-INIT-ERROR", err, label);
+            }
+        }
+    }
+
+    #! copies a module of the cases to a directory outside the module path and returns its path there
+    /** A file under a directory of the module path is library code however it is loaded
+    */
+    private string copyPathModule(string name) {
+        string dir = tmp.path + "/by-path";
+        if (!is_dir(dir)) {
+            mkdir(dir);
+        }
+        string path = dir + "/" + name + ".qm";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(ReadOnlyFile::readTextFile(case_dir + "/by-path/" + name + ".qm"));
+        f.close();
+        return path;
+    }
+
+    testPathModule() {
+        # a SandboxManager's default policy does not allow the module to be read
+        string path = copyPathModule("RcPathUser");
+        foreach string mode in (Modes) {
+            checkCase(ExpectedPathModule, "path-module", mode, False, path);
+        }
+    }
+
+    testPathShared() {
+        # an unrestricted Program loads the module first, then the restricted Program loads it by the same path
+        string path = copyPathModule("RcSharedPath");
+        foreach string mode in (Modes) {
+            checkCase(ExpectedPathShared, "path-shared", mode, False, path);
+        }
+    }
+
+    testIndexWrite() {
+        string dir = tmp.path + "/index-write";
+        mkdir(dir);
+        foreach string mode in (Modes) {
+            checkCase(ExpectedIndexWrite, "index-write", mode, False, dir, {"QORE_PROVIDER_INDEX_DIR": dir});
+        }
+    }
+
+    testSqlIdentity() {
+        if (!have_sqlite3) {
+            testSkip("the sqlite3 driver is not available");
+        }
+        # a SandboxManager's default policy does not allow the database file to be opened
+        foreach string mode in (Modes) {
+            checkCase(ExpectedSqlIdentity, "sqlutil-identity", mode, False,
+                sprintf("%s/sqlutil-identity-%s.db", tmp.path, mode));
+        }
+    }
+}

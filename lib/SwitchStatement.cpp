@@ -459,6 +459,20 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
     nth.mergeAndApply();
     ash.mergeAndApply();
 
+    // a value of the switch expression can certainly match no case if there is no default case, every case compares
+    // a value, and the type of the expression has more values than the cases: an enum or a boolean value can be
+    // matched by every case (issue #5940)
+    if (!deflt && QoreTypeInfo::hasType(switch_type_info) && !QoreTypeInfo::getReturnEnum(switch_type_info)
+            && QoreTypeInfo::parseReturns(switch_type_info, NT_BOOLEAN) == QTI_NOT_EQUAL) {
+        no_match_possible = true;
+        for (const CaseNode* c = head; c; c = c->next) {
+            if (!c->isCaseNode()) {
+                no_match_possible = false;
+                break;
+            }
+        }
+    }
+
     // warn if the switch is over an enum value, has no default case, and does not handle all
     // enum members (only when the switch parsed cleanly, to avoid noise on broken code)
     if (!err && !deflt && !parse_context.pgm->parseExceptionRaised()) {

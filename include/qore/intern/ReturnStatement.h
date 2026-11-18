@@ -55,10 +55,6 @@ public:
         return true;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
-    }
-
     DLLLOCAL QoreValue getExpression() const {
         return exp;
     }

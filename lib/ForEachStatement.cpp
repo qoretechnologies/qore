@@ -237,7 +237,8 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
 
     // here we get the runtime reference
     ReferenceHolder<ReferenceNode> vr(r->evalToRef(xsink), xsink);
-    if (*xsink) {
+    // a reference to NOTHING (\NOTHING) has no lvalue: the loop has no iterations (issue #6480)
+    if (*xsink || !vr) {
         return 0;
     }
 
@@ -355,7 +356,8 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
 
     // here we get the runtime reference
     ReferenceHolder<ReferenceNode> vr(r->evalToRef(rc, xsink), xsink);
-    if (*xsink) {
+    // a reference to NOTHING (\NOTHING) has no lvalue: the loop has no iterations (issue #6480)
+    if (*xsink || !vr) {
         return 0;
     }
 

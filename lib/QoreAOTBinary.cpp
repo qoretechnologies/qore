@@ -178,6 +178,7 @@
 #include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
+#include "qore/intern/xxhash.h"
 #include <zstd.h>
 
 static thread_local std::string qore_aot_expr_serialization_error;
@@ -4347,6 +4348,183 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     }
 }
 
+bool qore_aot_encoded_metadata_length(const uint8_t* data, size_t avail, size_t& len, bool* cancelled) {
+    auto read_u16_le = [](const uint8_t* p) -> uint16_t {
+        return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
+    };
+    auto read_u32_le = [](const uint8_t* p) -> uint32_t {
+        return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8)
+            | (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+    };
+    len = 0;
+    if (cancelled) {
+        *cancelled = false;
+    }
+    auto check_cancel = [cancelled](const char* operation) -> bool {
+        if (!qore_check_cancel(nullptr, operation)) {
+            return false;
+        }
+        if (cancelled) {
+            *cancelled = true;
+        }
+        return true;
+    };
+    if (avail < QORE_AOT_HEADER_SIZE) {
+        return false;
+    }
+    if (read_u32_le(data) != QORE_AOT_BINARY_MAGIC) {
+        return false;
+    }
+    uint16_t version = read_u16_le(data + 4);
+    if (version == 0 || version > QORE_AOT_BINARY_VERSION) {
+        return false;
+    }
+
+    uint8_t compression = data[34];
+    if (compression == QORE_AOT_COMPRESSION_NONE
+            || compression == QORE_AOT_COMPRESSION_SECTIONED_ZSTD) {
+        uint32_t section_count = read_u32_le(data + 16);
+        if (section_count > 100000) {
+            return false;
+        }
+        constexpr size_t section_header_size = 12;
+        size_t section_dir_size = static_cast<size_t>(section_count) * section_header_size;
+        size_t string_pool_size_pos = QORE_AOT_HEADER_SIZE + section_dir_size;
+        if (string_pool_size_pos + 4 > avail) {
+            return false;
+        }
+        uint32_t string_pool_size = read_u32_le(data + string_pool_size_pos);
+        size_t data_area_offset = string_pool_size_pos + 4 + string_pool_size;
+        if (data_area_offset > avail) {
+            return false;
+        }
+
+        uint64_t data_area_size = 0;
+        const uint8_t* sec = data + QORE_AOT_HEADER_SIZE;
+        for (uint32_t i = 0; i < section_count; ++i, sec += section_header_size) {
+            if (i && !(i % 100) && check_cancel("AOT metadata-length scan")) {
+                return false;
+            }
+            uint32_t offset = read_u32_le(sec + 4);
+            uint32_t size = read_u32_le(sec + 8);
+            uint64_t end = static_cast<uint64_t>(offset) + size;
+            if (end > data_area_size) {
+                data_area_size = end;
+            }
+        }
+        uint64_t total = static_cast<uint64_t>(data_area_offset) + data_area_size;
+        if (total > avail) {
+            return false;
+        }
+        len = static_cast<size_t>(total);
+        return true;
+    }
+
+    if (compression == QORE_AOT_COMPRESSION_ZLIB) {
+        if (avail < QORE_AOT_HEADER_SIZE + 4) {
+            return false;
+        }
+        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
+        if (uncompressed_size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
+            return false;
+        }
+        if (uncompressed_size == 0) {
+            len = QORE_AOT_HEADER_SIZE + 4;
+            return true;
+        }
+
+        // the stream is inflated into a buffer of fixed size, only to find its end: the output is not kept
+        constexpr size_t scratch_size = 64 * 1024;
+        std::unique_ptr<uint8_t[]> scratch(new uint8_t[scratch_size]);
+        z_stream strm{};
+        if (inflateInit(&strm) != Z_OK) {
+            return false;
+        }
+        strm.next_in = const_cast<Bytef*>(data + QORE_AOT_HEADER_SIZE + 4);
+        strm.avail_in = static_cast<uInt>(std::min<size_t>(
+            avail - QORE_AOT_HEADER_SIZE - 4, std::numeric_limits<uInt>::max()));
+        int rc = Z_OK;
+        unsigned chunks = 0;
+        while (rc == Z_OK) {
+            if (++chunks % 100 == 0 && check_cancel("AOT metadata-length scan")) {
+                break;
+            }
+            strm.next_out = scratch.get();
+            strm.avail_out = static_cast<uInt>(scratch_size);
+            rc = inflate(&strm, Z_NO_FLUSH);
+            if (strm.total_out > uncompressed_size) {
+                rc = Z_DATA_ERROR;
+            }
+        }
+        bool ok = rc == Z_STREAM_END && strm.total_out == uncompressed_size;
+        size_t consumed = static_cast<size_t>(strm.total_in);
+        inflateEnd(&strm);
+        if (!ok) {
+            return false;
+        }
+        len = QORE_AOT_HEADER_SIZE + 4 + consumed;
+        return len <= avail;
+    }
+
+    if (compression == QORE_AOT_COMPRESSION_ZSTD) {
+        if (avail < QORE_AOT_HEADER_SIZE + 4) {
+            return false;
+        }
+        uint32_t uncompressed_size = read_u32_le(data + QORE_AOT_HEADER_SIZE);
+        if (uncompressed_size > QORE_AOT_MAX_DECOMPRESSED_METADATA_SIZE) {
+            return false;
+        }
+        if (!uncompressed_size) {
+            len = QORE_AOT_HEADER_SIZE + 4;
+            return true;
+        }
+        const uint8_t* frame = data + QORE_AOT_HEADER_SIZE + 4;
+        size_t frame_size = ZSTD_findFrameCompressedSize(frame,
+            avail - QORE_AOT_HEADER_SIZE - 4);
+        if (ZSTD_isError(frame_size)) {
+            return false;
+        }
+        len = QORE_AOT_HEADER_SIZE + 4 + frame_size;
+        return len <= avail;
+    }
+
+    return false;
+}
+
+uint64_t qore_aot_metadata_checksum(const uint8_t* data, size_t size) {
+    return XXH64(data, size, 0);
+}
+
+//! Returns the format version of encoded AOT metadata, or 0 if it has no header
+static uint16_t qore_aot_metadata_version(const std::vector<uint8_t>& metadata) {
+    if (metadata.size() < QORE_AOT_HEADER_SIZE) {
+        return 0;
+    }
+    return static_cast<uint16_t>(metadata[4] | (metadata[5] << 8));
+}
+
+void qore_aot_seal_metadata(std::vector<uint8_t>& metadata) {
+    if (qore_aot_metadata_version(metadata) < QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        return;
+    }
+    // the flag is set before the checksum is computed, which covers the header too
+    metadata[6] |= static_cast<uint8_t>(QORE_AOT_FLAG_METADATA_CHECKSUM & 0xff);
+    metadata[7] |= static_cast<uint8_t>(QORE_AOT_FLAG_METADATA_CHECKSUM >> 8);
+    uint64_t checksum = qore_aot_metadata_checksum(metadata.data(), metadata.size());
+    for (unsigned i = 0; i < QORE_AOT_METADATA_CHECKSUM_SIZE; ++i) {
+        metadata.push_back(static_cast<uint8_t>((checksum >> (i * 8)) & 0xff));
+    }
+}
+
+bool qore_aot_unseal_metadata(std::vector<uint8_t>& metadata) {
+    if (qore_aot_metadata_version(metadata) < QORE_AOT_METADATA_CHECKSUM_VERSION
+            || metadata.size() < QORE_AOT_HEADER_SIZE + QORE_AOT_METADATA_CHECKSUM_SIZE) {
+        return false;
+    }
+    metadata.resize(metadata.size() - QORE_AOT_METADATA_CHECKSUM_SIZE);
+    return true;
+}
+
 bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::vector<uint8_t>& output) {
     // Make a mutable copy so we can fill in section count
     QoreAOTBinaryHeader header = in_header;
@@ -4437,15 +4615,18 @@ bool QoreAOTBinaryWriter::finalize(const QoreAOTBinaryHeader& in_header, std::ve
     // Write data area
     output.insert(output.end(), buffer.begin(), buffer.end());
 
+    // the checksum of the metadata follows it (qore#6451)
+    qore_aot_seal_metadata(output);
     return true;
 }
 
 // ---- QoreAOTBinaryReader ----
 
-bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error) {
+bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::string& error, bool verify_checksum) {
     section_stored_sizes.clear();
     decompressed_sections.clear();
     decompressed_string_pool.clear();
+    checksum_mismatch = false;
     data = in_data;
     total_size = in_size;
     input_data = in_data;
@@ -4512,6 +4693,51 @@ bool QoreAOTBinaryReader::open(const uint8_t* in_data, uint32_t in_size, std::st
               + std::to_string(QORE_AOT_BINARY_VERSION) + ")"
               + "; please update your Qore installation";
         return false;
+    }
+
+    // the metadata is checked against its checksum before anything else is read from it (qore#6451)
+    if (header.version >= QORE_AOT_METADATA_CHECKSUM_VERSION) {
+        if (!(header.flags & QORE_AOT_FLAG_METADATA_CHECKSUM)
+                || in_size < header_size + QORE_AOT_METADATA_CHECKSUM_SIZE) {
+            error = "the AOT metadata has no checksum";
+            checksum_mismatch = true;
+            return false;
+        }
+        auto stored_checksum = [in_data](size_t pos) -> uint64_t {
+            uint64_t stored = 0;
+            for (unsigned i = 0; i < QORE_AOT_METADATA_CHECKSUM_SIZE; ++i) {
+                stored |= static_cast<uint64_t>(in_data[pos + i]) << (i * 8);
+            }
+            return stored;
+        };
+        uint32_t meta_size = in_size - QORE_AOT_METADATA_CHECKSUM_SIZE;
+        if (verify_checksum && stored_checksum(meta_size) != qore_aot_metadata_checksum(in_data, meta_size)) {
+            // the input can be longer than the metadata and its checksum: the data of a symbol whose size is taken
+            // from the symbols of an object file without symbol sizes (Mach-O), up to the next symbol, which includes
+            // the padding after it; the checksum follows the encoded metadata, whose length its header gives
+            size_t exact = 0;
+            bool cancelled = false;
+            bool found = qore_aot_encoded_metadata_length(in_data, in_size, exact, &cancelled);
+            if (cancelled) {
+                error = "operation cancelled while the AOT metadata was read";
+                return false;
+            }
+            if (!found
+                    || exact + QORE_AOT_METADATA_CHECKSUM_SIZE >= in_size
+                    || stored_checksum(exact) != qore_aot_metadata_checksum(in_data, exact)) {
+                error = "the AOT metadata does not match its checksum: it was changed after it was written";
+                checksum_mismatch = true;
+                return false;
+            }
+            meta_size = static_cast<uint32_t>(exact);
+            // the input is the metadata and its checksum, without what follows: a copy of it can be opened again,
+            // also without verification (verify_checksum = false)
+            input_size = meta_size + QORE_AOT_METADATA_CHECKSUM_SIZE;
+        }
+        in_size = meta_size;
+        // the checksum is not part of the metadata that is read; the input keeps it (getInputData()/getInputSize()),
+        // so that a copy of the input can be opened again
+        total_size = in_size;
     }
 
     // Validate opcode compatibility

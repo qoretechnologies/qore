@@ -27,7 +27,8 @@ string sub number_dates() {
     softdate neg_inf_date = -@inf@n;
     l += sprintf("-1e300=-inf:%y", neg_big == neg_inf_date);
     # the dates of the saturated seconds: the conversion of their local time to UTC overflowed in a time zone ahead of
-    # UTC (the tests run with TZ=Europe/Prague)
+    # UTC (the tests run with TZ=Europe/Prague); seconds with no year that a date can hold give the local time of the
+    # earliest and the latest date (qore#6431)
     l += sprintf("min:%d max:%d", get_epoch_seconds(neg_big), get_epoch_seconds(big));
     return foldl $1 + "|" + $2, l;
 }
@@ -80,7 +81,8 @@ string sub roundings() {
 string sub cbor_epochs() {
     list<string> l = ();
     # 1.5, NaN, +infinity, 1e300, -2^63 (fits), 2^63 (does not fit), and the unsigned ints 2^63 - 1 (fits) and 2^63
-    # (does not fit)
+    # (does not fit); the seconds that fit an int64 but have no year that a date can hold give the earliest and the
+    # latest date (qore#6431)
     foreach binary b in ((<c1fb3ff8000000000000>, <c1fb7ff8000000000000>, <c1fb7ff0000000000000>,
             <c1fb7e37e43c8800759c>, <c1fbc3e0000000000000>, <c1fb43e0000000000000>, <c11b7fffffffffffffff>,
             <c11b8000000000000000>)) {

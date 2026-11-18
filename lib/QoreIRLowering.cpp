@@ -2592,6 +2592,60 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         cond_block->is_loop_header = true;
         // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
         cond_block->loop_cancel = QoreIRLoopCancel::For;
+        // The locals declared in the statement's initializer live until the loop ends.  When one can hold an object,
+        // whose destructor can raise an exception, they get the cleanups of a block's locals: a return from the body
+        // releases them through emitBlockCleanups() (a break or a continue does not: the flow target is pushed above
+        // their entry), an exception out of the loop releases them in their own cleanup block before it reaches the
+        // enclosing target, and the exception that their release at the loop's end raises goes to the enclosing
+        // target (qore#6084)
+        const LVList* for_lvars = for_stmt->getLVList();
+        bool for_lvars_cleanup = false;
+        if (for_lvars) {
+            for (unsigned i = 0; i < for_lvars->size(); ++i) {
+                if (qore_ir_type_may_hold_object(for_lvars->lv[i]->getTypeInfo())) {
+                    for_lvars_cleanup = true;
+                    break;
+                }
+            }
+        }
+        QoreIRBasicBlock* for_lvar_exception_cleanup_block = nullptr;
+        QoreIRBasicBlock* for_saved_exception_target = nullptr;
+        // pops the compile-time state pushed for the locals unless the lowering of the statement has completed
+        struct ForLvarsState {
+            QoreIRLowering& lowering;
+            bool entry = false;
+            bool handler = false;
+            ~ForLvarsState() {
+                pop();
+            }
+            void pop() {
+                if (handler) {
+                    lowering.exception_stack.pop_back();
+                    handler = false;
+                }
+                if (entry) {
+                    lowering.cleanup_stack.pop_back();
+                    entry = false;
+                }
+            }
+        } for_lvars_state{*this};
+        if (for_lvars_cleanup) {
+            BlockCleanupEntry lvars_entry;
+            lvars_entry.type = BlockCleanupEntry::Lvars;
+            lvars_entry.lvars = for_lvars;
+            lvars_entry.loc = for_stmt->loc;
+            pushBlockCleanup(lvars_entry);
+            for_lvars_state.entry = true;
+            if ((for_saved_exception_target = getCurrentExceptionTarget())) {
+                for_lvar_exception_cleanup_block = createBlock("for.lvars.exception.cleanup");
+                if (!for_lvar_exception_cleanup_block) {
+                    error = "IR builder failed to create the exception cleanup block of a for statement's locals";
+                    return false;
+                }
+                exception_stack.push_back(for_lvar_exception_cleanup_block);
+                for_lvars_state.handler = true;
+            }
+        }
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
             // the value of the initializer is not used: it and its temps are released before the loop runs, as in
@@ -2733,9 +2787,29 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // (reverse order ensures destructors are called in LIFO order like in AST mode)
         // The loop variables are declared in the for statement's initialization (e.g., "int j = 2")
         // and must be cleaned up after the loop exits.
-        if (const LVList* loop_lvars = for_stmt->getLVList()) {
-            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
-                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+        for_lvars_state.pop();
+        if (for_lvars) {
+            for (int i = static_cast<int>(for_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(for_lvars->lv[i], stmt->loc);
+            }
+        }
+        if (for_lvars_cleanup) {
+            // a destructor's exception goes to the enclosing target (qore#6084)
+            if (QoreIRBasicBlock* target = getCurrentExceptionTarget()) {
+                builder.createCheckException(stmt->loc)->exception_target = target;
+            }
+            if (for_lvar_exception_cleanup_block) {
+                // an exception out of the loop releases the locals before it reaches the enclosing target
+                QoreIRBasicBlock* after_block = builder.getBlock();
+                builder.getFunction()->moveBlockToEnd(for_lvar_exception_cleanup_block);
+                builder.setBlock(for_lvar_exception_cleanup_block);
+                for (int i = static_cast<int>(for_lvars->size()) - 1; i >= 0; --i) {
+                    auto* ui = builder.createUninstantiateLocal(for_lvars->lv[i], stmt->loc);
+                    ui->is_block_exit = true;
+                }
+                builder.createCheckException(stmt->loc)->exception_target = for_saved_exception_target;
+                builder.createBranch(for_saved_exception_target, stmt->loc);
+                builder.setBlock(after_block);
             }
         }
         pop_invariant_hoists();
@@ -3218,6 +3292,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Body block: assign value to loop variable, set $# via PushImplicitElement, execute body
 
         // Assign the value to the loop variable
+        // the instructions of the assignment, in the block where it starts: an exception that it raises (a
+        // destructor of the variable's previous element) goes to the statement's exception cleanup block, which
+        // releases the element, the iterator, the list and the loop variables first, as for an exception of the
+        // body (qore#6244; see below)
+        QoreIRBasicBlock* element_store_block = builder.getBlock();
+        size_t element_store_start = element_store_block->instructions.size();
         if (var_expr && !var_expr.isNothing()) {
             // The AST interpreter assigns the variable each element as it is, so that an element that is a weak
             // reference makes the variable a weak reference, which does not keep the target alive while the body
@@ -3317,6 +3397,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // iterator, the list and the loop variables first too, as the AST's foreach statement does (qore#5655)
             if (foreach_next_inst) {
                 foreach_next_inst->exception_target = foreach_exception_cleanup_block;
+            }
+            // and one that the assignment of the element to the variable raises (qore#6244); an assignment that
+            // created blocks of its own keeps its targets
+            if (builder.getBlock() == element_store_block) {
+                auto& insts = element_store_block->instructions;
+                for (size_t i = element_store_start; i < insts.size(); ++i) {
+                    if (insts[i]->exception_target == foreach_saved_exception_target) {
+                        insts[i]->exception_target = foreach_exception_cleanup_block;
+                    }
+                }
             }
         }
 
@@ -5259,6 +5349,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 
 void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.temp_scope_depth = builder.getTempScopeDepth();
+    entry.outer_exception_target = getCurrentExceptionTarget();
     entry.open_scopes = scope_stack.size();
     entry.open_catch_depth = catch_cleanup_depth;
     entry.open_try_depth = try_catch_cleanup_depth_stack.size();
@@ -5956,10 +6047,18 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             case BlockCleanupEntry::Lvars:
                 if (!(flags & CF_SKIP_LVARS)) {
                     assert(entry.lvars);
+                    bool may_hold_object = false;
                     for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
                         auto* ui = builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
                         // break/continue/return always exit the scope permanently
                         ui->is_block_exit = true;
+                        may_hold_object = may_hold_object
+                            || qore_ir_type_may_hold_object(entry.lvars->lv[j]->getTypeInfo());
+                    }
+                    // an exception raised by a destructor of the locals goes to the cleanups of the enclosing blocks
+                    // and the handler that encloses them, as when the block ends (qore#6084)
+                    if (!is_error && may_hold_object && entry.outer_exception_target) {
+                        builder.createCheckException(entry.loc)->exception_target = entry.outer_exception_target;
                     }
                 }
                 break;
@@ -5968,6 +6067,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     assert(entry.catch_var);
                     auto* ui = builder.createUninstantiateLocal(entry.catch_var, entry.loc);
                     ui->is_block_exit = true;
+                    // see the Lvars entries above (qore#6084)
+                    if (!is_error && entry.outer_exception_target
+                            && qore_ir_type_may_hold_object(entry.catch_var->getTypeInfo())) {
+                        builder.createCheckException(entry.loc)->exception_target = entry.outer_exception_target;
+                    }
                 }
                 break;
             case BlockCleanupEntry::ForeachElement:
@@ -10127,6 +10231,10 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             error = "unsupported lvalue for native Assignment lowering";
         }
         return QoreIRValue();
+    } else if (assign->getLeft().isNothing()) {
+        // NOTHING is an lvalue for check_lvalue(): the assignment discards the value, which is evaluated, and
+        // returns NOTHING, as in the AST interpreter (issue #6480)
+        return builder.createConstNothing(assign->loc)->result;
     } else {
         error = "unsupported lvalue for assignment IR lowering";
         return QoreIRValue();
@@ -13697,7 +13805,8 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     QoreValue lvalue = op->getExp();
-    if (!lvalue.hasNode()) {
+    // NOTHING is an lvalue (tryEmitLValuePathOp(), issue #6480)
+    if (!lvalue.hasNode() && !lvalue.isNothing()) {
         error = "unsupported lvalue for shift IR lowering";
         return QoreIRValue();
     }
@@ -13751,7 +13860,8 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     QoreValue lvalue = op->getLeft();
-    if (!lvalue.hasNode()) {
+    // NOTHING is an lvalue (tryEmitLValuePathOp(), issue #6480)
+    if (!lvalue.hasNode() && !lvalue.isNothing()) {
         error = "unsupported lvalue for unshift IR lowering";
         return QoreIRValue();
     }
@@ -13770,7 +13880,7 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
     // Invoke(UnshiftLValue), which has no source-free AOT lowering.
     QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
         lvalue, &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift);
+        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift, QoreValue(), op->needsReturnValue());
     if (path_result.isValid()) {
         return path_result;
     }
@@ -13901,7 +14011,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
             left_expr, &push_val, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-            LVUnaryOp::PreInc, LVBinaryMutOp::Push);
+            LVUnaryOp::PreInc, LVBinaryMutOp::Push, QoreValue(), op->needsReturnValue());
         if (path_result.isValid()) {
             return path_result;
         }
@@ -14805,6 +14915,10 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
     // For each LHS variable, extract element from list and store
     for (size_t i = 0; i < parse_list->size(); ++i) {
         QoreValue entry = parse_list->get(i);
+        // NOTHING is an lvalue for check_lvalue(): its element is not assigned (issue #6480)
+        if (entry.isNothing()) {
+            continue;
+        }
         // Create constant index
         QoreIRValue idx = builder.createConstInt(static_cast<int64_t>(i), op->loc)->result;
         QoreIRValue element_val = builder.createExprOp(QoreIROpcode::ListAssignAny, expr,
@@ -16243,6 +16357,11 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
         LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr, bool ref_rv) {
+    // NOTHING is an lvalue for check_lvalue(): an operator on it changes nothing and returns NOTHING, as in the AST
+    // interpreter; the caller has lowered the other operands, whose side effects remain (issue #6480)
+    if (lvalue.isNothing()) {
+        return builder.createConstNothing(loc)->result;
+    }
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     // Slice lvalues (HashKeySlice / ListIndexSlice / ListRangeSlice) are lvalues only of remove and delete

@@ -45,10 +45,6 @@ public:
             QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd);
     DLLLOCAL ForStatement(int start_line, int end_line, QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd);
     DLLLOCAL virtual ~ForStatement();
-    // faked here; checked at runtime
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        return true;
-    }
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
     DLLLOCAL QoreValue getAssignment() const {

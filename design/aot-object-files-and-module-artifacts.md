@@ -304,6 +304,25 @@ Every AOT metadata blob carries:
 
 Loaders must reject metadata requiring unsupported features or newer opcodes.
 
+From format version 43 (`QORE_AOT_METADATA_CHECKSUM_VERSION`), the encoded
+metadata (compressed, when it is compressed) is followed by its XXH64 checksum
+(seed 0, little-endian u64), and the header flags have
+`QORE_AOT_FLAG_METADATA_CHECKSUM` (qore#6451). The writer appends it
+(`qore_aot_seal_metadata()`; the compression of the metadata recomputes it over
+the new encoding), and `QoreAOTBinaryReader::open()` checks it before it reads
+anything else, for the module loader and for qcc's reads of object data alike.
+The checksum of a module's metadata is computed once per load: the metadata
+that `QoreAOTDebugMetadata` keeps for lazy and debug IR (or its copy of it) is
+opened again with `verify_checksum` false, as the reader of the module checked
+it.
+Metadata that does not match is refused as a whole ("the AOT metadata does not
+match its checksum"), and its module is not loaded, as a module whose metadata
+cannot be read: the source module is loaded instead when there is one. The
+checksum detects metadata changed after qcc wrote it; it is not a signature.
+The readers still check every read and value of the metadata (qore#6265,
+qore#6451): tests that patch the metadata of a module set its checksum again
+with `qore-aot-reseal` to check them.
+
 Native `.qmod` code has an additional ABI contract independent of the metadata
 format and the C/C++ binary-module API. Generated module descriptors encode the
 exact `QORE_AOT_MODULE_ABI_VERSION` in a tagged form of the existing module

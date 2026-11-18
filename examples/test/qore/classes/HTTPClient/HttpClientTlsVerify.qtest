@@ -15,6 +15,7 @@
 %requires HttpServer
 %requires HttpClientIo
 %requires RestClientIo
+%requires ../../../RefusedQuicPort.qm
 
 %exec-class HttpClientTlsVerifyTest
 
@@ -721,8 +722,10 @@ WKEuKQ7xuGuAiIESuSDBsSg=
 
     #! An HTTP/3 connection failure that is not a TLS error remains a connection error that is retried
     http3ConnectFailureTest() {
-        # nothing receives datagrams on this port
-        string url = sprintf("https://127.0.0.1:%d", get_free_port("127.0.0.1"));
+        # the system refuses the datagrams on this port, which the test holds (issue #6461)
+        RefusedUdpPort refused();
+        on_exit refused.close();
+        string url = sprintf("https://127.0.0.1:%d", refused.port);
         foreach string api in (Apis) {
             RecordingManager mgr = http3Manager({"accept_all_certs": True, "connect_timeout": 5s,
                 "max_request_retries": 1});

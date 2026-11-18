@@ -97,11 +97,14 @@ class SqlUtilCallerDatabaseTest inherits QUnit::Test {
             # a subclass deserialized from data without the connection's own members, which gives its URL itself
             rv{caller + ".subclass-deserialize-connection"} = restricted ? "PERMISSION-DENIED" : Allowed;
             rv{caller + ".runtime.getDatabase"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
-            foreach string call in (("dbdataprovider", "deserialize", "module-chain", "connection",
-                    "deserialize-connection")) {
+            foreach string call in (("dbdataprovider", "deserialize", "connection", "deserialize-connection")) {
                 rv{sprintf("%s.module.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
                 rv{sprintf("%s.callback.%s", caller, call)} = restricted ? "PERMISSION-DENIED" : Allowed;
             }
+            # another module that opens a table for the caller calls a variant in the DATABASE domain: it is refused
+            # when it is entered, as the calling code is restricted from the domain (qore#6337)
+            rv{caller + ".module.module-chain"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
+            rv{caller + ".callback.module-chain"} = restricted ? "INVALID-FUNCTION-ACCESS" : Allowed;
         }
         rv += {
             "host.getDatabase": Allowed,

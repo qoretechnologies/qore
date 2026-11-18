@@ -2434,7 +2434,20 @@ static size_t getAOTMaxCompressedMetadataSize() {
 }
 
 //! Compresses AOT metadata as the compression policy wants
+static void finalizeAOTMetadataCompressionIntern(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer);
+
+//! Compresses the metadata as the policy says; its checksum is computed again over the new encoding (qore#6451)
 static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer) {
+    bool sealed = qore_aot_unseal_metadata(metadata);
+    finalizeAOTMetadataCompressionIntern(metadata, include_source, report_metadata, writer);
+    if (sealed) {
+        qore_aot_seal_metadata(metadata);
+    }
+}
+
+static void finalizeAOTMetadataCompressionIntern(std::vector<uint8_t>& metadata, bool include_source,
         bool report_metadata, const QoreAOTBinaryWriter& writer) {
     static constexpr uint32_t AOT_HEADER_BYTES = 60;
     static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;
@@ -28257,6 +28270,23 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
         QoreAOTExtractedFragment frag;
         frag.symbol_name = name.str();
         const uint8_t* p = reinterpret_cast<const uint8_t*>(contents.data() + offset);
+        // Mach-O has no symbol sizes: the size computed for the symbol runs to the next symbol and includes the
+        // padding after the blob; the blob is cut to its metadata and the checksum after it, which its header gives,
+        // so that its readers, including those that do not verify the checksum again, get the bytes that were
+        // written (qore#6451)
+        size_t exact = 0;
+        bool cancelled = false;
+        if (qore_aot_encoded_metadata_length(p, size, exact, &cancelled)) {
+            // metadata of a format before the checksum has none (QORE_AOT_FLAG_METADATA_CHECKSUM in its header flags)
+            uint16_t flags = static_cast<uint16_t>(p[6]) | (static_cast<uint16_t>(p[7]) << 8);
+            size_t trailer = (flags & QORE_AOT_FLAG_METADATA_CHECKSUM) ? QORE_AOT_METADATA_CHECKSUM_SIZE : 0;
+            if (exact + trailer <= size) {
+                size = exact + trailer;
+            }
+        } else if (cancelled) {
+            error = "operation cancelled while the fragment blobs of '" + qo_path + "' were read";
+            return false;
+        }
         frag.bytes.assign(p, p + size);
         out.push_back(std::move(frag));
     }
