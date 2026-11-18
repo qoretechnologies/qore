@@ -9760,9 +9760,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     const ExecutionTier entry_tier = current_tier.load(std::memory_order_acquire);
     ExecutionTier tier = entry_tier;
 
-    // Native JIT/AOT code has no Qore DebugProgram hooks.  Keep the native tier
-    // for programs that merely allow debugger attachment, and switch to AST/IR
-    // only once a debugger is actually attached.
+    // A call that starts while a debugger is attached runs on the AST interpreter, or, for code compiled ahead of time,
+    // runs its debug IR in the IR interpreter: they take the debugger's return, break and continue requests at every
+    // step event.  The IR and the native code lowered from the parse tree have the step events and breakpoints but no
+    // paths for the requests (QoreIRFunction::hasDebugFlowPaths()), and only run under a debugger in frames that were
+    // already running when it attached (see design/debug-flow-edges.md, #6201).  Without a debugger, the call keeps
+    // its tier.
     if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
         if (statements) {
             tier = TIER_AST;

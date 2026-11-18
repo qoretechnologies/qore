@@ -8186,9 +8186,16 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see serializeIRFunction())
         uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        const bool debug_flow_flags = reader.getHeader().version >= QORE_AOT_DEBUG_FLOW_VERSION;
+        uint8_t loop_cancel = static_cast<uint8_t>(debug_flow_flags ? (block_flags >> 1) & 0x7 : block_flags >> 1);
+        if (debug_flow_flags && (block_flags & ~0x1f)) {
+            error = "invalid flags " + std::to_string(block_flags) + " of block " + std::to_string(i)
+                + " of function " + func->name;
+            return nullptr;
+        }
         if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
             error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
                 + std::to_string(i) + " of function " + func->name;
@@ -8199,6 +8206,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks[i]->name = block_name ? block_name : "";
         func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
         func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
+        func->blocks[i]->debug_flow = debug_flow_flags && (block_flags & 0x10);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {

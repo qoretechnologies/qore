@@ -119,12 +119,14 @@ $ gdb --args qore --exec-mode=jit script.qr
 (gdb) info functions _toplevel
     @endcode
 
-    When debugger semantics require AST execution, tiered dispatch can force
-    affected variants back to AST. JIT-compiled native code additionally emits
+    While a debugger is attached, new calls of code with a parse tree run on the
+    AST interpreter. JIT-compiled native code additionally emits
     statement-boundary debug events, so single-stepping, breakpoints, and line
     coverage also work for a native frame that is already running when a debugger
-    attaches mid-execution. These hooks are emitted only for programs parsed with
-    \c PO_ALLOW_DEBUGGER and remain dormant behind a single atomic check until a
+    attaches mid-execution; such a frame ignores the debugger's return, break and
+    continue requests (see @ref debugger_running_code). These hooks are emitted
+    for all code that is not parsed with @ref no-debugging "%no-debugging"
+    (\c PO_NO_DEBUGGING) and remain dormant behind a single atomic check until a
     debugger is actually attached, so they impose no cost on normal execution.
 
     @subsection jit_optimization_level JIT Optimization Level

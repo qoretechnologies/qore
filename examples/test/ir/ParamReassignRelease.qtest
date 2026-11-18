@@ -72,6 +72,11 @@ class ParamReassignReleaseTest inherits QUnit::Test {
             ("dtor callref", "cls out callref-r"),
             # issue #5701: functions, methods, static methods, closures, call references, two arguments, varargs,
             # from top-level code and from a function
+            ("chain clearing chain-argument", "dtor chain-argument"),
+            ("dtor chain-argument", "chain after clear"),
+            ("chain after clear", "chain returned"),
+            ("chain returned", "dtor chain-receiver"),
+            ("dtor chain-receiver", "chain next statement"),
             ("dtor i5701", "after clear"),
             ("dtor i5701-tm", "after clear meth"),
             ("dtor i5701-ts", "after clear static"),

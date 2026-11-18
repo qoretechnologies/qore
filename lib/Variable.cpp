@@ -715,14 +715,30 @@ ObjCountRec::ObjCountRec(const QoreListNode* c) : con(c), before((bool)qore_list
     //printd(5, "ObjCountRec::ObjCountRec() list %p count: %d\n", c, qore_list_private::getScanCount(*c));
 }
 
-ObjCountRec::ObjCountRec(const QoreHashNode* c) : con(c), before((bool)qore_hash_private::getScanCount(*c)),
-        declared_members(qore_hash_private::get(*c)->hashdecl) {
+ObjCountRec::ObjCountRec(const QoreHashNode* c) : con(c), before((bool)qore_hash_private::getScanCount(*c)) {
     //printd(5, "ObjCountRec::ObjCountRec() hash %p count: %d\n", c, qore_hash_private::getScanCount(*c));
 }
 
 ObjCountRec::ObjCountRec(const QoreObject* c) : con(c), before((bool)qore_object_private::getScanCount(*c)),
         declared_members(true) {
     //printd(5, "ObjCountRec::ObjCountRec() object %p count: %d\n", c, qore_object_private::getScanCount(*c));
+}
+
+void LValueHelper::setPathInfo(bool declared_members, bool shared) {
+    ObjCountRec& r = ocvec.back();
+    r.declared_members = declared_members;
+    r.shared = shared;
+    r.holder_type = typeInfo;
+    r.ref_type = ref_decl_type;
+#ifdef DEBUG
+    r.path_info = true;
+#endif
+    ref_list_type = nullptr;
+    ref_decl_type = nullptr;
+}
+
+bool LValueHelper::containerHasDeclaredMembers(const QoreHashNode* h) {
+    return qore_hash_private::get(*h)->hashdecl;
 }
 
 int ObjCountRec::getDifference() {
@@ -736,6 +752,9 @@ int ObjCountRec::getDifference() {
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
+    if (for_remove) {
+        startRemovalPath();
+    }
     try {
         RuntimeReferenceHelper rh(ref, xsink);
         if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, for_remove)) {
@@ -752,6 +771,9 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool 
 LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
+    if (for_remove) {
+        startRemovalPath();
+    }
     try {
         RuntimeReferenceHelper rh(ref, xsink);
         if (!*xsink && !doLValue(lvalue_ref::get(&ref)->vexp, rc, for_remove)) {
@@ -769,6 +791,7 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, Exceptio
     // the value of the reference is only read: the containers are resolved without being changed, so a missing
     // element or key reads as no value and is not created (a list past its end is not extended; qore#6435)
     read_value_only = true;
+    read_only_resolution = true;
     RuntimeReferenceHelper rh(ref, xsink);
     if (!*xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, rc, false);
@@ -777,6 +800,9 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, Exceptio
 
 LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadAccess, bool for_remove)
         : vl(xsink), read_access(RA_VAR), track_write_protection(true) {
+    if (for_remove) {
+        startRemovalPath();
+    }
     RuntimeReferenceHelper rh(ref, xsink);
     if (!*xsink) {
         doLValue(lvalue_ref::get(&ref)->vexp, for_remove);
@@ -786,6 +812,9 @@ LValueHelper::LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, ReadA
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
+    if (for_remove) {
+        startRemovalPath();
+    }
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     //printd(5, "LValueHelper::LValueHelper() exp: %p (%s %d)\n", exp, get_type_name(exp), get_node_type(exp));
     if (!exp.isNothing() && exp.hasNode()) {
@@ -802,6 +831,9 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
 LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove, int (*hook)(void*),
         void* hook_arg)
         : vl(xsink), root_hook(hook), root_hook_arg(hook_arg) {
+    if (for_remove) {
+        startRemovalPath();
+    }
     if (!exp.isNothing() && exp.hasNode()) {
         try {
             doLValue(exp, for_remove);
@@ -818,6 +850,9 @@ LValueHelper::LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_
 LValueHelper::LValueHelper(const QoreValue& exp, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove,
         bool for_assignment)
         : vl(xsink), assignment_only(for_assignment) {
+    // this constructor resolves lvalues to read or assign them (foreach, references, new objects): a path for delete
+    // or remove is resolved by the other constructors and navigatePath(), which set up the removal path
+    assert(!for_remove);
     // exp can be 0 when called from LValueRefHelper if the attach to the Program fails, for example
     if (!exp.isNothing() && exp.hasNode()) {
         try {
@@ -851,8 +886,11 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
         assignment_only(o.assignment_only), read_access(o.read_access),
         track_write_protection(o.track_write_protection),
         write_protected(o.write_protected),
-        read_only_resolution(o.read_only_resolution),
-        ref_list_type(o.ref_list_type), ref_decl_type(o.ref_decl_type), read_value_only(o.read_value_only),
+        read_only_resolution(o.read_only_resolution), read_value_only(o.read_value_only),
+        ref_list_type(o.ref_list_type), ref_decl_type(o.ref_decl_type),
+#ifdef DEBUG
+        removal_path(o.removal_path),
+#endif
         write_rejected(o.write_rejected),
         member_lvalue_modified(o.member_lvalue_modified), robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
@@ -1022,17 +1060,13 @@ bool QoreRemovedValueTracker::visit(const AbstractQoreNode* container) {
 }
 
 inline bool LValueHelper::vivifiedTypedListHole() const {
+    // a list whose element type does not take NOTHING gets only the element at its end (a gap is refused), so only
+    // the first element added is checked; a gap in another list starts with NOTHING there, and as no list type is
+    // narrowed in place, the type check then finds a list that takes NOTHING
     for (const VivifiedEntry& entry : vivified) {
-        if (!entry.list) {
-            continue;
-        }
-        for (size_t i = entry.list_size; i < entry.list->length; ++i) {
-            if (!entry.list->entry[i]) {
-                if (entry.list->elementTypeRejectsNothing()) {
-                    return true;
-                }
-                break;
-            }
+        if (entry.list && entry.list_size < entry.list->length && !entry.list->entry[entry.list_size]
+            && entry.list->elementTypeRejectsNothing()) {
+            return true;
         }
     }
     return false;
@@ -1046,8 +1080,8 @@ LValueHelper::~LValueHelper() {
     // the extract and splice operators do with a target that is not a list, string or binary object, except for an
     // element added to a list whose element type does not take NOTHING that still has no value, which such a list
     // cannot hold (qore#6435).  The entries are removed while the lvalue locks are still held
-    if (!vivified.empty() && ((*vl.xsink && (write_rejected || (!val && !qv))) || vivifiedTypedListHole())) {
-        rollbackVivification();
+    if (!vivified.empty()) [[unlikely]] {
+        finishVivified();
     }
 
     if (buffer_lvalue) {
@@ -1776,7 +1810,9 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     }
     // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution()), as is
     // one on the path of a reference whose value is read
-    if (read_only_resolution || read_value_only) {
+    // a path resolved for delete or remove records the path information of its containers (qore#6435)
+    const bool removal_path_info = for_remove;
+    if (read_only_resolution) {
         for_remove = true;
     }
 
@@ -1785,7 +1821,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
     bool shared = false;
     if (getType() == NT_LIST) {
         ensureUnique();
-        l = getValue().get<QoreListNode>();
+        // the value is a list (NT_LIST)
+        l = reinterpret_cast<QoreListNode*>(getValue().getPtr());
         if (negative_offsets && ind < 0) {
             ind += static_cast<int64>(l->size());
         }
@@ -1808,7 +1845,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
-        pushPathContainer(h);
+        pushPathContainer(h, false, removal_path_info);
         // Convert the index to a hash key in the default encoding for hash member access
         QoreHashKeyHelper key(*rh, vl.xsink);
         if (*vl.xsink) {
@@ -1821,7 +1858,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
-        pushPathContainer(h, true);
+        pushPathContainer(h, true, removal_path_info);
         // Convert the index to a hash key in the default encoding for hash member access
         QoreHashKeyHelper key(*rh, vl.xsink);
         if (*vl.xsink) {
@@ -1895,7 +1932,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
         }
     }
 
-    pushPathContainer(l, shared);
+    pushPathContainer(l, shared, removal_path_info);
 
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
 }
@@ -1931,7 +1968,9 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     }
     // an element of a write-protected variable is resolved without creating it (see setReadOnlyResolution()), as is
     // one on the path of a reference whose value is read
-    if (read_only_resolution || read_value_only) {
+    // a path resolved for delete or remove records the path information of its containers (qore#6435)
+    const bool removal_path_info = for_remove;
+    if (read_only_resolution) {
         for_remove = true;
     }
 
@@ -1940,7 +1979,8 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
     bool shared = false;
     if (getType() == NT_LIST) {
         ensureUnique();
-        l = getValue().get<QoreListNode>();
+        // the value is a list (NT_LIST)
+        l = reinterpret_cast<QoreListNode*>(getValue().getPtr());
         if (negative_offsets && ind < 0) {
             ind += static_cast<int64>(l->size());
         }
@@ -1963,7 +2003,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<QoreHashNode>();
-        pushPathContainer(h);
+        pushPathContainer(h, false, removal_path_info);
         // Convert the index to a hash key in the default encoding for hash member access
         QoreHashKeyHelper key(*rh, vl.xsink);
         if (*vl.xsink) {
@@ -1976,7 +2016,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
         ensureUnique();
         QoreHashNode* h = getValue().get<WeakHashReferenceNode>()->get();
-        pushPathContainer(h, true);
+        pushPathContainer(h, true, removal_path_info);
         // Convert the index to a hash key in the default encoding for hash member access
         QoreHashKeyHelper key(*rh, vl.xsink);
         if (*vl.xsink) {
@@ -2046,7 +2086,7 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
         }
     }
 
-    pushPathContainer(l, shared);
+    pushPathContainer(l, shared, removal_path_info);
 
     return qore_list_private::get(*l)->getLValue((size_t)ind, *this, for_remove, vl.xsink);
 }
@@ -2192,7 +2232,7 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
         }
     }
 
-    pushPathContainer(h, shared);
+    pushPathContainer(h, shared, for_remove);
 
     //printd(5, "LValueHelper::doHashLValue() def: %s member %s \"%s\"\n", QCS_DEFAULT->getCode(),
     //    mem->getEncoding()->getCode(), mem->getBuffer());
@@ -2296,11 +2336,17 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else {
         // a member of a write-protected variable's hash is resolved without creating it (see
         // setReadOnlyResolution())
-        return doHashLValue(t, mem.c_str(), read_only_resolution || read_value_only || for_remove);
+        if (read_only_resolution && !for_remove) {
+            // resolved without creating its entries: the path information is recorded, from set-up reference
+            // types (qore#6435)
+            startRemovalPath();
+        }
+        return doHashLValue(t, mem.c_str(), read_only_resolution || for_remove);
     }
     // an object is not part of the variable that holds it: its members are resolved, and can be written, as for any
     // other reference, under the object's own access control
-    read_only_resolution = false;
+    // (except on the path of a reference whose value is only read)
+    read_only_resolution = read_value_only;
     write_protected = false;
 
     return doObjLValue(o, mem.c_str(), for_remove || read_value_only);
@@ -2347,11 +2393,17 @@ int LValueHelper::doHashObjLValue(const QoreHashObjectDereferenceOperatorNode* o
     } else {
         // a member of a write-protected variable's hash is resolved without creating it (see
         // setReadOnlyResolution())
-        return doHashLValue(t, mem.c_str(), read_only_resolution || read_value_only || for_remove);
+        if (read_only_resolution && !for_remove) {
+            // resolved without creating its entries: the path information is recorded, from set-up reference
+            // types (qore#6435)
+            startRemovalPath();
+        }
+        return doHashLValue(t, mem.c_str(), read_only_resolution || for_remove);
     }
     // an object is not part of the variable that holds it: its members are resolved, and can be written, as for any
     // other reference, under the object's own access control
-    read_only_resolution = false;
+    // (except on the path of a reference whose value is only read)
+    read_only_resolution = read_value_only;
     write_protected = false;
 
     const qore_class_private* class_ctx = rc.getClass() ? rc.getClass() : runtime_get_class();
@@ -2729,6 +2781,11 @@ double LValueHelper::getAsFloat() const {
 
 int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove, bool remove_root) {
     assert(num_steps > 0);
+    // a path resolved without creating its entries (for delete or remove, or only to read it) sets up the reference
+    // types that references on it note (qore#6435)
+    if (for_remove) {
+        startRemovalPath();
+    }
 
     const bool final_assignment = assignment_only;
     assignment_only = final_assignment && num_steps == 1;
@@ -2931,7 +2988,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     QoreHashNode* h = t == NT_HASH
                         ? getValue().get<QoreHashNode>()
                         : getValue().get<WeakHashReferenceNode>()->get();
-                    pushPathContainer(h, t == NT_WEAKREF_HASH);
+                    pushPathContainer(h, t == NT_WEAKREF_HASH, for_remove);
                     // a dynamic index keeps the value it was given
                     QoreHashKeyHelper key(step.slice_values.size() == 1 ? step.slice_values[0]
                         : QoreValue(original_idx), vl.xsink);
@@ -2950,7 +3007,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 if (t == NT_LIST || t == NT_WEAKREF_LIST) {
                     ensureUnique();
                     l = t == NT_LIST
-                        ? getValue().get<QoreListNode>()
+                        ? reinterpret_cast<QoreListNode*>(getValue().getPtr())
                         : getValue().get<WeakListReferenceNode>()->get();
                     if (negative_offsets && idx < 0) {
                         idx += static_cast<int64_t>(l->size());
@@ -3007,7 +3064,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         assignNodeIntern((l = new QoreListNode(valueTypeInfo)));
                     }
                 }
-                pushPathContainer(l, t == NT_WEAKREF_LIST);
+                pushPathContainer(l, t == NT_WEAKREF_LIST, for_remove);
                 if (qore_list_private::get(*l)->getLValue(
                         static_cast<size_t>(idx), *this, for_remove, vl.xsink)) {
                     // the entries created on the way are rolled back, as by doListLValue()'s callers
@@ -3069,12 +3126,26 @@ void LValueHelper::trackVivifiedKey(qore_hash_private* h, const char* key) {
     vivified.push_back(std::move(entry));
 }
 
-void LValueHelper::trackVivifiedListSize(qore_list_private* l, size_t size) {
+void LValueHelper::finishVivified() {
+    if (!*vl.xsink && vivified.size() == 1) {
+        // the common cases without an exception: one key added to a hash, or one element added at the end of a list
+        // that has a value now
+        const VivifiedEntry& e = vivified.front();
+        if (!e.list || (e.list_size < e.list->length && e.list->entry[e.list_size])) {
+            return;
+        }
+    }
+    if ((*vl.xsink && (write_rejected || (!val && !qv))) || vivifiedTypedListHole()) {
+        rollbackVivification();
+    }
+}
+
+__attribute__((noinline)) void LValueHelper::trackVivifiedListSize(qore_list_private* l, size_t size) {
     assert(l);
-    VivifiedEntry entry;
+    vivified.emplace_back();
+    VivifiedEntry& entry = vivified.back();
     entry.list = l;
     entry.list_size = size;
-    vivified.push_back(std::move(entry));
 }
 
 void LValueHelper::trackVivifiedContainer() {
@@ -3120,6 +3191,8 @@ static bool holder_takes_widened_container(const QoreTypeInfo* ht) {
 }
 
 void LValueHelper::noteReferenceType(const QoreTypeInfo* ti) {
+    // the reference types are set up on a path resolved for delete or remove
+    assert(removal_path);
     // with nested references, the type of the inner reference is noted first; for each check, a type that refuses is
     // kept, so that a more permissive outer type does not replace it
     if (!ref_list_type || holder_takes_or_nothing_list(ref_list_type)) {
@@ -3139,6 +3212,8 @@ inline int LValueHelper::prepareListElementRemoval(QoreListNode& l, size_t ind, 
 }
 
 int LValueHelper::prepareTypedListElementRemoval(qore_list_private& l, size_t ind, bool for_del) {
+    // the path was resolved for delete or remove: the reference types and the path information are set
+    assert(removal_path);
     // the list is held in a list or a hash of the path whose type comes from its value: the declared type is that of
     // the lvalue holding the outermost such container
     // a reference that names the list decides with its declared type as well
@@ -3154,6 +3229,8 @@ int LValueHelper::prepareTypedListElementRemoval(qore_list_private& l, size_t in
     if (chained) {
         while (chain_start && !ocvec[chain_start - 1].declared_members) {
             --chain_start;
+            // the containers of a path resolved for delete or remove have their path information
+            assert(ocvec[chain_start].path_info);
             chain_shared |= ocvec[chain_start].shared;
         }
     }
@@ -5266,7 +5343,7 @@ int LocalVarValue::getLValue(LValueHelper& lvh, bool for_remove, const QoreTypeI
         lvh.adoptReferenceProgram(helper.takeProgramEntry());
         // the declared type of a typed reference (reference<list<int>>) decides delete and remove of an element of the
         // list it names as well (qore#6435)
-        if (QoreTypeInfo::hasType(refTypeInfo)) {
+        if (for_remove && QoreTypeInfo::hasType(refTypeInfo)) {
             lvh.noteReferenceType(refTypeInfo);
         }
         // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
@@ -5346,7 +5423,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         }
         // see LocalVarValue::getLValue()
         lvh.adoptReferenceProgram(helper.takeProgramEntry());
-        if (QoreTypeInfo::hasType(refTypeInfo)) {
+        if (for_remove && QoreTypeInfo::hasType(refTypeInfo)) {
             lvh.noteReferenceType(refTypeInfo);
         }
         // Preserve no-narrow marker types; broad references must keep the resolved lvalue type.
