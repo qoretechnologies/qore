@@ -23349,12 +23349,13 @@ QORE_INTERN_ALWAYS_INLINE QoreValue doPlusEqualsOnLValueImpl(LValueHelper& v, Va
             int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
             return v.plusEqualsBigInt(ms, "<+= operator>");
         }
-        // an int in a union lvalue and a float or a number are added as the + operator adds them, and a union that
-        // accepts the sum is assigned it, which it keeps if a member has its type (qore#6407)
+        // an int in a union lvalue and a float or a number are added as the + operator adds them, and a union with a
+        // member of the type of the sum is assigned it; any other union adds the operand as an int, as an int lvalue
+        // does (qore#6407)
         if (vtype == NT_INT && (right.getType() == NT_FLOAT || right.getType() == NT_NUMBER)
                 && QoreTypeInfo::getUnionType(v.getTypeInfo())) {
             ValueHolder sum(qore_union_int_arith(v.getAsBigInt(), right, false), xsink);
-            if (QoreTypeInfo::runtimeAcceptsValue(v.getTypeInfo(), *sum) != QTI_NOT_EQUAL) {
+            if (v.getTypeInfo()->unionAcceptsExactly(*sum, sum->getType())) {
                 if (assign(sum.release(), "<lvalue for += operator>")) {
                     return QoreValue();
                 }
@@ -23582,11 +23583,12 @@ QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Excepti
             // relative date or the epoch seconds of an absolute date
         }
         // an int in a union lvalue and a float or a number are subtracted as the - operator subtracts them, and a
-        // union that accepts the difference is assigned it, which it keeps if a member has its type (qore#6407)
+        // union with a member of the type of the difference is assigned it; any other union subtracts the operand as
+        // an int, as an int lvalue does (qore#6407)
         if (vtype == NT_INT && (right.getType() == NT_FLOAT || right.getType() == NT_NUMBER)
                 && QoreTypeInfo::getUnionType(v.getTypeInfo())) {
             ValueHolder diff(qore_union_int_arith(v.getAsBigInt(), right, true), xsink);
-            if (QoreTypeInfo::runtimeAcceptsValue(v.getTypeInfo(), *diff) != QTI_NOT_EQUAL) {
+            if (v.getTypeInfo()->unionAcceptsExactly(*diff, diff->getType())) {
                 if (v.assign(diff.release())) {
                     return QoreValue();
                 }

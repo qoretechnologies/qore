@@ -16,6 +16,8 @@ enum EI : int {
     Two = 2,
 }
 
+typedef UIS = union<int, string>;
+
 class B {
 }
 
@@ -172,6 +174,41 @@ sub run(EI e, int i, float f, string s, B o) {
         hash<HU> hu = <HU>{"i_f": 1};
         hu.i_f += 0.5;
         show("hashdecl-member-plus-equals-float", hu.i_f);
+    }
+
+    # a nested union, and soft and timeout members of the value's base type
+    {
+        union<float, UIS> a = i;
+        show("nested-float-union", a);
+        union<UIS, float> b = i;
+        show("nested-union-float", b);
+        show("cast-nested-float-union", cast<union<float, UIS>>(i));
+        union<float, softint> c = i;
+        show("var-float-softint", c);
+        union<softint, float> d = i;
+        show("var-softint-float", d);
+        union<number, softfloat> e1 = f;
+        show("var-number-softfloat", e1);
+        union<float, timeout> g = i;
+        show("var-float-timeout", g);
+        union<timeout, float> h = i;
+        show("var-timeout-float", h);
+    }
+
+    # += with a result type that no member has
+    {
+        union<int, softstring> a = 1;
+        a += 0.5;
+        show("softstring-member-plus-equals-float", a);
+        union<int, softfloat> b = 1;
+        b += 0.5;
+        show("softfloat-member-plus-equals-float", b);
+        union<int, float> c = 1;
+        c += 2.5n;
+        show("no-number-member-plus-equals-number", c);
+        union<int, number> d = 1;
+        d -= 0.5n;
+        show("number-member-minus-equals-number", d);
     }
 
     # objects are accepted as they are by a base class or their own class

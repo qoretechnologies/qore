@@ -3142,8 +3142,17 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Use appropriate cache
     union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
 
-    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken before the
-    // lock, as get_value_type() takes it to make a type
+    {
+        AutoLocker al(ctl);
+        union_map_t::iterator i = cache.find(key);
+        if (i != cache.end()) {
+            return i->second;
+        }
+    }
+
+    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken outside the
+    // lock, as get_value_type() takes it to make a type, and only for a union that is not made yet (a generic call
+    // looks the union up for each call)
     type_vec_t value_types;
     value_types.reserve(key.size());
     for (const QoreTypeInfo* ti : key) {
@@ -3152,6 +3161,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
 
     AutoLocker al(ctl);
 
+    // another thread can have made the union in the meantime
     union_map_t::iterator i = cache.find(key);
     if (i != cache.end()) {
         return i->second;
@@ -4006,10 +4016,50 @@ bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
     return static_cast<const QoreUnionTypeInfo*>(this)->hasExactMember(n);
 }
 
+//! returns true if a member type keeps a value of the scalar base type \a t as it is (qore#6407)
+/** The plain type (ex: int), a soft type of the base type (ex: softint) and a type of the base type that converts
+    other values (ex: timeout) accept a value of the base type without converting it; a date type with a subtype does
+    not keep a date of the other subtype
+*/
+static bool qore_union_member_keeps_scalar(const QoreTypeInfo* vt, qore_type_t t) {
+    switch (t) {
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_BOOLEAN:
+        case NT_BINARY:
+            break;
+        case NT_DATE:
+            if (QoreTypeInfo::getDateSubtype(vt)) {
+                return false;
+            }
+            break;
+        default:
+            return false;
+    }
+    for (const QoreAcceptSpec& a : vt->getAcceptSpecs()) {
+        if (!a.map && a.spec.isRuntimeBaseType(t)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void QoreUnionTypeInfo::initExactMembers(const type_vec_t& value_types) {
     for (const QoreTypeInfo* vt : value_types) {
-        if (!hasType(vt) || vt == autoTypeInfo || vt == autoNoNarrowTypeInfo || vt == anyTypeInfo
-                || vt->return_vec.size() != 1) {
+        if (!hasType(vt) || vt == autoTypeInfo || vt == autoNoNarrowTypeInfo || vt == anyTypeInfo) {
+            continue;
+        }
+        // a member that is a union (ex: a typedef of a union) gives its own exact members, so that the result does
+        // not depend on where the nested union is in the union
+        if (const QoreUnionTypeInfo* nested = dynamic_cast<const QoreUnionTypeInfo*>(vt)) {
+            exact_members.insert(exact_members.end(), nested->exact_members.begin(), nested->exact_members.end());
+            union_exact_mask |= nested->union_exact_mask;
+            union_scalar_mask |= nested->union_scalar_mask;
+            continue;
+        }
+        if (vt->return_vec.size() != 1) {
             continue;
         }
         // an enum value is kept by an enum type with qore_type_info_has_enum_spec_for() (qore#6277)
@@ -4022,8 +4072,7 @@ void QoreUnionTypeInfo::initExactMembers(const type_vec_t& value_types) {
         }
         exact_members.push_back(vt);
         union_exact_mask |= (1ull << t);
-        if (vt == bigIntTypeInfo || vt == floatTypeInfo || vt == numberTypeInfo || vt == stringTypeInfo
-                || vt == boolTypeInfo || vt == binaryTypeInfo || vt == dateTypeInfo) {
+        if (qore_union_member_keeps_scalar(vt, t)) {
             union_scalar_mask |= (1ull << t);
         }
     }
