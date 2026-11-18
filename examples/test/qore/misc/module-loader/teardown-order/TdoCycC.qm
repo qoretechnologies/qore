@@ -1,0 +1,31 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdoCycC.qm - module of teardown-order.qtest: requires TdoCycA; has an optional module
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# its AOT module is stale when TdoOptional is available at run time
+%try-module TdoOptional
+%define TdoNoOptional
+%endtry
+
+%requires(reexport) TdoCycA
+
+module TdoCycC {
+    version = "1.0";
+    desc = "module for the module teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdoCycC {
+    #! reports the deletion of the module on stdout: the constants of a module Program are released then
+    class Tracker {
+        destructor() {
+            print("TdoCycC deleted\n");
+        }
+    }
+
+    const DeletionTracker = new Tracker();
+}

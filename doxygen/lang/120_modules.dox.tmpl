@@ -1673,7 +1673,10 @@ module MyWorkerModule {
     references (\c \@=) are released first, while all module Programs still exist.  Then a module is deleted only
     after every module that requires it; a binary module that no remaining module requires is deleted before the user
     and AOT-compiled modules, while the asynchronous I/O services still run, and a module imported into a Program that
-    a binary module owns is deleted after that binary module, unless that module requires it.
+    a binary module owns is deleted after that binary module, unless that module requires it.  Modules that require
+    each other in a cycle (a module whose code loads a module that requires it, maybe indirectly) cannot all be deleted
+    after the modules requiring them: the cycle is broken at the module required only through such a run-time load.
+    The order does not depend on whether a module is loaded from its source or from its AOT-compiled module.
 
     @subsection mod_public The "public" Keyword
 

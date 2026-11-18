@@ -2928,6 +2928,10 @@
     - at process exit, modules were deleted before the modules that require them, and objects held through opaque
       references were released too late, so destructors failed with \c PROGRAM-ERROR (see
       @ref module_deletion_order)
+    - the order in which modules are deleted at process exit depended on whether a module was loaded from a stale
+      AOT module's source or from the AOT module; a dependency cycle made by a run-time module load is now broken at
+      the module loaded (see @ref module_deletion_order;
+      <a href="https://github.com/qoretechnologies/qore/issues/6251">issue 6251</a>)
     - an unhandled exception raised by a destructor at program exit leaves exit status 3 (see @ref exception_handling)
     - a debugger callback could get a deleted @ref Qore::ProgramControl "ProgramControl" object, which could crash the
       process, and a copy of a @ref Qore::Breakpoint "Breakpoint" shared the original's ID and Program (see
