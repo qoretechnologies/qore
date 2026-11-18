@@ -2666,6 +2666,13 @@ static QORE_INTERN_ALWAYS_INLINE int32_t qore_ir_opaque_line(int32_t line) {
     return line;
 }
 
+//! returns the number of instructions that the release of a local \a inst (UninstantiateLocal) advances by: 2 if it
+//! steps over the CheckException that follows it (QORE_IR_STEPS_OVER_CHECK), which does nothing when no exception is
+//! pending, otherwise 1, and the check runs (qore#6371)
+static QORE_INTERN_ALWAYS_INLINE size_t qore_ir_release_step(const QoreIRInstruction* inst, ExceptionSink* xsink) {
+    return 1 + ((inst->interpreter_gives_call_args & QORE_IR_STEPS_OVER_CHECK) && !(xsink && *xsink));
+}
+
 static ClosureVarValue* resolve_closure_var_value(const LocalVar* var) {
     if (!var) {
         return nullptr;
@@ -3804,6 +3811,21 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     continue;
                 }
                 keep->interpreter_gives_call_args |= QORE_IR_KEEP_GIVES_REFSELF;
+            }
+        }
+    }
+    // the exception check after the release of the locals of a block (the lowering of a block, a for, foreach or if
+    // statement with locals): the release steps over it when it leaves no exception pending, which is the only case in
+    // which the check does nothing (QORE_IR_STEPS_OVER_CHECK, qore#6371).  A check with operands (a release check of a
+    // functional loop's body, qore#6072) has the operand bookkeeping after the dispatch, and is never stepped over
+    for (const auto& b : func.blocks) {
+        auto& insts = b->instructions;
+        for (size_t i = 0; i + 1 < insts.size(); ++i) {
+            QoreIRInstruction* release = insts[i].get();
+            const QoreIRInstruction* check = insts[i + 1].get();
+            if (release->opcode == QoreIROpcode::UninstantiateLocal && check->opcode == QoreIROpcode::CheckException
+                    && check->operands.empty()) {
+                release->interpreter_gives_call_args |= QORE_IR_STEPS_OVER_CHECK;
             }
         }
     }
@@ -15992,7 +16014,8 @@ load_local_done:
                             }
                             clearLoadSlots(local_inst->slot_id);
                         }
-                        ++ip;
+                        // steps over the exception check that follows, if it has nothing to do (qore#6371)
+                        ip += qore_ir_release_step(local_inst, xsink);
                         break;
                     }
 
@@ -16295,7 +16318,8 @@ load_local_done:
                         invalidateExternalCaches();
                     }
                 }
-                ++ip;
+                // steps over the exception check that follows, if it has nothing to do (qore#6371)
+                ip += qore_ir_release_step(local_inst, xsink);
                 break;
             }
             case QoreIROpcode::StoreClosure: {
