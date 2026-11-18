@@ -5,7 +5,7 @@
 // qore-aot-reseal <file> [<offset> <length>]: sets the checksum of the AOT metadata in the file again (qore#6451)
 /* The AOT metadata of format QORE_AOT_METADATA_CHECKSUM_VERSION and later is followed by its checksum, which the
    reader checks before it reads anything else; the tests that patch the metadata of a module to check the readers
-   behind the checksum (aot-section-bounds.qtest, aot-ir-value-ids.qtest, AOTModuleMetadataSection.qtest) set it
+   behind the checksum (AotSectionBounds-*.qtest, aot-ir-value-ids.qtest, AOTModuleMetadataSection.qtest) set it
    again with this tool after patching.  The metadata is the <length> bytes at <offset> of the file, which a test
    takes from the module before it patches it (a patch of the section directory changes the length that the
    directory gives, but not that of the metadata that the module passes to the loader); without them, it is the first

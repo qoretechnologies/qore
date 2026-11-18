@@ -106,11 +106,15 @@ dependencies (the module descriptor's hard dependencies, which the loader loads 
 re-exported module that requires the module back would make a cycle), and a module sees the declarations of what it
 re-exports, so a module that appears for a re-exported module must make it a miss as well.  Version 2 of the
 metadata record names the closure: every module the module was compiled against, directly or not, re-exported ones
-too, as qcc loaded them.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
+too, as qcc loaded them; version 3 adds the restrictions that the module's directives gave its dependencies (AOT
+format version 44), and version 4 the functional domains that it declares in its header, the dependencies it requires
+only after its header and the domains its own code restricts (AOT format version 45), which the cache reads but does
+not use.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
 file that a module includes may be named `<x>.qm` for a module `x`), and a file the module includes is never taken for
 the source of a module from outside the tree, whatever its name.  A module whose record has another version (version
-1, written before the closure was recorded; the metadata section is in no release, and the loader refuses version 1
-too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
+1, written before the closure was recorded, version 2, before the version 3 fields, or version 3, before the version 4
+fields; the metadata section is in no
+release, and the loader refuses them too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
 record.  The guard checks the same list.
 
 ### Why absolute paths
@@ -166,7 +170,7 @@ Before a cached module is used:
 4. each stored file must have the SHA-256 digest the entry records (a damaged entry is removed);
 5. the stored module must contain the AOT runtime identity of the build;
 6. the stored depfile must name the module's path (the loader uses a depfile only for the module its rule names);
-7. the stored module must have a metadata record of the version that qcc writes (version 3; `tools/qore_qami.py`).
+7. the stored module must have a metadata record of the version that qcc writes (version 4; `tools/qore_qami.py`).
 
 The depfile, the fingerprints, the paths of the optional modules (`<qmod>.d.optional`, see
 `aot-linked-module-sources.md`) and then the module are each renamed into place, and the module and depfile are

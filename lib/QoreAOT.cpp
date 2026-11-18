@@ -2092,7 +2092,12 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     serializeModulePathLists(writer, pp->prepended_module_paths,
         pp->appended_module_paths, feature_flags);
     // the time zone that the code sets with %set-time-zone (qore#6270)
-    serializeTimeZone(writer, pp->time_zone_directive, pp->time_zone_after_module_header);
+    // a directive for a load as library code only is not recorded if a conditional on a parse option can restrict
+    // locale control again where the module is loaded (it fails closed; qore#6351)
+    if (!(pp->time_zone_trusted_only && pp->load_dependent_parse)) {
+        serializeTimeZone(writer, pp->time_zone_directive, pp->time_zone_after_module_header,
+            pp->time_zone_trusted_only);
+    }
     std::vector<AOTModuleCommand> commands;
     module_cmd_begin = std::min(module_cmd_begin, pp->module_parse_commands.size());
     module_cmd_end = std::min(module_cmd_end, pp->module_parse_commands.size());
@@ -3731,6 +3736,33 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
     }
 }
 
+//! Enumerates the locals that an instruction can write: every local reference of aotOutlineForEachLocalRef() but the
+//! reads of a load and of the read operands of the fused int operations (qore#6314)
+template <typename F>
+static void aotOutlineForEachLocalWrite(const QoreIRInstruction* inst, F&& cb) {
+    switch (inst->opcode) {
+        case QoreIROpcode::LoadLocal:
+        case QoreIROpcode::LoadClosure:
+        case QoreIROpcode::BranchIfLtLocalInt:
+            return;
+        case QoreIROpcode::AddAssignLocalInt: {
+            // the source is read; the target is written
+            const auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst);
+            if (fused->target) {
+                cb(fused->target);
+            }
+            return;
+        }
+        default:
+            aotOutlineForEachLocalRef(inst, [&](const AOTOutlineLocalRef& ref) {
+                if (ref.local) {
+                    cb(ref.local);
+                }
+            });
+            return;
+    }
+}
+
 //! Enumerate every mutable basic-block target slot of an instruction.
 //! Mirrors QoreIRVerifier's collectBranchTargets(): dedicated fields for
 //! branch/switch/phi/invoke/throw classes plus the base-class
@@ -3876,6 +3908,8 @@ struct AOTFnOutlineRegion {
     std::vector<const LocalVar*> shared_locals;
     //! Body locals whose every reference is inside the region.
     std::vector<const LocalVar*> contained_locals;
+    //! The shared locals that the helper can assign or remove (see QoreIRCallAOTHelperInstruction)
+    std::vector<const LocalVar*> written_shared_locals;
 };
 
 //! Whole-function analysis state for outline-region discovery.
@@ -4227,6 +4261,8 @@ private:
             }
         }
         std::unordered_set<const LocalVar*> region_locals;
+        // the locals that an instruction of the region can write (qore#6314)
+        std::unordered_set<const LocalVar*> region_written;
         size_t temp_push_count = 0;
         size_t temp_discard_count = 0;
         for (size_t i = first; i <= last; ++i) {
@@ -4319,6 +4355,9 @@ private:
                     if (ref.local) {
                         region_locals.insert(ref.local);
                     }
+                });
+                aotOutlineForEachLocalWrite(inst, [&](const LocalVar* lv) {
+                    region_written.insert(lv);
                 });
             }
         }
@@ -4422,6 +4461,14 @@ private:
                 // (return-path) clear — a true scope end is never followed
                 // by references to the same LocalVar.
                 region.shared_locals.push_back(lv);
+                // a shared local that the helper only reads keeps its value across the call, unless a reference, a
+                // closure or code evaluated through the AST can reach it (qore#6314)
+                const void* key = reinterpret_cast<const void*>(lv);
+                if (region_written.count(lv) || info.parse_reference || lv->closureUse() || lv->isTopLevel()
+                        || fn.has_opaque_ast_local_access || fn.ast_referenced_locals.count(key)
+                        || fn.reference_store_locals.count(key)) {
+                    region.written_shared_locals.push_back(lv);
+                }
             } else {
                 region.contained_locals.push_back(lv);
             }
@@ -5057,6 +5104,7 @@ private:
             // the coordinator releases its references to the values of the locals that the helper can assign
             // before the call (qore#6300)
             call->shared_locals = region.shared_locals;
+            call->written_shared_locals = region.written_shared_locals;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;
@@ -26675,6 +26723,83 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
         if (flags || std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), i.module)
                 != mod_info.dependencies.end()) {
             info.dependency_restrictions.emplace_back(i.module, i.options, flags);
+        }
+    }
+    // the domains the module declares in its header, as in the MODULE_DOMAINS section (qore#6351)
+    info.declared_domains = pp->module_own_dom;
+    // the domains that its code restricts itself (qore#6351); a module whose code has a conditional on a parse option
+    // or another parse that depends on where it is loaded can restrict any domain there: none is relieved for it then
+    // (it fails closed)
+    // a record whose requests before the header are inexact (QMDR_INEXACT, qore#6386) relieves nothing either: what
+    // the module requests before its header can depend on where it is loaded
+    // only the functional domains: the record relieves nothing else, and the decoder refuses other bits
+    info.restricted_domains = (pp->load_dependent_parse || inexact) ? static_cast<int64>(QDOM_ALL)
+        : (pp->dom_restricted_by_code & static_cast<int64>(QDOM_ALL));
+    // the dependencies that its parse requested only after its header and that the request loaded (qore#6351); not
+    // one that another load had loaded first (the initialization of a module required before the header, which loads
+    // it with the restrictions in effect there, for example), not
+    // a dependency that the parse did not request (the dependencies are found in the text of the source, also in
+    // code that a conditional excludes), nor one loaded before the header in any way (by a module required before
+    // it, also in an included file, or by the initialization of such a module), which its source uses as it was
+    // loaded, with the restrictions in effect before the header; nor one that was loaded before the parse (qcc loads
+    // the modules of %try-module directives to check that they are available), whose load by the source cannot be
+    // told: such a dependency is loaded with the restrictions (it fails closed)
+    //
+    // the dependencies are loaded before the module's initialization in the order of the source; a request before
+    // the header that is not a dependency (in an included file, re-exported, or with %try-module) is loaded only by
+    // the module's initialization, after them, and the modules it loads with the restrictions in effect before the
+    // header could be loaded by a relieved dependency first: no dependency is relieved then (it fails closed)
+    bool pre_header_listed = !pp->load_dependent_parse && !inexact;
+    for (const std::string& spec : pp->pre_header_requires) {
+        if (std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), spec)
+                == mod_info.dependencies.end()) {
+            pre_header_listed = false;
+            break;
+        }
+    }
+    // the dependencies are found in the text of the source, also in code that a conditional excludes, so a
+    // dependency is preloaded with the relief only if it is first listed after every request before the header
+    size_t last_pre_header = 0;
+    if (pre_header_listed) {
+        for (const std::string& spec : pp->pre_header_requires) {
+            size_t i = std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), spec)
+                - mod_info.dependencies.begin();
+            if (i + 1 > last_pre_header) {
+                last_pre_header = i + 1;
+            }
+        }
+    }
+    if (pre_header_listed) {
+        for (const std::string& dep : mod_info.dependencies) {
+            if (static_cast<size_t>(std::find(mod_info.dependencies.begin(), mod_info.dependencies.end(), dep)
+                    - mod_info.dependencies.begin()) < last_pre_header
+                    || pp->restricted_requires.find(dep) != pp->restricted_requires.end()) {
+                continue;
+            }
+            if (pp->post_header_requires.find(dep) == pp->post_header_requires.end()
+                    || pp->pre_header_requires.find(dep) != pp->pre_header_requires.end()
+                    || pp->loading_requires.find(dep) == pp->loading_requires.end()) {
+                continue;
+            }
+            // nor one that the record lists as requested before the header (QMDR_BEFORE_HEADER, qore#6386), which the
+            // loader loads with the restrictions of the loading code
+            if (std::find_if(info.dependency_restrictions.begin(), info.dependency_restrictions.end(),
+                    [&dep](const QoreModuleDependencyRestriction& r) {
+                        return r.module == dep && (r.flags & QMDR_BEFORE_HEADER);
+                    }) != info.dependency_restrictions.end()) {
+                continue;
+            }
+            // the module of the request: a request by path names the module's file
+            auto ni = pp->module_request_names.find(dep);
+            QoreAbstractModule* m = QMM.findModule(ni == pp->module_request_names.end() ? dep.c_str()
+                : ni->second.c_str());
+            if (!m) {
+                continue;
+            }
+            if (m->getRegistrationSeq() <= pp->module_header_close_seq) {
+                continue;
+            }
+            info.post_header_dependencies.push_back(dep);
         }
     }
     return qoreAOTEncodeModuleInfo(info, record, error);
