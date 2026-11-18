@@ -1635,6 +1635,19 @@ DLLLOCAL void qore_dbg_fd_wait(int fd);
 //! Debug-only: called by a read of a File that found its descriptor readable, right before the read (see
 //! dbg_hold_file_read_ready())
 DLLLOCAL void qore_dbg_file_read_ready(int fd);
+
+//! Debug-only: arms a rendezvous of the next calls of File::redirect() after they take their first lock
+/** Each of the next \a count calls waits, with the lock of the first of its two files held, until \a count calls have
+    arrived or \a timeout_ms has passed, so that a test can make two redirects take their first locks at the same time
+    (see dbg_file_redirect_rendezvous(), issue #6567)
+*/
+DLLLOCAL void qore_dbg_file_redirect_rendezvous(int count, int timeout_ms);
+
+//! Debug-only: returns the calls that arrived at the last rendezvous and those of them that waited until the timeout
+DLLLOCAL void qore_dbg_file_redirect_rendezvous_result(int& arrived, int& timed_out);
+
+//! Debug-only: the rendezvous of a call of File::redirect() with its first lock held, if one is armed
+DLLLOCAL void qore_dbg_file_redirect_locked();
 #endif
 
 //! Writes all of the data to the descriptor, waiting for room after EAGAIN (see qore_fd_wait_ready())

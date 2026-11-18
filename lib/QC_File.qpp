@@ -1138,6 +1138,11 @@ stderr.redirect(my_file);
     is not kept synchronized between the linked objects in %Qore, which must be taken into consideration when
     performing operations on objects linked through calls to this method.
 
+    @note The method holds the locks of both files while it redirects the descriptor; they are taken in the same order
+    whichever of the two files is redirected to the other, so that redirects in opposite directions between the same
+    two files in different threads wait for each other instead of deadlocking (in Qore 2.2.1 and earlier, they could
+    deadlock)
+
     @since Qore 0.9
 */
 nothing File::redirect(Qore::File[File] target_file) [flags=NAMED_ARGS] {
