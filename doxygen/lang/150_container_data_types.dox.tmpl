@@ -923,9 +923,13 @@ sub test() {
     - external references to the object: an object's automatic scope is prolonged as long as the object has valid external references
     - @anchor running_call_receiver a running method call: the object whose method is called is kept until the call
       returns, in every @ref execution_modes "execution mode", also when it was read through a weak reference, such
-      as a local variable assigned with the @ref weak_assignment_operator "weak assignment operator (:=)": a method
-      that releases the last other strong reference to its own object can still use the object, which is destroyed
-      when the call returns, before the rest of the statement runs
+      as a local variable assigned with the @ref weak_assignment_operator "weak assignment operator (:=)" or the
+      variable of a \c foreach statement whose element is a weak reference: a method that releases the last other
+      strong reference to its own object can still use the object, which is destroyed when the call returns, before
+      the rest of the statement runs; an object read through a weak reference held by a container, such as \c o in
+      <tt>h.o.m()</tt> after <tt>h.o := obj</tt>, or by a member of an object, a member of the current object, a
+      global variable or a static class variable, is a @ref temporary_lifetime "temporary value" and is kept until
+      the end of the statement, so in <tt>string s = h.o.m() + log();</tt> it is destroyed after \c log() has run
     - @anchor temporary_lifetime temporary values: an object or other value that an expression creates and nothing else refers to, such as the object returned by a call in <tt>getDocument().components.schemas.Pet.getDataType()</tt>, lives until the end of the statement that created it, or until the call returns if it is passed to a call as an argument, in every @ref execution_modes "execution mode"
       - every part of a chain of member accesses, element accesses, casts and method calls can use it: a weak
         reference to it, a closure created by one of its methods and a call reference to one of its methods work

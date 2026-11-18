@@ -6550,7 +6550,8 @@ void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module, uint32_t scope_id, boo
         std::vector<llvm::Value*> release;
         for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
             llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
-            if (!persistent_cleanup_allocas.count(alloca_ptr)) {
+            // a slot that its call clears when it returns holds no value at the end of the statement
+            if (!persistent_cleanup_allocas.count(alloca_ptr) && !call_return_cleanup_allocas.count(alloca_ptr)) {
                 release.push_back(alloca_ptr);
             }
         }
@@ -8169,7 +8170,9 @@ llvm::Value* QoreIRToLLVM::getElementLocalReadFlag(const void* key, llvm::Functi
 
 // documented in QoreIRToLLVM.h
 llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCacheSlot& slot, llvm::Module& module,
-        llvm::IRBuilder<>* load_builder, const char* name) {
+        llvm::IRBuilder<>* load_builder, const char* name, llvm::AllocaInst* receiver_slot,
+        llvm::AllocaInst* receiver_flag) {
+    assert(!receiver_flag || (!load_builder && receiver_slot));
     llvm::IRBuilder<>& b = load_builder ? *load_builder : *builder;
     // raw local cache: the accessor itself
     llvm::Value* stored = b.CreateLoad(i64_type, slot.storage(), name);
@@ -8200,7 +8203,16 @@ llvm::Value* QoreIRToLLVM::loadLocalCacheValue(const void* key, const LocalCache
     // a weak reference or a reference is the exception: the read falls through for any other value
     b.CreateCondBr(needs_read, node_bb, done_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
     b.SetInsertPoint(node_bb);
-    llvm::Value* read = b.CreateCall(read_fn, {stored, xsink_arg});
+    llvm::Value* read;
+    if (receiver_flag) {
+        // the receiver of a call keeps the object of a weak reference until the call returns, as the AST interpreter
+        // keeps the object of a method call (qore_rt_read_element_local_receiver(), qore#6594)
+        auto receiver_fn = module.getOrInsertFunction("qore_rt_read_element_local_receiver",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type, ptr_type}, false));
+        read = b.CreateCall(receiver_fn, {stored, receiver_slot, receiver_flag, xsink_arg});
+    } else {
+        read = b.CreateCall(read_fn, {stored, xsink_arg});
+    }
     b.CreateBr(done_bb);
     b.SetInsertPoint(done_bb);
     llvm::PHINode* rv = b.CreatePHI(i64_type, 2, name);
@@ -8518,7 +8530,8 @@ void QoreIRToLLVM::setWeakLoadCleanup(uint32_t result_id, llvm::Value* result, l
     builder->CreateCall(end_fn, {slot, owned_flag, xsink_arg});
 }
 
-bool QoreIRToLLVM::endWeakReceiverCall(const QoreIRInstruction* inst, llvm::Module& module) {
+bool QoreIRToLLVM::endWeakReceiverCall(const QoreIRInstruction* inst, llvm::Module& module,
+        llvm::Value** has_exception) {
     if (weak_receiver_holds.empty()) {
         return false;
     }
@@ -8529,8 +8542,46 @@ bool QoreIRToLLVM::endWeakReceiverCall(const QoreIRInstruction* inst, llvm::Modu
     }
     auto end_fn = module.getOrInsertFunction("qore_rt_end_weak_receiver_call",
         llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+    if (!conditional_weak_receiver_holds.count(receiver_id)) {
+        builder->CreateCall(end_fn, {it->second.first, it->second.second, xsink_arg});
+        return true;
+    }
+    // the read of a foreach variable took a hold only if it read a weak reference (qore#6594): the release and the
+    // check of an exception that it raises are made only then
+    llvm::Function* llvm_func = builder->GetInsertBlock()->getParent();
+    llvm::Type* i8_type = llvm::Type::getInt8Ty(ctx);
+    llvm::Value* held = builder->CreateICmpNE(builder->CreateLoad(i8_type, it->second.second),
+        llvm::ConstantInt::get(i8_type, 0));
+    llvm::BasicBlock* from_bb = builder->GetInsertBlock();
+    llvm::BasicBlock* release_bb = llvm::BasicBlock::Create(ctx, "element_receiver_release", llvm_func);
+    llvm::BasicBlock* cont_bb = llvm::BasicBlock::Create(ctx, "element_receiver_released", llvm_func);
+    builder->CreateCondBr(held, release_bb, cont_bb, llvm::MDBuilder(ctx).createBranchWeights(1, 1000));
+    builder->SetInsertPoint(release_bb);
     builder->CreateCall(end_fn, {it->second.first, it->second.second, xsink_arg});
-    return true;
+    llvm::Value* released_exception = nullptr;
+    if (has_exception) {
+        auto has_ex = module.getOrInsertFunction("qore_rt_has_exception",
+            llvm::FunctionType::get(i64_type, {ptr_type}, false));
+        released_exception = builder->CreateICmpNE(builder->CreateCall(has_ex, {xsink_arg}),
+            llvm::ConstantInt::get(i64_type, 0));
+    } else {
+        // the destructor of the object can raise; a skip of the next check left by an invoke is for the path that
+        // does not release, so it is kept for it
+        bool skip = skip_next_exception_check;
+        skip_next_exception_check = false;
+        emitExceptionCheck(module, llvm_func, inst);
+        skip_next_exception_check = skip;
+    }
+    llvm::BasicBlock* release_end_bb = builder->GetInsertBlock();
+    builder->CreateBr(cont_bb);
+    builder->SetInsertPoint(cont_bb);
+    if (has_exception) {
+        llvm::PHINode* phi = builder->CreatePHI((*has_exception)->getType(), 2, "element_receiver_exception");
+        phi->addIncoming(*has_exception, from_bb);
+        phi->addIncoming(released_exception, release_end_bb);
+        *has_exception = phi;
+    }
+    return false;
 }
 
 bool QoreIRToLLVM::releaseConsumedCallArgs(const QoreIRInstruction* inst, llvm::Module& module,
@@ -15293,6 +15344,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_cleanup_slot.clear();
     exit_temp_cleanup_slot.clear();
     persistent_cleanup_allocas.clear();
+    call_return_cleanup_allocas.clear();
     unary_result_slots.clear();
     temp_cleanup_marks.clear();
     exception_edges.clear();
@@ -15668,6 +15720,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     weak_load_result_ids.clear();
     receiver_value_ids.clear();
     weak_receiver_holds.clear();
+    conditional_weak_receiver_holds.clear();
     native_boolean_result_values.clear();
     consumable_phis.clear();
     owning_phis.clear();
@@ -19725,8 +19778,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 values[inst->result.id] = builder->CreateLoad(i1_type, it->second.storage());
             } else {
                 // the variable of a foreach loop reads a weak reference as its target, and dereferences a
-                // reference as the helper below does
-                llvm::Value* loaded = loadLocalCacheValue(key, it->second, module);
+                // reference as the helper below does; one that is the receiver of a call keeps the object of a
+                // weak reference until the call returns, as the AST interpreter keeps the object of a method call
+                // (qore#6594); a read that a later write to the local can overwrite takes its own reference below
+                llvm::AllocaInst* receiver_slot = nullptr;
+                llvm::AllocaInst* receiver_flag = nullptr;
+                if (!is_native_int && ir_only_element_locals.count(key) && receiver_value_ids.count(inst->result.id)
+                        && !overwritten_local_reads.count(inst->result.id)) {
+                    // the slot and the flag are set only by a read of a weak reference: the read of any other value
+                    // leaves them as they are, and the call tests the flag only (see endWeakReceiverCall()); the
+                    // slot is released by an exception edge or an exit, never at the end of the statement, as the
+                    // call clears it (call_return_cleanup_allocas)
+                    llvm::IRBuilder<> alloca_builder(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                    llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                    receiver_slot = alloca_builder.CreateAlloca(i64_type, nullptr, "element_receiver_slot");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), receiver_slot);
+                    receiver_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "element_receiver_owned");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), receiver_flag);
+                    call_return_cleanup_allocas.insert(receiver_slot);
+                    registerInvokeCleanupAlloca(receiver_slot);
+                    weak_receiver_holds[inst->result.id] = {receiver_slot, receiver_flag};
+                    conditional_weak_receiver_holds.insert(inst->result.id);
+                }
+                llvm::Value* loaded = loadLocalCacheValue(key, it->second, module, nullptr, "", receiver_slot,
+                    receiver_flag);
                 if (!is_native_int) {
                     // a local of no reference type that holds a reference (auto r = \x;, a reference element
                     // of a container, a reference argument) caches the reference itself (see
@@ -24514,7 +24590,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // call whose receiver it is (endWeakReceiverCall(), qore#6590), are released when the call returns, on
             // both edges, as in the AST; the release can raise, so the exception is checked after it
             bool call_temps_released = releaseConsumedCallArgs(inst, module, true);
-            if (endWeakReceiverCall(inst, module)) {
+            if (endWeakReceiverCall(inst, module, &has_exception)) {
                 call_temps_released = true;
             }
             if (call_temps_released) {
@@ -27239,7 +27315,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // call whose receiver it is (endWeakReceiverCall(), qore#6590), are released when the call returns, on
             // both edges, as in the AST; the release can raise, so the exception is checked after it
             bool call_temps_released = releaseConsumedCallArgs(inst, module, true);
-            if (endWeakReceiverCall(inst, module)) {
+            if (endWeakReceiverCall(inst, module, &has_exception)) {
                 call_temps_released = true;
             }
             if (call_temps_released) {
@@ -29404,7 +29480,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // call whose receiver it is (endWeakReceiverCall(), qore#6590), are released when the call returns, on
             // both edges, as in the AST; the release can raise, so the exception is checked after it
             bool call_temps_released = releaseConsumedCallArgs(inst, module, true);
-            if (endWeakReceiverCall(inst, module)) {
+            if (endWeakReceiverCall(inst, module, &has_exception)) {
                 call_temps_released = true;
             }
             if (call_temps_released) {
@@ -33166,8 +33242,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Constant* name_const = builder->CreateGlobalString(sminst->member_name,
                     "self_member_name");
             // Use _for_call variant when this result is only used as a DotEval base.
-            // This returns raw values (including WeakReferenceNode) without evaluating
-            // them, avoiding temporary strong references from weak member dereferences.
+            // This returns raw values (a weak reference to a hash or a list) without evaluating
+            // them; a weak reference to an object is read as its object, a temporary of the statement
+            // that keeps it until the statement ends, as in the AST interpreter (qore#6594).
             // All DotEval helpers handle NT_WEAKREF correctly.
             const char* helper_name = dot_eval_only_bases.count(inst->result.id)
                     ? "qore_rt_load_self_member_for_call"
