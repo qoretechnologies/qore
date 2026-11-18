@@ -1346,55 +1346,49 @@ public:
         }
     }
 
-    //! Releases the values that holdReturn() keeps, after the locals of the frame, and the handed-over return
-    /** The handed-over return (see handOverReturn()) is the value of the return that an exception interrupts, or that
-        the try statement that catches it releases
+    //! Releases the values that holdReturn() keeps, after the locals of the frame, with the handed-over return
+    /** The handed-over return (see handOverReturn()) is one of them: the value of the return that an exception
+        interrupts, or that the try statement that catches it releases.  Nothing is tested but the size of the values,
+        as before the handed-over return (#6137)
     */
     DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
-        for (QoreValue& v : held_returns) {
-            v.discard(xsink);
-        }
-        held_returns.clear();
-        if (handed_over_set) [[unlikely]] {
-            releaseHandedOverReturn(xsink);
+        if (!held_returns.empty()) [[unlikely]] {
+            releaseHeldReturnsIntern(xsink);
         }
     }
 
     //! Replaces the handed-over return with \a v, whose reference it takes, releasing the value before (#6137)
     /** The value that a handler run out of line past the inline cap hands over in the block cleanups of a return
         statement (QoreIRScopeExitInstruction::hand_over_return), which the return takes (takeHandedOverReturn()).
-        The handed-over return's functions are out of line and cold, so that they add nothing to the frame of
-        QoreIRInterpreter::execute(), which runs them only past the cap
+        It is kept with the held returns (handed_over_index), so that the end of the frame, which releases them,
+        tests nothing more.  The handed-over return's functions are out of line and cold, so that they add nothing to
+        the frame of QoreIRInterpreter::execute(), which runs them only past the cap
     */
     DLLLOCAL __attribute__((noinline, cold)) void handOverReturn(QoreValue v, ExceptionSink* xsink) {
-        QoreValue prev = handed_over;
-        handed_over = v;
-        bool had = handed_over_set;
-        handed_over_set = true;
-        if (had) {
-            prev.discard(xsink);
+        if (handed_over_index == NoHandedOver) {
+            handed_over_index = held_returns.size();
+            held_returns.push_back(v);
+            return;
         }
+        assert(handed_over_index < held_returns.size());
+        QoreValue prev = held_returns[handed_over_index];
+        held_returns[handed_over_index] = v;
+        prev.discard(xsink);
     }
 
     //! Returns the handed-over return, whose reference passes to the caller, and clears it, if one was handed over,
     //! or a reference of its own to \a value otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
     DLLLOCAL __attribute__((noinline, cold)) QoreValue takeHandedOverReturn(QoreValue value) {
-        if (!handed_over_set) {
+        if (handed_over_index == NoHandedOver) {
             return value.refSelf();
         }
-        QoreValue rv = handed_over;
-        handed_over = QoreValue();
-        handed_over_set = false;
-        return rv;
+        return removeHandedOverReturn();
     }
 
     //! Releases the handed-over return, if any (QoreIROpcode::ReleaseHandedOverReturn, #6137)
     DLLLOCAL __attribute__((noinline, cold)) void releaseHandedOverReturn(ExceptionSink* xsink) {
-        if (handed_over_set) {
-            QoreValue v = handed_over;
-            handed_over = QoreValue();
-            handed_over_set = false;
-            v.discard(xsink);
+        if (handed_over_index != NoHandedOver) {
+            removeHandedOverReturn().discard(xsink);
         }
     }
 
@@ -1438,13 +1432,33 @@ private:
     std::vector<QoreValue> slots;
     //! non-zero for the slots of object locals (see QoreIRFunction::real_reference_locals); empty if none
     std::vector<uint8_t> real_slots;
-    //! the values of a return that an exception interrupted, released after the locals of the frame (#5920)
+    //! the values of a return that an exception interrupted, released after the locals of the frame (#5920), and the
+    //! handed-over return (see handed_over_index)
     std::vector<QoreValue> held_returns;
-    //! the value that handlers run out of line past the inline cap handed over to the return whose cleanups run them,
-    //! if handed_over_set (see handOverReturn())
-    QoreValue handed_over;
-    //! true if a value was handed over to handed_over (also no value, with a return without one)
-    bool handed_over_set = false;
+    //! the index in held_returns of the value that handlers run out of line past the inline cap handed over to the
+    //! return whose cleanups run them (also no value, with a return without one), or NoHandedOver (see
+    //! handOverReturn()); touched only by the functions of the handed-over return and those that remove held returns,
+    //! which run only when held_returns has a value
+    size_t handed_over_index = NoHandedOver;
+    static constexpr size_t NoHandedOver = static_cast<size_t>(-1);
+
+    //! Removes the handed-over return from the held returns and returns it, with its reference
+    DLLLOCAL QoreValue removeHandedOverReturn() {
+        assert(handed_over_index < held_returns.size());
+        QoreValue rv = held_returns[handed_over_index];
+        held_returns.erase(held_returns.begin() + handed_over_index);
+        handed_over_index = NoHandedOver;
+        return rv;
+    }
+
+    //! Releases the values that holdReturn() keeps, the handed-over return among them (see releaseHeldReturns())
+    DLLLOCAL __attribute__((noinline, cold)) void releaseHeldReturnsIntern(ExceptionSink* xsink) {
+        handed_over_index = NoHandedOver;
+        for (QoreValue& v : held_returns) {
+            v.discard(xsink);
+        }
+        held_returns.clear();
+    }
 
     //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
     /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
@@ -1452,9 +1466,17 @@ private:
     */
     DLLLOCAL __attribute__((noinline, cold)) void releaseHeldReturnIntern(QoreValue v, ExceptionSink* xsink) {
         for (size_t i = held_returns.size(); i; --i) {
+            // the handed-over return is not the value of a return that an exception interrupted: it is kept, also
+            // when it is the same value (#6137)
+            if (i - 1 == handed_over_index) {
+                continue;
+            }
             if (held_returns[i - 1].hasNode() && held_returns[i - 1].getInternalNode() == v.getInternalNode()) {
                 QoreValue held = held_returns[i - 1];
                 held_returns.erase(held_returns.begin() + (i - 1));
+                if (handed_over_index != NoHandedOver && i - 1 < handed_over_index) {
+                    --handed_over_index;
+                }
                 held.discard(xsink);
             }
         }

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # A return in a handler run past the inline cap of the lowering of handlers replaces the value of the return (#6137);
-# see handler-return-past-cap.qtest.  The nested handlers are written without indentation: each "on_exit {" line
+# see HandlerReturnPastCap.qc.  The nested handlers are written without indentation: each "on_exit {" line
 # opens a handler in the body of the one before; the bodies of the outermost two and the innermost two return after
 # the handlers nested in them are registered (each conditional return lowers the handlers after it again, so that the
 # code grows to the budget of the handlers lowered inline).
@@ -545,6 +545,51 @@ if (x < 0 || x == 1) return new T("q1");
 }
     return new T("q-body");
 }
+# a foreach statement left by a return releases its element after the handlers past the cap, one of which returns
+# the element: the value handed over is kept (#6137)
+auto sub fe(int x) {
+    T g("fe-g");
+    foreach T t in ((g,)) {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+on_exit {
+if (x == 17) return t;
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+}
+if (x == 1) return t;
+}
+        return new T("fe-body");
+    }
+    return NOTHING;
+}
 # handlers of one scope that return conditionally, several of them for the same argument: past the budget of the
 # handlers lowered inline
 auto sub c7(int x) {
@@ -597,5 +642,6 @@ run("o32", \o32(), (-1, 0, 1, 2, 14, 31, 32));
 run("b17", \b17(), (-1, 0, 15, 16, 17));
 run("p", \p(), (-2, -1, 0, 1, 16, 17));
 run("q", \q(), (-2, -1, 0, 1, 16, 17));
+run("fe", \fe(), (0, 1, 17));
 run("c7", \c7(), (0, 1, 2, 3, 4, 5, 6, 7, 8, 15));
 run("s", \s(), (0, 1, 2, 3, 5, 6, 7, 15, 16, 17, 18, 31));

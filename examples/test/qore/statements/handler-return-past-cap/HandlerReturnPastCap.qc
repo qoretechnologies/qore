@@ -15,8 +15,9 @@
     scope whose conditions overlap gave the value of another handler than the AST interpreter.  The cases: handlers
     nested 15, 16, 17 and 32 deep whose outermost two and innermost two return a value, an object (the release of the
     replaced values), no value, or nothing (the return's own value survives); handlers in blocks of their own; a
-    handler registered before the nested ones that replaces their value, also from a try statement; and handlers of
-    one scope with overlapping conditions, also on_exit, on_success and on_error handlers.  HandlerReturnPastCap.q
+    handler registered before the nested ones that replaces their value, also from a try statement; a foreach statement
+    left by the return, which releases its element, the value handed over, after the handlers; and handlers of one
+    scope with overlapping conditions, also on_exit, on_success and on_error handlers.  HandlerReturnPastCap.q
     gives the output of the AST interpreter in every execution mode, on the IR tier and compiled with qcc.  The control
     flow of a return past the cap (the end of the code around the handler's run) is #6552.
 */
@@ -161,6 +162,12 @@ q(16)[0]: T:q16 [\"~q-body\", \"~q16\"]
 q(16)[1]: T:q16 [\"~q-body\", \"~q16\"]
 q(17)[0]: T:q17 [\"~q-body\", \"~q17\"]
 q(17)[1]: T:q17 [\"~q-body\", \"~q17\"]
+fe(0)[0]: T:fe-body [\"~fe-g\", \"~fe-body\"]
+fe(0)[1]: T:fe-body [\"~fe-g\", \"~fe-body\"]
+fe(1)[0]: T:fe-g [\"~fe-body\", \"~fe-g\"]
+fe(1)[1]: T:fe-g [\"~fe-body\", \"~fe-g\"]
+fe(17)[0]: T:fe-g [\"~fe-body\", \"~fe-g\"]
+fe(17)[1]: T:fe-g [\"~fe-body\", \"~fe-g\"]
 c7(0)[0]: \"c-body\" []
 c7(0)[1]: \"c-body\" []
 c7(1)[0]: \"c3\" []
