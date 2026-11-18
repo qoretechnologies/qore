@@ -3897,7 +3897,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             COP_CAST: (
                 "code": string sub (string cve, list<auto> args) {
                     string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
-                    hash desc = PgsqlTypeMap{name};
+                    # a type that the driver does not describe (ex: a sized type name such as "varchar2(10 char)") is given as
+                    # it is (qore#6572)
+                    *hash<auto> desc = PgsqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", cve, name);
                     switch (name) {
                         default:

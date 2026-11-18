@@ -108,6 +108,9 @@ class CastTypeNamesTest inherits QUnit::Test {
             string sql = i.value("c", ("string", 20));
             assertRegex("^cast ?\\(c as [a-z0-9]+", sql.lwr(), i.key);
             assertFalse(sql.lwr() =~ /as string/, i.key);
+            # a type name that the driver does not describe is given as it is; it raised RUNTIME-TYPE-ERROR
+            assertRegex("as varchar2\\(10 char\\)\\)$", i.value("c", ("varchar2(10 char)",)), i.key);
+            assertRegex("as number\\(\\*,2\\)\\)$", i.value("c", ("number(*,2)",)), i.key);
         }
     }
 
