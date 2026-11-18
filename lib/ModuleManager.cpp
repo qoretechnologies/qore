@@ -4688,6 +4688,177 @@ bool QoreModuleManager::findAvailableOptionalModule(ExceptionSink& xsink, const 
     return false;
 }
 
+bool QoreModuleManager::checkAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+        std::string& available) {
+    // the locks of a module load, in its order (see runTimeLoadModule())
+    QoreModuleLoadLockHelper aot_init_al;
+    OptLocker ol(&mutex);
+    return findAvailableOptionalModule(xsink, specs, nullptr, available);
+}
+
+//! The checks of the loader for the optional modules of a module of a build tree (see qore_aot_check_module_sources())
+/** @param deps the files of the module's dependency file
+*/
+static QoreAOTModuleCheck qore_aot_check_module_optional_modules(const char* qmod, const std::set<std::string>& deps,
+        std::string& reason, std::string& dependency, std::string& error) {
+    QoreAOTModuleFileInfo info;
+    switch (qoreAOTReadModuleInfo(qmod, info, error)) {
+        case QoreAOTModuleInfoStatus::NONE:
+            // a module without metadata records no failed %try-module directive
+            return QoreAOTModuleCheck::CURRENT;
+        case QoreAOTModuleInfoStatus::INVALID:
+            error = "cannot read its module metadata: " + error;
+            return QoreAOTModuleCheck::ERROR;
+        case QoreAOTModuleInfoStatus::FOUND:
+            break;
+    }
+    if (info.unavailable_optional_modules.empty()) {
+        return QoreAOTModuleCheck::CURRENT;
+    }
+
+    // the dependencies are found as the loader finds them for the module: with its own module path directories
+    // around those of the process (see loadBinaryModuleFromPath())
+    std::unique_ptr<QoreModulePathScope> path_scope;
+    if (!info.prepended_module_paths.empty() || !info.appended_module_paths.empty()) {
+        path_scope = std::make_unique<QoreModulePathScope>(nullptr, info.prepended_module_paths,
+            info.appended_module_paths);
+    }
+
+    // a candidate file of a module that the compile did not see (the dependency file lists those it saw, whose
+    // contents the caller has compared): the module may be available now
+    for (const std::string& spec : info.unavailable_optional_modules) {
+        size_t end = spec.find_first_of(" \t<>=!");
+        std::string name = spec.substr(0, end);
+        if (name.empty()) {
+            continue;
+        }
+        std::vector<std::string> files;
+        QMM.getModuleCandidateFiles(name.c_str(), nullptr, files);
+        for (const std::string& file : files) {
+            if (deps.find(file) == deps.end()) {
+                reason = "a file of optional module '" + spec + "' was not there when it was compiled";
+                dependency = file;
+                return QoreAOTModuleCheck::STALE;
+            }
+        }
+    }
+
+    // the module loader's own check: a module that can be loaded now
+    ExceptionSink xsink;
+    std::string available;
+    if (QMM.checkAvailableOptionalModule(xsink, info.unavailable_optional_modules, available)) {
+        reason = "optional module '" + available + "' was not available when it was compiled, but it is available "
+            "now";
+        return QoreAOTModuleCheck::STALE;
+    }
+    if (xsink) {
+        error = "its optional modules cannot be checked in this thread";
+        xsink.clear();
+        return QoreAOTModuleCheck::ERROR;
+    }
+    return QoreAOTModuleCheck::CURRENT;
+}
+
+QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& reason, std::string& dependency,
+        std::string& error) {
+#ifdef _Q_WINDOWS
+    // a module of a build tree is not checked on Windows (see qore_build_aot_module_is_stale())
+    return QoreAOTModuleCheck::CURRENT;
+#else
+    struct stat sb;
+    if (stat(qmod, &sb) || !S_ISREG(sb.st_mode)) {
+        error = "it is not a regular file";
+        return QoreAOTModuleCheck::ERROR;
+    }
+    const int64 qmod_mtime = qore_module_stat_mtime_ns(sb);
+
+    std::string depfile = std::string(qmod) + ".d";
+    std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
+    std::string fingerprint_file = depfile + QORE_AOT_MODULE_FINGERPRINT_SUFFIX;
+    if (!qore_aot_read_module_source_fingerprints(fingerprint_file, fingerprints)) {
+        error = "cannot read its source fingerprints";
+        dependency = fingerprint_file;
+        return QoreAOTModuleCheck::ERROR;
+    }
+    std::vector<std::string> deps;
+    struct stat dsb;
+    if (stat(depfile.c_str(), &dsb) && errno == ENOENT) {
+        // Ninja reads the dependency file of a rule into its log and removes it: the fingerprints, which qcc writes
+        // with it, list the same files (but one that qcc could not read)
+        for (const auto& i : fingerprints) {
+            deps.push_back(i.first);
+        }
+    } else {
+        std::string depfile_target;
+        if (!qore_read_module_depfile(depfile, depfile_target, deps)) {
+            error = "cannot read its dependency file";
+            dependency = depfile;
+            return QoreAOTModuleCheck::ERROR;
+        }
+        if (!qore_module_depfile_names_module(depfile, depfile_target, qmod)) {
+            error = "its dependency file describes another module ('" + depfile_target + "')";
+            dependency = depfile;
+            return QoreAOTModuleCheck::ERROR;
+        }
+    }
+
+    // the comparison of the loader (qore_module_source_changed()), except that a file that cannot be read fails
+    ExceptionSink xsink;
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT module source check")) {
+            error = "cancelled";
+            return QoreAOTModuleCheck::ERROR;
+        }
+        const std::string& dep = deps[i];
+        QoreAOTSourceStatFingerprint st;
+        if (!getAOTSourceStatFingerprint(dep.c_str(), st)) {
+            reason = "a dependency no longer exists";
+            dependency = dep;
+            return QoreAOTModuleCheck::STALE;
+        }
+        auto fi = fingerprints.find(dep);
+        if (fi == fingerprints.end()) {
+            // as without a fingerprint: a newer file has changed
+            if (static_cast<int64>(st.mtime_ns) > qmod_mtime) {
+                reason = "a dependency is newer than the module";
+                dependency = dep;
+                return QoreAOTModuleCheck::STALE;
+            }
+            continue;
+        }
+        if (st.size == fi->second.size && st.mtime_ns == fi->second.mtime_ns) {
+            continue;
+        }
+        if (st.size != fi->second.size) {
+            reason = "a dependency has changed since it was compiled";
+            dependency = dep;
+            return QoreAOTModuleCheck::STALE;
+        }
+        uint64_t hash;
+        if (!qore_module_source_hash(dep, st, hash, xsink)) {
+            xsink.clear();
+            error = "cannot read a dependency";
+            dependency = dep;
+            return QoreAOTModuleCheck::ERROR;
+        }
+        if (hash != fi->second.hash) {
+            reason = "a dependency has changed since it was compiled";
+            dependency = dep;
+            return QoreAOTModuleCheck::STALE;
+        }
+    }
+
+    // a module with failed %try-module directives (qcc lists the paths where their modules are not)
+    struct stat osb;
+    std::string optional = depfile + ".optional";
+    if (stat(optional.c_str(), &osb) || !osb.st_size) {
+        return QoreAOTModuleCheck::CURRENT;
+    }
+    std::set<std::string> dep_set(deps.begin(), deps.end());
+    return qore_aot_check_module_optional_modules(qmod, dep_set, reason, dependency, error);
+#endif
+}
+
 void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* pgm,
         std::vector<std::string>& files) {
     getModuleCandidatePaths(name, pgm, files, false);
