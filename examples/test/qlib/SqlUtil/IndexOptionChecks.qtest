@@ -1,0 +1,94 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The index options that the PostgreSQL, SQL Server and Oracle drivers write into the DDL (the index method, the
+# storage or domain index parameters and the operator classes) are checked, and values are written as literals where
+# the database takes a literal (qore#6577).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires MssqlSqlUtilBase
+%requires OracleSqlUtilBase
+
+%exec-class IndexOptionChecksTest
+
+class IndexOptionChecksTest inherits QUnit::Test {
+    constructor() : Test("index options in DDL", "1.0") {
+        addTestCase("PostgreSQL", \pgsqlTest());
+        addTestCase("SQL Server", \mssqlTest());
+        addTestCase("Oracle", \oracleTest());
+        set_return_value(main());
+    }
+
+    pgsqlTest() {
+        # accepted
+        foreach hash<auto> opt in (
+                {"method": "gin"}, {"method": "hnsw", "with": {"m": 16, "ef_construction": 64}},
+                {"with": {"fillfactor": 70, "fastupdate": False, "buffering": "auto"}},
+                {"opclass": {"name": "text_pattern_ops"}}, {"opclass": {"v": "public.gist_trgm_ops(siglen = 32)"}},
+            ) {
+            PgsqlTable::checkIndexOptions("ix", opt);
+        }
+        # refused
+        foreach hash<auto> opt in (
+                {"method": "btree (id); drop table t; --"}, {"method": "gin "}, {"method": 1},
+                {"with": {"fillfactor = 1); drop table t; --": 1}},
+                {"with": {"fillfactor": {"a": 1}}},
+                {"opclass": {"name": "text_pattern_ops, (select 1)"}},
+                {"opclass": {"name": "gist_trgm_ops(siglen = 1); drop table t"}},
+                {"opclass": {"name": 1}},
+            ) {
+            assertThrows("INDEX-OPTION-ERROR", \PgsqlTable::checkIndexOptions(), ("ix", opt), sprintf("%y", opt));
+        }
+        # a string value is a literal; numbers and booleans are not quoted
+        PgsqlIndex ix("ix", False, {"name": {}}, NOTHING, "gin", {"fillfactor": 70, "fastupdate": False,
+            "buffering": "a'b"});
+        assertEq("create index ix on t using gin (name) with (fillfactor = 70, fastupdate = false, buffering = 'a''b')",
+            ix.getCreateSql("t"));
+    }
+
+    mssqlTest() {
+        foreach hash<auto> opt in (
+                {"method": "CLUSTERED"}, {"method": "nonclustered columnstore"},
+                {"with": {"fillfactor": 90, "pad_index": "on", "online": True, "data_compression": "PAGE",
+                    "compression_delay": "10 minutes"}},
+            ) {
+            MssqlTable::checkIndexOptions("ix", opt);
+        }
+        foreach hash<auto> opt in (
+                {"method": "clustered index x on t (a); drop table t; --"}, {"method": "spatial"},
+                {"with": {"fillfactor = 1) drop table t --": 1}},
+                {"with": {"data_compression": "page; drop table t"}},
+                {"with": {"pad_index": ("on",)}},
+            ) {
+            assertThrows("INDEX-OPTION-ERROR", \MssqlTable::checkIndexOptions(), ("ix", opt), sprintf("%y", opt));
+        }
+        # a boolean is ON or OFF
+        MssqlIndex ix("ix", False, {"name": {}}, NOTHING, "nonclustered", {"online": True, "pad_index": False,
+            "fillfactor": 80});
+        assertRegex(" with \\(online = ON, pad_index = OFF, fillfactor = 80\\)", ix.getCreateSql("t"));
+    }
+
+    oracleTest() {
+        foreach hash<auto> opt in (
+                {"method": "bitmap"}, {"method": "ctxsys.context", "with": {"sync": "on_commit"}},
+            ) {
+            OracleTable::checkIndexOptions("ix", opt);
+        }
+        foreach hash<auto> opt in (
+                {"method": "ctxsys.context parameters('x')"}, {"method": "a b"},
+                {"method": "ctxsys.context", "with": {"a') drop": "x"}},
+                {"method": "ctxsys.context", "with": {"sync": {"a": 1}}},
+            ) {
+            assertThrows("INDEX-OPTION-ERROR", \OracleTable::checkIndexOptions(), ("ix", opt), sprintf("%y", opt));
+        }
+        # the parameters are a string literal: a quote in a value is doubled
+        OracleIndex ix("ix", False, {"name": {}}, "normal", NOTHING, "ctxsys.context", {"stoplist": "a')x"});
+        assertRegex(" indextype is ctxsys\\.context parameters\\('stoplist=a''\\)x'\\)", ix.getCreateSql("t"));
+    }
+}
