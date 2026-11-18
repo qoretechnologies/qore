@@ -136,7 +136,7 @@ bool QoreRegex::exec(const char* str, size_t len, ExceptionSink* xsink) const {
     assert(rc);
     //printd(5, "QoreRegex::exec(%s) this: %p pre_exec() rc=%d\n", str, this, rc);
     if (rc < 1) {
-        qore_pcre2_check_match_error(rc, xsink);
+        qore_pcre2_check_match_error(rc, xsink, str, len);
         return false;
     }
     return true;
@@ -178,7 +178,7 @@ QoreListNode* QoreRegex::extractSubstrings(const QoreString* target, ExceptionSi
         assert(rc);
 
         if (rc < 1) {
-            if (qore_pcre2_check_match_error(rc, xsink)) {
+            if (qore_pcre2_check_match_error(rc, xsink, t->c_str(), t->size())) {
                 assert(*xsink);
                 return nullptr;
             }
@@ -276,7 +276,7 @@ QoreListNode* QoreRegex::extractWithPattern(const QoreString& target, bool inclu
         assert(rc);
 
         if (rc < 1) {
-            if (qore_pcre2_check_match_error(rc, xsink)) {
+            if (qore_pcre2_check_match_error(rc, xsink, t->c_str(), t->size())) {
                 assert(*xsink);
                 return nullptr;
             }
@@ -335,7 +335,7 @@ int64 QoreRegex::countMatches(const QoreString* target, ExceptionSink* xsink) co
         int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
             match_options, md);
         if (rc < 1) {
-            if (qore_pcre2_check_match_error(rc, xsink)) {
+            if (qore_pcre2_check_match_error(rc, xsink, t->c_str(), t->size())) {
                 assert(*xsink);
                 return 0;
             }
@@ -401,7 +401,7 @@ QoreValue QoreRegex::extractNamedGroups(const QoreString* target, ExceptionSink*
         int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
             match_options, md);
         if (rc < 1) {
-            if (qore_pcre2_check_match_error(rc, xsink)) {
+            if (qore_pcre2_check_match_error(rc, xsink, t->c_str(), t->size())) {
                 assert(*xsink);
                 return QoreValue();
             }
@@ -493,7 +493,7 @@ QoreListNode* QoreRegex::extractDetailed(const QoreString* target, ExceptionSink
         int rc = qore_pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset,
             match_options, md);
         if (rc < 1) {
-            if (qore_pcre2_check_match_error(rc, xsink)) {
+            if (qore_pcre2_check_match_error(rc, xsink, t->c_str(), t->size())) {
                 assert(*xsink);
                 return nullptr;
             }

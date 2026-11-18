@@ -990,7 +990,7 @@ int PollPipelinePriv::addCheckRegex(const char* source_key, const char* pattern,
             int rc = qore_pcre2_match(code, reinterpret_cast<PCRE2_SPTR8>(subject), len, 0, 0, md);
             if (rc > 0) {
                 found = true;
-            } else if (qore_pcre2_check_match_error(rc, xsink)) {
+            } else if (qore_pcre2_check_match_error(rc, xsink, subject, len)) {
                 return;
             }
         }

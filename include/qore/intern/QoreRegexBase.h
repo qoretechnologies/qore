@@ -132,7 +132,8 @@ DLLLOCAL int64 q_get_regex_utf_check_bytes();
     exception has been raised if \a xsink is not nullptr: \c INVALID-ENCODING for a subject that is not valid UTF-8
     (see qore_pcre2_invalid_utf_error()), \c REGEX-ERROR for the others
  */
-DLLLOCAL int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink);
+DLLLOCAL int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink, const char* subject = nullptr,
+        size_t len = 0);
 
 #define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP|PCRE2_UNGREEDY|PCRE2_DOLLAR_ENDONLY|PCRE2_ANCHORED|PCRE2_DUPNAMES))
 

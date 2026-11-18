@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/qore_encoding_private.h"
 
@@ -503,6 +504,38 @@ SimpleValueQoreNode* qore_decode_http_body(const char* content_type, const Binar
         return const_cast<BinaryNode*>(body);
     }
     return qore_http_body_string(charset, body->getPtr(), body->size());
+}
+
+QoreStringNode* qore_http_response_body_string(const char* content_type, const QoreHttpBodyCharset& charset,
+        const void* data, size_t len, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> str(qore_http_body_string(charset, data, len));
+    if (qore_string_encoding_valid(**str)) {
+        return str.release();
+    }
+    switch (qore_http_body_kind(content_type)) {
+        // a body without a Content-Type that is text is any other text
+        case QoreHttpBodyKind::Binary:
+        case QoreHttpBodyKind::Html:
+        case QoreHttpBodyKind::Text:
+            str->setEncoding(QCS_ISO_8859_1);
+            return str.release();
+        default:
+            break;
+    }
+    xsink->raiseException("INVALID-ENCODING", "the HTTP response body of %zu bytes is not valid in its encoding "
+        "\"%s\", which its Content-Type gives", len, charset.enc->getCode());
+    return nullptr;
+}
+
+SimpleValueQoreNode* qore_decode_http_response_body(const char* content_type, const BinaryNode* body,
+        const QoreEncoding* assumed, ExceptionSink* xsink) {
+    assert(body);
+    QoreHttpBodyCharset charset = qore_get_http_body_charset(content_type, body->getPtr(), body->size(), assumed);
+    if (!charset.enc) {
+        body->ref();
+        return const_cast<BinaryNode*>(body);
+    }
+    return qore_http_response_body_string(content_type, charset, body->getPtr(), body->size(), xsink);
 }
 
 const QoreEncoding* qore_get_http_header_charset(const char* content_type, const QoreEncoding* assumed) {

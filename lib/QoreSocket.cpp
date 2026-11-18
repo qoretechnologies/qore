@@ -22152,8 +22152,27 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
                 sock->priv->socket->priv->http_assumed_encoding.load(std::memory_order_relaxed));
         }
         if (charset.enc) {
-            response->setKeyValue("body", qore_http_body_string(charset, stream->body.data(),
-                stream->body.size()), xsink);
+            auto ct_it = stream->headers.find("content-type");
+            // a body that is not valid in its encoding is an error of the stream, which completes it, as the other
+            // errors of a stream are (qore#6554)
+            ExceptionSink body_xsink;
+            QoreStringNode* body = qore_http_response_body_string(ct_it != stream->headers.end()
+                && !ct_it->second.empty() ? ct_it->second.back().c_str() : nullptr, charset, stream->body.data(),
+                stream->body.size(), &body_xsink);
+            if (!body) {
+                QoreValue err = body_xsink.getExceptionErr();
+                QoreValue desc = body_xsink.getExceptionDesc();
+                ReferenceHolder<QoreHashNode> err_response(new QoreHashNode(autoTypeInfo), xsink);
+                err_response->setKeyValue("err", err.refSelf(), xsink);
+                err_response->setKeyValue("desc", desc.refSelf(), xsink);
+                err_response->setKeyValue("stream_id", stream_id, xsink);
+                err_response->setKeyValue("end_stream", true, xsink);
+                body_xsink.clear();
+                AutoLocker al(response_lock);
+                completed_responses.push_back(err_response.release());
+                return;
+            }
+            response->setKeyValue("body", body, xsink);
         } else {
             SimpleRefHolder<BinaryNode> body(new BinaryNode);
             body->append(stream->body.data(), stream->body.size());

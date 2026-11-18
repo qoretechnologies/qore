@@ -145,7 +145,7 @@ bool RegexMatchIterator::next(ExceptionSink* xsink) {
         utf_validated ? PCRE2_NO_UTF_CHECK : 0, md);
     assert(rc);
     if (rc < 1) {
-        if (qore_pcre2_check_match_error(rc, xsink)) {
+        if (qore_pcre2_check_match_error(rc, xsink, subject->c_str(), subject_size)) {
             assert(*xsink);
         }
         m_valid = false;

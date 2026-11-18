@@ -117,7 +117,7 @@ bool StringRegexSplitIterator::next(ExceptionSink* xsink) {
     if (rc < 1) {
         // NOMATCH (or benign PCRE2 error): trailing piece is the rest of
         // the subject.  Stop after yielding it.
-        if (qore_pcre2_check_match_error(rc, xsink)) {
+        if (qore_pcre2_check_match_error(rc, xsink, subject->c_str(), src_len)) {
             // Unknown error — surface as an exception rather than silently
             // truncating iteration.
             assert(*xsink);
