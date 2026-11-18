@@ -671,9 +671,18 @@ void QoreDatasourceConnectChoosers::clear() {
 }
 
 int qore_ds_private::getConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const {
+    // the creators: one pointer, copied in a leaf section; the vector is never changed once it is shared
+    return getConnectChoosersIntern(getCreators(), c, xsink);
+}
+
+int qore_ds_private::getInUseConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const {
+    // the creators copied with the values in use: no other section on the pending values (qore#5747)
+    return getConnectChoosersIntern(conn_creators ? conn_creators : getCreators(), c, xsink);
+}
+
+int qore_ds_private::getConnectChoosersIntern(const qore_ds_creators_t& cr, QoreDatasourceConnectChoosers& c,
+        ExceptionSink* xsink) const {
     try {
-        // the creators: one pointer, copied in a leaf section; the vector is never changed once it is shared
-        qore_ds_creators_t cr = getCreators();
         assert(cr && !cr->empty());
         std::unique_ptr<qore_ds_connect_choosers_private> np(new qore_ds_connect_choosers_private);
         np->entries.reserve(cr->size() + QDCP_COUNT);
@@ -723,8 +732,11 @@ void QoreDsRestrictingManagers::add(QoreSandboxManager* sm) {
 }
 
 int qore_ds_private::getRestrictingManagers(QoreDsRestrictingManagers& managers, ExceptionSink* xsink) const {
+    // the code that chose the connection is read from the snapshot of the values that the connection is opened with,
+    // which setConnectionValues() copied in one section: the destinations that are checked are those of the values
+    // that the driver connects with, and no other section on the pending values is taken
     QoreDatasourceConnectChoosers ch;
-    if (getConnectChoosers(ch, xsink)) {
+    if (getInUseConnectChoosers(ch, xsink)) {
         return -1;
     }
     for (size_t i = 0, e = ch.size(); i < e; ++i) {
