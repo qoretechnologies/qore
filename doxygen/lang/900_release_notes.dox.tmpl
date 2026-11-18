@@ -113,8 +113,9 @@
     "regex_extract()", @ref Qore::Regex "Regex", @ref Qore::RegexMatchIterator "RegexMatchIterator" and
     @ref Qore::StringRegexSplitIterator "StringRegexSplitIterator") raises an \c INVALID-ENCODING exception for a
     string that is not valid in its encoding, which it took as one that does not match; the new
-    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests a string without an exception
-    (issue #6554).
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests a string without an exception, and a
+    pattern with \c \\C, which matches one byte and so can match a part of a character, raises
+    \c REGEX-COMPILATION-ERROR (issue #6554).
 
     @par URL Decoding Refuses a Result That Is Not Valid UTF-8
     @ref Qore::decode_url() "decode_url()" and @ref Qore::decode_uri_request() "decode_uri_request()" raise
