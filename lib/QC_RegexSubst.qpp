@@ -124,6 +124,7 @@ string result = r.subst("test 123 and 456");
 
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
     @throw REGEX-SUBST-ERROR infinite recursion detected (empty pattern with global flag)
+    @throw INVALID-ENCODING the string is not valid in its encoding: it cannot be matched, and is not returned unchanged
  */
 string RegexSubst::subst(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->subst(subject, xsink);
@@ -145,6 +146,7 @@ string result = r.subst("test 123", "XXX");
 
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
     @throw REGEX-SUBST-ERROR infinite recursion detected (empty pattern with global flag)
+    @throw INVALID-ENCODING the string is not valid in its encoding: it cannot be matched, and is not returned unchanged
  */
 string RegexSubst::subst(string subject, string replacement) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return r->subst(subject, replacement, xsink);
@@ -211,6 +213,7 @@ string result = r.subst("abc 123 def 456", string sub (hash<RegexMatchInfo> m) {
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
     @throw REGEX-SUBST-ERROR infinite recursion detected with global substitution on empty pattern
+    @throw INVALID-ENCODING the string is not valid in its encoding: it cannot be matched, and is not returned unchanged
 
     @since %Qore 3.0
 */

@@ -520,7 +520,9 @@ QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
         tstr->concat(replacement->c_str(), replacement->size());
 
         ptr = t->c_str() + ovector[1];
-        match_options = PCRE2_NO_UTF_CHECK;
+        // as in exec(): a byte-matching pattern such as \C can end inside a UTF-8 character, where the next match keeps
+        // PCRE2's offset validation
+        match_options = (static_cast<unsigned char>(*ptr) & 0xc0) == 0x80 ? 0 : PCRE2_NO_UTF_CHECK;
 
         if (!global) {
             break;

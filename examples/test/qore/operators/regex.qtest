@@ -1189,7 +1189,7 @@ class RegexTest inherits QUnit::Test {
         # regex_subst function form — also goes through QoreRegexSubst::exec
         assertThrows("INVALID-ENCODING", \regex_subst(), (bad, "password", "<masked>"));
         assertThrows("INVALID-ENCODING", sub () {
-            regex_subst(bad, "password", string sub (hash<RegexMatchInfo> match) {
+            string r = regex_subst(bad, "password", string sub (hash<RegexMatchInfo> match) {
                 return "<masked>";
             }, RE_Global);
         });

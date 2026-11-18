@@ -18,6 +18,9 @@ class RegexSubstInvalidEncodingTest inherits QUnit::Test {
         addTestCase("substitution operator", \substOperator());
         addTestCase("regex_subst()", \substFunction());
         addTestCase("valid strings are unaffected", \validStrings());
+        addTestCase("invalid bytes after a match", \invalidAfterMatch());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("byte-matching patterns", \byteMatch());
         set_return_value(main());
     }
 
@@ -48,7 +51,33 @@ class RegexSubstInvalidEncodingTest inherits QUnit::Test {
     substFunction() {
         assertThrows("INVALID-ENCODING", \regex_subst(), (invalid(), "'", "''", RE_Global));
         assertThrows("INVALID-ENCODING", sub () {
-            regex_subst(invalid(), "'", string sub (hash<RegexMatchInfo> m) { return "''"; }, RE_Global);
+            string r = regex_subst(invalid(), "'", string sub (hash<RegexMatchInfo> m) { return "''"; }, RE_Global);
+        });
+        # the RegexSubst class
+        RegexSubst rs("'", "''", RE_Global);
+        assertThrows("INVALID-ENCODING", \rs.subst(), (invalid(),));
+        assertEq("a''b", rs.subst("a'b"));
+    }
+
+    #! the whole subject is checked by the first match, also when the invalid bytes follow a match
+    invalidAfterMatch() {
+        string s = binary_to_string(parse_hex_string("27616161ff"), "UTF-8");
+        assertThrows("INVALID-ENCODING", "offset 4", sub () { s =~ s/'/''/g; });
+        assertThrows("INVALID-ENCODING", "offset 4", \regex_subst(), (s, "'", "''"));
+    }
+
+    #! a string in another encoding that is not valid in it cannot be converted to UTF-8 to be matched
+    otherEncodings() {
+        string sj = binary_to_string(parse_hex_string("8227ff"), "SHIFT_JIS");
+        assertThrows("ENCODING-CONVERSION-ERROR", sub () { sj =~ s/'/''/g; });
+    }
+
+    #! a byte-matching pattern that ends inside a character keeps PCRE2's offset check in the callback form, as in
+    #! the replacement form
+    byteMatch() {
+        assertThrows("REGEX-ERROR", \regex_subst(), ("éa", "\\C", "Z", RE_Global));
+        assertThrows("REGEX-ERROR", sub () {
+            string r = regex_subst("éa", "\\C", string sub (hash<RegexMatchInfo> m) { return "Z"; }, RE_Global);
         });
     }
 

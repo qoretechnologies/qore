@@ -2923,6 +2923,8 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         fmt = regex_subst(fmt, "YYYY", "yyyy", RE_Global);
         fmt = regex_subst(fmt, "YY(?!yy)", "yy", RE_Global);
         fmt = regex_subst(fmt, "DD", "dd", RE_Global);

@@ -609,6 +609,12 @@ lorem ipsum\r
             assertEq(original, decoded, "RFC 2231 roundtrip preserves filename");
         }
 
+        # a name that is not valid in its encoding gives the default name, with no path separator (qore#6553)
+        {
+            string filename = binary_to_string(parse_hex_string("2e2e2fff2f706173737764"), "UTF-8");
+            assertEq("attachment", sanitize_filename(filename));
+        }
+
         # Test sanitize_filename removes path separators
         {
             string filename = "../../../etc/passwd";

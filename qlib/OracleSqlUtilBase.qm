@@ -4913,6 +4913,8 @@ group by p.index_name", schema.upr(), name.upr());
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         # use negative lookahead to avoid double-replacing "HH24" -> "HH2424"
         fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);

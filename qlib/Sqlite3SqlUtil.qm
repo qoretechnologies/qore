@@ -2299,6 +2299,8 @@ string str = table.getSqlValue(date);
             @since Sqlite3SqlUtil 1.1
         */
         static string convertDateFormat(string fmt) {
+            # the format is written into an SQL string literal (qore#6553)
+            sql_literal_check_encoding(fmt);
             # replace longer tokens first to avoid partial matches (YYYY before YY)
             fmt = regex_subst(fmt, "YYYY", "%Y", RE_Global);
             fmt = regex_subst(fmt, "YY(?!YY)", "%y", RE_Global);

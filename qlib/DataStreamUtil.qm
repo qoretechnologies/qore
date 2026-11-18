@@ -1614,9 +1614,14 @@ namespace DataStreamUtilPrivate {
     # description that is not valid in its encoding (it can come from a peer) cannot be processed and is not given, so
     # that the caller, which handles an error, does not raise another one (qore#6553)
     string sub ds_error_line(hash<ExceptionInfo> ex) {
-        string err = (ex.err.typeCode() == NT_STRING && ex.err =~ /^/) ? ex.err : "<error code not valid in its encoding>";
-        string desc = (ex.desc.typeCode() == NT_STRING && ex.desc =~ /^/) ? ex.desc
-            : "<description not valid in its encoding>";
+        auto err = ex.err;
+        if (err.typeCode() == NT_STRING && !(err =~ /^/)) {
+            err = "<error code not valid in its encoding>";
+        }
+        auto desc = ex.desc;
+        if (desc.typeCode() == NT_STRING && !(desc =~ /^/)) {
+            desc = "<description not valid in its encoding>";
+        }
         string str = sprintf("%s: %s", err, desc);
         str =~ s/[\r\n]/ /g;
         return str;

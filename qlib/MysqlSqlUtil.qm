@@ -2715,6 +2715,8 @@ end";
             @return the format string with MySQL-specific codes: %Y, %y, %m, %d, %H, %i, %s, %f
         */
         static string convertDateFormat(string fmt) {
+            # the format is written into an SQL string literal (qore#6553)
+            sql_literal_check_encoding(fmt);
             # replace longer tokens first to avoid partial matches (YYYY before YY)
             fmt = regex_subst(fmt, "YYYY", "%Y", RE_Global);
             fmt = regex_subst(fmt, "YY", "%y", RE_Global);
