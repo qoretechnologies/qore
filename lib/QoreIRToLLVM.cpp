@@ -4050,6 +4050,32 @@ bool QoreIRToLLVM::isReturnValueAlloca(llvm::Value* alloca_ptr) const {
 void QoreIRToLLVM::emitHeldReturnValueRelease(llvm::Module& module) {
     auto helper = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    if (outline_transfer_held && outline_held_return) {
+        // an outlined helper returns the value to its coordinator, which releases it after its own locals; the
+        // values held are the same value, each with a reference of its own (see return_value_family), or the value of
+        // a handler's return that replaced it, whose hand-over released the interrupted one: the first one held is
+        // returned, and the references of the others are released
+        llvm::Value* nothing = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+        auto transfer = [&](llvm::Value* slot) {
+            llvm::Value* val = builder->CreateLoad(i64_type, slot);
+            builder->CreateStore(nothing, slot);
+            llvm::Value* cur = builder->CreateLoad(i64_type, outline_held_return);
+            llvm::Value* free_slot = builder->CreateICmpEQ(cur, nothing);
+            builder->CreateStore(builder->CreateSelect(free_slot, val, cur), outline_held_return);
+            builder->CreateCall(helper, {builder->CreateSelect(free_slot, nothing, val), xsink_arg});
+        };
+        if (handler_return_hold) {
+            transfer(handler_return_hold);
+        }
+        for (uint32_t id : return_value_ids) {
+            auto i = invoke_alloca_map.find(id);
+            if (i == invoke_alloca_map.end() || !i->second) {
+                continue;
+            }
+            transfer(i->second);
+        }
+        return;
+    }
     // the value of a handler's return that replaced an interrupted return (#5992)
     if (handler_return_hold) {
         llvm::Value* val = builder->CreateLoad(i64_type, handler_return_hold);
@@ -4066,6 +4092,14 @@ void QoreIRToLLVM::emitHeldReturnValueRelease(llvm::Module& module) {
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), i->second);
         builder->CreateCall(helper, {val, xsink_arg});
     }
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::getExceptionExitReturnValue() {
+    if (outline_held_return) {
+        return builder->CreateLoad(i64_type, outline_held_return);
+    }
+    return getNothingReturnValue();
 }
 
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
@@ -5874,8 +5908,10 @@ void QoreIRToLLVM::emitExceptionExitTail(llvm::Module& module) {
     emitOnBlockExitExec(module);
     emitPreinstantiatedCleanup(module, true);
     emitInvokeCleanup(module);
+    outline_transfer_held = true;
     emitLocalUninstantiation(module);
-    builder->CreateRet(getNothingReturnValue());
+    outline_transfer_held = false;
+    builder->CreateRet(getExceptionExitReturnValue());
     if (saved_insert) {
         builder->SetInsertPoint(saved_insert, saved_ip);
     }
@@ -14153,7 +14189,11 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     // release of the statement's temporaries (DiscardTempsKeep), which the AST interpreter releases after it - a
     // temporary receiver of a method call among them (QoreStatementTempScope::holdReceiver()) - by a handler or
     // by the destructor of a local
-    if (!return_value_ids.empty() && inst->opcode != QoreIROpcode::DiscardTempsKeep && inst->result.isValid()
+    // the result of an outlined helper's call on an exception is the value of a return of the helper that the
+    // exception interrupted, which the return had already taken: it is held until after the locals (see
+    // QoreIRToLLVM::outline_held_return, qore#6650)
+    if (!return_value_ids.empty() && inst->opcode != QoreIROpcode::DiscardTempsKeep
+            && inst->opcode != QoreIROpcode::CallAOTHelper && inst->result.isValid()
             && return_value_ids.count(inst->result.id)) {
         auto alloca_it = invoke_alloca_map.find(inst->result.id);
         if (alloca_it != invoke_alloca_map.end() && alloca_it->second) {
@@ -14742,6 +14782,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     holding_return_values = false;
     catch_return_release_blocks.clear();
     handler_return_hold = nullptr;
+    outline_held_return = nullptr;
+    outline_transfer_held = false;
     handler_return_hold_sites.clear();
     {
         std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
@@ -15655,6 +15697,28 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             getOrCreateLocalReloadEpoch(llvm_func);
         }
         // see handler_return_hold (#5992): only a function with a handler that can return a value has it
+        // an outlined helper with in-region returns of a value hands the value of an interrupted return over to
+        // its coordinator (see outline_held_return)
+        if (aot_mode && !func.aot_symbol_owner.empty() && !return_value_ids.empty()) {
+            bool signaled = false;
+            for (const auto& block : func.blocks) {
+                for (const auto& binst : block->instructions) {
+                    if (binst && binst->opcode == QoreIROpcode::Return
+                            && static_cast<const QoreIRReturnInstruction*>(binst.get())->outline_signal) {
+                        signaled = true;
+                        break;
+                    }
+                }
+                if (signaled) {
+                    break;
+                }
+            }
+            if (signaled) {
+                llvm::IRBuilder<> held_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
+                outline_held_return = held_builder.CreateAlloca(i64_type, nullptr, "outline_held_return");
+                held_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), outline_held_return);
+            }
+        }
         if (has_on_block_exit_handlers && qore_ir_handlers_return_value(func)) {
             llvm::IRBuilder<> hold_builder(&llvm_func->getEntryBlock(), llvm_func->getEntryBlock().begin());
             handler_return_hold = hold_builder.CreateAlloca(i64_type, nullptr, "handler_return_hold");
@@ -17860,8 +17924,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         emitOnBlockExitExec(module);
         emitPreinstantiatedCleanup(module, true);
         emitInvokeCleanup(module);
+        outline_transfer_held = true;
         emitLocalUninstantiation(module);
-        builder->CreateRet(getNothingReturnValue());
+        outline_transfer_held = false;
+        builder->CreateRet(getExceptionExitReturnValue());
     }
 
     // every instruction of the body is lowered: the allocas registered for a local after an UninstantiateLocal of it
