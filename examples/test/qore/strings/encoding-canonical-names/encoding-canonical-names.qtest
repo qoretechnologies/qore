@@ -1,0 +1,55 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class EncodingCanonicalNamesTest
+
+#! an encoding that is not predefined has one canonical name, whatever the spelling of its first use (qore#6570)
+/** Before, it was registered with the spelling of its first use, and every later lookup, which ignores case, gave that
+    spelling, so the name of an encoding depended on what the process had used before.
+*/
+class EncodingCanonicalNamesTest inherits QUnit::Test {
+    constructor() : Test("canonical encoding names", "1.0", \ARGV) {
+        addTestCase("standard names", \standardNames());
+        addTestCase("other names", \otherNames());
+        addTestCase("predefined names", \predefinedNames());
+        set_return_value(main());
+    }
+
+    #! returns the name of the encoding of a string made with the given encoding name
+    private static string name(string enc) {
+        return binary_to_string(<41>, enc).encoding();
+    }
+
+    #! a name of the table of character set labels has its standard spelling, whatever the spelling of its first use
+    standardNames() {
+        # first used here in lower case
+        assertEq("Big5-HKSCS", name("big5-hkscs"));
+        assertEq("Big5-HKSCS", name("BIG5-HKSCS"));
+        assertEq("Big5-HKSCS", name("Big5-HKSCS"));
+        # first used here in upper case
+        assertEq("macintosh", name("MACINTOSH"));
+        assertEq("macintosh", name("macintosh"));
+        foreach string n in ("SHIFT_JIS", "shift_jis", "Shift_JIS") {
+            assertEq("Shift_JIS", name(n), n);
+        }
+    }
+
+    #! any other name is given in upper case, as the predefined names are
+    otherNames() {
+        assertEq("X-QORE-TEST-6570", name("x-qore-test-6570"));
+        assertEq("X-QORE-TEST-6570", name("X-Qore-Test-6570"));
+        assertEq("CP1047", name("cp1047"));
+    }
+
+    #! the predefined names are unchanged
+    predefinedNames() {
+        assertEq("UTF-8", name("utf-8"));
+        assertEq("ISO-8859-1", name("iso-8859-1"));
+        assertEq("US-ASCII", name("us-ascii"));
+    }
+}
