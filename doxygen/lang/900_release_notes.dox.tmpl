@@ -2286,6 +2286,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a constant, static class variable or static method given as \c "Class::name" (also in a call reference) is
+      found in a class with that name that provides it, also when the name resolves first to another class with that
+      name that does not (such as a class of the Qore namespace; see @ref class_member_scope_resolution); the
+      reference raised a parse exception (issue #1527)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

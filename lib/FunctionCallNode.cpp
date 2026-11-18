@@ -2321,6 +2321,8 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                     : QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
                 )
             : parse_get_class_priv();
+        // the class context before the private-access check of the first class, for the other classes with the name
+        qore_class_private* scope_class_ctx = class_ctx;
 
         // see if this is a call to a base class method if bare refs are allowed
         // and we're parsing in a class context and the class found is in the
@@ -2367,7 +2369,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
             // link time exactly as the qualified spelling of the same call is.
             const QoreMethod* loaded_method = nullptr;
             QoreClass* loaded_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
-                scope->getIdentifier(), class_ctx, &loaded_method);
+                scope->getIdentifier(), class_ctx, &loaded_method, false);
             if (loaded_qc && loaded_method
                     && qore_aot_clean_source_symbol_path(loaded_qc->getNamespacePath().c_str())
                         != qore_aot_clean_source_symbol_path(deferred_source_receiver_path.c_str())) {
@@ -2429,6 +2431,32 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 assert(!n);
             }
 
+            // no function or constant either: another class with the name that has the static method is used, as
+            // for "Class::name" constants and static variables (issue #1527)
+            // a function of another source of an AOT group is resolved at link time
+            if (!defer_source_static_receiver && !defer_source_function && scope->size() == 2) {
+                const QoreMethod* other_method = nullptr;
+                QoreClass* other_qc = nullptr;
+                // with bare references in a class, a method of a parent class with the name, as for the first class
+                if (pc && scope_class_ctx) {
+                    other_qc = qore_root_ns_private::parseFindParentClassWithMethod(scope->get(0),
+                        scope->getIdentifier(), scope_class_ctx, other_method);
+                }
+                if (!other_qc) {
+                    other_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
+                        scope->getIdentifier(), scope_class_ctx, &other_method);
+                }
+                if (other_qc && other_method) {
+                    qc = other_qc;
+                    method = other_method;
+                    class_ctx = scope_class_ctx
+                            && qore_class_private::parseCheckPrivateClassAccess(*qc, scope_class_ctx)
+                        ? scope_class_ctx : nullptr;
+                }
+            }
+        }
+
+        if (!method) {
             // A namespace-qualified class call (Ns::C()) reaches the static-call parser.  A real
             // function with that name was resolved above, so a class match here is just as precise
             // as the unqualified C() case.
