@@ -1,0 +1,156 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - qcc compiles and links the sources ahead of time
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires json
+
+%exec-class QccLoadModulesTest
+
+#! The modules given with qcc -l (issues #6584, #6585)
+/** The parse errors and warnings of a module given with -l are reported as diagnostics of the compiled code, in the
+    form of qcc's other diagnostics (not in the text of qcc's error); and -l applies to an executable compile too, which
+    ignored it.
+*/
+class QccLoadModulesTest inherits QUnit::Test {
+    private {
+        string qcc_bin;
+        TmpDir tmp("qore-qcc-load-modules-");
+        string mod_dir;
+        string bad_module;
+        string uses_module;
+        string plain;
+        string warn_dir;
+    }
+
+    constructor() : QUnit::Test("QccLoadModulesTest", "1.0", \ARGV) {
+        qcc_bin = TestInterpreter::qcc_compiler();
+        mod_dir = tmp.path + DirSep + "mods";
+        mkdir(mod_dir);
+        string header = "    version = \"1.0\";\n    desc = \"test\";\n    author = \"test\";\n"
+            "    url = \"https://qore.org\";\n}\n";
+        bad_module = writeFile(mod_dir + DirSep + "QccBadModule.qm", "%modern\nmodule QccBadModule {\n" + header
+            + "public int sub f() {\n}\n");
+        writeFile(mod_dir + DirSep + "QccGoodModule.qm", "%modern\nmodule QccGoodModule {\n" + header
+            + "public int sub qcc_good_module_value() { return 42; }\n");
+        uses_module = writeFile(tmp.path + DirSep + "uses-module.qr",
+            "%modern\nprintf(\"%d\\n\", qcc_good_module_value());\n");
+        plain = writeFile(tmp.path + DirSep + "plain.q", "%modern\nint sub g() { return 1; }\n");
+        # a module whose binary form cannot be loaded: the loader warns and loads its source
+        warn_dir = tmp.path + DirSep + "warn-mods";
+        mkdir(warn_dir);
+        writeFile(warn_dir + DirSep + "QccWarnModule.qm", "%modern\nmodule QccWarnModule {\n" + header
+            + "public int sub qcc_warn_module_value() { return 1; }\n");
+        writeFile(warn_dir + DirSep + "QccWarnModule.qmod", "not a module\n");
+        addTestCase("a parse error of a module given with -l", \badModuleTest());
+        addTestCase("a parse error of a module given with -l, in JSON", \badModuleJsonTest());
+        addTestCase("-l applies to an executable compile", \executableTest());
+        addTestCase("a parse error of a module given with -l to an executable compile", \badModuleExecutableTest());
+        addTestCase("a module given with -l that does not exist", \missingModuleTest());
+        addTestCase("a module given with -l to a module compile", \moduleCompileTest());
+        addTestCase("a warning of a module given with -l with -r", \warningsAreErrorsTest());
+        set_return_value(main());
+    }
+
+    private string writeFile(string path, string src) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(src);
+        f.close();
+        return path;
+    }
+
+    #! runs qcc with \a args with the test's module directory in the module path; returns its output and status
+    private hash<auto> qcc(string args) {
+        string err_file = tmp.path + DirSep + "stderr.txt";
+        int rc;
+        string out = backquote(sprintf("env -u QORE_DIAG_FORMAT -u QORE_CODE_FRAMES QORE_MODULE_DIR=%s %s %s 2>%s",
+            mod_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""), qcc_bin, args, err_file), \rc);
+        return {"out": out, "err": ReadOnlyFile::readTextFile(err_file), "status": rc};
+    }
+
+    private checkBadModule(hash<auto> r) {
+        assertNeq(0, r.status, r.err);
+        assertFalse(r.err =~ /unhandled QORE/, r.err);
+        assertRegex("(^|\n)" + quote(bad_module) + ":8: error: MISSING-RETURN: ", r.err);
+        # qcc's own error does not repeat the module's errors
+        assertRegex("(^|\n)error: cannot load required module 'QccBadModule'\n", r.err);
+    }
+
+    badModuleTest() {
+        checkBadModule(qcc(sprintf("-l QccBadModule -c -o %s/plain.qo %s", tmp.path, plain)));
+    }
+
+    badModuleJsonTest() {
+        hash<auto> r = qcc(sprintf("--diag-format=json -l QccBadModule -c -o %s/plain.qo %s", tmp.path, plain));
+        assertNeq(0, r.status, r.err);
+        list<auto> diags = parse_json(r.out);
+        assertEq(1, diags.size(), r.out);
+        assertEq("MISSING-RETURN", diags[0].code);
+        assertEq(bad_module, diags[0].file);
+        assertEq(8, diags[0].startLine);
+    }
+
+    executableTest() {
+        string exe = tmp.path + DirSep + "uses-module";
+        # without the module, the code does not parse
+        hash<auto> r = qcc(sprintf("-o %s %s", exe, uses_module));
+        assertNeq(0, r.status, r.err);
+        assertRegex("qcc_good_module_value\\(\\)' cannot be found", r.err);
+        # with -l, it compiles, and the executable runs with the module
+        r = qcc(sprintf("-l QccGoodModule -o %s %s", exe, uses_module));
+        assertEq(0, r.status, r.err);
+        int rc;
+        string out = backquote(sprintf("QORE_MODULE_DIR=%s %s 2>&1", mod_dir
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""), exe), \rc);
+        assertEq(0, rc, out);
+        assertEq("42\n", out);
+        # the executable needs the module when it starts
+        out = backquote(sprintf("QORE_MODULE_DIR=%s %s 2>&1", ENV.QORE_MODULE_DIR ?? "", exe), \rc);
+        assertNeq(0, rc, out);
+        assertRegex("QccGoodModule", out);
+    }
+
+    badModuleExecutableTest() {
+        checkBadModule(qcc(sprintf("-l QccBadModule -o %s/plain-exe %s", tmp.path, plain)));
+    }
+
+    missingModuleTest() {
+        hash<auto> r = qcc(sprintf("-l QccNoSuchModule -c -o %s/plain.qo %s", tmp.path, plain));
+        assertNeq(0, r.status, r.err);
+        assertRegex("(^|\n)qcc: error: LOAD-MODULE-ERROR: feature 'QccNoSuchModule'", r.err);
+        assertRegex("(^|\n)error: cannot load required module 'QccNoSuchModule'\n", r.err);
+    }
+
+    #! a module states the modules it needs with %requires: -l is refused for it, not ignored
+    moduleCompileTest() {
+        string module = writeFile(tmp.path + DirSep + "QccPlainModule.qm", "%modern\nmodule QccPlainModule {\n"
+            "    version = \"1.0\";\n    desc = \"test\";\n    author = \"test\";\n    url = \"https://qore.org\";\n}\n"
+            "public int sub h() { return 1; }\n");
+        hash<auto> r = qcc(sprintf("-l QccGoodModule -o %s/QccPlainModule.qmod %s", tmp.path, module));
+        assertNeq(0, r.status, r.err);
+        assertRegex("-l/--load cannot be used when compiling a module", r.err);
+    }
+
+    #! the warnings of a module given with -l are errors with -r, as those of the compiled code
+    warningsAreErrorsTest() {
+        string err_file = tmp.path + DirSep + "stderr.txt";
+        int rc;
+        backquote(sprintf("env -u QORE_DIAG_FORMAT -u QORE_CODE_FRAMES QORE_MODULE_DIR=%s %s -r -l QccWarnModule "
+            "-c -o %s/plain-w.qo %s 2>%s", warn_dir + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : ""), qcc_bin,
+            tmp.path, plain, err_file), \rc);
+        string err = ReadOnlyFile::readTextFile(err_file);
+        assertNeq(0, rc, err);
+        assertRegex("warning: BINARY-MODULE-SOURCE-FALLBACK: ", err);
+    }
+
+    #! escapes \a str for a regular expression
+    private static string quote(string str) {
+        return regex_subst(str, "([.+*?^$(){}\\[\\]|\\\\])", "\\\\$1", RE_Global);
+    }
+}

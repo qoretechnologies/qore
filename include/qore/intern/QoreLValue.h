@@ -1809,7 +1809,8 @@ public:
 #endif
     }
 
-    DLLLOCAL QoreValue removeValue(bool for_del) {
+    // inlined explicitly: on a hot path whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreValue removeValue(bool for_del) {
         if (!assigned)
             return QoreValue();
         assigned = false;

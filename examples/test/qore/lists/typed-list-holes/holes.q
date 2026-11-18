@@ -66,6 +66,14 @@ auto sub del_hash_auto(reference<hash<auto>> r) {
     return r;
 }
 
+#! appends to a list<int> named by a reference<list<int>> passed on from another reference parameter
+sub ref_append(reference<list<int>> r) {
+    r += 3;
+}
+sub ref_pass_on(reference<list<int>> r) {
+    ref_append(\r);
+}
+
 #! removes the element at index 1 of a list held by an auto parameter and returns the list
 auto sub rem1(auto l) {
     auto v = remove l[1];
@@ -251,6 +259,7 @@ t("delete in a hash through a reference<hash<auto>> of auto", auto sub () {
     del_hash_auto(\h);
     return (h, h.fullType());
 });
+t("typed reference passed on", auto sub () { auto l = (1, 2); ref_pass_on(\l); return l; });
 t("remove in a function", auto sub () { return rem1((1, 2, 3)); });
 t("delete member auto", auto sub () { Holder h(); h.a = (1, 2); delete h.a[0]; return h.a; });
 t("delete member declared", auto sub () { Holder h(); h.i = (1, 2); delete h.i[0]; return h.i; });

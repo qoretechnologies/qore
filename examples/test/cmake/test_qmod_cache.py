@@ -180,7 +180,7 @@ class ModuleInfoTest(unittest.TestCase):
         dependencies, with their flags; version 4 the functional domains that the module declares, the dependencies it
         requires only after its header and the functional domains its code restricts"""
         p = self.write(b"junk" + qami_record("M", ["Util"], ["xml"], ["Util", "Base", "Re"], ["/p1", "/p2"], ["/a"],
-                                             domains=0x1000000, post_header=["Util"], restricted=0x20,
+                                             domains=0x1000000, post_header=["Util"], restricted=0x4000,
                                              restrictions=[("Util", 0x1000000000, 0x2), ("Pre", 0x4, 0, 1)])
                        + b"tail")
         info = qc.read_module_info(p, "M")
@@ -192,7 +192,7 @@ class ModuleInfoTest(unittest.TestCase):
         self.assertEqual([("Util", (0, 0x10, 2, 0), 0), ("Pre", (4, 0, 0, 0), 1)], info.dependency_restrictions)
         self.assertEqual(0x1000000, info.declared_domains)
         self.assertEqual(["Util"], info.post_header_dependencies)
-        self.assertEqual(0x20, info.restricted_domains)
+        self.assertEqual(0x4000, info.restricted_domains)
         info = qc.read_module_info(self.write(qami_record("M")), "M")
         self.assertEqual(([], [], [], [], 0, [], 0), (info.compiled_with, info.prepend_paths, info.append_paths,
                                                      info.dependency_restrictions, info.declared_domains,
@@ -280,6 +280,124 @@ class ModuleInfoTest(unittest.TestCase):
         qc._listdir_cache.clear()
         names = [os.path.relpath(p, self.dir) for p, _ in qc.module_candidates("Opt", [str(a), str(b)])]
         self.assertEqual(["a/Opt-api-2.3.qmod", os.path.join("b", "Opt", "Opt.qm")], names)
+
+
+def cpp_constants(*paths):
+    """The integer constants of C/C++ sources: the object-like #define macros and the constexpr variables, name ->
+    the list of the expression texts that define it (continuation lines joined, comments removed; a name defined in
+    more than one place, e.g. in #ifdef alternatives, has more than one)"""
+    exprs = {}
+    for path in paths:
+        text = re.sub(r"/\*.*?\*/", " ", (ROOT / path).read_text().replace("\\\n", " "), flags=re.S)
+        text = re.sub(r"//[^\n]*", "", text)
+        for m in re.finditer(r"^[ \t]*#[ \t]*define[ \t]+([A-Z_][A-Z0-9_]*)[ \t]+([^\n]+)$", text, re.M):
+            exprs.setdefault(m.group(1), []).append(m.group(2).strip())
+        for m in re.finditer(r"\bconstexpr\s+[\w:]+\s+([A-Za-z_]\w*)\s*=\s*([^;{]+);", text):
+            exprs.setdefault(m.group(1), []).append(m.group(2).strip())
+    return exprs
+
+
+#: the tokens of the integer expressions that cpp_value() evaluates: integers with their C suffixes, names, <<, |, *,
+#: + and parentheses
+CPP_TOKEN = re.compile(r"\s*(?:(0[xX][0-9a-fA-F]+|\d+)[uUlL]*\b|([A-Za-z_]\w*)|(<<|[|*+()]))")
+
+
+def cpp_value(exprs, name, depth=0):
+    """Evaluates the integer constant @p name of @p exprs (from cpp_constants()), with the constants it refers to;
+    raises ValueError if it, or a constant it refers to, is not defined exactly once or is not such an expression
+    (a cast, for example)"""
+    if depth > 32:
+        raise ValueError("cannot evaluate %s: the constants refer to each other too deeply (a cycle?)" % name)
+    defs = exprs.get(name, [])
+    if len(defs) != 1:
+        raise ValueError("cannot evaluate %s: %d definitions" % (name, len(defs)))
+    text, pos, out = defs[0], 0, []
+    # an operand (a number, a name or a closing parenthesis) is never directly followed by another one or by an
+    # opening parenthesis: Python would read that as a call
+    after_operand = False
+    while pos < len(text.rstrip()):
+        m = CPP_TOKEN.match(text, pos)
+        if not m:
+            raise ValueError("%s is not an integer expression: %r" % (name, text))
+        num, ref, op = m.groups()
+        if after_operand and (num or ref or op == "("):
+            raise ValueError("%s is not an integer expression: %r" % (name, text))
+        if num:
+            out.append(num)
+        elif ref:
+            out.append("(%d)" % cpp_value(exprs, ref, depth + 1))
+        else:
+            out.append(op)
+        after_operand = bool(num or ref or op == ")")
+        pos = m.end()
+    if not out:
+        raise ValueError("%s is empty" % name)
+    try:
+        return int(eval(" ".join(out), {"__builtins__": {}}, {}))
+    except (SyntaxError, TypeError) as e:
+        raise ValueError("%s is not an integer expression: %r" % (name, text)) from e
+
+
+class QamiParityTest(unittest.TestCase):
+    """tools/qore_qami.py reads the record as libqore does: its constants are those of the C++ sources, and it refuses
+    the records that qoreAOTDecodeModuleInfo() refuses"""
+
+    def setUp(self):
+        self.qami = qc.qore_qami
+        self.cpp = cpp_constants("include/qore/Restrictions.h", "include/qore/intern/SyncParseOptions.h",
+                                 "include/qore/intern/QoreAOTBinary.h", "lib/QoreAOTBinary.cpp")
+
+    def test_evaluator(self):
+        # the evaluator reads what the sources write, and refuses what it cannot evaluate
+        self.assertEqual(1 << 14, cpp_value(self.cpp, "QDOM_PROCESS"))
+        self.assertEqual(1 << 53, cpp_value(self.cpp, "QDOM_REFLECTION"))
+        self.assertEqual(3, cpp_value({"A": ["(1u << 0)"], "B": ["(1u << 1)"], "C": ["A | B"]}, "C"))
+        self.assertEqual(16 * 1024 * 1024, cpp_value({"X": ["16 * 1024 * 1024"]}, "X"))
+        self.assertEqual(0x494d4151, cpp_value({"X": ["0x494d4151u"]}, "X"))
+        # undefined, defined twice, a call, a cast, other operators, Python's power and comparison, empty, unbalanced
+        for bad in ({"X": ["Y"]}, {"X": ["1", "2"]}, {"X": ["f(1)"]}, {"X": ["static_cast<int64>(1)"]},
+                    {"X": ["(int64)1"]}, {"X": ["1 - 1"]}, {"X": ["2 ** 3"]}, {"X": ["1 < 2"]}, {"X": [""]},
+                    {"X": ["(1"]}, {"X": ["\"a\""]}, {"X": ["()"]}, {"X": ["1 (2)"]}, {"X": ["(1)(2)"]},
+                    {"X": ["Y (Y)"], "Y": ["1"]}, {"X": ["1 2"]}, {"X": ["Y"], "Y": ["X"]}):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                cpp_value(bad, "X")
+
+    def test_domains(self):
+        """ALL_DOMAINS is QDOM_ALL"""
+        self.assertEqual(cpp_value(self.cpp, "QDOM_ALL"), self.qami.ALL_DOMAINS)
+
+    def test_flags(self):
+        self.assertEqual(cpp_value(self.cpp, "QMDR_BEFORE_HEADER"), self.qami.FLAG_BEFORE_HEADER)
+        self.assertEqual(cpp_value(self.cpp, "QMDR_INEXACT"), self.qami.FLAG_INEXACT)
+        self.assertEqual(cpp_value(self.cpp, "QMDR_ALL_FLAGS"), self.qami.ALL_FLAGS)
+
+    def test_record_format(self):
+        self.assertEqual(cpp_value(self.cpp, "QORE_AOT_MODULE_INFO_VERSION"), self.qami.CURRENT_VERSION)
+        self.assertEqual(struct.pack("<I", cpp_value(self.cpp, "QORE_AOT_MODULE_INFO_MAGIC")), self.qami.MAGIC)
+        self.assertEqual(cpp_value(self.cpp, "QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE"), self.qami.MAX_PAYLOAD)
+        self.assertEqual(cpp_value(self.cpp, "QORE_AOT_MODULE_INFO_MAX_COUNT"), self.qami.MAX_COUNT)
+        self.assertEqual(cpp_value(self.cpp, "QORE_AOT_MODULE_INFO_HEADER_SIZE"), self.qami.HEADER_SIZE)
+
+    def test_unknown_domain_bits(self):
+        """A record whose declared or restricted domains have a bit outside QDOM_ALL is invalid, as in libqore"""
+        all_domains = cpp_value(self.cpp, "QDOM_ALL")
+        outside = [b for b in range(64) if not all_domains >> b & 1]
+        self.assertTrue(outside)
+        valid = qami_record("M", domains=all_domains, restricted=all_domains)
+        info = self.qami.parse(valid, exact=True)
+        self.assertEqual((all_domains, all_domains), (info.declared_domains, info.restricted_domains))
+        for bit in outside:
+            for field in ("domains", "restricted"):
+                rec = qami_record("M", **{field: 1 << bit})
+                self.assertIsNone(self.qami.parse(rec, exact=True), "%s bit %d" % (field, bit))
+        # the cache refuses such a module as it refuses any record it cannot read
+        p = Path(tempfile.mkdtemp(prefix="qore-qami-")) / "M.qmod"
+        self.addCleanup(shutil.rmtree, str(p.parent))
+        p.write_bytes(b"junk" + qami_record("M", ["Util"], domains=1 << outside[0]) + b"tail")
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(str(p), "M")
+        p.write_bytes(b"junk" + qami_record("M", ["Util"], domains=all_domains) + b"tail")
+        self.assertEqual(["Util"], qc.read_module_info(str(p), "M").dependencies)
 
 
 class IncludeTest(unittest.TestCase):

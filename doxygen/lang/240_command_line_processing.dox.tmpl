@@ -105,7 +105,7 @@
     |<tt>--output-dir=</tt><em>dir</em>|Output directory for batch \c -c builds
     |<tt>--depfile-dir=</tt><em>dir</em>|Write one dependency file per batch output into <em>dir</em>
     |<tt>--batch-build-sidecars</tt>|Write incremental-build index, manifest, status, dependency, and stamp sidecars for every batch output; requires \c --depfile-dir
-    |<tt>-l</tt>, <tt>--load=</tt><em>module</em>|Load a module before parsing sources
+    |<tt>-l</tt>, <tt>--load=</tt><em>module</em>|Load a module before parsing sources, when compiling a script, an object or an executable (an executable loads it when it starts); not when compiling a module, which uses @ref requires "%requires"; the parse errors and warnings of the module are reported as those of the compiled code, and its warnings are errors with \c -r
     |<tt>--stub=</tt><em>file</em>|Preload declaration-only source supplied by a host
     |<tt>--define=</tt><em>name</em><tt>[=</tt><em>value</em><tt>]</tt>|Set parser defines before parsing
     |<tt>--parse-option=</tt><em>name</em>|Set a parse option before parsing

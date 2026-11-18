@@ -704,6 +704,9 @@ void QoreEncodingManager::addAlias(const QoreEncoding* qcs, const char* alias) {
     mutex.unlock();
 }
 
+// returns the canonical name of an encoding that Qore does not know, defined after the table of character set labels
+static std::string qore_canonical_charset_name(const char* name);
+
 const QoreEncoding* QoreEncodingManager::findUnlocked(const char* name) {
     {
         encoding_map_t::const_iterator i = emap.find(name);
@@ -724,8 +727,11 @@ const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
     if (rv) {
         return rv;
     }
-    // an encoding that is not known is created with the properties of the encoding itself
-    std::unique_ptr<QoreEncoding> qcs(new QoreEncoding(name));
+    // an encoding that is not known is created with the properties of the encoding itself, with a canonical name that
+    // does not depend on the spelling of its first use, as every later lookup, which ignores case, gives this encoding
+    // (qore#6570)
+    std::string code = qore_canonical_charset_name(name);
+    std::unique_ptr<QoreEncoding> qcs(new QoreEncoding(code.c_str()));
     qore_encoding_private::get(*qcs)->probe();
     emap[qcs->getCode()] = qcs.get();
     return qcs.release();
@@ -781,6 +787,29 @@ static const struct {
     {"IBM857", "IBM857"}, {"IBM862", "IBM862"}, {"IBM866", "IBM866"}, {"CP866", "IBM866"}, {"KOI8-RU", "KOI8-RU"},
 };
 
+// the canonical name of an encoding that Qore does not know: the standard spelling of its name in the table of
+// character set labels (ex: "Shift_JIS" for "SHIFT_JIS"), or the name in upper case, as the names of the encodings that
+// Qore knows are
+static std::string qore_canonical_charset_name(const char* name) {
+    for (const auto& label : qore_untrusted_charset_labels) {
+        if (!strcasecmp(name, label.name)) {
+            return label.name;
+        }
+    }
+    // a name with a backslash (as every name with a NUL character has in its escaped form; see
+    // findCreate(const QoreString*)) is kept as it is
+    std::string code(name);
+    if (code.find('\\') != std::string::npos) {
+        return code;
+    }
+    for (char& c : code) {
+        if (c >= 'a' && c <= 'z') {
+            c = static_cast<char>(c - 'a' + 'A');
+        }
+    }
+    return code;
+}
+
 const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
     // a name with a NUL character would be looked up cut at the NUL character
     if (!name || !len || memchr(name, '\0', len)) {
@@ -788,17 +817,15 @@ const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
     }
     // the name is looked up as a NUL-terminated string
     assert(!name[len]);
-    const QoreEncoding* enc = QoreEncodingManager::find(name);
-    if (enc) {
-        return enc;
-    }
+    // a label selects the encoding of its name, whatever encodings the program has registered (qore#6570: a program
+    // that used "x-sjis" as a name registered an encoding of that name, which a later lookup of the label gave)
     for (const auto& label : qore_untrusted_charset_labels) {
         if (!strcasecmp(name, label.label)) {
-            enc = QoreEncodingManager::find(label.name);
+            const QoreEncoding* enc = QoreEncodingManager::find(label.name);
             return enc ? enc : QEM.findCreate(label.name);
         }
     }
-    return nullptr;
+    return QoreEncodingManager::find(name);
 }
 
 const QoreEncoding* qore_find_untrusted_encoding(const char* name) {

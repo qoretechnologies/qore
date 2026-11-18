@@ -1314,7 +1314,8 @@ public:
         place and the value's own hashdecl/complex type stops being enforced.
         Param binding must call this so params match assignment semantics.
     */
-    DLLLOCAL void applyNoNarrowContainerType(QoreValue& val, ExceptionSink* xsink) const {
+    // inlined explicitly: on a hot path whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void applyNoNarrowContainerType(QoreValue& val, ExceptionSink* xsink) const {
         if (isNoNarrowContainer()) {
             q_apply_no_narrow_container_type(getTypeInfoForLValue(), val, xsink);
         }

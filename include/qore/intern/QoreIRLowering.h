@@ -32,6 +32,7 @@
 #ifndef _QORE_INTERN_QOREIRLOWERING_H
 #define _QORE_INTERN_QOREIRLOWERING_H
 
+#include <map>
 #include <stack>
 #include <string>
 #include <unordered_map>
@@ -825,6 +826,10 @@ private:
         //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
         //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
         CF_CATCH_SCOPES = 4,
+        //! run the handlers of the scopes left out of line (a ScopeExit that runs them), except where one of them can
+        //! return, whose value replaces that of the exit (#5992): for the paths of a debugger's flow requests, which
+        //! run only on a request and stay small (#6201)
+        CF_HANDLERS_OUT_OF_LINE = 8,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -844,6 +849,142 @@ private:
      */
     bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE,
         size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr);
+
+    //! The target of a break or a continue at the current lowering position (see findLoopJumpTarget())
+    struct LoopJumpTarget {
+        QoreIRBasicBlock* target = nullptr;
+        size_t cleanup_depth = 0;
+        size_t temp_depth = 0;
+        QoreIRBasicBlock* exception_target = nullptr;
+        //! for a break out of a foreach loop: the value of $# to restore
+        QoreIRValue old_elem;
+    };
+    //! Returns the target of a break (\a is_break) or a continue at the current lowering position: the innermost
+    //! loop, or for a break also the innermost switch statement; the target is nullptr if there is none
+    /** @param max_cleanup_depth only a loop or switch statement pushed at this cleanup depth or below, which
+        encloses the block whose cleanup entry is there
+    */
+    LoopJumpTarget findLoopJumpTarget(bool is_break, size_t max_cleanup_depth = SIZE_MAX) const;
+    //! Lowers the jump of a break or a continue statement to \a jt at the current lowering position
+    /** Emits the cleanups of the blocks that the jump leaves (emitBlockCleanups()), the restore of $# for a break out
+        of a foreach loop and the branch to the target; the code of a debugger's break or continue request at a step
+        event is the same (lowerDebugFlowPath()), so that the two cannot differ.
+    */
+    /** @param debug_flow true for the path of a debugger's request, whose handlers run out of line
+        (CF_HANDLERS_OUT_OF_LINE)
+    */
+    bool lowerLoopJump(bool is_break, const LoopJumpTarget& jt, const QoreProgramLocation* loc, std::string& error,
+            bool debug_flow = false);
+
+    //! The paths of a debugger's flow requests at the step events of the statements of a block between which the
+    //! cleanups that a break or a continue emits are the same (see setDebugFlowTargets())
+    struct DebugFlowSegment {
+        //! the lowering state that the cleanups depend on
+        size_t cleanup_depth = SIZE_MAX;
+        size_t handlers = 0;
+        size_t temp_depth = 0;
+        int catch_depth = 0;
+        size_t flow_depth = 0;
+        size_t scopes = 0;
+        QoreIRBasicBlock* exception_target = nullptr;
+        //! the shared code of each request, lowered when a step event first needs it
+        QoreIRBasicBlock* break_path = nullptr;
+        QoreIRBasicBlock* continue_path = nullptr;
+        QoreIRBasicBlock* return_path = nullptr;
+        //! in the body of a handler lowered inline (InlineHandlerFlow::segment): the end of the handler that the path
+        //! of each request (RC_RETURN, RC_BREAK, RC_CONTINUE) branches to, or nullptr for the path of a loop or a
+        //! switch statement of the body; the requests that end at the same block share the path
+        QoreIRBasicBlock* handler_end[3] = {};
+    };
+    //! Gives the step event \a dbg the paths of a debugger's return, break and continue requests at the current
+    //! lowering position (QoreIRDebugStatementInstruction::flow, issues #6200 and #6201)
+    /** Each path gets a block of its own for the event (makeDebugFlowEntries()), which branches to the code of the
+        request that the step events of \a segment share (lowerDebugFlowPath()): that of a return statement without a
+        value, or of a break or a continue statement to its target (findLoopJumpTarget()), or of the return if there
+        is none, as with the AST interpreter.  The events of a handler's statements get no paths: the frame that runs the handler takes
+        their requests.  Only called for the step events of code with the paths (QoreIRFunction::hasDebugFlowPaths():
+        the debug IR of AOT code, QoreIRFunction::emit_debug_statements); code lowered from the parse tree has step
+        events without them (#6201).
+    */
+    bool setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, DebugFlowSegment& segment,
+            const QoreProgramLocation* loc, std::string& error);
+    //! Sets the targets of \a flow to the entry blocks of the paths of a debugger's requests, one for each path: the
+    //! requests whose path is the same (a break or a continue that no loop or switch statement takes is a return)
+    //! share the block; returns false if a block cannot be created
+    /** An entry block is a single branch to its path, so that the edge from the event has the state of the function
+        at the event as its input in the analyses of the IR (QoreIRDebugFlowTargets::targets())
+    */
+    bool makeDebugFlowEntries(QoreIRDebugFlowTargets& flow, QoreIRBasicBlock* break_path,
+            QoreIRBasicBlock* continue_path, QoreIRBasicBlock* return_path, const char* break_name,
+            const char* continue_name, const char* return_name, const QoreProgramLocation* loc);
+    //! Lowers the code of a debugger's request \a rc (RC_RETURN, RC_BREAK or RC_CONTINUE, with the target \a jt)
+    //! at the current lowering position into blocks of its own (QoreIRBasicBlock::debug_flow), as a return statement
+    //! without a value (lowerReturnWithoutValue()) or the jump of a break or a continue statement there
+    //! (lowerLoopJump()), and returns its first block, or nullptr with \a error set on failure; the lowering state
+    //! at the current position is unchanged
+    QoreIRBasicBlock* lowerDebugFlowPath(int rc, const LoopJumpTarget& jt, const QoreProgramLocation* loc,
+            std::string& error);
+    //! Gives the ScopeExit \a se, which runs the handlers of the scope whose entry is cleanup_stack[\a scope_entry],
+    //! the paths of a debugger's request that its last handler run ends with (#6201)
+    /** The request becomes that of the block, as with the AST interpreter (StatementBlock::execIntern()): its path is
+        the code of a return statement without a value or of a break or a continue statement placed after the block,
+        whose handlers have run: the cleanups of the entries below the scope's and the jump.  The paths are lowered
+        once for each scope (scope_exit_flow_paths).  Only for code with step events, and not in the code of a handler
+        lowered inline.
+    */
+    bool setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error);
+    //! Returns the shared paths of the requests after the handlers of the scope whose entry is
+    //! cleanup_stack[\a scope_entry] (scope_exit_flow_paths), lowering them the first time; nullptr with \a error
+    //! set on failure
+    const DebugFlowSegment* getScopeFlowPaths(size_t scope_entry, std::string& error);
+    //! Gives the step event \a dbg of a statement of the body of a handler lowered inline the paths of a debugger's
+    //! requests: those of the loops and switch statements of the body, or the end of the handler
+    //! (InlineHandlerFlow)
+    bool setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction* dbg, const QoreProgramLocation* loc,
+            std::string& error);
+    //! the paths of the ScopeExit instructions of each scope (setScopeExitFlowTargets())
+    std::unordered_map<uint32_t, DebugFlowSegment> scope_exit_flow_paths;
+    //! The end of the body of a handler being lowered inline in the code of an exit, where a debugger's request at a
+    //! step event of the body that no loop or switch statement of the body takes goes (#6201)
+    /** The request ends the handler, as with the AST interpreter, where the block of the handler returns it to the
+        block whose handler it is (StatementBlock::execIntern()), which takes the request of its last handler run: for
+        the last handler of the exit, the request becomes that of the block (the paths of the scope, see
+        setScopeExitFlowTargets()); otherwise the exit goes on with the next handler (\a join)
+    */
+    struct InlineHandlerFlow {
+        //! the cleanup depth and the temp scope depth where the body starts, and the size of flow_stack
+        size_t cleanup_depth = 0;
+        size_t temp_depth = 0;
+        size_t flow_depth = 0;
+        //! the scope whose handler it is, and the index of its entry in cleanup_stack, for the last handler run
+        uint32_t scope_id = 0;
+        size_t scope_entry = SIZE_MAX;
+        bool last = false;
+        //! for a handler that is not the last: the code of the exit after the handler
+        QoreIRBasicBlock* join = nullptr;
+        //! for the last handler: the code of each request after the handler (RC_RETURN, RC_BREAK, RC_CONTINUE)
+        QoreIRBasicBlock* request_end[3] = {};
+        //! the paths of the requests that the step events of the body with the same lowering state share, as the
+        //! events of the code do (setDebugFlowTargets()), so that the code of the paths of a handler lowered inline,
+        //! which can lower the handlers of the blocks of the body inline in turn, grows with the body
+        DebugFlowSegment segment;
+    };
+    //! the handlers being lowered inline, innermost last
+    std::vector<InlineHandlerFlow> inline_handler_flow_stack;
+    //! Returns the block after the body of the innermost handler being lowered inline for the request \a rc
+    //! (InlineHandlerFlow), creating it if needed; nullptr with \a error set on failure
+    QoreIRBasicBlock* getInlineHandlerFlowEnd(int rc, std::string& error);
+    //! Lowers a return statement without a value at the current lowering position: the cleanups of every block and
+    //! the return (\a debug_flow: for the path of a debugger's return request, see lowerLoopJump())
+    bool lowerReturnWithoutValue(std::string& error, bool debug_flow = false);
+    //! The shared ends of the return paths of a debugger's requests (#6201)
+    /** The release of the locals of the blocks at the bottom of cleanup_stack, those with no cleanup but their locals
+        (Lvars and CatchVar entries), and the return are the same for every return path in them: each path ends with
+        a branch to one block of that code (QoreIRBasicBlock::debug_flow_return_tail), so that the code of the paths
+        grows with that of the function and not with the product of its statements and its locals.  Keyed by the
+        function and the locals of the entries.
+    */
+    std::map<std::pair<const QoreIRFunction*, std::vector<const void*>>, QoreIRBasicBlock*> debug_flow_return_tails;
 
     //! Returns true if what a return statement leaves on its way out of the code depends on an error it raises
     /** A try block catches the error, a catch block and a context clean up, the handlers of a block run by how it
@@ -911,9 +1052,12 @@ private:
 
         @return false if lowering failed
     */
+    /** @param last_run true if the handler is the last of the exit that runs: a debugger's request in it becomes the
+        request of the block (see InlineHandlerFlow)
+    */
     bool lowerHandlerAtExit(const InlineHandler& handler, size_t keep_handlers, std::string& error,
             size_t barrier_depth, uint32_t scope_id, const QoreProgramLocation* scope_loc, bool set_exception_target,
-            QoreIRBasicBlock* handler_exception_target);
+            QoreIRBasicBlock* handler_exception_target, bool last_run = false);
 
     //! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
     bool constantContainerLoadsByReference(const QoreValue& expr) const;
@@ -992,11 +1136,6 @@ private:
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 
-    //! Exit block of the innermost while/for/do-while loop currently being lowered
-    //! (nullptr at top level).  Blocks created via createBlock() while this is set are
-    //! stamped with QoreIRBasicBlock::enclosing_loop_exit so the IR interpreter can
-    //! resolve a debugger DebugFlowBreak to the correct enclosing loop's exit.
-    QoreIRBasicBlock* current_loop_exit = nullptr;
 
     //! Stack of active scope IDs for tracking nested on_exit handlers
     std::vector<uint32_t> scope_stack;
@@ -1303,6 +1442,12 @@ private:
     //! the handler bodies lowered inline since the outermost exit being lowered began
     size_t inline_handlers_lowered = 0;
     class ExitLoweringNesting;
+    //! the nesting of the lowering of the paths of a debugger's flow requests (see DebugFlowPathLowering)
+    int debug_flow_path_depth = 0;
+    //! the handler bodies lowered inline in the paths of the debugger's requests of the function (see
+    //! QORE_IR_PATH_INLINE_HANDLER_BUDGET)
+    size_t path_handlers_lowered = 0;
+    class DebugFlowPathLowering;
     //! the value of the return that a return in a try statement in a handler replaces when the walk of its
     //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST
     //! interpreter's try statement replaces it when it ends (TryStatement::execImpl(), #5992)

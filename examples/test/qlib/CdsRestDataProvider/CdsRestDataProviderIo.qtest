@@ -282,6 +282,7 @@ class CdsRestDataProviderIoTest inherits QUnit::Test {
         addTestCase("create", \createTest());
         addTestCase("upsert", \upsertTest());
         addTestCase("update and delete", \updateDeleteTest());
+        addTestCase("query literals", \queryLiteralTest());
         addTestCase("CDS errors", \cdsErrorTest());
         addTestCase("API profile clients", \apiProfileClientTest());
         addTestCase("sync client compatibility", \syncClientCompatibilityTest());
@@ -477,6 +478,52 @@ class CdsRestDataProviderIoTest inherits QUnit::Test {
             assertEq(404, ex.arg.status_code);
             assertEq("0x80040217", ex.arg.decoded_body.error."code");
         }
+    }
+
+    #! Values in queries and keys are OData literals, and a value that has none is refused before any request
+    queryLiteralTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+
+        # a string with quotes and characters that end a query option is one literal in one option; the iterator
+        # requests the first page when it is created
+        accounts.searchRecords({"name": "O'Brien & Co+1;x=#"});
+        list<hash<auto>> gets = select handler.getRequests("GET"), $1.path =~ /^api\/data\/v9\.2\/accounts\?/;
+        assertEq("api/data/v9.2/accounts?$filter=name%20eq%20'O''Brien%20%26%20Co%2B1%3Bx%3D%23'", gets[0].path);
+
+        # a key is a GUID, written without quotes
+        string id = "11111111-1111-1111-1111-111111111111";
+        assertEq(1, accounts.updateRecords({"name": "Quoted"}, {"accountid": id}));
+        assertEq("api/data/v9.2/accounts(" + id + ")", handler.getRequests("PATCH").last().path);
+
+        # a key or a value that has no literal of its field's type, or a string that is not valid in its encoding,
+        # is refused and no request is made with it
+        handler.clearRequests();
+        # the record operations of the framework give the error in the description of an exception of their own
+        code check = sub (string detail, code op) {
+            try {
+                op();
+                assertTrue(False, "no exception was raised for: " + detail);
+            } catch (hash<ExceptionInfo> ex) {
+                assertRegex("VALUE-ERROR.*" + detail, ex.err + ": " + ex.desc);
+            }
+        };
+        check("not a GUID", sub () { accounts.updateRecords({"name": "x"}, {"accountid": id + ") or (1 eq 1"}); });
+        check("not a GUID", sub () { accounts.deleteRecords({"accountid": "x'"}); });
+        check("not a GUID", sub () { accounts.upsertRecord({"accountid": "x/y", "name": "n"}); });
+        check("not valid in its encoding", sub () {
+            map $1, accounts.searchRecords({"name": binary_to_string(<41ff2720>, "UTF-8")});
+        });
+        check("NUL", sub () {
+            map $1, accounts.searchRecords({"name": binary_to_string(<410027>, "UTF-8")});
+        });
+        assertEq((), handler.getRequests("GET"));
+        assertEq((), handler.getRequests("PATCH"));
+        assertEq((), handler.getRequests("DELETE"));
     }
 
     cdsErrorTest() {

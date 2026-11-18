@@ -18,11 +18,13 @@
     <tt>b.redirect(a)</tt> took the two locks in opposite orders: run at the same time, each held one lock and waited
     for the other.  It now locks the two Files in address order.
 
-    RedirectLockOrder.q runs the two redirects in two threads.  With a DEBUG build of the library, each redirect
-    waits with its first lock held until the other one has taken its first lock too (dbg_file_redirect_rendezvous()):
-    with the locks in call order, both arrive and then deadlock; in address order, the second redirect waits for the
-    first lock, so the first one arrives alone, waits until the timeout of the rendezvous and ends, and the second one
-    arrives then.  Without a DEBUG build, the redirects are only checked to end.
+    RedirectLockOrder.q runs the two redirects in two threads.  With a DEBUG build of the library, the first redirect
+    to take the first of its two locks waits there, with the lock held, until the outcome is known
+    (dbg_file_redirect_rendezvous()): with the locks in call order, the other redirect takes the other File's lock and
+    arrives there too, and the two then deadlock, which the script reports at once; in address order, the other
+    redirect waits for the lock that the first one holds, which releases the first one at once, and the two end one
+    after the other.  The 5 s timeout of the rendezvous is only a safety net.  Without a DEBUG build, the redirects are
+    only checked to end.
 */
 class FileRedirectLockOrderTest inherits QUnit::Test {
     private {
@@ -37,8 +39,8 @@ class FileRedirectLockOrderTest inherits QUnit::Test {
 
     redirectTest() {
         string script = get_script_dir() + "/RedirectLockOrder.q";
-        # the redirects take one lock after the other: the second one arrives when the first one has ended
-        string expected = Option::HAVE_LIBRARY_DEBUGGING ? "RESULT:ok RENDEZVOUS:2 1" : "RESULT:ok";
+        # the second redirect waits for the first one's lock, and arrives at the rendezvous once that one has ended
+        string expected = Option::HAVE_LIBRARY_DEBUGGING ? "RESULT:ok RENDEZVOUS:2 0 waiter" : "RESULT:ok";
         foreach string mode in (ExecModeHarness::ExecModes) {
             hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
                 qore_bin, mode, script));

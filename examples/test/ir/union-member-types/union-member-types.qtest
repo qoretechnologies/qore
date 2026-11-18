@@ -64,7 +64,8 @@ class UnionMemberTypesTest inherits QUnit::Test {
             "hash string member": "\"abc\" string",
             "hash bool member": "True bool",
             "hash list member": "[1, 2] list",
-            "hash float first": "2.0 float",
+            # the union keeps an int as it is although float comes first (qore#6407)
+            "hash float first": "2 integer",
             "hash dynamic key": "2.5 float",
             "hash member arithmetic": "3.5 float",
             "hash member compare": "True bool",

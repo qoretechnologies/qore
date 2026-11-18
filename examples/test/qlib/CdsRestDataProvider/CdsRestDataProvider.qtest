@@ -69,6 +69,10 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         addTestCase("App registration tests", \appRegistrationTests());
         addTestCase("Expression support tests", \expressionSupportTests());
         addTestCase("OData field paths", \odataFieldPathTests());
+        addTestCase("OData literals", \odataLiteralTests());
+        addTestCase("OData query encoding", \odataQueryEncodingTests());
+        addTestCase("OData names", \odataNameTests());
+        addTestCase("entity logical name literal", \entityLogicalNameTests());
         addTestCase("Child provider summary info tests", \childProviderSummaryInfoTests());
         addTestCase("action data dependent options", \testActionDataDependentOptions());
 
@@ -470,6 +474,205 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             get_query({"primarycontactid.fullname": "Smith"}));
         assertThrows("WHERE-ERROR", "the key \"Unit.Price\", which OData cannot name", get_query,
             {"Unit\\.Price": 1});
+    }
+
+    #! Values are written with the OData literal of their type, and strings that are not valid are refused
+    odataLiteralTests() {
+        code lit = \AbstractODataRecordIterator::getODataLiteral();
+
+        # a string is in single quotes with each single quote doubled; a backslash is not an escape in OData
+        assertEq("'O''Brien'", lit("O'Brien"));
+        assertEq("''''''", lit("''"));
+        assertEq("'a\\b'", lit("a\\b"));
+        assertEq("'a\\'''", lit("a\\'"));
+        assertEq("'Zoë 中文 😀'", lit("Zoë 中文 😀"));
+        assertEq("''", lit(""));
+        # a string in another encoding is written in UTF-8
+        string latin1 = convert_encoding("Zoë'", "ISO-8859-1");
+        string l = lit(latin1);
+        assertEq("UTF-8", l.encoding());
+        assertEq("'Zoë'''", l);
+
+        # a string with an invalid encoding, also with a quote after the invalid byte, or with a NUL is refused
+        assertThrows("VALUE-ERROR", "not valid in its encoding", lit, (binary_to_string(<41ff27>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", lit, (binary_to_string(<27c3>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", lit, (binary_to_string(<41ff27>, "UTF-8"),
+            "string"));
+        assertThrows("VALUE-ERROR", "NUL", lit, (binary_to_string(<41002720>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "NUL", lit, (binary_to_string(<41002720>, "UTF-8"), "guid"));
+
+        # numbers, booleans and null
+        assertEq("42", lit(42));
+        assertEq("-7", lit(-7));
+        assertEq("1.5", lit(1.5));
+        assertEq("1e+20", lit(1e20));
+        assertEq("-0.5", lit(-0.5n));
+        float inf = 1e308 * 10;
+        assertEq("INF", lit(inf));
+        assertEq("-INF", lit(-inf));
+        assertEq("NaN", lit(inf - inf));
+        assertEq("INF", lit(number(inf)));
+        assertEq("true", lit(True));
+        assertEq("false", lit(False));
+        assertEq("null", lit());
+        assertEq("null", lit(NULL));
+
+        # a date is a DateTimeOffset in UTC; a relative date has no literal
+        assertEq("2024-01-02T01:04:05Z", lit(2024-01-02T03:04:05+02:00));
+        assertEq("2024-01-02T01:04:05.000123Z", lit(2024-01-02T03:04:05.000123+02:00));
+        assertThrows("VALUE-ERROR", "relative date", lit, (1D,));
+
+        # a binary is base64url in a binary literal
+        assertEq("binary'AQL_'", lit(<0102ff>));
+
+        # a field reference is the property path of the field
+        assertEq("primarycontactid/fullname", lit(<DataProviderFieldReference>{"field": "primarycontactid.fullname"}));
+        # a hash, a list or an object has no literal
+        assertThrows("VALUE-ERROR", "hash", lit, ({"a": 1},));
+        assertThrows("VALUE-ERROR", "list", lit, ((1, 2),));
+
+        # the type of the field decides the literal
+        string guid = "11111111-2222-3333-4444-55555555abcd";
+        assertEq(guid, lit(guid, "guid"));
+        assertThrows("VALUE-ERROR", "not a GUID", lit, (guid + "' or 1 eq 1", "guid"));
+        assertThrows("VALUE-ERROR", "not a GUID", lit, ("x", "guid"));
+        assertThrows("VALUE-ERROR", "not a GUID", lit, (guid + "\n", "guid"));
+        assertThrows("VALUE-ERROR", "not a number", lit, ("1\n", "double"));
+        assertThrows("VALUE-ERROR", "not a date", lit, ("2024-01-02\n", "date"));
+        assertThrows("VALUE-ERROR", "not a date", lit, ("2024-01-02T03:04Z\n", "date"));
+        assertThrows("VALUE-ERROR", "not a GUID", lit, (1, "guid"));
+        assertEq("5", lit("5", "int"));
+        assertEq("5", lit(5.0, "int"));
+        assertEq("1", lit(True, "int"));
+        assertThrows("VALUE-ERROR", "not an integer", lit, ("5 or true", "int"));
+        assertThrows("VALUE-ERROR", "not an integer", lit, (5.5, "integer"));
+        assertEq("1.5e3", lit("1.5e3", "double"));
+        assertEq("2", lit(2, "decimal"));
+        assertThrows("VALUE-ERROR", "not a number", lit, ("1) or (1", "double"));
+        assertEq("true", lit("TRUE", "bool"));
+        assertEq("false", lit("0", "boolean"));
+        assertEq("true", lit(1, "bool"));
+        assertThrows("VALUE-ERROR", "not a boolean", lit, ("yes", "bool"));
+        assertEq("2024-01-02", lit("2024-01-02", "date"));
+        assertEq("2024-01-02T03:04:05.5+02:00", lit("2024-01-02T03:04:05.5+02:00", "datetime"));
+        assertEq("2024-01-02T01:04:05Z", lit(2024-01-02T03:04:05+02:00, "datetime"));
+        assertThrows("VALUE-ERROR", "not a date", lit, ("2024-01-02' or 1 eq 1", "datetime"));
+        assertEq("'5'", lit(5, "string"));
+        assertEq("'x'", lit("x", "string"));
+        assertThrows("VALUE-ERROR", "string field", lit, (True, "string"));
+        assertThrows("VALUE-ERROR", "string field", lit, (2024-01-02, "string"));
+        # a key that is a string is one segment of the path
+        assertEq("'a%2Fb''c%3F'", CdsRestDataProviderBase::encodePathSegment(lit("a/b'c?", "string")));
+        assertEq("binary'AQI'", lit(<0102>, "binary"));
+        assertEq("null", lit(NOTHING, "guid"));
+    }
+
+    #! A query is made of OData literals, and the value of each query option is percent-encoded on its own
+    odataQueryEncodingTests() {
+        hash<ODataRecordInfo> info = <ODataRecordInfo>{
+            "entity_name": "accounts",
+            "field_types": {
+                "accountid": "guid",
+                "name": "string",
+                "revenue": "decimal",
+            },
+        };
+        string value = "A&B'+=;#%é \\";
+
+        # a search hash
+        MockCdsRestClientCapture rest();
+        ODataRecordIterator i(rest, "accounts", info, {"name": value}, {"columns": ("name", "accountid"),
+            "orderby": "name", "limit": 5});
+        assertEq("accounts?$select=name,accountid&$filter=name%20eq%20'A%26B''%2B%3D%3B%23%25%C3%A9%20%5C'"
+            "&$orderby=name&$top=5", rest.paths.last());
+        assertEq("$select=name,accountid&$filter=name eq 'A&B''+=;#%é \\'&$orderby=name&$top=5",
+            i.makeQuery({"name": value}, {"columns": ("name", "accountid"), "orderby": "name", "limit": 5}));
+
+        # an expression
+        ODataRecordIterator i2(rest, "accounts", info, <DataProviderExpression>{
+            "exp": DP_OP_AND,
+            "args": (
+                <DataProviderExpression>{
+                    "exp": ODATA_OP_CONTAINS,
+                    "args": (<DataProviderFieldReference>{"field": "name"}, "it's"),
+                },
+                <DataProviderExpression>{
+                    "exp": DP_SEARCH_OP_IN,
+                    "args": (<DataProviderFieldReference>{"field": "revenue"}, (1, 2.5)),
+                },
+            ),
+        });
+        assertEq("accounts?$filter=(contains(name,'it''s')%20and%20revenue%20in%20(1,2.5))", rest.paths.last());
+
+        # the operators of a search hash
+        assertEq("$filter=contains(name, 'it''s')", i.makeQuery({"name": query_op_contains("it's")}));
+        assertEq("$filter=not (name eq 'it''s')", i.makeQuery({"name": query_op_not(query_op_eq("it's"))}));
+        assertEq("$filter=(name eq 'a''' or name eq 'b')",
+            i.makeQuery(query_wop_or({"name": "a'"}, {"name": "b"})));
+
+        # a value that has no literal of its field's type, or a string that is not valid, is refused and no request
+        # is made
+        int count = rest.paths.size();
+        assertThrows("VALUE-ERROR", "not a GUID", sub () {
+            ODataRecordIterator i3(rest, "accounts", info, {"accountid": "x' or 1 eq 1"});
+        });
+        assertThrows("VALUE-ERROR", "not valid in its encoding", sub () {
+            ODataRecordIterator i3(rest, "accounts", info, {"name": binary_to_string(<41ff2720>, "UTF-8")});
+        });
+        assertThrows("VALUE-ERROR", "NUL", sub () {
+            ODataRecordIterator i3(rest, "accounts", info, <DataProviderExpression>{
+                "exp": DP_SEARCH_OP_EQ,
+                "args": (<DataProviderFieldReference>{"field": "name"}, binary_to_string(<410027>, "UTF-8")),
+            });
+        });
+        assertEq(count, rest.paths.size());
+
+        # the value of a query option is encoded so that it is one value of one option
+        assertEq("name%20eq%20'A%26B'", CdsRestDataProviderBase::encodeQueryValue("name eq 'A&B'"));
+        assertEq("$filter=a%3Db%2Bc%3Bd", AbstractODataRecordIterator::encodeQueryOptions({"$filter": "a=b+c;d"}));
+        # a path segment is encoded so that it is one segment
+        assertEq("accounts('a%2Fb%3F')", CdsRestDataProviderBase::encodePathSegment("accounts('a/b?')"));
+        # every byte is encoded, also of a string that is not valid in its encoding
+        assertEq("A%FF'%20", CdsRestDataProviderBase::encodeRequestPath(binary_to_string(<41ff2720>, "UTF-8")));
+    }
+
+    #! Fields and columns are OData identifiers
+    odataNameTests() {
+        MockCdsRestClientCapture rest();
+        ODataRecordIterator i(rest, "accounts", <ODataRecordInfo>{"entity_name": "accounts"});
+        assertEq("$filter=_parentid_value eq 1", i.makeQuery({"_parentid_value": 1}));
+        assertThrows("WHERE-ERROR", "which OData cannot name", \i.makeQuery(), ({"name eq 'x' or name": 1},));
+        assertThrows("WHERE-ERROR", "which OData cannot name", \i.makeQuery(), ({"na(me)": 1},));
+        assertThrows("WHERE-ERROR", "which OData cannot name", \i.makeQuery(), ({"1name": 1},));
+        assertThrows("WHERE-ERROR", "which OData cannot name", \i.makeQuery(), ({"name\n": 1},));
+        assertThrows("COLUMN-ERROR", "cannot be named in OData", \i.makeQuery(), (NOTHING, {"columns": "a\n"}));
+        assertThrows("WHERE-ERROR", "which OData cannot name", \i.makeQuery(), <DataProviderExpression>{
+            "exp": DP_SEARCH_OP_EQ,
+            "args": (<DataProviderFieldReference>{"field": "name&$top=1"}, "x"),
+        });
+        # a name with an invalid encoding is refused as a value is
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \i.makeQuery(),
+            ({binary_to_string(<61ff>, "UTF-8"): 1},));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \i.makeQuery(),
+            (NOTHING, {"columns": binary_to_string(<61ff>, "UTF-8")}));
+        assertThrows("COLUMN-ERROR", "cannot be named in OData", \i.makeQuery(), (NOTHING, {"columns": "a,b"}));
+        assertThrows("COLUMN-ERROR", "cannot be named in OData", \i.makeQuery(), (NOTHING, {"orderby": "a desc"}));
+        assertThrows("COLUMN-ERROR", "cannot be named in OData", \i.makeQuery(), (NOTHING, {"groupby": "a&b"}));
+        assertEq("$select=a,_b&$orderby=c desc", i.makeQuery(NOTHING, {"columns": ("a", "_b"), "orderby": "c",
+            "orderby_desc": True}));
+    }
+
+    #! The logical name of a custom entity is an OData string literal in the entity definition request
+    entityLogicalNameTests() {
+        MockCdsRestClientCapture rest({"EntitySetName": "accounts", "PrimaryIdAttribute": "accountid"});
+        TestCustomEntityWatchDataProvider p(rest, {"entityName": "acc'ount&x/y"});
+        assertEq("accounts", p.resolveEntitySetName());
+        assertEq("EntityDefinitions(LogicalName='acc''ount%26x%2Fy')?$select=EntitySetName,PrimaryIdAttribute",
+            rest.paths.last());
+
+        TestCustomEntityWatchDataProvider p2(rest, {"entityName": binary_to_string(<61ff27>, "UTF-8")});
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \p2.resolveEntitySetName());
+        assertEq(1, rest.paths.size());
     }
 
     #! Test DataProvider expression support
@@ -1214,5 +1417,46 @@ class MockCdsRestClientWithError inherits CdsRestClientIo {
             "headers": {},
             "body": "Mock error",
         };
+    }
+}
+
+#! Mock CdsRestClientIo that records the path of each request and returns the given body
+class MockCdsRestClientCapture inherits CdsRestClientIo {
+    public {
+        #! The path of each request
+        list<string> paths = ();
+    }
+
+    private {
+        hash<auto> body;
+    }
+
+    constructor(hash<auto> body = {"value": ()}) : CdsRestClientIo({
+        "url": "https://mock.example.com",
+        "oauth2_client_id": "mock-client-id",
+        "oauth2_client_secret": "mock-client-secret",
+        # a static token: the mock sends no requests and does not log in
+        "token": "mock-token",
+    }) {
+        self.body = body;
+    }
+
+    hash<RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        paths += path;
+        return <RestResponseInfo>{
+            "status_code": 200,
+            "headers": {},
+            "body": body,
+        };
+    }
+}
+
+#! Gives the entity set that a custom entity event resolves
+class TestCustomEntityWatchDataProvider inherits CdsCustomEntityWatchDataProvider {
+    constructor(CdsRestClientIo rest, hash<auto> options) : CdsCustomEntityWatchDataProvider(rest, options) {
+    }
+
+    string resolveEntitySetName() {
+        return getEntitySetName();
     }
 }
