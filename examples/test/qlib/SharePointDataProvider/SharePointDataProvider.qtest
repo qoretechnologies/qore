@@ -114,6 +114,18 @@ class FakeSharePointRestClientIo inherits RestClientIo::RestClientIo {
     }
 }
 
+#! A REST client that records the path of every GET request
+class FakeSharePointRecordingRestClientIo inherits FakeSharePointRestClientIo {
+    public {
+        list<string> paths = ();
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        paths += path;
+        return FakeSharePointRestClientIo::restGet(path, hdr);
+    }
+}
+
 #! A REST client that answers a list's column request with one text column and records the other requests
 class FakeSharePointListRestClientIo inherits FakeSharePointRestClientIo {
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
@@ -203,6 +215,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         addTestCase("record flattening", \recordFlattenTest());
         addTestCase("OData filter translation", \odataFilterTest());
         addTestCase("OData literals", \odataLiteralTest());
+        addTestCase("site and drive path segments", \sitePathSegmentTest());
         addTestCase("graph url stripping", \graphUrlStripTest());
         addTestCase("event change filtering", \eventFilterTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
@@ -865,6 +878,74 @@ public class SharePointDataProviderTest inherits QUnit::Test {
             map $1, table.searchRecords({"Title": binary_to_string(<41ff2720>, "UTF-8")});
         });
         assertEq("", rest.last_path);
+    }
+
+    #! Sites and drives are written into request paths only in the forms Graph documents
+    sitePathSegmentTest() {
+        checkModule();
+        code site = \SharePointDataProviderBase::getSitePathSegment();
+        code drive = \SharePointDataProviderBase::getDrivePathSegment();
+
+        # the documented forms
+        assertEq("root", site("root"));
+        assertEq(TestSite, site(TestSite));
+        assertEq("contoso.sharepoint.com", site("contoso.sharepoint.com"));
+        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team"));
+        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team:"));
+        assertEq("contoso.sharepoint.com:/sites/Team%20Site%3F%23%25:",
+            site("contoso.sharepoint.com:/sites/Team Site?#%"));
+        assertEq("contoso.sharepoint.com:/sites/Zo%C3%AB:", site("contoso.sharepoint.com:/sites/Zoë"));
+        assertEq(TestSite.upr(), site(TestSite.upr()));
+        assertEq(TestDrive, drive(TestDrive));
+        assertEq("b!Ab-_c.d", drive("b!Ab-_c.d"));
+
+        # anything else is refused
+        foreach string v in (("", "roots", "../drives/x", "contoso.sharepoint.com/../me", "root?$select=x",
+                "contoso.sharepoint.com,x,y", TestSite + "/drives", TestSite + "\n", "contoso.sharepoint.com:/",
+                "contoso.sharepoint.com:/sites/../x", "contoso.sharepoint.com:/sites//x",
+                "contoso.sharepoint.com:/sites/a:/b", "contoso.sharepoint.com:/sites/team/", "-bad.example.com",
+                "host")) {
+            assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", site, (v,));
+        }
+        foreach string v in (("b!x/../y", "b!x?$top=1", "b!x#", "b x", ".", "..", "b!x\n", "b!x%2F")) {
+            assertThrows("SHAREPOINT-DRIVE-ERROR", "is not a drive ID", drive, (v,));
+        }
+        assertThrows("VALUE-ERROR", "not valid in its encoding", site, (binary_to_string(<41ff2f>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "NUL", site, (binary_to_string(<726f6f7400>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", drive, (binary_to_string(<62ff>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "NUL", drive, (binary_to_string(<620021>, "UTF-8"),));
+
+        # a request with a site or drive that is refused is not made
+        FakeSharePointRestClientIo rest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\rest);
+        rest.response_body = {"id": "1", "fields": {}};
+        prov.getChildProvider("get-list-item").doRequest({"site_id": "contoso.sharepoint.com:/sites/a b",
+            "list_id": TestList, "item_id": "1"});
+        assertEq("sites/contoso.sharepoint.com:/sites/a%20b:/lists/" + TestList + "/items/1?$expand=fields",
+            rest.last_path);
+        rest.last_path = "";
+        assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", \prov.getChildProvider("get-list-item").doRequest(),
+            ({"site_id": TestSite + "/../../me/drive", "list_id": TestList, "item_id": "1"},));
+        assertThrows("SHAREPOINT-DRIVE-ERROR", "is not a drive ID", sub () {
+            prov.getChildProvider("get-drive-info").doRequest({"site_id": TestSite,
+                "drive_id": TestDrive + "/root?$expand=children"});
+        });
+        assertEq("", rest.last_path);
+
+        # the record tables read the site option as a site, and a site option that is not one is an error rather
+        # than a site with no lists
+        FakeSharePointRecordingRestClientIo rrest();
+        rrest.response_body = {"id": TestSite, "value": ({"id": TestList, "displayName": "Widgets", "list": {}},)};
+        SharePointRecordsDataProvider records(rrest, {"site_id": "contoso.sharepoint.com:/sites/a b"});
+        assertEq(("Widgets",), (select records.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName));
+        assertEq(("sites/contoso.sharepoint.com:/sites/a%20b:?$select=id,displayName,name",
+            "sites/" + TestSite + "/lists?$select=id,name,displayName,description,webUrl,list,system,"
+            "createdDateTime,lastModifiedDateTime&$top=200"), rrest.paths);
+        rrest.paths = ();
+        SharePointRecordsDataProvider bad_records(rrest, {"site_id": "root/../me"});
+        assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", \bad_records.getChildProviderNames());
+        assertEq((), rrest.paths);
     }
 
     graphUrlStripTest() {

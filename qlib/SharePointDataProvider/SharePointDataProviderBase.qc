@@ -125,7 +125,9 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
 
         @return the Graph path prefix for the document library, with no trailing slash
 
-        @throw SHAREPOINT-DRIVE-ERROR no document library was named
+        @throw SHAREPOINT-DRIVE-ERROR no document library was named, or the drive ID is not one
+        (see @ref getDrivePathSegment())
+        @throw VALUE-ERROR the drive ID's encoding is invalid, or it has a NUL character
     */
     string getDriveBasePath(*hash<auto> req) {
         *string drive = req.drive_id ?? default_drive_id;
@@ -133,7 +135,115 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
             throw "SHAREPOINT-DRIVE-ERROR", sprintf("no document library named; set the 'drive_id' option "
                 "to the ID of the library to use (the 'list-drives' action lists the libraries in a site)");
         }
-        return "drives/" + drive;
+        return "drives/" + SharePointDataProviderBase::getDrivePathSegment(drive);
+    }
+
+    #! Returns a drive ID as it is written in a request path
+    /** A Graph drive ID is one segment of the path made of letters, digits, \c "!", \c "-", \c "_" and \c "."
+        (a document library's ID starts with \c "b!", followed by base64url characters); any other value is
+        refused rather than written into the path, where it could address another resource
+
+        @param drive the drive ID
+
+        @return the drive ID
+
+        @throw SHAREPOINT-DRIVE-ERROR the value is not a drive ID
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+
+        @since SharePointDataProvider 1.0
+    */
+    static string getDrivePathSegment(string drive) {
+        SharePointDataProviderBase::checkPathValue(drive, "drive ID");
+        if (drive !~ /^[A-Za-z0-9!_.-]+\z/ || drive == "." || drive == "..") {
+            throw "SHAREPOINT-DRIVE-ERROR", sprintf("%y is not a drive ID: a drive ID is made of letters, digits, "
+                "'!', '-', '_' and '.' (the 'list-drives' action lists the libraries in a site)", drive);
+        }
+        return drive;
+    }
+
+    #! Returns a site as it is written in a request path
+    /** A site is named in one of the forms that Graph documents:
+        - \c root: the tenant's root site
+        - a site ID: <em>hostname</em><tt>,</tt><em>site-collection-id</em><tt>,</tt><em>web-id</em>, where the
+          two IDs are GUIDs (as the \c list-sites action returns it)
+        - a host name: the root site of that host (<tt>contoso.sharepoint.com</tt>)
+        - a host name and a server-relative path: <em>hostname</em><tt>:/</tt><em>path</em>, with or without a
+          closing \c ":" (<tt>contoso.sharepoint.com:/sites/team</tt>); the path is given decoded (\c "Team Site",
+          not \c "Team%20Site"), each segment of it is percent-encoded, and it is closed with \c ":", so that
+          further segments can follow it
+
+        Any other value is refused rather than written into the path, where it could address another resource.
+
+        @param site the site
+
+        @return the site as it is written in a request path
+
+        @throw SHAREPOINT-SITE-ERROR the value is not a site in a form that Graph documents
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+
+        @par Example:
+        @code{.py}
+string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.com:/sites/Team Site");
+# seg: "contoso.sharepoint.com:/sites/Team%20Site:"
+        @endcode
+
+        @since SharePointDataProvider 1.0
+    */
+    static string getSitePathSegment(string site) {
+        SharePointDataProviderBase::checkPathValue(site, "site");
+        if (site == "root") {
+            return site;
+        }
+        # a host name: labels of letters, digits and hyphens separated by dots
+        string host_re = "[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+";
+        string guid_re = "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}";
+        if (regex(site, "^" + host_re + "(," + guid_re + "," + guid_re + ")?\\z")) {
+            return site;
+        }
+        int colon = site.find(":/");
+        if (colon > 0 && regex(site.substr(0, colon), "^" + host_re + "\\z")) {
+            string path = site.substr(colon + 2);
+            # a closing colon is optional in the value; it is always written
+            if (path.val() && path[path.length() - 1] == ":") {
+                splice path, -1;
+            }
+            list<string> segs = path.val() ? path.split("/") : ();
+            # split() drops a trailing empty segment, which is refused as an empty one in the path is
+            bool ok = segs.size() > 0 && path[path.length() - 1] != "/";
+            foreach string seg in (segs) {
+                if (seg == "" || seg == "." || seg == ".." || seg.find(":") >= 0) {
+                    ok = False;
+                    break;
+                }
+            }
+            if (ok) {
+                return site.substr(0, colon) + ":/" + (map encode_url($1, True), segs).join("/") + ":";
+            }
+        }
+        throw "SHAREPOINT-SITE-ERROR", sprintf("%y is not a site: a site is 'root', a site ID "
+            "('hostname,site-collection-guid,web-guid'), a host name, or a host name and a server-relative path "
+            "('hostname:/sites/name') (the 'list-sites' action lists the sites available)", site);
+    }
+
+    #! Checks that a value can be written in a request path
+    /** @param v the value
+        @param what what the value is, for the exception message
+
+        @throw VALUE-ERROR the value's encoding is invalid, or it has a NUL character
+    */
+    static private checkPathValue(string v, string what) {
+        try {
+            # a conversion to the same encoding would not check it
+            string check = convert_encoding(v, v.encoding() == "UTF-8" ? "UTF-16BE" : "UTF-8");
+            remove check;
+        } catch (hash<ExceptionInfo> ex) {
+            throw "VALUE-ERROR", sprintf("the %s given is not valid in its encoding (%s): %s: %s", what,
+                v.encoding(), ex.err, ex.desc);
+        }
+        # checked after the encoding, as a search in a string with an invalid encoding raises another error
+        if (v.find(chr(0)) >= 0) {
+            throw "VALUE-ERROR", sprintf("the %s given has a NUL character", what);
+        }
     }
 
     #! Returns the Graph path prefix for the site the given request addresses
@@ -141,7 +251,9 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
 
         @return the Graph path prefix for the site, with no trailing slash
 
-        @throw SHAREPOINT-SITE-ERROR no site was named
+        @throw SHAREPOINT-SITE-ERROR no site was named, or the site is not in a form that Graph documents (see
+        @ref getSitePathSegment())
+        @throw VALUE-ERROR the site's encoding is invalid, or it has a NUL character
     */
     private string getSiteBasePath(*hash<auto> req) {
         *string site = req.site_id ?? default_site_id;
@@ -149,7 +261,7 @@ public class SharePointDataProviderBase inherits OneDriveDataProvider::OneDriveD
             throw "SHAREPOINT-SITE-ERROR", sprintf("no site named; set the 'site_id' option to the ID of "
                 "the site to use (the 'list-sites' action lists the sites available)");
         }
-        return "sites/" + site;
+        return "sites/" + SharePointDataProviderBase::getSitePathSegment(site);
     }
 
     #! Returns the Graph path prefix for the list the given request addresses
