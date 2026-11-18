@@ -598,6 +598,7 @@ public class MapperTest inherits QUnit::Test {
         addTestCase("escaped dots in field names", \escapedDotFieldTest());
         addTestCase("field length test", \testFieldLength());
         addTestCase("typed output hash test", \typedOutputHashTest());
+        addTestCase("empty strings in a list value to NOTHING", \emptyStringsInListTest());
         set_return_value(main());
     }
 
@@ -991,6 +992,20 @@ public class MapperTest inherits QUnit::Test {
                 "out2": "input-1-2-ctx",
             }, h);
         }
+    }
+
+    #! the empty strings and NULLs of bulk input are deleted from the list that maps them, also when the input is a
+    #! list<string> (qore#6435)
+    emptyStringsInListTest() {
+        Mapper m({"out": "in"}, {"empty_strings_to_nothing": True});
+        hash<auto> h = m.mapBulk({"in": ("a", "", "b")});
+        assertEq(("a", NOTHING, "b"), h.out);
+        list<string> input = ("a", "", "b");
+        h = m.mapBulk({"in": input});
+        assertEq(("a", NOTHING, "b"), h.out);
+        assertEq("list<*string>", h.out.fullType());
+        h = m.mapBulk({"in": ("a", "b")});
+        assertEq(("a", "b"), h.out);
     }
 
     typedOutputHashTest() {

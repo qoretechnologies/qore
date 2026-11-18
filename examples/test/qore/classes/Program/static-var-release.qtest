@@ -20,7 +20,7 @@ class Results {
         #! the reports of the destructors
         static list<string> reports = ();
         #! the Programs that destructors created and kept
-        static list<Program> kept = ();
+        static list<*Program> kept = ();
         #! the number of calls of the initializer of the evalInit case
         static int calls = 0;
     }

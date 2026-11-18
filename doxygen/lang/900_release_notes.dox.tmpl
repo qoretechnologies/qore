@@ -125,6 +125,12 @@
     an exception at run time; \c NOTHING by itself is still an lvalue that the operators do not change, and a cast of
     it that allows \c NOTHING (<tt>cast<*string>(NOTHING)</tt>) is \c NOTHING (issue #6480).
 
+    @par A Typed List Whose Value Type Does Not Accept NOTHING Cannot Hold NOTHING
+    Assigning past the end of such a list (ex: <tt>list&lt;int&gt;</tt>, also held by \c auto) so that a gap would be
+    left raises a \c RUNTIME-TYPE-ERROR exception, as does @ref delete "delete" or @ref remove "remove" of an element
+    when the declared type of the lvalue holding the list requires its value type; otherwise the list becomes a
+    <tt>list&lt;*int&gt;</tt> (see @ref list_holes; issues #6435 and #6437).
+
     @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
     @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
     definition in a namespace block, as it does at the top level (see
@@ -2318,10 +2324,9 @@
     - with @ref broken-list-range "%broken-list-range", a range past the end of a list whose element type does not
       allow @ref nothing (ex: \c list<int>) gives @ref nothing for the elements outside of the list in a list with the
       or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception (issue #5757)
-    - a range of the @ref list_element_operator "[] operator" over a typed list holding @ref nothing in the range (a
-      hole left by @ref delete "delete" or @ref remove "remove", or a gap filled by an assignment past the end of the
-      list) gives a list with the or-nothing element type instead of raising a \c RUNTIME-TYPE-ERROR exception, which
-      failed an assertion in debug builds (issue #6435)
+    - with @ref broken-list-range "%broken-list-range", @ref remove "remove" of a range past the end of a list whose
+      element type does not allow @ref nothing gives a list with the or-nothing element type for the @ref nothing of
+      the elements outside of the list; it gave a list of the element type holding @ref nothing (issue #6434)
     - the report of an unhandled exception or of a warning on stderr is written whole, so that the output of other
       threads is no longer mixed into its lines (see @ref exception_handling; issue #6290)
     - a range of the @ref list_element_operator "[] operator" (ex: <tt>x[-9..1]</tt>) gives only elements of its
