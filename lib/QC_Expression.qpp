@@ -54,7 +54,8 @@ qclass Expression [arg=QoreExpression* e];
     can be created in the Program (since %Qore 3.0)
 
     @note the expression adds no code to the Program and does not change its parse state: a parse directive in its
-    source raises a parse exception and is not applied
+    source raises a parse exception and is not applied, and other threads can call into the Program and run its
+    expressions while the expression is parsed (since %Qore 3.0)
  */
 Expression::constructor(Program[QoreProgram] program, string source, string label) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreExpression> exp(new QoreExpression(**program, *source, *label, xsink), xsink);
