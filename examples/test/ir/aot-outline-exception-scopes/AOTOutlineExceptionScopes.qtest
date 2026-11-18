@@ -15,12 +15,14 @@
 
 %exec-class AOTOutlineExceptionScopesTest
 
-#! qcc compiles the exception paths of functions outlined with low thresholds as the AST runs them
+#! qcc compiles the exception paths and catch blocks of functions outlined with low thresholds as the AST runs them
 /** Each script of this directory has functions whose try statements, catch blocks and \c on_exit, \c on_error and
     \c on_success handlers end up in the outlined helpers of a function when the outliner's thresholds are forced low
     (\c QORE_AOT_OUTLINE_FN_MIN_INSTS, \c QORE_AOT_OUTLINE_FN_MIN_BLOCKS and \c QORE_AOT_OUTLINE_FN_TARGET_INSTS):
     - an exception leaving outlined code released the locals, the temporaries and the value of an interrupted return
-      after the catch block or the handler instead of before (qore#6650).
+      after the catch block or the handler instead of before (qore#6650);
+    - a catch block's exception variable had no value after the exit block of a catch block in a helper closed the
+      wrong catch block (qore#6651).
 
     The test compiles each script at -O0 and -O3 with several region sizes and checks that the executables print what
     the AST prints.
