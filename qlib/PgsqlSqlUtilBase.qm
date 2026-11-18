@@ -3821,9 +3821,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     if (exists args[1]) {
-                        # a quote in the format value is doubled so that it cannot end the string literal
-                        string fmt = replace(PgsqlTable::convertDateFormat(args[1]), "'", "''");
-                        return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
+                        return sprintf("to_timestamp(%s, %s)", exp0, PgsqlTable::getDateFormatLiteral(args[1]));
                     }
                     return sprintf("cast(%s as timestamp)", exp0);
                 },
@@ -3888,9 +3886,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    # a quote in the format value is doubled so that it cannot end the string literal
-                    string fmt = replace(PgsqlTable::convertDateFormat(args[1]), "'", "''");
-                    return sprintf("to_char(%s, '%s')", exp0, fmt);
+                    return sprintf("to_char(%s, %s)", exp0, PgsqlTable::getDateFormatLiteral(args[1]));
                 },
             },
         };
@@ -5448,9 +5444,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);
         fmt = regex_subst(fmt, "us", "US", RE_Global);
         fmt = regex_subst(fmt, "ms", "MS", RE_Global);
-        # escape single quotes for safe SQL embedding
-        fmt = regex_subst(fmt, "'", "''", RE_Global);
         return fmt;
+    }
+
+    #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+    /** A format with a backslash is given as an escape string, which PostgreSQL reads the same way whatever the value
+        of standard_conforming_strings (see pgsql_get_string_literal()); any other format is given in single quotes,
+        with each single quote doubled
+
+        @throw VALUE-ERROR the format is not valid in its encoding
+    */
+    static string getDateFormatLiteral(string fmt) {
+        return pgsql_get_string_literal(convertDateFormat(fmt));
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {

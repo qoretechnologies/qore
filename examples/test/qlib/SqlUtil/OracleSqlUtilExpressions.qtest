@@ -515,8 +515,10 @@ class OracleExpressionTest inherits QUnit::Test {
         assertEq("MM-DD", OracleTable::convertDateFormat("MM-DD"));
         # ensure already-converted HH24 is NOT double-replaced
         assertEq("HH24:MI:SS", OracleTable::convertDateFormat("HH24:MI:SS"));
-        # ensure single quotes are escaped for SQL safety
-        assertEq("YYYY''MM''DD", OracleTable::convertDateFormat("YYYY'MM'DD"));
+        # the format is converted without quoting; getDateFormatLiteral() gives it as an SQL string literal (qore#6557)
+        assertEq("YYYY'MM'DD", OracleTable::convertDateFormat("YYYY'MM'DD"));
+        assertEq("'YYYY''MM''DD'", OracleTable::getDateFormatLiteral("YYYY'MM'DD"));
+        assertEq("'YYYY\\MM'", OracleTable::getDateFormatLiteral("YYYY\\MM"));
         # YYYY and DD pass through unchanged
         assertEq("YYYY-MM-DD", OracleTable::convertDateFormat("YYYY-MM-DD"));
     }

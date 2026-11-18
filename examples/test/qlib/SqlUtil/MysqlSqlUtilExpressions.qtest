@@ -538,8 +538,13 @@ class MysqlExpressionTest inherits QUnit::Test {
         assertEq("%Y-%m-%d %H:%i:%s", MysqlTable::convertDateFormat("YYYY-MM-DD HH:mm:SS"));
         # us -> %f
         assertEq("%Y-%m-%d %H:%i:%s.%f", MysqlTable::convertDateFormat("YYYY-MM-DD HH:mm:SS.us"));
-        # ensure single quotes are escaped for SQL safety
-        assertEq("%Y''%m''%d", MysqlTable::convertDateFormat("YYYY'MM'DD"));
+        # the format is converted without quoting; getDateFormatLiteral() gives it as an SQL string literal (qore#6557)
+        assertEq("%Y'%m'%d", MysqlTable::convertDateFormat("YYYY'MM'DD"));
+        assertEq("'%Y''%m''%d'", MysqlTable::getDateFormatLiteral("YYYY'MM'DD"));
+        assertEq("_utf8mb4 X'25595c256d'", MysqlTable::getDateFormatLiteral("YYYY\\MM"));
+        # a backslash before a quote ended a literal with doubled quotes in the default sql_mode; a hex literal has
+        # neither
+        assertRegex("^_utf8mb4 X'[0-9a-f]+'$", MysqlTable::getDateFormatLiteral("YYYY\\' or 1=1 -- "));
     }
 
     testExpressionMapKeys() {
