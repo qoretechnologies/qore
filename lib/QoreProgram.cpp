@@ -5600,7 +5600,12 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
     }
 
     p = arg.c_str();
-    return flt ? q_strtod(p) : strtoll(p, 0, 10);
+    // a number is decimal, also with a leading zero (issue #6530); an integer stays an integer: the two results are
+    // not given by one conditional expression, whose type would be double
+    if (flt) {
+        return q_strtod(p);
+    }
+    return static_cast<int64>(strtoll(p, 0, 10));
 }
 
 void QoreProgram::parseDefine(const char* str, QoreValue val) {
