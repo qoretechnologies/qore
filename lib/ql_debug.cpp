@@ -43,6 +43,7 @@
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/BreakStatement.h"
 #include "qore/intern/typed_hash_decl_private.h"
