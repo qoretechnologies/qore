@@ -387,31 +387,34 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         made the closed connection ready again, and a submission then went through on it.
     */
     refusedDuringStateChangeTest() {
-        HttpServer server(<HttpServerOptionInfo>{"logger": new Logger("h3-refused-state-change",
-            LoggerLevel::getLevelInfo())});
-        on_exit server.stop();
-        server.setDefaultHandler("ok", new OkHandler());
-        server.waitForAsyncIo();
-        int port = server.addQuicListener(<HttpListenerOptionInfo>{
-            "node": "127.0.0.1",
-            "cert": new SSLCertificate(TestCertificates::CertPem),
-            "key": new SSLPrivateKey(TestCertificates::KeyPem),
-        }).port;
-        server.waitForAsyncIo();
-        string url = sprintf("https://127.0.0.1:%d", port);
-
+        # the raw QUIC server answers each request when the test lets it, so that the hook is armed before the
+        # response that passes the armed point is read
+        hash<auto> ctx = startQuicServer();
+        on_exit try { ctx.ctrl.cancelByOwner(ctx.owner); } catch () {}
         HttpClientConnectionManager mgr = getH3Manager();
         on_exit mgr.closeAll();
-        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
 
-        HttpClientStreamHandle stream = mgr.acquireStream(url);
+        Queue q = requestInBackground(mgr, ctx.url, "GET", "/first");
+        hash<auto> req = getQuicRequest(ctx);
+        respondQuic(\ctx, req, "first");
+        assertEq(200, getResponse(q).status_code);
+
+        HttpClientStreamHandle stream = mgr.acquireStream(ctx.url);
         HttpClientConnection conn = stream.getConnection();
         HttpClientPollOperation op = conn.getPollOperation();
         # disarms the hook if it did not fire
         on_exit call_function("dbg_poll_wait_close_before_open_state", 0);
+        resumeQuicServer(\ctx);
+        # requestAsync() submits the request on the ready connection and registers its response action before it
+        # returns, so the I/O thread finds the action when it reads the response and dispatches it in its read pass,
+        # which then stores the state at the armed point; a response read before the registration would be buffered
+        # and dispatched by the submitting thread, past the armed point (issue #6533)
+        HttpCancellableFuture f = mgr.requestAsync(ctx.url, "GET", "/second");
+        hash<auto> req2 = getQuicRequest(ctx);
+        assertEq(req.session_id, req2.session_id, "the request is on the connection of the stream");
         call_function("dbg_poll_close_before_open_state", op, "response-dispatched");
-        # the response of this request is dispatched before the state store at which the hook records the refusal
-        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+        respondQuic(\ctx, req2, "second");
+        assertEq(200, f.get(HangGuard).status_code);
         *bool closed_after_store = call_function("dbg_poll_wait_close_before_open_state", 30000);
         assertTrue(exists closed_after_store, "the hook fired");
         assertTrue(closed_after_store, "the I/O thread's state store left the connection closed");
@@ -423,7 +426,12 @@ public class HttpClientIoGoawayTest inherits QUnit::Test {
         assertFalse(stream.isSubmitted(), "nothing was submitted");
 
         # the next request gets another connection
-        assertEq(200, mgr.request(url, "GET", "/ok").status_code);
+        resumeQuicServer(\ctx);
+        Queue q3 = requestInBackground(mgr, ctx.url, "GET", "/third");
+        hash<auto> req3 = getQuicRequest(ctx);
+        assertNeq(req.session_id, req3.session_id, "the request is on another connection");
+        respondQuic(\ctx, req3, "third");
+        assertEq(200, getResponse(q3).status_code);
     }
 
     #! Another thread aborts an HTTP/1.1 or HTTP/2 client connection while the I/O thread is about to set its state
