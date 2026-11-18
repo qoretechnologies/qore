@@ -939,6 +939,9 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
     }
 
     #! creates the object from the arguments
+    /** @note the method and the domain index parameters are written into the DDL as they are given here; the
+        indexes of a table description are checked by OracleTable::checkIndexOptions() (qore#6577)
+    */
     constructor(string n, bool u, hash c, string nt, *string t, *string n_method, *hash<auto> n_with,
             *string n_partition_scope = NOTHING, bool n_compute_statistics = False,
             *softlist<string> n_partition_columns = NOTHING)
@@ -5222,9 +5225,11 @@ group by p.index_name", schema.upr(), name.upr());
                 throw "INDEX-OPTION-ERROR", sprintf("index %y: the domain index parameter %y is not a name", iname,
                     i.key);
             }
-            if (i.value.typeCode() == NT_HASH || i.value.typeCode() == NT_LIST || i.value.typeCode() == NT_OBJECT) {
-                throw "INDEX-OPTION-ERROR", sprintf("index %y: the value of the domain index parameter %y is not a "
-                    "scalar value", iname, i.key);
+            # a value is one word: one with a space would add other parameters to the parameters string
+            if (!exists i.value || i.value.typeCode() == NT_HASH || i.value.typeCode() == NT_LIST
+                    || i.value.typeCode() == NT_OBJECT || !regex(i.value.toString(), "\\A[A-Za-z0-9_.$#]+\\z")) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the value %y of the domain index parameter %y is not "
+                    "one word", iname, i.value, i.key);
             }
         }
     }

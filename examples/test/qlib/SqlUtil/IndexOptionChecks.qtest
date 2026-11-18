@@ -14,6 +14,11 @@
 %requires PgsqlSqlUtilBase
 %requires MssqlSqlUtilBase
 %requires OracleSqlUtilBase
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
 
 %exec-class IndexOptionChecksTest
 
@@ -22,6 +27,7 @@ class IndexOptionChecksTest inherits QUnit::Test {
         addTestCase("PostgreSQL", \pgsqlTest());
         addTestCase("SQL Server", \mssqlTest());
         addTestCase("Oracle", \oracleTest());
+        addTestCase("PostgreSQL table descriptions", \pgsqlDescriptionTest());
         set_return_value(main());
     }
 
@@ -31,6 +37,10 @@ class IndexOptionChecksTest inherits QUnit::Test {
                 {"method": "gin"}, {"method": "hnsw", "with": {"m": 16, "ef_construction": 64}},
                 {"with": {"fillfactor": 70, "fastupdate": False, "buffering": "auto"}},
                 {"opclass": {"name": "text_pattern_ops"}}, {"opclass": {"v": "public.gist_trgm_ops(siglen = 32)"}},
+                # the forms that the server gives
+                {"opclass": {"name": "COLLATE \"C\" varchar_pattern_ops"}},
+                {"opclass": {"v": "tsvector_ops (siglen='32')"}}, {"opclass": {"v": "\"MySchema\".\"my;ops\""}},
+                {"opclass": {"v": "x_ops (p='a'' ); drop table t; --')"}},
             ) {
             PgsqlTable::checkIndexOptions("ix", opt);
         }
@@ -42,19 +52,60 @@ class IndexOptionChecksTest inherits QUnit::Test {
                 {"opclass": {"name": "text_pattern_ops, (select 1)"}},
                 {"opclass": {"name": "gist_trgm_ops(siglen = 1); drop table t"}},
                 {"opclass": {"name": 1}},
+                # a backslash can end a literal where standard_conforming_strings is off
+                {"opclass": {"v": "x_ops (p='\\\\'); drop table t; --')"}},
+                {"opclass": {"v": "collate \"C\" x_ops; drop table t"}},
+                {"opclass": {"v": "\"unterminated"}},
             ) {
             assertThrows("INDEX-OPTION-ERROR", \PgsqlTable::checkIndexOptions(), ("ix", opt), sprintf("%y", opt));
         }
-        # a string value is a literal; numbers and booleans are not quoted
+        # a string value is a literal; numbers are not quoted, and a boolean is 1 or 0, as the server gives it
         PgsqlIndex ix("ix", False, {"name": {}}, NOTHING, "gin", {"fillfactor": 70, "fastupdate": False,
             "buffering": "a'b"});
-        assertEq("create index ix on t using gin (name) with (fillfactor = 70, fastupdate = false, buffering = 'a''b')",
+        assertEq("create index ix on t using gin (name) with (fillfactor = 70, fastupdate = 0, buffering = 'a''b')",
             ix.getCreateSql("t"));
+    }
+
+    # the options of an index of a table description are checked when the table is described
+    pgsqlDescriptionTest() {
+%ifdef NoPgsql
+        testSkip("the pgsql module is not available");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "IndexOptionChecks");
+        on_exit PgsqlRunSchema::teardown();
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        on_exit ds.rollback();
+        Database db(ds);
+        string table = "ioc_" + get_random_string(8).lwr();
+        hash<auto> desc = {"columns": {"id": {"qore_type": Type::Int, "notnull": True},
+            "name": {"qore_type": Type::String, "size": 40}}};
+        foreach hash<auto> ix in (
+                {"columns": ("name",), "method": "btree (id); drop table x; --"},
+                {"columns": ("name",), "opclass": {"name": "text_pattern_ops, (select 1)"}},
+                {"columns": ("name",), "with": {"fillfactor = 1); drop table x; --": 1}},
+            ) {
+            assertThrows("INDEX-OPTION-ERROR", sub (hash<auto> h) { db.getAlignSql(h); }, ({"tables": {table: desc
+                + {"indexes": {table + "_ix": ix}}}},), sprintf("%y", ix));
+        }
+        # an index with a boolean storage parameter and an operator class compares equal to the index read from the
+        # server: aligning it again gives no SQL
+        hash<auto> schema = {"tables": {table: desc + {"indexes": {table + "_ix": {"columns": ("name",),
+            "opclass": {"name": "text_pattern_ops"}, "with": {"fillfactor": 70}}}}}};
+        map ds.exec($1), db.getAlignSql(schema);
+        ds.commit();
+        on_exit {
+            ds.exec("drop table " + table);
+            ds.commit();
+        }
+        assertEq((), db.getAlignSql(schema));
     }
 
     mssqlTest() {
         foreach hash<auto> opt in (
-                {"method": "CLUSTERED"}, {"method": "nonclustered columnstore"},
+                {"method": "CLUSTERED"}, {"method": "nonclustered columnstore"}, {"method": "columnstore"},
                 {"with": {"fillfactor": 90, "pad_index": "on", "online": True, "data_compression": "PAGE",
                     "compression_delay": "10 minutes"}},
             ) {

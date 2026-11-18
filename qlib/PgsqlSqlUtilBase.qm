@@ -953,6 +953,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         @param options additional options: where, include, nulls_not_distinct, order, and nulls
         @throw INDEX-OPTION-ERROR for invalid key modifiers or incompatible options
         @note INCLUDE columns are stored separately from the uniqueness keys.
+        @note the access method, storage parameter names and operator classes are written into the DDL as they are
+        given here; the indexes of a table description are checked by PgsqlTable::checkIndexOptions() (qore#6577)
         @see pgsql_index_options for a fulfillment index example
     */
     constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace,
@@ -1071,7 +1073,9 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
                         vs = v.toString();
                         break;
                     case NT_BOOLEAN:
-                        vs = v ? "true" : "false";
+                        # as 1 or 0, as the server gives a storage parameter that was set with a number, so that
+                        # the declared index compares equal to the index read from the server
+                        vs = v ? "1" : "0";
                         break;
                     default:
                         vs = pgsql_get_string_literal(v.toString());
@@ -5836,9 +5840,20 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! the regular expression of a name in index options: an access method or a storage parameter
     const PgsqlIndexOptionNameRegex = "\\A[A-Za-z_][A-Za-z0-9_]*\\z";
 
-    #! the regular expression of an operator class: a name with an optional schema and optional parameters
-    const PgsqlOpclassRegex = "\\A[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?"
-        "(?:\\(\\s*[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*[0-9]+(?:\\s*,\\s*[A-Za-z_][A-Za-z0-9_]*\\s*=\\s*[0-9]+)*\\s*\\))?\\z";
+    #! a name in an operator class: a plain or quoted identifier
+    const PgsqlOpclassIdent = "(?:[A-Za-z_][A-Za-z0-9_$]*|\"(?:[^\"\\x00]|\"\")+\")";
+
+    #! a name with an optional schema in an operator class
+    const PgsqlOpclassQName = PgsqlOpclassIdent + "(?:\\." + PgsqlOpclassIdent + ")?";
+
+    #! a value of an operator class parameter: a number, a name or a string literal without a backslash
+    const PgsqlOpclassValue = "(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]*|'(?:[^'\\\\\\x00]|'')*')";
+
+    #! the regular expression of an operator class, also in the form that the server gives (see parsePgIndexDef()):
+    #! an optional collation (\c "COLLATE name"), a name with an optional schema, and optional parameters
+    const PgsqlOpclassRegex = "\\A(?:(?i:collate)\\s+" + PgsqlOpclassQName + "\\s+)?" + PgsqlOpclassQName
+        + "(?:\\s*\\(\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + "(?:\\s*,\\s*"
+        + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + ")*\\s*\\))?\\z";
 
     #! Checks the index options that are written into the DDL (qore#6577)
     /** Called for each index of a table description

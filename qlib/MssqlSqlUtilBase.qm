@@ -543,6 +543,9 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
     }
 
     #! creates the object from the arguments
+    /** @note the method and the options are written into the DDL as they are given here; the indexes of a table
+        description are checked by MssqlTable::checkIndexOptions() (qore#6577)
+    */
     constructor(string n_name, bool n_unique, hash n_cols, *string n_filegroup,
             *string n_method, *hash<auto> n_with)
             : AbstractIndex(n_name, n_unique, n_cols) {
@@ -3687,6 +3690,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     const MssqlIndexMethods = {
         "clustered": True,
         "nonclustered": True,
+        "columnstore": True,
         "clustered columnstore": True,
         "nonclustered columnstore": True,
     };
