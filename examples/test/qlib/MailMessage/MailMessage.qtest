@@ -614,7 +614,8 @@ lorem ipsum\r
             string filename = binary_to_string(parse_hex_string("2e2e2fff2f706173737764"), "UTF-8");
             assertEq("attachment", sanitize_filename(filename));
             # a name in another encoding that is not valid in it, as decode_mime_filename() can give
-            string sjis = binary_to_string(parse_hex_string("2e2e2f82ff2f78"), "SHIFT_JIS");
+            # (Shift_JIS 0x81 0x7f: a lead byte with an invalid trail byte, which every iconv refuses; musl decodes 0x82 0xff)
+            string sjis = binary_to_string(parse_hex_string("2e2e2f817f2f78"), "SHIFT_JIS");
             assertEq("attachment", sanitize_filename(sjis));
         }
 

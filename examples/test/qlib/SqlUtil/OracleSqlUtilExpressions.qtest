@@ -501,10 +501,11 @@ class OracleExpressionTest inherits QUnit::Test {
         # HH -> HH24
         assertEq("HH24:MI:SS", OracleTable::convertDateFormat("HH:mm:SS"));
         # a format that is not valid in its encoding is not written into an SQL string literal (qore#6553)
+        # (Shift_JIS 0x81 0x7f: a lead byte with an invalid trail byte, which every iconv refuses; musl decodes 0x82 0xff)
         assertThrows("VALUE-ERROR", \OracleTable::convertDateFormat(),
             (binary_to_string(parse_hex_string("59ff27"), "UTF-8"),));
         assertThrows("VALUE-ERROR", \OracleTable::convertDateFormat(),
-            (binary_to_string(parse_hex_string("82ff"), "SHIFT_JIS"),));
+            (binary_to_string(parse_hex_string("817f"), "SHIFT_JIS"),));
         # mm -> MI
         assertEq("YYYY-MM-DD HH24:MI:SS", OracleTable::convertDateFormat("YYYY-MM-DD HH:mm:SS"));
         # us -> FF6

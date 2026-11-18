@@ -1460,8 +1460,9 @@ class DataStreamUtilTest inherits QUnit::Test {
         assertEq("1: 2", send(1, 2)."DataStream-Error");
         assertEq("ERR: ", send("ERR", NOTHING)."DataStream-Error");
         # strings that are not valid in their encoding, in UTF-8 and in another encoding
+        # (Shift_JIS 0x81 0x7f: a lead byte with an invalid trail byte, which every iconv refuses; musl decodes 0x82 0xff)
         string bad_utf8 = binary_to_string(parse_hex_string("61ff"), "UTF-8");
-        string bad_sjis = binary_to_string(parse_hex_string("82ff"), "SHIFT_JIS");
+        string bad_sjis = binary_to_string(parse_hex_string("817f"), "SHIFT_JIS");
         assertEq("ERR: <description not valid in its encoding>", send("ERR", bad_utf8)."DataStream-Error");
         assertEq("ERR: <description not valid in its encoding>", send("ERR", bad_sjis)."DataStream-Error");
         assertEq("<error code not valid in its encoding>: d", send(bad_sjis, "d")."DataStream-Error");
