@@ -44,12 +44,14 @@
 class FileLineIterator : public QoreIteratorBase, public QoreLineTerminatorSource {
 public:
     DLLLOCAL FileLineIterator(ExceptionSink* xsink, const QoreStringNode* name, const QoreEncoding* enc = QCS_DEFAULT,
-        const QoreStringNode* n_eol = 0, bool n_trim = true, int flags = 0) :
+        const QoreStringNode* n_eol = 0, bool n_trim = true, int flags = 0,
+        qore_encoding_errors_t encoding_errors = qore_encoding_errors_t::RAISE) :
         eol(n_eol ? n_eol->stringRefSelf() : nullptr),
         encoding(enc),
         filename(name->stringRefSelf()),
         trim(n_trim),
-        flags(flags) {
+        flags(flags),
+        encoding_errors(encoding_errors) {
         doReset(xsink);
     }
 
@@ -58,7 +60,8 @@ public:
         encoding(old.encoding),
         filename(old.filename->stringRefSelf()),
         trim(old.trim),
-        flags(old.flags) {
+        flags(old.flags),
+        encoding_errors(old.encoding_errors) {
         doReset(xsink);
     }
 
@@ -66,8 +69,21 @@ public:
     }
 
     DLLLOCAL bool next(ExceptionSink* xsink) {
+        line = nullptr;
         bool validp = src->next(xsink);
-        if (!validp) {
+        if (validp && convert) {
+            // the lines of a file in an encoding that is not ASCII-compatible are returned in UTF-8; a line that is
+            // not valid in the encoding has been tagged ISO-8859-1 by the reader, or raises an exception here with
+            // the encoding_errors option "keep"
+            SimpleRefHolder<QoreStringNode> l(src->getValue());
+            line = toUtf8(**l, xsink);
+            if (*xsink) {
+                line = nullptr;
+                return false;
+            }
+        }
+        // the file is read from its start again after its end, not after an exception, after which reading goes on
+        if (!validp && !*xsink) {
             doReset(xsink);
         }
         return validp;
@@ -78,6 +94,9 @@ public:
     }
 
     DLLLOCAL QoreStringNode* getValue() {
+        if (convert) {
+            return line ? line->stringRefSelf() : nullptr;
+        }
         return src->getValue();
     }
 
@@ -94,13 +113,17 @@ public:
     }
 
     DLLLOCAL void reset(ExceptionSink* xsink) {
-        if (src->valid()) {
-            doReset(xsink);
-        }
+        // also after an exception, after which the iterator is not valid in the middle of the file
+        doReset(xsink);
     }
 
     DLLLOCAL const QoreEncoding* getEncoding() {
-        return src->getEncoding();
+        return convert ? QCS_UTF8 : src->getEncoding();
+    }
+
+    //! returns what a line that is not valid in the encoding gives (the encoding_errors option)
+    DLLLOCAL qore_encoding_errors_t getEncodingErrors() const {
+        return encoding_errors;
     }
 
     DLLLOCAL const QoreStringNode* getFileName() {
@@ -153,24 +176,60 @@ public:
     }
 
 private:
+    //! returns the given line in UTF-8
+    /** A line in a Unicode encoding (UTF-16, UTF-32) is converted with the character functions of the encoding, with
+        no conversion to open for each line; a line that is not valid in its encoding, or in another encoding, is
+        converted with iconv, which raises \c ENCODING-CONVERSION-ERROR for text that is not valid
+    */
+    DLLLOCAL static QoreStringNode* toUtf8(const QoreStringNode& l, ExceptionSink* xsink) {
+        const QoreEncoding* e = l.getEncoding();
+        const qore_encoding_private* ep = qore_encoding_private::get(*e);
+        if (ep->get_unicode && e->isMultiByte()) {
+            const char* p = l.c_str();
+            size_t len = l.size();
+            SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(QCS_UTF8));
+            rv->reserve(len + len / 2);
+            size_t i = 0;
+            while (i < len) {
+                qore_offset_t cl = e->getCharLen(p + i, len - i);
+                if (cl <= 0) {
+                    break;
+                }
+                rv->concatUTF8FromUnicode(ep->getUnicode(p + i));
+                i += cl;
+            }
+            if (i == len) {
+                return rv.release();
+            }
+        }
+        return l.convertEncoding(QCS_UTF8, xsink);
+    }
+
     DLLLOCAL void doReset(ExceptionSink* xsink) {
         fis = new FileInputStream(*filename, -1, flags, xsink);
         if (*xsink)
             return;
         fis->ref();
-        if (!encoding->isAsciiCompat())
-            src = new InputStreamLineIterator(xsink, new EncodingConversionInputStream(*fis, encoding, QCS_UTF8, xsink), QCS_UTF8, *eol, trim);
-        else
-            src = new InputStreamLineIterator(xsink, *fis, encoding, *eol, trim);
+        // the lines are read in the encoding of the file, so that they are checked in it; in an encoding that is
+        // not ASCII-compatible, each line is then converted to UTF-8 (see next())
+        src = new InputStreamLineIterator(xsink, *fis, encoding, *eol, trim, DefaultStreamBufferSize,
+            encoding_errors);
+        src->setOwnerName("FileLineIterator");
     }
 
     SimpleRefHolder<InputStreamLineIterator> src = nullptr;
+    //! the current line in UTF-8, for a file in an encoding that is not ASCII-compatible
+    SimpleRefHolder<QoreStringNode> line;
     SimpleRefHolder<FileInputStream> fis = nullptr;
     SimpleRefHolder<QoreStringNode> eol;
     const QoreEncoding* encoding;
     SimpleRefHolder<QoreStringNode> filename;
     bool trim;
     int flags;
+    //! what a line that is not valid in the encoding gives (the encoding_errors option)
+    qore_encoding_errors_t encoding_errors;
+    //! true if the lines are converted to UTF-8
+    bool convert = !encoding->isAsciiCompat();
 };
 
 #endif // _QORE_FILELINEITERATOR_H
