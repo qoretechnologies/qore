@@ -100,7 +100,7 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         on_exit pair.client.close();
         on_exit pair.server.close();
-        sendFailure(new HttpWebSocketPollOperationBase(pair.server), pair.client);
+        sendFailure(new HttpWebSocketPollOperationBase(pair.server), pair.server);
     }
 
     wsClientTest() {
@@ -108,7 +108,7 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         hash<auto> pair = createSocketPair();
         on_exit pair.client.close();
         on_exit pair.server.close();
-        sendFailure(new WebSocketClientPollOperationBase(pair.client), pair.server);
+        sendFailure(new WebSocketClientPollOperationBase(pair.client), pair.client);
     }
 
     pingTest() {
@@ -196,13 +196,21 @@ class PollOperationErrorInfoRaceTest inherits QUnit::Test {
         return r.value;
     }
 
-    #! a WebSocket operation's send that is in progress fails, as the peer resets the connection
-    private sendFailure(object op, Socket peer) {
+    #! a WebSocket operation's send that is in progress fails, as the sending side of its socket is shut down
+    /** The send fails on the next attempt, while the peer keeps its connection open: the operation sees nothing to
+        read, so it cannot see the connection end before the send fails.  A connection reset by the peer, as before,
+        is seen as the end of the input too, which can come first (macOS): the operation then ends closed with 1006, as
+        it must for a connection lost, before the send fails, and records no error (issue #6591).
+
+        @param op the operation
+        @param sock the socket of the operation
+    */
+    private sendFailure(object op, Socket sock) {
         # a frame larger than the socket buffers: its send is left in progress
         op.sendBinary(binary(strmul("x", SendSize)));
         *hash<SocketPollInfo> poll_info = op.continuePoll();
         assertTrue((poll_info.events & SOCK_POLLOUT) != 0, "the send is in progress");
-        call_function("dbg_reset_socket", peer);
+        sock.shutdownWrite();
         # the send goes on when the socket is ready for it, and fails; continuePoll() raises the error that it records
         *hash<auto> info = recordAndRead(op, sub () { driveUntil(op, \op.hasError()); }, "SOCKET-SEND-ERROR");
         assertEq("SOCKET-SEND-ERROR", info.err);
