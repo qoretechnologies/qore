@@ -235,6 +235,10 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - implemented @ref select_option_recursive "recursive queries" on PostgreSQL (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed writing a string to a \c json or \c jsonb column with an insert, an update or an upsert, which
       PostgreSQL refused as \c text; the value is cast to the column's type in the SQL
@@ -706,7 +710,8 @@ string sub pgsql_get_relation_name_literal(string name) {
 # single quotes as an escape character when standard_conforming_strings is off, and an escape string is read the same
 # way whatever its value
 string sub pgsql_get_string_literal(string v) {
-    sql_literal_check_encoding(v);
+    # issue #6586: a string whose encoding is invalid is refused
+    AbstractSqlUtilBase::checkSqlStringValue(v);
     if (v.find("\\") >= 0) {
         return "E'" + replace(replace(v, "\\", "\\\\"), "'", "''") + "'";
     }

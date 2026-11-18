@@ -43,7 +43,7 @@
 # enable all warnings
 
 module FreetdsSqlUtil {
-    version = "1.6";
+    version = "1.7";
     desc = "user module for working with FreeTDS SQL data";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -70,6 +70,14 @@ module FreetdsSqlUtil {
     for communication with MS SQL Server and Sybase databases
 
     @see @ref mssqlsqlutilbaseintro for implementation information about this module
+
+    @subsection freetdssqlutilv17 FreetdsSqlUtil v1.7
+    - a boolean given in SQL (a default value, or the value of a column or update operator) is \c 1 or \c 0, as
+      T-SQL has no \c true and \c false literals (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
 
     @subsection freetdssqlutilv16 FreetdsSqlUtil v1.6
     - implementation moved to the \c MssqlSqlUtilBase module
@@ -160,12 +168,15 @@ public class FreetdsTable inherits MssqlSqlUtilBase::MssqlTable {
             case NT_NUMBER: return string(v);
 
             # double any single quotes in strings
-            case NT_STRING: v = sql_literal_check_encoding(v); v =~ s/'/''/g; return "'" + v + "'";
+            # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+            # invalid is refused
+            case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
             case NT_NULL:
             case NT_NOTHING: return "null";
 
-            case NT_BOOLEAN: return v ? "true" : "false";
+            # issue #6586: T-SQL has no boolean literal; a bit value is given
+            case NT_BOOLEAN: return v ? "1" : "0";
 
             case NT_DATE: return sprintf("cast('%s' as datetimeoffset(6))",
                 TimeZone::get().date(v).format("YYYY-MM-DD HH:mm:SS.us"));

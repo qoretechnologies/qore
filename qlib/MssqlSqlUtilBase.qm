@@ -186,6 +186,12 @@ hash<auto> desc = {
     schema alignment.
 
     @subsection MssqlSqlUtilBasev11 MssqlSqlUtilBase v1.1
+    - a boolean given in SQL (a default value, or the value of a column or update operator) is \c 1 or \c 0, as
+      T-SQL has no \c true and \c false literals (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - implemented @ref select_option_recursive "recursive queries" on SQL Server; a query with a \c max_depth sets the
       recursion limit of the statement to it with \c MAXRECURSION; Sybase raises \c RECURSIVE-QUERY-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
@@ -369,12 +375,14 @@ string sub mssql_get_sql_object_name(string name) {
 
 # returns a string for an SQL string literal: in single quotes, with each single quote doubled
 string sub mssql_get_string_literal(string str) {
-    return "'" + replace(sql_literal_check_encoding(str), "'", "''") + "'";
+    # issue #6586: a string whose encoding is invalid is refused
+    return AbstractSqlUtilBase::getSqlStringLiteral(str);
 }
 
 # returns a string for a Unicode SQL string literal: N and the string in single quotes, with each single quote doubled
 string sub mssql_get_unicode_string_literal(string str) {
-    return "N'" + replace(sql_literal_check_encoding(str), "'", "''") + "'";
+    # issue #6586: a string whose encoding is invalid is refused
+    return "N" + AbstractSqlUtilBase::getSqlStringLiteral(str);
 }
 
 # returns a name in brackets, with each "]" doubled, without any other check of the name
@@ -3751,12 +3759,15 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             case NT_NUMBER: return string(v);
 
             # double any single quotes in strings
-            case NT_STRING: v = sql_literal_check_encoding(v); v =~ s/'/''/g; return "'" + v + "'";
+            # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+            # invalid is refused
+            case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
             case NT_NULL:
             case NT_NOTHING: return "null";
 
-            case NT_BOOLEAN: return v ? "true" : "false";
+            # issue #6586: T-SQL has no boolean literal; a bit value is given
+            case NT_BOOLEAN: return v ? "1" : "0";
 
             case NT_DATE: return sprintf("cast('%s' as datetimeoffset(6))",
                 TimeZone::get().date(v).format("YYYY-MM-DD HH:mm:SS.us Z"));

@@ -200,6 +200,10 @@ hash<auto> desc = {
 
 
     @section mysqlsqlutilv16 MysqlSqlUtil v1.6
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - implemented @ref select_option_recursive "recursive queries", which need MySQL 8.0 or MariaDB 10.2.2 or later;
       a query with a \c max_depth above the default recursion limit of the server raises it for the statement
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
@@ -422,7 +426,7 @@ public namespace MysqlSqlUtil {
                 "of an emulated sequence, as it is stored in a string literal, which reads a backslash according to "
                 "the sql_mode of the session", name);
         }
-        return "'" + replace(sql_literal_check_encoding(name), "'", "''") + "'";
+        return AbstractSqlUtilBase::getSqlStringLiteral(name);
     }
 
     sub parse_schema_name(string nname, reference<*string> schema, reference<string> name) {
@@ -3338,12 +3342,13 @@ end";
                     # with a backslash is given as a hex literal in UTF-8 with a character set introducer, which
                     # every sql_mode reads as the same string; any other string is given as before, with single
                     # quotes doubled
-                    v = sql_literal_check_encoding(v);
+                    # issue #6586: a string whose encoding is invalid is refused, and the quotes are doubled
+                    # without a regular expression
+                    AbstractSqlUtilBase::checkSqlStringValue(v);
                     if (v.find("\\") >= 0) {
                         return "_utf8mb4 X'" + binary(convert_encoding(v, "UTF-8")).toHex() + "'";
                     }
-                    v =~ s/'/''/g;
-                    return "'" + v + "'";
+                    return "'" + replace(v, "'", "''") + "'";
                 }
 
                 case NT_NULL:

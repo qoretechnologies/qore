@@ -170,6 +170,11 @@ module SqlUtil {
       a hint first), a value given with
       @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is an SQL literal of the database, as
       in the select list, and an alias referenced in a superquery or a window is given as an identifier (<a href="https://github.com/qoretechnologies/qore/issues/6574">issue 6574</a>)
+    - added @ref SqlUtil::AbstractSqlUtilBase::getSqlStringLiteral() "AbstractSqlUtilBase::getSqlStringLiteral()" and
+      @ref SqlUtil::AbstractSqlUtilBase::checkSqlStringValue() "AbstractSqlUtilBase::checkSqlStringValue()": a string
+      given in an SQL string literal whose encoding is invalid or that has a NUL character is refused with
+      \c VALUE-ERROR, and its quotes are doubled without a regular expression; the drivers use them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
       an existing constraint name is raised without also printing its message, and a debug print of update operators was
       removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

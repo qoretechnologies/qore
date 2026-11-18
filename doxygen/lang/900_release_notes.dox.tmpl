@@ -128,6 +128,11 @@
     sandbox before the DBI driver connects, and a driver that cannot report the destinations of its connections is
     refused for it with \c NETWORK-ACCESS-DENIED (see @ref sandbox_dbi_connections; issue #5747).
 
+    @par SqlUtil Refuses Strings with an Invalid Encoding in SQL Values
+    A string given in an SQL string literal by @ref sqlutilintro "SqlUtil" and its drivers (a default value, a
+    comment, or a value of an operator) whose encoding is invalid or that has a NUL character raises
+    \c VALUE-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>).
+
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
     (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a
