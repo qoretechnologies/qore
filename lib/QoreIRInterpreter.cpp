@@ -9660,6 +9660,18 @@ static __attribute__((noinline)) void takeOverRuntimeStackParams(const QoreIRFun
     }
 }
 
+//! Raises the error of an IR function whose parent slot count its frame or its parent's frame does not hold
+/** Only IR read from a malformed AOT module gives such a count (qore#6451); the error is raised out of the
+    interpreter loop, so that its variadic call does not enlarge the frame of QoreIRInterpreter::execute(), which
+    every level of a recursion of interpreted code puts on the stack (qore#6540)
+*/
+static QORE_IR_COLD_NOINLINE void qore_ir_raise_parent_slot_count_error(const QoreIRFunction& func,
+        size_t frame_slots, const std::vector<QoreValue>* parent_slot_cache, ExceptionSink* xsink) {
+    xsink->raiseException("IR-ERROR", "IR function '%s' has %u parent slots, more than its frame (%zu) or that of its "
+        "parent (%zu) holds", func.name.c_str(), func.parent_slot_count, frame_slots,
+        parent_slot_cache ? parent_slot_cache->size() : static_cast<size_t>(0));
+}
+
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
@@ -9750,9 +9762,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // which only IR read from a malformed AOT module can give, is refused before the slots are used (qore#6451)
     if (func.parent_slot_count && (func.parent_slot_count > locals_slot_cache.vector().size()
             || (parent_slot_cache && func.parent_slot_count > parent_slot_cache->size()))) {
-        xsink->raiseException("IR-ERROR", "IR function '%s' has %u parent slots, more than its frame (%zu) or that of "
-            "its parent (%zu) holds", func.name.c_str(), func.parent_slot_count, locals_slot_cache.vector().size(),
-            parent_slot_cache ? parent_slot_cache->size() : static_cast<size_t>(0));
+        qore_ir_raise_parent_slot_count_error(func, locals_slot_cache.vector().size(), parent_slot_cache, xsink);
         return false;
     }
 

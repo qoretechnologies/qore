@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# test-release-build: its release budgets are checked only in a release build, which CI tests in its performance job
 
 /*  Copyright 2026 Qore Technologies, s.r.o.
 
@@ -51,7 +52,13 @@
     they are in sanitizer builds, whose stack redzones make every frame larger.
 
     tools/check-stack-usage.py checks the frames of the same path, function by function, in a release build made with
-    -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.
+    -DQORE_STACK_USAGE_REPORT=ON; this test checks their sum as the recursion uses it, in the build being tested.  A
+    growth of a frame that is accepted there (a budget raised in tools/stack-usage-budgets.txt, with the bytes per level
+    measured here) raises the budgets here by the same measured bytes per level, so that the two checks stay in step
+    (issue #6540: the growths of #5824 and #6074 were accepted there only, and a growth of 64 bytes of the frame of
+    QoreIRInterpreter::execute within its budget there failed here).  The x86_64 release budgets of the ir recursions
+    are 56 bytes per level over the measured values, less than a growth of 64 bytes of that frame costs.
+    CI checks the release budgets in its performance job (# test-release-build), as the test jobs test a debug build.
 */
 
 public class RecursionFrameBudgetTest inherits QUnit::Test {
@@ -135,20 +142,26 @@ int sub run(string f) {
             images); see the comment at the top
         */
         const Budgets = {
-            # measured: ast 2656, 2464, 2511; ir 4804, 5714, 4750
+            # measured: ast 2656, 2464, 2511; ir 4804, 5714, 4750; the ir budgets: measured 5102, 6078, 5077 with a
+            # frame of QoreIRInterpreter::execute of 4240 B (develop 54285687c5 with the fix of #6540, which includes
+            # the growths of #5824 and #6074) plus 56 bytes per level: a frame that grows by N bytes costs about N
+            # bytes per level (#6451: 64 B, +62, +63, +68), so a growth of 64 bytes (as #6451's) fails here, and one of
+            # 48 bytes (+46..51) does not; the budget of execute() in tools/stack-usage-budgets.txt is 4304 B (64 B
+            # over), so a frame at its budget there fails here: raise both when a growth is accepted (issue #6540)
             "x86_64-linux-gnu release": {
                 "ast": {"function": 2840, "method": 2640, "static method": 2690},
-                "ir": {"function": 5140, "method": 6110, "static method": 5080},
+                "ir": {"function": 5158, "method": 6134, "static method": 5133},
             },
             # measured: ast 2639, 2608, 2511; ir 4848, 6223, 4798
             "x86_64-linux-gnu debug": {
                 "ast": {"function": 2820, "method": 2790, "static method": 2690},
                 "ir": {"function": 5180, "method": 6650, "static method": 5130},
             },
-            # measured: ast 2656, 2464, 2511; ir 4798, 5714, 4755
+            # measured: ast 2656, 2464, 2511; ir 4798, 5714, 4755; the ir budgets are those of x86_64-linux-gnu
+            # release, as musl gives the frames of glibc on this path (see tools/stack-usage-budgets.txt)
             "x86_64-alpine-linux-musl release": {
                 "ast": {"function": 2840, "method": 2640, "static method": 2690},
-                "ir": {"function": 5130, "method": 6110, "static method": 5080},
+                "ir": {"function": 5158, "method": 6134, "static method": 5133},
             },
             # measured: ast 2639, 2608, 2511; ir 4843, 6223, 4798
             "x86_64-alpine-linux-musl debug": {

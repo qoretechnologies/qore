@@ -79,6 +79,13 @@
   parsing, data provider metadata, REST schemas, SQL generation without a database), which the Linux jobs cover.  The
   reason names the mechanism, ex: `non-blocking File I/O, descriptor redirection and poll readiness of regular files`;
   `examples/test/runner/test_platform_markers.py` enforces the form.
+- The CI test jobs test a debug build; the only release build is the performance job's (`build-perf`/`test-perf`,
+  x86_64).  A test whose checks apply only to a release build (budgets calibrated for one, such as the release stack
+  budgets of `qore/stack/recursion-frame-budget.qtest`) declares `# test-release-build: <why>` (on a line of its own
+  after the `#!` and mode lines): `run_tests.sh -P` selects it with the performance tests, so `test-perf` runs it on
+  the release build, and the test jobs still run it.  The marker has no value, only the reason (unlike the
+  `<value> - <why>` form of the markers above), ex: `# test-release-build: its release budgets are checked only in a
+  release build`; `examples/test/runner/test_release_build_markers.py` enforces the form (#6540).
 - `QORE_TEST_JOBS=<n>|auto ./run_tests.sh` runs n tests at a time (the macOS CI job runs as many as the VM has CPUs, the
   Linux test jobs as many as their pod's CPU and memory limits allow: `qore_ci_test_jobs` in
   `examples/test/docker_test/ci-resource-report.sh`) and prints each test's output whole when it ends.  Tests must
