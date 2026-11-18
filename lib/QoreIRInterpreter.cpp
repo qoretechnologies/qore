@@ -1833,6 +1833,23 @@ struct IRCallFrame {
     @param raising the instruction that raised the exception
     @param marks the marks of the temp scopes open in the frame, innermost last
 */
+//! Keeps the object \a obj that the load \a id of a weak-assigned local borrowed for the call whose receiver it is
+/** The reference is released at the last use of the value, the call, or with the temps of the statement (qore#6590)
+*/
+static QORE_IR_COLD_NOINLINE void qore_ir_hold_weak_receiver(QoreValue obj, IRCleanupSlots& cleanup, uint32_t id) {
+    obj.refSelf();
+    cleanup.push_back(id);
+}
+
+//! Releases the object that the load of a weak-assigned local kept for a call whose receiver it is (qore#6590)
+/** @return true if its destructor raised an exception, which the call raises, as in the AST interpreter
+*/
+static QORE_IR_COLD_NOINLINE bool qore_ir_release_weak_receiver(QoreValue val, ExceptionSink* xsink) {
+    bool had_exception = xsink && *xsink;
+    val.discard(xsink);
+    return !had_exception && xsink && *xsink;
+}
+
 static QORE_IR_COLD_NOINLINE uint32_t qore_ir_exception_branch_temp_scope(const QoreIRInstruction* raising,
         const std::vector<IRCallFrame::TempCleanupMark>& marks) {
     bool scope_closed = raising->opcode == QoreIROpcode::DiscardTemps
@@ -3454,6 +3471,32 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 }
             }
         }
+    }
+    // the loads of locals that are the receiver of a call: one that borrows the object of a weak reference keeps it
+    // until the call returns, as the AST interpreter keeps the object of a method call (qore#6590).  Only a value used
+    // as the base of dot-eval calls and nothing else (interpreter_dot_eval_only_bases: no Phi takes it to another
+    // block or iteration) is one: the reference is released by its last call or, if an exception is raised before,
+    // with the temps of the statement, so that its slot never holds it when the load runs again.  A dot-eval call
+    // made through the AST (DotEvalAny ...) keeps its object itself (qore_object_private::startCall())
+    {
+        std::vector<uint8_t> receivers;
+        const std::vector<uint8_t>& dot_eval_only = func.interpreter_dot_eval_only_bases;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst_ptr : block->instructions) {
+                uint32_t id = qore_ir_call_receiver_id(inst_ptr.get());
+                if (!id || id >= value_defs.inst.size() || !value_defs.inst[id]
+                        || id >= dot_eval_only.size() || !dot_eval_only[id]
+                        || (value_defs.inst[id]->opcode != QoreIROpcode::LoadLocal
+                            && value_defs.inst[id]->opcode != QoreIROpcode::LoadClosure)) {
+                    continue;
+                }
+                if (receivers.empty()) {
+                    receivers.assign(func.max_value_id + 1, 0);
+                }
+                receivers[id] = 1;
+            }
+        }
+        func.interpreter_local_call_receivers = std::move(receivers);
     }
     func.interpreter_consumed_call_args = std::move(consumed_call_args);
     func.interpreter_phi_takes_incoming = std::move(phi_takes_incoming);
@@ -10805,13 +10848,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     using TempCleanupMark = IRCallFrame::TempCleanupMark;
     auto& temp_cleanup_marks = frame.temp_cleanup_marks;
 
-    auto releaseWeakLoadTemp = [&](uint32_t id) {
+    // Returns true if the destructor of the object that the load kept for a call whose receiver it is raised an
+    // exception: only such a load (see the LoadLocal of a weak-assigned local, qore#6590) has a cleanup entry, as it
+    // holds a reference; any other borrows its value.  Such a load is released by its last use or with the temps of
+    // the statement on an exception (see QoreIRFunction::interpreter_local_call_receivers), so that
+    // clearSlotForOverwrite() never finds one
+    auto releaseWeakLoadTemp = [&](uint32_t id) -> bool {
         if (id >= values.size()) {
-            return;
+            return false;
         }
-        removeAllCleanupEntries(cleanup, id);
+        bool held = removeAllCleanupEntries(cleanup, id);
+        QoreValue val = values[id];
         values[id] = QoreValue();
         weak_load_temp_slots.erase(id);
+        return held && qore_ir_release_weak_receiver(val, xsink);
     };
 
     auto clearSlotForOverwrite = [&](uint32_t id) {
@@ -10912,14 +10962,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    auto consumeOperandUse = [&](uint32_t id) {
+    // Returns true if the release of the object kept for a call raised an exception (see releaseWeakLoadTemp())
+    auto consumeOperandUse = [&](uint32_t id) -> bool {
         auto it = weak_load_temp_slots.find(id);
         if (it == weak_load_temp_slots.end()) {
-            return;
+            return false;
         }
         if (--it->second <= 0) {
-            releaseWeakLoadTemp(id);
+            return releaseWeakLoadTemp(id);
         }
+        return false;
     };
 
     auto trackBorrowedTemp = [&](uint32_t id) {
@@ -13142,7 +13194,17 @@ load_local_done:
                     clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (weak_ref_load && out.hasNode()) {
-                        trackWeakLoadTemp(local_inst->result.id);
+                        // the receiver of a call keeps the object of a weak reference until the call returns, as the
+                        // AST interpreter keeps the object of a method call (qore_object_private::startCall()), so
+                        // that a method that removes the last strong reference to its object can still use it; the
+                        // reference is released at the last use of the value, the call (releaseWeakLoadTemp()), or
+                        // as a temporary of the statement on an exception (qore#6590)
+                        uint32_t rid = local_inst->result.id;
+                        if (rid < func.interpreter_local_call_receivers.size()
+                                && func.interpreter_local_call_receivers[rid] && out.getType() == NT_OBJECT) {
+                            qore_ir_hold_weak_receiver(out, cleanup, rid);
+                        }
+                        trackWeakLoadTemp(rid);
                     } else if (out.needsRef()) {
                         // Every non-owned node result borrows its local's reference.
                         // Clear the slot after its final consumer so scope cleanup
@@ -13344,7 +13406,14 @@ load_local_done:
                     clearSlotForOverwrite(local_inst->result.id);
                     setValueSlotDirect(values, local_inst->result.id, out);
                     if (is_weak_ref_local && out.hasNode()) {
-                        trackWeakLoadTemp(local_inst->result.id);
+                        // the receiver of a call keeps the object of a weak reference until the call returns, as
+                        // LoadLocal keeps it (qore#6590)
+                        uint32_t rid = local_inst->result.id;
+                        if (rid < func.interpreter_local_call_receivers.size()
+                                && func.interpreter_local_call_receivers[rid] && out.getType() == NT_OBJECT) {
+                            qore_ir_hold_weak_receiver(out, cleanup, rid);
+                        }
+                        trackWeakLoadTemp(rid);
                     }
                 }
                 if (result_slot_owned && out.needsRef() && local_inst->auto_ref) {
@@ -21328,8 +21397,8 @@ load_local_done:
                 if (borrowed_temp_active) {
                     consumeBorrowedTemp(op.id);
                 }
-                if (!weak_load_temp_slots.empty()) {
-                    consumeOperandUse(op.id);
+                if (!weak_load_temp_slots.empty() && consumeOperandUse(op.id)) [[unlikely]] {
+                    goto weak_receiver_raised;
                 }
             }
         }
@@ -21342,6 +21411,22 @@ load_local_done:
         // these must go through phi processing in the outer while loop.
         if (block == current_block && ip > 0 && ip < block->instructions.size()) {
             goto next_instruction;
+        }
+        if (false) {
+weak_receiver_raised:
+            // the destructor of the object that a load kept for the call raised an exception, which the call raises
+            // (qore#6590); the uses of its other operands are left, as on the path of any exception raised by an
+            // instruction, for the release of the temps of the statement
+            if (inst->exception_target) {
+                cleanupToTempScope(exceptionBranchTempScope(inst), true, false, true);
+                prev_block = current_block;
+                block = inst->exception_target;
+                ip = 0;
+            } else {
+                unwindForException();
+                cleanupLocalCaches();
+                return exitAfterUnwind();
+            }
         }
         } // end of current_block scope
 

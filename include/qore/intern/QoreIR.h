@@ -4100,6 +4100,38 @@ inline int qore_ir_call_arg_start(const QoreIRInstruction* inst) {
     }
 }
 
+//! Returns the id of the receiver of a dot-eval call (a method call through an expression) or of the called value of
+//! a call through a call reference or closure, or 0
+inline uint32_t qore_ir_call_receiver_id(const QoreIRInstruction* inst) {
+    if (inst->operands.empty()) {
+        return 0;
+    }
+    QoreIROpcode op = inst->opcode;
+    if (op == QoreIROpcode::Invoke) {
+        op = static_cast<const QoreIRInvokeInstruction*>(inst)->invoke_opcode;
+        if (isDotEvalInvokeOpcode(op)) {
+            return inst->operands[0].id;
+        }
+    }
+    switch (op) {
+        case QoreIROpcode::DotEvalAny:
+        case QoreIROpcode::DotEvalInt:
+        case QoreIROpcode::DotEvalFloat:
+        case QoreIROpcode::DotEvalString:
+        case QoreIROpcode::DotEvalDate:
+        case QoreIROpcode::DotEvalList:
+        case QoreIROpcode::DotEvalHash:
+        case QoreIROpcode::DotEvalObject:
+        case QoreIROpcode::DotEvalMethodDirect:
+        case QoreIROpcode::InvokeDotEvalMethodDirect:
+        case QoreIROpcode::CallIndirect:
+        case QoreIROpcode::CallClosureDirect:
+            return inst->operands[0].id;
+        default:
+            return 0;
+    }
+}
+
 //! LandingPad instruction - marks the entry point of an exception handler (catch block)
 //! Stores the scope stack depth at the try-catch entry so the IR interpreter can
 //! execute on_error/on_exit handlers for scopes entered within the try body.
@@ -5063,6 +5095,11 @@ public:
     mutable std::unordered_map<const QoreIRInstruction*, std::vector<const QoreIRInstruction*>>
         interpreter_open_implicit_contexts;
     mutable std::vector<int32_t> interpreter_operand_use_counts;
+    //! Non-zero for a value loaded from a local (LoadLocal, LoadClosure) that is the receiver of a call
+    //! (qore_ir_call_receiver_id()) and is used only as the base of dot-eval calls (interpreter_dot_eval_only_bases):
+    //! a load that borrows the object of a weak reference keeps it until the call returns (qore#6590); empty if the
+    //! function has none
+    mutable std::vector<uint8_t> interpreter_local_call_receivers;
     mutable std::vector<uint32_t> interpreter_param_slot_ids;
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
     mutable std::vector<uint8_t> interpreter_locals_ir_only;
