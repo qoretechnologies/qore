@@ -70,6 +70,7 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
         addTestCase("MySQL: view alignment", sub () { checkDriver("mysql"); });
         addTestCase("Oracle: view alignment", sub () { checkDriver("oracle"); });
         addTestCase("invalid view descriptions", \errorTest());
+        addTestCase("queries given to a view probe", \probeSourceTest());
         addTestCase("SQL Server: view alignment", sub () { checkDriver("freetds"); });
         addTestCase("Firebird: view alignment", sub () { checkDriver("jdbc"); });
         set_return_value(main());
@@ -188,6 +189,70 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
         }
         # view comments on PostgreSQL and Oracle; Firebird cannot rename views
         checkViews(ds, inlist(driver, ("pgsql", "oracle")), driver != "jdbc");
+        if (inlist(driver, ("pgsql", "mysql"))) {
+            checkProbe(ds, driver);
+        }
+    }
+
+    #! checks that a query that is not only one select statement is not given to the view probe (qore#6578)
+    private checkProbe(Datasource ds, string driver) {
+        Database db(ds);
+        hash<auto> schema = {
+            "tables": {"vwa_t": TableDesc},
+            "views": {"vwa_a": "select id from vwa_t"},
+        };
+        align(ds, schema, "probe setup");
+        # a table of its own that the statements after the query would drop
+        ds.exec("create table vwa_marker (id int)");
+        ds.commit();
+        on_exit {
+            try {
+                ds.exec("drop table vwa_marker");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+        # an existing view whose query is changed to one with more statements: the SQL is only returned, so nothing
+        # of it runs; the probe would have given the statements to the database
+        schema.views.vwa_a = "select id from vwa_t; commit; drop table vwa_marker";
+        list<auto> sql = db.getAlignSql(schema);
+        assertTrue(sql.size() > 0, "the view is created again by the alignment");
+        assertTrue(exists db.getTable("vwa_marker"), "the statements after the query did not run");
+        # a query that the probe cannot make: its error is raised, and no probe view is left
+        schema.views.vwa_a = "select id from vwa_no_such_table";
+        bool raised;
+        try {
+            db.getAlignSql(schema);
+        } catch (hash<ExceptionInfo> ex) {
+            raised = True;
+        }
+        assertTrue(raised, "the error of the probe is raised");
+        if (driver == "mysql") {
+            assertEq(0, ds.selectRow("select count(1) as c from information_schema.views where table_schema = "
+                "database() and table_name like 'qore_view_probe%'").c.toInt(), "no probe view is left");
+        } else {
+            ds.rollback();
+        }
+        assertTrue(exists db.getTable("vwa_t"));
+    }
+
+    #! queries that can be given to a view probe: only one select or with statement (qore#6578)
+    probeSourceTest() {
+        foreach string src in ("select 1", "SELECT a, 'x;y' as b from t", "  with c as (select 1) select * from c;",
+                "(select 1) union (select 2)", "select \"a;b\" from t", "select `a``b` from t",
+                "select 'it''s; -- not a comment' from t") {
+            assertTrue(AbstractDatabase::viewProbeSourceSafe(src), src);
+        }
+        foreach string src in ("select 1; drop table t", "select 1 -- c", "select 1 /* c */", "select 1 # c",
+                "delete from t", "drop table t", "select $a$ ' $a$; drop table t; --'",
+                "select 'x\\'' ; drop table t; --'", "select 'unterminated", "select 1;; drop table t",
+                "update t set a = 1 returning (select 1)", "") {
+            assertFalse(AbstractDatabase::viewProbeSourceSafe(src), src);
+        }
+        # "`" quotes names on MySQL only; elsewhere it is an ordinary character, so a ";" after it is outside
+        assertTrue(AbstractDatabase::viewProbeSourceSafe("select `a;b` from t", True));
+        assertFalse(AbstractDatabase::viewProbeSourceSafe("select `a;b` from t"));
     }
 
     #! checks the alignment of views
