@@ -1373,7 +1373,7 @@ struct ColumnarCheckState {
     };
     std::vector<FixedSizeCount> fixed_size_counts;
 
-    DLLLOCAL void count(const QoreColumnarTypeDescriptor& schema, bool is_null) {
+    void count(const QoreColumnarTypeDescriptor& schema, bool is_null) {
         for (FixedSizeCount& c : fixed_size_counts) {
             if (c.schema == &schema) {
                 ++(is_null ? c.nulls : c.values);
@@ -1387,7 +1387,7 @@ struct ColumnarCheckState {
     /** Every value of a fixed-size list or binary column, null or not, has \c fixed_size elements in Arrow storage;
         the padding of the null values is bounded by the size of the other values.
     */
-    DLLLOCAL int checkFixedSizes(const char* name, const char* err, ExceptionSink* xsink) const {
+    int checkFixedSizes(const char* name, const char* err, ExceptionSink* xsink) const {
         for (const FixedSizeCount& c : fixed_size_counts) {
             size_t fixed_size = static_cast<size_t>(c.schema->fixed_size);
             if (c.nulls > c.values && c.nulls > COLUMNAR_MAX_FIXED_SIZE_NULL_PADDING / fixed_size) {

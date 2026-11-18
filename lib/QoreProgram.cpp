@@ -2921,9 +2921,9 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // lifts the restriction when the commit ends, also with an exception
             class CommitEntryRestrictionHelper {
             public:
-                DLLLOCAL CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
+                CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
                 }
-                DLLLOCAL ~CommitEntryRestrictionHelper() {
+                ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
                     pp.clearParseTidsIntern();
