@@ -2193,6 +2193,9 @@
     - @ref zohoinvoicerestclientintro "ZohoInvoiceRestClient": REST client for the Zoho Invoice API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
+    - an encoding that is not predefined has one canonical name, whatever the spelling of its first use (see
+      @ref character_encoding_overview); before, its name was the spelling of its first use, so the name of an
+      encoding depended on the order in which a program used its names (issue #6570)
 
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see

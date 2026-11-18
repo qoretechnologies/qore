@@ -41,7 +41,11 @@
     - a multi-byte encoding in which the length of a character is given by its first bytes (EUC encodings such as \c "EUC-JP", \c "EUC-KR" and \c "GB2312", double-byte encodings such as \c "GBK", \c "BIG5" and \c "CP949", \c "GB18030", and Shift_JIS and its variants such as \c "CP932") has strings made of characters of one to four bytes; Shift_JIS and its variants are not backwards compatible with \c ASCII: in Shift_JIS, the bytes 0x5c and 0x7e are the yen sign and overline of JIS X 0201, and \c iconv implementations and variants such as \c "CP932" map them differently
     - any other encoding and any encoding unknown to \c iconv is assumed to be backwards compatible with \c ASCII, meaning that one character is represented by one byte and that the strings are null-terminated.
 
-    An encoding created this way is registered for the life of the process.  A character set name taken from data
+    An encoding created this way is registered for the life of the process, with a canonical name that does not depend
+    on the spelling with which it is first used: the standard spelling of a character set that
+    @ref Qore::get_known_encoding() "get_known_encoding()" selects (ex: \c "Shift_JIS" for \c "SHIFT_JIS" or
+    \c "shift_jis"), or the name in upper case (ex: \c "CP1047" for \c "cp1047"), as the names of the encodings that
+    %Qore knows are; every later use of the name, in any case, gives this encoding.  A character set name taken from data
     that the program does not control (the \c charset of a message or of a MIME part, for example) should therefore
     be looked up with @ref Qore::get_known_encoding() "get_known_encoding()", which selects only an encoding that
     %Qore knows or a standard character set and never registers any other name; the HTTP clients and servers, the
