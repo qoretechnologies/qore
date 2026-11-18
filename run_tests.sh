@@ -216,7 +216,9 @@ elif [ $PERF_ONLY -eq 1 ]; then
     # build, as the test jobs test a debug build, and these tests run there too (issue #6540)
     RELEASE_BUILD_TESTS=""
     if [ -n "$TESTS" ]; then
-        RELEASE_BUILD_TESTS=" "`grep -l '^# test-release-build: ' $TESTS | tr '\n' ' '`
+        # the form that examples/test/runner/test_release_build_markers.py accepts: a reason, without leading or
+        # trailing white space
+        RELEASE_BUILD_TESTS=" "`grep -lE '^# test-release-build: [^[:space:]](.*[^[:space:]])?$' $TESTS | tr '\n' ' '`
     fi
     FILTERED=""
     for test in $TESTS; do
