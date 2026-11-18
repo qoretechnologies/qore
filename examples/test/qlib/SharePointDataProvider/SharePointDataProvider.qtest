@@ -887,15 +887,22 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         code site = \SharePointDataProviderBase::getSitePathSegment();
         code drive = \SharePointDataProviderBase::getDrivePathSegment();
 
-        # the documented forms
+        # the documented forms; a server-relative path is closed with ":" only when another segment follows it
         assertEq("root", site("root"));
         assertEq(TestSite, site(TestSite));
+        assertEq(TestSite, site(TestSite, True));
+        string guid = "4a1b2c3d-1111-2222-3333-444455556666";
+        assertEq("contoso.sharepoint.com," + guid, site("contoso.sharepoint.com," + guid));
+        assertEq(guid, site(guid));
         assertEq("contoso.sharepoint.com", site("contoso.sharepoint.com"));
-        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team"));
-        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team:"));
-        assertEq("contoso.sharepoint.com:/sites/Team%20Site%3F%23%25:",
+        assertEq("contoso.sharepoint.com", site("contoso.sharepoint.com", True));
+        assertEq("contoso.sharepoint.com:/sites/team", site("contoso.sharepoint.com:/sites/team"));
+        assertEq("contoso.sharepoint.com:/sites/team", site("contoso.sharepoint.com:/sites/team:"));
+        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team", True));
+        assertEq("contoso.sharepoint.com:/sites/team:", site("contoso.sharepoint.com:/sites/team:", True));
+        assertEq("contoso.sharepoint.com:/sites/Team%20Site%3F%23%25",
             site("contoso.sharepoint.com:/sites/Team Site?#%"));
-        assertEq("contoso.sharepoint.com:/sites/Zo%C3%AB:", site("contoso.sharepoint.com:/sites/Zoë"));
+        assertEq("contoso.sharepoint.com:/sites/Zo%C3%AB:", site("contoso.sharepoint.com:/sites/Zoë", True));
         assertEq(TestSite.upr(), site(TestSite.upr()));
         assertEq(TestDrive, drive(TestDrive));
         assertEq("b!Ab-_c.d", drive("b!Ab-_c.d"));
@@ -924,6 +931,10 @@ public class SharePointDataProviderTest inherits QUnit::Test {
             "list_id": TestList, "item_id": "1"});
         assertEq("sites/contoso.sharepoint.com:/sites/a%20b:/lists/" + TestList + "/items/1?$expand=fields",
             rest.last_path);
+        # the site ends the path of a get-site request, so its server-relative path is not closed with ":"
+        rest.response_body = {"id": TestSite};
+        prov.getChildProvider("get-site").doRequest({"site_id": "contoso.sharepoint.com:/sites/a b:"});
+        assertEq("sites/contoso.sharepoint.com:/sites/a%20b", rest.last_path);
         rest.last_path = "";
         assertThrows("SHAREPOINT-SITE-ERROR", "is not a site", \prov.getChildProvider("get-list-item").doRequest(),
             ({"site_id": TestSite + "/../../me/drive", "list_id": TestList, "item_id": "1"},));
@@ -940,7 +951,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         SharePointRecordsDataProvider records(rrest, {"site_id": "contoso.sharepoint.com:/sites/a b"});
         assertEq(("Widgets",), (select records.getChildProviderNames(),
             $1 != AbstractDataProvider::GenericApiCallChildName));
-        assertEq(("sites/contoso.sharepoint.com:/sites/a%20b:?$select=id,displayName,name",
+        assertEq(("sites/contoso.sharepoint.com:/sites/a%20b?$select=id,displayName,name",
             "sites/" + TestSite + "/lists?$select=id,name,displayName,description,webUrl,list,system,"
             "createdDateTime,lastModifiedDateTime&$top=200"), rrest.paths);
         rrest.paths = ();
