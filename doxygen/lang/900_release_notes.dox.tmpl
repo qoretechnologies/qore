@@ -2283,11 +2283,9 @@
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
       so that two redirects between the same files in opposite directions at the same time can no longer deadlock
       (issue #6567)
-    - a warning about a local variable raised when it goes out of scope (\c UNREFERENCED-VARIABLE) follows the
-      @ref enable-warning "%enable-warning" and @ref disable-warning "%disable-warning" directives in effect where the
-      variable is declared (not those in effect at the end of the parse), in functions, methods, constructors and
-      top-level code, also when the code is committed in a separate parse action (@ref Qore::Program::parseCommit() "Program::parseCommit()") with another warning mask
-      (issue #6589)
+    - \c UNREFERENCED-VARIABLE warnings ignored the code's own warning directives when the code was committed, and
+      qcc and qore could disagree; a @ref disable-warning "%disable-warning" or @ref enable-warning "%enable-warning"
+      directive now applies to the variables declared after it (issue #6589)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)
