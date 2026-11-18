@@ -577,6 +577,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the flags byte of the TIME_ZONE section has bit 2 set for a directive that applies only to a load of the
 //!        module as library code: one after the header of a module that declares the locale control domain, which
 //!        the module's own restriction disallowed when it was compiled (qore#6352)
+//! v47 (batch AI; one format version for the format changes of the batch, one line each):
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -661,10 +662,15 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
     record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
 */
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! The format version of the format changes of batch AI (see v47 above)
+/** Each change of the batch adds its line to the v47 history above and, if it needs one, a feature version of its own
+    that a static_assert keeps equal to this one
+*/
+constexpr uint16_t QORE_AOT_BATCH_AI_VERSION = 47;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_INFO_DOMAINS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_BATCH_AI_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
