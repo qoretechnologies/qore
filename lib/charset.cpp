@@ -796,7 +796,12 @@ static std::string qore_canonical_charset_name(const char* name) {
             return label.name;
         }
     }
+    // a name with a backslash (as every name with a NUL character has in its escaped form; see
+    // findCreate(const QoreString*)) is kept as it is
     std::string code(name);
+    if (code.find('\\') != std::string::npos) {
+        return code;
+    }
     for (char& c : code) {
         if (c >= 'a' && c <= 'z') {
             c = static_cast<char>(c - 'a' + 'A');
@@ -812,17 +817,15 @@ const QoreEncoding* qore_find_untrusted_encoding(const char* name, size_t len) {
     }
     // the name is looked up as a NUL-terminated string
     assert(!name[len]);
-    const QoreEncoding* enc = QoreEncodingManager::find(name);
-    if (enc) {
-        return enc;
-    }
+    // a label selects the encoding of its name, whatever encodings the program has registered (qore#6570: a program
+    // that used "x-sjis" as a name registered an encoding of that name, which a later lookup of the label gave)
     for (const auto& label : qore_untrusted_charset_labels) {
         if (!strcasecmp(name, label.label)) {
-            enc = QoreEncodingManager::find(label.name);
+            const QoreEncoding* enc = QoreEncodingManager::find(label.name);
             return enc ? enc : QEM.findCreate(label.name);
         }
     }
-    return nullptr;
+    return QoreEncodingManager::find(name);
 }
 
 const QoreEncoding* qore_find_untrusted_encoding(const char* name) {

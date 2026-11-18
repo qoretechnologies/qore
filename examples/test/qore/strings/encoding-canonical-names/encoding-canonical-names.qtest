@@ -17,6 +17,8 @@ class EncodingCanonicalNamesTest inherits QUnit::Test {
         addTestCase("standard names", \standardNames());
         addTestCase("other names", \otherNames());
         addTestCase("predefined names", \predefinedNames());
+        addTestCase("names with a NUL character", \nulNames());
+        addTestCase("labels", \labels());
         set_return_value(main());
     }
 
@@ -51,5 +53,20 @@ class EncodingCanonicalNamesTest inherits QUnit::Test {
         assertEq("UTF-8", name("utf-8"));
         assertEq("ISO-8859-1", name("iso-8859-1"));
         assertEq("US-ASCII", name("us-ascii"));
+    }
+
+    #! a name with a NUL character, which is given with escapes, is kept as it is
+    nulNames() {
+        assertEq("x-qore-6570\\x00a", force_encoding("abc", "x-qore-6570\x00a").encoding());
+        # a name with a backslash
+        assertEq("x-qore\\6570", force_encoding("abc", "x-qore\\6570").encoding());
+    }
+
+    #! a label is a name of its own here; get_known_encoding() gives the standard character set for it, also after
+    #! the label was used as a name
+    labels() {
+        assertEq("X-SJIS", name("x-sjis"));
+        assertEq("Shift_JIS", get_known_encoding("x-sjis"));
+        assertEq("Shift_JIS", get_known_encoding("X-SJIS"));
     }
 }
