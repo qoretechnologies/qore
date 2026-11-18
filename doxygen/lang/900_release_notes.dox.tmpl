@@ -2286,6 +2286,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
+      views in the DDL of the PostgreSQL, Oracle, MySQL and SQL Server drivers are quoted as identifiers, as the names
+      of tables and columns are, and a PostgreSQL function argument list must be one list of types (issue #6579)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

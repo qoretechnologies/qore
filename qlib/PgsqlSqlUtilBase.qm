@@ -694,25 +694,78 @@ string sub pgsql_get_sql_object_name(string nname) {
 
 # returns the name of a function or procedure with an optional argument list for SQL (qore#6579): the name, up to
 # the first "(" outside of double quotes, as pgsql_get_sql_object_name() returns it, and the argument list as given,
-# which must be one parenthesized list of types without a statement separator, comment or string literal
+# which must be one parenthesized list (of types, with names, modes and defaults as the server gives them): outside
+# of its double-quoted identifiers and string literals, it has no statement separator, comment, dollar quote or
+# parenthesis that closes the list before its end, and it has no backslash
 string sub pgsql_get_sql_routine_name(string sig) {
-    int len = sig.length();
+    # the characters that decide are ASCII, so the bytes are read
+    binary b = binary(convert_encoding(sig, "UTF-8"));
+    int len = b.size();
     int i = 0;
     bool quoted = False;
     for (; i < len; ++i) {
-        string c = sig[i];
-        if (c == "\"") {
+        if (b[i] == 0x22) {
             quoted = !quoted;
-        } else if (c == "(" && !quoted) {
+        } else if (b[i] == 0x28 && !quoted) {
             break;
         }
     }
-    string name = trim(sig.substr(0, i));
-    string args = sig.substr(i);
-    if (args.val() && args !~ /\A\((?:[^;'"\-\/]|"(?:[^"]|"")*+"|-(?!-)|\/(?!\*))*\)\s*\z/) {
-        throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y is not a list of types", sig);
+    string name = trim(sig.substr(0, sig.length() - (len - i)));
+    if (i == len) {
+        return pgsql_get_sql_object_name(name);
     }
-    return pgsql_get_sql_object_name(name) + trim(args);
+    # the argument list: from b[i] == "(" to the end
+    int end = len;
+    while (end > i && (b[end - 1] == 0x20 || b[end - 1] == 0x09 || b[end - 1] == 0x0a || b[end - 1] == 0x0d)) {
+        --end;
+    }
+    int depth = 0;
+    int j = i;
+    while (j < end) {
+        int c = b[j];
+        # a double-quoted identifier or a string literal, with a doubled quote as a quote in it
+        if (c == 0x22 || c == 0x27) {
+            ++j;
+            while (True) {
+                if (j >= end) {
+                    throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y has an unterminated "
+                        "quote", sig);
+                }
+                if (b[j] == 0x5c) {
+                    throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y has a backslash", sig);
+                }
+                if (b[j] == c) {
+                    if (j + 1 < end && b[j + 1] == c) {
+                        j += 2;
+                        continue;
+                    }
+                    break;
+                }
+                ++j;
+            }
+            ++j;
+            continue;
+        }
+        if (c == 0x28) {
+            ++depth;
+        } else if (c == 0x29) {
+            --depth;
+            # the list ends only at the end
+            if (!depth && j != end - 1) {
+                throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y is followed by more text",
+                    sig);
+            }
+        } else if (c == 0x3b || c == 0x24 || c == 0x5c || (j + 1 < end && ((c == 0x2d && b[j + 1] == 0x2d)
+                || (c == 0x2f && b[j + 1] == 0x2a)))) {
+            throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y has a statement separator, "
+                "comment, dollar quote or backslash", sig);
+        }
+        ++j;
+    }
+    if (depth) {
+        throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y is not closed", sig);
+    }
+    return pgsql_get_sql_object_name(name) + binary_to_string(b.substr(i, end - i), "UTF-8");
 }
 
 # returns a schema name as the name of an object gives it, as a double-quoted identifier or a name of word
@@ -927,7 +980,7 @@ public class PgsqlType inherits Qore::Serializable {
         */
     string getRenameSql(string new_name, *hash opt) {
         return sprintf("alter type %s rename to %s", pgsql_get_sql_object_name(name),
-            pgsql_get_sql_identifier(new_name));
+            pgsql_is_quoted_identifier(new_name) ? new_name : pgsql_get_sql_identifier(new_name));
     }
 
     #! returns @ref True if the types are equal
@@ -2122,6 +2175,9 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
     }
 
     #! returns a string that can be used to create the function in the database
+    /** @throw FUNCTION-NAME-ERROR the argument list of the name is not one list of types (see
+        pgsql_get_sql_routine_name())
+    */
     softlist<string> getCreateSql(*hash opt) {
         return sprintf("create%s %s %s %s", opt.replace ? " or replace" : "", type, pgsql_get_sql_routine_name(name),
             src);
@@ -2130,6 +2186,8 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
     #! returns a string that can be used to drop the function from the database
     /** @param opt drop options; if \a force is @ref True "True", then the \c CASCADE option will be used in the
         drop statement
+
+        @throw FUNCTION-NAME-ERROR the argument list of the name is not one list of types
     */
     string getDropSql(*hash opt) {
         return sprintf("drop %s %s%s", type, pgsql_get_sql_routine_name(name), opt.force ? " cascade" : "");

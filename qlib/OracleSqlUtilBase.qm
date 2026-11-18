@@ -630,6 +630,18 @@ string sub oracle_get_sql_object_name(string name) {
     return oracle_get_sql_identifier(name);
 }
 
+# returns the name of a code object (function, procedure, package, type or materialized view) for SQL: as
+# oracle_get_sql_object_name() returns it, but a reserved word is quoted in upper case, as Oracle stores an unquoted
+# name, as SqlUtil gives the names of these objects in lower case (qore#6579)
+string sub oracle_get_sql_code_name(string name) {
+    *list<*string> l = (name =~ x/^(\w+)\.(.+)$/s);
+    string obj = l ? l[1] : name;
+    string rv = (obj =~ /\A\p{L}[\p{L}\p{N}_$#]*\z/ && OracleDatabase::OracleReservedWords{obj.lwr()})
+        ? ("\"" + obj.upr() + "\"")
+        : oracle_get_sql_identifier(obj);
+    return l ? (oracle_get_sql_identifier(l[0]) + "." + rv) : rv;
+}
+
 # returns the major version of the Oracle server of a connection (ex: 19, 23): the oracle driver gives the server's
 # version as a string, such as "Oracle Database 23ai Free Release 23.0.0.0.0", and the jdbc driver as a hash with its
 # major_version
@@ -1772,7 +1784,7 @@ public class OracleCodeBase inherits SqlUtil::AbstractFunction {
         */
     softlist getRenameSql(string new_name, *hash opt) {
         # the names are identifiers (qore#6579)
-        return sprintf("rename %s to %s", oracle_get_sql_object_name(name), oracle_get_sql_identifier(new_name));
+        return sprintf("rename %s to %s", oracle_get_sql_code_name(name), oracle_get_sql_code_name(new_name));
     }
 
     #! returns a string that can be used to drop the object from the database
@@ -1780,7 +1792,7 @@ public class OracleCodeBase inherits SqlUtil::AbstractFunction {
     */
     string getDropSql(*hash opt) {
         # the name is an identifier (qore#6579)
-        return sprintf("drop %s %s", type, oracle_get_sql_object_name(name));
+        return sprintf("drop %s %s", type, oracle_get_sql_code_name(name));
     }
 }
 
@@ -1817,7 +1829,7 @@ public class OracleType inherits OracleCodeBaseNoRename {
     /** @param opt drop options; if \a force is @ref True "True", then the \c FORCE option will be used in the drop statement
         */
     string getDropSql(*hash opt) {
-        return sprintf("drop %s %s%s", type, oracle_get_sql_object_name(name), opt.force ? " force" : "");
+        return sprintf("drop %s %s%s", type, oracle_get_sql_code_name(name), opt.force ? " force" : "");
     }
 }
 
@@ -1900,7 +1912,7 @@ public class OracleMaterializedView inherits OracleCodeBaseNoRename {
 
     #! returns a string that can be used to create the object in the database
     softlist getCreateSql(*hash opt) {
-        string sql = sprintf("create %s %s", type, oracle_get_sql_object_name(name));
+        string sql = sprintf("create %s %s", type, oracle_get_sql_code_name(name));
 
         *string ts = opt.data_tablespace ? opt.data_tablespace : tablespace;
         if (ts)
@@ -2293,7 +2305,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
 
     private OracleType makeType(string name, string src, *hash opts) {
         # the name is an identifier (qore#6579)
-        return new OracleType(name, sprintf("%s as %s", oracle_get_sql_object_name(name), src));
+        return new OracleType(name, sprintf("%s as %s", oracle_get_sql_code_name(name), src));
     }
 
     private OracleMaterializedView makeMaterializedView(string name, string src, bool logging = True, bool use_index = True, *string tablespace, *hash opts) {

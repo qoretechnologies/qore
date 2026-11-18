@@ -39,6 +39,8 @@ class DdlObjectNamesTest inherits QUnit::Test {
         assertEq("create type \"my type\" as (a int, b text)", t.getCreateSql());
         assertEq("drop type \"my type\" cascade", t.getDropSql({"force": True}));
         assertEq("alter type \"my type\" rename to \"x; drop table t\"", t.getRenameSql("x; drop table t"));
+        # a new name given as a quoted identifier is kept
+        assertEq("alter type \"my type\" rename to \"X\"", t.getRenameSql("\"X\""));
         # a plain name is as before
         PgsqlType plain("s.t_x", "a int");
         assertEq("create type s.t_x as (a int)", plain.getCreateSql());
@@ -58,9 +60,14 @@ class DdlObjectNamesTest inherits QUnit::Test {
         assertEq("drop function s.\"F(x)\"(a integer, b text)",
             new PgsqlFunction("s.\"F(x)\"(a integer, b text)", "x").getDropSql());
         assertEq("drop function f()", new PgsqlFunction("f()", "x").getDropSql());
-        # an argument list that is not a list of types
-        foreach string sig in ("f(int); drop table t; --", "f(int) cascade; drop table t", "f(text default 'x')",
-                "f(int /* x */)", "f(int -- x\n)") {
+        # the argument list as the server gives it, with defaults and quoted identifiers
+        assertEq("create function f(a text DEFAULT 'x;y'::text, \"b)\" numeric(10,2)) x",
+            new PgsqlFunction("f(a text DEFAULT 'x;y'::text, \"b)\" numeric(10,2))", "x").getCreateSql()[0]);
+        # an argument list that is not one list of types
+        foreach string sig in ("f(int); drop table t; --", "f(int) cascade; drop table t", "f(int /* x */)",
+                "f(int -- x\n)", "f1(int), victim_fn(int)", "f(int) returns int security definer as (x)",
+                "f2(a int) returns text language sql as $q$select $x$\"$x$$q$; drop table victim; --\")",
+                "f(a text default E'\\' ); drop table t; --')", "f(a text default 'unterminated)", "f((int)") {
             assertThrows("FUNCTION-NAME-ERROR", \new PgsqlFunction(sig, "x").getDropSql(), NOTHING, sig);
         }
     }
@@ -76,6 +83,8 @@ class DdlObjectNamesTest inherits QUnit::Test {
         OracleMaterializedView mv("mv x", "select 1 from dual");
         assertRegex("^create materialized view \"MV X\"", mv.getCreateSql()[0]);
         assertEq("drop materialized view \"MV X\"", mv.getDropSql());
+        # a reserved word that Oracle takes unquoted is quoted in upper case, as Oracle stores it
+        assertEq("drop package \"NOTFOUND\"", new OraclePackage("notfound", "notfound as end;").getDropSql());
         # a name with a double quote, which Oracle does not allow
         assertThrows("IDENTIFIER-ERROR", \new OracleFunction("a\"b", "x").getDropSql());
     }
