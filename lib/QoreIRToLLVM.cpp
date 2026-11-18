@@ -14621,6 +14621,117 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     builder->SetInsertPoint(cont);
 }
 
+void QoreIRToLLVM::removeRedundantRuntimeLocationStores(llvm::Function* llvm_func) {
+    auto* loc_inst = llvm::dyn_cast_or_null<llvm::Instruction>(loc_cache_ptr);
+    if (!loc_inst || loc_inst->getFunction() != llvm_func) {
+        return;
+    }
+    // the location value that a block leaves (the last one it stores) or nullptr if it stores none, and the location
+    // in which each block is entered: nullptr for an unknown location
+    std::unordered_map<const llvm::BasicBlock*, llvm::Value*> last_store;
+    std::unordered_map<const llvm::BasicBlock*, llvm::Value*> entry_loc;
+    auto is_loc_store = [loc_inst](llvm::Instruction& i) -> llvm::StoreInst* {
+        auto* st = llvm::dyn_cast<llvm::StoreInst>(&i);
+        return st && st->getPointerOperand() == loc_inst && llvm::isa<llvm::Constant>(st->getValueOperand())
+            ? st : nullptr;
+    };
+    // a store of a value that is not a constant location (none is emitted) makes the location unknown
+    auto clobbers = [loc_inst](const llvm::Instruction& i) {
+        auto* st = llvm::dyn_cast<llvm::StoreInst>(&i);
+        return st && st->getPointerOperand() == loc_inst && !llvm::isa<llvm::Constant>(st->getValueOperand());
+    };
+    std::unordered_set<const llvm::BasicBlock*> unknown_exit;
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        llvm::Value* last = nullptr;
+        bool unknown = false;
+        for (llvm::Instruction& i : bb) {
+            if (llvm::StoreInst* st = is_loc_store(i)) {
+                last = st->getValueOperand();
+                unknown = false;
+            } else if (clobbers(i)) {
+                last = nullptr;
+                unknown = true;
+            }
+        }
+        last_store[&bb] = last;
+        if (unknown) {
+            unknown_exit.insert(&bb);
+        }
+    }
+    // the entry locations, from the exits of the predecessors, iterated to a fixed point; a block not reached yet
+    // has no entry yet (absent from the map), which no predecessor's exit contradicts
+    const llvm::BasicBlock* entry_bb = &llvm_func->getEntryBlock();
+    auto exit_loc = [&](const llvm::BasicBlock* bb, bool& known) -> llvm::Value* {
+        if (unknown_exit.count(bb)) {
+            known = true;
+            return nullptr;
+        }
+        if (llvm::Value* v = last_store[bb]) {
+            known = true;
+            return v;
+        }
+        auto it = entry_loc.find(bb);
+        known = it != entry_loc.end();
+        return known ? it->second : nullptr;
+    };
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (llvm::BasicBlock& bb : *llvm_func) {
+            llvm::Value* in = nullptr;
+            if (&bb != entry_bb && !bb.isEHPad() && !bb.hasAddressTaken()) {
+                bool first = true;
+                bool any_known = false;
+                for (const llvm::BasicBlock* pred : llvm::predecessors(&bb)) {
+                    bool known;
+                    llvm::Value* v = exit_loc(pred, known);
+                    if (!known) {
+                        // a predecessor not reached yet: it takes the value of the others, which a later pass checks
+                        continue;
+                    }
+                    any_known = true;
+                    if (first) {
+                        in = v;
+                        first = false;
+                    } else if (in != v) {
+                        in = nullptr;
+                    }
+                }
+                if (!any_known) {
+                    in = nullptr;
+                }
+            }
+            auto it = entry_loc.find(&bb);
+            if (it == entry_loc.end()) {
+                entry_loc[&bb] = in;
+                changed = true;
+            } else if (it->second != in) {
+                // the entry locations only go from a value to unknown (nullptr), so the iteration ends
+                if (it->second) {
+                    it->second = nullptr;
+                    changed = true;
+                }
+            }
+        }
+    }
+    // the stores of the location that the thread holds are removed
+    for (llvm::BasicBlock& bb : *llvm_func) {
+        llvm::Value* cur = entry_loc[&bb];
+        for (auto it = bb.begin(); it != bb.end();) {
+            llvm::Instruction& i = *it++;
+            if (llvm::StoreInst* st = is_loc_store(i)) {
+                if (cur && st->getValueOperand() == cur) {
+                    st->eraseFromParent();
+                } else {
+                    cur = st->getValueOperand();
+                }
+            } else if (clobbers(i)) {
+                cur = nullptr;
+            }
+        }
+    }
+}
+
 void QoreIRToLLVM::emitRuntimeLocationStore(const QoreProgramLocation* loc) {
     if (!loc_cache_ptr || aot_mode) {
         return;
@@ -18128,6 +18239,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (!finalizeCleanupFrame(llvm_func, fn_name, error)) {
         return false;
     }
+
+    removeRedundantRuntimeLocationStores(llvm_func);
 
     sizeCallArrayBuffer();
 

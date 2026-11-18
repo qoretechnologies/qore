@@ -2467,6 +2467,15 @@ private:
     //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
     void emitRuntimeLocationStore(const QoreProgramLocation* loc);
 
+    //! Removes the stores of the runtime location that store the location that the thread has already
+    /** The code of each block stores the runtime location of its first instruction (emitRuntimeLocationUpdate()),
+        as the block can be entered in any location; a store of the location that every path to it has stored last
+        is removed, such as the store of a loop's location in its condition after the code of its next iteration
+        stored it (qore#6646).  The entry block and the landing pads start in an unknown location; a call restores
+        the location of its caller when it returns.
+    */
+    void removeRedundantRuntimeLocationStores(llvm::Function* llvm_func);
+
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag
     // and return to evalTiered() which re-executes via AST.
