@@ -88,7 +88,9 @@ public class McpCompletionDataProvider inherits McpClientDataProviderBase {
 
         hash<auto> result = mcp.complete(ref, argument);
         @debug {
-            printf("Completion returned %d values\n", result.completion.values.size());
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Completion returned %d values\n", result.completion.values.size());
+            }
         }
         return result.completion;
     }
@@ -142,7 +144,9 @@ public class McpPingDataProvider inherits McpClientDataProviderBase {
         @debug("Pinging MCP server");
         mcp.ping();
         @debug {
-            printf("Ping successful\n");
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Ping successful\n");
+            }
         }
         return {};
     }

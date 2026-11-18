@@ -42,6 +42,7 @@
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/QC_HttpFastRoutes.h"
 #include "qore/intern/WebSocketCloseRecord.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 #include "qore/QoreSSLCertificate.h"
 #include "qore/QoreSSLPrivateKey.h"
 
@@ -6192,7 +6193,7 @@ hash<auto> hdr = sock.readHTTPHeader(10s);
     @since %Qore 3.0
 */
 nothing Socket::shutdownWrite() [dom=NETWORK] {
-    s->shutdownWrite(xsink);
+    qore_socket_object_private(s).shutdownWrite(xsink);
 }
 
 //! Shuts down the SSL connection on a secure connection
@@ -6364,7 +6365,7 @@ bool Socket::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     @since %Qore 3.0
 */
 int Socket::checkIdleDataForAsyncPoll() {
-    return s->checkIdleDataForAsyncPoll(xsink);
+    return qore_socket_object_private(s).checkIdleDataForAsyncPoll(xsink);
 }
 
 //! Returns @ref True or @ref False depending on whether all the data has been written to the socket
@@ -6412,7 +6413,7 @@ bool Socket::isOpen() [flags=CONSTANT] {
     established
 */
 *string Socket::getSSLCipherName() [flags=CONSTANT] {
-    return s->getSSLCipherNameString(xsink);
+    return qore_socket_object_private(s).getSSLCipherNameString(xsink);
 }
 
 //! Returns the version string of the cipher for an encrypted connection or @ref nothing if a secure connection has not been established
@@ -6425,7 +6426,7 @@ bool Socket::isOpen() [flags=CONSTANT] {
     not been established
 */
 *string Socket::getSSLCipherVersion() [flags=CONSTANT] {
-    return s->getSSLCipherVersionString(xsink);
+    return qore_socket_object_private(s).getSSLCipherVersionString(xsink);
 }
 
 //! Returns @ref True if the connection is a secure TLS/SSL connection
@@ -6437,7 +6438,7 @@ bool b = sock.isSecure();
     @return @ref True if the connection is encrypted, @ref False if not
 */
 bool Socket::isSecure() [flags=CONSTANT] {
-    return s->isSecure(xsink);
+    return qore_socket_object_private(s).isSecure(xsink);
 }
 
 //! Sets the ALPN (Application-Layer Protocol Negotiation) protocols to offer during TLS negotiation
@@ -6476,7 +6477,7 @@ if (proto == "h2") {
     @since %Qore 3.0
 */
 *string Socket::getAlpnProtocol() [flags=CONSTANT] {
-    return s->getAlpnProtocol(xsink);
+    return qore_socket_object_private(s).getAlpnProtocol(xsink);
 }
 
 //! Returns @ref True if the connection is using HTTP/2 (negotiated via ALPN)
@@ -6492,7 +6493,7 @@ if (sock.isHttp2()) {
     @since %Qore 3.0
 */
 bool Socket::isHttp2() [flags=CONSTANT] {
-    return s->isHttp2(xsink);
+    return qore_socket_object_private(s).isHttp2(xsink);
 }
 
 //! Returns a string code giving the result of verifying the remote certificate or @ref nothing if an encrypted connection is not currently established
@@ -6504,7 +6505,7 @@ bool Socket::isHttp2() [flags=CONSTANT] {
     @return A string code giving the result of verifying the peer's certificate. No value is returned if a secure connection has not been established.  The set of possible return values is made up of the keys of the @ref X509_VerificationReasons hash. This hash can also be used to generate a textual description of the verification result.
 */
 *string Socket::verifyPeerCertificate() [flags=CONSTANT] {
-    const char *c = getSSLCVCode(s->verifyPeerCertificate(xsink));
+    const char *c = getSSLCVCode(qore_socket_object_private(s).verifyPeerCertificate(xsink));
     if (*xsink) {
         return QoreValue();
     }
@@ -7333,7 +7334,7 @@ bool Socket::captureRemoteCertificates(bool enabled = True) [flags=NAMED_ARGS] {
     @since %Qore 0.9.3
 */
 *SSLCertificate Socket::getRemoteCertificate() {
-    return s->getRemoteCertificate(xsink);
+    return qore_socket_object_private(s).getRemoteCertificate(xsink);
 }
 
 //! Returns an integer connection ID that is incremented every time the socket is disconnected
@@ -8020,7 +8021,7 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 */
 int Socket::sendHttp2StreamWebSocketClose(int stream_id, binary frame, softbool end_stream = False)
         [flags=NAMED_ARGS] {
-    return s->sendHttp2StreamWebSocketClose((int32_t)stream_id, frame, (bool)end_stream, xsink);
+    return qore_socket_object_private(s).sendHttp2StreamWebSocketClose((int32_t)stream_id, frame, (bool)end_stream, xsink);
 }
 
 //! Returns the record of the close frame of a WebSocket connection on a server-side HTTP/2 stream
@@ -8129,7 +8130,7 @@ sock.setHttp2StreamSendLimit(stream_id, 256 * 1024);
     @since %Qore 3.0
 */
 nothing Socket::setHttp2StreamSendLimit(int stream_id, int limit) [flags=NAMED_ARGS] {
-    s->setHttp2StreamSendLimit((int32_t)stream_id, limit, xsink);
+    qore_socket_object_private(s).setHttp2StreamSendLimit((int32_t)stream_id, limit, xsink);
     return QoreValue();
 }
 
@@ -8601,7 +8602,7 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
         return -1;
     }
     int64_t stream_id = suppress_wake
-        ? s->submitQuicRequestNoWake(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink)
+        ? qore_socket_object_private(s).submitQuicRequestNoWake(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink)
         : s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
     return stream_id;
 }
@@ -8644,7 +8645,7 @@ int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> h
         return QoreValue();
     }
     int64_t stream_id = suppress_wake
-        ? s->submitQuicRequestStreamingNoWake(method->c_str(), path->c_str(), headers, xsink)
+        ? qore_socket_object_private(s).submitQuicRequestStreamingNoWake(method->c_str(), path->c_str(), headers, xsink)
         : s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
     return stream_id;
 }
@@ -8721,7 +8722,7 @@ bool Socket::waitForQuicSettings(timeout timeout_ms = -1) [flags=NAMED_ARGS;dom=
     if (stream_id <= 0) {
         return QoreValue();
     }
-    return s->getHttp2StreamTrailers(stream_id);
+    return qore_socket_object_private(s).getHttp2StreamTrailers(stream_id);
 }
 
 //! Sends trailers that end the request body of a client-side streaming HTTP/3 request
@@ -8746,7 +8747,7 @@ nothing Socket::sendQuicClientTrailers(int stream_id, hash<string, string> trail
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    s->submitQuicClientTrailers(stream_id, trailers, xsink);
+    qore_socket_object_private(s).submitQuicClientTrailers(stream_id, trailers, xsink);
 }
 
 //! Sends body data on a client-side streaming HTTP/3 request
@@ -9315,7 +9316,7 @@ int Socket::submitQuicStreamWebSocketClose(int session_id, int stream_id, binary
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return -1;
     }
-    return s->submitQuicStreamWebSocketClose(session_id, stream_id, frame->getPtr(), frame->size(),
+    return qore_socket_object_private(s).submitQuicStreamWebSocketClose(session_id, stream_id, frame->getPtr(), frame->size(),
         (bool)end_stream, xsink);
 }
 
@@ -9793,7 +9794,7 @@ bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT
     if (session_id <= 0 || stream_id < 0) {
         return QoreValue();
     }
-    return s->getQuicStreamTrailers(session_id, stream_id, xsink);
+    return qore_socket_object_private(s).getQuicStreamTrailers(session_id, stream_id, xsink);
 }
 
 //! Remove a dispatched HTTP/3 stream from the session map
@@ -10007,7 +10008,7 @@ nothing Socket::setQuicStreamSendLimit(int session_id, int stream_id, int limit)
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    s->setQuicStreamSendLimit(session_id, stream_id, limit, xsink);
+    qore_socket_object_private(s).setQuicStreamSendLimit(session_id, stream_id, limit, xsink);
     return QoreValue();
 }
 

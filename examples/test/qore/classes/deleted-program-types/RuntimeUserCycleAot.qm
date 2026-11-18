@@ -1,0 +1,22 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%requires qore >= 2.0
+
+module RuntimeUserCycleAot {
+    version = "1.0";
+    desc = "an AOT module that loads a user module requiring it at run time (issue #6501)";
+    author = "Qore Technologies";
+    url = "https://qoretechnologies.com";
+}
+
+%modern
+
+#! loads the user module \c RuntimeUserCycleLoaded from the module's own Program, as ProviderIndexUtil loads modules
+/** The module's Program imports the declarations of the loaded module, so the module must be deleted before it, and
+    before the native module that the loaded module requires, when the process ends.
+*/
+public int sub runtime_user_cycle_load() {
+    load_module("RuntimeUserCycleLoaded");
+    return 1;
+}

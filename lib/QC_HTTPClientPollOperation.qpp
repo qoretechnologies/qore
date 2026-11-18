@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_HTTPClientPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 
@@ -63,6 +64,8 @@ HTTPClientPollOperation::constructor(HTTPClient[QoreHttpClientObject] client, st
 /** Destroys the object
  */
 HTTPClientPollOperation::destructor() {
+    // the operation has no C++ poll operation: the controller that continues a submitted one cancels it (qore#6531)
+    qore_poll_op_qore_object_deleted(self);
     op->deref(xsink);
 }
 

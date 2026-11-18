@@ -42,6 +42,7 @@
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 class QoreEventNotifier;
 
@@ -623,7 +624,12 @@ protected:
             accepted_socket_obj->ref();
             info->setKeyValue("socket", *accepted_socket_obj, xsink);
         } else {
-            info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+            QoreObject* sock = getReferencedSocketObject(xsink);
+            if (!sock) {
+                // no poll info is returned with an exception: a step returns one or the other (#6525)
+                return nullptr;
+            }
+            info->setKeyValue("socket", sock, xsink);
         }
         return info.release();
     }
@@ -2564,7 +2570,7 @@ public:
             // the stream and clear non-block tracking
             if (quic_session && ss_state != QCS_SS::DONE) {
                 ExceptionSink cancel_xsink;
-                sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+                qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
                 cancel_xsink.clear();
             }
             if (quic_session || set_non_block) {
@@ -2600,7 +2606,7 @@ public:
         // Cancel the stream through the socket's async-aware cancellation path.
         if (quic_session) {
             ExceptionSink cancel_xsink;
-            sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+            qore_socket_object_private(sock).cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
             cancel_xsink.clear();
             quic_session.reset();
         }

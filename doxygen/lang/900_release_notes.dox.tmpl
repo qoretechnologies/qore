@@ -101,6 +101,18 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par on_exit, on_success and on_error Must Be Statements of a Block
+    An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
+    \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
+    \c on_error statement) is a parse error, as its scope was unclear; put it in braces (see
+    @ref on_block_exit_in_block "on_exit statements"; issue #240).
+
+    @par An Octal Integer Literal Cannot Contain 8 or 9
+    An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
+    (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a
+    64-bit integer, which was read as the largest integer (see
+    @ref octal_integer_literals "octal integer literals"; issue #504).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
@@ -123,9 +135,10 @@
     <tt>i.next</tt> for <tt>i.next()</tt>, is now a parse exception in every mode, also without type declarations
     (see @ref member_method_names; issue #2967).
 
-    @par Parse Directives Are Not Allowed in an Expression
-    A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
-    applied; it changed the parse state of the Program that the expression was created in (see
+    @par Parse Directives and Declarations Are Not Allowed in an Expression
+    A parse directive, a declaration after code that ends the expression or a global variable that is declared or
+    created implicitly in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
+    applied; it changed the parse state of the Program that the expression was created in or added code to it (see
     @ref Qore::Expression::constructor() "Expression::constructor()").
 
     @par A Locked Program Keeps Its Restrictions
@@ -928,6 +941,18 @@
     \c MISSING-RETURN parse error (see @ref missing_return); 2.2.1 did not check it, or checked it with the return
     type of the running code (issue #5940).
 
+    @par Binary Deserialization Accepts Only Known Character Encodings
+    @ref Qore::Serializable "Serializable" raises \c DESERIALIZATION-ERROR for a string in binary serialized data
+    whose encoding name selects neither an encoding that %Qore knows nor a standard character set, unless the
+    @ref Qore::QDF_REGISTER_ENCODINGS "QDF_REGISTER_ENCODINGS" flag is given; 2.2.1 registered every such name as an
+    encoding (issue #6483).
+
+    @par Data Provider Index Files Are Written Only by Code With File System Access
+    The @ref providerindexutilintro "ProviderIndexUtil" and @ref providerindexintro "ProviderIndex" APIs that read
+    or write files at a caller's path or directory, or change the index directory, are in the \c FILESYSTEM domain
+    (writers and builder also \c PROCESS_CONTROL), so code restricted with @ref Qore::PO_NO_FILESYSTEM
+    "PO_NO_FILESYSTEM" cannot call them; index lookups are unchanged (issue #6500).
+
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
@@ -1146,6 +1171,12 @@
     combine a select with selects of the same or other tables, with each database's SQL (ex: \c MINUS on Oracle),
     and order and page the combined result; see @ref select_option_set_operators
     (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>).
+
+    @par Recursive Queries in SqlUtil
+    The \c "recursive" select option of @ref sqlutilintro "SqlUtil" and search option of \c DbTableDataProvider
+    run a recursive query (a recursive common table expression) on PostgreSQL, MySQL, MariaDB, Oracle, SQL Server,
+    Firebird and SQLite, with each database's SQL and recursion limits; see @ref select_option_recursive
+    (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>).
 
     @par Language and Runtime
     @parblock
@@ -1479,6 +1510,8 @@
       - connection option errors name the options but no longer contain the options provided or the values of
         sensitive options, which can be credentials (see @ref connectionprovider_3_1;
         <a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
@@ -1491,7 +1524,14 @@
       - a module can register actions to be built on first use, and the provider modules generating actions
         from REST API descriptions do, so loading them no longer builds their actions (see
         @ref dataprovider_lazy_actions)
-      - see @ref dataprovider_v3_11 for all changes
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); errors
+        written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no terminal I/O
+        instead of raising an exception (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+      - see @ref dataprovider_v3_12 for all changes
+
+    - @ref datasourceproviderintro "DatasourceProvider" module
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
 
     - @ref dbdataproviderintro "DbDataProvider" module
       - the @ref DbDataProvider::DatasourceConnection "DatasourceConnection" class for \c db:// connections
@@ -1538,6 +1578,9 @@
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2 and HTTP/3)
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - resources with their metadata (see @ref filelocationhandler_resources), and \c conn:// locations
+      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
+        terminal I/O instead of raising an exception
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref filelocationhandler_v3_0 for all changes
 
     - @ref filepollerintro "FilePoller" module
@@ -1594,6 +1637,8 @@
 
     - @ref loggerintro "Logger" module
       - memory-based backpressure for @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue"
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref logger_v1_1 for all changes
 
     - @ref mailmessageintro "MailMessage" module
@@ -1694,15 +1739,25 @@
       - @ref Qore::Reflection::TypedHash "TypedHash" objects can be serialized
       - see @ref reflection_3_0 for all changes
 
+    - @ref providerindexutilintro "ProviderIndexUtil" module
+      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
+        terminal I/O instead of raising an exception
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+
     - @ref restclientintro "RestClient" module
       - data providers make API calls with an asynchronous @ref restclientiointro "RestClientIo" client
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - explicit request targets (see @ref restclienttargets), and credential headers are redacted in exceptions
         and logs
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref restclientv2_7 for all changes
 
     - @ref restschemavalidatorintro "RestSchemaValidator" and @ref swaggerintro "Swagger" modules
       - JSON and YAML bodies in another encoding are converted to UTF-8 before they are parsed
+      - the Swagger module can be loaded first by code without terminal I/O
+        (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref restschemavalidator_2_5 and @ref swagger_2_6 for all changes
 
     - @ref salesforcerestclientintro "SalesforceRestClient" module
@@ -1716,6 +1771,8 @@
     - @ref schemaintro "Schema" module
       - data-driven schema definitions and migrations from YAML and JSON files
         (@ref Schema::DataSchema "DataSchema") and the \c qschema CLI tool
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref schema_relnotes (versions 1.5.0 to 1.9.0) for all changes
 
     - @ref schemareverseintro "SchemaReverse" module
@@ -1726,6 +1783,9 @@
       - events are received with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo"
         (HTTP/1.1, HTTP/2 and HTTP/3)
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
+        terminal I/O instead of raising an exception
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref serversenteventclient_v1_1 for all changes
 
     - @ref serversenteventhandlerintro "ServerSentEventHandler" module
@@ -1756,10 +1816,16 @@
         killed (ex: during RAC rolling patching) or the connection is lost
       - @ref SqlUtil::op_trunc_date() "op_trunc_date()" compares a truncated date column in where clauses
         (<a href="https://github.com/qoretechnologies/qore/issues/2363">issue 2363</a>)
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO")
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref sqlutilv3_11_0 for all changes
 
     - @ref tablemapperintro "TableMapper" module
       - see @ref tablemapperv1_3_1 for all changes
+
+    - @ref telnetclientintro "TelnetClient" module
+      - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"), which sends
+        a window size of 80x24 (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
 
     - @ref utilintro "Util" module
       - @ref Util::get_file_from_http() "get_file_from_http()" and @ref Util::get_file_from_url() "get_file_from_url()"
@@ -1780,6 +1846,9 @@
         permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - the close handshake follows RFC 6455
+      - errors written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
+        terminal I/O instead of raising an exception
+        (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
       - see @ref wsc_v2_5 for all changes
 
     - @ref websockethandlerintro "WebSocketHandler" module
@@ -2141,6 +2210,15 @@
     - deleting a socket, HTTP or WebSocket poll operation that was submitted to the asynchronous I/O controller
       cancels it, and its state is released with its last reference in its %Program, so the deletion can no longer
       crash the process (issue #6464)
+    - deleting a submitted @ref Qore::Socket "Socket", @ref Qore::File "File", FTP or @ref Qore::HTTPClient "HTTPClient"
+      poll operation cancels it as well, and an FTP poll operation keeps its sockets until its state is released, so
+      deleting one during a step can no longer crash the process (issue #6505)
+    - deleting a submitted poll operation implemented in %Qore (a subclass of
+      @ref Qore::AbstractPollOperation "AbstractPollOperation") cancels it as well, instead of ending it with
+      \c OBJECT-ALREADY-DELETED at its next step (issue #6531)
+    - an FTP PORT accept poll operation keeps the accept operation that it is given, so one created with a temporary
+      accept operation accepts a connection instead of failing its first step, and a socket accept or HTTP keep-alive
+      poll operation step no longer returns poll information together with an exception (issue #6525)
     - a channel or server-sent events completion action releases its notifier objects after its lock, so the
       destructor of a user notifier class can no longer block on the action (issue #6465)
     - @ref httpserverintro "HttpServer" module: a server whose last reference is released while a request runs in it
@@ -2152,6 +2230,22 @@
       interpreters, instead of \c NOTHING (issue #6244)
     - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
       its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
+    - the conditional parse directives (<tt>%%ifdef</tt>, <tt>%%ifndef</tt>, <tt>%%if</tt>, <tt>%%elif</tt>) on a line
+      that ends with CRLF are read, and the scanner no longer writes source text that it cannot read to standard
+      output: such text is a parse error (issue #6512)
+    - an @ref include "%include" of a file that does not exist raises \c PARSE-EXCEPTION at the directive, with its
+      location, instead of \c PARSE-ERROR without one (issue #6509)
+    - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
+      object of a subclass, so the class's methods read no value, and was serialized without its value (see
+      @ref private_members; issue #6402)
+    - a parse directive on the last line of code or of a file that does not end with a newline (<tt>%%endif</tt>,
+      <tt>%%modern</tt>) takes effect; such an <tt>%%endif</tt> left its conditional block open (issue #2740)
+    - the parse of a class hierarchy with diamonds (a class inherited through more than one path) visits each
+      ancestor of a class once, so that a chain of a few dozen diamonds no longer takes exponential time to parse (see
+      @ref inheritance; issue #6499)
+    - the creation of an object of a class whose hierarchy reaches a class without a constructor through more than
+      one path walks the base classes of that class once, not once per path, which took exponential time in a chain
+      of diamonds (see @ref inheritance; issue #6513)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
@@ -2177,6 +2271,10 @@
     - parsing or loading a long chain of classes, each inheriting the previous one (see @ref inheritance), took time
       that grew with the fourth power of its length, as each class walked the whole hierarchy again for each of its
       ancestors; it now grows about with the square of the length (issue #6106)
+    - the errors of a data provider option whose value or type is a hash, list or object no longer contain its value,
+      and the debug messages of the Empathic Building module give response headers with their credentials redacted
+      and URLs with their passwords masked (see @ref dataprovider_v3_12;
+      <a href="https://github.com/qoretechnologies/qore/issues/6504">issue 6504</a>)
     - when more than one class of a hierarchy declares a member with an initialization expression, the value that a
       later one replaces is released, so that an object that a base class stored there is destroyed (see
       @ref member_initialization; issue #6411)
@@ -2243,6 +2341,12 @@
     - creating an @ref Qore::Expression "Expression" in a %Program with code pending, or whose parse was rolled back
       without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", raises \c EXPRESSION-ERROR; it let threads enter the
       %Program before its code was committed, and could refer to code that a rollback deleted (issue #6353)
+    - threads that create, run and delete the @ref Qore::Expression "Expression" objects of a %Program at the same
+      time no longer corrupt the %Program's set of expressions, which ended the process with a segmentation fault or
+      a heap error (issue #6493)
+    - while a thread creates an @ref Qore::Expression "Expression" in a %Program, other threads can call into the
+      %Program and run its expressions; they were refused with \c PROGRAM-ERROR, as during a parse of code
+      (see @ref Qore::Expression::constructor() "Expression::constructor()"; issue #6518)
     - a child process created with @ref Qore::fork() "fork()" while another thread changed the parse options of a
       %Program or of a module, or created a %Program that copies the external data of its parent, could block when it
       did the same, or when the %Program was destroyed (issue #6403)
@@ -2716,6 +2820,13 @@
     - %Qore and modules built with its CMake macros now link executables, libraries and binary modules to a temporary
       file that is renamed into place, so a build killed during a link no longer leaves a truncated binary that the
       next build treats as up to date
+    - a @ref binary "binary" value that grows by appends (\c +=, @ref Qore::BinaryOutputStream "BinaryOutputStream",
+      @ref Qore::Serializable::serialize() "Serializable::serialize()") grows its buffer geometrically; it was
+      reallocated for every append, which was quadratic with an allocator whose \c realloc() copies (issue #6312)
+    - @ref splice "splice" of a @ref binary "binary" or @ref string "string" value, and the C++ API operations of
+      \c BinaryNode and \c QoreString that take a source (such as \c writeTo(), \c concat(), \c insert(),
+      \c sprintf() and \c set()) give the correct result when the source is part of the value being modified, also
+      when the value is a view of another string (issue #6312)
     - an AOT module refused by the restrictions of the @ref Qore::Program "Program" loading it now raises
       \c AOT-MODULE-RESTRICTED instead of the generic \c MODULE-LOAD-ERROR (see @ref module_parse_option_masks)
     - when an AOT module could not be loaded (for example, refused by the restrictions of the
@@ -3270,6 +3381,17 @@
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
       raised \c DIVISION-BY-ZERO for a divisor that is not zero (issue #1034)
+    - the @ref push "push" and @ref unshift "unshift" operators on a member or list element that is not a list report
+      the same error message in every execution mode, as in the AST interpreter
+    - the internal threads that join ended threads no longer receive process signals meant for the application or for
+      Qore's signal thread, and a thread whose thread-local destructors block no longer delays the end of the threads
+      that end after it, for which @ref Qore::exit() "exit()" waited too (issue #6433)
+    - @ref Qore::Serializable::deserialize() "binary deserialization" reads string and binary values in bounded chunks
+      and raises \c DESERIALIZATION-ERROR for a value, list or hash larger than the data that follows it, instead of
+      reserving the size given in the data first (issue #6502)
+    - a user module that a module loads at run time with @ref Qore::load_module() "load_module()" is deleted after
+      that module when the process ends, together with the native modules it requires, so the cleanup no longer uses
+      the declarations of a native module that was already deleted (issue #6501)
 
     @section qore_2_2_1 Qore 2.2.1
 

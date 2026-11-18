@@ -28,7 +28,7 @@
 %modern
 
 module DatasourceProvider {
-    version = "1.1";
+    version = "1.2";
     desc    = "API for providing datasource connection strings";
     author  = "David Nichols <david.nichols@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -91,6 +91,12 @@ $env:QORE_DATASOURCE_PROVIDERS="MyDatasourceProvider;OtherDatasourceProvider"
 
     @section datasourceproviderrelnotes Release Notes
 
+    @subsection datasourceprovider_1_2 DatasourceProvider 1.2
+    - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"); the verbose
+      output of @ref DatasourceProvider::get_ds_string() "get_ds_string()" and
+      @ref DatasourceProvider::get_ds_hash() "get_ds_hash()" is left out when the module's code has no terminal I/O
+      (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
+
     @subsection datasourceprovider_1_1 DatasourceProvider 1.1
     - added support for the \c get_ds_hash() function
 
@@ -107,7 +113,9 @@ string connstr = get_ds_string(str);
         @endcode
 
         @param str the identifier or datasource connection string
-        @param verbose display datasource provider module errors on stdout (otherwise errors are ignored)
+        @param verbose display datasource provider module errors on stdout (otherwise errors are ignored); nothing is
+            displayed when the module's code has no terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"):
+            when code without it loaded the module first, or a sandbox without it governs the call
 
         @return the datasource connection string
 
@@ -130,8 +138,11 @@ string connstr = get_ds_string(str);
                 try {
                     return try_get_ds_string(mod, str);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (verbose)
-                        printf("%s: %s\n", ex.err, ex.desc);
+                    # the stdout constant needs terminal I/O only when it is written, so that the module can be
+                    # loaded by code without it; such code gets no output (qore#6438)
+                    if (verbose && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        stdout.printf("%s: %s\n", ex.err, ex.desc);
+                    }
                     # otherwise ignore exceptions
                 }
             }
@@ -145,6 +156,9 @@ string connstr = get_ds_string(str);
     }
 
     #! Returns all datasource supported with their connection strings prefixed by \c "db://"
+    /** @param verbose display datasource provider module errors on stdout (otherwise errors are ignored); nothing is
+            displayed when the module's code has no terminal I/O (see get_ds_string())
+    */
     public *hash<string, string> sub get_ds_hash(*bool verbose) {
         hash<string, string> rv;
 
@@ -155,8 +169,9 @@ string connstr = get_ds_string(str);
                 try {
                     rv += try_get_ds_hash(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    if (verbose) {
-                        printf("%s: %s\n", ex.err, ex.desc);
+                    # see get_ds_string()
+                    if (verbose && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        stdout.printf("%s: %s\n", ex.err, ex.desc);
                     }
                     # otherwise ignore exceptions
                 }

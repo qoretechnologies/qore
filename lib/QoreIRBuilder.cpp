@@ -1674,6 +1674,21 @@ QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createNestedPushTempMark(const QoreProgramLocation* loc) {
+    QoreIRInstruction* mark = block && !block->instructions.empty() ? block->instructions.back().get() : nullptr;
+    if (!mark || mark->opcode != QoreIROpcode::PushTempMark || temp_scope_id_stack.empty()
+            || mark->temp_scope_id != temp_scope_id_stack.back() || mark->temp_scope_id != exception_temp_scope_id) {
+        return createPushTempMark(loc);
+    }
+    // the mark's temp_scope_id stays the outer scope's; the inner scope is opened as createPushTempMark() opens it
+    mark->opcode = QoreIROpcode::PushTempMarkPair;
+    mark->unwind_inner_temp_scope_id = next_temp_scope_id++;
+    temp_scope_id_stack.push_back(mark->unwind_inner_temp_scope_id);
+    exception_temp_scope_id_stack.push_back(exception_temp_scope_id);
+    exception_temp_scope_id = mark->unwind_inner_temp_scope_id;
+    return mark;
+}
+
 void QoreIRBuilder::createUnwindTemps(size_t from_depth, size_t to_depth, const QoreProgramLocation* loc) {
     assert(from_depth <= temp_scope_id_stack.size());
     assert(to_depth <= from_depth);

@@ -496,7 +496,8 @@ set_signal_handler(SIGTERM, sub () { ProviderIndex::cancelWorkers(); });
         @since %ProviderIndex 1.0
     */
     public static hash<auto> createDataProviderIndex(hash<DataProviderIndexInfo> index = <DataProviderIndexInfo>{},
-            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{}) [dom=PROCESS_CONTROL] {
+            *string dir, hash<ProviderIndexCreateOptions> opts = <ProviderIndexCreateOptions>{})
+            [dom=PROCESS_CONTROL,FILESYSTEM] {
         # Includes module loading and deferred output-type warm-up, not only serialization.
         DataProviderStaticMetadataHelper static_metadata();
         date start = now_us();
@@ -1386,7 +1387,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
 
         @since %ProviderIndex 1.2
     */
-    static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL] {
+    static prepareIndexWorker(string batch_path) [dom=PROCESS_CONTROL,FILESYSTEM] {
         getWorkerBatch(batch_path);
     }
 
@@ -1418,7 +1419,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @since %ProviderIndex 1.2
     */
-    static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL] {
+    static int runIndexWorker(string batch_path, *code<nothing()> setup) [dom=PROCESS_CONTROL,FILESYSTEM] {
         DataProviderStaticMetadataHelper static_metadata();
         hash<auto> batch;
         try {

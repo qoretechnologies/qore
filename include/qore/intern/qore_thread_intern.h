@@ -811,6 +811,14 @@ public:
     */
     DLLLOCAL QoreSandboxContext(bool capture_budgets = true);
 
+    //! Creates a context that governs as \a src does (or as no sandbox does, if \a src is nullptr) and is work that
+    //! the module cleanup hands over (@ref module_cleanup_delegate)
+    /** For an operation that the module cleanup cancels: what the operation then runs is part of the cleanup (see
+        qore_close_module_programs()), while its sandbox stays the one of the code that started it.  Takes its own
+        references to the managers and budgets of \a src; may throw std::bad_alloc
+    */
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate);
+
     DLLLOCAL ~QoreSandboxContext();
 
     DLLLOCAL void ref() const { ROreference(); }
@@ -951,6 +959,13 @@ DLLLOCAL void qore_dbg_hold_next_thread_finish(int ms);
 DLLLOCAL void qore_dbg_hold_next_thread_tls_exit(int ms);
 //! Waits until a finishing background thread is held; returns false on timeout
 DLLLOCAL bool qore_dbg_wait_thread_finish_held(int timeout_ms);
+//! Releases a thread that qore_dbg_hold_next_thread_tls_exit() holds, if it is held (qore#6433)
+DLLLOCAL void qore_dbg_release_thread_finish_hold();
+//! Waits until the background thread count (thread_counter) is at most \a count; returns false on timeout
+/** A thread leaves the count when it has been joined (qore#6412), so a test can tell when a thread was joined
+    (qore#6433)
+*/
+DLLLOCAL bool qore_dbg_wait_thread_counter_at_most(int count, int timeout_ms);
 //! Holds the next thread that is started, before it registers, for up to \a ms milliseconds or until
 //! qore_dbg_release_thread_start() (qore#6469)
 DLLLOCAL void qore_dbg_hold_next_thread_start(int ms);
@@ -2618,6 +2633,23 @@ private:
     exported qore_program_thread_entry_pending().
 */
 DLLLOCAL bool thread_entry_pending(const QoreProgram* pgm);
+
+//! A thread that runs Qore code since an epoch of type retirement (see qore_type_retire_epoch)
+struct QoreTypeRetirementThread {
+    //! the thread's TID
+    int tid;
+    //! the epoch that the thread published when it entered Qore code
+    uint64_t epoch;
+};
+
+//! Scans the threads for the type retirement epochs that they published (see qore_type_retire_epoch)
+/** @param below if not 0, \a threads receives each thread whose epoch is not 0 and is less than this value: the
+    threads that an item retired at this epoch waits for
+    @param threads if not null, receives the threads found, in the order of their TIDs
+
+    @return the lowest epoch of the threads that run Qore code, or 0 if none does
+*/
+DLLLOCAL uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads);
 
 //! A thread's entry into a Program, counted with its thread count, which is left with
 //! qore_program_private::decThreadCount(*pgm, tid, xsink)

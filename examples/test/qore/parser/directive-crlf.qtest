@@ -1,0 +1,75 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%exec-class DirectiveCrlfTest
+
+#! conditional parse directives on lines that end with CRLF (issue #6512): the argument of %ifdef, %ifndef, %if and
+#! %elif was not read, and the scanner wrote it to standard output
+class DirectiveCrlfTest inherits QUnit::Test {
+    constructor() : QUnit::Test("directives with CRLF", "1.0") {
+        addTestCase("conditional directives", \conditionals());
+        addTestCase("a script with CRLF line endings writes nothing of its source", \script());
+        set_return_value(main());
+    }
+
+    private conditionals() {
+        assertEq("in", callGet("%define X\r\n%ifdef X\r\nstring sub get() { return \"in\"; }\r\n%else\r\n"
+            "string sub get() { return \"else\"; }\r\n%endif\r\n"));
+        assertEq("else", callGet("%ifdef UNDEFINED_6512\r\nstring sub get() { return \"in\"; }\r\n%else\r\n"
+            "string sub get() { return \"else\"; }\r\n%endif\r\n"));
+        assertEq("n", callGet("%ifndef UNDEFINED_6512\r\nstring sub get() { return \"n\"; }\r\n%endif\r\n"));
+        assertEq("elif", callGet("%define X\r\n%if defined(UNDEFINED_6512)\r\nstring sub get() { return \"if\"; }\r\n"
+            "%elif defined(X)\r\nstring sub get() { return \"elif\"; }\r\n%endif\r\n"));
+        # %else and %endif with a comment after them, in a skipped block and not
+        assertEq("else", callGet("%ifdef UNDEFINED_6512\r\nstring sub get() { return \"in\"; }\r\n%else # c\r\n"
+            "string sub get() { return \"else\"; }\r\n%endif # c\r\n"));
+        assertEq("in", callGet("%define X\r\n%ifdef X\r\nstring sub get() { return \"in\"; }\r\n%else # c\r\n"
+            "string sub get() { return \"else\"; }\r\n%endif # c\r\n"));
+        # a %try-module that loads
+        assertEq("t", callGet("%try-module Util\r\n%define NO_UTIL\r\n%endtry\r\n"
+            "string sub get() { return \"t\"; }\r\n"));
+        # a %try-module that does not load, %try-reexport-module, and a %try-module in one that loads
+        assertEq("n", callGet("%try-module NoSuchModule6512\r\n%define NO_MOD\r\n%endtry\r\n%ifdef NO_MOD\r\n"
+            "string sub get() { return \"n\"; }\r\n%endif\r\n"));
+        assertEq("r", callGet("%try-reexport-module Util\r\n%endtry\r\nstring sub get() { return \"r\"; }\r\n"));
+        assertEq("i", callGet("%try-module Util\r\n%try-module NoSuchModule6512\r\n%define INNER\r\n%endtry\r\n"
+            "%endtry\r\n%ifndef INNER\r\nstring sub get() { return \"i\"; }\r\n%endif\r\n"));
+        # nested conditionals in a skipped block
+        assertEq("o", callGet("%ifdef UNDEFINED_6512\r\n%ifdef X\r\nstring sub get() { return \"x\"; }\r\n"
+            "%else # inner\r\nstring sub get() { return \"y\"; }\r\n%endif # inner\r\n%else\r\n"
+            "string sub get() { return \"o\"; }\r\n%endif\r\n"));
+        # an %elif in a skipped block
+        assertEq("else", callGet("%if defined(UNDEFINED_6512)\r\nstring sub get() { return \"if\"; }\r\n"
+            "%elif defined(UNDEFINED_6512_2)\r\nstring sub get() { return \"elif\"; }\r\n%else\r\n"
+            "string sub get() { return \"else\"; }\r\n%endif\r\n"));
+    }
+
+    private script() {
+        string qore = TestInterpreter::qore_interpreter();
+        TmpDir tmp("qore-directive-crlf-");
+        string path = tmp.path + "/crlf.q";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%new-style\r\n%ifdef UNDEFINED_6512\r\nprintf(\"skipped\\n\");\r\n%endif\r\n"
+                "printf(\"after\\n\");\r\n");
+        }
+        int rc;
+        string out = backquote(sprintf("%s %s 2>&1", qore, path), \rc);
+        assertEq(0, rc, out);
+        assertEq("after\n", out);
+    }
+
+    #! returns the result of the function of the code, parsed in a new Program
+    private auto callGet(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        p.parse(code, "code");
+        return p.callFunction("get");
+    }
+}

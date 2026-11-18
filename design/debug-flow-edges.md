@@ -540,7 +540,7 @@ the frame's exits) is gone.
   code has no paths (see "Which code has paths"): its step hooks (`qore_rt_dbg_step()`,
   `qore_rt_dbg_synthetic_block_step()`) report the events and honour an exception that the debugger raises, and
   ignore the requests.
-- **AOT (format v44, `QORE_AOT_DEBUG_FLOW_VERSION`).** DebugStatement, DebugBlock and ScopeExit records end with a
+- **AOT (format v45, `QORE_AOT_DEBUG_FLOW_VERSION`).** DebugStatement, DebugBlock and ScopeExit records end with a
   u8 mask and a u16 block index per path; block flag 0x10 is `debug_flow`.  AOT native code lowers no path blocks.
 
 - **Analyses of the code** (prof's decision after the `-d ir` regressions).  The summary, pattern and projection
@@ -574,7 +574,7 @@ the frame's exits) is gone.
     block) as a return statement there does, without running handlers out of line.
 - **AOT outlining.**  Outlined code is AOT native code only, which takes no requests, so the outliner sets the paths
   aside while it outlines a function and puts them back with `undo()` (design/aot-function-outlining.md, decision 11);
-  the debug IR, and format v44, are unchanged.
+  the debug IR, and format v45, are unchanged.
 - **IR interpreter handlers.**  A debugger attached in a call that then raises an exception gets the events of the
   handlers that the exception runs in the caller (pre-existing: `debug_active` was stale on the exception path).
 
@@ -594,7 +594,7 @@ Why:
 - the paths of every step event cost about 15-19% of the JIT compile time of code with step events (all code that is
   not parsed with `%no-debugging`), and the continue edges into a loop changed the native code of the loop's hot path;
 - new calls of AOT code under a debugger run its debug IR in the IR interpreter
-  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v44).
+  (`UserVariantBase::materializeAOTDebugIR()`), so that IR needs the paths, and keeps them (format v45).
 
 A request at a step event of code without paths:
 | Code | Return | Break or continue |

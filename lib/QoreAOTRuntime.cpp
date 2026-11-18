@@ -7172,6 +7172,56 @@ static QoreAOTContext* buildContextFromSlotMap(
 
 // ---- IR Function Deserialization (Phase 5) ----
 
+//! Returns the target that an instruction read from an AOT module always branches to and does not have, or nullptr
+/** The interpreter and the JIT take the targets of a branch, a conditional branch, a switch, an iterator step and the
+    blocks of the incoming values of a phi without a check (qore#6468)
+*/
+static const char* qore_aot_ir_missing_target(const QoreIRInstruction& inst) {
+    if (auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(&inst)) {
+        return br->target ? nullptr : "branch target";
+    }
+    if (auto* brif = qore_ir_inst_cast<const QoreIRBranchIfInstruction*>(&inst)) {
+        return brif->true_target && brif->false_target ? nullptr : "conditional branch target";
+    }
+    if (auto* fused = qore_ir_inst_cast<const QoreIRBranchIfLtLocalIntInstruction*>(&inst)) {
+        return fused->true_target && fused->false_target ? nullptr : "conditional branch target";
+    }
+    if (auto* next = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(&inst)) {
+        return next->done_target && next->continue_target ? nullptr : "iterator step target";
+    }
+    if (auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(&inst)) {
+        for (const QoreIRPhiIncoming& in : phi->incoming) {
+            if (!in.block) {
+                return "block for an incoming value of a phi";
+            }
+        }
+        return nullptr;
+    }
+    if (auto* sw = qore_ir_inst_cast<const QoreIRSwitchIntInstruction*>(&inst)) {
+        if (!sw->default_target) {
+            return "switch default target";
+        }
+        for (const QoreIRSwitchCase& c : sw->cases) {
+            if (!c.target) {
+                return "switch case target";
+            }
+        }
+        return nullptr;
+    }
+    if (auto* sw = qore_ir_inst_cast<const QoreIRSwitchStringInstruction*>(&inst)) {
+        if (!sw->default_target) {
+            return "switch default target";
+        }
+        for (const QoreIRSwitchStringCase& c : sw->cases) {
+            if (!c.target) {
+                return "switch case target";
+            }
+        }
+        return nullptr;
+    }
+    return nullptr;
+}
+
 //! Deserialize a single IR instruction from binary data
 /** @return the deserialized instruction, or nullptr on error */
 static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
@@ -7254,8 +7304,13 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         return nullptr;
     }
     uint16_t exc_target_idx = QoreAOTBinaryReader::readU16(ptr);
-    QoreIRBasicBlock* exc_target = (exc_target_idx != 0xFFFF && exc_target_idx < blocks.size())
-        ? blocks[exc_target_idx].get() : nullptr;
+    // an index beyond the blocks of the function is refused, not read as no handler (qore#6468)
+    if (exc_target_idx != 0xFFFF && exc_target_idx >= blocks.size()) {
+        error = "malformed IR: exception target block index " + std::to_string(exc_target_idx)
+            + " is beyond the " + std::to_string(blocks.size()) + " block(s) of the function";
+        return nullptr;
+    }
+    QoreIRBasicBlock* exc_target = exc_target_idx != 0xFFFF ? blocks[exc_target_idx].get() : nullptr;
 
     std::unique_ptr<QoreIRInstruction> inst;
 
@@ -7287,6 +7342,19 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     rctx.num_parent_locals = num_parent_locals;
     rctx.enclosing_body_locals = enclosing_body_locals;
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
+    // a block index beyond the blocks of the function, and a missing target of an instruction that always branches
+    // to it, are refused: the interpreter takes such a target without a check (qore#6468)
+    if (inst && rctx.bad_block_index) {
+        error = "malformed IR: a block index is beyond the " + std::to_string(blocks.size())
+            + " block(s) of the function";
+        inst.reset();
+    } else if (inst) {
+        const char* missing = qore_aot_ir_missing_target(*inst);
+        if (missing) {
+            error = std::string("malformed IR: the instruction has no ") + missing;
+            inst.reset();
+        }
+    }
     if (!inst) {
         const OpcodeInfo* oi = getOpcodeInfo(opcode_raw);
         error = std::string("opcode ") + (oi && oi->name ? oi->name : "<unknown>")
@@ -15873,7 +15941,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
             "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
-            &info);
+            info);
     }
     if (xsink) {
         xsink.handleExceptions();
@@ -15882,7 +15950,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
 
 // Phase 4 slice 10d: script-context register path.  Called by the
 // glue object that qcc emits for `qcc -o binary *.qo` (slice 10d).
-// Differs from qore_aot_register_into_program / qore_aot_module_init_v3:
+// Differs from qore_aot_register_into_program_v2() / qore_aot_module_init_v3:
 //
 //   * NO shadow module program created.  Metadata is deserialized
 //     straight into the caller's @p tpgm via

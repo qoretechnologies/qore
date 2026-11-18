@@ -51,7 +51,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 439,
+static_assert(QORE_IR_MAX_OPCODE == 440,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -5007,6 +5007,13 @@ bool QoreIRToLLVM::finalizeCleanupFrameTable(llvm::Function* llvm_func, CleanupF
 
 // documented in QoreIRToLLVM.h
 bool QoreIRToLLVM::finalizeCleanupFrame(llvm::Function* llvm_func, const std::string& fn_name, std::string& error) {
+    // the slots that keepCatchFrameSlotsInMemory() marks are allocas that this function can erase (qore#6392)
+    if (!catch_frame_slots_kept) {
+        assert(false && "keepCatchFrameSlotsInMemory() must run before finalizeCleanupFrame()");
+        error = "internal error: the catch slots of '" + fn_name + "' were not marked before its cleanup frame was "
+            "made";
+        return false;
+    }
     cleanup_frame_slots.clear();
     cleanup_frame_index.clear();
     // the reload chain slots are the first slots of the frame, at the indexes that the tables of the flushes give
@@ -7258,6 +7265,54 @@ void QoreIRToLLVM::finalizeFunctionCommonCleanup(llvm::Module& module) {
 
     if (saved_insert) {
         builder->SetInsertPoint(saved_insert, saved_ip);
+    }
+}
+
+void QoreIRToLLVM::keepCatchFrameSlotsInMemory(const QoreIRFunction& func) {
+    catch_frame_slots_kept = true;
+    std::vector<llvm::AllocaInst*> slots;
+    if (auto* depth = llvm::dyn_cast_or_null<llvm::AllocaInst>(catch_depth_saved)) {
+        slots.push_back(depth);
+    }
+    // the catch variables: the locals that the result of a CatchException is stored in
+    std::unordered_set<uint32_t> caught;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst && inst->opcode == QoreIROpcode::CatchException && inst->result.isValid()) {
+                caught.insert(inst->result.id);
+            }
+        }
+    }
+    if (!caught.empty()) {
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (!inst || inst->opcode != QoreIROpcode::StoreLocal || inst->operands.empty()
+                        || !caught.count(inst->operands[0].id)) {
+                    continue;
+                }
+                const auto* store = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                auto i = local_allocas.find(reinterpret_cast<const void*>(store->local));
+                if (i == local_allocas.end()) {
+                    continue;
+                }
+                if (auto* slot = llvm::dyn_cast_or_null<llvm::AllocaInst>(i->second.storage())) {
+                    if (std::find(slots.begin(), slots.end(), slot) == slots.end()) {
+                        slots.push_back(slot);
+                    }
+                }
+            }
+        }
+    }
+    for (llvm::AllocaInst* slot : slots) {
+        for (llvm::User* user : slot->users()) {
+            if (auto* load = llvm::dyn_cast<llvm::LoadInst>(user)) {
+                load->setVolatile(true);
+            } else if (auto* store = llvm::dyn_cast<llvm::StoreInst>(user)) {
+                if (store->getPointerOperand() == slot) {
+                    store->setVolatile(true);
+                }
+            }
+        }
     }
 }
 
@@ -15419,6 +15474,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     handler_locals_known = has_on_block_exit_handlers && func.collectHandlerLocals(handler_locals);
     handler_sites.clear();
     catch_depth_saved = nullptr;
+    catch_frame_slots_kept = false;
     catch_scope_count = nullptr;
     catch_entry_blocks.clear();
 
@@ -17162,6 +17218,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 || inst->opcode == QoreIROpcode::ConstNull
                 || inst->opcode == QoreIROpcode::ConstString
                 || inst->opcode == QoreIROpcode::PushTempMark
+                || inst->opcode == QoreIROpcode::PushTempMarkPair
                 // the check of the target of a call (issue #5784, #5823) changes no local and runs no Qore code: it
                 // reads the state of an object or looks up a method, and a failure leaves the path that would reuse
                 // the extraction
@@ -17885,6 +17942,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // reload chains, the table-driven handler code) are emitted: the slots of the tables move to the cleanup frame,
     // and the tables are made (qore#6299); a cancelled or failed finalization refuses the function, as its code would
     // read tables that were not made
+    // the slots of the frame that only catch blocks and exception paths use stay in memory (qore#6392); their loads
+    // and stores are marked while they are allocas, before the slots of the cleanup frame replace them
+    keepCatchFrameSlotsInMemory(func);
     if (!finalizeCleanupFrame(llvm_func, fn_name, error)) {
         return false;
     }
@@ -37492,6 +37552,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 inst->temp_scope_id,
                 iterator_cleanup_allocas.size()
             });
+            return true;
+        }
+        case QoreIROpcode::PushTempMarkPair: {
+            // the marks of two nested scopes, as two PushTempMark instructions push them (qore#6444)
+            for (uint32_t scope_id : {inst->temp_scope_id, inst->unwind_inner_temp_scope_id}) {
+                temp_cleanup_marks.push_back({
+                    invoke_result_allocas.size(),
+                    pending_ssa_cleanup.size(),
+                    scope_id,
+                    iterator_cleanup_allocas.size()
+                });
+            }
             return true;
         }
         case QoreIROpcode::DebugStatement: {

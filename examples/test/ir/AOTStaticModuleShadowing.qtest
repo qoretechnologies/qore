@@ -17,10 +17,9 @@
 
 #! A statically registered module is checked as a file load of the same module from outside the module path is
 /** A module that qcc compiled to a .qo and that is linked into a program is registered with its register function
-    (qore_<name>_register(), qore_aot_register_into_program_v2()) or with ModuleManager::registerAOTStaticModule(),
-    not loaded from a file.  It is never library code: its code is linked into the program, not loaded from the
-    process-wide module path, whatever path label it is given.  It is checked as a load of the module's .qmod by
-    path from outside the module path, for the code that calls the registration (issue #5986):
+    (qore_<name>_register(), qore_aot_register_into_program_v2()), not loaded from a file.  It is never library code:
+    its code is linked into the program, not loaded from the process-wide module path.  It is checked as a load of
+    the module's .qmod by path from outside the module path, for the code that calls the registration (issue #5986):
     - code that is not trusted (code of a Program with a sandbox manager, or whose parse options restrict a
       functional domain) cannot register a module with the name of a library module, which would replace it for
       every later user, also into another Program;
@@ -124,8 +123,7 @@ public string sub value() {
             \directOwnSandboxedTest());
         addTestCase("the host registering into a restricted Program with no sandbox is trusted",
             \directOwnRestrictedTest());
-        addTestCase("a path label in the module path does not make a module registered with the C++ API trusted",
-            \apiPathSandboxedTest());
+        addTestCase("a module that sandboxed code registers is initialized under its sandbox", \probeSandboxedTest());
         addTestCase("a module registered while a library module is initialized has the loader's sandbox",
             \liftSandboxedTest());
         set_return_value(main());
@@ -279,8 +277,8 @@ public string sub value() {
         string host = getHost();
         hash<auto> rv;
         foreach string mode in (static_only ? ("static",) : ("static", "file")) {
-            string out = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s %s %s %s 2>&1; echo \"exit: $?\"", env, lib_dir,
-                host, mode, scenario, qmod_dir, lib_dir)));
+            string out = trim(run(sprintf("%s QORE_MODULE_DIR=%s %s %s %s %s 2>&1; echo \"exit: $?\"", env, lib_dir,
+                host, mode, scenario, qmod_dir)));
             # the host ended normally, also its cleanup
             assertRegex("\nexit: 0$", out, mode + ": " + out);
             rv{mode} = out;
@@ -375,10 +373,10 @@ public string sub value() {
             "other-require: value=own"));
     }
 
-    apiPathSandboxedTest() {
-        # registered with ModuleManager::registerAOTStaticModule() in both runs; the module is not library code: it
-        # is initialized under the sandbox of the code that registers it, and is chosen by that code
-        checkTenantRefused(runScenario("api-path-sandboxed", True), ("register: loaded",
+    probeSandboxedTest() {
+        # registered by sandboxed code with its register function: the module is not library code: it is initialized
+        # under the sandbox of the code that registers it, and is chosen by that code
+        checkTenantRefused(runScenario("probe-sandboxed", True), ("register: loaded",
             "use: value=static=True,init=True", "other-sandbox-register: refused", "other-require: refused"),
             "ProbeMod", 2);
     }

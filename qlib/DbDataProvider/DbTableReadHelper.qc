@@ -48,6 +48,22 @@ class DbTableReadHelper {
         }
     }
 
+    #! Returns the record type of a search with the given search options
+    /** @param table the table
+        @param search_options the search options; a search with the \c "recursive" search option returns the rows of
+        the common table expression of a recursive query
+
+        @return the record type of the search
+
+        @since DbDataProvider 2.5
+    */
+    static *hash<string, AbstractDataField> getSearchRecordType(AbstractTable table, *hash<auto> search_options) {
+        if (exists search_options.recursive) {
+            return table.getRecursiveQueryRecordType(search_options.recursive);
+        }
+        return table.getRecordType();
+    }
+
     #! Returns a statement for a select on the given table, releasing any implicit transaction if it fails
     /** @param table the table
         @param select_options the select options, including any \c where clause
@@ -201,7 +217,7 @@ class DbTableReadHelper {
         hash<auto> native_options = public_options - ("columns", "limit", "offset", "requires_result", "max_records");
         DbTableRecordIterator native_iter(table, split.pushdown, native_options);
         return new DefaultRecordIterator<hash<auto>>(native_iter, split.client, public_options,
-            table.getRecordType(), NOTHING, NOTHING);
+            DbTableReadHelper::getSearchRecordType(table, public_options), NOTHING, NOTHING);
     }
 
     #! Returns expression info annotated with native pushdown capability

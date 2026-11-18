@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 
 // the private data of AbstractPollOperation; it has no state, as the methods implemented by AbstractPollOperation
 // only use the object, but a builtin method can only be called on an object with the private data of its class.  The
@@ -54,6 +55,18 @@ qclass AbstractPollOperation<T> [arg=AbstractPollOperation* poll; ns=Qore; legac
 */
 AbstractPollOperation::constructor() {
     self->setPrivate(CID_ABSTRACTPOLLOPERATION, new AbstractPollOperation);
+}
+
+//! Destroys the object
+/** An operation without a C++ poll operation (one implemented in %Qore) that was submitted to the asynchronous I/O
+    controller is canceled: it is not continued again, and its result is a cancellation
+
+    @since %Qore 3.0
+*/
+AbstractPollOperation::destructor() {
+    // the controller holds a reference to the object of a submitted operation and continues it (qore#6531)
+    qore_poll_op_qore_object_deleted(self);
+    poll->deref(xsink);
 }
 
 //! Copies the object

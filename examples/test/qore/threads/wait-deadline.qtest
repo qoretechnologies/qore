@@ -74,7 +74,7 @@ class WaitDeadlineTest inherits QUnit::Test {
 
         Queue result();
         int tid = background sub () {
-            date start = now_us();
+            int start = clock_get_monotonic_us();
             auto rv;
             try {
                 switch (kind) {
@@ -102,7 +102,7 @@ class WaitDeadlineTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 rv = ex.err;
             }
-            result.push({"rv": rv, "ms": (now_us() - start).durationMilliseconds()});
+            result.push({"rv": rv, "ms": (clock_get_monotonic_us() - start) / 1000});
         }();
 
         # wakes the wait again each time it is blocked again, until it ends

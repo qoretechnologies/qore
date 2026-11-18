@@ -381,6 +381,16 @@ public:
         AssignmentMode mode,
         const QoreProgramLocation* loc);
     QoreIRValue lowerHashObjectDereference(const QoreValue& expr, std::string& error);
+
+    //! Lowers the right operand of a compound assignment as lowerMutationOperand() does; with \a force_int (an
+    //! operation that converts its operand to an int), a constant-key read of a hash with int enum values reads the
+    //! int (qore#6477)
+    //! the node of the operand of an int compound assignment being lowered, or nullptr (see
+    //! lowerIntMutationOperand(), qore#6477)
+    const AbstractQoreNode* int_operand_node = nullptr;
+
+    QoreIRValue lowerIntMutationOperand(const QoreValue& lvalue, const QoreValue& expr,
+        const QoreProgramLocation* loc, std::string& error, bool force_int);
     QoreIRValue lowerPop(const QoreValue& expr, std::string& error);
     QoreIRValue lowerShift(const QoreValue& expr, std::string& error);
     QoreIRValue lowerPush(const QoreValue& expr, std::string& error);

@@ -148,8 +148,14 @@ struct QoreDbgFinishHold {
     bool held = false;
     //! the held thread is to continue
     bool released = false;
+    //! true while a hold is armed (hold_ms or tls_hold_ms): a thread that finishes takes the mutex only then, so a
+    //! fork() made while a thread finishes finds it unlocked (qore#6543)
+    std::atomic<bool> armed{false};
 };
 static QoreDbgFinishHold* dbg_finish_hold = new QoreDbgFinishHold;
+//! the mutex is a process-wide lock: a child of fork() gets it unlocked (qore#6543; see design/fork-handlers.md)
+static QoreForkStdMutex dbg_finish_hold_fork_handler{dbg_finish_hold->m, QFLR_LEAF, "dbg_finish_hold", QFLM_ACQUIRE,
+    {&dbg_finish_hold->cv}};
 
 //! Releases a held finishing thread when the static objects of this file are destroyed (issue #6405)
 /** Declared before thread_counter, so that it is destroyed after it: a thread that exit() left finishing then uses
@@ -179,17 +185,28 @@ struct QoreDbgStartHold {
     bool held = false;
     //! the held thread is to continue
     bool released = false;
+    //! true while a hold is armed: a thread that starts takes the mutex only then, so a fork() made while a thread
+    //! starts finds it unlocked (qore#6543)
+    std::atomic<bool> armed{false};
 };
 static QoreDbgStartHold* dbg_start_hold = new QoreDbgStartHold;
+//! the mutex is a process-wide lock: a child of fork() gets it unlocked (qore#6543; see design/fork-handlers.md)
+static QoreForkStdMutex dbg_start_hold_fork_handler{dbg_start_hold->m, QFLR_LEAF, "dbg_start_hold", QFLM_ACQUIRE,
+    {&dbg_start_hold->cv}};
 
 //! Holds a thread that has been started, before it registers, if a hold is armed (qore#6469)
 static void qore_dbg_hold_thread_start() {
+    // every thread that starts gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_start_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::unique_lock<std::mutex> l(dbg_start_hold->m);
     int ms = dbg_start_hold->hold_ms;
     if (ms <= 0) {
         return;
     }
     dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->armed.store(false, std::memory_order_release);
     dbg_start_hold->held = true;
     dbg_start_hold->cv.notify_all();
     dbg_start_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_start_hold->released; });
@@ -778,8 +795,13 @@ public:
     // current generic receiver type for static generic method bodies
     const QoreTypeInfo* current_receiver_type_info = nullptr;
 
-    // current program context
+    // current program context; set with set_thread_current_pgm()
     QoreProgram* current_pgm = nullptr;
+    //! the type retirement epoch at which the thread entered Qore code, or 0 while it has no Program context
+    /** Written by the thread when its Program context is set from none or cleared (set_thread_current_pgm()), read by
+        qore_type_retirement_scan() (see qore_type_retire_epoch; issue #6419)
+    */
+    std::atomic<uint64_t> type_epoch{0};
 
     // issue #3024: program context for calls prior to a call
     QoreProgram* call_program_context = nullptr;
@@ -1037,6 +1059,10 @@ public:
             try_reexport(false),
             finalizing(false),
             tlv_clearing(false) {
+        if (p) {
+            // the thread runs the Program's code from its start
+            type_epoch.store(qore_type_retire_epoch.load(std::memory_order_seq_cst), std::memory_order_seq_cst);
+        }
 #ifdef QORE_MANAGE_STACK
         if (n_flags & QTF_NO_STACK_GUARD) {
             // No stack guard for lightweight threads (e.g. dedicated async I/O threads)
@@ -1604,6 +1630,36 @@ public:
 };
 
 static QoreThreadLocalStorage<ThreadData> thread_data;
+
+//! Sets the Program context of the thread, publishing its type retirement epoch when it enters or leaves Qore code
+/** The epoch is published when the context is set from none and cleared when it is cleared (see
+    qore_type_retire_epoch; issue #6419).  The exchange is sequentially consistent: the types that the thread reads
+    in its code are read after the epoch is published, and the epoch is cleared after the last of them was read.
+*/
+static inline void set_thread_current_pgm(ThreadData* td, QoreProgram* pgm) {
+    if (!td->current_pgm != !pgm) {
+        td->type_epoch.exchange(pgm ? qore_type_retire_epoch.load(std::memory_order_seq_cst) : 0,
+            std::memory_order_seq_cst);
+    }
+    td->current_pgm = pgm;
+}
+
+uint64_t qore_type_retirement_scan(uint64_t below, std::vector<QoreTypeRetirementThread>* threads) {
+    uint64_t min_epoch = 0;
+    thread_list.anyThreadData([&](ThreadData* td) -> bool {
+        uint64_t e = td->type_epoch.load(std::memory_order_seq_cst);
+        if (e) {
+            if (!min_epoch || e < min_epoch) {
+                min_epoch = e;
+            }
+            if (threads && below && e < below) {
+                threads->push_back(QoreTypeRetirementThread{td->tid, e});
+            }
+        }
+        return false;
+    });
+    return min_epoch;
+}
 
 void ThreadEntry::allocate(tid_node* tn, int stat) {
     assert(status == QTS_AVAIL);
@@ -3409,6 +3465,17 @@ void parse_cond_push(bool mark) {
         td->pcs = new ParseConditionalStack;
     }
     td->pcs->push(mark);
+    // a conditional directive before the header of a user module: the modules that the module requests before its
+    // header can depend on where it is loaded (qore#6386)
+    if (mark) {
+        QoreProgram* pgm = getProgram();
+        if (pgm) {
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            if (!pp->module_header_closed) {
+                pp->conditional_before_module_header = true;
+            }
+        }
+    }
 }
 
 bool parse_cond_else() {
@@ -4244,7 +4311,7 @@ QoreProgramContextHelper::QoreProgramContextHelper(QoreProgram* pgm) {
     }
     ThreadData* td  = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -4253,7 +4320,7 @@ QoreProgramContextHelper::~QoreProgramContextHelper() {
         return;
     }
     ThreadData* td  = thread_data.get();
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
 }
 
@@ -5049,7 +5116,7 @@ void ProgramThreadCountContextHelper::restoreContext() {
     // the call budgets started when the Program was entered end with the call
     td->sandbox_budgets.leave(td->tid, this);
     restoreDeferral();
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     td->tlpd = old_tlpd;
     td->current_pgm_ctx = old_ctx;
     sync_runtime_config_program(td);
@@ -5221,7 +5288,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
     // set up thread stacks; an exception (std::bad_alloc) restores the thread and releases the thread count before it
     // propagates from the constructor, whose destructor does not run (issue #6198)
     restore = true;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     bool first_entry = false;
     try {
 #ifdef DEBUG
@@ -5251,7 +5318,7 @@ void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionS
             td->tlpd->thread_init_pending = true;
         }
         restore = false;
-        td->current_pgm = old_pgm;
+        set_thread_current_pgm(td, old_pgm);
         td->tlpd = old_tlpd;
         releaseThreadCount(td, pgm);
         module_uncounted = false;
@@ -6361,6 +6428,36 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     provenance_policy_manager = provenance_policy.release();
 }
 
+QoreSandboxContext::QoreSandboxContext(const QoreSandboxContext* src, bool module_cleanup_delegate)
+        : module_cleanup_delegate(module_cleanup_delegate) {
+    if (!src) {
+        return;
+    }
+    // copied first, as they can throw std::bad_alloc; the references below are taken only after that
+    program_ids = src->program_ids;
+    budgets = src->budgets;
+    pgm_id = src->pgm_id;
+    for (QoreSandboxCallBudget* budget : budgets) {
+        budget->ref();
+    }
+    manager = src->manager;
+    if (manager) {
+        manager->ref();
+    }
+    policy_manager = src->policy_manager;
+    if (policy_manager) {
+        policy_manager->ref();
+    }
+    provenance_manager = src->provenance_manager;
+    if (provenance_manager) {
+        provenance_manager->ref();
+    }
+    provenance_policy_manager = src->provenance_policy_manager;
+    if (provenance_policy_manager) {
+        provenance_policy_manager->ref();
+    }
+}
+
 QoreSandboxContext::~QoreSandboxContext() {
     qore_sandbox_budgets_deref(budgets);
     if (manager) {
@@ -6654,9 +6751,9 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
         restore = true;
         old_pgm = td->current_pgm;
         old_tlpd = td->tlpd;
-        td->current_pgm = pgm;
+        set_thread_current_pgm(td, pgm);
         auto undo = [this, td, pgm]() {
-            td->current_pgm = old_pgm;
+            set_thread_current_pgm(td, old_pgm);
             td->tlpd = old_tlpd;
             sync_runtime_config_program(td);
             qore_program_private::unlockParsing(*pgm);
@@ -6694,7 +6791,7 @@ ProgramRuntimeParseCommitContextHelper::~ProgramRuntimeParseCommitContextHelper(
         "restoring old pgm: %p old tlpd: %p\n", td->current_pgm, old_pgm, old_tlpd);
     // the exit handler runs while the thread is still in the Program
     entry_frame.exit(xsink);
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     td->tlpd        = old_tlpd;
     sync_runtime_config_program(td);
 
@@ -6715,7 +6812,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -6742,7 +6839,7 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 
     ThreadData* td = thread_data.get();
     old_pgm = td->current_pgm;
-    td->current_pgm = pgm;
+    set_thread_current_pgm(td, pgm);
     sync_runtime_config_program(td);
 }
 
@@ -6752,7 +6849,7 @@ ProgramRuntimeParseContextHelper::~ProgramRuntimeParseContextHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
     // last: the Program is cleared and dereferenced here if code run while it was locked deleted it
     qore_program_private::unlockParsing(*pgm);
@@ -6822,7 +6919,7 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
 
         restore = true;
         old_pgm = td->current_pgm;
-        td->current_pgm = pgm;
+        set_thread_current_pgm(td, pgm);
         sync_runtime_config_program(td);
     }
 }
@@ -6833,7 +6930,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
 
     ThreadData* td = thread_data.get();
     QoreProgram* pgm = td->current_pgm;
-    td->current_pgm = old_pgm;
+    set_thread_current_pgm(td, old_pgm);
     sync_runtime_config_program(td);
     qore_program_private::decThreadCount(*pgm, td->tid, xsink);
 }
@@ -7544,6 +7641,7 @@ void qore_dbg_hold_next_thread_start(int ms) {
     std::lock_guard<std::mutex> l(dbg_start_hold->m);
     dbg_start_hold->hold_ms = ms;
     dbg_start_hold->released = false;
+    dbg_start_hold->armed.store(ms > 0, std::memory_order_release);
 }
 
 bool qore_dbg_wait_thread_start_held(int timeout_ms) {
@@ -7556,6 +7654,7 @@ void qore_dbg_release_thread_start() {
     std::unique_lock<std::mutex> l(dbg_start_hold->m);
     // a hold that no thread has taken yet is disarmed
     dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->armed.store(false, std::memory_order_release);
     dbg_start_hold->released = true;
     dbg_start_hold->cv.notify_all();
     // returns when the held thread has continued, so that a later hold is not ended by this release
@@ -7566,6 +7665,8 @@ void qore_dbg_hold_next_thread_finish(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->hold_ms = ms;
     dbg_finish_hold->released = false;
+    dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0 || dbg_finish_hold->tls_hold_ms > 0,
+        std::memory_order_release);
 }
 
 bool qore_dbg_wait_thread_finish_held(int timeout_ms) {
@@ -7579,6 +7680,8 @@ void qore_dbg_hold_next_thread_tls_exit(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->tls_hold_ms = ms;
     dbg_finish_hold->released = false;
+    dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0 || dbg_finish_hold->tls_hold_ms > 0,
+        std::memory_order_release);
 }
 
 namespace {
@@ -7614,21 +7717,31 @@ thread_local QoreDbgTlsHold qore_dbg_tls_hold;
 
 //! Arms the thread-local hold of the calling thread if a hold of the next thread's exit is armed
 static void qore_dbg_arm_thread_tls_hold() {
+    // every thread that finishes gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_finish_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     if (dbg_finish_hold->tls_hold_ms > 0) {
         // the first use constructs the thread-local object, whose destructor then runs when the thread ends
         qore_dbg_tls_hold.ms = dbg_finish_hold->tls_hold_ms;
         dbg_finish_hold->tls_hold_ms = 0;
+        dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0, std::memory_order_release);
     }
 }
 
 static void qore_dbg_hold_thread_finish() {
+    // every thread that finishes gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_finish_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::unique_lock<std::mutex> l(dbg_finish_hold->m);
     int ms = dbg_finish_hold->hold_ms;
     if (ms <= 0) {
         return;
     }
     dbg_finish_hold->hold_ms = 0;
+    dbg_finish_hold->armed.store(dbg_finish_hold->tls_hold_ms > 0, std::memory_order_release);
     dbg_finish_hold->held = true;
     dbg_finish_hold->cv.notify_all();
     dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
@@ -7647,6 +7760,14 @@ static void qore_dbg_release_finishing_hold() {
         dbg_finish_hold->released = true;
         dbg_finish_hold->cv.notify_all();
     }
+}
+
+void qore_dbg_release_thread_finish_hold() {
+    qore_dbg_release_finishing_hold();
+}
+
+bool qore_dbg_wait_thread_counter_at_most(int count, int timeout_ms) {
+    return !thread_counter.waitForCountAtMost(count, timeout_ms);
 }
 #endif
 
@@ -7911,11 +8032,48 @@ struct ThreadArg {
     }
 };
 
+//! Starts a native thread of the library that runs no Qore code, with every signal blocked
+/** Such a thread (a native thread reaper, the condition waker) handles no signals: a process-directed signal must be
+    delivered to a thread that expects it (the library's signal thread, or a thread of an embedding application), not
+    to it; without this, it would have the signal mask of the thread that starts it, which can be a foreign thread of
+    the application with signals unblocked (qore#6433).  The signals of its own faults stay unblocked.  The caller's
+    signal mask is restored.
+
+    @return 0 or the error of pthread_create()
+*/
+static int q_create_native_worker(pthread_t* id, void* (*entry)(void*), void* arg) {
+#ifndef _Q_WINDOWS
+    sigset_t all, old;
+    sigfillset(&all);
+    // the signals of a fault of the thread itself stay unblocked: a blocked one is delivered with its default action,
+    // so that a crash handler of the application would not run
+    for (int sig : {SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGTRAP}) {
+        sigdelset(&all, sig);
+    }
+    if (pthread_sigmask(SIG_SETMASK, &all, &old)) {
+        return pthread_create(id, nullptr, entry, arg);
+    }
+    int rc = pthread_create(id, nullptr, entry, arg);
+    pthread_sigmask(SIG_SETMASK, &old, nullptr);
+    return rc;
+#else
+    return pthread_create(id, nullptr, entry, arg);
+#endif
+}
+
 // External-lifecycle threads outlive individual Qore programs. Their completion
 // counter must include native TLS destruction, which happens after q_run_thread
-// returns. A single native reaper joins completed threads during normal operation
-// instead of retaining their stacks until process shutdown. It never executes
-// Qore code and is itself joined before module/threading teardown.
+// returns. Native reaper threads join completed threads during normal operation
+// instead of retaining their stacks until process shutdown. They never execute
+// Qore code and are themselves joined before module/threading teardown.
+//
+// A join waits for the thread's thread-local destructors, which can block (a module's thread-local data, a library's
+// per-thread state): a reaper that is about to join a thread first makes sure that another one is waiting for the
+// threads that end meanwhile, starting one if none is, so that one slow thread exit does not delay the joins of the
+// others (qore#6433).  So there are as many reapers as joins that are under way at the same time, plus one; a reaper
+// that has finished a join ends if two others are waiting, so that two remain once the joins are done, which take
+// the joins of normal thread exits without starting a thread.  An ended reaper is joined by another one, or by
+// stop().
 class DLLLOCAL ExternalThreadReaper {
 public:
     ~ExternalThreadReaper() {
@@ -7935,7 +8093,7 @@ public:
         if (started) {
             return 0;
         }
-        int rc = pthread_create(&native_id, nullptr, entry, this);
+        int rc = addReaperLocked();
         if (rc) {
             xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc,
                 "could not create native thread cleanup worker");
@@ -8006,19 +8164,24 @@ public:
             }
             assert(!head);
             // a thread counted in thread_counter can still be queued here (one that user module cleanup started in
-            // qore_cleanup(), or a stop by the static destructor without a wait): run() joins every queued thread
-            // before it returns, and a thread that comes later detaches itself (completeCounted())
+            // qore_cleanup(), or a stop by the static destructor without a wait): the reapers join every queued
+            // thread before they return, and a thread that comes later detaches itself (completeCounted())
             stopping = true;
-            condition.signal();
+            condition.broadcast();
         }
-        int rc = pthread_join(native_id, nullptr);
-        if (rc) {
-            // Join failure means an internal ownership invariant was broken;
-            // continuing teardown could unload code still used by a native thread.
-            fprintf(stderr, "qore: cannot join native thread cleanup worker: %s\n", strerror(rc));
-            abort();
+        // no reaper is started or ends by itself once stopping is set (see run()), so the list is complete and does
+        // not change
+        for (pthread_t id : reapers) {
+            joinReaper(id);
         }
+        // the reapers that ended before and that the others did not join
         AutoLocker al(mutex);
+        for (pthread_t id : ended) {
+            joinReaper(id);
+        }
+        reapers.clear();
+        ended.clear();
+        idle = 0;
         started = stopping = false;
     }
 
@@ -8038,6 +8201,10 @@ public:
     */
     void forkChild() {
         started = stopping = false;
+        // the reapers do not exist in the child
+        reapers.clear();
+        ended.clear();
+        idle = 0;
         head = tail = nullptr;
         counted_head = counted_tail = nullptr;
         condition.reinitAfterFork();
@@ -8057,7 +8224,12 @@ private:
     ThreadArg* tail = nullptr;
     CountedThread* counted_head = nullptr;
     CountedThread* counted_tail = nullptr;
-    pthread_t native_id{};
+    //! the reaper threads, which stop() joins
+    std::vector<pthread_t> reapers;
+    //! the reapers that have ended and are not joined yet; it has room for every reaper (see addReaperLocked())
+    std::vector<pthread_t> ended;
+    //! the number of reapers that are waiting for a thread to join, or starting
+    unsigned idle = 0;
     bool started = false;
     bool stopping = false;
 
@@ -8066,16 +8238,97 @@ private:
         return nullptr;
     }
 
+    static void joinReaper(pthread_t id) {
+        int rc = pthread_join(id, nullptr);
+        if (rc) {
+            // Join failure means an internal ownership invariant was broken;
+            // continuing teardown could unload code still used by a native thread.
+            fprintf(stderr, "qore: cannot join native thread cleanup worker: %s\n", strerror(rc));
+            abort();
+        }
+    }
+
+    //! Starts a reaper thread with every signal blocked; returns 0 or the error of pthread_create()
+    int addReaperLocked() {
+        // the lists have room for the new reaper before it is started: ended for every reaper that has not been
+        // joined, as a reaper that ends moves from reapers to ended
+        size_t need = reapers.size() + ended.size() + 1;
+        if (reapers.capacity() < reapers.size() + 1 || ended.capacity() < need) {
+            size_t n = need < 4 ? 4 : need * 2;
+            try {
+                reapers.reserve(n);
+                ended.reserve(n);
+            } catch (std::bad_alloc&) {
+                return ENOMEM;
+            }
+        }
+        pthread_t id;
+        int rc = q_create_native_worker(&id, entry, this);
+        if (!rc) {
+            reapers.push_back(id);
+            // the new reaper waits for threads to join as soon as it runs
+            ++idle;
+#if defined(__linux__) && defined(QORE_HAVE_PTHREAD_SETNAME_NP_2)
+            // named here too, so that it has its name as soon as it exists (it names itself in run() as well)
+            pthread_setname_np(id, "qore-reaper");
+#endif
+        }
+        return rc;
+    }
+
+    //! After a join: the reaper ends if two others are waiting and nothing is queued, else it waits again
+    /** @return true if the reaper ends; it is then in ended, which another reaper or stop() joins
+    */
+    bool afterJoinLocked() {
+        if (idle >= 2 && !head && !counted_head && !stopping) {
+            pthread_t self = pthread_self();
+            for (size_t i = 0, e = reapers.size(); i < e; ++i) {
+                if (pthread_equal(reapers[i], self)) {
+                    reapers[i] = reapers.back();
+                    reapers.pop_back();
+                    break;
+                }
+            }
+            // ended has room for it (see addReaperLocked()); a waiting reaper joins it at once
+            ended.push_back(self);
+            condition.signal();
+            return true;
+        }
+        ++idle;
+        return false;
+    }
+
+    //! Before a reaper joins a thread: starts another one if no other is waiting for the threads that end meanwhile
+    /** A failure to start one is ignored: the threads are then joined one after the other, as by a single reaper.
+    */
+    void ensureIdleReaperLocked() {
+        if (!idle && !stopping) {
+            addReaperLocked();
+        }
+    }
+
     void run() {
 #ifdef QORE_HAVE_THREAD_NAME
         q_set_thread_name("qore-reaper");
 #endif
         // Cleanup cannot be cancelled: every accepted thread must be joined before
         // its completion is published. This native worker has no Qore program/TID.
+        // The reaper is counted in idle when it starts and after each join.
         SafeLocker lock(mutex);
         while (true) {
-            while (!head && !counted_head && !stopping) {
+            // a reaper that has ended is joined by another one, which is counted in idle meanwhile
+            while (!ended.empty()) {
+                pthread_t id = ended.back();
+                ended.pop_back();
+                lock.unlock();
+                joinReaper(id);
+                lock.lock();
+            }
+            while (!head && !counted_head && !stopping && ended.empty()) {
                 condition.wait(mutex);
+            }
+            if (!ended.empty()) {
+                continue;
             }
             if (counted_head) {
                 std::unique_ptr<CountedThread> t(counted_head);
@@ -8083,6 +8336,8 @@ private:
                 if (!counted_head) {
                     counted_tail = nullptr;
                 }
+                --idle;
+                ensureIdleReaperLocked();
                 lock.unlock();
                 int rc = pthread_join(t->native_id, nullptr);
                 if (rc) {
@@ -8091,6 +8346,9 @@ private:
                 }
                 thread_counter.dec();
                 lock.lock();
+                if (afterJoinLocked()) {
+                    return;
+                }
                 continue;
             }
             if (!head) {
@@ -8102,6 +8360,8 @@ private:
             if (!head) {
                 tail = nullptr;
             }
+            --idle;
+            ensureIdleReaperLocked();
             lock.unlock();
             int rc = pthread_join(arg->native_id, nullptr);
             if (rc) {
@@ -8111,6 +8371,9 @@ private:
             arg.reset();
             tp_thread_counter.dec();
             lock.lock();
+            if (afterJoinLocked()) {
+                return;
+            }
         }
     }
 };
@@ -9889,7 +10152,8 @@ public:
             started = false;
             head = tail = -1;
         }
-        int rc = pthread_create(&native_id, nullptr, entry, this);
+        // it runs no Qore code and handles no signals (qore#6433)
+        int rc = q_create_native_worker(&native_id, entry, this);
         if (rc) {
             errno = rc;
             return -1;

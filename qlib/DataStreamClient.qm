@@ -375,8 +375,12 @@ rest.recvDataStream(recvcallback, endcallback, "GET", "/orders/1", body);
         */
     recvDataStream(code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback, string method, string path, auto body,
             timeout timeout_ms = 0, *reference<hash<auto>> info, *hash<auto> hdr) {
-        @debug(printf("DataStreamClient::recvDataStream() method=%y path=%y protocol=%y\n",
-            method, path, protocol_mode));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("DataStreamClient::recvDataStream() method=%y path=%y protocol=%y\n",
+                    method, path, protocol_mode);
+            }
+        }
         bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
 
         # Save originals for retry with DataStream v1 if Connect is rejected
@@ -511,8 +515,12 @@ hash<auto> h = rest.sendDataStream(callback, "POST", "/path");
     */
     hash<auto> sendDataStream(code<auto()> scb, string method, string path, timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        @debug(printf("DataStreamClient::sendDataStream() method=%y path=%y protocol=%y\n",
-            method, path, protocol_mode));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("DataStreamClient::sendDataStream() method=%y path=%y protocol=%y\n",
+                    method, path, protocol_mode);
+            }
+        }
         bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
 
         # Save originals for retry with DataStream v1 if Connect is rejected
@@ -738,8 +746,12 @@ rest.sendRecvDataStream(send_callback, reccallback, "POST", "/path");
     sendRecvDataStream(code<auto()> scb, code<nothing(auto)> recv_callback, code<nothing(*string)> eod_callback, string method, string path,
             timeout timeout_ms = 0,
             *reference<hash<auto>> info, *hash<auto> hdr) {
-        @debug(printf("DataStreamClient::sendRecvDataStream() method=%y path=%y protocol=%y\n",
-            method, path, protocol_mode));
+        @debug {
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("DataStreamClient::sendRecvDataStream() method=%y path=%y protocol=%y\n",
+                    method, path, protocol_mode);
+            }
+        }
         bool use_connect = (getEffectiveProtocol() == DataStreamProtocol::Connect);
 
         # Save originals for retry with DataStream v1 if Connect is rejected

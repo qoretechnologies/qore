@@ -1,0 +1,248 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class BinaryGrowthTest
+
+#! Tests that a binary value that grows by small appends reallocates its buffer a logarithmic number of times
+/** Each append grew the buffer to the exact new size, so N one-byte appends reallocated it N times; an allocator
+    whose realloc() copies the block (valgrind's always does) made a series of appends quadratic, and
+    Serializable::serialize(), which writes every field of a value to a BinaryOutputStream separately, took hours
+    under valgrind for a value of a few MB (issue #6312).
+
+    The values are made by code that a memory-limited sandbox governs: their buffers are charged to the sandbox,
+    and so is each reallocation that the host makes when it appends to them, so the sandbox's memory usage changes
+    exactly when a buffer is reallocated.  The number of distinct usages seen over a series of appends is thus the
+    number of reallocations, which does not depend on timing, the allocator or library debugging.
+*/
+class BinaryGrowthTest inherits QUnit::Test {
+    public {
+        #! the number of appends of each check
+        const Appends = 5000;
+
+
+        #! the code of the sandbox: makes the values that the host appends to
+        const SandboxCode = "%new-style
+binary sub make_binary() {
+    return binary(\"start\");
+}
+BinaryOutputStream sub make_stream() {
+    BinaryOutputStream s();
+    s.write(binary(\"start\"));
+    return s;
+}
+binary sub serialize_value(int n) {
+    hash<auto> h;
+    for (int i = 0; i < n; ++i) {
+        h{\"k\" + i} = i;
+    }
+    return Serializable::serialize(h);
+}
+binary sub append_bytes(int n) {
+    list<binary> pieces = map binary(chr(65 + $1)), xrange(26);
+    binary b = binary(\"start\");
+    for (int i = 0; i < n; ++i) {
+        b += pieces[i % 26];
+    }
+    return b;
+}
+";
+    }
+
+    private {
+        SandboxManager sm;
+        Program p;
+
+        #! the one-byte values that the checks append
+        list<binary> pieces = map binary(chr(65 + $1)), xrange(26);
+    }
+
+    constructor() : QUnit::Test("BinaryGrowthTest", "1.0", \ARGV) {
+        sm = new SandboxManager();
+        sm.setMemoryLimit(64 * 1024 * 1024);
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse(SandboxCode, "sandbox");
+
+        addTestCase("+= on a binary value grows its buffer geometrically", \testPlusEquals());
+        addTestCase("BinaryOutputStream writes grow its buffer geometrically", \testOutputStream());
+        addTestCase("appends in a sandbox call are charged to the sandbox", \testSandboxAppends());
+        addTestCase("a grown value keeps its contents through other operations", \testOperations());
+        addTestCase("serialization round trip of a value with many fields", \testSerialization());
+        set_return_value(main());
+    }
+
+    #! returns the most reallocations that a series of appends to a value of the given final size may make
+    /** The capacity grows by factors of 1.14 to 1.25 from 16 bytes: 4 capacities for each power of 2 (a logarithmic
+        number), plus the value's first allocation and the exact size it may start with
+    */
+    static int maxReallocs(int size) {
+        int powers = 0;
+        for (int cap = 16; cap < size; cap *= 2) {
+            ++powers;
+        }
+        return powers * 4 + 2;
+    }
+
+    #! returns the bytes that the appends of the checks add
+    static binary expected(string start, int n) {
+        string str = start;
+        for (int i = 0; i < n; ++i) {
+            str += chr(65 + (i % 26));
+        }
+        return binary(str);
+    }
+
+    testPlusEquals() {
+        binary b = p.callFunction("make_binary");
+        int start_usage = sm.getMemoryUsage();
+        assertGe(b.size(), start_usage, "the value made by the sandbox is charged to it");
+
+        hash<string, bool> usages = {start_usage.toString(): True};
+        bool charged = True;
+        for (int i = 0; i < Appends; ++i) {
+            b += pieces[i % 26];
+            int usage = sm.getMemoryUsage();
+            usages{usage.toString()} = True;
+            if (usage < b.size()) {
+                charged = False;
+            }
+        }
+        assertTrue(charged, "the buffer stays charged to the sandbox after every append");
+        assertEq(Appends + 5, b.size());
+        assertEq(expected("start", Appends), b);
+        # the distinct usages include the one before the appends
+        assertLe(maxReallocs(b.size()) + 1, usages.size(), sprintf("the number of reallocations of %d appends",
+            Appends));
+        # the unused capacity is at most a quarter of the size
+        assertLe(b.size() * 5 / 4 + 16, sm.getMemoryUsage(), "the capacity charged");
+
+        remove b;
+        assertEq(0, sm.getMemoryUsage(), "freeing the value releases its whole charge");
+    }
+
+    testOutputStream() {
+        BinaryOutputStream s = p.callFunction("make_stream");
+        StreamWriter w(s);
+        int start_usage = sm.getMemoryUsage();
+        assertGe(5, start_usage, "the stream's buffer is charged to the sandbox");
+
+        hash<string, bool> usages = {start_usage.toString(): True};
+        for (int i = 0; i < Appends; ++i) {
+            # the field writes of Serializable::serialize(): 1, 2, 4 and 8 bytes
+            switch (i % 4) {
+                case 0: w.writei1(1); break;
+                case 1: w.writei2(0x0203); break;
+                case 2: w.writei4(0x04050607); break;
+                case 3: w.writei8(0x08090a0b0c0d0e0f); break;
+            }
+            usages{sm.getMemoryUsage().toString()} = True;
+        }
+        binary b = s.getData();
+        assertLe(maxReallocs(b.size()) + 1, usages.size(), sprintf("the number of reallocations of %d writes",
+            Appends));
+        # 5 bytes, then each group of 4 writes adds 15 bytes
+        assertEq(5 + (Appends / 4) * 15, b.size());
+        assertEq(binary("start"), b.substr(0, 5));
+        assertEq(<0102030405060708090a0b0c0d0e0f>, b.substr(5, 15));
+        assertEq(<0102030405060708090a0b0c0d0e0f>, b.substr(-15));
+        # the unused capacity is freed when the data is taken
+        assertEq(b.size(), sm.getMemoryUsage(), "the data taken from the stream is charged with its exact size");
+
+        # the stream starts again with no data
+        assertEq(binary(), s.getData());
+        s.write(<ff>);
+        assertEq(<ff>, s.getData());
+
+        remove b;
+        remove w;
+        remove s;
+        assertEq(0, sm.getMemoryUsage(), "freeing the data and the stream releases their whole charge");
+    }
+
+    testSandboxAppends() {
+        # serialized in the sandbox: the result is charged with its exact size
+        binary sb = p.callFunction("serialize_value", Appends);
+        assertEq(sb.size(), sm.getMemoryUsage(), "a serialized value is charged with its exact size");
+        assertEq(Appends, Serializable::deserialize(sb).size());
+        remove sb;
+        assertEq(0, sm.getMemoryUsage());
+
+        binary b = p.callFunction("append_bytes", Appends);
+        assertEq(expected("start", Appends), b);
+        assertGe(b.size(), sm.getMemoryUsage(), "the grown value is charged to the sandbox");
+        remove b;
+        assertEq(0, sm.getMemoryUsage(), "freeing the value releases its whole charge");
+
+        # the growth is refused beyond the memory limit of the sandbox
+        SandboxManager small();
+        small.setMemoryLimit(64 * 1024);
+        Program sp(PO_NO_CHILD_PO_RESTRICTIONS);
+        sp.setSandboxManager(small);
+        sp.parse(SandboxCode, "small sandbox");
+        assertThrows("SANDBOX-MEMORY-LIMIT", \sp.callFunction(), ("append_bytes", 1024 * 1024));
+    }
+
+    testOperations() {
+        binary b = binary("start");
+        for (int i = 0; i < Appends; ++i) {
+            b += pieces[i % 26];
+        }
+        binary e = expected("start", Appends);
+        assertEq(e, b);
+
+        # the value is copied with its size, not its capacity
+        binary c = b;
+        c += <00>;
+        assertEq(e.size() + 1, c.size());
+        assertEq(e, b, "the copy appended to leaves the original unchanged");
+
+        # removing data and appending again reuses the buffer
+        binary s = b;
+        splice s, 5;
+        assertEq(binary("start"), s);
+        s += binary("xyz");
+        assertEq(binary("startxyz"), s);
+
+        # inserting data in the middle of a grown value
+        s = b;
+        splice s, 5, 0, binary("123");
+        assertEq(Appends + 8, s.size());
+        assertEq(binary("start123ABC"), s.substr(0, 11));
+        assertEq(e.substr(5), s.substr(8));
+
+        # extracting data from a grown value
+        s = b;
+        binary x = extract s, 0, 5;
+        assertEq(binary("start"), x);
+        assertEq(e.substr(5), s);
+
+        # appending a value to itself
+        s = b;
+        s += s;
+        assertEq(e.size() * 2, s.size());
+        assertEq(e, s.substr(0, e.size()));
+        assertEq(e, s.substr(e.size()));
+
+        # appending nothing changes nothing
+        s = b;
+        s += binary();
+        assertEq(e, s);
+    }
+
+    testSerialization() {
+        # a value with many small fields: every field is a separate write to the output stream
+        hash<auto> h;
+        for (int i = 0; i < 2000; ++i) {
+            h{"key" + i} = (i, i * 1.5, "str" + i, i % 2 ? True : False, binary("b" + i), 2026-11-16T12:00:00Z);
+        }
+        binary b = Serializable::serialize(h);
+        assertEq(h, Serializable::deserialize(b));
+    }
+}
