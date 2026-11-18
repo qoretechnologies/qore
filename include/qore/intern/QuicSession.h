@@ -691,19 +691,17 @@ public:
     */
     DLLLOCAL void setRecordResponseHeaderEvents(bool v);
 
-    //! Takes the recorded response headers of the named streams
-    /** Only the streams named by @a stream_ids are taken, so a header that arrived before its caller
-        finished registering the request is taken by a later call instead of being dropped; a header
-        recorded for a stream that no longer exists and is not named is discarded, so an unclaimed
-        record cannot accumulate.
+    //! Takes the recorded response headers
+    /** Every recorded header is taken: the caller decides which request each belongs to, and keeps the header of a
+        request that is still being registered until the request claims it (see
+        Http3ClientPollOperationPriv::reportResponseHeaderEvents()), as the response of such a request can be complete
+        and its stream gone from the session before then.
 
-        @param stream_ids the streams to take
         @param out receives one entry per stream, in the order the headers arrived
 
         @since %Qore 3.0
     */
-    DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int64_t>& stream_ids,
-        std::vector<QuicResponseHeaderEvent>& out);
+    DLLLOCAL void takeResponseHeaderEvents(std::vector<QuicResponseHeaderEvent>& out);
 
     //! Records the response header of a stream if recording is enabled; called on the I/O thread
     DLLLOCAL void recordResponseHeaderEvent(const QuicStreamInfo& stream);

@@ -430,13 +430,6 @@ public:
     }
 
     //! Get the socket object (returns a referenced QoreObject*)
-    //! Returns the event sink of the request on a stream with a new reference, or nullptr if it has none
-    /** The sink reports the protocol events of the request to the event queue of the client that issued
-        it; it is attached to the request's completion action, because the connection is shared between
-        requests.  I/O thread only.
-    */
-    DLLLOCAL HttpClientEventSink* getReferencedEventSink(int64_t stream_id) const;
-
     DLLLOCAL QoreObject* getReferencedSocket() const {
         if (self) {
             ExceptionSink xsink;
@@ -632,6 +625,15 @@ private:
     //! Stream IDs between Phase 2 and Phase 3 of submit
     std::unordered_set<std::string> pending_stream_ids;
 
+    //! The response headers of requests that were not registered when their header arrived: stream_id -> headers
+    /** Kept for a request that is still being submitted or registered (the rule of takeResponseAction()), and
+        reported by the thread that claims the request first, before the request's response is dispatched: the
+        registration (registerStream()) or the dispatch of a response on the I/O thread (takeResponseAction()).
+        The response of such a request can be complete before it is registered, so its header is not left for a
+        later read cycle, which would report it after the response, or never.
+    */
+    std::unordered_map<std::string, std::vector<QuicResponseHeaderEvent>> pending_header_events;
+
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
     //! Set (release) when @ref error_info is stored, under the lock that protects it; read (acquire) without a lock
@@ -688,6 +690,32 @@ private:
         belongs to no request
     */
     DLLLOCAL AbstractAsyncAction* takeResponseAction(const std::string& sid, QoreHashNode* output, bool& buffered,
+            ExceptionSink* xsink);
+
+    //! Reports the response header events of the streams whose header arrived, before their responses are dispatched
+    /** Takes every response header recorded by the QUIC session: the header of a registered request is reported to
+        the request's event sink, and the header of a request that is still being submitted or registered is kept in
+        @ref pending_header_events until the request is claimed.  Called by the I/O thread before it dispatches the
+        completed responses of a read cycle.
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int reportResponseHeaderEvents(QuicSession& session, ExceptionSink* xsink);
+
+    //! Reports the response headers kept for a request in @ref pending_header_events and removes them
+    /** Called with @ref stream_lock held by the thread that claims the request: the registration or the dispatch of
+        a response, so that the header is reported before the response completes the request.  Reporting only queues
+        the event (see HttpClientEventSink) and runs no Qore code.
+
+        @param sid the stream ID
+        @param action the request's action, whose event sink receives the events
+    */
+    DLLLOCAL void reportPendingHeaderEventsLocked(const std::string& sid, AbstractAsyncAction* action);
+
+    //! Reports one response header event to an event sink
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL static int reportResponseHeaderEvent(HttpClientEventSink& sink, const QuicResponseHeaderEvent& event,
             ExceptionSink* xsink);
 
     //! Records the error of the operation and closes it
