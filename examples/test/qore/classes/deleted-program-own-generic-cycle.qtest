@@ -19,9 +19,9 @@
     its own generic hashdecl, a list of such objects and an object of a generic class of the parent Program.  The
     values' destructors must run, and nothing of the Programs may be left after the library cleanup (debug builds count
     the declarations of Programs left after qore_cleanup() with QORE_TEARDOWN_REPORT).  The declarations of a deleted
-    Program that derived types name are kept until the library cleanup (issue #6419); their number must be the same in
-    every generation (debug builds).  The worker runs in each execution mode, at the IR tier and promoted to native code
-    with tiered execution, and as qcc-compiled executables (-O0, -O3).
+    Program that derived types name are retired and freed once no thread can read them (issue #6419): none may be
+    left after a generation (debug builds).  The worker runs in each execution mode, at the IR tier and promoted to
+    native code with tiered execution, and as qcc-compiled executables (-O0, -O3).
 */
 class DeletedProgramOwnGenericCycleTest inherits QUnit::Test {
     public {
@@ -42,7 +42,7 @@ class DeletedProgramOwnGenericCycleTest inherits QUnit::Test {
         qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
         worker = get_script_dir() + DirSep + "deleted-program-types" + DirSep + "own-generic-cycle.q";
         expected = "destroyed: {Box: 20, Foo: 40, ParentBox: 10}\n"
-            + sprintf("kept per generation: %s\n", Option::HAVE_LIBRARY_DEBUGGING ? "constant" : "n/a");
+            + sprintf("kept per generation: %s\n", Option::HAVE_LIBRARY_DEBUGGING ? "0" : "n/a");
 
         foreach string mode in (ExecModes) {
             addTestCase("generic values of a deleted Program's own declarations: " + mode, \testMode(), (mode,));
