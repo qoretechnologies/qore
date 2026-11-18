@@ -11529,7 +11529,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
             // that do not make a complete character can make one with the bytes of the next part, so the count of the
             // concatenation is made on the concatenation (qore#6597)
             if (value.isShortString()) {
-                current = QCS_DEFAULT;
+                current = QCS_UTF8;
                 if (characters) {
                     bool invalid;
                     measured += qore_short_string_utf8_length(value, invalid);
@@ -11546,7 +11546,9 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
                 if (string) {
                     if (characters) {
                         const qore_string_private* priv = qore_string_private::get(*string);
-                        if (priv->isStateful()) {
+                        // Only UTF-8 has a strict width scanner here. Other encodings must be
+                        // validated on the joined text, except Latin-1 where every byte is valid.
+                        if (current != QCS_UTF8 && current != QCS_ISO_8859_1) {
                             direct = false;
                             break;
                         }
@@ -11587,7 +11589,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
     }
     QoreStringNodeValueHelper string(*concatenated);
     return static_cast<int64_t>(
-        characters ? string->length() : string->strlen());
+        characters ? qore_string_private::characterCount(**string, xsink) : string->strlen());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
@@ -12190,6 +12192,14 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             const char* mname = method_call->getName();
             if (mname && nargs == 1) {
                 // Phase 5.2c: Pseudo-methods on built-in types (read-only, non-mutating)
+                if (fromBits(args[0]).getType() == NT_STRING) {
+                    if (!strcmp(mname, "length")) {
+                        return qore_fast_length(args[0], xsink);
+                    }
+                    if (!strcmp(mname, "size")) {
+                        return qore_fast_strlen(args[0], xsink);
+                    }
+                }
                 if (!strcmp(mname, "length") || !strcmp(mname, "size")) {
                     return qore_fast_any_size(args[0], xsink);
                 } else if (!strcmp(mname, "keys")) {
@@ -12365,12 +12375,20 @@ extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
     if (arg.isShortString()) {
-        return toBits(static_cast<int64_t>(qore_short_string_utf8_length(arg)));
+        bool invalid;
+        size_t count = qore_short_string_utf8_length(arg, invalid);
+        if (invalid) {
+            QoreStringValueHelper str(arg);
+            qore_string_private::get(**str)->raiseInvalidEncoding(xsink);
+            return toBits(0);
+        }
+        return toBits(static_cast<int64_t>(count));
     }
     if (arg.hasNode()) {
         const AbstractQoreNode* node = arg.getInternalNode();
         if (node->getType() == NT_STRING) {
-            return toBits(static_cast<int64_t>(static_cast<const QoreStringNode*>(node)->length()));
+            const auto* str = static_cast<const QoreStringNode*>(node);
+            return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
         }
         if (node->getType() == NT_BINARY) {
             return toBits(static_cast<int64_t>(static_cast<const BinaryNode*>(node)->size()));

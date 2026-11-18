@@ -28,6 +28,7 @@
 #include <qore/QoreValue.h>
 #include <qore/QoreStringNode.h>
 #include <qore/DateTimeNode.h>
+#include "qore/intern/qore_string_private.h"
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_program_private.h>
 #include <qore/intern/ContextStatement.h>
@@ -151,6 +152,11 @@ static bool qore_ir_try_string_no_arg_pseudo_fast_path(bool pseudo, bool base_kn
         return false;
     }
     switch (intrinsic) {
+        case QoreIRIntrinsic::StringLength: {
+            QoreStringValueHelper str(base);
+            res = QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
+            return true;
+        }
         case QoreIRIntrinsic::StringLower:
             res = fromBits(qore_rt_pseudo_string_lwr_noguard(toBits(base), xsink));
             return true;
@@ -255,11 +261,9 @@ static bool qore_ir_try_common_no_arg_pseudo_fast_path(QoreIRIntrinsic intrinsic
             }
             return false;
         case QoreIRIntrinsic::StringStrlen:
-        case QoreIRIntrinsic::StringLength:
             if (base_type == NT_STRING) {
                 QoreStringValueHelper s(base);
-                res = QoreValue(static_cast<int64_t>(intrinsic == QoreIRIntrinsic::StringStrlen
-                    ? s->strlen() : s->length()));
+                res = QoreValue(static_cast<int64_t>(s->strlen()));
                 return true;
             }
             return false;
@@ -5007,8 +5011,6 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
     }
     if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
         kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringSize;
-    } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-        kind = QoreIRCallDirectInstruction::NativeLeafKind::ClosureStringLength;
     } else {
         return false;
     }
@@ -5322,8 +5324,6 @@ static QORE_INTERN_NOINLINE bool computeInterpreterNativeLeafState(QoreIRCallDir
         QoreIRCallDirectInstruction::NativeLeafKind kind;
         if (intrinsic == QoreIRIntrinsic::Size || intrinsic == QoreIRIntrinsic::StringStrlen) {
             kind = QoreIRCallDirectInstruction::NativeLeafKind::StringSize;
-        } else if (intrinsic == QoreIRIntrinsic::StringLength) {
-            kind = QoreIRCallDirectInstruction::NativeLeafKind::StringLength;
         } else {
             return reject();
         }
@@ -21939,7 +21939,7 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             }
             if (t == NT_STRING) {
                 QoreStringValueHelper str(value);
-                return QoreValue(static_cast<int64>(str->length()));
+                return QoreValue(static_cast<int64>(qore_string_private::characterCount(**str, xsink)));
             }
             if (t == NT_BINARY) {
                 return QoreValue(static_cast<int64>(value.get<const BinaryNode>()->size()));

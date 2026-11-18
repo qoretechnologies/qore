@@ -1366,10 +1366,8 @@ sub legacy() {
     |!Argument|!Processing
     |\a expression @ref list_type "list"|Returns the number of elements in the list
     |\a expression @ref hash_type "hash"|Returns the number of keys in the hash
-    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); in a string that is not valid in its encoding, each byte that does not start a complete character counts as one character
+    |\a expression @ref string_type "string"|Returns the number of characters in the string (which may be different than the number of bytes for multi-byte character encodings such as \c UTF-8); raises \c INVALID-ENCODING if the string is not valid in its encoding
     |\a expression @ref binary_type "binary"|Returns the number of bytes in the binary object
-
-    This operator does not throw any exceptions.
 
     @see @ref <value>::size()
 

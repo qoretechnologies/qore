@@ -3898,6 +3898,69 @@ size_t QoreString::length() const {
     return priv->len;
 }
 
+size_t qore_string_private::characterCount(const QoreString& str, ExceptionSink* xsink) {
+    const qore_string_private* p = str.priv;
+    const QoreEncoding* enc = p->getEncoding();
+    if (enc == QCS_UTF8) {
+        bool invalid;
+        size_t count = p->getLengthFrom(p->effective_buf(), 0, invalid);
+        if (invalid) {
+            p->raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return count;
+    }
+    const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+    if (!p->len || enc == QCS_ISO_8859_1 || ep->opaque_single_byte) {
+        return p->len;
+    }
+    if (enc == QCS_USASCII) {
+        if (!str.isDataAscii()) {
+            p->raiseInvalidEncoding(xsink);
+            return 0;
+        }
+        return p->len;
+    }
+
+    if (ep->fcharlen == q_UTF16BE_get_char_len || ep->fcharlen == q_UTF16LE_get_char_len) {
+        // The width of a leading surrogate is four bytes even if the next unit is not a trailing
+        // surrogate. The decoder returns the surrogate itself when it cannot form a scalar.
+        const char* b = p->effective_buf();
+        size_t count = 0;
+        for (size_t i = 0; i < p->len; ++count) {
+            if (!(count % 1024) && qore_check_cancel(xsink, "counting UTF-16 characters")) {
+                return 0;
+            }
+            qore_offset_t width = ep->fcharlen(b + i, p->len - i);
+            if (width <= 0) {
+                p->raiseInvalidEncoding(xsink);
+                return 0;
+            }
+            unsigned cp = ep->getUnicode(b + i);
+            if (cp >= 0xd800 && cp <= 0xdfff) {
+                p->raiseInvalidEncoding(xsink);
+                return 0;
+            }
+            i += width;
+        }
+        return count;
+    }
+
+    // The character-width callbacks of some encodings only determine boundaries. Decode the text to
+    // verify its repertoire and shift state. Only an illegal input sequence is a domain error.
+    QoreString utf8(QCS_UTF8);
+    size_t bad_offset = SIZE_MAX;
+    if (convert_encoding_intern(p->effective_buf(), p->len, enc, utf8, QCS_UTF8, xsink, false, false,
+            &bad_offset)) {
+        if (bad_offset != SIZE_MAX) {
+            xsink->clear();
+            p->raiseInvalidEncoding(xsink);
+        }
+        return 0;
+    }
+    return p->isStateful() ? utf8.length() : str.length();
+}
+
 size_t qore_string_private::getLengthCountingInvalidBytes(const char* b) const {
     const QoreEncoding* enc = getEncoding();
     // an encoding made of units of more than one byte (UTF-16) skips an invalid unit, so that the text after it is

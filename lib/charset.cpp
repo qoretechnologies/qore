@@ -1628,8 +1628,11 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
 */
 void qore_encoding_private::probe() {
     ProbeConverter to(code.c_str(), "UTF-8");
+    bool no_encoder = !to.valid() && errno == EINVAL;
     ProbeConverter from("UTF-8", code.c_str());
     if (!to.valid() || !from.valid()) {
+        // Resource errors do not make an encoding an opaque tag.
+        opaque_single_byte = no_encoder && !from.valid() && errno == EINVAL;
         return;
     }
 

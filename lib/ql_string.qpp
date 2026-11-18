@@ -1086,11 +1086,11 @@ int len = length(str);
     @endcode
 
     @note
-    - this operation has <i>O(n)</i> complexity if called on a string with a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
+    - counting takes linear time when the encoding requires validation; a UTF-8 string caches its ASCII prefix,
+      so repeated counts of all-ASCII UTF-8 text take constant time
     - equivalent to <string>::length()
-    - in a string that is not valid in its encoding, each byte that does not start a complete character counts as one
-      character, so the count is not less than the number of characters of its text (since %Qore 3.0; before, the
-      count stopped at the first such byte)
+
+    @throw INVALID-ENCODING the string is not valid in its declared encoding
 
     @see
     - strlen()
@@ -1105,8 +1105,8 @@ int len = length(str);
     strict \c string and \c binary variants have no such conversion and are flagged; see
     @ref qore_code_flags_portability.
  */
-int length(softstring str) [flags=CONSTANT,NAMED_ARGS] {
-   return str->length();
+int length(softstring str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return qore_string_private::characterCount(*str, xsink);
 }
 
 //! Returns the number of bytes in the binary object passed as an argument

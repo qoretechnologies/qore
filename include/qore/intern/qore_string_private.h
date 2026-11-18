@@ -346,7 +346,10 @@ public:
     }
 
     //! Raises the exception that QoreEncoding raises for text that is not valid in the encoding of the string
-    DLLLOCAL void raiseInvalidEncoding(ExceptionSink* xsink) const;
+    DLLLOCAL QORE_INTERN_COLD QORE_INTERN_NOINLINE void raiseInvalidEncoding(ExceptionSink* xsink) const;
+
+    //! Counts characters for language operations, raising INVALID-ENCODING for malformed text
+    DLLLOCAL static size_t characterCount(const QoreString& str, ExceptionSink* xsink);
 
     //! Returns the number of characters of a string in a multi-byte encoding, counting each byte that does not start
     //! a complete character as one character

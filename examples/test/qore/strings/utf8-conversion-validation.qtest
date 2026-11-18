@@ -95,6 +95,7 @@ class Utf8ConversionValidationTest inherits QUnit::Test {
     characters() {
         foreach binary payload in (Malformed) {
             string s = binary_to_string(binary("a") + payload + binary(" b"), "UTF-8");
+            assertThrows("INVALID-ENCODING", \length(), (s,), payload.toHex() + " length");
             assertThrows("INVALID-ENCODING", \encode_url(), (s,), payload.toHex());
             # as the first character of a string
             assertThrows("INVALID-ENCODING", \encode_url(), (binary_to_string(payload, "UTF-8"),),

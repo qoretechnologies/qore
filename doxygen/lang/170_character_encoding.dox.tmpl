@@ -40,7 +40,7 @@
     U+10FFFF and the bytes \c 0xc0, \c 0xc1 and \c 0xf5 - \c 0xff are invalid, as are a lead byte without the
     continuation bytes it needs and a character cut off at the end of the string.  Every check of \c UTF-8 uses this
     definition: the character functions above raise an \c INVALID-ENCODING exception for a character offset after
-    an invalid byte, length() counts each invalid byte as one character,
+    an invalid byte, @ref Qore::length(softstring) "length()" raises \c INVALID-ENCODING for invalid text,
     @ref Qore::zzz8stringzzz9::isEncodingValid() "<string>::isEncodingValid()" returns \c False, and a conversion to
     another encoding raises an \c ENCODING-CONVERSION-ERROR exception.
 
