@@ -153,6 +153,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+      decodes a decompressed body with the encoding of the request, as an uncompressed body is, not with the socket's
+      encoding (<a href="https://github.com/qoretechnologies/qore/issues/6618">issue 6618</a>)
     - @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "AbstractHttpRequestHandler::handleRequest()" is
       declared to return <tt>union<hash<auto>, data></tt> and
       @ref HttpServer::AbstractStreamRequest::getResponseHeaderMessageImpl() "AbstractStreamRequest::getResponseHeaderMessageImpl()"
@@ -4276,8 +4279,15 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         }
 
         if (decode && body && hdr."content-encoding" && decompress) {
-            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body,
-                decompress_to_string ? s.getEncoding() : NOTHING, getMaxDecodedBodySize(listener));
+            # the decompressed octets are text in the charset of the request, decoded as an uncompressed body is,
+            # with the socket's encoding as the assumed one (qore#6618)
+            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
+                getMaxDecodedBodySize(listener));
+            if (decompress_to_string) {
+                auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+                data text = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, s.getEncoding());
+                body = text.typeCode() == NT_STRING ? text : body.toString(s.getEncoding());
+            }
         }
 
         return body;
