@@ -23,11 +23,11 @@ if (!is_file(qcc_bin)) {
 string code = "%modern
 
 list<string> regular = (\"alpha\", \"beta\", \"gamma\");
-list<string> sparse = (\"alpha\", \"beta\", \"gamma\");
+list<*string> sparse = (\"alpha\", \"beta\", \"gamma\");
 delete sparse[1];
-list<string> first_missing = (\"alpha\", \"beta\");
+list<*string> first_missing = (\"alpha\", \"beta\");
 delete first_missing[0];
-list<string> all_missing = (\"alpha\", \"beta\", \"gamma\");
+list<*string> all_missing = (\"alpha\", \"beta\", \"gamma\");
 delete all_missing[0];
 delete all_missing[1];
 delete all_missing[2];
@@ -36,7 +36,7 @@ list<string> empty = ();
 list<string> removed = (\"removed\",);
 remove removed;
 list<string> singleton = (\"solo\",);
-list<string> singleton_missing = (\"solo\",);
+list<*string> singleton_missing = (\"solo\",);
 delete singleton_missing[0];
 *list<string> optional = (\"optional\", \"value\");
 *list<string> optional_missing;

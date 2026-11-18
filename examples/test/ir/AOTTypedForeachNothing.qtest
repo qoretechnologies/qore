@@ -71,7 +71,12 @@ class AOTTypedForeachNothingTest inherits QUnit::Test {
             delete targets;
         } else if (entity == 6) {
             targets = (%s,);
-            targets[2] = %s;
+            # a gap in a typed list is refused (qore#6435)
+            try {
+                targets[2] = %s;
+            } catch (hash<ExceptionInfo> ex) {
+                errors += ex.err + \";\";
+            }
         }
         try {
             foreach %s target in (targets) {

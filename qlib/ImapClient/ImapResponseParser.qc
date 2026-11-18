@@ -379,7 +379,8 @@ public class ImapResponseParser {
         @return the parsed date, or @ref nothing if the value could not be parsed
     */
     static *date parseInternalDate(*string str) {
-        if (!str.val()) {
+        # a string that is not valid in its encoding (server data) cannot be parsed (qore#6553)
+        if (!str.val() || !(str =~ /^/)) {
             return;
         }
         # the day is space-padded when single-digit
@@ -398,7 +399,8 @@ public class ImapResponseParser {
         @return the parsed date, or @ref nothing if the value could not be parsed
     */
     static *date parseEnvelopeDate(*string str) {
-        if (!str.val()) {
+        # a string that is not valid in its encoding (server data) cannot be parsed (qore#6553)
+        if (!str.val() || !(str =~ /^/)) {
             return;
         }
         string norm = str;

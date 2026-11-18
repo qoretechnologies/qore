@@ -119,6 +119,23 @@ DLLLOCAL const QoreAOTBodyContractDependencyMap*
 */
 DLLEXPORT void qore_aot_set_compiler_process();
 
+//! Reports the exceptions in \a sink, the parse errors (or warnings if \a warnings) of code that the compiler
+//! compiles, as diagnostics in the form that QORE_DIAG_FORMAT / QORE_CODE_FRAMES select (by default one line each on
+//! stderr), and clears it (issue #6555)
+DLLEXPORT void qore_aot_report_parse_diagnostics(ExceptionSink& sink, bool warnings);
+
+//! makes the Program collect its parse diagnostics and keep those of all of its parse actions together, for the
+//! reports of the AOT compiler in the forms of QORE_DIAG_FORMAT and QORE_CODE_FRAMES (issue #6555)
+DLLEXPORT void qore_set_program_parse_diagnostics_accumulated(QoreProgram& pgm);
+
+//! calls qore_set_program_parse_diagnostics_accumulated() for a Program that the AOT compiler creates to compile
+//! code, if its diagnostics are reported in the form of QORE_DIAG_FORMAT or QORE_CODE_FRAMES (issue #6555)
+DLLEXPORT void qore_aot_prepare_compile_program(QoreProgram& pgm);
+
+//! Prints the parse diagnostics of the compiled code collected in JSON form (QORE_DIAG_FORMAT=json) as one JSON
+//! array to \a out (stdout if nullptr); nothing in the other forms or if they have been printed already (issue #6555)
+DLLEXPORT void qore_aot_flush_parse_diagnostics(FILE* out = nullptr);
+
 //! Returns true if qore_aot_set_compiler_process() was called in this process
 DLLLOCAL bool qore_aot_is_compiler_process();
 

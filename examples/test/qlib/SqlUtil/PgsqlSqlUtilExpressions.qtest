@@ -104,6 +104,7 @@ class PgsqlExpressionTest inherits QUnit::Test {
 
         # Date/string function tests
         addTestCase("DP_FUNC_FORMAT_DATE", \testDpFuncFormatDate());
+        addTestCase("cast type names", \testCastTypeNames());
         addTestCase("DP_FUNC_SUBSTR", \testDpFuncSubstr());
         addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
 
@@ -484,6 +485,24 @@ class PgsqlExpressionTest inherits QUnit::Test {
 
     # --- Date/string function tests ---
 
+    #! a cast writes its type name into the SQL; only a type name is accepted (qore#6572)
+    testCastTypeNames() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result", expr(COP_CAST, (fref("id"), "text")), 1);
+        assertEq("1", row.result);
+        row = selectExprRow("result", expr(COP_CAST, (fref("id"), "character varying")), 1);
+        assertEq("1", row.result);
+        # a size after a word of a type name of several words
+        row = selectExprRow("result", expr(COP_CAST, (fref("created_at"), "timestamp(0) without time zone")), 1);
+        assertEq(2026-01-15T10:30:00, row.result);
+        # the type name ran SQL of its own in the cast: current_user
+        assertThrows("OPERATOR-ERROR", "invalid cast type name", \selectExprRow(),
+            ("result", expr(COP_CAST, (fref("id"), "text) || current_user || cast(1 as text")), 1));
+        # the column operator
+        assertEq("1", table.selectRow({"columns": (cop_as(cop_cast("id", "text"), "result"),), "where": {"id": 1}}).result);
+    }
+
     testDpFuncFormatDate() {
         if (!table) { testSkip("no DB connection"); }
 
@@ -495,6 +514,17 @@ class PgsqlExpressionTest inherits QUnit::Test {
         row = selectExprRow("result",
             expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY-MM-DD HH:mm:SS")), 1);
         assertEq("2026-01-15 10:30:00", row.result);
+
+        # a format with a backslash before a quote: with standard_conforming_strings off, PostgreSQL reads a backslash
+        # in a string in single quotes as an escape character, so a literal with doubled quotes ended where the format
+        # did not (qore#6557); the format is given as an escape string, which is read the same way either way
+        on_exit ds.rollback();
+        foreach string scs in ("off", "on") {
+            ds.exec(sprintf("set local standard_conforming_strings = %s", scs));
+            row = selectExprRow("result", expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY\\' || 'x")), 1);
+            # to_char() gives the characters of the format that are not codes as they are
+            assertEq("2026\\' || 'x", row.result, scs);
+        }
     }
 
     testDpFuncSubstr() {
@@ -523,8 +553,11 @@ class PgsqlExpressionTest inherits QUnit::Test {
         assertEq("MM-DD", PgsqlTable::convertDateFormat("MM-DD"));
         # ensure already-converted HH24 is NOT double-replaced
         assertEq("HH24:MI:SS", PgsqlTable::convertDateFormat("HH24:MI:SS"));
-        # ensure single quotes are escaped for SQL safety
-        assertEq("YYYY''MM''DD", PgsqlTable::convertDateFormat("YYYY'MM'DD"));
+        # the format is converted without quoting; getDateFormatLiteral() gives it as an SQL string literal (qore#6557)
+        assertEq("YYYY'MM'DD", PgsqlTable::convertDateFormat("YYYY'MM'DD"));
+        assertEq("'YYYY''MM''DD'", PgsqlTable::getDateFormatLiteral("YYYY'MM'DD"));
+        assertEq("E'YYYY\\\\MM'", PgsqlTable::getDateFormatLiteral("YYYY\\MM"));
+        assertEq("E'YYYY\\\\'' or 1=1 -- '", PgsqlTable::getDateFormatLiteral("YYYY\\' or 1=1 -- "));
     }
 
     testExpressionMapKeys() {

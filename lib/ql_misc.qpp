@@ -2527,7 +2527,10 @@ list<string> get_feature_list() {
 list<auto> vl = hash_values(vl);
     @endcode
 
-    @note equivalent to <hash>::values()
+    @note
+    - equivalent to <hash>::values()
+    - the values are returned as they are stored in the hash: a reference is returned as the reference, whether the
+      hash has a declared value type or not
 
     @see <hash>::keys()
 */

@@ -2388,15 +2388,17 @@ class TypeTest inherits QUnit::Test {
                 assertEq(2, l[0]);
                 assertEq(3, l[1]);
 
-                l[3] = "50";
-                assertEq(50, l[3]);
+                # an element past the end that would leave a gap is refused (qore#6435)
+                assertThrows("RUNTIME-TYPE-ERROR", sub () { l[3] = "50"; });
+                l[2] = "50";
+                assertEq(50, l[2]);
 
                 l += "20";
-                assertEq(20, l[4]);
+                assertEq(20, l[3]);
 
                 l += ("5", 4.1);
-                assertEq(5, l[5]);
-                assertEq(4, l[6]);
+                assertEq(5, l[4]);
+                assertEq(4, l[5]);
             }
 
             {

@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - mutexes of two Files taken by threads that redirect descriptors with dup2()
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires ../../../../ExecModeHarness.qm
+%requires ../../../../TestInterpreter.qm
+
+%exec-class FileRedirectLockOrderTest
+
+#! Redirects between two Files in opposite directions at the same time do not deadlock (#6567)
+/** File::redirect() locked the File it was called on and then its argument, so <tt>a.redirect(b)</tt> and
+    <tt>b.redirect(a)</tt> took the two locks in opposite orders: run at the same time, each held one lock and waited
+    for the other.  It now locks the two Files in address order.
+
+    RedirectLockOrder.q runs the two redirects in two threads.  With a DEBUG build of the library, each redirect
+    waits with its first lock held until the other one has taken its first lock too (dbg_file_redirect_rendezvous()):
+    with the locks in call order, both arrive and then deadlock; in address order, the second redirect waits for the
+    first lock, so the first one arrives alone, waits until the timeout of the rendezvous and ends, and the second one
+    arrives then.  Without a DEBUG build, the redirects are only checked to end.
+*/
+class FileRedirectLockOrderTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("FileRedirectLockOrder", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("redirects in opposite directions", \redirectTest());
+        set_return_value(main());
+    }
+
+    redirectTest() {
+        string script = get_script_dir() + "/RedirectLockOrder.q";
+        # the redirects take one lock after the other: the second one arrives when the first one has ended
+        string expected = Option::HAVE_LIBRARY_DEBUGGING ? "RESULT:ok RENDEZVOUS:2 1" : "RESULT:ok";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                qore_bin, mode, script));
+            *list<*string> line = r.out =~ x/^(RESULT:.*)$/m;
+            assertEq(expected, line ? line[0] : r.out, mode);
+            assertEq(0, r.rc, mode + ": exit status");
+        }
+    }
+}

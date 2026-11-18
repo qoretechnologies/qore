@@ -432,7 +432,13 @@ void dsoptprobe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     ProbeNs.addBuiltinVariant(nullptr, "waitBlocked", f_waitBlocked, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
     ProbeNs.addBuiltinVariant(nullptr, "release", f_release, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
     ProbeNs.addBuiltinVariant(nullptr, "unblock", f_unblock, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo);
-    DBI.registerDriver("dsoptprobe", methods, DBI_CAP_TRANSACTION_MANAGEMENT);
+    // the driver connects to nothing, so sandboxed code can use it whatever the sandbox's network and filesystem
+    // policy (qore#5747)
+    DBI.registerDriver("dsoptprobe", methods, DBI_CAP_TRANSACTION_MANAGEMENT
+#ifdef DBI_CAP_LOCAL_ONLY
+        | DBI_CAP_LOCAL_ONLY
+#endif
+    );
 }
 
 void dsoptprobe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

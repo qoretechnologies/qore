@@ -38,9 +38,12 @@
 #include "qore/intern/ql_debug.h"
 
 #include <cerrno>
+#include <chrono>
 #include <climits>
+#include <condition_variable>
 #include <cstdio>
 #include <memory>
+#include <mutex>
 #include <string>
 
 #ifdef DEBUG
@@ -56,6 +59,50 @@ void qore_dbg_fd_wait(int fd) {
 void qore_dbg_file_read_ready(int fd) {
     if (qore_dbg_file_read_ready_hook_t hook = qore_dbg_file_read_ready_hook.load()) {
         hook(fd);
+    }
+}
+
+namespace {
+//! The rendezvous of qore_dbg_file_redirect_rendezvous()
+struct QoreDbgFileRedirectRendezvous {
+    std::mutex m;
+    std::condition_variable cv;
+    //! the calls still to arrive; 0 when no rendezvous is armed
+    int pending = 0;
+    int count = 0;
+    int timeout_ms = 0;
+    int arrived = 0;
+    int timed_out = 0;
+};
+
+// never destroyed: a thread can redirect a file while the process exits
+QoreDbgFileRedirectRendezvous* dbg_redirect_rendezvous = new QoreDbgFileRedirectRendezvous;
+}
+
+void qore_dbg_file_redirect_rendezvous(int count, int timeout_ms) {
+    std::lock_guard<std::mutex> l(dbg_redirect_rendezvous->m);
+    dbg_redirect_rendezvous->pending = dbg_redirect_rendezvous->count = count;
+    dbg_redirect_rendezvous->timeout_ms = timeout_ms;
+    dbg_redirect_rendezvous->arrived = dbg_redirect_rendezvous->timed_out = 0;
+}
+
+void qore_dbg_file_redirect_rendezvous_result(int& arrived, int& timed_out) {
+    std::lock_guard<std::mutex> l(dbg_redirect_rendezvous->m);
+    arrived = dbg_redirect_rendezvous->arrived;
+    timed_out = dbg_redirect_rendezvous->timed_out;
+}
+
+void qore_dbg_file_redirect_locked() {
+    std::unique_lock<std::mutex> l(dbg_redirect_rendezvous->m);
+    QoreDbgFileRedirectRendezvous& r = *dbg_redirect_rendezvous;
+    if (!r.pending) {
+        return;
+    }
+    --r.pending;
+    ++r.arrived;
+    r.cv.notify_all();
+    if (!r.cv.wait_for(l, std::chrono::milliseconds(r.timeout_ms), [&r] () { return r.arrived >= r.count; })) {
+        ++r.timed_out;
     }
 }
 #endif

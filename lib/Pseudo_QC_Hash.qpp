@@ -113,6 +113,8 @@ list<auto> l = h.values();
     - equivalent to hash_values()
     - this pseudo-method is also implemented in Qore::zzz8nothingzzz9, so it's safe to use where the value could be a hash or @ref nothing (ex: @ref hash_or_nothing_type "*hash")
     - a hash with a declared value type will have a plain untyped list returned; this will be fixed in a future version of %Qore
+    - the values are returned as they are stored in the hash: a reference is returned as the reference, whether the
+      hash has a declared value type or not
 
     @see <hash>::keys()
  */

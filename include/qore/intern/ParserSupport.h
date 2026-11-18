@@ -175,6 +175,10 @@ struct QoreParseState {
    //! newline gets one at its end, as the rules of the parse directives end with a newline (qore_scanner_read(),
    //! issue #2740)
    std::map<FILE*, int> file_line_first;
+   //! for each file included with %include whose scan has not ended, the end of the last token of the including file
+   //! (its last line and column), where the scan of the including file resumes: the location of a token starts at the
+   //! end of the last one, so the scan of an included file starts at its first line and column (issue #6561)
+   std::vector<std::pair<int, int>> include_resume_loc;
 };
 
 //! returns the description of a syntax error on a line that starts with % and \a name, which no parse directive's

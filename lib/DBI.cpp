@@ -79,6 +79,7 @@ struct dbi_cap_hash dbi_cap_list[] =
   { DBI_CAP_HAS_TYPED_SELECT,       "HasTypedSelect" },
   { DBI_CAP_HAS_COLUMNAR_SELECT,    "HasColumnarSelect" },
   { DBI_CAP_HAS_BULK_LOAD,          "HasBulkLoad" },
+  { DBI_CAP_LOCAL_ONLY,             "LocalOnly" },
 };
 
 #define NUM_DBI_CAPS (sizeof(dbi_cap_list) / sizeof(dbi_cap_hash))
@@ -265,6 +266,13 @@ void qore_dbi_method_list::add(int code, q_dbi_bulk_load_end_t method) {
     priv->l[code] = reinterpret_cast<void*>(method);
 }
 
+// covers the destinations of a connection
+void qore_dbi_method_list::add(int code, q_dbi_get_connect_targets_t method) {
+    assert(code == QDBI_METHOD_GET_CONNECT_TARGETS);
+    assert(priv->l.find(code) == priv->l.end());
+    priv->l[code] = reinterpret_cast<void*>(method);
+}
+
 void qore_dbi_method_list::add(int code, q_dbi_option_set_t method) {
     assert(code == QDBI_METHOD_OPT_SET);
     assert(priv->l.find(code) == priv->l.end());
@@ -387,6 +395,11 @@ qore_dbi_private::qore_dbi_private(const char* nme, const qore_dbi_mlist_private
             case QDBI_METHOD_BULK_LOAD_END:
                 assert(!f.bulk_load_end);
                 f.bulk_load_end = reinterpret_cast<q_dbi_bulk_load_end_t>((*i).second);
+                break;
+
+            case QDBI_METHOD_GET_CONNECT_TARGETS:
+                assert(!f.get_connect_targets);
+                f.get_connect_targets = reinterpret_cast<q_dbi_get_connect_targets_t>((*i).second);
                 break;
             case QDBI_METHOD_SELECT_ROW:
                 assert(!f.selectRow);
