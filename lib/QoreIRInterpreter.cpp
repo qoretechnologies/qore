@@ -13138,8 +13138,10 @@ dispatch_folded_step_host:
                         LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                         weak_ref_load = lvv && isWeakReferenceType(lvv->val.getType());
                     }
-                } else if (local_inst->auto_ref) {
-                    // FAST PATH: direct slot cache access (most common case)
+                } else if (local_inst->auto_ref || (local_inst->slot_id < locals_ir_only.size()
+                        && locals_ir_only[local_inst->slot_id])) {
+                    // An IR-only local has no runtime-stack value to borrow. Read it from its slot for
+                    // non-owning loads too, honoring strong and weak references before borrowing a plain value.
                     uint32_t sid = local_inst->slot_id;
                     bool is_ir_only_local = sid < locals_ir_only.size()
                         && locals_ir_only[sid];
@@ -13186,11 +13188,9 @@ dispatch_folded_step_host:
                             goto load_local_done;
                         }
                         if (cache_has_value) {
-                            if (local_inst->borrowed_local_load) {
-                                // Load pairs with a local mutation and has no
-                                // other consumers: borrow the slot-cache reference
-                                // so the builder node stays unique at the mutation
-                                // site (native code borrows via alloca loads)
+                            if (!local_inst->auto_ref || local_inst->borrowed_local_load) {
+                                // The consumer borrows this local until it mutates the value or the iterator
+                                // takes its own reference.
                                 out = cached_val;
                                 if ((local_inst->string_append_local_cow
                                         || local_inst->list_push_local_cow)
