@@ -1267,8 +1267,14 @@ private:
     // Result IDs produced by LoadLocal/LoadClosure on weak-assigned locals.
     // These loads return temporary strong refs that must be released at last
     // use; otherwise a loop condition like `while (weak)` keeps the referent
-    // alive until function exit in LLVM mode.
+    // alive until function exit in LLVM mode.  The receivers of calls
+    // (receiver_value_ids) are released at the end of their statement instead
     std::unordered_set<uint32_t> weak_load_result_ids;
+    // The values that are the receiver of a dot-eval call (a method call through an expression) or the called value
+    // of a call through a call reference or closure (see qore_ir_call_receiver_id()): they live until the end of the
+    // statement (DiscardTemps), as in the AST interpreter, also the value of a load of a weak-assigned local, which
+    // owns a reference when the local holds a reference or a value rather than a weak reference (qore#6559)
+    std::unordered_set<uint32_t> receiver_value_ids;
 
     // Allocas tracking active iterator pointers from IteratorCreate/IteratorCreateReverse.
     // On normal exit (IteratorNext done), the alloca is nulled out.
@@ -2724,14 +2730,6 @@ private:
     // weak-local load, drop the temporary strong reference immediately.
     void consumeValueUse(uint32_t value_id, llvm::Module& module,
             bool release_weak_load = true);
-
-    // A dot-eval call whose base is the strong reference that a load of a weak
-    // local took releases it at its last use; EH invoke lowerers create a
-    // terminator before lowerFunction's post-instruction cleanup can emit IR, so
-    // it is released at the call boundary.  Any other base is a temporary that
-    // lives until the end of the statement (DiscardTemps), as in the AST.
-    void releaseDotEvalBaseIfCurrentUseIsLast(const QoreIRInstruction* inst,
-            llvm::Module& module);
 
     // Releases the temporary arguments of a call that the call consumes - their last use, in the block that
     // defines them - last argument first, as the AST interpreter releases the parameters that took them over when
