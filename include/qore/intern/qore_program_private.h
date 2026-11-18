@@ -3755,6 +3755,10 @@ public:
         if (!internParsePending(xsink, exp_code.c_str(), label, orig_src, offset, false)) {
             internParseCommit(false);   // finalize parsing, back out or commit all changes
         } else {
+            // the Program had no code pending: what its namespaces have pending was added by the failed expression,
+            // such as a declaration after the expression in its code, which is a parse error (issue #6524); it is
+            // rolled back, so that a later parse does not find it and a later commit does not commit it
+            qore_root_ns_private::get(*RootNS)->parseRollback(xsink, true);
             parsing_in_progress = false;
         }
 

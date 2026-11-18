@@ -3667,6 +3667,12 @@ Var* qore_root_ns_private::parseCheckImplicitGlobalVarIntern(const QoreProgramLo
         assert(!tns->var_list.parseFindVar(vname.getIdentifier()));
         rv = tns->var_list.parseCreatePendingVar(loc, vname.getIdentifier(), typeInfo);
         varmap.update(rv->getName(), this, rv);
+        // an expression adds no code to its Program: an implicit global variable in it is a parse error, and the
+        // variable is removed when the expression's parse is rolled back (issue #6524)
+        if (qore_program_private::get(*getProgram())->expression_mode) {
+            parse_error(*loc, "global variable '%s' cannot be declared in the code of an expression", vname.ostr);
+            tns->pending_var_names.push_back(rv->getName());
+        }
     } else
         rv->checkAssignType(loc, typeInfo);
 
