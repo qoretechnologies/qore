@@ -13872,12 +13872,15 @@ string sql = table.getAlignSqlString(table2);
 
         @code{.py}
 # t is a AbstractTable/Table object
-# custom operator hash
-hash<auto> to_char = (
-"code" : string sub(string arg1, auto arg) {
-                return sprintf("to_char(%s, '%s')", arg1, arg);
-            },
-);
+# custom operator hash: the argument is a string that is given to the code as an SQL literal ("sqlvalue"), so the
+# code writes it as it is; a value from outside the program is never written into the SQL in quotes of its own
+hash<auto> to_char = {
+    "arg": Type::String,
+    "sqlvalue": True,
+    "code": string sub (string cve, string arg) {
+        return sprintf("to_char(%s, %s)", cve, arg);
+    },
+};
 # operator registration
 t.addCustomCopOperator("to_char", to_char);
 # example usage

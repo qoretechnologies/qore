@@ -1044,7 +1044,8 @@ auto v = c.name;
         /** @param opt this argument is ignored
          */
         string getDropSql(*hash opt) {
-            return sprintf("drop function %s", name);
+            # the name is an identifier (qore#6579)
+            return sprintf("drop function %s", mysql_get_sql_object_name(name));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -1057,7 +1058,9 @@ auto v = c.name;
             @param opt this argument is ignored
          */
         softlist getRenameSql(string new_name, *hash opt) {
-            return sprintf("alter function %s rename to %s", name, new_name);
+            # the names are identifiers (qore#6579)
+            return sprintf("alter function %s rename to %s", mysql_get_sql_object_name(name),
+                mysql_get_sql_identifier(new_name));
         }
     }
 

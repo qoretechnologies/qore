@@ -2298,6 +2298,9 @@
 
     - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
       where it returned its bytes up to the NUL byte and memory after them (issue #6604)
+    - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
+      views in the DDL of the PostgreSQL, Oracle, MySQL and SQL Server drivers are quoted as identifiers, as the names
+      of tables and columns are, and a PostgreSQL function argument list must be one list of types (issue #6579)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

@@ -2753,13 +2753,19 @@ list<auto> rows = source_table.selectRows({
     about the current SQL operation if an error occurs in the @ref sql_callback "sql callback" and can be specified as
     in the following example:
     @code{.py}
+# ds is the Datasource of the database
 code error_callback = sub (int ac, string type, string name, *string table, *string new_name, *string info,
         string sql, hash<ExceptionInfo> ex) {
-    if (ac == AC_Create && type == "materialized_view" && ex.arg.alterr == "OCI-01031") {
+    if (ac == AbstractDatabase::AC_Create && type == "materialized_view" && ex.arg.alterr == "OCI-01031") {
         # try to drop any table created to back the materialized view, ignoring ORA-00942 "table or view does not
-        # exist" errors but rethrowing all others; note that Oracle reports SQLCODE as the negative of the ORA number
-        ds.exec("begin execute immediate 'drop table " + name + "'; exception when others then "
-            "if sqlcode != -942 then raise; end if; end;");
+        # exist" errors but rethrowing all others; note that Oracle reports SQLCODE as the negative of the ORA number;
+        # the name is used only if it is a plain name, and it is in a string literal, in which each single quote is
+        # doubled; execRaw() takes no placeholders (the Oracle driver does this itself)
+        if (name !~ /^\w+(\.\w+)?$/) {
+            return;
+        }
+        ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when others "
+            "then if sqlcode != -942 then raise; end if; end;");
     }
 };
     @endcode
@@ -11012,7 +11018,9 @@ string sql = constraint.getDeferrabilitySql();
         /** @param opt drop options (if supported by the driver and object); in this generic base class method, this argument is ignored
          */
         string getDropSql(*hash<auto> opt) {
-            return sprintf("drop %s %s", type, name);
+            # a plain name only, as for the other objects that this class quotes no name of (qore#6579); a driver
+            # quotes the names of its objects
+            return sprintf("drop %s %s", type, AbstractSqlUtilBase::getPlainSqlName(name, self.className()));
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
