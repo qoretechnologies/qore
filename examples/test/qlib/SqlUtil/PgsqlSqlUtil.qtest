@@ -641,14 +641,16 @@ class PgsqlTest inherits SqlTestBase {
         # the measurement does not include, and does not grow with, the storage of other schemas, unlike the
         # size of the whole database
         ds.exec(sprintf("set search_path to %s", cur));
-        int before_db = db.getPhysicalSize();
         int before_other = db.getSchemaPhysicalSize(other);
         ds.exec(sprintf("insert into %s.items select g, repeat(md5(g::text), 100) from generate_series(1, 2000) g",
             other));
         map ds.exec(sprintf("create table %s.extra_%d (id bigint primary key, v text)", other, $1)), xrange(20);
         ds.commit();
         assertGt(before_other, db.getSchemaPhysicalSize(other), "the other schema grew");
-        assertGt(before_db, db.getPhysicalSize(), "the database grew");
+        # the size of the whole database includes the other schema; it is not compared with an earlier size, as
+        # other tests that share the database create and drop objects meanwhile
+        int other_size = db.getSchemaPhysicalSize(other);
+        assertTrue(db.getPhysicalSize() >= other_size + cur_size, "the database includes the other schema");
         assertEq(cur_size, db.getCurrentSchemaPhysicalSize(), "the current schema's size does not change");
         assertEq(db.getSchemaPhysicalSize(cur), db.getCurrentSchemaPhysicalSize());
         ds.rollback();
