@@ -241,6 +241,13 @@ hash<auto> desc = {
 
 
     @section sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - a date given in SQL (a default value, or the value of a column or update operator) is the ISO-8601 string that
+      the driver binds for a date; it was given as a timestamp literal, which SQLite does not have
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - implemented @ref select_option_recursive "recursive queries", which need SQLite 3.8.3 or later
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
@@ -2243,19 +2250,19 @@ string sql = pk.getTableConstraintSql();
                 case NT_NUMBER: return string(v);
 
                 # double any single quotes in strings
-                case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+                # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+                # invalid is refused
+                case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
                 case NT_NULL:
                 case NT_NOTHING: return "null";
 
                 case NT_BOOLEAN: return v ? "true" : "false";
 
-                case NT_DATE: {
-                    # Sqlite3 does not allow us to specify the UTC offset in the timestamp literal :(
-                    TimeZone tz = TimeZone::get();
-                    v = tz.date(v);
-                    return "timestamp " + v.format("'YYYY-MM-DDTHH:mm:SS.us'");
-                }
+                case NT_DATE:
+                    # issue #6586: SQLite has no timestamp literal; a date is given as the ISO-8601 string that the
+                    # sqlite3 driver binds for it
+                    return "'" + v.format("IF") + "'";
             }
         }
 

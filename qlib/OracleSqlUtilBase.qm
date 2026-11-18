@@ -392,6 +392,10 @@ hash schema = (
 /** @page ora_relnotes Release Notes
 
     @section oracle17 OracleSqlUtilBase v1.7
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - fixed a column declared with \c "default null", which was described with the default value \c null, so
       table alignment set it again every time
       (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
@@ -2235,7 +2239,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     #! Returns the SQL that sets or removes the comment of a view: Oracle comments on a view as on a table
     private softlist<string> getViewCommentSqlImpl(AbstractView view, *string comment, *string old_comment) {
         return sprintf("comment on table %s is %s", oracle_get_sql_object_name(view.name),
-            "'" + replace(comment ?? "", "'", "''") + "'");
+            AbstractSqlUtilBase::getSqlStringLiteral(comment ?? ""));
     }
 
     private OracleFunction makeFunctionImpl(string name, string src, *hash opts) {
@@ -2842,6 +2846,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
             # try to drop any table created to back the materialized view, ignoring ORA-00942
             # "table or view does not exist" errors but rethrowing all others
             # the name is in a string literal, where each single quote is doubled
+            AbstractSqlUtilBase::checkSqlStringValue(name);
             ds.execRaw("begin execute immediate 'drop table " + replace(name, "'", "''") + "'; exception when "
                 "others then if sqlcode != -942 then raise; end if; end;");
         }
@@ -5515,7 +5520,9 @@ group by p.index_name", schema.upr(), name.upr());
             case NT_INT: return v.toString();
 
             # double any single quotes in strings
-            case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+            # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+            # invalid is refused
+            case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
             case NT_NULL:
             case NT_NOTHING: return "null";

@@ -178,6 +178,48 @@ string sql = "select " + table.getSqlIdentifier("Order Date") + " from " + table
             "identifier quoting in SqlUtil", dsdesc, name, getDriverName());
     }
 
+    #! Checks that a string can be given as a value in an SQL string literal
+    /** @param v the string
+
+        @throw VALUE-ERROR the string's encoding is invalid, or it has a NUL character; such a string is refused
+        before any SQL is made with it
+
+        @since SqlUtil 3.11.0
+    */
+    static checkSqlStringValue(string v) {
+        try {
+            # the conversion refuses a string whose encoding is invalid; a conversion to the same encoding would not
+            # check it
+            string check = convert_encoding(v, v.encoding() == "UTF-8" ? "UTF-16BE" : "UTF-8");
+            remove check;
+        } catch (hash<ExceptionInfo> ex) {
+            throw "VALUE-ERROR", sprintf("a string given to an SQL string literal is not valid in its encoding (%s): "
+                "%s: %s", v.encoding(), ex.err, ex.desc);
+        }
+        # checked after the encoding, as a search in a string with an invalid encoding raises another error
+        if (v.find(chr(0)) >= 0) {
+            throw "VALUE-ERROR", "a string with a NUL character cannot be given in an SQL string literal";
+        }
+    }
+
+    #! Returns a standard SQL string literal of a string: in single quotes, with each single quote doubled
+    /** checkSqlStringValue() first refuses a string whose encoding is invalid, which no function that doubles the
+        quotes (neither a regular expression nor @ref Qore::replace() "replace()") processes reliably; the quotes are
+        then doubled with @ref Qore::replace() "replace()"
+
+        @param v the string
+
+        @return the SQL string literal
+
+        @throw VALUE-ERROR the string's encoding is invalid, or it has a NUL character
+
+        @since SqlUtil 3.11.0
+    */
+    static string getSqlStringLiteral(string v) {
+        AbstractSqlUtilBase::checkSqlStringValue(v);
+        return "'" + replace(v, "'", "''") + "'";
+    }
+
     #! checks that a name can be an identifier on any database
     /** @param name the name to check
         @param driver the name of the database driver for the exception message
