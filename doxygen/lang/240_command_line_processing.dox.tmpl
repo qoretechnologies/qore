@@ -125,6 +125,15 @@
     |<tt>--dump-symbols</tt>|Include an nm-like symbol table in dump output
     |<tt>--dump-sections</tt>|Include object and AOT section tables in dump output
 
+    \c qcc reports each parse error and warning of the code it compiles (of the parse or of its commit) on stderr, in
+    the form of other compilers:
+    @verbatim
+<file>:<line>[:<column>]: error|warning: <code>: <message>
+    @endverbatim
+    The column is 1-based, and is left out when it is not known; a diagnostic without a location starts with the file
+    name, if known, or \c qcc.  A message that lists more than one item (ex: the variants that a call could match) goes
+    on over the following lines.
+
     AOT compilation requires @ref modern "%modern" source semantics. Modern
     script and application sources should use the <tt>.qr</tt> extension; <tt>.q</tt> keeps
     legacy defaults unless the source contains an explicit \c %%modern directive.
