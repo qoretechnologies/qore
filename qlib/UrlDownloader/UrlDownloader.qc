@@ -663,7 +663,12 @@ public class UrlDownloader {
         if (!exists info.username && !exists info.password) {
             return url;
         }
-        return regex_subst(url, "^([^:]+://)[^@/]*@", "$1");
+        # a URL that is not valid in its encoding cannot be processed; it is not given, as it can hold credentials (qore#6553)
+        try {
+            return regex_subst(url, "^([^:]+://)[^@/]*@", "$1");
+        } catch () {
+            return sprintf("<URL of %d bytes not valid in its encoding>", url.size());
+        }
     }
 }
 

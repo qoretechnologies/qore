@@ -491,6 +491,10 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
 
     std::vector<std::vector<size_t>> preds(ir_func.blocks.size());
     std::vector<std::vector<size_t>> succs(ir_func.blocks.size());
+    // the block of the step event of each block that a debugger's flow request enters
+    std::unordered_map<size_t, size_t> flow_source;
+    // the assigned set at the step event of the flow request that enters each such block
+    std::unordered_map<size_t, std::unordered_set<const void*>> flow_in;
     for (size_t i = 0; i < ir_func.blocks.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "IR native local successor analysis")) {
             return incomplete();
@@ -507,6 +511,16 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
         if (successor_cancelled) {
             return incomplete();
         }
+        // the paths of the debugger's flow requests at the block's step events, which leave it at their events
+        // (#6201): the block of a path has the block as its only predecessor, and the assigned set at the event
+        qore_ir_visit_debug_flow_targets(*ir_func.blocks[i], [&](size_t, QoreIRBasicBlock* target) {
+            auto it = block_index.find(target);
+            if (it != block_index.end()) {
+                preds[it->second].push_back(i);
+                succs[i].push_back(it->second);
+                flow_source.emplace(it->second, i);
+            }
+        });
     }
 
     std::unordered_map<uint32_t, const void*> slot_to_key;
@@ -569,6 +583,8 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
             std::unordered_set<const void*>& assigned,
             std::unordered_set<const void*>* unsafe) -> bool {
         size_t inst_count = 0;
+        // the paths of the debugger's flow requests leave the block before an instruction
+        QoreIRDebugFlowCursor flow_cursor;
         for (const auto& inst_ptr : ir_func.blocks[block_id]->instructions) {
             const QoreIRInstruction* inst = inst_ptr.get();
             if (!inst) {
@@ -577,6 +593,14 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
             if (++inst_count % 100 == 0
                     && qore_check_cancel(nullptr, "IR native local assigned-state transfer")) {
                 return false;
+            }
+            if (!flow_source.empty()) {
+                flow_cursor.visit(inst, [&](QoreIRBasicBlock* target) {
+                        auto it = target ? block_index.find(target) : block_index.end();
+                        if (it != block_index.end()) {
+                            flow_in[it->second] = assigned;
+                        }
+                    });
             }
 
             if (inst->opcode == QoreIROpcode::LoadLocal) {
@@ -692,9 +716,14 @@ QoreIRLocalAssignment qore_ir_analyze_local_assignment(
             }
             size_t i = order[oi];
             bool intersect_cancelled = false;
+            auto flow_it = flow_source.find(i);
             std::unordered_set<const void*> assigned = i == 0
-                ? initially_assigned : qore_ir_intersect_assigned(out_sets, visited, assigned_universe,
-                    preds[i], &intersect_cancelled);
+                ? initially_assigned
+                // the block that a debugger's flow request enters has the set at the request's step event
+                : flow_it != flow_source.end()
+                    ? (visited[flow_it->second] ? flow_in[i] : assigned_universe)
+                    : qore_ir_intersect_assigned(out_sets, visited, assigned_universe,
+                        preds[i], &intersect_cancelled);
             if (intersect_cancelled) {
                 return incomplete();
             }

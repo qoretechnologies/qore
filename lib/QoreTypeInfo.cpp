@@ -1355,11 +1355,11 @@ struct QoreTypeOwnerReleaseQueue {
 //! Marks the queue of the thread active while it is drained, also if a release throws
 class QoreTypeOwnerReleaseQueueHelper {
 public:
-    DLLLOCAL QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
+    QoreTypeOwnerReleaseQueueHelper(QoreTypeOwnerReleaseQueue& q) : q(q) {
         q.active = true;
     }
 
-    DLLLOCAL ~QoreTypeOwnerReleaseQueueHelper() {
+    ~QoreTypeOwnerReleaseQueueHelper() {
         q.active = false;
     }
 
@@ -1495,6 +1495,9 @@ public:
             }
         } else if (const QoreUnionTypeInfo* uti = dynamic_cast<const QoreUnionTypeInfo*>(ti)) {
             for (const QoreOrphanablePtr<const QoreTypeInfo>& m : uti->getOrphanableMemberTypes()) {
+                orphanType(m);
+            }
+            for (const QoreOrphanablePtr<const QoreTypeInfo>& m : uti->getOrphanableExactMembers()) {
                 orphanType(m);
             }
         } else if (const QoreComplexCodeTypeInfo* cti = dynamic_cast<const QoreComplexCodeTypeInfo*>(ti)) {
@@ -3757,45 +3760,9 @@ static QoreString build_union_name(const type_vec_t& member_types, bool or_nothi
     return name;
 }
 
-const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
-    // Handle edge cases
-    if (member_types.empty()) {
-        return autoTypeInfo;  // empty union accepts anything
-    }
-
-    // Normalize the key for consistent cache lookup
-    type_vec_t key = normalize_union_key(member_types);
-
-    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
-    // that writes the union without the duplicates reads it back (qore#5858)
-    if (key.size() == 1) {
-        const QoreTypeInfo* ti = key[0];
-        if (or_nothing) {
-            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
-            return orn ? orn : ti;
-        }
-        return ti;
-    }
-
-    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
-    bool has_nothing = false;
-    for (const QoreTypeInfo* ti : key) {
-        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
-            has_nothing = true;
-            break;
-        }
-    }
-
-    // Use appropriate cache
-    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
-
-    AutoLocker al(ctl);
-
-    union_map_t::iterator i = cache.find(key);
-    if (i != cache.end()) {
-        return i->second;
-    }
-
+//! makes a union type of the members given (see qore_get_union_type())
+static QoreUnionTypeInfo* qore_make_union_type(const type_vec_t& key, bool or_nothing, bool has_nothing,
+        const type_vec_t& value_types) {
     // Build accept and return vectors from all member types
     q_accept_vec_t accept_vec;
     q_return_vec_t return_vec;
@@ -3849,9 +3816,66 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Create the union type
     QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name, key,
         or_nothing || has_nothing);
-    noteDerivedTypeKeys(nullptr, key);
-    cache[key] = ti;
+    ti->initExactMembers(value_types);
     return ti;
+}
+
+const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_nothing) {
+    // Handle edge cases
+    if (member_types.empty()) {
+        return autoTypeInfo;  // empty union accepts anything
+    }
+
+    // Normalize the key for consistent cache lookup
+    type_vec_t key = normalize_union_key(member_types);
+
+    // a union of one type, also after its duplicates are removed (ex: union<int, int>), is that type, as an AOT image
+    // that writes the union without the duplicates reads it back (qore#5858)
+    if (key.size() == 1) {
+        const QoreTypeInfo* ti = key[0];
+        if (or_nothing) {
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
+            return orn ? orn : ti;
+        }
+        return ti;
+    }
+
+    // Check if any member already accepts NOTHING, if so, or_nothing is already covered
+    bool has_nothing = false;
+    for (const QoreTypeInfo* ti : key) {
+        if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+            has_nothing = true;
+            break;
+        }
+    }
+
+    // Use appropriate cache
+    union_map_t& cache = (or_nothing && !has_nothing) ? union_on_map : union_map;
+
+    // the value types of the members, which a value of the union is accepted as (qore#6407), are taken outside the
+    // lock, as get_value_type() takes it to make a type, and only for a union that is not made yet (a generic call
+    // looks the union up for each call); the union is then looked up again, as another thread can have made it
+    type_vec_t value_types;
+    while (true) {
+        {
+            AutoLocker al(ctl);
+            union_map_t::iterator i = cache.find(key);
+            if (i != cache.end()) {
+                return i->second;
+            }
+            if (!value_types.empty()) {
+                QoreUnionTypeInfo* ti = qore_make_union_type(key, or_nothing, has_nothing, value_types);
+                noteDerivedTypeKeys(nullptr, key);
+                cache[key] = ti;
+                return ti;
+            }
+        }
+        value_types.reserve(key.size());
+        for (const QoreTypeInfo* ti : key) {
+            // a union member (also an or-nothing union, whose value type is not a union) gives its exact members
+            value_types.push_back(dynamic_cast<const QoreUnionTypeInfo*>(ti) ? ti : get_value_type(ti));
+        }
+    }
 }
 
 const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types) {
@@ -4637,6 +4661,89 @@ const QoreComplexCodeTypeInfo* QoreTypeInfo::getComplexCodeType(const QoreTypeIn
     }
     // Check if the type is a QoreComplexCodeTypeInfo by attempting a dynamic_cast
     return dynamic_cast<const QoreComplexCodeTypeInfo*>(ti);
+}
+
+bool QoreTypeInfo::unionAcceptsExactlyImpl(const QoreValue& n) const {
+    // only a union sets the mask
+    return static_cast<const QoreUnionTypeInfo*>(this)->hasExactMember(n);
+}
+
+//! returns true if a member type keeps a value of the scalar base type \a t as it is (qore#6407)
+/** The plain type (ex: int), a soft type of the base type (ex: softint) and a type of the base type that converts
+    other values (ex: timeout) accept a value of the base type without converting it; a date type with a subtype does
+    not keep a date of the other subtype
+*/
+static bool qore_union_member_keeps_scalar(const QoreTypeInfo* vt, qore_type_t t) {
+    switch (t) {
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_BOOLEAN:
+        case NT_BINARY:
+            break;
+        case NT_DATE:
+            if (QoreTypeInfo::getDateSubtype(vt)) {
+                return false;
+            }
+            break;
+        default:
+            return false;
+    }
+    for (const QoreAcceptSpec& a : vt->getAcceptSpecs()) {
+        if (!a.map && a.spec.isRuntimeBaseType(t)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void QoreUnionTypeInfo::initExactMembers(const type_vec_t& value_types) {
+    for (const QoreTypeInfo* vt : value_types) {
+        if (!hasType(vt) || vt == autoTypeInfo || vt == autoNoNarrowTypeInfo || vt == anyTypeInfo) {
+            continue;
+        }
+        // a member that is a union (ex: a typedef of a union) gives its own exact members, so that the result does
+        // not depend on where the nested union is in the union
+        if (const QoreUnionTypeInfo* nested = dynamic_cast<const QoreUnionTypeInfo*>(vt)) {
+            exact_members.insert(exact_members.end(), nested->exact_members.begin(), nested->exact_members.end());
+            union_exact_mask |= nested->union_exact_mask;
+            union_scalar_mask |= nested->union_scalar_mask;
+            continue;
+        }
+        if (vt->return_vec.size() != 1) {
+            continue;
+        }
+        // an enum value is kept by an enum type with qore_type_info_has_enum_spec_for() (qore#6277)
+        if (vt->return_vec[0].spec.getEnum()) {
+            continue;
+        }
+        qore_type_t t = vt->return_vec[0].spec.getType();
+        if (t < 0 || t >= 64) {
+            continue;
+        }
+        exact_members.push_back(vt);
+        union_exact_mask |= (1ull << t);
+        if (qore_union_member_keeps_scalar(vt, t)) {
+            union_scalar_mask |= (1ull << t);
+        }
+    }
+}
+
+bool QoreUnionTypeInfo::hasExactMember(const QoreValue& n) const {
+    // an enum value is kept by an enum type of the union with qore_type_info_has_enum_spec_for() (qore#6277)
+    if (n.isEnum()) {
+        return false;
+    }
+    const QoreTypeInfo* vt = n.getFullTypeInfo();
+    for (const QoreTypeInfo* m : orphanable_type_vec_view_t(exact_members)) {
+        // a list or hash member with no element type keeps any list or hash as it is
+        if (m == vt || ((m == autoHashTypeInfo || m == hashTypeInfo) && n.getType() == NT_HASH)
+                || ((m == autoListTypeInfo || m == listTypeInfo) && n.getType() == NT_LIST)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 const QoreUnionTypeInfo* QoreTypeInfo::getUnionType(const QoreTypeInfo* ti) {
@@ -5603,6 +5710,10 @@ static bool qore_type_info_has_enum_spec_for(const QoreTypeInfo& typeInfo, const
     return false;
 }
 
+bool QoreTypeInfo::unionHasEnumTypeFor(const QoreTypeInfo* ti, const QoreValue& n) {
+    return n.isEnum() && getUnionType(ti) && qore_type_info_has_enum_spec_for(*ti, n);
+}
+
 template <typename FilterPolicy>
 bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const QoreAcceptSpec& accept,
         const char* arg_type, bool obj, int param_num, const char* param_name, QoreValue& n,
@@ -5700,6 +5811,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                     ok = true;
                     break;
                 }
+                // a union with a member of the hash's own type keeps it as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n, NT_HASH)) {
+                    return true;
+                }
                 QoreHashNode* h = n.get<QoreHashNode>();
                 bool err = false;
                 ok = acceptInputComplexHashImpl(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, h,
@@ -5728,6 +5843,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 if (is_auto_vti(uTi())) {
                     ok = true;
                     break;
+                }
+                // a union with a member of the list's own type keeps it as it is (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n, NT_LIST)) {
+                    return true;
                 }
                 QoreListNode* l = n.get<QoreListNode>();
                 bool err = false;
@@ -5759,6 +5878,11 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
                 if (n.isEnum() && typeInfo.getAcceptSpecs().size() > 1
                         && qore_type_info_has_enum_spec_for(typeInfo, n)) {
                     break;
+                }
+                // a union with a member of the value's own type keeps it as it is, which a soft list would wrap in a
+                // list (qore#6407)
+                if (typeInfo.unionAcceptsExactly(n, n.getType())) {
+                    return true;
                 }
                 // see if value matches
                 if (policy.value(uTi(), n, true) > 0) {
@@ -5930,6 +6054,10 @@ bool QoreTypeSpec::acceptInputImpl(ExceptionSink* xsink, const QoreTypeInfo& typ
     if (ok) {
         assert(!priv_error);
         if (accept.map) {
+            // a union with a member of the value's own type keeps the value as it is (qore#6407)
+            if (typeInfo.unionAcceptsExactly(n, typespec == QTS_TYPE && u.t != NT_ALL ? u.t : n.getType())) {
+                return true;
+            }
             policy.map(accept, n, xsink);
             if (xsink && *xsink) {
                 xsink->appendLastDescription(" (while converting types for type '%s')",

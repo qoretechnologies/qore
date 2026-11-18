@@ -195,7 +195,7 @@ class ArtifactChecksTest(unittest.TestCase):
             return data + b"\0" * (-len(data) % 4)
 
         # every record version that the build writes or wrote is accepted, the current one included
-        self.assertEqual(3, qami.CURRENT_VERSION)
+        self.assertEqual(4, qami.CURRENT_VERSION)
         for version in qami.VERSIONS:
             with self.subTest(version=version):
                 rec = record(version=version)

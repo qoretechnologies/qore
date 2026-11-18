@@ -1932,8 +1932,12 @@ WebSocketClient ws(\event(), {
 
     #! Returns a "safe" URL, without any password info
     string getSafeUrl() {
-        # Mask the password in the URL (user:password@host → user:***@host)
-        return regex_subst(url, "(://[^:/@]+:)[^@]+(\\@)", "$1***$2");
+        # Mask the password in the URL (user:password@host → user:***@host); a URL that is not valid in its encoding cannot be processed; it is not given, as it can hold credentials (qore#6553)
+        try {
+            return regex_subst(url, "(://[^:/@]+:)[^@]+(\\@)", "$1***$2");
+        } catch () {
+            return sprintf("<URL of %d bytes not valid in its encoding>", url.size());
+        }
     }
 
     #! returns the unique connection ID

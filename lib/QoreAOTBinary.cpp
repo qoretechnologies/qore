@@ -780,6 +780,26 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
         }
         moduleInfoPut32(payload, i.flags);
     }
+    // the declared domains (version 4): a u64 as two u32, low word first
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains)));
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains) >> 32));
+    // the dependencies required only after the header (version 4)
+    if (!put_list(info.post_header_dependencies, "dependency required after the module header")) {
+        return false;
+    }
+    // the domains that the module's code restricts (version 4): a u64 as two u32, low word first
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains)));
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains) >> 32));
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
@@ -914,6 +934,32 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
                 static_cast<int64>(static_cast<uint64_t>(w[2]) | (static_cast<uint64_t>(w[3]) << 32)))
                 & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions::FREE_OPTIONS
                 & ~QoreParseOptions(PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG), flags);
+        }
+    }
+    {
+        uint32_t lo = 0, hi = 0;
+        if (!get32(lo) || !get32(hi)) {
+            return fail(moduleInfoDamaged("the record has no declared domains"));
+        }
+        info.declared_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+        // only functional domains: a damaged record cannot relieve another restriction of a dependency
+        if (info.declared_domains & ~static_cast<int64>(QDOM_ALL)) {
+            return fail(moduleInfoDamaged("the record declares unknown functional domain bits"));
+        }
+    }
+    if (!get_list(info.post_header_dependencies)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid list of the dependencies "
+            "required after the module header") : cancel_error);
+    }
+    {
+        uint32_t lo = 0, hi = 0;
+        if (!get32(lo) || !get32(hi)) {
+            return fail(moduleInfoDamaged("the record has no restricted domains"));
+        }
+        info.restricted_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+        // only functional domains, as qcc writes them
+        if (info.restricted_domains & ~static_cast<int64>(QDOM_ALL)) {
+            return fail(moduleInfoDamaged("the record restricts unknown functional domain bits"));
         }
     }
     if (pos != size) {
@@ -14820,6 +14866,13 @@ static bool serializeCallRelocations(QoreAOTBinaryWriter& writer,
     return true;
 }
 
+//! Returns true if QORE_AOT_DEBUG_IR_DIGEST is set: the compiler prints the digest of the debug IR of each function
+static bool aotDebugIRDigestRequested() {
+    static const bool requested = q_env_is_set("QORE_AOT_DEBUG_IR_DIGEST");
+    return requested;
+}
+
+
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const AOTConstantReverseMap* const_reverse_map, std::string& error, QoreProgram* pgm) {
     struct ValueTypeProgramScope {
@@ -15214,6 +15267,19 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
             uint32_t payload_offset = writer.position() - debug_section_start;
             uint32_t payload_start = writer.position();
+            // the positions of the string references of the payload for its digest (see aotDebugIRDigestRequested())
+            std::vector<uint32_t> payload_string_refs;
+            std::vector<uint32_t>* string_refs = aotDebugIRDigestRequested() ? &payload_string_refs : nullptr;
+            struct StringRefTracking {
+                QoreAOTBinaryWriter& writer;
+                DLLLOCAL StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
+                        : writer(writer) {
+                    writer.string_ref_positions = positions;
+                }
+                DLLLOCAL ~StringRefTracking() {
+                    writer.string_ref_positions = nullptr;
+                }
+            } string_ref_tracking(writer, string_refs);
             const auto& parent_locals = func.slot_ids.locals;
             const auto& parent_globals = func.slot_ids.globals;
             auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
@@ -15224,6 +15290,18 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             // debug IR is serialized against the function's own complete slot table
             QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, nullptr);
             qoreAOTClearExprSerializationError();
+#ifndef NDEBUG
+            // the debug IR is that of the function as it was before it was outlined (AOTFunctionOutliner::undo()): it
+            // has no call of an outlined helper and no return of one, and its paths of the debugger's flow requests
+            // are those of the function (#6201)
+            for (const auto& block : func.debug_ir->blocks) {
+                for (const auto& inst : block->instructions) {
+                    assert(inst->opcode != QoreIROpcode::CallAOTHelper);
+                    assert(!qore_ir_inst_cast<const QoreIRReturnInstruction*>(inst.get())
+                        || !static_cast<const QoreIRReturnInstruction*>(inst.get())->outline_signal);
+                }
+            }
+#endif
             bool debug_ir_ok = serializeIRFunction(writer, *func.debug_ir, writeExpr);
             std::string expr_error;
             bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
@@ -15241,6 +15319,35 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     error += ": serializeIRFunction returned false without a nested expression diagnostic";
                 }
                 return false;
+            }
+            // the digest of the serialized debug IR of each function, for the tests that compare it (#6201): of its
+            // bytes, with the strings of its string references for their offsets in the pool, which depend on the
+            // strings written before
+            if (string_refs) {
+                const std::vector<uint8_t>& buf = writer.getBuffer();
+                uint64_t digest = 14695981039346656037ull;
+                auto add = [&digest](uint8_t b) {
+                    digest = (digest ^ b) * 1099511628211ull;
+                };
+                size_t ref = 0;
+                for (uint32_t b = payload_start; b < writer.position(); ++b) {
+                    if (ref < string_refs->size() && (*string_refs)[ref] == b && b + 4 <= writer.position()) {
+                        uint32_t offset = buf[b] | (buf[b + 1] << 8) | (buf[b + 2] << 16)
+                            | (static_cast<uint32_t>(buf[b + 3]) << 24);
+                        const char* str = writer.getPoolString(offset);
+                        for (const char* p = str ? str : ""; *p; ++p) {
+                            add(static_cast<uint8_t>(*p));
+                        }
+                        add(0);
+                        ++ref;
+                        b += 3;
+                        continue;
+                    }
+                    add(buf[b]);
+                }
+                fprintf(stderr, "AOT-DEBUG-IR: %s %u %016llx\n", func.name.c_str(), writer.position() - payload_start,
+                    static_cast<unsigned long long>(digest));
+                string_refs->clear();
             }
             writer.patchU32(debug_ir_patches[i].offset_pos, payload_offset);
             writer.patchU32(debug_ir_patches[i].size_pos, writer.position() - payload_start);
@@ -16080,9 +16187,10 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     // 5. Serialize blocks
     for (auto& block : func.blocks) {
         writer.writeStringRef(block->name.c_str());
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see deserializeIRFunction())
         writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
-            | (static_cast<uint8_t>(block->loop_cancel) << 1)));
+            | (static_cast<uint8_t>(block->loop_cancel) << 1) | (block->debug_flow ? 0x10 : 0)));
         // a PushTempMarkPair is written as the two PushTempMark instructions that it stands for (qore#6444)
         size_t inst_count = block->instructions.size();
         for (const auto& inst_ptr : block->instructions) {
@@ -22531,21 +22639,24 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     return true;
 }
 
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header) {
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header,
+        bool trusted_only) {
     if (zone.empty()) {
         return;
     }
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::TIME_ZONE);
     writer.writeStringRef(zone.c_str());
-    // 1 if the directive follows the header of a user module (qore#6270)
-    writer.writeU8(after_module_header ? 1 : 0);
+    // flags: 1 if the directive follows the header of a module (qore#6270), 2 if it applies only to a load of the
+    // module as library code (qore#6352)
+    writer.writeU8((after_module_header ? 1 : 0) | (trusted_only ? 2 : 0));
     writer.endSection(sec_idx);
 }
 
 bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
-        std::string& error) {
+        bool& trusted_only, std::string& error) {
     zone.clear();
     after_module_header = false;
+    trusted_only = false;
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TIME_ZONE);
     if (!sec) {
         return true;
@@ -22561,7 +22672,13 @@ bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& af
         return false;
     }
     zone = z;
-    after_module_header = QoreAOTBinaryReader::readU8(ptr) != 0;
+    uint8_t flags = QoreAOTBinaryReader::readU8(ptr);
+    if (flags & ~3u) {
+        error = "invalid TIME_ZONE section: unknown flags";
+        return false;
+    }
+    after_module_header = flags & 1;
+    trusted_only = flags & 2;
     return true;
 }
 

@@ -569,6 +569,18 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 3) has the restrictions that its
 //!        code gives the modules it requires, each with QMDR_* flags, which the loader applies before the module's
 //!        initialization (qore#6406, qore#6386)
+//! v45 (batch AF; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 4) has the functional domains
+//!        that the module declares in its header, the dependencies that it requires only after its header and the
+//!        functional domains that its own code restricts, with which the module loader removes the declared domains
+//!        from the restrictions that those dependencies inherit when the module is loaded as library code (qore#6351)
+//!      - the flags byte of the TIME_ZONE section has bit 2 set for a directive that applies only to a load of the
+//!        module as library code: one after the header of a module that declares the locale control domain, which
+//!        the module's own restriction disallowed when it was compiled (qore#6352)
+//! v46: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
+//!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
+//!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
+//!      v9-v45 image has none: a request at a step event of its code returns from the function.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -646,10 +658,19 @@ constexpr uint32_t QORE_AOT_METADATA_CHECKSUM_SIZE = 8;
     qore#6386)
 */
 constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
+//! First format version whose modules have the module metadata record with the declared domains (see v45 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION, 4 from this format) gives
+    its readers its layout; the format version of the artifacts that carry it changes with it, so that the format that
+    a module reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has; a
+    record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
+*/
+constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
+constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DEBUG_FLOW_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -829,8 +850,9 @@ enum class QoreAOTSectionType : uint16_t {
     UNRUN_TOP_LEVEL_CODE = 31,  //!< Optional top-level statements of a script fragment's sources that never run
     FUNCTIONAL_DOMAIN    = 32,  //!< The functional domains the code uses (u64 lo + u64 hi); absent if none
     MODULE_DOMAINS       = 33,  //!< The functional domains a user module declares in its header (u64); absent if none
-    TIME_ZONE            = 34,  //!< The time zone set with `%set-time-zone` (StringRef, then u8: 1 if the directive
-                                //!< follows the header of a module); absent if none (qore#6270)
+    TIME_ZONE            = 34,  //!< The time zone set with `%set-time-zone` (StringRef, then u8 flags: 1 if the
+                                //!< directive follows the header of a module, 2 if it applies only to a load of the
+                                //!< module as library code); absent if none (qore#6270, qore#6352)
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -1556,19 +1578,40 @@ public:
     //! Write a source-path reference; ordinary string values must use writeStringRef().
     /** @param path physical source path */
     void writeSourcePath(const char* path) {
+        noteStringRef();
         writeU32(addSourcePath(path));
     }
 
     //! Write a string reference (adds to pool, writes offset)
     void writeStringRef(const char* str) {
         uint32_t offset = strings.add(str);
+        noteStringRef();
         writeU32(offset);
     }
 
     //! Write a string reference with explicit length
     void writeStringRef(const char* str, size_t len) {
         uint32_t offset = strings.add(str, len);
+        noteStringRef();
         writeU32(offset);
+    }
+
+    //! The positions of the string references written while set (see noteStringRef()), or nullptr
+    /** The offset of a string in the pool depends on the strings written before it, so a digest of a payload takes
+        the strings of its references instead (QORE_AOT_DEBUG_IR_DIGEST, #6201)
+    */
+    std::vector<uint32_t>* string_ref_positions = nullptr;
+
+    //! Records the position of the string reference written next, if string_ref_positions is set
+    void noteStringRef() {
+        if (string_ref_positions) {
+            string_ref_positions->push_back(position());
+        }
+    }
+
+    //! Returns the string at an offset of the pool, or nullptr
+    const char* getPoolString(uint32_t offset) const {
+        return strings.get(offset);
     }
 
     //! Write a QoreValue (serializes constant value)
@@ -2483,6 +2526,27 @@ struct QoreModuleParseOptionMask;
 //! applied; see QoreModuleParseOptionMask
 /** \a p may be nullptr; \a exclude names the options the module does not inherit
 */
+//! Names the functional domains that the module metadata record of an AOT module declares while the module's
+//! initialization runs in this thread (qore#6351)
+/** The module loader relieves the dependencies of a module loaded as library code with the domains of its record
+    (QoreAOTModuleFileInfo::declared_domains), which it reads before the module is mapped; the initialization of the
+    module named \a module refuses the module if its MODULE_DOMAINS section declares other domains: the record is
+    damaged.  Only the first initialization of that module in the scope checks them.
+*/
+class QoreAOTModuleExpectedDomainsHelper {
+public:
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains);
+    DLLLOCAL ~QoreAOTModuleExpectedDomainsHelper();
+
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper& operator=(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+
+private:
+    std::string old_module;
+    int64 old_domains;
+    bool old_set;
+};
+
 DLLLOCAL QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
         const QoreModuleParseOptionMask& mask);
 
@@ -2506,12 +2570,13 @@ bool readModuleDomains(const QoreAOTBinaryReader& reader, int64& dom, std::strin
 //! offset) into the TIME_ZONE section, with \a after_module_header true if the directive follows the header of a
 //! module, whose \c domains can have removed the restriction the loader checks it against; nothing is written if
 //! \a zone is empty (qore#6270)
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header);
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header,
+        bool trusted_only = false);
 
 //! Read the time zone recorded in the TIME_ZONE section and whether its directive follows the header of a module;
 //! an empty zone if there is no such section
 bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
-        std::string& error);
+        bool& trusted_only, std::string& error);
 
 //! Serialize producer/build metadata into the BUILD_INFO binary section.
 /** Wire format: u32 count, then count x (StringRef key, StringRef value).
@@ -3176,7 +3241,11 @@ DLLLOCAL FILE* qore_open_regular_file(const char* path);
     - uint32 magic ('QAMI'), uint32 version, uint32 payload_size (the bytes that follow)
     - the payload: the module name, then uint32 num_dependencies and the dependencies, then uint32 num_optional and
       the optional modules, each string as uint32 length followed by its bytes; every string is nonempty and
-      contains no NUL
+      contains no NUL; then the lists \c compiled_with, \c prepended_module_paths and \c appended_module_paths
+      (version 2), then (version 3) uint32 num_dependency_restrictions and for each the module name and its
+      restrictions as four uint32 (low 64 bits then high 64 bits, each low word first), then its uint32 QMDR_* flags
+      (any other bit makes the record invalid); then (version 4) uint64 declared_domains (two uint32, low word
+      first), the list \c post_header_dependencies and uint64 restricted_domains (likewise)
 
     The loader reads the metadata before it maps the qmod: it loads the dependencies first so the qmod can be
     mapped once with RTLD_NOW, and it checks the optional modules that were unavailable when the module was compiled
@@ -3202,7 +3271,7 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> prepended_module_paths;
     //! the module's own %append-module-path directories, in the order its initialization searches them
     std::vector<std::string> appended_module_paths;
-    //! the options that the module's directives gave the modules that they loaded, in directive order
+    //! the options that the module's directives gave the modules that they loaded, in directive order (version 3)
     /** The parse options that the module's Program gave each module that a directive loaded, which it inherits from
         it (not those that relieve restrictions); the loader loads the module's dependencies with them, as the module's
         source would (qore#6406; see qore_program_private::parse_module_restrictions); each entry has QMDR_* flags: the
@@ -3211,6 +3280,27 @@ struct QoreAOTModuleFileInfo {
         initialization with the restrictions of the loading code (qore#6386)
     */
     std::vector<QoreModuleDependencyRestriction> dependency_restrictions;
+    //! the functional domains that the module declares in its header (\c domains), as in the MODULE_DOMAINS
+    //! section of the image (version 4)
+    /** The module loader loads the module's dependencies before the module's initialization (see
+        QoreModuleManager::loadBinaryModuleFromPath()); for a module loaded as library code, they inherit the
+        restrictions of the Program loading the module without these domains, as the dependencies of the module's
+        source do, which its Program loads after its header has removed them (qore#6351)
+    */
+    int64 declared_domains = 0;
+    //! the dependencies that the module's parse requested only after its header (version 4), which inherit the
+    //! restrictions without the declared domains, as those of its source do, which its Program loads after its header
+    //! has removed them; the others (requested before the header, or not requested by the parse: in code that a
+    //! conditional excludes) inherit them with the domains
+    /** Never a module that dependency_restrictions lists with QMDR_BEFORE_HEADER, and empty if an entry of
+        dependency_restrictions has QMDR_INEXACT; the loader enforces both for any record (qore#6386)
+    */
+    std::vector<std::string> post_header_dependencies;
+    //! the functional domains that the module's code restricts with its own parse directives (version 4): the
+    //! dependencies do not inherit a relief of them from a module loading this one (qore#6351)
+    /** QDOM_ALL if an entry of dependency_restrictions has QMDR_INEXACT (qore#6386)
+    */
+    int64 restricted_domains = 0;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
@@ -3218,9 +3308,13 @@ static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
 /** version 2 added the names of the modules the module was compiled with and its own module path directories;
     version 3 the restrictions that its code gives the modules it requires (qore#6406), each with QMDR_* flags
-    (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION)
+    (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION); version 4 the
+    functional domains that the module declares in its header, the dependencies it requires only after its header and
+    the functional domains its own code restricts (qore#6351), from AOT format version 45
+    (QORE_AOT_MODULE_INFO_DOMAINS_VERSION).  A record of another version is refused, asking for the module to be
+    rebuilt.
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 3u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 4u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata

@@ -213,10 +213,26 @@ This generalizes the existing Phase 1.5 init-expression outliner
    locals (transient `shared_locals`): the coordinator releases its
    reload storage of them (reload tracker, deferred slot, entry owner)
    right before the call and reloads them right after it, as around a
-   call that runs handlers out of line (`finalizeHandlerSites()`).
+   call that runs handlers out of line (`finalizeHandlerSites()`); only
+   for those that the helper can write (`written_shared_locals`: those
+   that an instruction of the region writes or that a handler declared
+   in the region references (see below), top-level locals, and those
+   that a reference, a closure or code evaluated through the AST can
+   reach), as a local that the helper only reads keeps its value across
+   the call (qore#6314).
    Otherwise that storage kept the value that the helper replaced in a
    shared local alive until the coordinator next reloaded the local, and
-   its destructor ran late (qore#6300).
+   its destructor ran late (qore#6300).  The locals of the function that
+   the `on_exit`, `on_error` and `on_success` handlers of a block in a
+   region reference count as references at the block's `OnBlockExit`
+   instruction (`QoreIRFunction::collectOnBlockExitLocals()`; a region
+   cannot hold a handler whose locals cannot be collected).  So a local
+   declared before the region, or a parameter, that only a handler in
+   the region references there is shared and counts as written by the
+   helper, which runs the handler: the coordinator releases its
+   storage of the local before the call, and the value that the handler
+   replaces is released at the assignment (qore#6545).  Closure-use
+   locals are left out, as their values are not in reload storage.
 8. **Self-recursive fast entry.** When the outliner fires, the
    Approach-B fast entry is skipped: fast-entry mode passes params as
    LLVM arguments (not TLS), which helpers cannot see, and a
@@ -249,6 +265,39 @@ This generalizes the existing Phase 1.5 init-expression outliner
    the epoch and its stale check would otherwise be silently skipped
    (this manifested as an infinite loop: the fused `while` condition
    never observed the helper's `++turn`).
+
+11. **The paths of a debugger's flow requests are set aside (#6201).**
+   Code with step events has a path per return, break and continue
+   request of its step events (`QoreIRBasicBlock::debug_flow`, see
+   design/debug-flow-edges.md).  AOT native code takes none of them: it
+   makes no step events (`emitDebugStepHook()` emits nothing in AOT
+   mode) and its lowering drops the path blocks.  Outlined code is AOT
+   native code only: the IR interpreter rejects `CallAOTHelper`, the
+   JIT never sees outlined IR, and `undo()` restores the function before
+   its debug IR is serialized, so a qcc program under a debugger runs
+   the un-outlined debug IR, paths included, in the IR interpreter.  So
+   no helper can ever see a request, and the outlined call needs no
+   "take the flow" step and the format no field for one.
+   `run()` sets the paths aside before it splits and analyzes the
+   function (`detachDebugFlowPaths()`: the path blocks with their
+   positions, the flow targets of the step events and ScopeExit
+   instructions, and the Phi incomings from the paths), so that regions
+   with step events are outlined as without them; `undo()` puts them
+   back (`reattachDebugFlowPaths()`).  Debug builds assert that `undo()`
+   restores the blocks, the branch and flow targets, the Phi incomings
+   and `max_value_id` exactly (`shapeOf()`), and that no `CallAOTHelper`
+   or outlined return reaches the debug IR writer, the IR interpreter or
+   JIT lowering.  `AOTDebugIRFlow.qtest` compares the digests of the
+   serialized debug IR (`QORE_AOT_DEBUG_IR_DIGEST`, with the strings of
+   the string references for their pool offsets) of a debuggable
+   function outlined and of the same function compiled with
+   `QORE_AOT_OUTLINE_FN=analyze`, which optimizes it as for outlining
+   but does not transform it: a function that may be outlined is
+   optimized with its outline regions preserved
+   (`aotFunctionBodyMayBeOutlined()`, the last argument of
+   `qore_ir_optimize()`), so its constant CSE differs from that of the
+   same function compiled with outlining off, whose debug IR is not
+   the same for that reason alone.
 
 ## Correctness invariants
 

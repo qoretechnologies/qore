@@ -43,6 +43,7 @@
 #include "qore/intern/HttpClientDrainDebug.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/BreakStatement.h"
 #include "qore/intern/typed_hash_decl_private.h"
@@ -77,6 +78,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QC_Expression.h"
 #include "qore/intern/QC_QoreParseOptions.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
@@ -10789,7 +10791,9 @@ DBIDriver* ut_dsopt_driver() {
         methods.registerOption("opt2", "an option of the test-only unit-test driver", stringTypeInfo);
         methods.registerOption("opt3", "an option of the test-only unit-test driver that can be unset",
             stringOrNothingTypeInfo);
-        return DBI.registerDriver("qore-ut-dsopt", methods, 0);
+        // it connects to nothing, so sandboxed code can use it whatever the sandbox's network and filesystem policy
+        // (qore#5747)
+        return DBI.registerDriver("qore-ut-dsopt", methods, DBI_CAP_LOCAL_ONLY);
     }();
     return driver;
 }
@@ -20291,6 +20295,17 @@ static QoreValue f_dbg_run_method_cache_lifetime_tests(const QoreListNode* param
     }
     return make_unit_test_result(c, xsink);
 }
+
+//! Debug-only: returns the numbers of the recorded IR inline call sites that inline their calls and of those that a
+//! debugger attached to their callees' Program suspended (qore_ir_suspend_inline_states(), issue #6473)
+static QoreValue f_dbg_ir_inline_site_states(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    int64 eligible, suspended;
+    qore_ir_dbg_inline_site_states(eligible, suspended);
+    QoreHashNode* h = new QoreHashNode(bigIntTypeInfo);
+    h->setKeyValue("eligible", eligible, xsink);
+    h->setKeyValue("suspended", suspended, xsink);
+    return h;
+}
 #endif
 
 #ifdef DEBUG
@@ -21678,6 +21693,54 @@ static QoreValue f_dbg_run_datasource_pending_tests(const QoreListNode* params, 
 }
 #endif
 
+//! native lowering gives the blocks of the paths of a debugger's flow requests no code, and refuses JIT code that
+//! branches to one (#6201)
+/** Only the debug IR of AOT code has the paths (QoreIRFunction::hasDebugFlowPaths()), which only its step events enter;
+    native code takes no requests, so QoreIRToLLVM::lowerFunction() erases the blocks of the paths once every block is
+    lowered.  A JIT function whose code branched to one would branch to code that native code does not have: its
+    lowering fails with an error (fail closed), the function staying on its tier, and does not crash
+*/
+static void ut_jit_debug_flow_block_fail_closed(UnitTestCounters& c) {
+    for (bool branch : {false, true}) {
+        std::string what = branch ? "a branch to a path block: " : "a path block that no code enters: ";
+        QoreIRFunction func("jit_debug_flow_block_fail_closed");
+        QoreIRBuilder builder(&func);
+        QoreIRBasicBlock* entry = func.createBlock("entry");
+        QoreIRBasicBlock* path = func.createBlock("debug.flow.return.0");
+        path->debug_flow = true;
+        builder.setBlock(entry);
+        if (branch) {
+            builder.createBranch(path);
+        } else {
+            builder.createReturnNothing();
+        }
+        builder.setBlock(path);
+        builder.createReturnNothing();
+
+        llvm::LLVMContext llvm_context;
+        llvm::Module module("jit_debug_flow_block_fail_closed", llvm_context);
+        QoreIRToLLVM lowering(llvm_context);
+        std::string error;
+        bool ok = lowering.lowerFunction(func, module, error);
+        if (branch) {
+            UT_ASSERT(c, !ok, (what + "the lowering fails").c_str());
+            UT_ASSERT(c, error.find("paths of a debugger's flow requests") != std::string::npos,
+                (what + "the error names the path block: " + error).c_str());
+            continue;
+        }
+        UT_ASSERT(c, ok, (what + "the lowering succeeds: " + error).c_str());
+        bool path_code = false;
+        for (llvm::Function& llvm_func : module) {
+            for (llvm::BasicBlock& bb : llvm_func) {
+                if (bb.getName().starts_with("debug.flow")) {
+                    path_code = true;
+                }
+            }
+        }
+        UT_ASSERT(c, !path_code, (what + "the block gets no native code").c_str());
+    }
+}
+
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
@@ -21696,6 +21759,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_debug_step_folded_statements(c, rc.getProgram());
     ut_ir_fold_debug_statements_exception_target(c);
+    ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
     ut_self_call_without_method(c, rc.getProgram());
     ut_old_background_self_call_helper(c);
@@ -22099,6 +22163,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_debug_step_every_statement(c, rc.getProgram());
     ut_debug_step_folded_statements(c, rc.getProgram());
     ut_ir_fold_debug_statements_exception_target(c);
+    ut_jit_debug_flow_block_fail_closed(c);
     ut_callback_caller_parse_options(c, rc.getProgram());
 #ifdef DEBUG
     ut_sandbox_context_inner_program_id(c, rc.getProgram());
@@ -25624,7 +25689,11 @@ static QoreValue f_dbg_hold_child_program_create_clear(const QoreListNode* param
     request's action that the dispatch held, on the I/O thread or, for an HTTP/3 response that arrived before its
     request was registered, on the thread that registered it (with a release Counter of 0, the point only reports it);
     \c "continue-poll": an I/O thread of the asynchronous I/O controller is about to continue a C++ poll operation on
-    the thread (to call its continuePoll()), armed for the operation's object
+    the thread (to call its continuePoll()), armed for the operation's object; \c "h3-register": an HTTP/3 client poll
+    operation submitted a request and is about to register it, after waking its I/O thread, so that the request is
+    sent and its response can arrive before the registration; \c "h3-response-buffered": an HTTP/3 client poll
+    operation received the response of a request that is not registered yet and kept it for the registration (with a
+    release Counter of 0, it only reports it)
     @param reached decremented when a thread reaches the point
     @param release the thread waits until it reaches zero
     @param target if given, only a thread that reaches the point for this object is held: the poll operation of the
@@ -25668,6 +25737,10 @@ static QoreValue f_dbg_http_hold_at(const QoreListNode* params, RuntimeConfig& r
         point = static_cast<int>(QoreDbgHttpHoldPoint::StreamEndDispatched);
     } else if (!strcmp(name->c_str(), "continue-poll")) {
         point = static_cast<int>(QoreDbgHttpHoldPoint::ContinuePoll);
+    } else if (!strcmp(name->c_str(), "h3-register")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Http3Register);
+    } else if (!strcmp(name->c_str(), "h3-response-buffered")) {
+        point = static_cast<int>(QoreDbgHttpHoldPoint::Http3ResponseBuffered);
     } else {
         xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_http_hold_at(): unknown point '%s'", name->c_str());
         return QoreValue();
@@ -26509,6 +26582,56 @@ static QoreValue f_dbg_set_next_program_id(const QoreListNode* params, RuntimeCo
     return static_cast<int64>(qore_program_private::setNextProgramId(static_cast<qore_program_id_t>(id)));
 }
 
+//! Checks that the diagnostic recorded for an exception of a parse is not used once the diagnostics were cleared
+/** The Program collects and accumulates its diagnostics, as the Programs of the AOT compiler do; the hook parses
+    \c first (which must fail), looks up the diagnostic of its first exception, turns the collection of diagnostics off
+    and on again, parses \c second (which must fail too) and looks up the diagnostic of the first exception again
+    (issue #6555)
+
+    @param pgm the Program
+    @param first code with a parse error
+    @param second code with another parse error
+
+    @return a hash with the keys \c before and \c after: the code of the diagnostic found for the first exception
+    before and after the diagnostics were cleared, or no value if none was found
+*/
+static QoreValue f_dbg_check_parse_diagnostic_lookup(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    const QoreStringNode* first = get_param_value(params, 1).get<const QoreStringNode>();
+    const QoreStringNode* second = get_param_value(params, 2).get<const QoreStringNode>();
+    qore_set_program_parse_diagnostics_accumulated(**pgm);
+
+    ExceptionSink first_xsink;
+    pgm->parse(first->c_str(), "first", &first_xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    QoreException* e = qore_es_private::get(first_xsink)->head;
+    if (!e) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "the first code has no parse error");
+        return QoreValue();
+    }
+    QoreDiagnostic d("", std::string(), std::string(), QoreProgramLineLocation(), nullptr);
+    if (qore_get_exception_parse_diagnostic(*e, d)) {
+        rv->setKeyValue("before", new QoreStringNode(d.code.c_str()), xsink);
+    }
+
+    qore_program_private::get(**pgm)->setParseDiagnosticsCollected(false);
+    qore_program_private::get(**pgm)->setParseDiagnosticsAccumulated();
+    ExceptionSink second_xsink;
+    pgm->parse(second->c_str(), "second", &second_xsink);
+    second_xsink.clear();
+    if (qore_get_exception_parse_diagnostic(*e, d)) {
+        rv->setKeyValue("after", new QoreStringNode(d.code.c_str()), xsink);
+    }
+    first_xsink.clear();
+    return rv.release();
+}
+
 namespace {
 //! the state of dbg_fork_lock_cycle_arm(): a stand-in for the lock of the dynamic linker, and what the forking thread
 //! and a thread creating a c-ares channel hold and wait for
@@ -26904,6 +27027,46 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 #endif
 
 #ifdef DEBUG
+//! Arms a rendezvous of the next calls of File::redirect() with the first of their two locks held (issue #6567)
+static QoreValue f_dbg_file_redirect_rendezvous(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_file_redirect_rendezvous(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        static_cast<int>(get_param_value(params, 1).getAsBigInt()));
+    return QoreValue();
+}
+
+//! returns the name of the outcome of a rendezvous of File::redirect() calls
+static const char* dbg_file_redirect_outcome_name(QoreDbgFileRedirectOutcome outcome) {
+    switch (outcome) {
+        case QDFR_ARRIVED: return "arrived";
+        case QDFR_WAITER: return "waiter";
+        case QDFR_TIMEOUT: return "timeout";
+        default: return "none";
+    }
+}
+
+//! Waits until the outcome of the armed rendezvous of File::redirect() calls is known, for up to the given
+//! milliseconds, and returns it: "arrived", "waiter", "timeout", or "none" if it is not known yet
+static QoreValue f_dbg_file_redirect_rendezvous_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return new QoreStringNode(dbg_file_redirect_outcome_name(qore_dbg_file_redirect_rendezvous_wait(
+        static_cast<int>(get_param_value(params, 0).getAsBigInt()))));
+}
+
+//! Returns the calls of File::redirect() that arrived at the last rendezvous, those that waited until its timeout,
+//! and its outcome
+static QoreValue f_dbg_file_redirect_rendezvous_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int arrived, timed_out;
+    QoreDbgFileRedirectOutcome outcome;
+    qore_dbg_file_redirect_rendezvous_result(arrived, timed_out, outcome);
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("arrived", arrived, xsink);
+    h->setKeyValue("timed_out", timed_out, xsink);
+    h->setKeyValue("outcome", new QoreStringNode(dbg_file_redirect_outcome_name(outcome)), xsink);
+    return h;
+}
+
 //! Makes the next step of an entry into another Program at the given site fail with std::bad_alloc
 /** Tests that a failed entry leaves the thread as it was (ProgramThreadCountContextHelper; issue #6198); several sites
     can be armed, each fails once; -1 disarms all of them
@@ -27196,10 +27359,19 @@ void init_debug_functions(QoreNamespace& qns) {
         hashTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "encoded");
     qns.addBuiltinVariant("dbg_run_method_cache_lifetime_tests", f_dbg_run_method_cache_lifetime_tests,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo, 1, objectTypeInfo, QORE_PARAM_NO_ARG, "target");
+    qns.addBuiltinVariant("dbg_ir_inline_site_states", f_dbg_ir_inline_site_states, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        hashTypeInfo);
     qns.addBuiltinVariant("dbg_sandbox_cpu_used", f_dbg_sandbox_cpu_used, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_file_redirect_rendezvous", f_dbg_file_redirect_rendezvous, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_file_redirect_rendezvous_wait", f_dbg_file_redirect_rendezvous_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, stringTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_file_redirect_rendezvous_result", f_dbg_file_redirect_rendezvous_result, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_tls_exit", f_dbg_hold_next_thread_tls_exit, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,
@@ -27744,6 +27916,9 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "path");
     qns.addBuiltinVariant("dbg_set_next_program_id", f_dbg_set_next_program_id, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         bigIntTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "id");
+    qns.addBuiltinVariant("dbg_check_parse_diagnostic_lookup", f_dbg_check_parse_diagnostic_lookup, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo, 3, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "first", stringTypeInfo, QORE_PARAM_NO_ARG, "second");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_arm", f_dbg_fork_lock_cycle_arm, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "entered");
     qns.addBuiltinVariant("dbg_fork_lock_cycle_result", f_dbg_fork_lock_cycle_result, QCF_NO_FLAGS,

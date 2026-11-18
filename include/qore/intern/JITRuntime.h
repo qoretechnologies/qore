@@ -631,6 +631,10 @@ uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 
 //! Reads a cached value that can be a reference: the referenced value, or the value itself, with a reference
 uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
+//! Reads the cache of an untyped IR-only variable of a foreach loop; a value read through a reference is held in
+//! \a current, whose value moves to \a previous, whose value is released, and \a held is set
+uint64_t qore_rt_read_element_local_held(uint64_t val, uint64_t* current, uint64_t* previous, uint8_t* held,
+    ExceptionSink* xsink);
 //! Assigns a value (whose reference is taken) through the reference in the native cache of an IR-only local
 void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink);
 //! Stores an element to the native cache of the IR-only variable of a foreach loop; returns the value of the cache
@@ -1956,6 +1960,21 @@ void qore_rt_pop_closure_var(LocalVar* var, ExceptionSink* xsink);
     had to be returned, in which case the caller must dereference it.
 */
 uint64_t qore_rt_load_local_weak(LocalVar* var, int8_t* owned_out, ExceptionSink* xsink);
+
+//! Loads a weak-assigned local that is the receiver of a method call, keeping the object of a weak reference
+/** \a owned_out is set to 2 when the object of a weak reference was given a reference, which
+    qore_rt_end_weak_receiver_call() releases when the call returns, and to 1 as qore_rt_load_local_weak() sets it
+*/
+uint64_t qore_rt_load_local_weak_receiver(LocalVar* var, int8_t* owned_out, ExceptionSink* xsink);
+
+//! Loads a weak-assigned local that is the receiver of a method call through an AOT context slot
+/** @see qore_rt_load_local_weak_receiver()
+*/
+uint64_t qore_rt_load_local_weak_receiver_aot(QoreAOTContext* ctx, int32_t idx, int8_t* owned_out,
+        ExceptionSink* xsink);
+
+//! Releases the receiver kept by qore_rt_load_local_weak_receiver() when its call returns
+void qore_rt_end_weak_receiver_call(uint64_t* slot, int8_t* owned_flag, ExceptionSink* xsink);
 
 //! Loads a weak-assigned local through an AOT context slot, preserving the borrow
 /** @see qore_rt_load_local_weak()

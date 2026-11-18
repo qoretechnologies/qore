@@ -665,7 +665,7 @@ if (!exists result) {
             }
 
             # Run the program to register any new definitions
-            pgm.run();
+            runInput();
 
             # If this was an expression, call the temporary function to get the result
             auto result;
@@ -1196,6 +1196,23 @@ if (!exists result) {
         return result;
     }
 
+    #! Runs the code of the last input or file
+    /** The code of an input is one unit: when one of its statements raises an exception, the statements after it are
+        skipped, and the run of the next input does not execute them (Program::skipPendingStatements())
+    */
+    private runInput() {
+        try {
+            pgm.run();
+        } catch (hash<ExceptionInfo> ex) {
+            # the exception of the input is the one reported, also if skipping raises one
+            try {
+                pgm.skipPendingStatements();
+            } catch (hash<ExceptionInfo> ex2) {
+            }
+            rethrow;
+        }
+    }
+
     #! Loads and executes a file
     /** @param filename The file path to load
         @return A result hash with either 'value' (success message) or 'error' (exception info)
@@ -1214,7 +1231,7 @@ if (!exists result) {
             }
             string code = ReadOnlyFile::readTextFile(filename);
             pgm.parse(code, filename);
-            pgm.run();
+            runInput();
             return {"value": sprintf("Loaded: %s", filename)};
         } catch (hash<ExceptionInfo> ex) {
             return {"error": ex};
@@ -1421,7 +1438,7 @@ if (!exists result) {
             string code = sprintf("our auto %s = (%s);", var_name, expr);
             string label = sprintf("<type:%d>", eval_counter);
             pgm.parse(code, label);
-            pgm.run();
+            runInput();
             auto result = pgm.getGlobalVariable(var_name);
             # Use Reflection to get the full type name (e.g., hash<StatInfo> instead of just hash)
             Reflection::Type t = Reflection::Type::getType(result);

@@ -12,7 +12,11 @@ that many strings.  The payload of each version:
 - version 2: as version 1, then the modules it was compiled with, its %prepend-module-path directories and its
   %append-module-path directories;
 - version 3: as version 2, then the parse options that its directives gave its dependencies: a u32 count, then for
-  each a module name, four u32 words of options and a u32 word of flags (FLAG_*).
+  each a module name, four u32 words of options and a u32 word of flags (FLAG_*) (qore#6406, qore#6386);
+- version 4: as version 3, then the functional domains that the module declares in its header (a u64 as two u32, low
+  word first), the dependencies that it requires only after its header (a list) and the functional domains that its
+  own code restricts (a u64 as two u32, low word first) (qore#6351); either domain value with a bit outside
+  ALL_DOMAINS makes the record invalid.
 """
 
 import struct
@@ -20,9 +24,9 @@ import struct
 #: the record magic
 MAGIC = b"QAMI"
 #: the record version that qcc writes (QORE_AOT_MODULE_INFO_VERSION)
-CURRENT_VERSION = 3
+CURRENT_VERSION = 4
 #: the versions that parse() reads
-VERSIONS = (1, 2, 3)
+VERSIONS = (1, 2, 3, 4)
 #: the size of the record header
 HEADER_SIZE = 12
 #: the largest payload accepted (QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE)
@@ -39,6 +43,10 @@ FLAG_BEFORE_HEADER = 1 << 0
 FLAG_INEXACT = 1 << 1
 #: the flags that a record can have; any other bit makes it invalid (QMDR_ALL_FLAGS)
 ALL_FLAGS = FLAG_BEFORE_HEADER | FLAG_INEXACT
+#: the functional domain bits (QDOM_ALL in include/qore/Restrictions.h): a record whose declared or restricted domains
+#: have any other bit is invalid, as libqore refuses it (qoreAOTDecodeModuleInfo()); test_qmod_cache.py checks that
+#: this is the value of the header
+ALL_DOMAINS = 0x28201621ddd00c
 
 
 class ModuleInfo:
@@ -52,10 +60,14 @@ class ModuleInfo:
     - prepend_paths, append_paths: the module's own module path directories (version 2 and later; else empty)
     - dependency_restrictions: (name, options, flags) for each module that a directive loaded, options being a tuple
       of four u32 words and flags a combination of FLAG_* (version 3 and later; else empty)
+    - declared_domains: the functional domains that the module declares in its header (version 4 and later; else 0)
+    - post_header_dependencies: the dependencies that the module requires only after its header (version 4 and
+      later; else empty)
+    - restricted_domains: the functional domains that the module's own code restricts (version 4 and later; else 0)
     """
 
     def __init__(self, version, name, dependencies, optional, compiled_with=(), prepend_paths=(), append_paths=(),
-                 dependency_restrictions=()):
+                 dependency_restrictions=(), declared_domains=0, post_header_dependencies=(), restricted_domains=0):
         self.version = version
         self.name = name
         self.dependencies = list(dependencies)
@@ -64,6 +76,9 @@ class ModuleInfo:
         self.prepend_paths = list(prepend_paths)
         self.append_paths = list(append_paths)
         self.dependency_restrictions = list(dependency_restrictions)
+        self.declared_domains = declared_domains
+        self.post_header_dependencies = list(post_header_dependencies)
+        self.restricted_domains = restricted_domains
 
 
 def header(data, offset=0):
@@ -122,12 +137,18 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
             items.append(s)
         return items, p
 
+    def read_u64(p):
+        lo, p = read_u32(p)
+        hi, p = read_u32(p)
+        return lo | (hi << 32), p
+
     try:
         cur = pos
         name, cur = read_str(cur)
         deps, cur = read_list(cur)
         optional, cur = read_list(cur)
         compiled_with, prepend, append, restrictions = [], [], [], []
+        declared_domains, post_header, restricted_domains = 0, [], 0
         if version >= 2:
             compiled_with, cur = read_list(cur)
             prepend, cur = read_list(cur)
@@ -145,11 +166,20 @@ def parse(data, offset=0, versions=VERSIONS, exact=False):
                 if flags & ~ALL_FLAGS:
                     raise ValueError
                 restrictions.append((dep, words, flags))
+        if version >= 4:
+            declared_domains, cur = read_u64(cur)
+            if declared_domains & ~ALL_DOMAINS:
+                raise ValueError
+            post_header, cur = read_list(cur)
+            restricted_domains, cur = read_u64(cur)
+            if restricted_domains & ~ALL_DOMAINS:
+                raise ValueError
     except (ValueError, UnicodeDecodeError):
         return None
     if cur != end:
         return None
-    return ModuleInfo(version, name, deps, optional, compiled_with, prepend, append, restrictions)
+    return ModuleInfo(version, name, deps, optional, compiled_with, prepend, append, restrictions, declared_domains,
+                      post_header, restricted_domains)
 
 
 def find(data, name=None, versions=VERSIONS):
@@ -165,7 +195,7 @@ def find(data, name=None, versions=VERSIONS):
 
 
 def encode(version, name, dependencies=(), optional=(), compiled_with=(), prepend_paths=(), append_paths=(),
-           dependency_restrictions=()):
+           dependency_restrictions=(), declared_domains=0, post_header_dependencies=(), restricted_domains=0):
     """Encodes a record of @p version (for tests)"""
     def enc_str(s):
         b = s.encode("utf-8")
@@ -183,4 +213,8 @@ def encode(version, name, dependencies=(), optional=(), compiled_with=(), prepen
             dep, words = entry[0], entry[1]
             flags = entry[2] if len(entry) > 2 else 0
             payload += enc_str(dep) + struct.pack("<%dI" % RESTRICTION_WORDS, *words) + struct.pack("<I", flags)
+    if version >= 4:
+        payload += struct.pack("<II", declared_domains & 0xffffffff, declared_domains >> 32)
+        payload += enc_list(list(post_header_dependencies))
+        payload += struct.pack("<II", restricted_domains & 0xffffffff, restricted_domains >> 32)
     return MAGIC + struct.pack("<II", version, len(payload)) + payload

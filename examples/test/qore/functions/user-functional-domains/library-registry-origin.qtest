@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - each case runs in a child process whose registering Program sets its own execution mode
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires Util
+
+%exec-class LibraryRegistryOriginTest
+
+#! State of library module code that restricted code creates keeps the restrictions of its creator (issue #6520)
+/** Under a library module's initialization barrier, the caller walk does not reach the code that loaded the module.
+    A call reference to library code, a closure of library code and an object of a library class that restricted code
+    created (through the library's own functions) and that a library registry holds are run by the initialization of
+    another library module: the declared domain that they call is refused for a restricted creator
+    (INVALID-FUNCTION-ACCESS), and allowed for one without the restriction.  The library modules are in a trusted
+    module directory of the child (QORE_MODULE_DIR_ONLY).
+*/
+class LibraryRegistryOriginTest inherits QUnit::Test {
+    public {
+        const Refused = "fired: INVALID-FUNCTION-ACCESS,INVALID-FUNCTION-ACCESS
+methods: INVALID-FUNCTION-ACCESS
+destroyed: INVALID-FUNCTION-ACCESS
+";
+        const Allowed = "fired: ran,ran
+methods: ran
+destroyed: ran
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string fixture_dir;
+    }
+
+    constructor() : QUnit::Test("LibraryRegistryOriginTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        fixture_dir = normalize_dir(get_script_dir() + "/library-registry-origin");
+        foreach string mode in (("ast", "ir", "jit")) {
+            addTestCase("restricted creator, " + mode, \check(), (True, mode));
+            addTestCase("unrestricted creator, " + mode, \check(), (False, mode));
+        }
+        set_return_value(main());
+    }
+
+    check(bool restricted, string mode) {
+        string mod_dir = fixture_dir;
+        if (ENV.QORE_MODULE_DIR) {
+            mod_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        string cmd = sprintf("env QORE_MODULE_DIR_ONLY=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+            "QORE_MODULE_DIR=%s %s -b %s %d %s 2>&1; echo \"rc=$?\"", shellQuote(libqore_dir), shellQuote(libqore_dir),
+            shellQuote(libqore_dir), shellQuote(mod_dir), shellQuote(qore_bin),
+            shellQuote(fixture_dir + "/origin-child.q"), restricted ? 1 : 0, mode);
+        string output = backquote(cmd);
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertEq("0", rc[0], sprintf("the child ends normally: %s", output));
+        # only the result lines: a tool that runs the child (valgrind) can add output of its own
+        string results = (map $1 + "\n", output.split("\n"), $1 =~ /^(fired|methods|destroyed): /).join("");
+        assertEq(restricted ? Refused : Allowed, results,
+            restricted ? "the creator's restrictions apply" : "the state runs for an unrestricted creator");
+    }
+
+    #! returns the string quoted for the shell
+    private static string shellQuote(string s) {
+        return "'" + replace(s, "'", "'\\''") + "'";
+    }
+}

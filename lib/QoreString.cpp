@@ -3889,9 +3889,33 @@ size_t QoreString::length() const {
     if (priv->getEncoding()->isMultiByte() && priv->len) {
         bool invalid;
         const char* b = priv->effective_buf();
-        return priv->getLengthFrom(b, 0, invalid);
+        size_t rc = priv->getLengthFrom(b, 0, invalid);
+        // text that is not valid in the encoding has one character per byte, as this function cannot raise an
+        // exception: the count of the characters before the first invalid byte sequence is not the length of the
+        // string (qore#6597)
+        return invalid ? priv->getLengthCountingInvalidBytes(b) : rc;
     }
     return priv->len;
+}
+
+size_t qore_string_private::getLengthCountingInvalidBytes(const char* b) const {
+    const QoreEncoding* enc = getEncoding();
+    // an encoding made of units of more than one byte (UTF-16) skips an invalid unit, so that the text after it is
+    // read in whole units; a byte is skipped where a whole unit does not remain
+    size_t unit = enc->getMinCharWidth();
+    const char* p = b;
+    const char* end = b + len;
+    size_t n = 0;
+    while (p < end) {
+        qore_offset_t l = enc->getCharLen(p, end - p);
+        if (l > 0) {
+            p += l;
+        } else {
+            p += unit > 1 && static_cast<size_t>(end - p) >= unit ? unit : 1;
+        }
+        ++n;
+    }
+    return n;
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
@@ -4085,6 +4109,50 @@ void qore_string_private::checkAsciiPrefix(const char* b, size_t prefix) const {
 void qore_string_private::raiseInvalidEncoding(ExceptionSink* xsink) const {
     // the exception that QoreEncoding raises for text that is not valid in a multi-byte encoding
     xsink->raiseException("INVALID-ENCODING", "invalid %s encoding encountered in string", getEncoding()->getCode());
+}
+
+int qore_string_private::checkValidEncodingIntern(const QoreString& str, const char* func, const char* what,
+        ExceptionSink* xsink) {
+    const qore_string_private* p = str.priv;
+    if (p->getEncoding() == QCS_UTF8) {
+        const char* b = p->effective_buf();
+        // the bytes of an ASCII prefix are valid characters in UTF-8
+        size_t start = p->getAsciiPrefix(b, p->len);
+        if (start == p->len) {
+            return 0;
+        }
+        bool incomplete;
+        size_t valid = start + IconvHelper::validUtf8Prefix(b + start, p->len - start, incomplete);
+        if (valid == p->len) {
+            return 0;
+        }
+        xsink->raiseException("INVALID-ENCODING", "%s: the %s string is not valid UTF-8: invalid byte sequence at "
+            "byte offset %zu", func, what, valid);
+        return -1;
+    }
+    if (qore_string_encoding_valid(str)) {
+        return 0;
+    }
+    xsink->raiseException("INVALID-ENCODING", "%s: the %s string is not valid %s", func, what,
+        p->getEncoding()->getCode());
+    return -1;
+}
+
+int64 qore_string_private::getCheckedUtf8Length(const QoreString& str, const char* op, ExceptionSink* xsink) {
+    const qore_string_private* p = str.priv;
+    assert(p->getEncoding() == QCS_UTF8);
+    if (checkValidEncodingIntern(str, op, "subject", xsink)) {
+        return -1;
+    }
+    // the ASCII prefix is known after the check; each character of valid UTF-8 after it has one byte that is not a
+    // continuation byte
+    const char* b = p->effective_buf();
+    size_t start = p->getAsciiPrefix(b, p->len);
+    size_t n = start;
+    for (size_t i = start; i < p->len; ++i) {
+        n += (static_cast<unsigned char>(b[i]) & 0xc0) != 0x80;
+    }
+    return static_cast<int64>(n);
 }
 
 void qore_string_private::prepareMutableBuffer() {
@@ -4875,4 +4943,25 @@ void TempEncodingHelper::removeBom() {
     qore_string_private* pstr = qore_string_private::get(str);
     assert(pstr->encoding);
     q_remove_bom(str, pstr->encoding);
+}
+
+// documented in qore_string_private.h
+bool qore_string_encoding_valid(const QoreString& str) {
+    if (!str.size()) {
+        return true;
+    }
+    if (str.getEncoding() == QCS_UTF8) {
+        bool incomplete = false;
+        return IconvHelper::validUtf8Prefix(str.c_str(), str.size(), incomplete) == str.size();
+    }
+    const QoreEncoding* enc = str.getEncoding();
+    // ASCII text in an encoding that represents every ASCII character as itself is valid; it needs no conversion
+    if (enc->isAsciiCompat() && !qore_encoding_private::isStateful(enc) && str.isDataAscii()) {
+        return true;
+    }
+    // a string in another encoding is valid if it can be converted to UTF-8; the conversion is made without an
+    // exception sink, so that it raises nothing (also no cancellation or sandbox limit, which a later call raises)
+    QoreString utf8(QCS_UTF8);
+    return !qore_string_private::convert_encoding_intern(str.c_str(), str.size(), enc, utf8, QCS_UTF8, nullptr,
+        false);
 }

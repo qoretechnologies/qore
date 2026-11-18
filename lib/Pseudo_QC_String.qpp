@@ -165,6 +165,9 @@ int len = str.length();
     @note
     - this operation has <i>O(n)</i> complexity if the string has a multi-byte @ref character_encoding "character encoding", otherwise it is <i>O(1)</i>; a UTF-8 string remembers the length of the ASCII text at its start, so for a UTF-8 string that only holds ASCII text it is <i>O(1)</i> after the first call, and for any other UTF-8 string it is linear in the number of bytes after the ASCII text at its start
     - equivalent to @ref Qore::length(softstring)
+    - in a string that is not valid in its encoding, each byte that does not start a complete character counts as one
+      character, so the count is not less than the number of characters of its text (since %Qore 3.0; before, the
+      count stopped at the first such byte)
 
     @see
     - <string>::strlen()
@@ -1278,6 +1281,38 @@ bool b = str.isDataPrintableAscii();
  */
 bool <string>::isDataPrintableAscii() [const;flags=CONSTANT] {
     return str->isDataPrintableAscii();
+}
+
+//! returns @ref True if the string is valid in its encoding
+/** A string that is not valid in its encoding (one in UTF-8 with byte sequences that are not well-formed UTF-8, or
+    one in another encoding that cannot be converted to UTF-8) cannot be processed reliably as text.  This method tests
+    a string without raising an exception, as code that receives text from outside the program does before it
+    processes it.
+
+    A UTF-8 string is checked strictly (RFC 3629), as the regular expression engine checks it: overlong forms,
+    surrogate code points, values above U+10FFFF and unexpected continuation bytes are not valid.  A string in another
+    encoding is valid if it is ASCII text in an ASCII-compatible encoding or if it can be converted to UTF-8: a byte
+    that its encoding does not define (ex: \c 0x81 in \c "WINDOWS-1252", a byte above \c 0x7f in \c "US-ASCII") is not
+    valid, and neither is text other than ASCII in an encoding that the \c iconv library cannot convert.  The time
+    taken is proportional to the size of the string.
+
+    @return @ref True if the string is empty or valid in its encoding
+
+    @par Example:
+    @code{.py}
+if (!str.isEncodingValid()) {
+    throw "INPUT-ERROR", sprintf("the input of %d bytes is not valid in its encoding", str.size());
+}
+    @endcode
+
+    @see
+    - @ref Qore::<string>::isDataAscii() "<string>::isDataAscii()"
+    - @ref Qore::<string>::isDataPrintableAscii() "<string>::isDataPrintableAscii()"
+
+    @since %Qore 3.0
+ */
+bool <string>::isEncodingValid() [const;flags=CONSTANT] {
+    return qore_string_encoding_valid(*str);
 }
 
 //! returns a string of hexadecimal digits corresponding to the contents of the string

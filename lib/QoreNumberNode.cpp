@@ -468,11 +468,11 @@ namespace {
 struct QoreMpz {
     mpz_t z;
 
-    DLLLOCAL QoreMpz() {
+    QoreMpz() {
         mpz_init(z);
     }
 
-    DLLLOCAL ~QoreMpz() {
+    ~QoreMpz() {
         mpz_clear(z);
     }
 
@@ -484,11 +484,11 @@ struct QoreMpz {
 struct QoreMpfrValue {
     mpfr_t v;
 
-    DLLLOCAL explicit QoreMpfrValue(mpfr_prec_t prec) {
+    explicit QoreMpfrValue(mpfr_prec_t prec) {
         mpfr_init2(v, prec < MPFR_PREC_MIN ? MPFR_PREC_MIN : prec);
     }
 
-    DLLLOCAL ~QoreMpfrValue() {
+    ~QoreMpfrValue() {
         mpfr_clear(v);
     }
 

@@ -988,6 +988,33 @@ ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 qore_program_private_base::ThreadContainerShard
     qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
 
+void qore_set_program_parse_diagnostics_accumulated(QoreProgram& pgm) {
+    qore_program_private::get(pgm)->setParseDiagnosticsAccumulated();
+}
+
+bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic& diag) {
+    if (!e.diagnostic_pgm_id || e.diagnostic_index < 0) {
+        return false;
+    }
+    QoreProgram* pgm = qore_program_private::getReferencedProgram(e.diagnostic_pgm_id);
+    if (!pgm) {
+        return false;
+    }
+    bool rv = false;
+    {
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        if (pp->accumulate_diagnostics && e.diagnostic_gen == pp->diagnostics_gen
+                && static_cast<size_t>(e.diagnostic_index) < pp->diagnostics.size()) {
+            diag = pp->diagnostics[e.diagnostic_index];
+            rv = true;
+        }
+    }
+    ExceptionSink xsink;
+    pgm->deref(&xsink);
+    xsink.clear();
+    return rv;
+}
+
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
@@ -1301,7 +1328,7 @@ void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& lo
         QoreStringValueHelper err(e->err);
         QoreStringValueHelper desc(e->desc);
         diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
-        e->diagnostic_pgm_id = programId;
+        markDiagnostic(*e);
     }
 }
 
@@ -1318,8 +1345,23 @@ void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
         // an exception without a source location (raised by builtin code) has no file
         diagnostics.emplace_back(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e,
             desc->c_str());
-        e->diagnostic_pgm_id = programId;
+        markDiagnostic(*e);
     }
+}
+
+int64 qore_program_private::skipPendingStatements(QoreProgram& pgm, ExceptionSink* xsink) {
+    if (lockParsing(pgm, xsink)) {
+        return -1;
+    }
+    // the parse lock is released also if an exception leaves
+    ON_BLOCK_EXIT([&pgm, xsink] () {
+        qore_program_private::unlockParsing(pgm, xsink);
+    });
+    // without PO_ALLOW_REPARSE, a run executes all of the statements
+    if (!(pgm.priv->pwo.parse_options & PO_ALLOW_REPARSE)) {
+        return 0;
+    }
+    return pgm.priv->sb.skipUnexecuted();
 }
 
 void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink) {
@@ -1486,9 +1528,13 @@ static void json_diagnostic_metadata_append(std::string& str, const QoreDiagnost
 }
 
 std::string qore_program_private::getParseDiagnosticsJSON() const {
+    return qore_diagnostics_json(diagnostics);
+}
+
+std::string qore_diagnostics_json(const std::vector<QoreDiagnostic>& diags) {
     std::string j = "[";
     bool first = true;
-    for (auto& d : diagnostics) {
+    for (auto& d : diags) {
         if (!first) {
             j += ",";
         }
@@ -1566,8 +1612,14 @@ unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* sourc
 }
 
 unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_text, FILE* os) const {
+    return qore_render_diagnostic_frames(diagnostics, [source_text] (const QoreDiagnostic&) { return source_text; },
+        os);
+}
+
+unsigned qore_render_diagnostic_frames(const std::vector<QoreDiagnostic>& diags,
+        const std::function<const char* (const QoreDiagnostic&)>& source_text, FILE* os) {
     unsigned errors = 0;
-    for (auto& d : diagnostics) {
+    for (auto& d : diags) {
         if (d.error) {
             ++errors;
         }
@@ -1581,7 +1633,7 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
 
         // code frame: the source line plus a caret line under the offending span
         std::string line;
-        if (extract_source_line(source_text, d.start_line, line)) {
+        if (extract_source_line(source_text(d), d.start_line, line)) {
             fprintf(os, "  %s\n", line.c_str());
             if (d.start_column >= 0) {
                 std::string caret("  ");
@@ -2181,6 +2233,14 @@ void qore_program_private_base::newProgram() {
 
     if (pwo.parse_options & PO_IN_MODULE) {
         dmap["QoreHasUserModuleLicense"] = true;
+    }
+
+    // the built-in defines that the identity of an AOT image fixes (the version and the platform): a conditional on
+    // them takes the same branch where the code is compiled and where it is loaded (qore#6351); not the options
+    // below or QoreDebug, which depend on the build configuration of the library (a qmod compiled by one build of the
+    // library is loaded by another of the same sources) or on the process (HAVE_SIGNAL_HANDLING)
+    for (auto& i : dmap) {
+        builtin_defines.insert(i.first);
     }
 
     QoreNamespace* ns = QoreNS->findLocalNamespace("Option");
@@ -2929,9 +2989,9 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // lifts the restriction when the commit ends, also with an exception
             class CommitEntryRestrictionHelper {
             public:
-                DLLLOCAL CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
+                CommitEntryRestrictionHelper(qore_program_private& pp) : pp(pp) {
                 }
-                DLLLOCAL ~CommitEntryRestrictionHelper() {
+                ~CommitEntryRestrictionHelper() {
                     AutoLocker al(pp.plock);
                     pp.commit_entry_restricted = false;
                     pp.clearParseTidsIntern();
@@ -5588,27 +5648,65 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
     if (!strcasecmp(p, "false"))
         return false;
 
-    // see if there are non-numeric characters in the string
+    // an empty value is no value, as with %define without one (issue #6564)
+    if (!*p) {
+        return QoreValue();
+    }
+
+    // a number: an optional sign, decimal digits and an optional fraction; anything else, as text after the number
+    // (1-2), is an error (issue #6564)
+    const char* q = p;
+    if (*q == '-' || *q == '+') {
+        ++q;
+    }
+    bool digits = false;
+    while (isdigit(static_cast<unsigned char>(*q))) {
+        ++q;
+        digits = true;
+    }
     bool flt = false;
-    while (*p) {
-        if (*p == '.') {
-            if (flt) {
-                parse_error(*loc, "'%s' is defined with an invalid number: '%s'", str, arg.getBuffer());
+    if (*q == '.') {
+        flt = true;
+        ++q;
+        while (isdigit(static_cast<unsigned char>(*q))) {
+            ++q;
+            digits = true;
+        }
+    }
+    if (*q || !digits) {
+        for (const char* a = p; *a; ++a) {
+            if (isalpha(static_cast<unsigned char>(*a))) {
+                parse_error(*loc, "'%s' has unquoted alphabetic characters in the value; use quotes (\" or ') to "
+                    "define strings", str);
                 ok = false;
                 return QoreValue();
             }
-            flt = true;
         }
-        else if (isalpha(*p)) {
-            parse_error(*loc, "'%s' has unquoted alphabetic characters in the value; use quotes (\" or ') to define strings", str);
+        parse_error(*loc, "'%s' is defined with an invalid number: '%s'", str, arg.getBuffer());
+        ok = false;
+        return QoreValue();
+    }
+
+    // a number is decimal, also with a leading zero (issue #6530); an integer stays an integer: the two results are
+    // not given by one conditional expression, whose type would be double
+    if (flt) {
+        double d = q_strtod(p);
+        if (std::isinf(d)) {
+            parse_error(*loc, "'%s' is defined with a number that cannot be represented: '%s'", str, arg.getBuffer());
             ok = false;
             return QoreValue();
         }
-        ++p;
+        return d;
     }
-
-    p = arg.c_str();
-    return flt ? q_strtod(p) : strtoll(p, 0, 10);
+    errno = 0;
+    int64 i = strtoll(p, 0, 10);
+    if (errno == ERANGE) {
+        parse_error(*loc, "'%s' is defined with a number that cannot be represented: '%s'; integers must be in the "
+            "range " QLLD " (MININT) to " QLLD " (MAXINT)", str, arg.getBuffer(), -LLONG_MAX, LLONG_MAX);
+        ok = false;
+        return QoreValue();
+    }
+    return i;
 }
 
 void QoreProgram::parseDefine(const char* str, QoreValue val) {

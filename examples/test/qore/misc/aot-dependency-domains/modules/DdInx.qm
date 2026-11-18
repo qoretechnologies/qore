@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain, with a conditional before
+# its header on a built-in define (which takes the same branch where the module is compiled and where it is loaded),
+# and requires a module that uses it after its header: its source relieves the module; the conditional makes the
+# requests of the compiled module's record inexact (QMDR_INEXACT, qore#6386), and the compiled module relieves nothing
+# (it fails closed; qore#6351)
+
+%modern
+
+%ifdef QoreVersionMajor
+%endif
+
+module DdInx {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%requires DdInner
+
+public namespace DdInx {
+    public string sub run() {
+        return DdInner::run();
+    }
+}

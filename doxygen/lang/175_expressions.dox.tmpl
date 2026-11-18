@@ -254,6 +254,10 @@ code closure = int sub (int a) { return a + b; };
     For unassigned arguments to functions or methods, this syntax supplements the automatic argv variable holding all function arguments not assigned to parameter variables.\n\n
     This syntax is particularly useful when writing expressions for the @ref map "map", @ref foldl "foldl", @ref foldr "foldr", and @ref select "select" operators, where implicit argument references are the only way the operator expressions can reference the current list values that are populated as implicit arguments as the operators traverse the list.
 
+    @anchor implicit_argument_offsets
+    The argument number is decimal; leading zeros are ignored: <tt>$08</tt> is <tt>$8</tt> and <tt>$010</tt> is
+    <tt>$10</tt>, unlike an integer literal with a leading zero, which is octal.
+
     @par Example
     @code{.py}
 # extract a list of even numbers from a list

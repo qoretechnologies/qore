@@ -84,7 +84,26 @@ class UntraversableHashType inherits HashDataType {
     }
 }
 
-#! Tests that type-graph traversals are bounded in time and memory
+#! A hash type that counts how many times its fields are described
+/** getInfo() describes the fields of a type each time it expands the type and never for a type that it takes from
+    its memo or truncates at a cycle, so the count is the number of expansions of the type object
+*/
+class CountingHashDataType inherits HashDataType {
+    public {
+        #! The number of times the fields of this type object were described
+        int expansions = 0;
+    }
+
+    constructor(string name) : HashDataType(name) {
+    }
+
+    *hash<string, hash<DataFieldInfo>> getFieldInfo() {
+        ++expansions;
+        return HashDataType::getFieldInfo();
+    }
+}
+
+#! Tests that type-graph traversals are bounded
 /** Type graphs are traversed as live objects, so they are not necessarily trees:
     - a type object reachable from more than one parent (a shared subtype in a DAG) must be expanded once, not
       once per path, otherwise the traversal is exponential in the depth of the graph
@@ -102,9 +121,6 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
             once performs Depth + 1 (15) of them
         */
         const Depth = 14;
-
-        #! Upper bound on the traversal; the unbounded implementation needs many minutes and many GB at this depth
-        const MaxTraversalTime = 30s;
 
         #! Depth of the cyclic graph whose description is measured
         const CyclicDepth = 6;
@@ -130,6 +146,31 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
     }
 
     #! Builds an acyclic type DAG where every level shares the same child type object Fanout times
+    #! Builds the shared-subtype DAG of @a depth levels above a leaf with types that count their expansions
+    /** @param depth the number of levels above the leaf
+        @param levels the type objects of the graph, the leaf first
+
+        @return the top of the graph
+    */
+    private CountingHashDataType getCountingSharedSubtypeDag(int depth, reference<list<CountingHashDataType>> levels) {
+        CountingHashDataType leaf("leaf");
+        leaf.addField(new QoreDataField("str", "a string field", StringType));
+        leaf.addField(new QoreDataField("num", "an int field", IntType));
+        levels = (leaf,);
+
+        CountingHashDataType rv = leaf;
+        for (int i = 0; i < depth; ++i) {
+            CountingHashDataType t("level" + (i + 1));
+            # all three fields reference the *same* child type object
+            foreach string fname in ("a", "b", "c") {
+                t.addField(new QoreDataField(fname, "shared subtype", rv));
+            }
+            levels += t;
+            rv = t;
+        }
+        return rv;
+    }
+
     private AbstractDataProviderType getSharedSubtypeDag(int depth) {
         HashDataType leaf();
         leaf.addField(new QoreDataField("str", "a string field", StringType));
@@ -369,13 +410,22 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
 
     #! A shared subtype must be expanded once per distinct type object, not once per path to it
     sharedSubtypeDagTest() {
-        AbstractDataProviderType t = getSharedSubtypeDag(Depth);
+        list<CountingHashDataType> levels;
+        CountingHashDataType t = getCountingSharedSubtypeDag(Depth, \levels);
 
-        date start = now_us();
         hash<DataTypeInfo> info = t.getInfo();
-        date elapsed = now_us() - start;
 
-        assertLt(MaxTraversalTime, elapsed, "getInfo() on a shared-subtype DAG must not re-expand shared subtypes");
+        # each distinct type object is expanded once: Depth + 1 expansions in all, where re-expanding shared subtypes
+        # would expand the type at level i (the leaf at 0) Fanout ** (Depth - i) times
+        assertEq(Depth + 1, levels.size());
+        foreach CountingHashDataType level in (levels) {
+            assertEq(1, level.expansions, sprintf("%s is expanded once", level.getName()));
+        }
+        assertEq(Depth + 1, (foldl $1 + $2, (map $1.expansions, levels)), "expansions in all");
+
+        # the count sees every expansion: a second traversal (with a memo of its own) expands every type once more
+        t.getInfo();
+        assertEq((map 2, levels), (map $1.expansions, levels), "a second traversal expands each type once more");
 
         # the graph is intact: Depth levels of "a"/"b"/"c" above the leaf
         hash<auto> node = info;
@@ -413,11 +463,8 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         a.setElementType(b);
         b.setElementType(a);
 
-        date start = now_us();
+        # the traversal returns: the cycle is truncated and marked (checked below)
         hash<DataTypeInfo> info = a.getInfo();
-        date elapsed = now_us() - start;
-
-        assertLt(MaxTraversalTime, elapsed, "getInfo() on a cyclic element-type graph must terminate");
 
         # "a" contains "b"; "b" would contain "a" again, so the cycle is truncated there and marked
         assertEq("b", info.element_type.name, "the element type is reported");
@@ -428,16 +475,14 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
 
     #! A cyclic field graph must terminate, with the cycle marked rather than followed
     cyclicFieldTypeTest() {
-        HashDataType t();
+        CountingHashDataType t("self");
         # a field of the type itself: t.self -> t -> t.self -> ...
         t.addField(new QoreDataField("self", "self-referencing field", t));
         t.addField(new QoreDataField("str", "a string field", StringType));
 
-        date start = now_us();
         hash<DataTypeInfo> info = t.getInfo();
-        date elapsed = now_us() - start;
-
-        assertLt(MaxTraversalTime, elapsed, "getInfo() on a cyclic field graph must terminate");
+        # the type is expanded once; its occurrence below itself is truncated, not expanded
+        assertEq(1, t.expansions, "the cyclic type is expanded once");
 
         hash<auto> child = info.fields.self.type;
         assertTrue(child.recursive, "the cycle is marked as recursive");
@@ -501,28 +546,30 @@ public class DataProviderTypeGraphTest inherits QUnit::Test {
         assertFalse(info.hasKey("element_type"));
     }
 
-    #! A field's configuration on a deep graph whose shared subtypes are on a cycle is described in bounded time
+    #! A field's configuration on a deep graph whose shared subtypes are on a cycle does not expand the graph
     /** Info on a type truncated by a cycle depends on the path to it, so getInfo() cannot memoize the types on a
         cycle and re-expands each shared subtype once per path to it (Fanout ** Depth); a field's configuration does
         not traverse the graph at all
     */
     configInfoCyclicGraphTest() {
-        HashDataType root();
-        AbstractDataProviderType rv = root;
+        CountingHashDataType root("root");
+        list<CountingHashDataType> types = (root,);
+        CountingHashDataType rv = root;
         for (int i = 0; i < Depth; ++i) {
-            HashDataType t();
+            CountingHashDataType t("level" + (i + 1));
             foreach string fname in ("a", "b", "c") {
                 t.addField(new QoreDataField(fname, "shared subtype", rv));
             }
+            types += t;
             rv = t;
         }
         # close the cycle: the leaf refers back to the top of the graph
         root.addField(new QoreDataField("top", "cycle to the top", rv));
 
-        date start = now_us();
         hash<DataFieldInfo> info = new QoreDataField("f", "a field", rv).getConfigInfo();
-        date elapsed = now_us() - start;
-        assertLt(MaxTraversalTime, elapsed, "a field's configuration must not traverse the type graph");
+        # the configuration describes the type without the graph: no type of the graph is expanded
+        assertEq((map 0, types), (map $1.expansions, types),
+            "a field's configuration must not traverse the type graph");
         assertEq("hash", info.type.base_type);
         assertFalse(info.type.hasKey("default_field_type_info"), "the type declares fields");
     }

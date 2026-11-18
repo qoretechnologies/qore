@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class StringInvalidEncodingTest
+
+#! string operations on characters fail closed on a string that is not valid in its encoding (qore#6595)
+/** The characters of such a string cannot be found after its first invalid byte sequence: an operation that gives a
+    transformed copy of the string, or that resolves character offsets against its length, raises INVALID-ENCODING
+    instead of giving a partial result.
+*/
+class StringInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("string operations on invalid strings", "1.0", \ARGV) {
+        addTestCase("replace() subject", \replaceSubject());
+        addTestCase("replace() arguments", \replaceArgs());
+        addTestCase("replace() other encodings", \replaceOtherEncodings());
+        addTestCase("range operator", \rangeOperator());
+        addTestCase("remove and delete", \removeDelete());
+        addTestCase("strmul() offset", \strmulOffset());
+        addTestCase("valid strings are unaffected", \validStrings());
+        set_return_value(main());
+    }
+
+    #! returns a string tagged as UTF-8 that is not valid in it: "a'b", an invalid byte, "c'd"
+    private static string invalid() {
+        return binary_to_string(parse_hex_string("612762ff632764"), "UTF-8");
+    }
+
+    #! returns a string tagged as UTF-8 that is not valid in it: a quote, an overlong form of "/", two quotes
+    private static string overlong() {
+        return binary_to_string(parse_hex_string("27c0af2727"), "UTF-8");
+    }
+
+    replaceSubject() {
+        # without range arguments, and with each form of the range arguments
+        assertThrows("INVALID-ENCODING", "replace\\(\\): the subject string is not valid UTF-8: invalid byte "
+            "sequence at byte offset 3", \replace(), (invalid(), "'", "''"));
+        assertThrows("INVALID-ENCODING", \replace(), (invalid(), "'", "''", 1));
+        assertThrows("INVALID-ENCODING", \replace(), (invalid(), "'", "''", -2));
+        assertThrows("INVALID-ENCODING", \replace(), (invalid(), "'", "''", 0, 5));
+        assertThrows("INVALID-ENCODING", \replace(), (invalid(), "'", "''", 0, -2));
+        assertThrows("INVALID-ENCODING", \replace(), (invalid(), "'", "''", 0, -1));
+        # a pattern that is not in the string
+        assertThrows("INVALID-ENCODING", \replace(), (invalid(), "x", "y"));
+        # an overlong form is not valid UTF-8
+        assertThrows("INVALID-ENCODING", "byte offset 1", \replace(), (overlong(), "'", "''"));
+        # an invalid byte after a non-ASCII character
+        assertThrows("INVALID-ENCODING", "byte offset 3", \replace(),
+            (binary_to_string(parse_hex_string("c3a927ff27"), "UTF-8"), "'", "''"));
+        # a substring of an invalid string
+        assertThrows("INVALID-ENCODING", "byte offset 2", \replace(), (substr(invalid(), 1), "'", "''"));
+        # a truncated character at the end
+        assertThrows("INVALID-ENCODING", "byte offset 2", \replace(),
+            (binary_to_string(parse_hex_string("2727e282"), "UTF-8"), "'", "''"));
+    }
+
+    replaceArgs() {
+        string bad = binary_to_string(parse_hex_string("27ff"), "UTF-8");
+        assertThrows("INVALID-ENCODING", "replace\\(\\): the source string is not valid UTF-8: invalid byte sequence "
+            "at byte offset 1", \replace(), ("a'b", bad, "x"));
+        assertThrows("INVALID-ENCODING", "replace\\(\\): the target string is not valid UTF-8: invalid byte sequence "
+            "at byte offset 1", \replace(), ("a'b'c", "'", bad));
+    }
+
+    #! a string in another multi-byte encoding is checked in its encoding
+    replaceOtherEncodings() {
+        string sj = binary_to_string(parse_hex_string("8227ff27"), "SHIFT_JIS");
+        assertThrows("INVALID-ENCODING", "replace\\(\\): the subject string is not valid Shift_JIS", \replace(),
+            (sj, "'", "''"));
+        # a string in a single-byte encoding has no invalid bytes
+        string l = binary_to_string(parse_hex_string("27e927ff"), "ISO-8859-1");
+        assertEq(parse_hex_string("2727e92727ff"), binary(replace(l, "'", "''")));
+    }
+
+    rangeOperator() {
+        string s = invalid();
+        assertThrows("INVALID-ENCODING", "range operator \\[m\\.\\.n\\]: the subject string is not valid UTF-8",
+            sub () { string r = s[1..5]; });
+        assertThrows("INVALID-ENCODING", sub () { string r = s[0..]; });
+        assertThrows("INVALID-ENCODING", sub () { string r = s[5..1]; });
+        assertThrows("INVALID-ENCODING", sub () { string r = s[-3..-1]; });
+        assertThrows("INVALID-ENCODING", sub () { string r = overlong()[0..1]; });
+        # a list of selectors with a range from the end
+        assertThrows("INVALID-ENCODING", sub () { string r = s[-3..-1, 0]; });
+    }
+
+    removeDelete() {
+        # a single index after the invalid byte
+        string s = invalid();
+        assertThrows("INVALID-ENCODING", "<remove operator>: the subject string is not valid UTF-8",
+            sub () { *string r = remove s[5]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+        assertThrows("INVALID-ENCODING", "<delete operator>", sub () { delete s[5]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+        assertThrows("INVALID-ENCODING", sub () { delete s[-1]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+        # several indexes and a range
+        assertThrows("INVALID-ENCODING", sub () { *string r = remove s[5, 6]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+        assertThrows("INVALID-ENCODING", sub () { delete s[5, 6]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+        assertThrows("INVALID-ENCODING", sub () { *string r = remove s[4..6]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+        assertThrows("INVALID-ENCODING", sub () { delete s[4..6]; });
+        assertEq(parse_hex_string("612762ff632764"), binary(s));
+    }
+
+    strmulOffset() {
+        assertThrows("INVALID-ENCODING", "strmul\\(\\): the subject string is not valid UTF-8", \strmul(),
+            (invalid(), 2, 1));
+        assertThrows("INVALID-ENCODING", \strmul(), (invalid(), 2, 10));
+        assertEq("éa,éa", strmul("éa,", 2, 1));
+    }
+
+    validStrings() {
+        assertEq("a''b''c", replace("a'b'c", "'", "''"));
+        assertEq("é''ü''", replace("é'ü'", "'", "''"));
+        assertEq("a'b''c", replace("a'b'c", "'", "''", 2));
+        assertEq("a''b'c", replace("a'b'c", "'", "''", 0, 2));
+        assertEq("", replace("", "'", "''"));
+        # an end before the start of the string leaves nothing to replace
+        assertEq("abc", replace("abc", "b", "x", 0, -4));
+        assertEq("abcb", replace("abcb", "b", "x", 0, -10));
+        assertEq("abcb", replace("abcb", "b", "x", 2, 1));
+        string s = "aébüc";
+        assertEq("ébü", s[1..3]);
+        assertEq("üb", s[3..2]);
+        assertEq("büc", s[-3..-1]);
+        assertEq("c", remove s[4]);
+        assertEq("éb", remove s[1..2]);
+        assertEq("aüc", s);
+        delete s[0, 2];
+        assertEq("ü", s);
+    }
+}
