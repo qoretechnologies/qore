@@ -2805,6 +2805,139 @@ static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
 // argument releases
 // when it returns if the read gave the frame a reference of its own; an implicit argument ($1) is not one: a later $1
 // reads its element slot again
+//! Returns true if \a local is the untyped variable of a foreach loop, which can hold a reference given by an element
+/** Such a variable reads as the referenced lvalue: it does not hold the value read, which the read owns, so a call
+    that writes the referenced lvalue and its parameter must be given it, to destroy it at the parameter's write as
+    the AST interpreter does (c.m(r) in foreach auto r in ((\o,)); issues #6441, #6538).  Decided statically, when the
+    function is analyzed, from the facts of its lowering (QoreIRFunction::reference_element_locals,
+    reference_store_locals): such a read is a consumed argument of its call, whose instruction then has
+    QORE_IR_GIVES_CALL_ARGS and QORE_IR_GIVES_CALL_TEMPS, which the interpreter's call sites already test, so that the
+    interpreter's loop is the same code as for any other call
+*/
+static bool qore_ir_element_local_may_read_reference(const QoreIRFunction& func, const LocalVar* local) {
+    // a variable that no element and no store that can be a reference is assigned to (a loop over a list of ints)
+    // is not one
+    const void* key = reinterpret_cast<const void*>(local);
+    return func.element_store_locals.count(key)
+        && (func.reference_element_locals.count(key) || func.reference_store_locals.count(key));
+}
+
+//! Returns true if the call \a inst is known, when the function is analyzed, to call a variant none of whose
+//! parameters takes its argument over
+/** A function, a static method, or a method that cannot be overridden (of a final class, or a final variant) whose IR
+    is known or can be lowered now and shows that no parameter takes its argument over
+    (QoreIRFunction::param_take_over), or a builtin
+    variant, whose argument list holds its arguments until it returns, as in the AST interpreter.  Anything else (an
+    overridable method, a call reference, a closure, a callee whose IR is not known yet) can take an argument over
+    (issue #6538)
+*/
+static bool qore_ir_call_known_to_take_no_arg_over(const QoreIRInstruction* inst) {
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const QoreMethod* method = nullptr;
+    const QoreClass* qc = nullptr;
+    const char* name = nullptr;
+    switch (inst->opcode) {
+        case QoreIROpcode::CallDirect: {
+            const auto* call = static_cast<const QoreIRCallDirectInstruction*>(inst);
+            variant = call->variant;
+            name = call->func ? call->func->getName() : nullptr;
+            break;
+        }
+        case QoreIROpcode::CallStaticDirect: {
+            const auto* call = static_cast<const QoreIRCallStaticDirectInstruction*>(inst);
+            variant = call->variant;
+            name = call->method ? call->method->getName() : nullptr;
+            break;
+        }
+        case QoreIROpcode::CallMethodDirect: {
+            const auto* call = static_cast<const QoreIRCallMethodDirectInstruction*>(inst);
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            break;
+        }
+        case QoreIROpcode::InvokeMethodDirect: {
+            const auto* call = static_cast<const QoreIRInvokeMethodDirectInstruction*>(inst);
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            break;
+        }
+        case QoreIROpcode::DotEvalMethodDirect: {
+            const auto* call = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(inst);
+            if (call->pseudo) {
+                return false;
+            }
+            variant = call->variant;
+            method = call->method;
+            qc = call->qc;
+            if (!method) {
+                // the lowering leaves the target to the run-time dispatch when the parser did not resolve the
+                // variant (an argument of an unknown type): the method and class resolved at parse time are those of
+                // the call's expression
+                const auto* dot = call->expr.hasNode()
+                    ? dynamic_cast<const QoreDotEvalOperatorNode*>(call->expr.getInternalNode()) : nullptr;
+                const MethodCallNode* m = dot ? dot->getMethodCall() : nullptr;
+                if (m && !m->isPseudo()) {
+                    method = m->getMethod();
+                    qc = m->getClass();
+                }
+            }
+            break;
+        }
+        default:
+            return false;
+    }
+    if (!variant) {
+        // a call whose variant is resolved when it is made (an argument of an unknown type) calls the single
+        // variant of a function or method that has no other
+        const QoreFunction* f = nullptr;
+        if (method) {
+            f = qore_method_private::get(*method)->getFunction();
+        } else if (inst->opcode == QoreIROpcode::CallDirect) {
+            f = static_cast<const QoreIRCallDirectInstruction*>(inst)->func;
+        } else if (inst->opcode == QoreIROpcode::CallStaticDirect) {
+            const QoreMethod* static_method = static_cast<const QoreIRCallStaticDirectInstruction*>(inst)->method;
+            f = static_method ? qore_method_private::get(*static_method)->getFunction() : nullptr;
+        }
+        if (!f || f->numVariants() != 1 || f->hasInheritedVariants() || f->hasGenericClassAncestor()) {
+            return false;
+        }
+        variant = f->first();
+    }
+    if (inst->opcode != QoreIROpcode::CallDirect && inst->opcode != QoreIROpcode::CallStaticDirect) {
+        // a method that can be overridden calls a variant known only when the call is made
+        if (!method || !qc || method->getClass() != qc) {
+            return false;
+        }
+        const auto* method_variant = dynamic_cast<const MethodVariantBase*>(variant);
+        if (!qc->isFinal() && !(method_variant && method_variant->isFinal())) {
+            return false;
+        }
+        name = method->getName();
+    }
+    const UserVariantBase* uvb = variant->getUserVariantBase();
+    if (!uvb) {
+        return true;
+    }
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
+    // a callee that has not run yet has no IR: it is lowered now, without promoting its tier, as the batch
+    // compilation of native code lowers its callees (a variant without statements, from a source-stripped qmod, has
+    // none to lower)
+    if (!callee_ir && name && uvb->getStatementBlock() && !uvb->irLoweringFailed()) {
+        uvb->forceIRLowering(name, false, false);
+        callee_ir = uvb->getCachedIR();
+    }
+    return callee_ir && !callee_ir->param_take_over;
+}
+
+//! Returns true if the read of \a local is given to the call \a call_inst: the variable can hold a reference given by
+//! an element (qore_ir_element_local_may_read_reference()) and the call can take an argument over
+static bool qore_ir_element_read_given_to_call(const QoreIRFunction& func, const LocalVar* local,
+        const QoreIRInstruction* call_inst) {
+    return qore_ir_element_local_may_read_reference(func, local) && !qore_ir_call_known_to_take_no_arg_over(call_inst);
+}
+
 static bool qore_ir_reads_variable_for_call_arg(QoreIROpcode op) {
     switch (op) {
         case QoreIROpcode::LoadLocal:
@@ -3139,6 +3272,9 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
             return true;
         }
         const auto& insts = call_block[id]->instructions;
+        if (qore_ir_element_read_given_to_call(func, load->local, insts[call_pos[id]].get())) {
+            return true;
+        }
         const uint32_t scope = insts[call_pos[id]]->temp_scope_id;
         if (!scope) {
             return true;
@@ -3422,7 +3558,9 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                 return false;
             }
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
-            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()) {
+            if (!load->local || load->is_ref || load->is_closure || load->local->closureUse()
+                    || qore_ir_element_read_given_to_call(func, load->local,
+                        call_block->instructions[call_pos].get())) {
                 return false;
             }
             const auto& insts = call_block->instructions;
