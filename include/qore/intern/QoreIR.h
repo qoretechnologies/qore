@@ -1383,6 +1383,11 @@ struct QoreIRConstant {
     double float_value = 0.0;
     bool bool_value = false;
     std::string string_value;
+    //! true if \c string_value is ASCII text (no byte >= 0x80); set by setStringValue()
+    /** A string made from the value has its ASCII prefix known (see qore_string_private::setOwnedAsciiText()), so
+        that the operations on a literal do not scan it again at each evaluation (qore#6625)
+    */
+    bool string_ascii = false;
     int64_t date_microseconds = 0;
     bool date_is_relative = false;
     const AbstractQoreZoneInfo* date_zone = nullptr;  // Original timezone for absolute dates
@@ -1396,6 +1401,22 @@ struct QoreIRConstant {
     int rel_seconds = 0;
     int rel_us = 0;
     const QoreEnumMember* enum_member = nullptr;
+
+    //! returns true if the text has no byte >= 0x80
+    static bool isAsciiText(const std::string& str) {
+        return std::all_of(str.begin(), str.end(), [](char c) { return static_cast<unsigned char>(c) < 0x80; });
+    }
+
+    //! sets \c string_value and \c string_ascii
+    void setStringValue(const char* str, size_t len) {
+        string_value.assign(str, len);
+        string_ascii = isAsciiText(string_value);
+    }
+
+    //! sets \c string_value and \c string_ascii
+    void setStringValue(const std::string& str) {
+        setStringValue(str.data(), str.size());
+    }
 };
 
 //! The loop statement whose iterations a block starts, for cancellation checks (see QoreIRBasicBlock::loop_cancel)

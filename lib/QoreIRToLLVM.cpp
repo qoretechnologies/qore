@@ -1764,6 +1764,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(i64_type, {ptr_type}, false));
     module.getOrInsertFunction("qore_rt_make_string_len",
             llvm::FunctionType::get(i64_type, {ptr_type, i64_type}, false));
+    module.getOrInsertFunction("qore_rt_make_ascii_string_len",
+            llvm::FunctionType::get(i64_type, {ptr_type, i64_type}, false));
     module.getOrInsertFunction("qore_rt_catch_exception",
             llvm::FunctionType::get(i64_type, {ptr_type}, false));
     module.getOrInsertFunction("qore_rt_catch_end",
@@ -11480,7 +11482,9 @@ llvm::Value* QoreIRToLLVM::emitAOTStringExpression(const BatchCalleeInfo& info,
                 break;
             case AOTStringExpressionNodeKind::StringConstant: {
                 llvm::Value* data = builder->CreateGlobalString(node.string_constant);
-                auto helper = module.getOrInsertFunction("qore_rt_make_string_len",
+                // a constant that is ASCII text is made with its ASCII prefix known (qore#6625)
+                auto helper = module.getOrInsertFunction(QoreIRConstant::isAsciiText(node.string_constant)
+                    ? "qore_rt_make_ascii_string_len" : "qore_rt_make_string_len",
                     llvm::FunctionType::get(i64_type, {ptr_type, i64_type}, false));
                 values[i] = builder->CreateCall(helper,
                     {data, llvm::ConstantInt::get(i64_type,
@@ -22251,7 +22255,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* cinst = static_cast<const QoreIRConstInstruction*>(inst);
             // Create a global constant string and pass an explicit byte length so embedded NULs are preserved.
             llvm::Constant* str_const = builder->CreateGlobalString(cinst->constant.string_value);
-            auto helper = module.getOrInsertFunction("qore_rt_make_string_len",
+            // a literal that is ASCII text is made with its ASCII prefix known, so that the operations on it do
+            // not scan it at each evaluation (qore#6625)
+            auto helper = module.getOrInsertFunction(cinst->constant.string_ascii
+                    ? "qore_rt_make_ascii_string_len" : "qore_rt_make_string_len",
                     llvm::FunctionType::get(i64_type, {ptr_type, i64_type}, false));
             llvm::Value* len = llvm::ConstantInt::get(i64_type, cinst->constant.string_value.size());
             llvm::Value* str_result = builder->CreateCall(helper, {str_const, len});

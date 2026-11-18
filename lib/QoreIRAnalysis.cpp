@@ -6189,7 +6189,7 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
             }
             // copy by length: a ConstString is emitted with an explicit byte count and may hold
             // embedded NULs
-            constant.string_value.assign(str.c_str(), str.size());
+            constant.setStringValue(str.c_str(), str.size());
             return true;
         }
         default:
