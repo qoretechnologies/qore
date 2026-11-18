@@ -1369,7 +1369,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
-        "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers",
+        "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
+        "dbg_finish_hold",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {

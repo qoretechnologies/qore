@@ -148,8 +148,14 @@ struct QoreDbgFinishHold {
     bool held = false;
     //! the held thread is to continue
     bool released = false;
+    //! true while a hold is armed (hold_ms or tls_hold_ms): a thread that finishes takes the mutex only then, so a
+    //! fork() made while a thread finishes finds it unlocked (qore#6543)
+    std::atomic<bool> armed{false};
 };
 static QoreDbgFinishHold* dbg_finish_hold = new QoreDbgFinishHold;
+//! the mutex is a process-wide lock: a child of fork() gets it unlocked (qore#6543; see design/fork-handlers.md)
+static QoreForkStdMutex dbg_finish_hold_fork_handler{dbg_finish_hold->m, QFLR_LEAF, "dbg_finish_hold", QFLM_ACQUIRE,
+    {&dbg_finish_hold->cv}};
 
 //! Releases a held finishing thread when the static objects of this file are destroyed (issue #6405)
 /** Declared before thread_counter, so that it is destroyed after it: a thread that exit() left finishing then uses
@@ -179,17 +185,28 @@ struct QoreDbgStartHold {
     bool held = false;
     //! the held thread is to continue
     bool released = false;
+    //! true while a hold is armed: a thread that starts takes the mutex only then, so a fork() made while a thread
+    //! starts finds it unlocked (qore#6543)
+    std::atomic<bool> armed{false};
 };
 static QoreDbgStartHold* dbg_start_hold = new QoreDbgStartHold;
+//! the mutex is a process-wide lock: a child of fork() gets it unlocked (qore#6543; see design/fork-handlers.md)
+static QoreForkStdMutex dbg_start_hold_fork_handler{dbg_start_hold->m, QFLR_LEAF, "dbg_start_hold", QFLM_ACQUIRE,
+    {&dbg_start_hold->cv}};
 
 //! Holds a thread that has been started, before it registers, if a hold is armed (qore#6469)
 static void qore_dbg_hold_thread_start() {
+    // every thread that starts gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_start_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::unique_lock<std::mutex> l(dbg_start_hold->m);
     int ms = dbg_start_hold->hold_ms;
     if (ms <= 0) {
         return;
     }
     dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->armed.store(false, std::memory_order_release);
     dbg_start_hold->held = true;
     dbg_start_hold->cv.notify_all();
     dbg_start_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_start_hold->released; });
@@ -7613,6 +7630,7 @@ void qore_dbg_hold_next_thread_start(int ms) {
     std::lock_guard<std::mutex> l(dbg_start_hold->m);
     dbg_start_hold->hold_ms = ms;
     dbg_start_hold->released = false;
+    dbg_start_hold->armed.store(ms > 0, std::memory_order_release);
 }
 
 bool qore_dbg_wait_thread_start_held(int timeout_ms) {
@@ -7625,6 +7643,7 @@ void qore_dbg_release_thread_start() {
     std::unique_lock<std::mutex> l(dbg_start_hold->m);
     // a hold that no thread has taken yet is disarmed
     dbg_start_hold->hold_ms = 0;
+    dbg_start_hold->armed.store(false, std::memory_order_release);
     dbg_start_hold->released = true;
     dbg_start_hold->cv.notify_all();
     // returns when the held thread has continued, so that a later hold is not ended by this release
@@ -7635,6 +7654,8 @@ void qore_dbg_hold_next_thread_finish(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->hold_ms = ms;
     dbg_finish_hold->released = false;
+    dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0 || dbg_finish_hold->tls_hold_ms > 0,
+        std::memory_order_release);
 }
 
 bool qore_dbg_wait_thread_finish_held(int timeout_ms) {
@@ -7648,6 +7669,8 @@ void qore_dbg_hold_next_thread_tls_exit(int ms) {
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     dbg_finish_hold->tls_hold_ms = ms;
     dbg_finish_hold->released = false;
+    dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0 || dbg_finish_hold->tls_hold_ms > 0,
+        std::memory_order_release);
 }
 
 namespace {
@@ -7683,21 +7706,31 @@ thread_local QoreDbgTlsHold qore_dbg_tls_hold;
 
 //! Arms the thread-local hold of the calling thread if a hold of the next thread's exit is armed
 static void qore_dbg_arm_thread_tls_hold() {
+    // every thread that finishes gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_finish_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::lock_guard<std::mutex> l(dbg_finish_hold->m);
     if (dbg_finish_hold->tls_hold_ms > 0) {
         // the first use constructs the thread-local object, whose destructor then runs when the thread ends
         qore_dbg_tls_hold.ms = dbg_finish_hold->tls_hold_ms;
         dbg_finish_hold->tls_hold_ms = 0;
+        dbg_finish_hold->armed.store(dbg_finish_hold->hold_ms > 0, std::memory_order_release);
     }
 }
 
 static void qore_dbg_hold_thread_finish() {
+    // every thread that finishes gets here: no lock is taken unless a hold is armed (qore#6543)
+    if (!dbg_finish_hold->armed.load(std::memory_order_acquire)) {
+        return;
+    }
     std::unique_lock<std::mutex> l(dbg_finish_hold->m);
     int ms = dbg_finish_hold->hold_ms;
     if (ms <= 0) {
         return;
     }
     dbg_finish_hold->hold_ms = 0;
+    dbg_finish_hold->armed.store(dbg_finish_hold->tls_hold_ms > 0, std::memory_order_release);
     dbg_finish_hold->held = true;
     dbg_finish_hold->cv.notify_all();
     dbg_finish_hold->cv.wait_for(l, std::chrono::milliseconds(ms), [] () { return dbg_finish_hold->released; });
