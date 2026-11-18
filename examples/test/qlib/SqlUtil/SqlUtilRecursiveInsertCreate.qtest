@@ -502,8 +502,8 @@ class SqlUtilRecursiveInsertCreateTest inherits QUnit::Test {
         hash<auto> sh = getTreeSelect();
         sh.recursive.anchor.where = {"name": name};
         sh.columns = ("id", cop_as("name", "näme"), "lvl");
-        # a comment with a quote and a placeholder is not changed
-        sh.comment = "x' %v";
+        # a comment with a quote is not changed (a placeholder character in a comment is refused since #6574)
+        sh.comment = "x'";
 
         OfflineDatasource ods("sqlite3", "3.45.1");
         AbstractTable emp = getTable(ods, "sqlite3", "emp", EmpDesc);
@@ -515,9 +515,9 @@ class SqlUtilRecursiveInsertCreateTest inherits QUnit::Test {
         assertRegex("where name = UNISTR\\('a\\\\0027b \\\\0025v \\\\00E4'\\)", sql);
         assertRegex("< 2\\)", sql);
         assertRegex("näme", sql);
-        assertRegex("/\\* x' %v \\*/", sql);
-        assertEq(1, (select regex_extract(sql, "(%v)", Qore::RE_Global) ?? (), True).size(),
-            "only the placeholder in the comment remains: " + sql);
+        assertRegex("/\\* x' \\*/", sql);
+        assertEq(0, (select regex_extract(sql, "(%v)", Qore::RE_Global) ?? (), True).size(),
+            "no placeholder remains: " + sql);
 
         # the tokenizer: placeholders in comments, quoted strings and identifiers are not replaced
         assertEq("select 1 -- %v\nfrom x where a = 2", copy.inline("select %v -- %v\nfrom x where a = %v", (1, 2)));
