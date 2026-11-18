@@ -5949,14 +5949,18 @@ string sql = table.getSelectSql(sh, \args);
 
     #! Returns the text of a comment or hint of a select, which is written into an SQL comment (qore#6574)
     /** The text cannot end the comment (\c "*" followed by \c "/") or open another one (\c "/" followed by \c "*",
-        as comments nest in some databases), so a text with either is refused, as is a text with a NUL character
+        as comments nest in some databases), and cannot have a placeholder character (\c "%" or \c ":"), as some
+        database drivers read placeholders in comments; a text with any of them is refused, as is a text with a NUL
+        character
 
-        @throw OPTION-ERROR the text has a character sequence that is not allowed in a comment
+        @throw OPTION-ERROR the text has a character or a character sequence that is not allowed in a comment
     */
     private static string checkCommentText(string option, string text) {
-        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0) {
+        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0 || text.find("%") >= 0
+            || text.find(":") >= 0) {
             throw "OPTION-ERROR", sprintf("the %y select option cannot contain the character sequences \"/*\" or "
-                "\"*/\" or a NUL character, as it is written into an SQL comment", option);
+                "\"*/\", the placeholder characters \"%%\" and \":\", or a NUL character, as it is written into an SQL "
+                "comment", option);
         }
         return text;
     }
@@ -6381,7 +6385,8 @@ string sql = table.getSelectSql(sh, \args);
             }
         }
 
-        # issue #4206: splice comments and hints into the SQL query string last
+        # issue #4206: splice comments and hints into the SQL query string last, right after the select keyword, where a
+        # hint must be, and where no text of the query can be (qore#6574: the first " from " could be in a literal)
         if (info.query_hash.comment || info.query_hash.hint) {
             string comment;
             if (info.query_hash.comment) {
@@ -6390,9 +6395,9 @@ string sql = table.getSelectSql(sh, \args);
             if (info.query_hash.hint) {
                 comment += sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
             }
-            # splice comment / hint test right before the " from " text in the query
-            int i = sql.find(" from ");
-            splice sql, i + 1, 0, comment;
+            # a query that does not start with the select keyword (ex: a recursive query, which starts with "with") has the
+            # comment at its start
+            splice sql, (sql =~ /^select /) ? 7 : 0, 0, comment;
         }
 
         if (setop_keys) {
@@ -7291,21 +7296,12 @@ string sql = table.getSelectSql(sh, \args);
             arg = getSqlValue(arg);
         } else if (cmd.argcolumn) {
             if (!cmd.argoptional || arg) {
-                # issue #2555: allow the use of literal with other column operators; a number is written as a numeric
-                # literal, and any other value is bound, so that no text of the value is written into the SQL
-                # (qore#6574)
+                # issue #2555: allow the use of literal with other column operators; the value is written as an SQL
+                # literal of the database, as cop_value() gives it in the select list, never as its text (qore#6574);
+                # it is not bound, as the SQL of a column expression is also copied (an alias in a where clause, a
+                # group by or order by position) and rendered out of the order of its text (a superquery)
                 if (arg.cop == COP_VALUE) {
-                    switch (arg.arg.typeCode()) {
-                        case NT_INT:
-                        case NT_FLOAT:
-                        case NT_NUMBER:
-                            arg = arg.arg.toString();
-                            break;
-                        default:
-                            info.args += arg.arg;
-                            arg = "%v";
-                            break;
-                    }
+                    arg = getSqlValue(arg.arg);
                 } else {
                     if (arg.typeCode() != NT_STRING) {
                         throw "SELECT-ERROR", sprintf("%s: expecting a string column designation for column "

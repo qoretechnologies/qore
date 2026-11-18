@@ -103,8 +103,8 @@
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
     @par SqlUtil Writes No Caller Text Into the SQL of a Select
     In @ref sqlutilintro "SqlUtil", a \c "comment" or \c "hint" select option that could end its SQL comment raises
-    \c OPTION-ERROR, a string given with @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is
-    bound, an alias referenced in a superquery or a window is given as an identifier, and a string given as the first
+    \c OPTION-ERROR, a value given with @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is an
+    SQL literal of the database, an alias referenced in a superquery or a window is given as an identifier, and a string given as the first
     argument of the Oracle \c in data provider expression is a bound value, as with the other databases (issue #6574).
 
     @par on_exit, on_success and on_error Must Be Statements of a Block
