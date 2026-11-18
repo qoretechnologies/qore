@@ -37,6 +37,8 @@ class Utf8ConversionValidationTest inherits QUnit::Test {
         addTestCase("well-formed UTF-8 is converted", \wellFormed());
         addTestCase("streams reject malformed UTF-8", \streams());
         addTestCase("the validator", \native());
+        addTestCase("the character functions of UTF-8 strings", \characters());
+        addTestCase("a character cut off by the end of the string", \truncatedAtEnd());
         set_return_value(main());
     }
 
@@ -87,6 +89,46 @@ class Utf8ConversionValidationTest inherits QUnit::Test {
             }
             assertEq("aé€😀b", convert_encoding(binary_to_string(out, "UTF-16LE"), "UTF-8"), "chunk " + chunk);
         }
+    }
+
+    #! the character functions of UTF-8 strings use the same strict definition as the conversions (qore#6604)
+    characters() {
+        foreach binary payload in (Malformed) {
+            string s = binary_to_string(binary("a") + payload + binary(" b"), "UTF-8");
+            assertThrows("INVALID-ENCODING", \encode_url(), (s,), payload.toHex());
+            # as the first character of a string
+            assertThrows("INVALID-ENCODING", \encode_url(), (binary_to_string(payload, "UTF-8"),),
+                payload.toHex() + " first");
+            # trunc_str() raises for an invalid character within the length, and ignores one after it
+            assertThrows("INVALID-ENCODING", "trunc_str\\(\\): the string is not valid UTF-8: invalid byte sequence at "
+                "byte offset 1", \trunc_str(), (s, s.size()), payload.toHex() + " trunc_str()");
+            assertEq("a", trunc_str(s, 1), payload.toHex() + " trunc_str() before");
+            # the whole string within the length
+            assertThrows("INVALID-ENCODING", \trunc_str(), (s, s.size() + 5), payload.toHex() + " trunc_str() whole");
+        }
+        foreach binary payload in (WellFormed) {
+            string s = binary_to_string(binary("a") + payload + binary(" b"), "UTF-8");
+            string url = encode_url(s);
+            assertEq(s, decode_url(url), payload.toHex());
+            # one character between the ASCII ones
+            assertEq(4, s.length(), payload.toHex() + " length");
+            assertEq(binary_to_string(payload, "UTF-8"), s.substr(1, 1), payload.toHex() + " substr");
+            # a character that the length cuts is left out without an exception
+            assertEq(s, trunc_str(s, s.size()), payload.toHex() + " trunc_str()");
+            assertEq(payload.size() > 1 ? "a" : "a" + binary_to_string(payload, "UTF-8"),
+                trunc_str(s, 1 + 1), payload.toHex() + " trunc_str() cut");
+        }
+    }
+
+    #! a character cut off by the end of the string is invalid within the length, and left out where the length cuts
+    #! it (qore#6604)
+    truncatedAtEnd() {
+        string s = binary_to_string(<6162e282>, "UTF-8");
+        assertThrows("INVALID-ENCODING", "trunc_str\\(\\): the string is not valid UTF-8: invalid byte sequence at "
+            "byte offset 2", \trunc_str(), (s, 10));
+        assertThrows("INVALID-ENCODING", \trunc_str(), (s, 4));
+        assertEq("ab", trunc_str(s, 3));
+        assertEq("ab", trunc_str(s, 2));
     }
 
     native() {

@@ -4506,8 +4506,9 @@ int q_check_char_read_encoding(const QoreEncoding* enc, ExceptionSink* xsink) {
     return -1;
 }
 
-// returns the byte length of the UTF-8 character starting with the given byte
-static size_t q_utf8_char_len(unsigned char c) {
+// returns the byte length of the UTF-8 character starting with the given lead byte, for UTF-8 text from iconv,
+// which is valid (for a check of UTF-8, see q_utf8_char_len())
+static size_t q_utf8_lead_len(unsigned char c) {
     if (c < 0x80) {
         return 1;
     }
@@ -4523,7 +4524,7 @@ static size_t q_utf8_char_len(unsigned char c) {
 // returns the number of characters in the given UTF-8 text from iconv
 static size_t q_utf8_char_count(const std::string& utf8) {
     size_t count = 0;
-    for (size_t i = 0; i < utf8.size(); i += q_utf8_char_len(static_cast<unsigned char>(utf8[i]))) {
+    for (size_t i = 0; i < utf8.size(); i += q_utf8_lead_len(static_cast<unsigned char>(utf8[i]))) {
         ++count;
     }
     return count;
@@ -4533,7 +4534,7 @@ static size_t q_utf8_char_count(const std::string& utf8) {
 static size_t q_utf8_prefix_len(const std::string& utf8, size_t n) {
     size_t i = 0;
     while (n-- && i < utf8.size()) {
-        i += q_utf8_char_len(static_cast<unsigned char>(utf8[i]));
+        i += q_utf8_lead_len(static_cast<unsigned char>(utf8[i]));
     }
     return QORE_MIN(i, utf8.size());
 }

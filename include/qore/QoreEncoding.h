@@ -154,7 +154,10 @@ public:
         @param p a pointer to the character data to check
         @param valid_len the number of valid bytes at the start of the character pointer
 
-        @return 0=invalid, positive = number of bytes needed to represent the character (and all are present), negative numbers = number of additional bytes needed to perform the check
+        @return 0=invalid, positive = number of bytes needed to represent the character (and all are present),
+        negative numbers = minus the number of bytes that the character needs, when \a valid_len bytes are a valid
+        start of it; UTF-8 is checked as RFC 3629 defines it (no overlong forms, surrogates or code points above
+        U+10FFFF; since %Qore 3.0)
     */
     DLLEXPORT qore_offset_t getCharLen(const char* p, size_t valid_len) const;
 

@@ -33,6 +33,7 @@
 #include <qore/intern/qore_encoding_private.h>
 #include <qore/intern/qore_string_private.h>
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreUtf8.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -855,41 +856,9 @@ const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {
     return findCreate(str->c_str());
 }
 
+// the UTF-8 encoding's character function: the one definition of a valid UTF-8 character (qore#6604)
 qore_offset_t q_UTF8_get_char_len(const char* p, size_t len) {
-    // see if a multi-byte char is starting
-    if ((*p & 0xc0) == 0xc0) {
-        //printd(5, "MULTIBYTE *p = %hhx\n", *p);
-        // check for a 3-byte sequence
-        if ((*p) & 0x20) {
-            // check for a 4-byte sequence
-            if ((*p) & 0x10) {
-                if (len >= 4) {
-                    if ((*(p+1)) & 0x80 && (*(p+2)) & 0x80 && (*(p+3)) & 0x80)
-                        return 4;
-                    // encoding error - invalid UTF-8 character
-                    return 0;
-                }
-                return -4;
-            } else { // should be 3-byte sequence
-                if (len >= 3) {
-                    if ((*(p+1)) & 0x80 && (*(p+2)) & 0x80)
-                        return 3;
-                    // encoding error - invalid UTF-8 character
-                    return 0;
-                }
-                return -3;
-            }
-        } else { // should be a 2-byte sequence - check next char for high bit
-            if (len >= 2) {
-                if ((*(p+1)) & 0x80)
-                   return 2;
-                // encoding error - invalid UTF-8 character
-                return 0;
-            }
-            return -2;
-        }
-    }
-    return 1;
+    return q_utf8_char_len(p, len);
 }
 
 static size_t UTF8_getLength(const char* p, const char* end, bool& invalid) {
@@ -912,7 +881,7 @@ static size_t UTF8_getLength(const char* p, const char* end, bool& invalid) {
             continue;
         }
 
-        qore_offset_t l = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t l = q_utf8_char_len(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;
@@ -928,7 +897,7 @@ static size_t UTF8_getLength(const char* p, const char* end, bool& invalid) {
 static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& invalid) {
     size_t b = 0;
     while ((p < end) && l) {
-        qore_offset_t bl = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t bl = q_utf8_char_len(p, end - p);
         if (bl <= 0) {
             invalid = true;
             return b;
@@ -944,7 +913,7 @@ static size_t UTF8_getByteLen(const char* p, const char* end, size_t l, bool& in
 static size_t UTF8_getCharPos(const char* p, const char* end, bool& invalid) {
     size_t i = 0;
     while (p < end) {
-        qore_offset_t l = q_UTF8_get_char_len(p, end - p);
+        qore_offset_t l = q_utf8_char_len(p, end - p);
         if (l <= 0) {
             invalid = true;
             return i;

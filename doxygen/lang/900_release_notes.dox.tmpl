@@ -175,6 +175,16 @@
     @ref elements "elements operator" count each byte of a string that does not start a complete character as one
     character, in every execution mode; before, the count stopped at the first such byte (issue #6597).
 
+    @par UTF-8 Strings Are Valid Only as RFC 3629 Defines Them
+    A continuation byte on its own, an overlong form, a surrogate, a code point above U+10FFFF and the bytes
+    \c 0xf5 - \c 0xff are invalid in a \c UTF-8 string: the string functions and operators raise
+    \c INVALID-ENCODING for them where they were read as characters (see @ref utf8_validity; issue #6604).
+
+    @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
+    @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
+    when the whole string is within it, where it returned the part before the character or the string unchecked
+    (issue #6604).
+
     @par A Keyword After a Dot and White Space Is a Member Name
     A keyword after the @ref dot_operator ". operator" and white space is a member or method name, as it is without
     the white space, so an operator keyword there is no longer an operator: <tt>h . keys h2</tt>, which was
@@ -2286,6 +2296,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
+      where it returned its bytes up to the NUL byte and memory after them (issue #6604)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
