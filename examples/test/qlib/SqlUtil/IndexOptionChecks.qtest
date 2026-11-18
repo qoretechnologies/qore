@@ -38,7 +38,8 @@ class IndexOptionChecksTest inherits QUnit::Test {
                 {"with": {"fillfactor": 70, "fastupdate": False, "buffering": "auto"}},
                 {"opclass": {"name": "text_pattern_ops"}}, {"opclass": {"v": "public.gist_trgm_ops(siglen = 32)"}},
                 # the forms that the server gives
-                {"opclass": {"name": "COLLATE \"C\" varchar_pattern_ops"}},
+                {"opclass": {"name": "COLLATE \"C\" varchar_pattern_ops"}}, {"opclass": {"name": "COLLATE \"C\""}},
+                {"opclass": {"name": "collate pg_catalog.\"default\" text_ops"}},
                 {"opclass": {"v": "tsvector_ops (siglen='32')"}}, {"opclass": {"v": "\"MySchema\".\"my;ops\""}},
                 {"opclass": {"v": "x_ops (p='a'' ); drop table t; --')"}},
             ) {
@@ -93,7 +94,7 @@ class IndexOptionChecksTest inherits QUnit::Test {
         # an index with a boolean storage parameter and an operator class compares equal to the index read from the
         # server: aligning it again gives no SQL
         hash<auto> schema = {"tables": {table: desc + {"indexes": {table + "_ix": {"columns": ("name",),
-            "opclass": {"name": "text_pattern_ops"}, "with": {"fillfactor": 70}}}}}};
+            "opclass": {"name": "text_pattern_ops"}, "with": {"fillfactor": 70, "deduplicate_items": True}}}}}};
         map ds.exec($1), db.getAlignSql(schema);
         ds.commit();
         on_exit {

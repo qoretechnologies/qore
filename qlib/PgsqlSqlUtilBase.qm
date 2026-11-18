@@ -5849,11 +5849,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     #! a value of an operator class parameter: a number, a name or a string literal without a backslash
     const PgsqlOpclassValue = "(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]*|'(?:[^'\\\\\\x00]|'')*')";
 
+    #! the optional parameters of an operator class
+    const PgsqlOpclassParams = "(?:\\s*\\(\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue
+        + "(?:\\s*,\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + ")*\\s*\\))?";
+
     #! the regular expression of an operator class, also in the form that the server gives (see parsePgIndexDef()):
-    #! an optional collation (\c "COLLATE name"), a name with an optional schema, and optional parameters
-    const PgsqlOpclassRegex = "\\A(?:(?i:collate)\\s+" + PgsqlOpclassQName + "\\s+)?" + PgsqlOpclassQName
-        + "(?:\\s*\\(\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + "(?:\\s*,\\s*"
-        + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + ")*\\s*\\))?\\z";
+    #! a name with an optional schema and optional parameters, after an optional collation (\c "COLLATE name"),
+    #! or a collation alone; a parameter value with a backslash is not accepted, also in the form of the server
+    const PgsqlOpclassRegex = "\\A(?:(?i:collate)\\s+" + PgsqlOpclassQName + "(?:\\s+" + PgsqlOpclassQName
+        + PgsqlOpclassParams + ")?|" + PgsqlOpclassQName + PgsqlOpclassParams + ")\\z";
 
     #! Checks the index options that are written into the DDL (qore#6577)
     /** Called for each index of a table description
