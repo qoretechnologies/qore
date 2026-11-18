@@ -4043,6 +4043,11 @@ public:
         return without a value), which the first hand-over of a run releases in their slots, as the AST interpreter
         releases the value that a return replaces.  Without it, a handler's return replaces a value only while an
         exception or a thread_exit unwinds the scope.
+
+        Outside the block cleanups of a return statement (at the end of a block, a break or a continue in the body of a
+        handler lowered inline), the instruction has a result: a bool that is true if a value was handed over in this
+        run, on which the lowering branches to the return of the value (QoreIRLowering::lowerHandedOverReturn(),
+        #6552), as the AST interpreter's handler's return ends the code around it as a return statement there would.
     */
     bool hand_over_return = false;
 };

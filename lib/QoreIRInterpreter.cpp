@@ -1460,6 +1460,15 @@ private:
         held_returns.clear();
     }
 
+public:
+    //! the count of the values handed over to the frame by the handlers that it runs (see
+    //! QoreHandlerRunContext::hand_over_count, #6552)
+    uint64_t handed_over_count = 0;
+    //! the slot of the result of a ScopeExit that the frame ran whose handlers handed a value over, which the return
+    //! that it branches to clears (see qore_ir_scope_exit_handed_over()), or UINT32_MAX
+    uint32_t handed_over_result_slot = UINT32_MAX;
+
+private:
     //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
     /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
         DiscardTempsKeep's) is held with a reference of its own.
@@ -8501,6 +8510,14 @@ static QORE_INTERN_NOINLINE void qore_ir_handler_hand_over_return(void* data, Qo
 // QoreIRInterpreter::execute(), which runs it only past the cap, keeps its code and frame
 static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handed_over_return_op(IRCallFrame& frame,
         IRValueSlots& values, IRCleanupSlots& cleanup, const QoreIRInstruction* inst, ExceptionSink* xsink) {
+    // the result of the ScopeExit whose handlers handed the value over, which branched here (#6552)
+    uint32_t& result_slot = frame.locals_slot_cache.handed_over_result_slot;
+    if (result_slot != UINT32_MAX) [[unlikely]] {
+        if (result_slot < values.size()) {
+            values[result_slot] = QoreValue();
+        }
+        result_slot = UINT32_MAX;
+    }
     if (inst->opcode == QoreIROpcode::ReleaseHandedOverReturn) {
         frame.locals_slot_cache.releaseHandedOverReturn(xsink);
         return;
@@ -8508,6 +8525,21 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_handed_over_retur
     QoreValue rv = frame.locals_slot_cache.takeHandedOverReturn(inst->operands.empty() ? QoreValue()
         : getIRValue(values, inst->operands.front()));
     setOwnedValueSlot(values, cleanup, inst->result.id, rv, xsink);
+}
+
+// The result of a ScopeExit past the inline cap outside the cleanups of a return statement: whether its handlers
+// handed a value over (#6552), set to true by the run of the handler that hands one over (see executeHandlerBody()):
+// the slot is never set otherwise, as the frame starts with its slots empty (no value is false) and a true value
+// branches to the return of the value, whose TakeHandedOverReturn or ReleaseHandedOverReturn clears it again (see
+// qore_ir_handed_over_return_op()), so that a later run of the ScopeExit that runs no handler (one reached again after
+// an exception that a try statement of the function catches) does not see it.  Nothing of this runs in
+// QoreIRInterpreter::execute() on a path that the cap does not reach.
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_scope_exit_handed_over(IRCallFrame& frame,
+        uint32_t id) {
+    if (id < frame.values.size()) {
+        frame.values[id] = QoreValue(true);
+        frame.locals_slot_cache.handed_over_result_slot = id;
+    }
 }
 
 // The IR interpreter's QoreIROpcode::HandlerReturn: hands the value of a return statement of a handler run out of line
@@ -8571,11 +8603,16 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
         if (parent_frame) {
             run_ctx.hand_over = returning ? qore_ir_handler_hand_over_return : qore_ir_handler_hand_over;
             run_ctx.data = &hand_over;
+            run_ctx.hand_over_count = &parent_frame->locals_slot_cache.handed_over_count;
         }
     }
     // the frame that execute() pushes for the handler
     run_ctx.ir_frame_index = pool.top;
     QoreHandlerRunGuard run_guard(run_ctx);
+    // a ScopeExit with a result gives whether a value was handed over to the function that takes the values of its
+    // handlers: the delta of its count in the runs (#6552)
+    uint64_t* count = scope_exit && scope_exit->result.isValid() ? run_ctx.hand_over_count : nullptr;
+    uint64_t count_before = count ? *count : 0;
     QoreValue rv;
     // the handler runs with the debug context of its frame, so that a debugger gets the events of its statements, as
     // with the AST interpreter, but not those of a function (see QoreIRInterpreter::execute())
@@ -8583,6 +8620,9 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
                                &handler.handler_ir->pre_instantiated_cache, nullptr, dbg_statements, dbg_pgm,
                                false, nullptr, parent_slot_cache, true);
     rv.discard(obe_xsink);
+    if (count && parent_frame && *count - count_before) {
+        qore_ir_scope_exit_handed_over(*parent_frame, scope_exit->result.id);
+    }
 }
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's

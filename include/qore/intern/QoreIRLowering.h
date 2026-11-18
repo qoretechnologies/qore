@@ -825,6 +825,8 @@ private:
         //! is closed after its own blocks and before the blocks that enclose it, whose on_exit handlers then see
         //! the exception of an enclosing catch block, as in the AST interpreter (qore#6017)
         CF_CATCH_SCOPES = 4,
+        //! the walk is the block cleanups of a return statement (see return_walk, #6552)
+        CF_RETURN_WALK = 8,
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)
@@ -843,7 +845,8 @@ private:
      *  @return false if lowering failed
      */
     bool emitBlockCleanups(size_t target_depth, std::string& error, bool is_error = false, unsigned flags = CF_NONE,
-        size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr);
+        size_t unwind_temp_depth = SIZE_MAX, const QoreProgramLocation* unwind_loc = nullptr,
+        size_t start_depth = SIZE_MAX);
 
     //! Returns true if what a return statement leaves on its way out of the code depends on an error it raises
     /** A try block catches the error, a catch block and a context clean up, the handlers of a block run by how it
@@ -1289,6 +1292,19 @@ private:
     bool pending_return_active = false;
     //! try_depth at the return statement of pending_return
     int pending_return_try_depth = 0;
+    //! true while the exit being lowered is the block cleanups of a return statement (CF_RETURN_WALK), not a block end,
+    //! a break or a continue (#6552)
+    /** A ScopeExit whose handlers run out of line past the inline cap in it leaves the value that they hand over to the
+        return, which takes it when its cleanups end (pending_return_handed_over); in another exit, a value handed
+        over ends the code around the run as a return statement there would (lowerHandedOverReturn())
+    */
+    bool return_walk = false;
+    //! Lowers the return of the value that handlers run out of line past the inline cap handed over, on the path
+    //! where they did, in an exit that is not the block cleanups of a return statement (#6552)
+    /** As a return statement at the point of the ScopeExit: the cleanup entries below \a start_depth (the index of the
+        scope that the ScopeExit left) are lowered as the block cleanups of a return, and the Return gives the value.
+    */
+    DLLLOCAL bool lowerHandedOverReturn(size_t start_depth, const QoreProgramLocation* loc, std::string& error);
     //! true if the block cleanups of pending_return have a ScopeExit whose handlers run out of line past the inline cap
     //! and hand the values of their returns over (QoreIRScopeExitInstruction::hand_over_return, #6137)
     /** The return takes the value handed over, if any (QoreIROpcode::TakeHandedOverReturn), and a return in a handler
@@ -1303,6 +1319,7 @@ private:
     //! the handler bodies lowered inline since the outermost exit being lowered began
     size_t inline_handlers_lowered = 0;
     class ExitLoweringNesting;
+    class PendingReturnScope;
     //! the value of the return that a return in a try statement in a handler replaces when the walk of its
     //! cleanups leaves the outermost try statement in the handler (try_end_depth == try_replaced_depth), as the AST
     //! interpreter's try statement replaces it when it ends (TryStatement::execImpl(), #5992)

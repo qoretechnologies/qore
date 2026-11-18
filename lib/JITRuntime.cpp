@@ -15333,12 +15333,28 @@ QoreHandlerRunContext*& qore_handler_run_context() {
 }
 
 // documented in QoreHandlerRun.h
+uint64_t qore_handler_run_hand_over_count() {
+    QoreHandlerRunContext* ctx = qore_handler_run_context();
+    return ctx && ctx->hand_over_count ? *ctx->hand_over_count : 0;
+}
+
+// documented in QoreHandlerRun.h
 void qore_handler_return(QoreValue value, ExceptionSink* xsink) {
     QoreHandlerRunContext* ctx = qore_handler_run_context();
     if (!ctx || !(ctx->unwinding || ctx->returning) || !ctx->hand_over) {
         return;
     }
+    if (ctx->hand_over_count) {
+        ++*ctx->hand_over_count;
+    }
     ctx->hand_over(ctx->data, value, xsink);
+}
+
+//! Returns the count of the values handed over to the function that the handler that runs it hands its values to
+//! (qore_handler_run_hand_over_count()), which the native code of a ScopeExit with a result in a handler compiled as a
+//! function of its own compares before and after its handlers run (#6552)
+extern "C" DLLEXPORT int64_t qore_rt_handler_run_hand_over_count() {
+    return static_cast<int64_t>(qore_handler_run_hand_over_count());
 }
 
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for (#6074)
@@ -15373,6 +15389,8 @@ struct QoreNativeHandlerHold {
     bool replaced = false;
     //! set to 1 when a value is handed over
     int8_t held = 0;
+    //! the count of the values handed over (QoreHandlerRunContext::hand_over_count, #6552)
+    uint64_t count = 0;
 
     static void handOver(void* data, QoreValue value, ExceptionSink* xsink) {
         QoreNativeHandlerHold& h = *static_cast<QoreNativeHandlerHold*>(data);
@@ -15562,6 +15580,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                     if (hold) {
                         run_ctx.hand_over = QoreNativeHandlerHold::handOver;
                         run_ctx.data = hold;
+                        run_ctx.hand_over_count = &hold->count;
                     }
                 }
                 QoreHandlerRunGuard run_guard(run_ctx);

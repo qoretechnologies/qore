@@ -68,6 +68,14 @@ struct QoreHandlerRunContext {
     hand_over_t hand_over = nullptr;
     //! the data of hand_over
     void* data = nullptr;
+    //! the count of the values handed over to the function that takes them (the frame of the IR interpreter that
+    //! runs the handlers, or the hold of native code), which qore_handler_return() increments, or nullptr (#6552)
+    /** A ScopeExit past the inline cap outside the cleanups of a return statement compares it before and after its
+        handlers run: only the values that reach its function count, not those of the handlers of the functions that
+        its handlers call, which have counts of their own; a run of the handlers of a block of a handler forwards to
+        the same count (forwardFrom())
+    */
+    uint64_t* hand_over_count = nullptr;
     //! the context of the run that this one is nested in, if any
     QoreHandlerRunContext* prev = nullptr;
     //! the index of the IR frame of the handler in the thread's IR frame pool, if the handler runs in the IR
@@ -83,11 +91,16 @@ struct QoreHandlerRunContext {
         returning = outer.returning;
         hand_over = outer.hand_over;
         data = outer.data;
+        hand_over_count = outer.hand_over_count;
     }
 };
 
 //! Returns the context of the innermost handler run of the current thread, if any (see QoreHandlerRunContext)
 DLLLOCAL QoreHandlerRunContext*& qore_handler_run_context();
+
+//! Returns the count of the values handed over to the function that the innermost handler run of the current thread
+//! hands its values to (QoreHandlerRunContext::hand_over_count), or 0 if none (#6552)
+DLLLOCAL uint64_t qore_handler_run_hand_over_count();
 
 //! Pushes the context of a handler run for the lifetime of the object, on every way out (an exception, a thread_exit,
 //! a cancellation), and pops it

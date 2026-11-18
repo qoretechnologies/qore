@@ -980,6 +980,10 @@ int8_t qore_rt_exec_on_block_exit_return_hold(int64_t saved_count, ExceptionSink
 //! \a value_bits otherwise (QoreIROpcode::TakeHandedOverReturn, #6137)
 uint64_t qore_rt_take_handed_over_return(uint64_t* hold, int8_t* handed, uint64_t value_bits);
 
+//! Returns the count of the values handed over to the function that the innermost handler run of the current thread
+//! hands its values to, or 0 (#6552)
+int64_t qore_rt_handler_run_hand_over_count();
+
 //! Releases the value in \a hold if \a handed is set, clearing both (QoreIROpcode::ReleaseHandedOverReturn, #6137)
 void qore_rt_release_handed_over_return(uint64_t* hold, int8_t* handed, ExceptionSink* xsink);
 

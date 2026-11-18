@@ -38204,7 +38204,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else {
                     // the handlers run through the runtime only if one of the scope is registered (see
                     // emitOnBlockExitExec())
+                    llvm::BasicBlock* check_bb = builder->GetInsertBlock();
                     llvm::BasicBlock* done_bb = beginPendingHandlerRun(module, saved_count);
+                    // whether the handlers handed a value over, for a ScopeExit with a result (#6552): the count of the
+                    // values handed over changes in the run
+                    llvm::Value* handed = nullptr;
+                    // in a handler compiled as a function of its own, its handlers forward their values to the
+                    // function that the handler runs for: the count of the values handed over to it changes in the
+                    // run; otherwise the call tells
+                    llvm::Value* handed_count = nullptr;
+                    llvm::FunctionCallee count_fn;
+                    if (inst->result.isValid() && !sinst->hand_over_return) {
+                        count_fn = module.getOrInsertFunction("qore_rt_handler_run_hand_over_count",
+                            llvm::FunctionType::get(i64_type, {}, false));
+                        handed_count = builder->CreateCall(count_fn, {});
+                    }
                     publishLocalsForHandlers(module);
                     // the locals whose reload storage is released before the handlers run are reloaded right after
                     // them (see finalizeHandlerSites())
@@ -38220,6 +38234,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             handler_return_hold, handler_return_handed,
                             llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
                             llvm::ConstantInt::get(i64_type, 0)});
+                        if (inst->result.isValid()) {
+                            handed = builder->CreateICmpNE(call, builder->getInt8(0), "handed_over");
+                        }
                         if (!inst->operands.empty()) {
                             HandlerReturnHoldSite site{call, nullptr};
                             site.own_values = true;
@@ -38237,7 +38254,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             reaches_catch ? qore_ir_exception_catch_returns(*current_ir_func, inst->exception_target)
                                 : nullptr), true);
                     }
+                    if (handed_count) {
+                        // the delta of the count
+                        handed = builder->CreateICmpNE(builder->CreateSub(builder->CreateCall(count_fn, {}),
+                            handed_count), llvm::ConstantInt::get(i64_type, 0), "handed_over");
+                    }
+                    llvm::BasicBlock* run_end_bb = builder->GetInsertBlock();
                     endPendingHandlerRun(done_bb);
+                    if (handed) {
+                        // false where no handler was registered
+                        llvm::PHINode* phi = builder->CreatePHI(i1_type, 2, "handed_over_run");
+                        phi->addIncoming(builder->getFalse(), check_bb);
+                        phi->addIncoming(handed, run_end_bb);
+                        values[inst->result.id] = phi;
+                    }
                     // On-block-exit handlers execute user code and can modify any local variable on the
                     // thread-local stack.  The local caches are invalidated on both paths, as at a landing pad: this
                     // exit is on an exception path, where the cache of a local can have been left empty by the
@@ -38246,10 +38276,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     emitExceptionCheck(module, llvm_func, inst);
                 }
             }
-            // ScopeExit produces NOTHING as its result
-            if (inst->result.isValid()) {
-                values[inst->result.id] = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
-                nanboxed_values.insert(inst->result.id);
+            // a ScopeExit has a result only if it is one past the inline cap outside the cleanups of a return
+            // statement: whether its handlers handed a value over (#6552); false if it ran no handler
+            if (inst->result.isValid() && !values.count(inst->result.id)) {
+                values[inst->result.id] = builder->getFalse();
             }
             return true;
         }
