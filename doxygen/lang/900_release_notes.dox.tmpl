@@ -2187,6 +2187,8 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
+      value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)
