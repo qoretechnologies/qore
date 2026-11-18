@@ -48,6 +48,14 @@ class IsEncodingValidTest inherits QUnit::Test {
             "f4908080",     # a value above U+10FFFF
             "f880808080",   # a five-byte form
             "c1bf",         # an overlong two-byte form
+            "e0a0",         # a truncated three-byte sequence
+            "f09f98",       # a truncated four-byte sequence
+            "eda0",         # a truncated surrogate
+            "f48f",         # a truncated four-byte sequence at the highest code point
+            "f0808080",     # an overlong four-byte form
+            "f5",           # a lead byte above U+10FFFF
+            "edbfbf",       # the highest surrogate
+            "c2c2",         # a lead byte followed by a lead byte
         );
     }
 
@@ -76,6 +84,17 @@ class IsEncodingValidTest inherits QUnit::Test {
         # UTF-16LE: an unpaired surrogate
         assertTrue(binary_to_string(parse_hex_string("6100"), "UTF-16LE").isEncodingValid());
         assertFalse(binary_to_string(parse_hex_string("00d8"), "UTF-16LE").isEncodingValid());
+        # UTF-16 with a byte order mark
+        assertTrue(binary_to_string(parse_hex_string("fffe6100"), "UTF-16").isEncodingValid());
+        # a byte that the encoding does not define
+        assertFalse(binary_to_string(parse_hex_string("41ff"), "US-ASCII").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("4181"), "WINDOWS-1252").isEncodingValid());
+        # a stateful encoding: a complete and a truncated two-byte character after the escape sequence
+        assertTrue(binary_to_string(parse_hex_string("1b244224221b2842"), "ISO-2022-JP").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("1b2442242261"), "ISO-2022-JP").isEncodingValid());
+        # an encoding that iconv cannot convert: ASCII text is valid, other text is not
+        assertTrue(force_encoding("abc", "X-QORE-UNKNOWN-6554").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("61e9"), "X-QORE-UNKNOWN-6554").isEncodingValid());
     }
 
     largeStrings() {

@@ -4886,12 +4886,14 @@ bool qore_string_encoding_valid(const QoreString& str) {
         bool incomplete = false;
         return IconvHelper::validUtf8Prefix(str.c_str(), str.size(), incomplete) == str.size();
     }
-    // a string in another encoding is valid if it can be converted to UTF-8; the conversion's exception is not raised
-    ExceptionSink xsink;
-    TempEncodingHelper t(str, QCS_UTF8, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return false;
+    const QoreEncoding* enc = str.getEncoding();
+    // ASCII text in an encoding that represents every ASCII character as itself is valid; it needs no conversion
+    if (enc->isAsciiCompat() && !qore_encoding_private::isStateful(enc) && str.isDataAscii()) {
+        return true;
     }
-    return true;
+    // a string in another encoding is valid if it can be converted to UTF-8; the conversion is made without an
+    // exception sink, so that it raises nothing (also no cancellation or sandbox limit, which a later call raises)
+    QoreString utf8(QCS_UTF8);
+    return !qore_string_private::convert_encoding_intern(str.c_str(), str.size(), enc, utf8, QCS_UTF8, nullptr,
+        false);
 }

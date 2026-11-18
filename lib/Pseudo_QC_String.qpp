@@ -1287,8 +1287,11 @@ bool <string>::isDataPrintableAscii() [const;flags=CONSTANT] {
     processes it.
 
     A UTF-8 string is checked strictly (RFC 3629), as the regular expression engine checks it: overlong forms,
-    surrogate code points, values above U+10FFFF and unexpected continuation bytes are not valid; the time taken is
-    proportional to the size of the string.
+    surrogate code points, values above U+10FFFF and unexpected continuation bytes are not valid.  A string in another
+    encoding is valid if it is ASCII text in an ASCII-compatible encoding or if it can be converted to UTF-8: a byte
+    that its encoding does not define (ex: \c 0x81 in \c "WINDOWS-1252", a byte above \c 0x7f in \c "US-ASCII") is not
+    valid, and neither is text other than ASCII in an encoding that the \c iconv library cannot convert.  The time
+    taken is proportional to the size of the string.
 
     @return @ref True if the string is empty or valid in its encoding
 
