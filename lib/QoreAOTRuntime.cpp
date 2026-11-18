@@ -10767,6 +10767,28 @@ static QoreStringNode* aotThreadStackInitError(const AOTThreadStackError& e, con
     return err;
 }
 
+// the functional domains that the module metadata record of the AOT module whose initialization runs in this thread
+// declares, if set (see QoreAOTModuleExpectedDomainsHelper; qore#6351)
+static thread_local std::string aot_module_init_expected_module;
+static thread_local int64 aot_module_init_expected_domains = 0;
+static thread_local bool aot_module_init_expected_set = false;
+
+QoreAOTModuleExpectedDomainsHelper::QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains)
+        : old_domains(aot_module_init_expected_domains), old_set(aot_module_init_expected_set) {
+    // the new name is copied before anything is changed: a failed allocation changes nothing
+    std::string new_module(module);
+    old_module.swap(aot_module_init_expected_module);
+    aot_module_init_expected_module.swap(new_module);
+    aot_module_init_expected_domains = domains;
+    aot_module_init_expected_set = true;
+}
+
+QoreAOTModuleExpectedDomainsHelper::~QoreAOTModuleExpectedDomainsHelper() {
+    aot_module_init_expected_module.swap(old_module);
+    aot_module_init_expected_domains = old_domains;
+    aot_module_init_expected_set = old_set;
+}
+
 QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
         : old_loader(aot_module_init_loader_pgm) {
     aot_module_init_loader_pgm = loader;
@@ -15506,6 +15528,20 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                 mod_name ? mod_name : "<unknown>", module_context_desc.c_str(), dom_error.c_str());
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
+        }
+        // the module loader relieved the module's dependencies with the domains that its metadata record declares
+        // (qore#6351): they must be those of its header; checked once, by the module's own initialization
+        if (aot_module_init_expected_set && mod_name && aot_module_init_expected_module == mod_name) {
+            aot_module_init_expected_set = false;
+            if (own_dom != aot_module_init_expected_domains) {
+                QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): "
+                    "the module metadata record declares the functional domains 0x%llx, but the module declares "
+                    "0x%llx in its header; the module is damaged: rebuild it", mod_name,
+                    module_context_desc.c_str(), static_cast<unsigned long long>(aot_module_init_expected_domains),
+                    static_cast<unsigned long long>(own_dom));
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
         }
         if (own_dom) {
             int64 removed = qore_program_private::setModuleOwnDomains(*local_pgm, own_dom,

@@ -26440,8 +26440,9 @@ static bool buildAOTModuleInfoRecord(const QoreAOTModuleInfo& mod_info, QoreProg
     // (it fails closed)
     // a record whose requests before the header are inexact (QMDR_INEXACT, qore#6386) relieves nothing either: what
     // the module requests before its header can depend on where it is loaded
+    // only the functional domains: the record relieves nothing else, and the decoder refuses other bits
     info.restricted_domains = (pp->load_dependent_parse || inexact) ? static_cast<int64>(QDOM_ALL)
-        : pp->dom_restricted_by_code;
+        : (pp->dom_restricted_by_code & static_cast<int64>(QDOM_ALL));
     // the dependencies that its parse requested only after its header and that the request loaded (qore#6351); not
     // one that another load had loaded first (the initialization of a module required before the header, which loads
     // it with the restrictions in effect there, for example), not

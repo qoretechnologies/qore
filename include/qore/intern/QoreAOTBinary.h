@@ -2484,6 +2484,27 @@ struct QoreModuleParseOptionMask;
 //! applied; see QoreModuleParseOptionMask
 /** \a p may be nullptr; \a exclude names the options the module does not inherit
 */
+//! Names the functional domains that the module metadata record of an AOT module declares while the module's
+//! initialization runs in this thread (qore#6351)
+/** The module loader relieves the dependencies of a module loaded as library code with the domains of its record
+    (QoreAOTModuleFileInfo::declared_domains), which it reads before the module is mapped; the initialization of the
+    module named \a module refuses the module if its MODULE_DOMAINS section declares other domains: the record is
+    damaged.  Only the first initialization of that module in the scope checks them.
+*/
+class QoreAOTModuleExpectedDomainsHelper {
+public:
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains);
+    DLLLOCAL ~QoreAOTModuleExpectedDomainsHelper();
+
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+    DLLLOCAL QoreAOTModuleExpectedDomainsHelper& operator=(const QoreAOTModuleExpectedDomainsHelper&) = delete;
+
+private:
+    std::string old_module;
+    int64 old_domains;
+    bool old_set;
+};
+
 DLLLOCAL QoreParseOptions qore_get_masked_module_parse_options(QoreProgram* p, const QoreParseOptions& exclude,
         const QoreModuleParseOptionMask& mask);
 

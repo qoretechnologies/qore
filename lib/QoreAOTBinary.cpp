@@ -942,6 +942,10 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
             return fail(moduleInfoDamaged("the record has no declared domains"));
         }
         info.declared_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+        // only functional domains: a damaged record cannot relieve another restriction of a dependency
+        if (info.declared_domains & ~static_cast<int64>(QDOM_ALL)) {
+            return fail(moduleInfoDamaged("the record declares unknown functional domain bits"));
+        }
     }
     if (!get_list(info.post_header_dependencies)) {
         return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid list of the dependencies "
@@ -953,6 +957,10 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
             return fail(moduleInfoDamaged("the record has no restricted domains"));
         }
         info.restricted_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+        // only functional domains, as qcc writes them
+        if (info.restricted_domains & ~static_cast<int64>(QDOM_ALL)) {
+            return fail(moduleInfoDamaged("the record restricts unknown functional domain bits"));
+        }
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "

@@ -461,7 +461,14 @@ domains, as the source's do.  That relief never applies to a module listed with
 `QMDR_BEFORE_HEADER`, and a record with a `QMDR_INEXACT` entry relieves nothing,
 neither with its declared domains nor with a relief from a module loading it:
 qcc then writes no post-header dependency and `QDOM_ALL` as the restricted
-domains, and the loader enforces both rules for any record.
+domains, and the loader enforces both rules for any record.  The relief
+applies only to the load of the dependency itself (the load frame that is a
+direct child of the module's own, with the dependency's name), not to a load
+that the loading Program's code makes meanwhile (a callback or a constant of
+the dependency that runs it).  Both domain fields hold only functional domains
+(`QDOM_ALL`; the decoder refuses other bits), and the module's initialization
+refuses a module whose record declares other domains than its
+`MODULE_DOMAINS` section.
 
 When the restrictions refuse a module that a `%try-module` directive before
 the header requests, the qmod, compiled where the request succeeded and with no
@@ -473,10 +480,10 @@ the source continues without the module and fails or not by its own code (with
 Version 2 added the compiled-with and module path lists, version 3 the parse
 option list and the three fields of the declared domains, which came with AOT
 format version 44 (`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), so that
-the format that a module reports tells which record it has. Every string is nonempty and
-contains no NUL; payloads are bounded to 16 MiB and 65,536 entries per list.
-`QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h` documents the
-layout.
+the format that a module reports tells which record it has. Every string is
+nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries
+per list. `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h`
+documents the layout.
 
 qcc adds the section as a constant global of the LLVM module
 (`addAOTModuleInfoSection()` in `lib/QoreAOT.cpp`) to the object that is linked

@@ -220,6 +220,28 @@ public namespace MetaMod {
         return r.readu4LSB();
     }
 
+    #! returns the offset of the declared functional domains in the version 3 record at the given offset of a binary
+    /** they follow the module name, the five lists of names and the list of dependency restrictions (each a name, four
+        words of options and a word of flags)
+    */
+    private static int declaredDomainsOffset(binary data, int offset) {
+        int pos = offset + 12;
+        pos += 4 + getLe32(data, pos);
+        for (int l = 0; l < 5; ++l) {
+            int n = getLe32(data, pos);
+            pos += 4;
+            for (int i = 0; i < n; ++i) {
+                pos += 4 + getLe32(data, pos);
+            }
+        }
+        int n = getLe32(data, pos);
+        pos += 4;
+        for (int i = 0; i < n; ++i) {
+            pos += 4 + getLe32(data, pos) + 20;
+        }
+        return pos;
+    }
+
     #! returns the 32-bit big-endian value at the given offset of a binary
     private static int getBe32(binary data, int offset) {
         BinaryInputStream input(data.substr(offset, 4));
@@ -499,6 +521,12 @@ public namespace MetaMod {
             # the dependency count follows the module name
             {"offset": info.offset + 16 + "MetaMod".size(), "data": le32(1000), "error": "the record has an invalid "
                 "dependency list; the file is damaged"},
+            # the declared and the restricted functional domains hold only functional domains (qore#6351): bit 63
+            # is none
+            {"offset": declaredDomainsOffset(orig, info.offset) + 4, "data": le32(0x80000000), "error": "the record "
+                "declares unknown functional domain bits; the file is damaged"},
+            {"offset": info.offset + info.size - 4, "data": le32(0x80000000), "error": "the record restricts unknown "
+                "functional domain bits; the file is damaged"},
         );
         foreach hash<auto> c in (cases) {
             string label = "damage " + $#;
@@ -508,6 +536,23 @@ public namespace MetaMod {
                 "offset 0x%x\\): ", info.offset) + quoteRegex(c.error), \moduleInfo(), qmod);
             assertRefused(qmod, "cannot load binary module '.*MetaMod\\.qmod': its AOT module metadata \\(.*\\): "
                 + quoteRegex(c.error), label);
+        }
+
+        # a record that declares a functional domain that the module's header does not declare (qore#6351): the
+        # record is valid, but the module's initialization refuses the module
+        write(qmod, orig);
+        assertEq(0, getLe32(orig, declaredDomainsOffset(orig, info.offset)), "MetaMod declares no domain");
+        # QDOM_LOCALE_CONTROL
+        patch(qmod, declaredDomainsOffset(orig, info.offset), le32(0x1000000));
+        if (PlatformOS == "Darwin") {
+            signAdHoc(qmod, "declared domains");
+        }
+        {
+            int rc;
+            string out = loadMeta(\rc);
+            assertNeq(0, rc, "declared domains: the module was not loaded: " + out);
+            assertRegex("the module metadata record declares the functional domains 0x1000000, but the module "
+                "declares 0x0 in its header; the module is damaged", out, "declared domains");
         }
 
         # a module whose metadata names another module

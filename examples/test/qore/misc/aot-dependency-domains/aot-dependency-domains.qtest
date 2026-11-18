@@ -69,6 +69,10 @@
     - DdInx declares the domain, has a conditional on a built-in define before its header and requires the inner
       module after it: it runs from source; the conditional makes the compiled module's record inexact
       (QMDR_INEXACT, qore#6386), and the compiled module relieves nothing (it fails closed)
+    - DdHookTop declares the domain and requires DdHookMid (always a source module) after its header, whose constant
+      runs a callback that the loading Program registered with DdHook: the callback, the loading Program's own code,
+      loads the inner module, which inherits the Program's restrictions in full and is refused; only DdHookMid's own
+      load is relieved
     each from source modules and from modules compiled with qcc, with the same output.
 */
 class AotDependencyDomainsTest inherits QUnit::Test {
@@ -79,7 +83,7 @@ class AotDependencyDomainsTest inherits QUnit::Test {
             "DdIfdef", "DdVer", "DdDup", "DdMidLc", "DdTopPre", "DdIx", "DdPreInit", "DdAix", "DdUnrel", "DdPos",
             "DdWrap", "DdTry", "DdPreChild", "DdTI", "DdXa", "DdXd", "DdXe", "DdXm", "DdPrEx", "DdPrB", "DdPrD",
             "DdPrM", "DdPrT", "DdZ", "DdY", "DdSxI", "DdSxN", "DdSxO", "DdCfN", "DdCfO", "DdCgO", "DdHd", "DdSig",
-            "DdOpt", "DdRB", "DdRA", "DdInx");
+            "DdOpt", "DdRB", "DdRA", "DdInx", "DdHook", "DdHookTop");
 
         const Ran = "inner ran\n";
         const Refused = "refused: DdInner uses locale control\n";
@@ -169,6 +173,8 @@ class AotDependencyDomainsTest inherits QUnit::Test {
             what + ": the header lifts a restriction that the module requiring the module gives it");
         assertEq(what == "source" ? Ran : Refused, load(module_dir, "DdInx", "DdInx"),
             what + ": a module whose requests before the header are inexact relieves nothing when compiled");
+        assertEq(Refused, load(module_dir, "DdHookTop", "DdHookTop", "hook"),
+            what + ": a module that the loading Program's code loads while a dependency is loaded is not relieved");
         # the source does not load a module that a conditional excludes; a compiled module lists it as a dependency
         # and loads it without relief (it fails closed)
         assertEq(what == "source" ? "no inner\n" : Refused, load(module_dir, "DdIfdef", "DdIfdef"),
@@ -214,6 +220,8 @@ class AotDependencyDomainsTest inherits QUnit::Test {
         copy_file(get_script_dir() + "/modules/DdTI.inc", mod_dir + "/DdTI.inc");
         copy_file(get_script_dir() + "/modules/DdXm.inc", mod_dir + "/DdXm.inc");
         copy_file(get_script_dir() + "/modules/DdPrM.inc", mod_dir + "/DdPrM.inc");
+        # a source module in both cases: its constant runs the callbacks of DdHook while it is parsed
+        copy_file(get_script_dir() + "/modules/DdHookMid.qm", mod_dir + "/DdHookMid.qm");
         # each module is compiled with the modules it requires in the module directory
         foreach string mod in (Modules) {
             int rc;
