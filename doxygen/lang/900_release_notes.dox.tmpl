@@ -954,6 +954,10 @@
     "PO_NO_FILESYSTEM" cannot call them; index lookups are unchanged (issue #6500).
 
     @subsection qore_3_0_0_new_features New Features in Qore
+    @par Testing Whether a String Is Valid in Its Encoding
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its
+    encoding (strict UTF-8 as RFC 3629 defines it), without raising an exception (issue #6554).
+
     @par Strict Number Parsing
     @ref parse_int(string, string, bool) "parse_int()", @ref parse_float(string, string, bool) "parse_float()" and
     @ref parse_number(string, string, bool) "parse_number()" take a \a strict argument that raises
