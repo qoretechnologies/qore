@@ -11428,6 +11428,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
 }
 
 static size_t qore_short_string_utf8_length(QoreValue value);
+static size_t qore_short_string_utf8_length(QoreValue value, bool& invalid);
 
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
         uint64_t* args, int nargs, int32_t characters, ExceptionSink* xsink) {
@@ -11443,17 +11444,44 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
                 value = value.getEnumBaseValue();
             }
             const QoreEncoding* current;
+            // the characters of the parts are counted only if each part is valid text: the bytes at the end of a part
+            // that do not make a complete character can make one with the bytes of the next part, so the count of the
+            // concatenation is made on the concatenation (qore#6597)
             if (value.isShortString()) {
                 current = QCS_DEFAULT;
-                measured += characters
-                    ? qore_short_string_utf8_length(value)
-                    : value.shortStringLen();
+                if (characters) {
+                    bool invalid;
+                    measured += qore_short_string_utf8_length(value, invalid);
+                    if (invalid) {
+                        direct = false;
+                        break;
+                    }
+                } else {
+                    measured += value.shortStringLen();
+                }
             } else if (value.getType() == NT_STRING) {
                 const QoreStringNode* string = value.get<const QoreStringNode>();
                 current = string ? string->getEncoding() : QCS_DEFAULT;
                 if (string) {
-                    measured += characters
-                        ? string->length() : string->strlen();
+                    if (characters) {
+                        const qore_string_private* priv = qore_string_private::get(*string);
+                        if (priv->isStateful()) {
+                            direct = false;
+                            break;
+                        }
+                        if (current->isMultiByte()) {
+                            bool invalid;
+                            measured += priv->getLengthFrom(priv->effective_buf(), 0, invalid);
+                            if (invalid) {
+                                direct = false;
+                                break;
+                            }
+                        } else {
+                            measured += string->strlen();
+                        }
+                    } else {
+                        measured += string->strlen();
+                    }
                 }
             } else {
                 direct = false;
@@ -23672,7 +23700,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_string_size_noguard(uint64_t val_bi
 }
 
 static size_t qore_short_string_utf8_length(QoreValue v) {
+    bool invalid;
+    return qore_short_string_utf8_length(v, invalid);
+}
+
+//! returns the number of characters of a short string, which is in UTF-8, and if it has bytes that are not valid UTF-8
+static size_t qore_short_string_utf8_length(QoreValue v, bool& invalid) {
     assert(v.isShortString());
+    invalid = false;
     char buf[7];
     v.getShortString(buf);
 
@@ -23686,11 +23721,15 @@ static size_t qore_short_string_utf8_length(QoreValue v) {
             continue;
         }
 
+        // a byte that does not start a complete character counts as one character, as in QoreString::length()
+        // (qore#6597)
         qore_offset_t char_len = q_UTF8_get_char_len(p, end - p);
-        if (char_len <= 0) {
-            return len;
+        if (char_len > 0) {
+            p += char_len;
+        } else {
+            invalid = true;
+            ++p;
         }
-        p += char_len;
         ++len;
     }
     return len;

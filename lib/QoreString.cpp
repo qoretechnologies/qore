@@ -3889,9 +3889,33 @@ size_t QoreString::length() const {
     if (priv->getEncoding()->isMultiByte() && priv->len) {
         bool invalid;
         const char* b = priv->effective_buf();
-        return priv->getLengthFrom(b, 0, invalid);
+        size_t rc = priv->getLengthFrom(b, 0, invalid);
+        // text that is not valid in the encoding has one character per byte, as this function cannot raise an
+        // exception: the count of the characters before the first invalid byte sequence is not the length of the
+        // string (qore#6597)
+        return invalid ? priv->getLengthCountingInvalidBytes(b) : rc;
     }
     return priv->len;
+}
+
+size_t qore_string_private::getLengthCountingInvalidBytes(const char* b) const {
+    const QoreEncoding* enc = getEncoding();
+    // an encoding made of units of more than one byte (UTF-16) skips an invalid unit, so that the text after it is
+    // read in whole units; a byte is skipped where a whole unit does not remain
+    size_t unit = enc->getMinCharWidth();
+    const char* p = b;
+    const char* end = b + len;
+    size_t n = 0;
+    while (p < end) {
+        qore_offset_t l = enc->getCharLen(p, end - p);
+        if (l > 0) {
+            p += l;
+        } else {
+            p += unit > 1 && static_cast<size_t>(end - p) >= unit ? unit : 1;
+        }
+        ++n;
+    }
+    return n;
 }
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
