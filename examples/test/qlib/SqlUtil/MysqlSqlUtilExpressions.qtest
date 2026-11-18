@@ -524,6 +524,11 @@ class MysqlExpressionTest inherits QUnit::Test {
         row = selectExprRow("result",
             expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY-MM-DD HH:mm:SS")), 1);
         assertEq("2026-01-15 10:30:00", row.result);
+
+        # a format with a backslash before a quote, which ended a literal with doubled quotes in the default sql_mode
+        # (qore#6557): it is given as a hex literal, which date_format() reads as the format
+        row = selectExprRow("result", expr(DP_FUNC_FORMAT_DATE, (fref("created_at"), "YYYY\\' || 'x")), 1);
+        assertEq("2026\\' || 'x", row.result);
     }
 
     # --- Helper tests ---
@@ -544,7 +549,7 @@ class MysqlExpressionTest inherits QUnit::Test {
         assertEq("_utf8mb4 X'25595c256d'", MysqlTable::getDateFormatLiteral("YYYY\\MM"));
         # a backslash before a quote ended a literal with doubled quotes in the default sql_mode; a hex literal has
         # neither
-        assertRegex("^_utf8mb4 X'[0-9a-f]+'$", MysqlTable::getDateFormatLiteral("YYYY\\' or 1=1 -- "));
+        assertEq("_utf8mb4 X'25595c27206f7220313d31202d2d20'", MysqlTable::getDateFormatLiteral("YYYY\\' or 1=1 -- "));
     }
 
     testExpressionMapKeys() {
