@@ -451,7 +451,17 @@ removes the declared domains from the restrictions, as its source loads them.
 A conditional directive before its header makes every entry `QMDR_INEXACT`, as
 what it requests there can depend on where it is loaded: the loader then loads
 every listed module with the restrictions of the loading code, relieving none
-(fail-closed; qore#6386).
+(fail-closed; qore#6386).  Then follow the functional domains that the module
+declares in its header (a 64-bit value as two 32-bit words, low word first),
+the count and names of the dependencies that it requires only after its
+header, and the functional domains that its own code restricts (64-bit, as
+before; qore#6351): the dependencies of a module loaded as library code that it
+requires after its header inherit the restrictions without the declared
+domains, as the source's do.  That relief never applies to a module listed with
+`QMDR_BEFORE_HEADER`, and a record with a `QMDR_INEXACT` entry relieves nothing,
+neither with its declared domains nor with a relief from a module loading it:
+qcc then writes no post-header dependency and `QDOM_ALL` as the restricted
+domains, and the loader enforces both rules for any record.
 
 When the restrictions refuse a module that a `%try-module` directive before
 the header requests, the qmod, compiled where the request succeeded and with no
@@ -461,9 +471,9 @@ the source continues without the module and fails or not by its own code (with
 `PARSE-EXCEPTION` when it calls the module that it did not load).
 
 Version 2 added the compiled-with and module path lists, version 3 the parse
-option list, which came with AOT format version 44
-(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), so that the format that a
-module reports tells which record it has. Every string is nonempty and
+option list and the three fields of the declared domains, which came with AOT
+format version 44 (`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), so that
+the format that a module reports tells which record it has. Every string is nonempty and
 contains no NUL; payloads are bounded to 16 MiB and 65,536 entries per list.
 `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h` documents the
 layout.

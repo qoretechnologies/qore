@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary started without an execution mode
+# test-platform: macos - module loading of AOT modules compiled with qcc and of their dependencies
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class AotDependencyDomainsTest
+
+#! Regression test for issue #6351: the dependencies of an AOT module that declares a functional domain
+/** A module loaded as library code that declares a functional domain in its header (\c domains) does not inherit the
+    restriction of that domain from the Program loading it, and the modules that its code requires, which its Program
+    loads after the header, do not either.  The module loader loads the dependencies of an AOT module before its
+    initialization, with the Program loading the module, so they inherited the restriction: a dependency that uses
+    the domain was refused (AOT-MODULE-RESTRICTED) where the source modules load.  The module info note of a qmod now
+    records the domains the module declares, which the loader removes from the restrictions that the dependencies
+    inherit, for a module loaded as library code.
+
+    load.q loads, in a Program that disallows locale control, an outer module that requires a module using it:
+    - DdOuter declares the locale control domain: the inner module runs
+    - DdOuterOther declares another domain: the inner module is refused
+    - DdOuter loaded by a path outside the module path is not library code: the inner module is refused
+    - DdPre requires the inner module before its header, where the restriction still applies: it is refused
+    - DdTop declares the locale control domain and requires DdMid, which declares another one and requires the inner
+      module: the inner module has both removed and runs (DdTop0 and DdMid0: the middle module declares none)
+    - DdVer requires it with a version requirement after the header: it runs; DdDup before and after the header: it is
+      refused
+    - DdTopPre requires DdMidLc before its header, which declares the domain itself: the inner module runs
+    - DdIfdef requires it after the header in code that a conditional excludes: the source does not load it; the
+      compiled module lists it as a dependency, which is loaded without relief and refused
+    - DdOuter loaded with load_module() by the Program's code: the inner module runs; by a path outside the module
+      path: it is refused (restricted code cannot load such a module at run time)
+    - DdIx requires the inner module after its header, but an included file requires DdMid0 before the header, which
+      loads it first: it is refused; DdAix likewise with DdPreInit, whose initialization loads it
+    - DdPos requires an unrelated module (DdUnrel) before its header and the inner module after it: it runs
+    - DdTry requests DdWrap, which requires the inner module, with %try-module after its header: it runs from source;
+      qcc loads the module of a %try-module directive before the parse to check that it is available, so the compiled
+      module cannot tell when its source loads the inner module, and loads it with the restriction (it fails closed)
+    - DdPath (written by the test) requires the inner module by its path after its header: it runs
+    - DdTI requires DdPreChild before its header, whose initialization loads the inner module in a Program of its own,
+      and requests the inner module after its header, also with %try-module: it is refused
+    - DdXm requires DdXd after its header, which the initialization of DdXe (required after the header through an
+      included file) loads first through DdXa, required before the header: DdXd runs with the restriction, and the
+      inner module that it loads is refused
+    - DdPrM (with an included file) and DdPrT (with %try-module) request DdPrB before their headers, which requires
+      DdPrEx, and require DdPrD after them, which requires DdPrEx too: DdPrEx keeps the restriction and the inner module
+      that it loads is refused
+    - DdZ requires DdPrB before its header and DdPrD after it, with a request of DdPrD in excluded code first: refused
+    - DdY restricts locale control again after its header, before it requires DdPrD: refused
+    - DdSxO declares the domain and requires DdSxN after its header, which restricts locale control itself and
+      requires DdSxI: DdSxI keeps the restriction
+    - DdCfO -> DdCfN and DdCgO restrict locale control again in a conditional on PO_NO_GUI, which the loading Program
+      has: DdSxI keeps the restriction (a compiled module was compiled without it, so it relieves nothing)
+    - DdHd does so in a conditional on DD_HOST_DEFINE, which the loading Program defines: likewise
+    - DdSig does so where HAVE_SIGNAL_HANDLING is not defined, which depends on the process (qore -b): likewise
+    - DdOpt has a conditional on a library option (it depends on the build configuration of the library, and a qmod
+      compiled by one build is loaded by another of the same sources) and requires the inner module after its
+      header: it runs from source; the compiled module relieves nothing (it fails closed)
+    - DdRA restricts locale control itself and requires DdRB, which declares the domain and requires the inner module
+      after its header: DdRB's header lifts the restriction that DdRA gives it (qore#6406) for the inner module: it
+      runs
+    - DdInx declares the domain, has a conditional on a built-in define before its header and requires the inner
+      module after it: it runs from source; the conditional makes the compiled module's record inexact
+      (QMDR_INEXACT, qore#6386), and the compiled module relieves nothing (it fails closed)
+    each from source modules and from modules compiled with qcc, with the same output.
+*/
+class AotDependencyDomainsTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+
+        const Modules = ("DdInner", "DdOuter", "DdOuterOther", "DdPre", "DdMid", "DdTop", "DdMid0", "DdTop0",
+            "DdIfdef", "DdVer", "DdDup", "DdMidLc", "DdTopPre", "DdIx", "DdPreInit", "DdAix", "DdUnrel", "DdPos",
+            "DdWrap", "DdTry", "DdPreChild", "DdTI", "DdXa", "DdXd", "DdXe", "DdXm", "DdPrEx", "DdPrB", "DdPrD",
+            "DdPrM", "DdPrT", "DdZ", "DdY", "DdSxI", "DdSxN", "DdSxO", "DdCfN", "DdCfO", "DdCgO", "DdHd", "DdSig",
+            "DdOpt", "DdRB", "DdRA", "DdInx");
+
+        const Ran = "inner ran\n";
+        const Refused = "refused: DdInner uses locale control\n";
+    }
+
+    constructor() : QUnit::Test("dependencies of AOT modules that declare functional domains", "1.0", \ARGV) {
+        addTestCase("source modules", \testSource());
+        addTestCase("modules compiled with qcc", \testCompiled());
+        set_return_value(main());
+    }
+
+    private string qccBin() {
+        *string qcc_bin = TestInterpreter::qcc_compiler();
+        if (!qcc_bin) {
+            testSkip("qcc not found");
+        }
+        return qcc_bin;
+    }
+
+    #! runs load.q with the given module directory and module to require
+    private string load(string module_dir, string mod, string ns, string how = "requires", string qore_opts = "") {
+        return backquote(sprintf("QORE_MODULE_DIR=%s %s %s %s %s %s %s 2>&1", shellQuote(module_dir
+            + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "")), shellQuote(qore_bin), qore_opts,
+            shellQuote(get_script_dir() + "/load.q"), shellQuote(mod), ns, how));
+    }
+
+    #! checks the cases with the modules of a directory and an outer module outside it
+    private checkCases(string module_dir, string untrusted_outer, string what) {
+        assertEq(Ran, load(module_dir, "DdOuter", "DdOuter"), what + ": a declared domain is lifted");
+        assertEq(Refused, load(module_dir, "DdOuterOther", "DdOuterOther"),
+            what + ": a domain that is not declared is not lifted");
+        assertEq(Refused, load(module_dir, untrusted_outer, "DdOuter"),
+            what + ": a module that is not library code lifts no domain");
+        assertEq(Refused, load(module_dir, "DdPre", "DdPre"),
+            what + ": a module required before the header is loaded with the restriction");
+        assertEq(Ran, load(module_dir, "DdTop", "DdTop"),
+            what + ": the domains of nested module headers are removed together");
+        assertEq(Ran, load(module_dir, "DdTop0", "DdTop0"),
+            what + ": a module that declares no domain passes the domain removed by its loader on");
+        assertEq(Ran, load(module_dir, "DdVer", "DdVer"), what + ": a request with a version requirement");
+        assertEq(Refused, load(module_dir, "DdDup", "DdDup"),
+            what + ": a module required before and after the header is loaded with the restriction");
+        assertEq(Ran, load(module_dir, "DdTopPre", "DdTopPre"),
+            what + ": a module required before the header removes the domain that it declares itself");
+        assertEq(Ran, load(module_dir, "DdOuter", "DdOuter", "runtime"),
+            what + ": a module loaded with load_module() by the restricted code");
+        # restricted code cannot load a module outside the module path at run time at all
+        assertRegex("^(refused: DdInner uses locale control|LOAD-MODULE-ERROR: .* outside the module path)",
+            load(module_dir, untrusted_outer, "DdOuter", "runtime"),
+            what + ": a module that is not library code loaded with load_module() lifts no domain");
+        assertEq(Refused, load(module_dir, "DdIx", "DdIx"),
+            what + ": a module that a module loaded before the header loads first is loaded with the restriction");
+        assertEq(Refused, load(module_dir, "DdAix", "DdAix"),
+            what + ": a module that the initialization of a module loaded before the header loads first");
+        assertEq(Ran, load(module_dir, "DdPos", "DdPos"),
+            what + ": an unrelated module required before the header does not prevent the relief");
+        assertEq(what == "source" ? Ran : Refused, load(module_dir, "DdTry", "DdTry"),
+            what + ": a module requested with %try-module after the header (a compiled module fails closed)");
+        # the source refuses it with the parse error of the inner module in the child Program
+        assertRegex("^(refused: DdInner uses locale control|.*set_thread_tz.*LOCALE_CONTROL)",
+            load(module_dir, "DdTI", "DdTI"),
+            what + ": a module loaded before the header outside the module's dependencies is not relieved");
+        assertEq(Refused, load(module_dir, "DdXm", "DdXm"),
+            what + ": a dependency that code with the restrictions before the header loads first is not relieved");
+        assertEq(Refused, load(module_dir, "DdPrM", "DdPrM"),
+            what + ": a module that a request before the header in an included file loads first is not relieved");
+        assertEq(Refused, load(module_dir, "DdPrT", "DdPrT"),
+            what + ": a module that a %try-module request before the header loads first is not relieved");
+        assertEq(Refused, load(module_dir, "DdZ", "DdZ"),
+            what + ": a request in excluded code before the header does not change the order of the loads");
+        assertEq(Refused, load(module_dir, "DdY", "DdY"),
+            what + ": a module requested after the restriction is added again after the header is not relieved");
+        assertRegex("^restricted: ", load(module_dir, "DdSxO", "DdSxO"),
+            what + ": a module that restricts a domain itself takes the relief of the module loading it back");
+        assertRegex("^restricted: ", load(module_dir, "DdCfO", "DdCfO"),
+            what + ": a module that restricts a domain in a conditional on a parse option passes no relief on");
+        assertRegex("^restricted: ", load(module_dir, "DdCgO", "DdCgO"),
+            what + ": a module that restricts its domain in a conditional on a parse option relieves nothing");
+        assertRegex("^restricted: ", load(module_dir, "DdHd", "DdHd"),
+            what + ": a module that restricts its domain in a conditional on a define of the loading code");
+        # qore -b: no signal handling, so HAVE_SIGNAL_HANDLING is not defined
+        assertRegex("^restricted: ", load(module_dir, "DdSig", "DdSig", "requires", "-b"),
+            what + ": a module that restricts its domain in a conditional on an option of the process");
+        assertEq(what == "source" ? Ran : Refused, load(module_dir, "DdOpt", "DdOpt"),
+            what + ": a conditional on a library option makes a compiled module relieve nothing");
+        assertEq(Ran, load(module_dir, "DdRA", "DdRA"),
+            what + ": the header lifts a restriction that the module requiring the module gives it");
+        assertEq(what == "source" ? Ran : Refused, load(module_dir, "DdInx", "DdInx"),
+            what + ": a module whose requests before the header are inexact relieves nothing when compiled");
+        # the source does not load a module that a conditional excludes; a compiled module lists it as a dependency
+        # and loads it without relief (it fails closed)
+        assertEq(what == "source" ? "no inner\n" : Refused, load(module_dir, "DdIfdef", "DdIfdef"),
+            what + ": a request that a conditional excludes gets no relief");
+    }
+
+    testSource() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        mkdir(dir + "/untrusted");
+        copy_file(get_script_dir() + "/modules/DdOuter.qm", dir + "/untrusted/DdOuter.qm");
+        checkCases(get_script_dir() + "/modules", dir + "/untrusted/DdOuter.qm", "source");
+        assertEq(Ran, load(writePathModule(dir), "DdPath", "DdPath"), "source: a request by path after the header");
+    }
+
+    #! writes DdPath.qm, which requires DdInner.qm by its path after its header, with DdInner.qm in a directory of its
+    #! own; returns the directory, which only these modules are in, so that no other module is loaded instead
+    private string writePathModule(string dir) {
+        string path_dir = dir + "/path";
+        mkdir(path_dir);
+        copy_file(get_script_dir() + "/modules/DdInner.qm", path_dir + "/DdInner.qm");
+        File f();
+        f.open2(path_dir + "/DdPath.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("%modern\nmodule DdPath { version = \"1.0\"; desc = \"a module that requires a module by path\"; "
+            "author = \"Qore Technologies, s.r.o.\"; url = \"https://qore.org\"; license = \"MIT\"; "
+            "domains = \"LOCALE_CONTROL\"; }\n%requires " + path_dir + "/DdInner.qm\n"
+            "public namespace DdPath { public string sub run() { return DdInner::run(); } }\n");
+        f.close();
+        return path_dir;
+    }
+
+    testCompiled() {
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        string mod_dir = dir + "/modules";
+        mkdir(mod_dir);
+        mkdir(dir + "/untrusted");
+        foreach string mod in (Modules) {
+            copy_file(get_script_dir() + "/modules/" + mod + ".qm", mod_dir + "/" + mod + ".qm");
+        }
+        copy_file(get_script_dir() + "/modules/DdIx.inc", mod_dir + "/DdIx.inc");
+        copy_file(get_script_dir() + "/modules/DdAix.inc", mod_dir + "/DdAix.inc");
+        copy_file(get_script_dir() + "/modules/DdTI.inc", mod_dir + "/DdTI.inc");
+        copy_file(get_script_dir() + "/modules/DdXm.inc", mod_dir + "/DdXm.inc");
+        copy_file(get_script_dir() + "/modules/DdPrM.inc", mod_dir + "/DdPrM.inc");
+        # each module is compiled with the modules it requires in the module directory
+        foreach string mod in (Modules) {
+            int rc;
+            string output = backquote(sprintf("QORE_MODULE_DIR=%s %s --module --strip-source -o %s %s 2>&1",
+                shellQuote(mod_dir), shellQuote(qccBin()), shellQuote(mod_dir + "/" + mod + ".qmod"),
+                shellQuote(mod_dir + "/" + mod + ".qm")), \rc);
+            assertEq(0, rc, mod + ": " + output);
+        }
+        copy_file(mod_dir + "/DdOuter.qmod", dir + "/untrusted/DdOuter.qmod");
+        # the programs use the compiled modules only
+        map unlink(mod_dir + "/" + $1 + ".qm"), Modules;
+        checkCases(mod_dir, dir + "/untrusted/DdOuter.qmod", "qcc");
+
+        # a request by path names the source of the inner module, which stays; the outer module is compiled
+        string path_dir = writePathModule(dir);
+        int rc;
+        string output = backquote(sprintf("QORE_MODULE_DIR=%s %s --module --strip-source -o %s %s 2>&1",
+            shellQuote(path_dir), shellQuote(qccBin()), shellQuote(path_dir + "/DdPath.qmod"),
+            shellQuote(path_dir + "/DdPath.qm")), \rc);
+        assertEq(0, rc, "DdPath: " + output);
+        unlink(path_dir + "/DdPath.qm");
+        assertEq(Ran, load(path_dir, "DdPath", "DdPath"), "qcc: a request by path after the header");
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

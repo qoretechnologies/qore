@@ -1,0 +1,20 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module whose function loads DdXd in its own Program; DdXm requires it
+# before its header (qore#6351)
+
+%modern
+
+module DdXa {
+    version = "1.0";
+    desc = "a module that loads another on request";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DdXa {
+    public sub loadIt() {
+        load_module("DdXd");
+    }
+}

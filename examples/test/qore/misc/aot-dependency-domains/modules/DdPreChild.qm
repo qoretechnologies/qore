@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module whose initialization parses a Program that requires a module that
+# uses locale control: that load is not a dependency of the module; DdTI requires it before its header (qore#6351)
+
+%modern
+
+module DdPreChild {
+    version = "1.0";
+    desc = "a module whose initialization loads another in a Program";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () { Program p(PO_NEW_STYLE); p.parse("%requires DdInner\n", "child"); };
+}
+
+public namespace DdPreChild {
+}

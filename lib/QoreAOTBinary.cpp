@@ -780,6 +780,26 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
         }
         moduleInfoPut32(payload, i.flags);
     }
+    // the declared domains (version 3): a u64 as two u32, low word first
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains)));
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains) >> 32));
+    // the dependencies required only after the header (version 3)
+    if (!put_list(info.post_header_dependencies, "dependency required after the module header")) {
+        return false;
+    }
+    // the domains that the module's code restricts (version 3): a u64 as two u32, low word first
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains)));
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains) >> 32));
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
@@ -915,6 +935,24 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
                 & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions::FREE_OPTIONS
                 & ~QoreParseOptions(PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG), flags);
         }
+    }
+    {
+        uint32_t lo = 0, hi = 0;
+        if (!get32(lo) || !get32(hi)) {
+            return fail(moduleInfoDamaged("the record has no declared domains"));
+        }
+        info.declared_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+    }
+    if (!get_list(info.post_header_dependencies)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid list of the dependencies "
+            "required after the module header") : cancel_error);
+    }
+    {
+        uint32_t lo = 0, hi = 0;
+        if (!get32(lo) || !get32(hi)) {
+            return fail(moduleInfoDamaged("the record has no restricted domains"));
+        }
+        info.restricted_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "
@@ -22531,21 +22569,24 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     return true;
 }
 
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header) {
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header,
+        bool trusted_only) {
     if (zone.empty()) {
         return;
     }
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::TIME_ZONE);
     writer.writeStringRef(zone.c_str());
-    // 1 if the directive follows the header of a user module (qore#6270)
-    writer.writeU8(after_module_header ? 1 : 0);
+    // flags: 1 if the directive follows the header of a module (qore#6270), 2 if it applies only to a load of the
+    // module as library code (qore#6352)
+    writer.writeU8((after_module_header ? 1 : 0) | (trusted_only ? 2 : 0));
     writer.endSection(sec_idx);
 }
 
 bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
-        std::string& error) {
+        bool& trusted_only, std::string& error) {
     zone.clear();
     after_module_header = false;
+    trusted_only = false;
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TIME_ZONE);
     if (!sec) {
         return true;
@@ -22561,7 +22602,13 @@ bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& af
         return false;
     }
     zone = z;
-    after_module_header = QoreAOTBinaryReader::readU8(ptr) != 0;
+    uint8_t flags = QoreAOTBinaryReader::readU8(ptr);
+    if (flags & ~3u) {
+        error = "invalid TIME_ZONE section: unknown flags";
+        return false;
+    }
+    after_module_header = flags & 1;
+    trusted_only = flags & 2;
     return true;
 }
 

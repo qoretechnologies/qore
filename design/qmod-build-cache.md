@@ -106,11 +106,13 @@ dependencies (the module descriptor's hard dependencies, which the loader loads 
 re-exported module that requires the module back would make a cycle), and a module sees the declarations of what it
 re-exports, so a module that appears for a re-exported module must make it a miss as well.  Version 2 of the
 metadata record names the closure: every module the module was compiled against, directly or not, re-exported ones
-too, as qcc loaded them.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
+too, as qcc loaded them; version 3 adds the restrictions that the module's directives gave its dependencies, the
+functional domains that it declares in its header, the dependencies it requires only after its header and the domains
+its own code restricts, which the cache reads but does not use.  No module name is taken from the depfile, whose files are no reliable sign of a module (a
 file that a module includes may be named `<x>.qm` for a module `x`), and a file the module includes is never taken for
 the source of a module from outside the tree, whatever its name.  A module whose record has another version (version
-1, written before the closure was recorded; the metadata section is in no release, and the loader refuses version 1
-too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
+1, written before the closure was recorded, or version 2, before the version 3 fields; the metadata section is in no
+release, and the loader refuses them too) is never stored and never a hit: `exec` compiles it and stores nothing, and a hit checks the stored module's
 record.  The guard checks the same list.
 
 ### Why absolute paths

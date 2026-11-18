@@ -9916,8 +9916,9 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
         std::string& error, bool ignore, bool ignore_after_header) {
     std::string zone;
     bool after_module_header;
+    bool trusted_only;
     std::string read_error;
-    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
+    if (!readTimeZone(reader, zone, after_module_header, trusted_only, read_error)) {
         error = "AOT time zone metadata read error";
         if (label && *label) {
             error += " in ";
@@ -9931,6 +9932,11 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
     }
     // a directive after the header of a module is checked against the restrictions that the header's domains leave
     if (after_module_header ? ignore_after_header : ignore) {
+        return true;
+    }
+    // a directive that the module's own restriction disallowed when it was compiled applies only to a load of the
+    // module as library code, where the locale control domain that the header declares removes it (qore#6352)
+    if (trusted_only && !qore_module_load_is_trusted()) {
         return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
