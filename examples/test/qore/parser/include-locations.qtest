@@ -25,6 +25,7 @@ public class IncludeLocationsTest inherits QUnit::Test {
         addTestCase("the first declaration of an included file", \firstLineTest());
         addTestCase("the first declaration after an included file", \afterIncludeTest());
         addTestCase("nested included files", \nestedTest());
+        addTestCase("declarations after an include that fails", \failedIncludeTest());
         set_return_value(main());
     }
 
@@ -47,6 +48,11 @@ public class IncludeLocationsTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
         }
         return (map $1, p.getParseDiagnostics(), $1.severity == "error");
+    }
+
+    #! returns the error diagnostics of \a src, which must fail, other than those of the failed %include
+    private list<hash<ParseDiagnosticInfo>> parseErrorsAfterInclude(string src) {
+        return (map $1, parseErrors(src), $1.message !~ /cannot include|cannot open include/);
     }
 
     private checkLoc(hash<ParseDiagnosticInfo> d, string file, int line, int col, int end_col) {
@@ -78,5 +84,23 @@ public class IncludeLocationsTest inherits QUnit::Test {
         assertEq(2, l.size(), sprintf("%N", l));
         checkLoc(l[0], "outer.qc", 2, 0, 11);
         checkLoc(l[1], "include-locations", 2, 0, 11);
+    }
+
+    #! an %include that fails does not change the locations of the declarations after it
+    failedIncludeTest() {
+        list<string> targets = (tmp.path + DirSep + "missing.qc", tmp.path);
+        # a file that cannot be read, unless the process can read it anyway (as root or with a capability)
+        string unreadable = writeFile("unreadable.qc", "const U = 1;\n");
+        chmod(unreadable, 0);
+        if (!is_readable(unreadable)) {
+            targets += unreadable;
+        }
+        foreach string target in (targets) {
+            list<hash<ParseDiagnosticInfo>> l = parseErrorsAfterInclude("const Z = 2;\n%include " + target
+                + "\nconst Z = 3;\nconst Z = 4;\n");
+            assertEq(2, l.size(), sprintf("%s: %N", target, l));
+            checkLoc(l[0], "include-locations", 3, 0, 11);
+            checkLoc(l[1], "include-locations", 4, 0, 11);
+        }
     }
 }
