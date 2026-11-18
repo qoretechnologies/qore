@@ -2144,6 +2144,11 @@ private:
     //! storage is released for handlers run out of line; when handler_locals_known is false, every local's
     std::unordered_set<const void*> handler_locals;
     bool handler_locals_known = false;
+    //! The locals that the handlers of the function can write (qore_ir_collect_handler_written_locals()): a local
+    //! that the handlers only read keeps its reload storage across a handler run (qore#6314)
+    std::unordered_set<const void*> handler_written_locals;
+    //! true if handler_written_locals is complete
+    bool handler_written_locals_known = false;
 
     //! Returns the keys of a map of locals in reverse declaration order (their IR slot ids, highest first)
     template <typename Map>
