@@ -109,9 +109,8 @@
 
     @par A Regular Expression Substitution Raises INVALID-ENCODING for a String Not Valid in Its Encoding
     The @ref regex_subst_operator "=~ s///" operator and @ref Qore::regex_subst() "regex_subst()" raise an
-    \c INVALID-ENCODING exception for a string that is not valid in its encoding, which cannot be matched; before,
-    they returned it unchanged, as if nothing in it had matched, so that a substitution meant to escape or remove text
-    let it through unprocessed (issue #6553).
+    \c INVALID-ENCODING exception for a string that is not valid in its encoding, which cannot be matched,
+    and previously returned such a string unchanged (issue #6553).
 
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
