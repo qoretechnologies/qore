@@ -1,0 +1,283 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+%requires ./FirebirdTestIsolation.qm
+%requires MssqlSqlUtilBase
+%requires FreetdsSqlUtil
+%requires XdbcFirebirdSqlUtilBase
+%requires JdbcFirebirdSqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module freetds
+%define NO_FREETDS
+%endtry
+
+%try-module jni
+%define NoJni
+%endtry
+
+%exec-class SqlUtilViewAlignmentTest
+
+#! Tests the alignment of the views of schema descriptions (issue #1427)
+/** The tests run on SQLite and, each in a schema or database of its own, on PostgreSQL, MySQL/MariaDB, Oracle, SQL
+    Server and Firebird (through JDBC) when \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL,
+    \c QORE_DB_CONNSTR_ORACLE, \c QORE_DB_CONNSTR_FREETDS and \c QORE_DB_CONNSTR_JDBC_FIREBIRD are set (an Oracle
+    schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
+*/
+class SqlUtilViewAlignmentTest inherits QUnit::Test {
+    public {
+        #! the table of the views
+        const TableDesc = {
+            "columns": {
+                "id": {"qore_type": "integer", "notnull": True},
+                "name": {"qore_type": "string", "size": 20},
+                "active": {"qore_type": "integer"},
+            },
+            "primary_key": {"name": "pk_vwa_t", "columns": "id"},
+        };
+    }
+
+    private {
+        #! connections by driver (\c "jdbc" is Firebird)
+        hash<string, Datasource> dsh;
+        #! why a database is skipped, by driver
+        hash<string, string> skip = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "freetds": "QORE_DB_CONNSTR_FREETDS is not set",
+            "jdbc": "no Firebird connection; set QORE_DB_CONNSTR_JDBC_FIREBIRD",
+        };
+    }
+
+    constructor() : Test("SqlUtilViewAlignment", "1.0", \ARGV) {
+        addTestCase("SQLite: view alignment", \sqliteTest());
+        addTestCase("PostgreSQL: view alignment", sub () { checkDriver("pgsql"); });
+        addTestCase("MySQL: view alignment", sub () { checkDriver("mysql"); });
+        addTestCase("Oracle: view alignment", sub () { checkDriver("oracle"); });
+        addTestCase("invalid view descriptions", \errorTest());
+        addTestCase("SQL Server: view alignment", sub () { checkDriver("freetds"); });
+        addTestCase("Firebird: view alignment", sub () { checkDriver("jdbc"); });
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        connect("pgsql", ENV.QORE_DB_CONNSTR_PGSQL, *string sub (string connstr) {
+            PgsqlRunSchema::setup(connstr, "SqlUtilViewAlignment");
+            return connstr;
+        });
+        connect("mysql", ENV.QORE_DB_CONNSTR_MYSQL, *string sub (string connstr) {
+            return MysqlRunDatabase::getConnectionString(connstr, "SqlUtilViewAlignment");
+        });
+        connect("oracle", ENV.QORE_DB_CONNSTR_ORACLE, *string sub (string connstr) {
+            return OracleRunSchema::getConnectionString(connstr, "SqlUtilViewAlignment");
+        });
+%ifdef NO_FREETDS
+        skip.freetds = "freetds module unavailable";
+%else
+        connect("freetds", ENV.QORE_DB_CONNSTR_FREETDS, *string sub (string connstr) {
+            return MssqlRunDatabase::getConnectionString(connstr, "SqlUtilViewAlignment");
+        });
+        if (dsh.freetds && MssqlDatabase::isSybase(dsh.freetds)) {
+            skip.freetds = "the database is Sybase, not SQL Server";
+            remove dsh.freetds;
+        }
+%endif
+%ifdef NoJni
+        skip.jdbc = "no jni module";
+%else
+        connect("jdbc", ENV.QORE_DB_CONNSTR_JDBC_FIREBIRD, *string sub (string connstr) {
+            return FirebirdRunDatabase::getConnectionString(connstr, "SqlUtilViewAlignment");
+        });
+        if (dsh.jdbc && dsh.jdbc.getDriverRealName() !~ /^firebird/i) {
+            skip.jdbc = "not a Firebird connection";
+            remove dsh.jdbc;
+        }
+%endif
+    }
+
+    globalTearDown() {
+        foreach hash<auto> i in (dsh.pairIterator()) {
+            i.value.rollback();
+        }
+        remove dsh;
+        if (PgsqlRunSchema::getName()) {
+            PgsqlRunSchema::teardown();
+        }
+        MysqlRunDatabase::teardown();
+        OracleRunSchema::teardown();
+        MssqlRunDatabase::teardown();
+        FirebirdRunDatabase::teardown();
+    }
+
+    #! opens the connection of a driver in the run's own schema or database, or records why it cannot be
+    private connect(string driver, *string connstr, code isolate) {
+        if (!connstr) {
+            return;
+        }
+        try {
+            Datasource ds(isolate(connstr));
+            if (ds.getDriverName() != driver) {
+                skip{driver} = sprintf("the connection uses driver %y", ds.getDriverName());
+                return;
+            }
+            ds.open();
+            dsh{driver} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skip{driver} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! aligns the schema, and checks that aligning it again gives no SQL
+    /** @return the SQL of the first alignment
+    */
+    private list<auto> align(Datasource ds, hash<auto> schema, string label) {
+        Database db(ds);
+        list<auto> sql = db.getAlignSql(schema);
+        map ds.exec($1), sql;
+        ds.commit();
+        assertEq((), db.getAlignSql(schema), label + " again");
+        return sql;
+    }
+
+    #! returns the ids that a view gives, in order
+    private static list<auto> ids(Datasource ds, string view) {
+        return map $1.id.toInt(), ds.selectRows(sprintf("select id from %s order by id", view));
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        checkViews(ds, False, False);
+    }
+
+    #! checks the view alignment on a database
+    private checkDriver(string driver) {
+        if (!dsh{driver}) {
+            testSkip(skip{driver});
+        }
+        Datasource ds = dsh{driver};
+        on_exit {
+            ds.rollback();
+            # the objects of the test are dropped, views first
+            foreach string obj in ("view vwa_a", "view vwa_b", "view vwa_c", "table vwa_t") {
+                try {
+                    ds.exec("drop " + obj);
+                    ds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    ds.rollback();
+                }
+            }
+        }
+        # view comments on PostgreSQL and Oracle; Firebird cannot rename views
+        checkViews(ds, inlist(driver, ("pgsql", "oracle")), driver != "jdbc");
+    }
+
+    #! checks the alignment of views
+    /** @param ds the database
+        @param comments True if the driver supports view comments
+        @param rename True if the driver can rename views
+    */
+    private checkViews(Datasource ds, bool comments, bool rename) {
+        Database db(ds);
+        assertEq(comments, db.supportsViewComments());
+
+        hash<auto> schema = {
+            "tables": {"vwa_t": TableDesc},
+            "views": {
+                "vwa_a": "select id, name from vwa_t where active = 1",
+                "vwa_b": {"src": "select id from vwa_t", "comment": "the ids"},
+            },
+        };
+        # the table and the views are created
+        list<auto> sql = align(ds, schema, "create");
+        # the SQL for the views: their creation and the comment
+        assertEq(comments ? 3 : 2, (select sql, $1 =~ /\bview\b|^comment on table vwa_b/i).size(), "create");
+        map ds.exec("insert into vwa_t values (%v, %v, %v)", $1[0], $1[1], $1[2]), ((1, "a", 1), (2, "b", 0),
+            (3, "c", 1));
+        ds.commit();
+        assertEq((1, 3), ids(ds, "vwa_a"));
+        assertEq((1, 2, 3), ids(ds, "vwa_b"));
+        AbstractView vb = db.getView("vwa_b");
+        assertEq(comments ? "the ids" : NOTHING, vb.comment);
+
+        # the query of a view is changed: the view is created again; its comment is kept
+        schema.views.vwa_b.src = "select id from vwa_t where id > 1";
+        sql = align(ds, schema, "changed query");
+        assertEq(comments ? 3 : 2, sql.size(), "changed query");
+        assertEq((2, 3), ids(ds, "vwa_b"));
+        assertEq(comments ? "the ids" : NOTHING, db.getView("vwa_b").comment);
+
+        # the same query written otherwise (whitespace and a trailing semicolon) is the same query
+        schema.views.vwa_a = "select id, name\n    from vwa_t   where active = 1;";
+        assertEq((), db.getAlignSql(schema), "whitespace");
+
+        if (comments) {
+            # a changed comment, with a quote, and a removed comment
+            schema.views.vwa_b.comment = "it's the ids";
+            sql = align(ds, schema, "changed comment");
+            assertEq(1, sql.size(), "changed comment");
+            assertEq("it's the ids", db.getView("vwa_b").comment);
+            remove schema.views.vwa_b.comment;
+            sql = align(ds, schema, "removed comment");
+            assertEq(1, sql.size(), "removed comment");
+            assertNothing(db.getView("vwa_b").comment);
+        }
+
+        if (rename) {
+            # a view is renamed with view_map
+            schema.view_map = {"vwa_b": "vwa_c"};
+            schema.views.vwa_c = remove schema.views.vwa_b;
+            sql = align(ds, schema, "renamed");
+            assertTrue(sql.size() > 0, "renamed");
+            assertNothing(db.getView("vwa_b"));
+            assertEq((2, 3), ids(ds, "vwa_c"));
+            remove schema.view_map;
+        }
+
+        # a view described with "drop" is dropped
+        schema.views.vwa_a = {"drop": True};
+        sql = align(ds, schema, "dropped");
+        assertEq(1, sql.size(), "dropped");
+        assertNothing(db.getView("vwa_a"));
+
+        # the views of a schema that exist are dropped first by getDropSchemaSql()
+        list<auto> drop_sql = db.getDropSchemaSql(schema);
+        assertRegex("^drop view ", drop_sql[0]);
+        map ds.exec($1), drop_sql;
+        ds.commit();
+        assertNothing(db.getView(rename ? "vwa_c" : "vwa_b"));
+    }
+
+    errorTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        Database db(ds);
+        assertThrows("VIEW-DESCRIPTION-ERROR", "no \"src\" key", sub (hash<auto> h) { db.getAlignSql(h); },
+            ({"views": {"v": {"comment": "x"}}},));
+        assertThrows("VIEW-DESCRIPTION-ERROR", "expecting a string query", sub (hash<auto> h) { db.getAlignSql(h); }, ({"views": {"v": 1}},));
+        # the attributes of a view that SchemaReverse gives are ignored
+        assertEq(("create view v as select 1 as x",), db.getAlignSql({"views": {"v": {"src": "select 1 as x",
+            "updatable": False}}}));
+        ds.rollback();
+    }
+}

@@ -1627,6 +1627,47 @@ const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int
     return *i;
 }
 
+const char* qore_program_private_base::addRuntimeString(const char* str) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+    str_set_t::iterator i = rt_str_set.lower_bound(str);
+    if (i == rt_str_set.end() || strcmp(*i, str)) {
+        rt_str_vec.push_back(strdup(str));
+        i = rt_str_set.insert(i, rt_str_vec.back());
+    }
+    return *i;
+}
+
+const QoreProgramLocation* qore_program_private_base::getRuntimeLocation(const QoreProgramLocation& loc, int sline,
+        int eline) {
+    std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+    QoreProgramLocation loc1(loc);
+    loc1.start_line = sline;
+    loc1.end_line = eline;
+
+    // the strings that the location refers to are not rolled back either
+    if (loc1.getFile()) {
+        loc1.setFile(addRuntimeString(loc1.getFile()));
+    }
+    if (loc1.getSource()) {
+        loc1.setSource(addRuntimeString(loc1.getSource()));
+    }
+
+    loc_set_t::iterator i = rt_loc_set.find(&loc1);
+    if (i != rt_loc_set.end()) {
+        return *i;
+    }
+    std::unique_ptr<QoreProgramLocation> lp(new QoreProgramLocation(loc1));
+    rt_pgmloc.push_back(lp.get());
+    // owned by rt_pgmloc from here on
+    QoreProgramLocation* rv = lp.release();
+    rt_loc_set.insert(rv);
+    return rv;
+}
+
+const QoreProgramLocation* qore_program_private_base::getRuntimeLocation(int sline, int eline) {
+    return getRuntimeLocation(QoreProgramLocation(sline, eline), sline, eline);
+}
+
 const QoreProgramLocation* qore_program_private_base::getLocation(int sline, int eline, int scol, int ecol) {
     std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
     QoreProgramLocation loc(sline, eline, scol, ecol);
@@ -2367,6 +2408,12 @@ int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guar
         if ((pwo.parse_options & PO_ALLOW_REPARSE) && !parsing_in_progress) {
             parsing_in_progress = true;
             guard.began = true;
+            // the strings and locations that exist now were not added by this parse: expressions created since the
+            // last commit and code that ran meanwhile refer to them, so a rollback of the parse must not delete them
+            // (issue #6354)
+            std::lock_guard<std::recursive_mutex> lock(runtime_metadata_lock);
+            str_vec_hwm = str_vec.size();
+            pgmloc_hwm = pgmloc.size();
         }
         // the threads that code of an earlier parse or of a debugger evaluation started are not this parse's
         // (issue #6243)
@@ -2393,14 +2440,18 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     sb.parseRollback();
     native_parse_info = committed_native_parse_info;
 
+    // the strings and locations are protected by the runtime metadata lock, as code that is deserialized lazily adds
+    // to them (issue #6354)
+    std::unique_lock<std::recursive_mutex> metadata_lock(runtime_metadata_lock);
+
     // free temporary data structures
     str_set.clear();
     loc_set.clear();
 
-    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete pending items added since last commit,
-    // preserving committed state for continued use. Without PO_ALLOW_REPARSE, the program is considered
-    // unusable after rollback anyway, so we just clear the vectors without freeing (the memory will be
-    // cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
+    // With PO_ALLOW_REPARSE, we do atomic rollback: only delete the items that the failed parse added (above the high
+    // water marks, see beginParse()), preserving committed state for continued use. Without PO_ALLOW_REPARSE, the
+    // program is considered unusable after rollback anyway, so we just clear the vectors without freeing (the memory
+    // will be cleaned up when the Program is destroyed). This preserves backward compatibility where error messages
     // could still reference parse locations from failed parses.
     if (pwo.parse_options & PO_ALLOW_REPARSE) {
         // delete pending strings (those added after str_vec_hwm)
@@ -2418,6 +2469,7 @@ void qore_program_private::internParseRollback(ExceptionSink* xsink) {
     // Note: without PO_ALLOW_REPARSE, we don't clear str_vec/pgmloc - the memory will be freed
     // when the Program object is destroyed. This is intentional to avoid use-after-free when
     // error messages reference parse locations from the failed parse.
+    metadata_lock.unlock();
 
     // issue #2907 delete & clear statement index maps when doing a parse rollback
     for (auto& i : statementByFileIndex) {
@@ -2820,6 +2872,13 @@ int qore_program_private::internParseCommit(bool standard_parse) {
             // the top-level code and the namespaces are not in a class (classes set their own context): the Program can
             // be parsed while a method runs (ex: in Program::parse()), and the method's class is then the thread's class
             ClassOnlySubstitutionHelper class_helper(nullptr);
+            // the functional operators decide which operands are statements of their own when all the code has been
+            // initialized (qore#6288)
+            QoreElementScopeParseHelper element_scope_helper;
+
+            // the missing return checks of the code wait until all of the code is initialized, as they analyze the
+            // code that it calls (issue #5940)
+            QoreMissingReturnCheckHelper mrch(missing_return_checks);
 
             // initialize new statements second (for "our" and "my" declarations)
             // also initializes namespaces, constants, etc
@@ -2827,6 +2886,10 @@ int qore_program_private::internParseCommit(bool standard_parse) {
 
             // do the initial parse phase
             qore_root_ns_private::get(*RootNS)->parseInit();
+
+            if (!parseSink->isEvent()) {
+                missing_return_checks.run(pgm);
+            }
 
             printd(5, "QoreProgram::internParseCommit() this: %p RootNS: %p\n", pgm, RootNS);
         }
@@ -2962,7 +3025,10 @@ void qore_program_private::addStatement(AbstractStatement* s, const QoreNativePa
 
         // initialize expression
         QoreParseContext parse_context;
-        block->parseInit(parse_context);
+        {
+            QoreElementScopeParseHelper element_scope_helper;
+            block->parseInit(parse_context);
+        }
         // an expression is never committed: it runs the checks that a commit runs for the classes it instantiates,
         // so "new C()" of a class with abstract methods is refused as in any other code, and no check is left for
         // the Program's next commit
@@ -3961,7 +4027,9 @@ AbstractStatement* qore_program_private::findIndexedStatementForLocation(const c
 StatementBlock* qore_program_private::getAOTClosureDebugBlock(const QoreProgramLocation* loc) {
     AutoLocker al(&plock);
     if (!loc) {
-        loc = getLocation(0, 0);
+        // the block is kept for the life of the Program: its location is never rolled back with a failed parse
+        // (issue #6354)
+        loc = getRuntimeLocation(0, 0);
     }
     StatementBlock*& b = aot_closure_debug_blocks[loc];
     if (!b) {
@@ -4122,7 +4190,8 @@ int qore_program_private::initDeferredCode() {
     server side debug library.
 */
 void ThreadLocalProgramData::dbgAttach(ExceptionSink* xsink) {
-    if (runState == DBG_RS_DETACH) {
+    // a thread that the debugger does not want is not offered to it again (#3293)
+    if (runState == DBG_RS_DETACH && !dbg_dont_attach.load(std::memory_order_acquire)) {
         DebugRunStateEnum rs = runState;
         const AbstractStatement* rts = runToStatement;
         functionCallLevel = 0;
@@ -4281,6 +4350,14 @@ void ThreadLocalProgramData::dbgException(const AbstractStatement* statement, Ex
         getProgram()->priv->onException(statement, rs, rts, xsink);
         setRunState(rs, rts);
         printd(5, "ThreadLocalProgramData::dbgException() this: %p, rs: %d, rts: %p, xsink: %d\n", this, runState, runToStatement, xsink && xsink->isEvent());
+    }
+}
+
+void qore_program_private::dbgRunExit(QoreValue& rv, ExceptionSink* xsink) {
+    // called in the Program's context: the thread-local data is this Program's, if a debugger is attached
+    ThreadLocalProgramData* tlpd = get_thread_local_program_data();
+    if (tlpd) {
+        tlpd->dbgExit(&sb, rv, xsink);
     }
 }
 
@@ -5134,7 +5211,16 @@ QoreValue QoreProgram::runTopLevel(ExceptionSink* xsink) {
     if (!*xsink && priv->debugger_terminating.load(std::memory_order_relaxed)) {
         qore_check_cancel(xsink, "end of the program's top-level code");
     }
-    return *xsink ? QoreValue() : rv.release();
+    // the debugger's exit event of the top-level code gets the value that Program::run() returns, which it can
+    // replace (#3401); after an exception, rv releases the value, and the event gets none
+    QoreValue result = *xsink ? QoreValue() : rv.release();
+    priv->dbgRunExit(result, xsink);
+    if (*xsink) {
+        // nothing is returned with an exception, also if the debugger set a value
+        result.discard(xsink);
+        return QoreValue();
+    }
+    return result;
 }
 
 template <bool LexicalInvocation>
@@ -5284,6 +5370,9 @@ void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
         // waitForTerminationAndClear() after all threads have terminated.
         priv->exec_class_inst.discard(xsink);
         priv->exec_class_inst = qc->execConstructor((QoreListNode*)0, xsink);
+        // the debugger's exit event of the exec class gets the value that Program::run() returns (the return value
+        // that the class set), which it can replace (#3401)
+        priv->dbgRunExit(priv->exec_class_rv, xsink);
     }
 }
 
@@ -5732,6 +5821,10 @@ void QoreDebugProgram::removeProgram(QoreProgram *pgm) {
 
 QoreListNode* QoreDebugProgram::getAllProgramObjects() {
    return priv->getAllProgramObjects();
+}
+
+bool QoreDebugProgram::attachThread(QoreProgram* pgm, int tid) const {
+   return priv->attachThread(pgm, tid);
 }
 
 int QoreDebugProgram::breakProgramThread(QoreProgram *pgm, int tid) const {

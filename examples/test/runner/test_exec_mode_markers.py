@@ -185,6 +185,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   module is not checked again for the next Program (#5803)
         # - qlib-all-modules-load: each qlib module is loaded by a restricted Program in a child process of its own, as
         #   a loaded module is not checked again for the next Program (#5803)
+        # - qlib-restricted-callers: each case loads the modules in a restricted Program in a child process of its own
+        #   (#6337)
         # - nested-module-parse: the module is loaded in a child process whose module path holds it (#5803, #5938)
         # - RestSchemaModuleLazyTypes-<n>: the modules are loaded and compared in child processes
         # - WebSocketProgramEnd: the server whose Program ends with an open connection is a child process; the
@@ -269,6 +271,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   and arm a debug hook in them
         # - generic-static-call-type-params (#6186, #6285, #6308, #6256): its probes run in child processes that set
         #   their own --exec-mode, in qcc executables and in a qcc-compiled module
+        # - generic-static-intermediate (#6447, #6448): its probes run in child processes that set their own
+        #   --exec-mode, in qcc executables and in a qcc-compiled module
         # - UndefinedArithmetic-<n> (#1034): their probes run in child processes that set their own --exec-mode, in qcc
         #   executables and in a qcc-compiled module
         # - entry-cpp-exception (#6255): its checks run in child processes that set their own --exec-mode and in qcc
@@ -280,8 +284,15 @@ class ExecModeMarkerTest(unittest.TestCase):
         # - test-interpreter-options (#6250): its checks run in child interpreters started with options of their own
         # - frame-check-stack (#6124, #6414): its checks run a fixture that sets its own execution mode, in child
         #   processes and in qcc executables
+        # - RestSchemaImportTool (#6190): its checks run tools/rest-schema-import.qr in child processes
+        # - param-class-check-steps (#6449): its worker runs in child processes that set their own --exec-mode and in
+        #   qcc executables
+        # - ir-guard-profile-types (#6421): its checks run in child processes that set their own --exec-mode
+        # - number-round-exact (#6278): its probes run in child processes that set their own --exec-mode and in qcc
+        #   executables
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/JITFinalizeCancellation.qtest",
+                                 "examples/test/ir/ir-guard-profile-types/ir-guard-profile-types.qtest",
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
@@ -305,6 +316,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/threads/unhandled-exception-report.qtest",
                                  "examples/test/qore/threads/frame-check-stack.qtest",
                                  "examples/test/qore/functions/float-conversion-edges.qtest",
+                                 "examples/test/qore/functions/number-round-exact.qtest",
                                  "examples/test/qore/classes/AsyncIoController/asyncio_callback_exception_stderr.qtest",
                                  "examples/test/ir/AOTModuleForeignThread.qtest",
                                  "examples/test/qore/misc/foreach-enum-element-release.qtest",
@@ -325,6 +337,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/misc/declaration-initializer-scope.qtest",
                                  "examples/test/qore/classes/or-nothing-container-casts.qtest",
                                  "examples/test/qore/classes/generic-static-call-type-params.qtest",
+                                 "examples/test/qore/classes/generic-static-intermediate.qtest",
+                                 "examples/test/qore/classes/param-class-check-steps/param-class-check-steps.qtest",
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
@@ -341,7 +355,9 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest",
+                                 "examples/test/qore/functions/user-functional-domains/qlib-restricted-callers.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
+                                 "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-1.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-2.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaModuleLazyTypes-3.qtest",

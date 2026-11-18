@@ -94,9 +94,9 @@ class TemporaryLifetimeTest inherits QUnit::Test {
             r."60 return in a foreach with a variable of the function");
         # the temporaries held at the end of a statement are released in the reverse order of their creation
         assertRegex("log\\(alive,alive\\) ~two-2 ~two-1$", r."18 two chains in one statement");
-        # a temporary created per element releases the previous one; nothing accumulates
-        assertEq("+map-1 getName(map-1) +map-2 ~map-1 getName(map-2) +map-3 ~map-2 getName(map-3) "
-            "log(map-1,map-2,map-3) ~map-3", r."29 map evaluating a temporary per element");
+        # a temporary created per element is released at the end of its element (qore#6288); nothing accumulates
+        assertEq("+map-1 getName(map-1) ~map-1 +map-2 getName(map-2) ~map-2 +map-3 getName(map-3) ~map-3 "
+            "log(map-1,map-2,map-3)", r."29 map evaluating a temporary per element");
         # a closure and a call reference of a temporary work in its statement
         assertEq("+closure log(self=closure) ~closure", r."32 closure of a temporary called in the chain");
         assertEq("+call-ref getName(call-ref) log(call-ref) ~call-ref",
@@ -106,9 +106,10 @@ class TemporaryLifetimeTest inherits QUnit::Test {
             r."34 closure of a temporary assigned");
         # an on_exit handler is a statement of its own
         assertEq("body +on-exit state(on-exit)=alive log(alive) ~on-exit", r."46 on_exit handler");
-        # an element that a foreach statement gets from a map one by one releases the temporary of the previous one
-        assertEq("+lazy-member-1 state(lazy-member-1)=alive lazy body alive +lazy-member-2 ~lazy-member-1 "
-            "state(lazy-member-2)=alive lazy body alive ~lazy-member-2", r."47 foreach over map with a member chain");
+        # an element that a foreach statement gets from a map one by one releases its temporaries before the body runs
+        # (qore#6288)
+        assertEq("+lazy-member-1 state(lazy-member-1)=alive ~lazy-member-1 lazy body alive +lazy-member-2 "
+            "state(lazy-member-2)=alive ~lazy-member-2 lazy body alive", r."47 foreach over map with a member chain");
         # a member of self read for a call keeps its value until the end of the statement
         assertEq("+member +replacement replaced log(member) ~member after the call ~replacement",
             r."48 member of self replaced by its method");

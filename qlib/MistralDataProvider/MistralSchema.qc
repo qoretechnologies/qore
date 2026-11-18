@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore MistralDataProvider module: the pinned Mistral API description
+#! Qore MistralDataProvider module: the vendored Mistral API description
 
 /** MistralSchema.qc Copyright 2026 Qore Technologies, s.r.o.
 
@@ -35,13 +35,13 @@ public namespace MistralDataProvider {
 #! Records where the vendored Mistral API description came from and what it describes
 /** The actions are generated from a schema committed to this module rather than fetched at run time,
     because an upstream change must not be able to alter the contract of an action that existing
-    workflows call.  Updating it is a reviewed step: import a named revision, check it against the
-    manifest, and look at what changed.
+    workflows call.  Updating it is a reviewed step: download the current official document over the vendored
+    copy beside the import specification, import it, check it against the manifest, and look at what changed.
 
     @see @ref MistralDataProvider::MistralSchema "MistralSchema"
 */
 public hashdecl MistralSchemaProvenanceInfo {
-    #! The URL the schema was imported from
+    #! The URL of the official document; the import reads the copy of it vendored beside the import specification
     string source_url;
 
     #! The SHA-256 checksum of the unmodified upstream document
@@ -81,13 +81,13 @@ public class MistralSchema {
     public {
         #! Where the vendored schema came from
         const Provenance = <MistralSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/mistralai/platform-docs-public/2e094f7bbe1395de4a738a3483def3573143d973/openapi.yaml",
-            "source_sha256": "60f5e92dcc4cae89a1c1eec614c409a1ce9da37f1e856d2868ff6734474f5859",
-            "source_size": 661948,
-            "imported": 2026-09-08,
-            "source_paths": 131,
-            "source_operations": 173,
-            "source_schemas": 481,
+            "source_url": "https://docs.mistral.ai/openapi.yaml",
+            "source_sha256": "7652f1307b3bc6cb7a10526c28788a430246f641cb9785a9f1b7b0dd912cdfae",
+            "source_size": 1548910,
+            "imported": 2026-11-17,
+            "source_paths": 251,
+            "source_operations": 347,
+            "source_schemas": 1106,
             "source_webhooks": 0,
             "api_version": "1.0.0",
         };

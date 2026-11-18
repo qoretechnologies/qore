@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/1.1 client poll operation completion actions releasing user EventNotifier objects
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class AsyncActionNotifierReleaseTest
+
+#! an EventNotifier that records the completion action locks held by the thread that destroys it
+class RecordingNotifier inherits EventNotifier {
+    public {
+        #! the number of completion action locks held when the last object was destroyed, or -1 if none was
+        static int locks_held = -1;
+        #! the number of objects destroyed
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        RecordingNotifier::locks_held = call_function("dbg_async_action_locks_held");
+        ++RecordingNotifier::destroyed;
+    }
+}
+
+#! A completion action releases its EventNotifier object only after its lock (issue #6465)
+/** The release of a user EventNotifier object runs its destructor, which is user code that can block on, or use, the
+    action again; the action therefore takes the object under its lock and releases it after the lock.  The actions of
+    the HTTP/1.1 client poll operation's requests hold the only reference of the notifier, so that deleting the
+    operation releases the action and the notifier with it, in the deleting thread; the notifier's destructor reads
+    the number of completion action locks that its thread holds (debug builds only).
+*/
+class AsyncActionNotifierReleaseTest inherits QUnit::Test {
+    constructor() : Test("completion action notifier release test", "1.0") {
+        addTestCase("a channel action releases its notifier without its lock", \channelTest());
+        addTestCase("an SSE action releases its notifier without its lock", \sseTest());
+        set_return_value(main());
+    }
+
+    channelTest() {
+        checkDebug();
+        Listener l();
+        on_exit l.close();
+        Http1ClientPollOperationBase op = l.connect();
+        Channel ch(-1);
+        resetNotifier();
+        op.submitRequestStreaming("GET", "/", NOTHING, NOTHING, ch, 1, True, False, new RecordingNotifier());
+        assertEq(0, RecordingNotifier::destroyed, "the action holds the notifier while the request is pending");
+        # the operation's cleanup completes the request with an error and releases its action, and the notifier
+        delete op;
+        assertEq(1, RecordingNotifier::destroyed, "the action released the notifier");
+        assertEq(0, RecordingNotifier::locks_held, "the notifier was released without the action's lock");
+    }
+
+    sseTest() {
+        checkDebug();
+        Listener l();
+        on_exit l.close();
+        Http1ClientPollOperationBase op = l.connect();
+        Queue q();
+        resetNotifier();
+        op.submitRequestSse("GET", "/", NOTHING, NOTHING, q, 1, new RecordingNotifier());
+        assertEq(0, RecordingNotifier::destroyed, "the action holds the notifier while the request is pending");
+        delete op;
+        assertEq(1, RecordingNotifier::destroyed, "the action released the notifier");
+        assertEq(0, RecordingNotifier::locks_held, "the notifier was released without the action's lock");
+    }
+
+    private checkDebug() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("needs a debug build of the library (dbg_async_action_locks_held())");
+        }
+    }
+
+    private resetNotifier() {
+        RecordingNotifier::locks_held = -1;
+        RecordingNotifier::destroyed = 0;
+    }
+}
+
+#! a listener that accepts one connection and never answers: requests stay pending
+class Listener {
+    private {
+        Socket listener();
+        *Socket peer;
+        #! the connection of the operation, which only refers to it
+        AbstractHttpPollConnection conn();
+        #! the longest wait for the operation's socket to be ready: a hang guard only
+        const PollWait = 60s;
+    }
+
+    constructor() {
+        listener.bindINET("127.0.0.1", 0, True, AF_INET);
+        listener.listen();
+    }
+
+    #! returns a ready HTTP/1.1 client poll operation connected to the listener, driven by this thread
+    Http1ClientPollOperationBase connect() {
+        int port = listener.getSocketInfo().port;
+        Http1ClientPollOperationBase op(new Socket(), "127.0.0.1:" + port, "127.0.0.1", port, False, False, False,
+            conn);
+        # the first step starts the connect, which completes when the connection is accepted; each further step runs
+        # when the operation's socket is ready, until the operation is ready
+        *hash<SocketPollInfo> info = op.continuePoll();
+        peer = listener.accept(PollWait);
+        if (!peer) {
+            throw "TEST-ERROR", "the connection was not accepted";
+        }
+        while (!op.isReady() && info) {
+            if (!Socket::poll((info,), PollWait)) {
+                throw "TEST-ERROR", sprintf("the operation's socket did not become ready in state %y", op.getState());
+            }
+            info = op.continuePoll();
+        }
+        if (!op.isReady()) {
+            throw "TEST-ERROR", sprintf("the operation is not ready in state %y", op.getState());
+        }
+        return op;
+    }
+
+    close() {
+        if (peer) {
+            peer.close();
+        }
+        listener.close();
+    }
+}

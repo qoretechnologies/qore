@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception paths of block exits and temporaries
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+%requires ../TestInterpreter.qm
+%exec-class CleanupDestructorExceptionsTest
+
+#! destructor exceptions raised on the way out of a block or by temporaries are caught by the enclosing try (qore#6084, qore#6244)
+/** A break, a continue or a return that leaves a block whose local raises an exception in its destructor gives the
+    exception to the cleanups of the enclosing blocks and the handler that encloses them, as when the block ends
+    (BlockCleanupEntry::outer_exception_target); the temporaries of remove, of fused foreach loops, of hash maps and of
+    streaming operators give theirs to the enclosing handler; the value of push and unshift is the list in every mode,
+    and an exception that a store left in the sink reaches the handler at a push.
+*/
+class CleanupDestructorExceptionsTest inherits QUnit::Test {
+    private {
+        string qore_bin = executablePath(TestInterpreter::qore_interpreter());
+        string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        string probe = get_script_dir() + "/CleanupDestructorExceptions/probe.q";
+        *string ast_out;
+    }
+
+    constructor() : Test("cleanup destructor exceptions", "1.0", \ARGV) {
+        addTestCase("AST catches every destructor exception in the enclosing try", \astReference());
+        addTestCase("compiled modes match AST", \sourceModes());
+        addTestCase("qcc executables match AST", \compiled());
+        set_return_value(main());
+    }
+
+    astReference() {
+        string out = getAst();
+        # the catch block runs, the value of the interrupted return is released before it, and the function goes on
+        assertEq(2, (out =~ x/(ret_in_try: \["~t", "dthrow", "~d", "~v", "catch:DT", "~z", "got:after"\])/g).size(),
+            out);
+        foreach string t in ("s_end", "s_break", "s_continue", "s_foreach_break", "s_for_break", "s_switch_break",
+                "s_return", "s_return_nested", "s_break_inner_try") {
+            assertRegex("\n" + t + " caught ", out, t);
+        }
+        foreach string t in ("for_end", "for_break", "for_return", "for_outer_break") {
+            assertRegex("\n" + t + " caught ", out, t);
+        }
+        assertRegex("\nfor_return -> \"after\"\n", out);
+        assertRegex("\nforeach_store caught fs1 next \"fs2\"\n", out);
+        assertRegex("\nfor_body_throw: \\[\"~ft\", \"catch:BODY\"\\]\n", out);
+        assertRegex("\ns_return -> \"after\"\n", out);
+        # the catch block in the loop body ends the try statement that the break left: the loop goes on
+        assertRegex("\ns_break_inner_try i=3\n", out);
+        # each element's temporaries are released at its end (qore#6288): the first destructor exception ends the loop
+        foreach hash<auto> h in ({"t": "t7", "e": "DTOR-rm1"}, {"t": "t7a", "e": "DTOR-ra1"},
+                {"t": "t10", "e": "DTOR-fe1"}, {"t": "t10b", "e": "DTOR-fb1"}, {"t": "t10d", "e": "DTOR-fd1"},
+                {"t": "t5b", "e": "DTOR-h1"}, {"t": "t5c", "e": "DTOR-hc1"}, {"t": "t11", "e": "DTOR-fr2"},
+                {"t": "t12", "e": "DTOR-ix1"}, {"t": "t14", "e": "DTOR-al1"}, {"t": "t15", "e": "DTOR-co1"},
+                {"t": "t16", "e": "DTOR-tw1"}, {"t": "t20", "e": "DTOR-c,DTOR-d"}, {"t": "t24", "e": "DTOR-pc"}) {
+            assertRegex("\n" + h.t + ": " + h.e + "\n", out, h.t);
+        }
+        # the value of the list in the push of t20 keeps its objects until the end of the statement
+        assertRegex("\nnew c\nnew d\n~c\n~d\nt20: ", out);
+        assertRegex("\npush: \\[1, 2\\]\nunshift: \\[0, 1, 2\\]\npush member: \\[1, 3\\]\nunshift member: \\[0, 1, 3\\]\n",
+            out);
+        assertFalse(out =~ /ESCAPED|unhandled/, out);
+    }
+
+    sourceModes() {
+        string expected = getAst();
+        foreach string mode in ("ir", "jit") {
+            assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", qore_bin, "-b", "--enable-debug", "--exec-mode=" + mode,
+                probe)), mode);
+        }
+        assertEq(expected, run(("QORE_JIT_SYNC_COMPILE=1", "QORE_IR_THRESHOLD=1", "QORE_JIT_THRESHOLD=1", qore_bin,
+            "-b", "--enable-debug", "--exec-mode=tiered", probe)), "tiered");
+    }
+
+    compiled() {
+        string expected = getAst();
+        foreach string level in ("-O0", "-O3") {
+            TmpDir dir("qore-cleanup-destructor-exceptions-");
+            string exe = dir.path + "/probe";
+            run((qcc_bin, level, "-o", exe, probe));
+            assertEq(expected, run((exe, "-b", "--enable-debug")), "qcc " + level);
+        }
+    }
+
+    private string getAst() {
+        if (!exists ast_out) {
+            ast_out = run((qore_bin, "-b", "--enable-debug", "--exec-mode=ast", probe));
+        }
+        return ast_out;
+    }
+
+    private static string quote(string value) {
+        return "'" + join("'\\''", split("'", value)) + "'";
+    }
+
+    private static string executablePath(string name) {
+        if (name.regex("/")) {
+            return realpath(name);
+        }
+        foreach string directory in (split(":", ENV.PATH ?? "")) {
+            string path = (directory ? directory : ".") + "/" + name;
+            if (is_executable(path)) {
+                return realpath(path);
+            }
+        }
+        throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
+    }
+
+    #! runs a command; one that runs qore with an execution mode runs through ExecModeHarness
+    private string run(list<string> args) {
+        string command = "env LD_LIBRARY_PATH=" + quote(lib_dir) + " QORE_LIBDIR=" + quote(lib_dir) + " "
+            + (map quote($1), args).join(" ");
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(command);
+        if (r.mode) {
+            ExecModeHarness::check_native(r);
+        }
+        assertEq(0, r.rc, r.out);
+        return r.out;
+    }
+}

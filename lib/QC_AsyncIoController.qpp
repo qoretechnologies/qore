@@ -335,6 +335,11 @@ AsyncIoController::copy() {
     there is subject to the same policy as one made by the submitting code; an operation submitted by such a step
     is governed by the same sandbox
 
+    @note A builtin HTTP or WebSocket client or server poll operation, @ref Qore::PollPipeline "PollPipeline" or
+    @ref Qore::DelegatingPollOperation "DelegatingPollOperation" that is deleted with the @ref delete "delete operator"
+    while the controller holds it is canceled: it is not continued again, and its result is a canceled result; its
+    state is released when the controller no longer uses it
+
     @since %Qore 3.0
 */
 static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,

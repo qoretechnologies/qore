@@ -361,6 +361,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       capabilities of the thread that creates the client are used, as a host sets them for the code it runs with
       @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - \c WebSocketConnectionObject::getImpl() is declared to return a
       @ref WebSocketClient::WebSocketClient "WebSocketClient", as subclasses return other clients (see
       @ref override_return_types); \c getAsync() raises \c CONNECTION-ASYNC-UNSUPPORTED for a connection whose client
@@ -6436,7 +6438,8 @@ public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientI
             };
         }
         if (logger) {
-            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", base_url);
+            # the URL is logged without its password
+            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", get_masked_url(base_url));
         }
     }
 

@@ -59,6 +59,7 @@
 #include "qore/intern/QoreIRBuilder.h"
 #include "qore/intern/QoreIRLowering.h"
 #include "qore/intern/QoreIRVerifier.h"
+#include "qore/intern/QoreIRAnalysis.h"
 #include "qore/intern/QoreIRInterpreter.h"
 #include "qore/intern/QoreOpcodeRegistry.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
@@ -204,6 +205,7 @@
 #include <limits>
 #include <optional>
 #include <unordered_map>
+#include <set>
 #include <unordered_set>
 #include <vector>
 #include <dlfcn.h>
@@ -2811,12 +2813,11 @@ const QoreProgramLocation* qore_aot_read_source_location(const QoreAOTBinaryRead
         return nullptr;
     }
     // interned in the Program, as the locations of parsed code; the Program's runtime metadata lock protects its
-    // strings and locations, so that this can run when code is deserialized lazily
+    // strings and locations, so that this can run when code is deserialized lazily, and they are never rolled back
+    // with a failed parse, which did not add them (issue #6354)
     qore_program_private* pp = qore_program_private::get(*pgm);
-    const char* interned_file = pp->addString(file);
-    const char* interned_source = source && *source ? pp->addString(source) : nullptr;
-    QoreProgramLocation tmp(interned_file, start_line, end_line, interned_source, offset);
-    return pp->getLocation(tmp, start_line, end_line);
+    QoreProgramLocation tmp(file, start_line, end_line, source && *source ? source : nullptr, offset);
+    return pp->getRuntimeLocation(tmp, start_line, end_line);
 }
 
 // Forward declaration for use by expression registry handlers (Phase 3.2)
@@ -3164,10 +3165,13 @@ struct QoreAOTDebugMetadata {
             metadata.insert(metadata.end(), section_data, section_data + sec->size);
         }
         assert(metadata.size() == compact_size);
+        // the copy has the header of the metadata, so it has a checksum of its own (qore#6451)
+        qore_aot_seal_metadata(metadata);
 
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
         std::string open_error;
-        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error)) {
+        // the copy is made from metadata that the reader of the module checked against its checksum (qore#6451)
+        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error, false)) {
             this->reader = std::move(retained_reader);
         }
     }
@@ -3178,8 +3182,10 @@ struct QoreAOTDebugMetadata {
             return reader.get();
         }
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
+        // the metadata, or a copy of it, was checked against its checksum by the reader of the module, whose
+        // load it belongs to (qore#6451)
         if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
-                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error)) {
+                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error, false)) {
             return nullptr;
         }
         // Force retained sections to decode before publishing the reader for
@@ -3294,6 +3300,11 @@ static std::unique_ptr<QoreIRFunction> deserializeDebugIRForContext(
         }
         if (kind == AOTExprKind::EXPR_TREE) {
             uint32_t blob_size = QoreAOTBinaryReader::readU32(p);
+            // the tree is read within the IR (qore#6451)
+            if (e < p || blob_size > static_cast<size_t>(e - p)) {
+                err = "truncated AOT IR expression tree";
+                return QoreValue();
+            }
             const uint8_t* blob_data = p;
             p += blob_size;
             ExprTreeDeserializer deser(blob_data, blob_size, ctx->pgm, ctx);
@@ -4900,6 +4911,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // (especially CLOSURE_CREATE) are resolved, since EXPR_TREEs
                 // may reference closure slots that appear later in the stream
                 uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+                // the tree is read later from the entry (qore#6451)
+                if (bound_end && (bound_end < ptr || blob_size > static_cast<size_t>(bound_end - ptr))) {
+                    aot_slot_resolve_error = "truncated expression tree in SLOT_MAPS entry";
+                    has_unsupported = true;
+                    ptr = bound_end;
+                    continue;
+                }
                 const uint8_t* blob_data = ptr;
                 ptr += blob_size;
                 deferred_expr_trees.push_back({i, blob_data, blob_size});
@@ -6985,16 +7003,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                     continue;
                 }
 
-                const char* interned_file = pp->addString(loc_file);
+                // never rolled back (issue #6354)
+                const char* interned_file = pp->addRuntimeString(loc_file);
                 const char* interned_source = loc_source && *loc_source
-                    ? pp->addString(loc_source) : nullptr;
+                    ? pp->addRuntimeString(loc_source) : nullptr;
                 if (pp->findIndexedStatementForLocation(interned_file, interned_source,
                         start_line, offset)) {
                     continue;
                 }
                 QoreProgramLocation tmp(interned_file, start_line, end_line,
                     interned_source, offset);
-                const QoreProgramLocation* loc = pp->getLocation(tmp, start_line, end_line);
+                const QoreProgramLocation* loc = pp->getRuntimeLocation(tmp, start_line, end_line);
                 StatementBlock* stmt = new StatementBlock(pp, loc);
                 qore_program_private::registerStatement(pgm, stmt, true);
                 ctx->owned_debug_statements.push_back(stmt);
@@ -7292,15 +7311,15 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     // file pointer dangles the moment deserialization returns and any later
     // exception throw reports garbage bytes for `ex.file` / callstack[*].file.
     //
-    // Intern via qore_program_private::addString() so the string lives in the
-    // program's str_vec pool for the program's lifetime, matching how the
-    // parser's addFile() already stores filenames for JIT/source-parsed code.
+    // Intern via qore_program_private::addRuntimeString() so the string lives
+    // in the program's runtime pool for the program's lifetime; it is never
+    // rolled back with a failed parse, which did not add it (issue #6354).
     int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     const char* loc_file = reader.readStringRef(ptr);
     if (start_line > 0 && owner_func) {
         const char* interned_file = (loc_file && pgm)
-            ? qore_program_private::get(*pgm)->addString(loc_file)
+            ? qore_program_private::get(*pgm)->addRuntimeString(loc_file)
             : (loc_file ? loc_file : "");
         auto* loc = new QoreProgramLocation(interned_file, start_line, end_line);
         owner_func->owned_locations.push_back(loc);
@@ -7308,6 +7327,228 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     }
 
     return inst;
+}
+
+//! Returns the opcodes of the instructions that may define the value that \a opcode takes as the handle of an object
+/** The interpreter keeps the address of an iterator, a context, the state of a reference foreach or a suspended
+    exception in a value slot (see QoreIRPointerSlot.h), which the instructions that use it take as an address; such a
+    value of IR read from an AOT module must be defined by the instruction that creates the object (qore#6451)
+*/
+static const std::vector<QoreIROpcode>* qore_aot_ir_handle_definers(QoreIROpcode opcode) {
+    static const std::vector<QoreIROpcode> iterators = {QoreIROpcode::IteratorCreate,
+        QoreIROpcode::IteratorCreateIterate, QoreIROpcode::IteratorCreateSelectors, QoreIROpcode::IteratorCreateSource,
+        QoreIROpcode::IteratorCreateReverse};
+    static const std::vector<QoreIROpcode> selector_iterators = {QoreIROpcode::IteratorCreateSelectors};
+    static const std::vector<QoreIROpcode> contexts = {QoreIROpcode::Context};
+    static const std::vector<QoreIROpcode> ref_foreach = {QoreIROpcode::RefForeachInit};
+    static const std::vector<QoreIROpcode> exceptions = {QoreIROpcode::ExceptionSuspend};
+    switch (opcode) {
+        case QoreIROpcode::IteratorNext:
+        case QoreIROpcode::IteratorNextSelectors:
+        case QoreIROpcode::IteratorRelease:
+            return &iterators;
+        case QoreIROpcode::SelectorIteratorPending:
+        case QoreIROpcode::SelectorIteratorFeed:
+            return &selector_iterators;
+        case QoreIROpcode::ContextMaxPos:
+        case QoreIROpcode::ContextSetPos:
+        case QoreIROpcode::ContextDestroy:
+            return &contexts;
+        case QoreIROpcode::RefForeachSize:
+        case QoreIROpcode::RefForeachGetEntry:
+        case QoreIROpcode::RefForeachRecord:
+        case QoreIROpcode::RefForeachFinalize:
+        case QoreIROpcode::RefForeachCleanup:
+            return &ref_foreach;
+        case QoreIROpcode::ExceptionResume:
+            return &exceptions;
+        default:
+            return nullptr;
+    }
+}
+
+//! Checks the value ids of IR read from an AOT module before it is used (qore#6451)
+/** The interpreter allocates its frame for the highest value id that a result or a base operand gives, or for 128
+    values if there is none (QoreIRFunction::computeSlotIdsAndEmbed(), QoreIRInterpreter), and indexes it with every
+    value id of the instructions, also with those that an instruction holds in fields of its own; a value id beyond
+    the frame, a value defined twice, or the handle of an object that is not defined by the instruction that creates
+    the object (see qore_aot_ir_handle_definers()) is refused.
+*/
+static bool qore_aot_check_ir_value_ids(const QoreIRFunction& func, std::string& error) {
+    size_t check_count = 0;
+    auto cancelled = [&]() -> bool {
+        if (!(++check_count % 100) && qore_check_cancel(nullptr, "AOT IR value id check")) {
+            error = "AOT IR value id check cancelled";
+            return true;
+        }
+        return false;
+    };
+    // the definitions of the values and the highest id of a result or a base operand
+    std::unordered_map<uint32_t, const QoreIRInstruction*> definers;
+    uint32_t max_id = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (cancelled()) {
+                return false;
+            }
+            if (inst->result.isValid()) {
+                if (!definers.emplace(inst->result.id, inst.get()).second) {
+                    error = "IR value " + std::to_string(inst->result.id) + " is defined more than once";
+                    return false;
+                }
+                max_id = std::max(max_id, inst->result.id);
+            }
+            for (const QoreIRValue& op : inst->operands) {
+                if (op.isValid()) {
+                    max_id = std::max(max_id, op.id);
+                }
+            }
+        }
+    }
+    // the interpreter's frame holds 128 values if no value has an id (QoreIRInterpreter)
+    const uint32_t limit = max_id ? max_id : 127;
+    auto idError = [&](uint32_t id, const QoreIRInstruction& inst, const char* field, const char* what) {
+        const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst.opcode));
+        error = std::string("IR instruction ") + (oi && oi->name ? oi->name : "<unknown>") + " has " + field
+            + " value id " + std::to_string(id) + what;
+    };
+    // an id of 0 is no value; UINT32_MAX is no value only where \a sentinel says so (LVPathStep::operand_idx)
+    auto checkId = [&](uint32_t id, const QoreIRInstruction& inst, const char* field, bool sentinel = false) -> bool {
+        if (id != 0 && !(sentinel && id == UINT32_MAX) && id > limit) {
+            idError(id, inst, field, (" beyond the highest value id " + std::to_string(limit)).c_str());
+            return false;
+        }
+        return true;
+    };
+    // a value that the instruction reads in every execution
+    auto checkRequiredId = [&](uint32_t id, const QoreIRInstruction& inst, const char* field) -> bool {
+        if (!id) {
+            idError(id, inst, field, ", which is no value");
+            return false;
+        }
+        return checkId(id, inst, field);
+    };
+    // returns true if the value is defined by one of the opcodes, directly or by phis of such values; the phis are
+    // walked without recursion, each once per walk, and the values found defined so are kept for the next walks
+    std::set<std::pair<const std::vector<QoreIROpcode>*, uint32_t>> defined_handles;
+    auto definedBy = [&](uint32_t root, const std::vector<QoreIROpcode>& opcodes) -> bool {
+        std::vector<uint32_t> stack = {root};
+        std::unordered_set<uint32_t> seen;
+        while (!stack.empty()) {
+            if (cancelled()) {
+                return false;
+            }
+            uint32_t id = stack.back();
+            stack.pop_back();
+            if (!seen.insert(id).second || defined_handles.count({&opcodes, id})) {
+                // a phi that reaches itself adds no definition
+                continue;
+            }
+            auto it = definers.find(id);
+            if (it == definers.end()) {
+                return false;
+            }
+            const QoreIRInstruction* def = it->second;
+            if (std::find(opcodes.begin(), opcodes.end(), def->opcode) != opcodes.end()) {
+                continue;
+            }
+            const auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(def);
+            if (!phi || phi->incoming.empty()) {
+                return false;
+            }
+            for (const QoreIRPhiIncoming& in : phi->incoming) {
+                if (!in.value.isValid()) {
+                    return false;
+                }
+                stack.push_back(in.value.id);
+            }
+        }
+        for (uint32_t id : seen) {
+            defined_handles.insert({&opcodes, id});
+        }
+        return true;
+    };
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (cancelled()) {
+                return false;
+            }
+            bool ok = true;
+            qore_ir_visit_value_operands(*inst, [&](QoreIRValue v) {
+                if (ok && v.isValid()) {
+                    ok = checkId(v.id, *inst, "an operand");
+                }
+            });
+            if (!ok) {
+                return false;
+            }
+            // the values that the instruction always reads
+            if (const auto* br = qore_ir_inst_cast<const QoreIRBranchIfInstruction*>(inst.get())) {
+                if (!checkRequiredId(br->condition.id, *inst, "a condition")) {
+                    return false;
+                }
+            } else if (const auto* sw = qore_ir_inst_cast<const QoreIRSwitchIntInstruction*>(inst.get())) {
+                if (!checkRequiredId(sw->switch_val.id, *inst, "a switch")) {
+                    return false;
+                }
+            } else if (const auto* sws = qore_ir_inst_cast<const QoreIRSwitchStringInstruction*>(inst.get())) {
+                if (!checkRequiredId(sws->switch_val.id, *inst, "a switch")) {
+                    return false;
+                }
+            } else if (const auto* ret = qore_ir_inst_cast<const QoreIRReturnInstruction*>(inst.get())) {
+                if (ret->has_value && !checkRequiredId(ret->value.id, *inst, "a returned")) {
+                    return false;
+                }
+            }
+            // the value ids that instructions hold in fields of their own
+            if (const auto* phi = qore_ir_inst_cast<const QoreIRPhiInstruction*>(inst.get())) {
+                for (const QoreIRPhiIncoming& in : phi->incoming) {
+                    if (!checkId(in.value.id, *inst, "an incoming")) {
+                        return false;
+                    }
+                }
+            }
+            const auto* next = qore_ir_inst_cast<const QoreIRIteratorNextInstruction*>(inst.get());
+            if (next) {
+                if (!checkId(next->iterator.id, *inst, "an iterator") || !checkId(next->index.id, *inst, "an index")
+                        || !checkId(next->limit.id, *inst, "a limit")) {
+                    return false;
+                }
+                for (const QoreIRValue& v : next->release_values) {
+                    if (!checkId(v.id, *inst, "a released")) {
+                        return false;
+                    }
+                }
+            }
+            if (const auto* path = qore_ir_inst_cast<const QoreIRLValuePathInstruction*>(inst.get())) {
+                for (const LVPathStep& step : path->path) {
+                    if (!checkId(step.operand_idx, *inst, "a path", true)) {
+                        return false;
+                    }
+                    for (uint32_t id : step.slice_operand_ids) {
+                        if (!checkId(id, *inst, "a slice")) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            if (const std::vector<QoreIROpcode>* opcodes = qore_aot_ir_handle_definers(inst->opcode)) {
+                // the iterator of an IteratorNext is a field of its own, the handle of the others the first operand
+                QoreIRValue handle = (next && (inst->opcode == QoreIROpcode::IteratorNext
+                        || inst->opcode == QoreIROpcode::IteratorNextSelectors))
+                    ? next->iterator
+                    : (inst->operands.empty() ? QoreIRValue() : inst->operands.front());
+                if (!handle.isValid() || !definedBy(handle.id, *opcodes)) {
+                    const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst->opcode));
+                    error = std::string("IR instruction ") + (oi && oi->name ? oi->name : "<unknown>")
+                        + " takes value " + std::to_string(handle.id)
+                        + ", which is not defined by an instruction that creates its object";
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 std::unique_ptr<QoreIRFunction> deserializeIRFunction(
@@ -7906,8 +8147,10 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                     const OpcodeInfo* oi = getOpcodeInfo(peek_opcode);
                     const auto* gi = getAOTInstGroupInfo(peek_group);
                     fprintf(stderr,
-                        "[aot-ir-deser] func=%s block=%d inst=%d off=%zu opcode=%s(%u) group=%s(%u)\n",
+                        "[aot-ir-deser] func=%s block=%d inst=%d off=%zu meta_off=%zd opcode=%s(%u) group=%s(%u)\n",
                         func->name.c_str(), i, j, static_cast<size_t>(inst_start - func_start),
+                        reader.getDataOffset(inst_start) == SIZE_MAX
+                            ? static_cast<ssize_t>(-1) : static_cast<ssize_t>(reader.getDataOffset(inst_start)),
                         oi && oi->name ? oi->name : "<unknown>", peek_opcode,
                         gi && gi->name ? gi->name : "<unknown>", peek_group);
                 }
@@ -7956,6 +8199,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     // a read past the end of the IR gave 0: the function is not used (qore#6265)
     if (ir_bounds.overrun()) {
         error = "truncated IR function";
+        return nullptr;
+    }
+    // the interpreter indexes its frame with the value ids of the IR (qore#6451)
+    if (!qore_aot_check_ir_value_ids(*func, error)) {
+        error = "malformed IR function '" + func->name + "': " + error;
         return nullptr;
     }
     return func;
@@ -10496,6 +10744,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     // an AOT module initialized as library code (see QoreModuleInitSandboxBarrierHelper) has a library Program
     if (qore_module_init_library()) {
         local_priv->library_module = true;
+        // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+        qore_module_init_set_program(local_pgm);
     }
 
     // the lists are those of the Program loading the module when the module loader names it, as for the inherited

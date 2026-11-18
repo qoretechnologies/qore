@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
@@ -115,41 +116,53 @@ Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
 }
 
 void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
-    // the recorded error is taken under the lock that its readers hold, and released after it
+    // the recorded error, the actions and the request data are taken under the lock that other threads hold to use
+    // them, and completed and released after it: completing or releasing an action can run code (the release of an
+    // object it holds) that uses this operation again
     QoreHashNode* old_error_info;
-    // Clean up single stream action - reject pending Promise so Future::get() doesn't hang
+    AbstractAsyncAction* old_stream_action;
+    ChannelAction* old_completed_channel_action;
+    BinaryNode* old_pending_request_data;
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
     {
         AutoLocker al(stream_lock);
         old_error_info = error_info;
         error_info = nullptr;
         has_error.store(false, std::memory_order_release);
-        if (stream_action) {
-            stream_action->executeError("HTTP1-ABORT",
-                "poll operation cleaned up before response was received", xsink);
-            stream_action->deref(xsink);
-            stream_action = nullptr;
-        }
-        if (completed_channel_action) {
-            completed_channel_action->deref(xsink);
-            completed_channel_action = nullptr;
-            completed_sid = 0;
-        }
+        old_stream_action = stream_action;
+        stream_action = nullptr;
+        old_completed_channel_action = completed_channel_action;
+        completed_channel_action = nullptr;
+        completed_sid = 0;
         active_stream_count = 0;
-        if (pending_request_data) {
-            pending_request_data->deref(xsink);
-            pending_request_data = nullptr;
+        old_pending_request_data = pending_request_data;
+        pending_request_data = nullptr;
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
+        send_trailers = nullptr;
+    }
+
+    // Clean up single stream action - reject pending Promise so Future::get() doesn't hang
+    if (old_stream_action) {
+        old_stream_action->executeError("HTTP1-ABORT",
+            "poll operation cleaned up before response was received", xsink);
+        old_stream_action->deref(xsink);
+    }
+    if (old_completed_channel_action) {
+        old_completed_channel_action->deref(xsink);
+    }
+    if (old_pending_request_data) {
+        old_pending_request_data->deref(xsink);
+    }
+    // Clean up streaming send queue
+    for (auto* s : old_send_body_queue) {
+        if (s) {
+            s->deref(xsink);
         }
-        // Clean up streaming send queue
-        for (auto* s : send_body_queue) {
-            if (s) {
-                s->deref(xsink);
-            }
-        }
-        send_body_queue.clear();
-        if (send_trailers) {
-            send_trailers->deref(xsink);
-            send_trailers = nullptr;
-        }
+    }
+    if (old_send_trailers) {
+        old_send_trailers->deref(xsink);
     }
 
     if (old_error_info) {
@@ -1168,22 +1181,35 @@ void Http1ClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
     }
 }
 
+// releases request body chunks and trailers taken out of an operation under its stream lock, after the lock: the
+// trailers hash can hold values whose release runs code that uses the operation again
+static void h1_release_send_data(std::deque<QoreStringNode*>& queue, QoreHashNode* trailers, ExceptionSink* xsink) {
+    for (auto* s : queue) {
+        if (s) {
+            s->deref(xsink);
+        }
+    }
+    queue.clear();
+    if (trailers) {
+        trailers->deref(xsink);
+    }
+}
+
 void Http1ClientPollOperationPriv::resetSendState(ExceptionSink* xsink) {
     releaseSendOp(xsink);
     send_state = SendState::INACTIVE;
     send_final_pending = false;
     send_buffered_body = false;
-    AutoLocker al(stream_lock);
-    for (auto* s : send_body_queue) {
-        if (s) {
-            s->deref(xsink);
-        }
-    }
-    send_body_queue.clear();
-    if (send_trailers) {
-        send_trailers->deref(xsink);
+    // taken under stream_lock and released after it
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
+    {
+        AutoLocker al(stream_lock);
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
         send_trailers = nullptr;
     }
+    h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
 }
 
 // --- Request sub-state handlers ---
@@ -1630,10 +1656,10 @@ void Http1ClientPollOperationPriv::pushSendData(const QoreStringNode* data, Exce
 }
 
 void Http1ClientPollOperationPriv::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
+    // the trailers replaced are released after stream_lock
+    ReferenceHolder<QoreHashNode> old_send_trailers(xsink);
     AutoLocker al(stream_lock);
-    if (send_trailers) {
-        send_trailers->deref(xsink);
-    }
+    old_send_trailers = send_trailers;
     send_trailers = trailers ? trailers->hashRefSelf() : nullptr;
 }
 
@@ -2862,6 +2888,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     AbstractAsyncAction* action = nullptr;
     bool close = connection_close;
     bool keep_completed_channel = false;
+    // a completed request's action that this one replaces is released after stream_lock, as releasing an action can
+    // run code that uses this operation again
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
 
     // Full-duplex streaming: if the response completed while the chunked
     // request body is still open (the server replied and closed its response
@@ -2887,9 +2916,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
             action->ref();
             ChannelAction* ch_action = dynamic_cast<ChannelAction*>(action);
             if (ch_action && ch_action->isSseInstallEligible()) {
-                if (completed_channel_action) {
-                    completed_channel_action->deref(xsink);
-                }
+                old_completed_channel_action = completed_channel_action;
                 completed_channel_action = ch_action;
                 completed_sid = stream_id;
                 keep_completed_channel = true;
@@ -2903,6 +2930,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         active_sid = 0;
         active_method.clear();
     }
+    // the completed request's action that this one replaces is released first, as when it was released under the
+    // lock
+    old_completed_channel_action = nullptr;
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
@@ -2927,6 +2957,10 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         if (!keep_completed_channel) {
             action->deref(xsink);
         }
+#ifdef DEBUG
+        // reports that the dispatch of the end of the response is done with the request's action
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::StreamEndDispatched, *self);
+#endif
     }
 
     if (close) {
@@ -3232,29 +3266,28 @@ bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string&
 void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
         ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
+    // released after stream_lock, as releasing an action can run code that uses this operation again
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
+    std::deque<QoreStringNode*> old_send_body_queue;
+    QoreHashNode* old_send_trailers;
     {
         AutoLocker al(stream_lock);
         action = stream_action;
         stream_action = nullptr;
-        if (completed_channel_action) {
-            completed_channel_action->deref(xsink);
-            completed_channel_action = nullptr;
-            completed_sid = 0;
-        }
+        old_completed_channel_action = completed_channel_action;
+        completed_channel_action = nullptr;
+        completed_sid = 0;
         active_stream_count = 0;
-        // Clean up streaming send queue
-        for (auto* s : send_body_queue) {
-            if (s) {
-                s->deref(xsink);
-            }
-        }
-        send_body_queue.clear();
-        if (send_trailers) {
-            send_trailers->deref(xsink);
-            send_trailers = nullptr;
-        }
+        // the streaming send queue is released after the lock
+        old_send_body_queue.swap(send_body_queue);
+        old_send_trailers = send_trailers;
+        send_trailers = nullptr;
     }
 
+    // released in the order of the release under the lock before: the completed request's action and the send data
+    // first, then the active request's action is completed
+    old_completed_channel_action = nullptr;
+    h1_release_send_data(old_send_body_queue, old_send_trailers, xsink);
     if (action) {
         action->executeError(err, desc, xsink);
         action->deref(xsink);
@@ -3422,7 +3455,17 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         bin->append(body, body_len);
     }
 
-    int64_t stream_id;
+    // the request data and the action of a refused request, and the action and the request data that this request
+    // replaces, are released after stream_lock: releasing an action can run code (the release of an object it holds)
+    // that uses this operation again
+    ReferenceHolder<BinaryNode> bin_holder(bin, xsink);
+    ReferenceHolder<AbstractAsyncAction> refused_action(action, xsink);
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
+    ReferenceHolder<BinaryNode> old_pending_request_data(xsink);
+    int64_t stream_id = -1;
+    // the error that refuses the request, raised after stream_lock
+    std::string refused_err;
+    std::string refused_desc;
     {
         // Under stream_lock: store and register
         AutoLocker al(stream_lock);
@@ -3438,67 +3481,65 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         // caller (mgr.request -> q_future_get_blocking).  Surface the closure
         // error eagerly instead.
         if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
-            bin->deref(xsink);
-            std::string err_str = "HTTP1-CONNECTION-CLOSED";
-            std::string desc_str = "connection closed before request could be submitted";
+            refused_err = "HTTP1-CONNECTION-CLOSED";
+            refused_desc = "connection closed before request could be submitted";
             if (error_info) {
                 QoreValue ev = error_info->getKeyValue("err");
                 QoreValue dv = error_info->getKeyValue("desc");
                 if (ev.getType() == NT_STRING) {
                     QoreStringValueHelper ev_str(ev);
-                    err_str = ev_str->c_str();
+                    refused_err = ev_str->c_str();
                 }
                 if (dv.getType() == NT_STRING) {
                     QoreStringValueHelper dv_str(dv);
-                    desc_str = dv_str->c_str();
+                    refused_desc = dv_str->c_str();
                 }
             }
-            action->deref(xsink);
-            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
-            return -1;
-        }
-
-        // Capacity check
-        if (max_streams && active_stream_count >= max_streams) {
-            bin->deref(xsink);
-            action->deref(xsink);
-            xsink->raiseException("HTTP1-CAPACITY-ERROR",
-                "connection at capacity: %d/%d streams",
-                active_stream_count, max_streams);
-            return -1;
-        }
-
-        stream_id = ++next_stream_id;
-        if (completed_channel_action) {
-            completed_channel_action->deref(xsink);
+        } else if (max_streams && active_stream_count >= max_streams) {
+            // Capacity check
+            refused_err = "HTTP1-CAPACITY-ERROR";
+            QoreString desc;
+            desc.sprintf("connection at capacity: %d/%d streams", active_stream_count, max_streams);
+            refused_desc = desc.c_str();
+        } else {
+            stream_id = ++next_stream_id;
+            old_completed_channel_action = completed_channel_action;
             completed_channel_action = nullptr;
             completed_sid = 0;
+            stream_action = refused_action.release();  // takes ownership
+            ++active_stream_count;
+            active_sid = (int)stream_id;
+            active_method = method;
+            streaming_active = streaming;
+            streaming_send = streaming_send_flag;
+            old_pending_request_data = pending_request_data;
+            pending_request_data = bin_holder.release();
+            pending_request_header_len = header_len;
         }
-        stream_action = action;  // takes ownership
-        ++active_stream_count;
-        active_sid = (int)stream_id;
-        active_method = method;
-        streaming_active = streaming;
-        streaming_send = streaming_send_flag;
-        if (pending_request_data) {
-            pending_request_data->deref(xsink);
-        }
-        pending_request_data = bin;
-        pending_request_header_len = header_len;
     }
 
+    if (stream_id < 0) {
+        xsink->raiseException(refused_err.c_str(), "%s", refused_desc.c_str());
+        return -1;
+    }
+    // released in the order of the release under the lock before: the completed request's action, then the request
+    // data replaced
+    old_completed_channel_action = nullptr;
+    old_pending_request_data = nullptr;
     return stream_id;
 }
 
 bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
     bool in_flight = false;
+    // released after stream_lock, as releasing an action can run code that uses this operation again
+    ReferenceHolder<ChannelAction> old_completed_channel_action(xsink);
 
     {
         AutoLocker al(stream_lock);
         if (!stream_action || active_sid != (int)stream_id) {
             if (completed_channel_action && completed_sid == (int)stream_id) {
-                completed_channel_action->deref(xsink);
+                old_completed_channel_action = completed_channel_action;
                 completed_channel_action = nullptr;
                 completed_sid = 0;
             }
@@ -3550,6 +3591,9 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
         ExceptionSink* xsink) {
     ChannelAction* ch_action = nullptr;
     bool completed_action = false;
+    // a value that is not installed is released after stream_lock, as its release can run code that uses this
+    // operation again
+    ValueHolder initial_holder(initial, xsink);
     {
         AutoLocker al(stream_lock);
         if (stream_action && active_sid == (int)stream_id) {
@@ -3560,14 +3604,12 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
             completed_sid = 0;
             completed_action = true;
         } else {
-            initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
                 "cannot install SSE state: stream %lld not found or already complete",
                 (long long)stream_id);
             return;
         }
         if (!ch_action) {
-            initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STATE-ERROR",
                 "cannot install SSE state: stream %lld action is not a ChannelAction",
                 (long long)stream_id);
@@ -3576,7 +3618,7 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
         ch_action->ref();
     }
 
-    ch_action->installSseState(queue, notifier, notifier_obj, initial, xsink);
+    ch_action->installSseState(queue, notifier, notifier_obj, initial_holder.release(), xsink);
     ch_action->deref(xsink);
     if (completed_action) {
         ch_action->deref(xsink);
@@ -3689,7 +3731,9 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
 /** Releases all internal references.
 */
 Http1ClientPollOperationBase::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

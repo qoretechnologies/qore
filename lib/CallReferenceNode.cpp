@@ -892,7 +892,7 @@ QoreFunction* RunTimeResolvedMethodReferenceNode::getFunction() const {
 bool qore_object_has_pseudo_or_member_method(const qore_class_private* cls, const char* method,
         const qore_class_private* class_ctx) {
     QoreClass* pqc;
-    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetMemberInfo(method, class_ctx);
+    return pseudo_classes_find_method(NT_OBJECT, method, pqc) || cls->runtimeGetCallableMemberInfo(method, class_ctx);
 }
 
 // out of line: needs_scan() calls it only for call references, and inlined there it makes needs_scan() too large to be
@@ -1018,7 +1018,7 @@ QoreFunction* RunTimePseudoMethodReferenceNode::getFunction() const {
 //! of the name calls when the class has no method of the name (see qore_class_private::checkMethodForEval())
 static bool qore_object_member_holds_code(const qore_class_private* cls, QoreObject* obj, const char* name,
         const qore_class_private* class_ctx) {
-    const QoreMemberInfo* mi = cls->runtimeGetMemberInfo(name, class_ctx);
+    const QoreMemberInfo* mi = cls->runtimeGetCallableMemberInfo(name, class_ctx);
     if (!mi) {
         return false;
     }
@@ -1462,8 +1462,13 @@ LocalStaticMethodCallReferenceNode::LocalStaticMethodCallReferenceNode(const Qor
 const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(const QoreMethod& m,
         const QoreClass* scope_cls, const qore_class_private* code_class) {
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    // the method of a class without type parameters that has variants of a generic class binds the type parameters
+    // of the generic class wherever it is called from (qore#6448)
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
     }
     if (scope_cls) {
         if (const QoreTypeInfo* rv = qore_class_private::get(*scope_cls)->getStaticCallReceiverTypeInfo(m)) {
@@ -1499,8 +1504,11 @@ const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(
         return receiver_type_info;
     }
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
     }
     return qore_method_private::get(m)->getFunction()->runtimeInferClassReceiverTypeInfo(args);
 }
@@ -1512,8 +1520,11 @@ const QoreTypeInfo* LocalStaticMethodCallReferenceNode::getCallReceiverTypeInfo(
         return receiver_type_info;
     }
     const QoreClass* mcls = m.getClass();
-    if (!mcls || !mcls->hasTypeParameters()) {
+    if (!mcls) {
         return nullptr;
+    }
+    if (!mcls->hasTypeParameters()) {
+        return qore_class_private::getInheritedStaticCallReceiverTypeInfo(m);
     }
     // the type arguments are inferred from the values of the arguments
     if (args && args->needs_eval()) {
@@ -2111,7 +2122,10 @@ int UnresolvedStaticMethodCallReferenceNode::parseInit(QoreValue& val, QoreParse
         const qore_class_private* code_class = parse_get_class_priv();
         bool current_receiver;
         const QoreClass* ref_cls = qc;
-        if (qore_class_private::parseGetStaticCallReceiverTypeInfo(*qm, qc, code_class, current_receiver)
+        // (only in the code of a class, and for a method of a generic class: a method of a class that is not generic
+        // has a receiver for the variants that it adds to a generic base class's method also in top-level code)
+        if (code_class && qm->getClass()->hasTypeParameters()
+                && qore_class_private::parseGetStaticCallReceiverTypeInfo(*qm, qc, code_class, current_receiver)
                 && qore_class_private::get(*qc)->hasTypeParams()
                 && const_cast<qore_class_private*>(code_class)->parseFindStaticMethod(scope->getIdentifier(),
                     code_class) == qm) {
@@ -2578,7 +2592,7 @@ private:
         // the caller's code in the build (QoreSandboxBudgetStack::suspendCharge())
         QoreSandboxManager* callers = qore_find_thread_sandbox_manager_ref();
         barrier.emplace(QoreTrustedBuildTag());
-        if (!barrier->established()) {
+        if (!barrier->recorded()) {
             if (callers) {
                 callers->deref(nullptr);
             }

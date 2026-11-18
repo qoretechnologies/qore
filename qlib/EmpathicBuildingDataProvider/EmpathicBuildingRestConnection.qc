@@ -388,7 +388,9 @@ public class EmpathicBuildingRestClientIo inherits RestClientIo::RestClientIo {
             h.access_token = h.token;
         }
         if (h.access_token.typeCode() != NT_STRING || !h.access_token.val()) {
-            throw "EMPATHICBUILDING-LOGIN-ERROR", sprintf("the login response has no token: %y", h - "password");
+            # only the keys of the response, which can hold credentials
+            throw "EMPATHICBUILDING-LOGIN-ERROR", sprintf("the login response has no token; keys in the response: "
+                "%y", keys h);
         }
         if (h.token_type.typeCode() != NT_STRING || !h.token_type.val()) {
             h.token_type = "Bearer";

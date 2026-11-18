@@ -928,6 +928,11 @@ Datasource::destructor() {
     @code{.py}
 Datasource new_ds = ds.copy();
     @endcode
+
+    @note The code that copies the datasource and the creators of the original are the creators of the copy, and the
+    copy keeps the setters of the values and options that it copies: a copy is never judged less restricted than the
+    original or the code that copied it by a driver that judges a connection by the code that chose it (since %Qore
+    3.0; see @ref sandbox_datasource_connect_choosers)
 */
 Datasource::copy() {
     self->setPrivate(CID_DATASOURCE, ds->copy());
@@ -1668,6 +1673,10 @@ db.setUserName(user);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+
+    @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
+    connection by the code that chose it judges the next connection by it, also when other code opens it (since
+    %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setUserName(string username) [flags=NAMED_ARGS] {
     // the value is passed to the driver as a C string, which would be cut at a NUL character
@@ -1689,6 +1698,10 @@ db.setPassword(pass);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0); the password is not shown in the exception
+
+    @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
+    connection by the code that chose it judges the next connection by it, also when other code opens it (since
+    %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setPassword(string password) [flags=NAMED_ARGS] {
     // the value is passed to the driver as a C string, which would be cut at a NUL character; it is not shown
@@ -1710,6 +1723,10 @@ db.setDBName(db);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+
+    @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
+    connection by the code that chose it judges the next connection by it, also when other code opens it (since
+    %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setDBName(string database) [flags=NAMED_ARGS] {
     // the value is passed to the driver as a C string, which would be cut at a NUL character
@@ -1775,6 +1792,10 @@ db.setHostName(host);
     @endcode
 
     @throw DATASOURCE-ERROR the value contains a NUL character (since %Qore 3.0)
+
+    @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
+    connection by the code that chose it judges the next connection by it, also when other code opens it (since
+    %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setHostName(string host) [flags=NAMED_ARGS] {
     // the value is passed to the driver as a C string, which would be cut at a NUL character
@@ -1793,6 +1814,10 @@ nothing Datasource::setHostName(string host) [flags=NAMED_ARGS] {
     @code{.py}
 db.setPort(port);
     @endcode
+
+    @note the calling code is recorded as the setter of the value: a driver that judges the destination of a
+    connection by the code that chose it judges the next connection by it, also when other code opens it (since
+    %Qore 3.0; see @ref sandbox_datasource_connect_choosers)
 */
 nothing Datasource::setPort(softint port = 0) [flags=NAMED_ARGS] {
     ds->setPendingPort((int)port);

@@ -89,6 +89,8 @@ printf("%Y\n", ans.body);
     @section sewiorestclientrelnotes Release Notes
 
     @subsection Sewiorestclientv1_5 SewioRestClient v1.5
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - added the @ref SewioRestClient::SewioRestClientIo "SewioRestClientIo" class, which makes the
       module's requests with the async I/O of the @ref restclientiointro "RestClientIo" module;
       @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" of a
@@ -195,8 +197,9 @@ SewioRestClient rest(("url": "http://rtlsstudio.com/sensmapserver", "apikey": ap
                 throw "SEWIORESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
             }
             if (v.typeCode() != NT_STRING) {
-                throw "SEWIORESTCLIENT-ERROR", sprintf("required option %y was passed as a %s (%y); expecting "
-                    "\"string\"", key, v.type(), v);
+                # only the type of the value, which can be a credential
+                throw "SEWIORESTCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting "
+                    "\"string\"", key, v.type());
             }
 
             self{key} = v;

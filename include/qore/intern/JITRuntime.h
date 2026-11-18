@@ -364,7 +364,10 @@ struct QoreCallArgsSource {
     the AST interpreter raises "cannot call <class>::<method>() on an object that has already been deleted" when it
     enters the code of the variant that the call resolves with its arguments (qore_object_private::startCall()),
     naming the class of the variant: the variant is resolved here with the arguments from @a args, as the call would
-    resolve it (qore_raise_deleted_method_call_after_args()), as the call is not made (issue #5824)
+    resolve it (qore_raise_deleted_method_call_after_args()), as the call is not made (issue #5824); also for a static
+    method called through the object, and for a call to a member holding a call reference, to a pseudo-method or to
+    methodGate() (qore_raise_deleted_missing_method_call_after_args(), issue #6056), but not for a call through self
+    of a static method without an object (s() in a method)
 
     @return -1 if the exception was raised, 0 if not
 */
@@ -965,6 +968,12 @@ void qore_rt_exec_on_block_exit_forward(int64_t saved_count, ExceptionSink* xsin
     QoreHandlerRunContext
 */
 void qore_rt_handler_return(uint64_t value_bits, ExceptionSink* xsink);
+
+//! Sets the parse options that the top-level code runs with from here on (QoreIROpcode::SetCodeParseOptions,
+//! qore#6293)
+/** The options are given as four 32-bit words, from the lowest; see set_toplevel_code_parse_options()
+*/
+void qore_rt_set_code_parse_options(int64_t w0, int64_t w1, int64_t w2, int64_t w3);
 
 //! Discard (without firing) on_block_exit handlers registered since saved_count,
 //! truncating the thread-local handler stack back to that mark.  Used by the JIT

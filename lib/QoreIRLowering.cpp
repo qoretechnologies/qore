@@ -554,8 +554,10 @@ static bool expressionMayCreateNodeTemp(const QoreValue& val) {
 template <typename F>
 static bool anyOperandMayCreateTemp(const QoreValue& val, F operand_may_create_temp) {
     const AbstractQoreNode* node = val.getInternalNode();
+    // an implicit argument ($1, $#) has no operands either
     if (!node || val.isValue() || dynamic_cast<const VarRefNode*>(node)
-            || qore_get_runtime_constant_ref_node(node)) {
+            || qore_get_runtime_constant_ref_node(node) || dynamic_cast<const QoreImplicitArgumentNode*>(node)
+            || dynamic_cast<const QoreImplicitElementNode*>(node)) {
         return false;
     }
     // the conservative answer, as for an unknown kind of expression: a temp scope is created
@@ -970,6 +972,52 @@ static bool isSharedVar(const VarRefNode* var) {
 }
 
 static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
+
+//! Returns true if evaluating \a val may create a temporary besides its value whose release can be observed
+/** A value made by a call or a construction, and a value that can hold an object read from a variable that other code
+    can change while the expression runs - a global, thread-local or closure-bound variable, a local that a closure
+    uses or that a reference is taken of, a variable that holds a reference, a static class variable or a member of
+    the current object - which the AST interpreter holds as a temporary (see temporary_lifetime): its release is the
+    last one when the variable is changed, which a destructor can observe (qore#6288).  A read of another local, of
+    an element or of the implicit argument holds a reference only.
+*/
+static bool expressionMayCreateIntermediateObservableTemp(const QoreValue& val) {
+    return anyOperandMayCreateTemp(val, [](const QoreValue& operand) {
+        const AbstractQoreNode* node = operand.getInternalNode();
+        if (!node || operand.isValue()) {
+            return false;
+        }
+        if (dynamic_cast<const FunctionCallBase*>(node) || dynamic_cast<const QoreDotEvalOperatorNode*>(node)
+                || dynamic_cast<const CallReferenceCallNode*>(node)
+                || dynamic_cast<const ScopedObjectCallNode*>(node) || dynamic_cast<const NewObjectCallNode*>(node)) {
+            return true;
+        }
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const QoreTypeInfo* ti = var->getTypeInfo();
+            return (isSharedVar(var) || QoreTypeInfo::isReference(ti)) && qore_ir_type_may_hold_object(ti);
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            return qore_ir_type_may_hold_object(getExprTypeInfo(operand));
+        }
+        return expressionMayCreateIntermediateObservableTemp(operand);
+    });
+}
+
+// documented in QoreStatementTemps.h
+bool qore_expr_may_create_observable_temp(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (node && !expr.isValue()) {
+        // the expression's own value read from such a variable is held as a temporary as well
+        if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+            const QoreTypeInfo* ti = var->getTypeInfo();
+            return (isSharedVar(var) || QoreTypeInfo::isReference(ti)) && qore_ir_type_may_hold_object(ti);
+        }
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            return qore_ir_type_may_hold_object(getExprTypeInfo(expr));
+        }
+    }
+    return expressionMayCreateIntermediateObservableTemp(expr);
+}
 
 // documented in QoreIRLowering.h
 bool QoreIRLowering::expressionReadsWeakCapableLocal(const QoreValue& expr) const {
@@ -2263,13 +2311,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     error = "IR builder failed to create the exception cleanup block of an if statement's locals";
                     return false;
                 }
-                exception_stack.push_back(if_lvar_exception_cleanup_block);
+                // a catch block in the branches whose statement raises is left at the cleanup (qore#6472)
+                pushExceptionAnchor(if_lvar_exception_cleanup_block);
             }
         }
         // pops the compile-time state pushed for the condition's locals on a lowering failure
         auto abandon_if_lvars = [&]() {
             if (if_lvar_exception_cleanup_block) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
             }
             if (if_lvars) {
                 cleanup_stack.pop_back();
@@ -2331,7 +2380,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         builder.setBlock(merge_block);
         if (if_lvars) {
             if (if_lvar_exception_cleanup_block) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
             }
             // released in reverse order, after the branch's own locals, as in AST mode
             for (int i = static_cast<int>(if_lvars->size()) - 1; i >= 0; --i) {
@@ -2347,6 +2396,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 QoreIRBasicBlock* after_block = builder.getBlock();
                 builder.getFunction()->moveBlockToEnd(if_lvar_exception_cleanup_block);
                 builder.setBlock(if_lvar_exception_cleanup_block);
+                // a catch block in the branches whose statement raised the exception is left first (qore#6472)
+                emitAnchorCatchLeave(if_lvar_exception_cleanup_block, if_stmt->loc);
                 for (int i = static_cast<int>(if_lvars->size()) - 1; i >= 0; --i) {
                     auto* ui = builder.createUninstantiateLocal(if_lvars->lv[i], if_stmt->loc);
                     ui->is_block_exit = true;
@@ -2572,6 +2623,60 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         cond_block->is_loop_header = true;
         // the statement checks for cancellation at the start of every iteration, as in the AST interpreter
         cond_block->loop_cancel = QoreIRLoopCancel::For;
+        // The locals declared in the statement's initializer live until the loop ends.  When one can hold an object,
+        // whose destructor can raise an exception, they get the cleanups of a block's locals: a return from the body
+        // releases them through emitBlockCleanups() (a break or a continue does not: the flow target is pushed above
+        // their entry), an exception out of the loop releases them in their own cleanup block before it reaches the
+        // enclosing target, and the exception that their release at the loop's end raises goes to the enclosing
+        // target (qore#6084)
+        const LVList* for_lvars = for_stmt->getLVList();
+        bool for_lvars_cleanup = false;
+        if (for_lvars) {
+            for (unsigned i = 0; i < for_lvars->size(); ++i) {
+                if (qore_ir_type_may_hold_object(for_lvars->lv[i]->getTypeInfo())) {
+                    for_lvars_cleanup = true;
+                    break;
+                }
+            }
+        }
+        QoreIRBasicBlock* for_lvar_exception_cleanup_block = nullptr;
+        QoreIRBasicBlock* for_saved_exception_target = nullptr;
+        // pops the compile-time state pushed for the locals unless the lowering of the statement has completed
+        struct ForLvarsState {
+            QoreIRLowering& lowering;
+            bool entry = false;
+            bool handler = false;
+            ~ForLvarsState() {
+                pop();
+            }
+            void pop() {
+                if (handler) {
+                    lowering.exception_stack.pop_back();
+                    handler = false;
+                }
+                if (entry) {
+                    lowering.cleanup_stack.pop_back();
+                    entry = false;
+                }
+            }
+        } for_lvars_state{*this};
+        if (for_lvars_cleanup) {
+            BlockCleanupEntry lvars_entry;
+            lvars_entry.type = BlockCleanupEntry::Lvars;
+            lvars_entry.lvars = for_lvars;
+            lvars_entry.loc = for_stmt->loc;
+            pushBlockCleanup(lvars_entry);
+            for_lvars_state.entry = true;
+            if ((for_saved_exception_target = getCurrentExceptionTarget())) {
+                for_lvar_exception_cleanup_block = createBlock("for.lvars.exception.cleanup");
+                if (!for_lvar_exception_cleanup_block) {
+                    error = "IR builder failed to create the exception cleanup block of a for statement's locals";
+                    return false;
+                }
+                exception_stack.push_back(for_lvar_exception_cleanup_block);
+                for_lvars_state.handler = true;
+            }
+        }
         QoreValue init = for_stmt->getAssignment();
         if (init && !init.isNothing()) {
             // the value of the initializer is not used: it and its temps are released before the loop runs, as in
@@ -2721,9 +2826,29 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // (reverse order ensures destructors are called in LIFO order like in AST mode)
         // The loop variables are declared in the for statement's initialization (e.g., "int j = 2")
         // and must be cleaned up after the loop exits.
-        if (const LVList* loop_lvars = for_stmt->getLVList()) {
-            for (int i = static_cast<int>(loop_lvars->size()) - 1; i >= 0; --i) {
-                builder.createUninstantiateLocal(loop_lvars->lv[i], stmt->loc);
+        for_lvars_state.pop();
+        if (for_lvars) {
+            for (int i = static_cast<int>(for_lvars->size()) - 1; i >= 0; --i) {
+                builder.createUninstantiateLocal(for_lvars->lv[i], stmt->loc);
+            }
+        }
+        if (for_lvars_cleanup) {
+            // a destructor's exception goes to the enclosing target (qore#6084)
+            if (QoreIRBasicBlock* target = getCurrentExceptionTarget()) {
+                builder.createCheckException(stmt->loc)->exception_target = target;
+            }
+            if (for_lvar_exception_cleanup_block) {
+                // an exception out of the loop releases the locals before it reaches the enclosing target
+                QoreIRBasicBlock* after_block = builder.getBlock();
+                builder.getFunction()->moveBlockToEnd(for_lvar_exception_cleanup_block);
+                builder.setBlock(for_lvar_exception_cleanup_block);
+                for (int i = static_cast<int>(for_lvars->size()) - 1; i >= 0; --i) {
+                    auto* ui = builder.createUninstantiateLocal(for_lvars->lv[i], stmt->loc);
+                    ui->is_block_exit = true;
+                }
+                builder.createCheckException(stmt->loc)->exception_target = for_saved_exception_target;
+                builder.createBranch(for_saved_exception_target, stmt->loc);
+                builder.setBlock(after_block);
             }
         }
         pop_invariant_hoists();
@@ -2844,7 +2969,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Push exception handler for body instructions
             QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
             guard_exception_target_override = catch_block;
-            exception_stack.push_back(catch_block);
+            // a catch block in the body whose statement raises is left at the catch block (qore#6472)
+            pushExceptionAnchor(catch_block);
             size_t try_scope_depth = scope_stack.size() - 1;  // depth before try scope
             exception_scope_depth_stack.push_back(try_scope_depth);
 
@@ -2885,15 +3011,45 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             ft.cleanup_stack_depth = cleanup_stack.size();
             pushFlowTarget(ft);
 
-            // Lower the loop body
+            // an exception that leaves the body restores the implicit element before the loop's catch block, which
+            // continues to the handlers of the enclosing blocks (qore#6432); guarded instructions use it too
+            QoreIRBasicBlock* element_exception_next = nullptr;
+            QoreIRBasicBlock* element_exception_block = beginForeachElementExceptionRestore(element_exception_next,
+                error);
+            if (!element_exception_block) {
+                if (error.empty()) {
+                    error = "IR builder failed to create the reference foreach element exception block";
+                }
+                flow_stack.pop_back();
+                cleanup_stack.pop_back();  // RefForeachRecord
+                popExceptionAnchor();
+                exception_scope_depth_stack.pop_back();
+                guard_exception_target_override = prev_guard_override;
+                scope_stack.pop_back();
+                cleanup_stack.pop_back();  // Scope
+                cleanup_stack.pop_back();  // RefForeach
+                return false;
+            }
+            guard_exception_target_override = element_exception_block;
+
+            // Lower the loop body: $# in it is this loop's index, also in a foreach nested in the body of another
+            // foreach, whose index would otherwise be the virtual implicit element (qore#6383)
             StatementBlock* body = foreach_stmt->getCode();
+            VirtualImplicitContext saved_implicit = virtual_implicit;
+            virtual_implicit.arg0 = QoreIRValue();
+            virtual_implicit.arg1 = QoreIRValue();
+            virtual_implicit.element = index_val;
+            virtual_implicit.active = true;
+            virtual_implicit.runtime = false;
             if (body) {
                 ++loop_depth;
                 if (!lowerStatementBlock(body, error)) {
+                    virtual_implicit = saved_implicit;
                     --loop_depth;
+                    popExceptionAnchor();  // element exception block
                     flow_stack.pop_back();
                     cleanup_stack.pop_back();  // RefForeachRecord
-                    exception_stack.pop_back();
+                    popExceptionAnchor();
                     exception_scope_depth_stack.pop_back();
                     guard_exception_target_override = prev_guard_override;
                     scope_stack.pop_back();
@@ -2903,6 +3059,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 }
                 --loop_depth;
             }
+            virtual_implicit = saved_implicit;
+            popExceptionAnchor();  // element exception block
+            guard_exception_target_override = catch_block;
+            emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element,
+                stmt->loc);
             flow_stack.pop_back();
 
             // Pop RefForeachRecord from cleanup stack (only needed during body lowering)
@@ -2918,7 +3079,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createPopImplicitElement(old_element, stmt->loc);
             QoreIRValue modified = lowerExpression(var_expr, error);
             if (!modified.isValid()) {
-                exception_stack.pop_back();
+                popExceptionAnchor();
                 exception_scope_depth_stack.pop_back();
                 guard_exception_target_override = prev_guard_override;
                 scope_stack.pop_back();
@@ -2942,7 +3103,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             index_phi->operands.push_back(next_index);
 
             // Pop exception handler
-            exception_stack.pop_back();
+            popExceptionAnchor();
             exception_scope_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
 
@@ -2981,6 +3142,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Catch: landing pad, cleanup without write-back, rethrow to outer handler
             builder.setBlock(catch_block);
             builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+            // a catch block in the body whose statement raised the exception is left first (qore#6472)
+            emitAnchorCatchLeave(catch_block, stmt->loc);
             builder.createRefForeachCleanup(state, stmt->loc);
             // the loop variables are released before the exception leaves the statement, as the AST interpreter's
             // foreach statement releases them when it unwinds, before the handlers of the enclosing blocks run; a
@@ -3165,11 +3328,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.setBlock(body_block);
         }
 
-        // Body block: set $# via PushImplicitElement, assign value to loop variable, execute body
-        // Push the implicit element ($#) for the current iteration
-        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
+        // Body block: assign value to loop variable, set $# via PushImplicitElement, execute body
 
         // Assign the value to the loop variable
+        // the instructions of the assignment, in the block where it starts: an exception that it raises (a
+        // destructor of the variable's previous element) goes to the statement's exception cleanup block, which
+        // releases the element, the iterator, the list and the loop variables first, as for an exception of the
+        // body (qore#6244; see below)
+        QoreIRBasicBlock* element_store_block = builder.getBlock();
+        size_t element_store_start = element_store_block->instructions.size();
         if (var_expr && !var_expr.isNothing()) {
             // The AST interpreter assigns the variable each element as it is, so that an element that is a weak
             // reference makes the variable a weak reference, which does not keep the target alive while the body
@@ -3199,6 +3366,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 return false;
             }
         }
+
+        // Push the implicit element ($#) for the current iteration, after the assignment, as the AST interpreter sets
+        // it, so that an exception that the assignment raises leaves the loop with the enclosing element (qore#6432)
+        QoreIRValue old_element = builder.createPushImplicitElement(index_val, stmt->loc)->result;
 
         // Register a cleanup entry so a non-local exit (return / thread_exit) from
         // inside the body restores $# to the caller's value.  Break and continue
@@ -3259,12 +3430,36 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
                 return false;
             }
-            exception_stack.push_back(foreach_exception_cleanup_block);
+            // a catch block in the body whose statement raises is left at the cleanup (qore#6472)
+            pushExceptionAnchor(foreach_exception_cleanup_block);
             // an exception that the iterator's next() raises releases the element of the previous iteration, the
             // iterator, the list and the loop variables first too, as the AST's foreach statement does (qore#5655)
             if (foreach_next_inst) {
                 foreach_next_inst->exception_target = foreach_exception_cleanup_block;
             }
+            // and one that the assignment of the element to the variable raises (qore#6244); an assignment that
+            // created blocks of its own keeps its targets
+            if (builder.getBlock() == element_store_block) {
+                auto& insts = element_store_block->instructions;
+                for (size_t i = element_store_start; i < insts.size(); ++i) {
+                    if (insts[i]->exception_target == foreach_saved_exception_target) {
+                        insts[i]->exception_target = foreach_exception_cleanup_block;
+                    }
+                }
+            }
+        }
+
+        // an exception that leaves the body for a handler of this function restores the implicit element first
+        // (qore#6432); the restoration goes with the loop's PushImplicitElement if that is elided below
+        QoreIRBasicBlock* element_exception_next = nullptr;
+        QoreIRBasicBlock* element_exception_block = beginForeachElementExceptionRestore(element_exception_next,
+            error);
+        if (element_exception_next && !element_exception_block) {
+            cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);
+            if (foreach_exception_cleanup_block) {
+                popExceptionAnchor();
+            }
+            return false;
         }
 
         FlowTarget ft;
@@ -3314,7 +3509,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                                     ->reads_implicit_element)
                             || (inst->opcode == QoreIROpcode::Find
                                 && static_cast<const QoreIRFindInstruction*>(inst.get())
-                                    ->reads_implicit_element)) {
+                                    ->reads_implicit_element)
+                            // a foreach over a reference evaluates its reference expression as AST at run time when
+                            // it starts and when it writes the list back, where a $# in it reads the thread's
+                            // implicit element (qore#6424)
+                            || op == QoreIROpcode::RefForeachInit
+                            || op == QoreIROpcode::RefForeachFinalize) {
                         ++observers;
                     }
                 }
@@ -3331,8 +3531,11 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 virtual_implicit = saved_implicit;
                 flow_stack.pop_back();
                 cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
+                if (element_exception_block) {
+                    popExceptionAnchor();
+                }
                 if (foreach_exception_cleanup_block) {
-                    exception_stack.pop_back();
+                    popExceptionAnchor();
                 }
                 return false;
             }
@@ -3341,8 +3544,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         virtual_implicit = saved_implicit;
         flow_stack.pop_back();
         cleanup_stack.resize(cleanup_stack.size() - 1 - foreach_source_entries);  // ForeachElement, source
+        if (element_exception_block) {
+            popExceptionAnchor();
+            emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element,
+                stmt->loc);
+        }
         if (foreach_exception_cleanup_block) {
-            exception_stack.pop_back();
+            popExceptionAnchor();
         }
 
         bool elide_implicit_element = analyze_implicit_element
@@ -3466,7 +3674,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 obe_inst,  // enable compileAllHandlerIRs() to compile this handler
                 // the statement is being lowered, one level deeper than its own depth
                 static_cast<uint16_t>(debug_nest_depth ? debug_nest_depth - 1 : 0),
-                debug_catch_child_depth
+                debug_catch_child_depth,
+                virtual_implicit,
+                // in top-level code whose statements have different options, the handler runs with the options of
+                // the statement that declares it, as in the AST interpreter, also when it runs after statements with
+                // other options (qore#6293)
+                top_level_code_parse_options ? stmt : nullptr
             });
         }
 
@@ -3652,7 +3865,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Install exception handler override for the body.
         QoreIRBasicBlock* prev_guard_override = guard_exception_target_override;
         guard_exception_target_override = catch_block;
-        exception_stack.push_back(catch_block);
+        // a catch block in the body whose statement raises is left at the catch block (qore#6472)
+        pushExceptionAnchor(catch_block);
         size_t try_scope_depth = scope_stack.size() - 1;
         exception_scope_depth_stack.push_back(try_scope_depth);
 
@@ -3691,7 +3905,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!lowerStatementBlock(code, error)) {
             --loop_depth;
             flow_stack.pop_back();
-            exception_stack.pop_back();
+            popExceptionAnchor();
             exception_scope_depth_stack.pop_back();
             guard_exception_target_override = prev_guard_override;
             scope_stack.pop_back();
@@ -3724,7 +3938,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         index_phi->operands.push_back(next_index);
 
         // Pop exception handler.
-        exception_stack.pop_back();
+        popExceptionAnchor();
         exception_scope_depth_stack.pop_back();
         guard_exception_target_override = prev_guard_override;
 
@@ -3749,6 +3963,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Catch: landingpad, destroy, rethrow.
         builder.setBlock(catch_block);
         builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
+        // a catch block in the body whose statement raised the exception is left first (qore#6472)
+        emitAnchorCatchLeave(catch_block, stmt->loc);
         builder.createContextDestroy(state, stmt->loc);
         {
             QoreIRBasicBlock* outer_handler = exception_stack.empty()
@@ -4416,11 +4632,18 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         // a catch block without an exit block whose statements' exceptions go to the exception path of an enclosing
         // block is left there, before that block's handlers and locals (see lowerStatementBlock())
-        if (!catch_exit_block && try_stmt->getCatchBlock() && !anchor_catch_stack.empty()
-                && getCurrentExceptionTarget() == anchor_catch_stack.back().anchor) {
-            anchor_catch_stack.back().any = true;
-            if (catch_var) {
-                anchor_catch_stack.back().vars.push_back(catch_var);
+        // the anchor is the innermost one, except in a handler lowered inline at an exit, which runs with the exception
+        // target of the block that declares it, below the anchors of the statements that the exit leaves (qore#6472)
+        if (!catch_exit_block && try_stmt->getCatchBlock()) {
+            QoreIRBasicBlock* catch_exception_target = getCurrentExceptionTarget();
+            for (auto i = anchor_catch_stack.rbegin(), e = anchor_catch_stack.rend(); i != e; ++i) {
+                if (i->anchor == catch_exception_target) {
+                    i->any = true;
+                    if (catch_var) {
+                        i->vars.push_back(catch_var);
+                    }
+                    break;
+                }
             }
         }
         // the statements of the catch block are marked for the debugger's exception events (#5816)
@@ -4468,15 +4691,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRBasicBlock* after_block = builder.getBlock();
             builder.getFunction()->moveBlockToEnd(catch_exit_block);
             builder.setBlock(catch_exit_block);
-            if (exit_catches.any) {
-                // a nested catch block without an exit block whose statement raised the exception is left first
-                for (LocalVar* var : exit_catches.vars) {
-                    auto* ui = builder.createUninstantiateLocal(var, stmt->loc);
-                    ui->is_block_exit = true;
-                }
-                QoreIRInstruction* close = builder.createCatchCleanup(stmt->loc);
-                builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(exit_catches.catch_depth);
-            }
+            // a nested catch block without an exit block whose statement raised the exception is left first
+            emitCatchLeave(exit_catches, stmt->loc);
             if (catch_var) {
                 auto* ui = builder.createUninstantiateLocal(catch_var, stmt->loc);
                 ui->is_block_exit = true;
@@ -4646,6 +4862,32 @@ static bool qore_ir_block_may_return(const StatementBlock* block) {
     }
     for (const AbstractStatement* stmt : block->getStatements()) {
         if (qore_ir_stmt_may_return(stmt)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Returns true if two statements have the same options, other than options that only the parser reads
+/** The parse-time semantics of the statements are in their lowered code; their run-time options (the restrictions,
+    the positive options) are those that the code reads at run time (qore#6293)
+*/
+static bool qore_ir_statement_parse_options_equal(const AbstractStatement* a, const AbstractStatement* b) {
+    const QoreParseOptions mask = ~QoreParseOptions::FREE_OPTIONS;
+    return (a->pwo.parse_options & mask) == (b->pwo.parse_options & mask);
+}
+
+//! Returns true if the statements of a block do not all have the same options; see
+//! qore_ir_statement_parse_options_equal()
+static bool qore_ir_statement_parse_options_differ(const StatementBlock::statement_list_t& statements) {
+    const AbstractStatement* first = nullptr;
+    for (const AbstractStatement* stmt : statements) {
+        if (!stmt) {
+            continue;
+        }
+        if (!first) {
+            first = stmt;
+        } else if (!qore_ir_statement_parse_options_equal(first, stmt)) {
             return true;
         }
     }
@@ -4845,10 +5087,25 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         builder.createDebugBlock(block->loc, block);
     }
 
+    // top-level code whose statements have different options (files with different options parsed into one Program,
+    // or a parse directive between its statements) runs each statement with its own options, as the AST interpreter
+    // does (AbstractStatement::exec()): the options are set at the start of the code and where they change (qore#6293)
+    const bool set_code_parse_options = root_top_level && root_statement_block
+        && qore_ir_statement_parse_options_differ(block->getStatements());
+    if (set_code_parse_options) {
+        top_level_code_parse_options = true;
+    }
+    const AbstractStatement* code_po_statement = nullptr;
+
     bool terminated = false;
     for (auto it = block->getStatements().begin(); it != block->getStatements().end(); ++it) {
         if (!*it) {
             continue;
+        }
+        if (set_code_parse_options && (!code_po_statement
+                || !qore_ir_statement_parse_options_equal(code_po_statement, *it))) {
+            builder.createSetCodeParseOptions((*it)->pwo.parse_options, (*it)->loc);
+            code_po_statement = *it;
         }
         // Bracket each statement with PushTempMark / DiscardTemps so expression
         // temps created during the statement destruct at end of statement —
@@ -5077,19 +5334,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (builder.getFunction()->source_dpgm_addr || builder.getFunction()->emit_debug_statements) {
             builder.createDebugBlockUnwind(debug_nest_depth, block->loc);
         }
-        if (anchor_catches.any) {
-            // a catch block without an exit block whose statement raised the exception (a call, or a thread_exit)
-            // is left first, before the handlers and the locals of this block, as the AST interpreter leaves it:
-            // its catch variable is released, which does nothing if the catch block did not run or was left
-            // already, and the catch blocks of the frame opened in this block that are still open are closed
-            // (#5968)
-            for (LocalVar* var : anchor_catches.vars) {
-                auto* ui = builder.createUninstantiateLocal(var, block->loc);
-                ui->is_block_exit = true;
-            }
-            QoreIRInstruction* close = builder.createCatchCleanup(block->loc);
-            builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(anchor_catches.catch_depth);
-        }
+        // a catch block without an exit block whose statement raised the exception (a call, or a thread_exit) is
+        // left first, before the handlers and the locals of this block, as the AST interpreter leaves it: its catch
+        // variable is released, which does nothing if the catch block did not run or was left already, and the
+        // catch blocks of the frame opened in this block that are still open are closed (#5968)
+        emitCatchLeave(anchor_catches, block->loc);
         if (has_on_block_exit) {
             // Exception unwinds through this synthetic block instead of the
             // try LandingPad, so fire this lexical scope's on_exit/on_error
@@ -5133,6 +5382,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 
 void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.temp_scope_depth = builder.getTempScopeDepth();
+    entry.outer_exception_target = getCurrentExceptionTarget();
     entry.open_scopes = scope_stack.size();
     entry.open_catch_depth = catch_cleanup_depth;
     entry.open_try_depth = try_catch_cleanup_depth_stack.size();
@@ -5350,10 +5600,18 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             case BlockCleanupEntry::Lvars:
                 if (!(flags & CF_SKIP_LVARS)) {
                     assert(entry.lvars);
+                    bool may_hold_object = false;
                     for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
                         auto* ui = builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
                         // break/continue/return always exit the scope permanently
                         ui->is_block_exit = true;
+                        may_hold_object = may_hold_object
+                            || qore_ir_type_may_hold_object(entry.lvars->lv[j]->getTypeInfo());
+                    }
+                    // an exception raised by a destructor of the locals goes to the cleanups of the enclosing blocks
+                    // and the handler that encloses them, as when the block ends (qore#6084)
+                    if (!is_error && may_hold_object && entry.outer_exception_target) {
+                        builder.createCheckException(entry.loc)->exception_target = entry.outer_exception_target;
                     }
                 }
                 break;
@@ -5362,6 +5620,11 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                     assert(entry.catch_var);
                     auto* ui = builder.createUninstantiateLocal(entry.catch_var, entry.loc);
                     ui->is_block_exit = true;
+                    // see the Lvars entries above (qore#6084)
+                    if (!is_error && entry.outer_exception_target
+                            && qore_ir_type_may_hold_object(entry.catch_var->getTypeInfo())) {
+                        builder.createCheckException(entry.loc)->exception_target = entry.outer_exception_target;
+                    }
                 }
                 break;
             case BlockCleanupEntry::ForeachElement:
@@ -5654,6 +5917,13 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
+        // the handlers nested in the handler run with the options of the statements that declare them, as the
+        // handler does (qore#6293)
+        handler_lowering.top_level_code_parse_options = top_level_code_parse_options;
+        if (handler.code_po_statement) {
+            handler_builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
         // the handlers nested in the handler share the functions compiled for the function
         handler_lowering.handler_ir_cache = handler_ir_cache;
         // what the function is compiled with, for the cache
@@ -5810,6 +6080,13 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // the handler runs in the frame of the function: its calls through self are made on the same object
         // (issue #5823)
         handler_lowering.self_local = self_local;
+        // the handlers nested in the handler run with the options of the statements that declare them, as the
+        // handler does (qore#6293)
+        handler_lowering.top_level_code_parse_options = top_level_code_parse_options;
+        if (handler.code_po_statement) {
+            handler_builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the
@@ -6007,6 +6284,19 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         }
     } debug_nest_depth_restore(debug_nest_depth, debug_catch_child_depth, handler.debug_nest_depth,
         handler.debug_catch_child_depth);
+    // the handler runs with the implicit arguments and element of the block that declares it, not of a loop nested in
+    // the block that the exit leaves, as in the AST interpreter, where the loop has ended when the handler runs
+    // (qore#6383)
+    struct VirtualImplicitRestore {
+        VirtualImplicitContext& ctx;
+        VirtualImplicitContext saved;
+        VirtualImplicitRestore(VirtualImplicitContext& c, const VirtualImplicitContext& n) : ctx(c), saved(c) {
+            ctx = n;
+        }
+        ~VirtualImplicitRestore() {
+            ctx = saved;
+        }
+    } virtual_implicit_restore(virtual_implicit, handler.virtual_implicit);
     // a handler lowered at a break, a continue or a return runs after the statements that the exit leaves, down to the
     // level of the statement that declares it, which have no end markers on that path; the marker has no location, so
     // that native code updates no runtime location for it
@@ -6031,11 +6321,21 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
         if (handler_exception_target) {
             exception_stack.push_back(handler_exception_target);
         }
+        // the handler runs with the options of the statement that declares it (qore#6293)
+        if (handler.code_po_statement) {
+            builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
         inline_handler_block = handler.code;
         ++inline_handler_body_depth;
         ok = lowerStatementBlock(handler.code, error);
         --inline_handler_body_depth;
     } else {
+        // the handler runs with the options of the statement that declares it (qore#6293)
+        if (handler.code_po_statement) {
+            builder.createSetCodeParseOptions(handler.code_po_statement->pwo.parse_options,
+                handler.code_po_statement->loc);
+        }
         inline_handler_block = handler.code;
         ++inline_handler_body_depth;
         ok = lowerStatementBlock(handler.code, error);
@@ -9163,6 +9463,17 @@ QoreIRValue QoreIRLowering::lowerMutationOperand(const QoreValue& lvalue, const 
     return lowerExpressionInTempScope(expr, loc, error);
 }
 
+// documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc,
+        std::string& error) {
+    // only a temporary whose release can be observed (a destructor) needs the scope; the others hold references only,
+    // and a scope would hide the expression's value from the loop's optimizations
+    if (!expressionMayCreateIntermediateObservableTemp(expr)) {
+        return lowerExpression(expr, error);
+    }
+    return lowerExpressionInTempScope(expr, loc, error);
+}
+
 QoreIRValue QoreIRLowering::lowerExpressionInTempScope(const QoreValue& expr, const QoreProgramLocation* loc,
         std::string& error, bool containers_only) {
     // The temps of an expression are released by the temp scope of the statement, which ends only after the code
@@ -9367,6 +9678,10 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             error = "unsupported lvalue for native Assignment lowering";
         }
         return QoreIRValue();
+    } else if (assign->getLeft().isNothing()) {
+        // NOTHING is an lvalue for check_lvalue(): the assignment discards the value, which is evaluated, and
+        // returns NOTHING, as in the AST interpreter (issue #6480)
+        return builder.createConstNothing(assign->loc)->result;
     } else {
         error = "unsupported lvalue for assignment IR lowering";
         return QoreIRValue();
@@ -9386,6 +9701,23 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
 */
 static bool qore_ir_is_enum_lvalue_type(const QoreTypeInfo* ti) {
     return QoreTypeInfo::getReturnEnum(ti) != nullptr;
+}
+
+//! Returns true if the change of a local of type \a ti by a fused local int instruction can raise an exception
+/** The fused instructions IncrementLocalInt and AddAssignLocalInt store the integer that they compute in the local
+    directly (the IR interpreter) or with LValueHelper (the runtime helpers of native code for a variable on the runtime
+    stack or a closure-bound variable), which raises an exception if the local's type refuses it.  An int or softint
+    local, with or without "*", accepts every integer: its change cannot raise, and the instruction gets no exception
+    edge for it, which would make the handler of an enclosing try block reachable from the operation and constrain the
+    optimization of the code around it.  An enum lvalue never takes the fused path (see qore_ir_is_enum_lvalue_type());
+    any other type is given the handler, as an exception that it raises goes to the handler of an enclosing try block
+    (qore#6197).  The or-nothing types (*int, *softint) are listed defensively: they never reach the fused path, as +=
+    and -= take the lvalue path for an or-nothing lvalue (lowerPlusEquals(), lowerMinusEquals()), and the parser
+    gives ++ and -- the int operators only for an int or softint lvalue (QoreIntPreIncrementOperatorNode)
+*/
+static bool qore_ir_fused_int_change_may_raise(const QoreTypeInfo* ti) {
+    return ti != bigIntTypeInfo && ti != bigIntOrNothingTypeInfo && ti != softBigIntTypeInfo
+        && ti != softBigIntOrNothingTypeInfo;
 }
 
 // documented in QoreIRLowering.h
@@ -9467,8 +9799,13 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             // the instruction reads the source as a load of it reads it: a source of no type can hold a reference,
             // whose read raises an exception if the referenced lvalue is gone; and the change of the target, which
             // the JIT makes with a runtime helper for a variable on the runtime stack, raises an exception if the
-            // variable refuses it, which goes to the handler of an enclosing try block (qore#6197)
-            inst->exception_target = getCurrentExceptionTarget();
+            // variable's type refuses it (see qore_ir_fused_int_change_may_raise()); either exception goes to the
+            // handler of an enclosing try block (qore#6197)
+            if (qore_ir_fused_int_change_may_raise(left_var->getTypeInfo())) {
+                inst->exception_target = getCurrentExceptionTarget();
+            } else {
+                setReferenceLoadExceptionTarget(inst, right_var->ref.id->getTypeInfo());
+            }
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());
@@ -9480,8 +9817,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             auto* inst = builder.createIncrementLocalInt(
                 left_var->ref.id, right_expr.getAsBigInt(), op->loc);
             // an exception raised by the change goes to the handler of an enclosing try block (see
-            // QoreIRIncrementLocalIntInstruction)
-            inst->exception_target = getCurrentExceptionTarget();
+            // QoreIRIncrementLocalIntInstruction); the change of an int or softint local cannot raise one (see
+            // qore_ir_fused_int_change_may_raise())
+            if (qore_ir_fused_int_change_may_raise(left_var->getTypeInfo())) {
+                inst->exception_target = getCurrentExceptionTarget();
+            }
             if (parse_context) {
                 parse_context->markLocalAssignment(left_var->ref.id, true,
                     left_var->getTypeInfo());
@@ -9699,7 +10039,12 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || get_or_nothing_base_type(ti) != ti
                 || QoreTypeInfo::equal(ti, timeoutTypeInfo)
                 // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
-                || qore_ir_is_enum_lvalue_type(ti)) {
+                || qore_ir_is_enum_lvalue_type(ti)
+                // an lvalue of a soft type that converts the difference that it is assigned (ex: softstring,
+                // softbool, softlist) holds the converted value, while the operator gives the difference that it
+                // computes (doMinusEqualsOnLValue()), also for a NOTHING operand: the AST operator on its lvalue path
+                // gives both (qore#6304)
+                || qore_lvalue_converts_result(ti, NT_INT)) {
             left_var = nullptr;
         }
     }
@@ -9714,8 +10059,11 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         auto* inst = builder.createIncrementLocalInt(
             left_var->ref.id, delta, op->loc);
         // an exception raised by the change goes to the handler of an enclosing try block (see
-        // QoreIRIncrementLocalIntInstruction)
-        inst->exception_target = getCurrentExceptionTarget();
+        // QoreIRIncrementLocalIntInstruction); the change of an int or softint local cannot raise one (see
+        // qore_ir_fused_int_change_may_raise())
+        if (qore_ir_fused_int_change_may_raise(left_var->getTypeInfo())) {
+            inst->exception_target = getCurrentExceptionTarget();
+        }
         if (parse_context) {
             parse_context->markLocalAssignment(left_var->ref.id, true,
                 left_var->getTypeInfo());
@@ -10509,8 +10857,11 @@ QoreIRValue QoreIRLowering::lowerPreIncDec(const QoreValue& expr, const QoreValu
             if (isLocalOrClosureVar(var)) {
                 auto* inst = builder.createIncrementLocalInt(var->ref.id, increment ? 1 : -1, loc);
                 // an exception raised by the change goes to the handler of an enclosing try block (see
-                // QoreIRIncrementLocalIntInstruction)
-                inst->exception_target = getCurrentExceptionTarget();
+                // QoreIRIncrementLocalIntInstruction); the change of an int or softint local cannot raise one (see
+                // qore_ir_fused_int_change_may_raise())
+                if (qore_ir_fused_int_change_may_raise(var->getTypeInfo())) {
+                    inst->exception_target = getCurrentExceptionTarget();
+                }
                 if (parse_context) {
                     parse_context->markLocalAssignment(var->ref.id, true,
                         var->getTypeInfo());
@@ -12901,7 +13252,8 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
         return QoreIRValue();
     }
     QoreValue lvalue = op->getExp();
-    if (!lvalue.hasNode()) {
+    // NOTHING is an lvalue (tryEmitLValuePathOp(), issue #6480)
+    if (!lvalue.hasNode() && !lvalue.isNothing()) {
         error = "unsupported lvalue for shift IR lowering";
         return QoreIRValue();
     }
@@ -12955,7 +13307,8 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
     QoreValue lvalue = op->getLeft();
-    if (!lvalue.hasNode()) {
+    // NOTHING is an lvalue (tryEmitLValuePathOp(), issue #6480)
+    if (!lvalue.hasNode() && !lvalue.isNothing()) {
         error = "unsupported lvalue for unshift IR lowering";
         return QoreIRValue();
     }
@@ -12974,7 +13327,7 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
     // Invoke(UnshiftLValue), which has no source-free AOT lowering.
     QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
         lvalue, &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift);
+        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift, QoreValue(), op->needsReturnValue());
     if (path_result.isValid()) {
         return path_result;
     }
@@ -13105,7 +13458,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
             left_expr, &push_val, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
-            LVUnaryOp::PreInc, LVBinaryMutOp::Push);
+            LVUnaryOp::PreInc, LVBinaryMutOp::Push, QoreValue(), op->needsReturnValue());
         if (path_result.isValid()) {
             return path_result;
         }
@@ -14009,6 +14362,10 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
     // For each LHS variable, extract element from list and store
     for (size_t i = 0; i < parse_list->size(); ++i) {
         QoreValue entry = parse_list->get(i);
+        // NOTHING is an lvalue for check_lvalue(): its element is not assigned (issue #6480)
+        if (entry.isNothing()) {
+            continue;
+        }
         // Create constant index
         QoreIRValue idx = builder.createConstInt(static_cast<int64_t>(i), op->loc)->result;
         QoreIRValue element_val = builder.createExprOp(QoreIROpcode::ListAssignAny, expr,
@@ -15447,6 +15804,11 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
         LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr, bool ref_rv) {
+    // NOTHING is an lvalue for check_lvalue(): an operator on it changes nothing and returns NOTHING, as in the AST
+    // interpreter; the caller has lowered the other operands, whose side effects remain (issue #6480)
+    if (lvalue.isNothing()) {
+        return builder.createConstNothing(loc)->result;
+    }
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     // Slice lvalues (HashKeySlice / ListIndexSlice / ListRangeSlice) are lvalues only of remove and delete
@@ -19642,7 +20004,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                     if (!need_result) {
                         builder.createPushTempMark(map->loc);
                     }
-                    QoreIRValue value = lowerExpression(map->getLeft(), error);
+                    QoreIRValue value = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
                     if (!value.isValid()) {
                         if (!need_result) {
                             builder.abandonTempScope();
@@ -19668,7 +20030,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (!need_result) {
             builder.createPushTempMark(map->loc);
         }
-        QoreIRValue expr_result = lowerExpression(map->getLeft(), error);
+        QoreIRValue expr_result = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
         virtual_implicit = saved;
         if (!need_result) {
             createDiscardTemps(map->loc);
@@ -19864,7 +20226,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                     if (!need_result) {
                         builder.createPushTempMark(map->loc);
                     }
-                    QoreIRValue value = lowerExpression(map->getLeft(), error);
+                    QoreIRValue value = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
                     if (!value.isValid()) {
                         if (!need_result) {
                             builder.abandonTempScope();
@@ -19895,7 +20257,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                 builder.createPushTempMark(map->loc);
             }
             expr_result = invariant_typed_scalar
-                ? invariant_map_value : lowerExpression(map->getLeft(), error);
+                ? invariant_map_value : (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
 
             // Restore virtual context
             virtual_implicit = saved;
@@ -20103,7 +20465,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
                 if (!need_result) {
                     builder.createPushTempMark(map->loc);
                 }
-                QoreIRValue value = lowerExpression(map->getLeft(), error);
+                QoreIRValue value = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
                 if (!value.isValid()) {
                     if (!need_result) {
                         builder.abandonTempScope();
@@ -20133,7 +20495,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         if (!need_result) {
             builder.createPushTempMark(map->loc);
         }
-        expr_result = lowerExpression(map->getLeft(), error);
+        expr_result = (need_result ? lowerElementExpression(map->getLeft(), map->loc, error) : lowerExpression(map->getLeft(), error));
 
         // Restore virtual context
         virtual_implicit = saved;
@@ -20363,7 +20725,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             // (qore#5680)
             predicate_bool = lowerWithImplicitContext(element_val, index_val, select->loc, nullptr, error,
                 [&]() -> QoreIRValue {
-                    QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+                    QoreIRValue predicate_result = lowerElementExpression(select->getRight(), select->loc, error);
                     if (!predicate_result.isValid()) {
                         return QoreIRValue();
                     }
@@ -20387,7 +20749,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
             virtual_implicit.active = true;
             virtual_implicit.runtime = false;
 
-            QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+            QoreIRValue predicate_result = lowerElementExpression(select->getRight(), select->loc, error);
 
             // Restore virtual context
             virtual_implicit = saved;
@@ -20597,7 +20959,7 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     // thread-local stack also holds when it needs them (qore#5680), and is converted to a bool; see
     // lowerWithImplicitContext()
     auto lower_predicate = [&]() -> QoreIRValue {
-        QoreIRValue predicate_result = lowerExpression(select->getRight(), error);
+        QoreIRValue predicate_result = lowerElementExpression(select->getRight(), select->loc, error);
         if (!predicate_result.isValid()) {
             return QoreIRValue();
         }
@@ -20848,7 +21210,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         QoreIRValue fold_result;
         if (qore_ir_body_needs_implicit_context(foldl->getLeft(), 2)) {
             fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldl->loc, nullptr, error,
-                [&]() { return lowerExpression(foldl->getLeft(), error); });
+                [&]() { return lowerElementExpression(foldl->getLeft(), foldl->loc, error); });
         } else {
             VirtualImplicitContext saved = virtual_implicit;
             virtual_implicit.arg0 = accum_val;
@@ -20856,7 +21218,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
             virtual_implicit.element = QoreIRValue();
             virtual_implicit.active = true;
             virtual_implicit.runtime = false;
-            fold_result = lowerExpression(foldl->getLeft(), error);
+            fold_result = lowerElementExpression(foldl->getLeft(), foldl->loc, error);
             virtual_implicit = saved;
         }
         if (!fold_result.isValid()) {
@@ -20968,7 +21330,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     QoreIRValue fold_result;
     if (qore_ir_body_needs_implicit_context(foldl->getLeft(), 2)) {
         fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldl->loc, nullptr, error,
-            [&]() { return lowerExpression(foldl->getLeft(), error); });
+            [&]() { return lowerElementExpression(foldl->getLeft(), foldl->loc, error); });
     } else {
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -20976,7 +21338,7 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         virtual_implicit.element = QoreIRValue();
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
-        fold_result = lowerExpression(foldl->getLeft(), error);
+        fold_result = lowerElementExpression(foldl->getLeft(), foldl->loc, error);
         virtual_implicit = saved;
     }
     if (!fold_result.isValid()) {
@@ -21127,7 +21489,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         QoreIRValue fold_result;
         if (qore_ir_body_needs_implicit_context(foldr->getLeft(), 2)) {
             fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldr->loc, nullptr, error,
-                [&]() { return lowerExpression(foldr->getLeft(), error); });
+                [&]() { return lowerElementExpression(foldr->getLeft(), foldr->loc, error); });
         } else {
             VirtualImplicitContext saved = virtual_implicit;
             virtual_implicit.arg0 = accum_val;
@@ -21135,7 +21497,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
             virtual_implicit.element = QoreIRValue();
             virtual_implicit.active = true;
             virtual_implicit.runtime = false;
-            fold_result = lowerExpression(foldr->getLeft(), error);
+            fold_result = lowerElementExpression(foldr->getLeft(), foldr->loc, error);
             virtual_implicit = saved;
         }
         if (!fold_result.isValid()) {
@@ -21238,7 +21600,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
     QoreIRValue fold_result;
     if (qore_ir_body_needs_implicit_context(foldr->getLeft(), 2)) {
         fold_result = lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), foldr->loc, nullptr, error,
-            [&]() { return lowerExpression(foldr->getLeft(), error); });
+            [&]() { return lowerElementExpression(foldr->getLeft(), foldr->loc, error); });
     } else {
         VirtualImplicitContext saved = virtual_implicit;
         virtual_implicit.arg0 = accum_val;
@@ -21246,7 +21608,7 @@ QoreIRValue QoreIRLowering::lowerFoldrNativeValue(const QoreFoldrOperatorNode* f
         virtual_implicit.element = QoreIRValue();
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
-        fold_result = lowerExpression(foldr->getLeft(), error);
+        fold_result = lowerElementExpression(foldr->getLeft(), foldr->loc, error);
         virtual_implicit = saved;
     }
     if (!fold_result.isValid()) {
@@ -21472,7 +21834,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         // releasePredicateValue())
         QoreIRValue predicate_value;
         auto lower_predicate = [&]() -> QoreIRValue {
-            QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+            QoreIRValue predicate_result = lowerElementExpression(ms->get(2), ms->loc, error);
             if (!predicate_result.isValid()) {
                 return QoreIRValue();
             }
@@ -21484,7 +21846,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
             if (!need_result) {
                 builder.createPushTempMark(ms->loc);
             }
-            QoreIRValue value = lowerExpression(ms->get(0), error);
+            QoreIRValue value = (need_result ? lowerElementExpression(ms->get(0), ms->loc, error) : lowerExpression(ms->get(0), error));
             if (!value.isValid()) {
                 if (!need_result) {
                     builder.abandonTempScope();
@@ -21752,7 +22114,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // releasePredicateValue())
     QoreIRValue predicate_value;
     auto lower_predicate = [&]() -> QoreIRValue {
-        QoreIRValue predicate_result = lowerExpression(ms->get(2), error);
+        QoreIRValue predicate_result = lowerElementExpression(ms->get(2), ms->loc, error);
         if (!predicate_result.isValid()) {
             return QoreIRValue();
         }
@@ -21765,7 +22127,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         if (!need_result) {
             builder.createPushTempMark(ms->loc);
         }
-        QoreIRValue value = lowerExpression(ms->get(0), error);
+        QoreIRValue value = (need_result ? lowerElementExpression(ms->get(0), ms->loc, error) : lowerExpression(ms->get(0), error));
         if (!value.isValid()) {
             if (!need_result) {
                 builder.abandonTempScope();
@@ -22024,11 +22386,11 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         // lowerWithImplicitContext(); qore#5691)
         QoreIRValue next_type_state;
         auto lower_body = [&]() -> QoreIRValue {
-            QoreIRValue key_result = lowerExpression(hm->get(0), error);
+            QoreIRValue key_result = lowerElementExpression(hm->get(0), hm->loc, error);
             if (!key_result.isValid()) {
                 return QoreIRValue();
             }
-            QoreIRValue value_result = lowerExpression(hm->get(1), error);
+            QoreIRValue value_result = lowerElementExpression(hm->get(1), hm->loc, error);
             if (!value_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22183,11 +22545,11 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     // FunctionalLoopExceptionCleanup::finish())
     QoreIRValue key_result, value_result;
     auto lower_body = [&]() -> QoreIRValue {
-        key_result = lowerExpression(hm->get(0), error);
+        key_result = lowerElementExpression(hm->get(0), hm->loc, error);
         if (!key_result.isValid()) {
             return QoreIRValue();
         }
-        value_result = lowerExpression(hm->get(1), error);
+        value_result = lowerElementExpression(hm->get(1), hm->loc, error);
         if (!value_result.isValid()) {
             return QoreIRValue();
         }
@@ -22383,7 +22745,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
             return rv;
         };
         auto lower_predicate = [&]() -> QoreIRValue {
-            QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+            QoreIRValue predicate_result = lowerElementExpression(hms->get(3), hms->loc, error);
             if (!predicate_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22391,11 +22753,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         };
         QoreIRValue inserted_type_state;
         auto lower_insert = [&]() -> QoreIRValue {
-            QoreIRValue key_result = lowerExpression(hms->get(0), error);
+            QoreIRValue key_result = lowerElementExpression(hms->get(0), hms->loc, error);
             if (!key_result.isValid()) {
                 return QoreIRValue();
             }
-            QoreIRValue value_result = lowerExpression(hms->get(1), error);
+            QoreIRValue value_result = lowerElementExpression(hms->get(1), hms->loc, error);
             if (!value_result.isValid()) {
                 return QoreIRValue();
             }
@@ -22589,7 +22951,7 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         return rv;
     };
     auto lower_predicate = [&]() -> QoreIRValue {
-        QoreIRValue predicate_result = lowerExpression(hms->get(3), error);
+        QoreIRValue predicate_result = lowerElementExpression(hms->get(3), hms->loc, error);
         if (!predicate_result.isValid()) {
             return QoreIRValue();
         }
@@ -22600,11 +22962,11 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     // FunctionalLoopExceptionCleanup::finish())
     QoreIRValue key_result, value_result;
     auto lower_insert = [&]() -> QoreIRValue {
-        key_result = lowerExpression(hms->get(0), error);
+        key_result = lowerElementExpression(hms->get(0), hms->loc, error);
         if (!key_result.isValid()) {
             return QoreIRValue();
         }
-        value_result = lowerExpression(hms->get(1), error);
+        value_result = lowerElementExpression(hms->get(1), hms->loc, error);
         if (!value_result.isValid()) {
             return QoreIRValue();
         }
@@ -22757,7 +23119,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     // is kept when its temporaries are released
     if (q_env_is_set("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT") || qore_ir_body_needs_implicit_context(stage_expr, 1)) {
         return lowerWithImplicitContext(element, index, stage_loc, nullptr, error,
-            [&]() { return lowerExpression(stage_expr, error); });
+            [&]() { return lowerElementExpression(stage_expr, stage_loc, error); });
     }
 
     // the stage reads the implicit arguments only as the element and its index (see
@@ -22769,7 +23131,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineStage(const QoreValue& stage_expr,
     virtual_implicit.active = true;
     virtual_implicit.runtime = false;
 
-    QoreIRValue result = lowerExpression(stage_expr, error);
+    // the temporaries of an element's stage are released when its value is computed, as in the AST interpreter's
+    // functional iterators (qore#6288)
+    QoreIRValue result = lowerElementExpression(stage_expr, stage_loc, error);
     virtual_implicit = saved;
     return result;
 }
@@ -22988,7 +23352,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         assert(root.fold_expr);
         if (fold_expr_needs_context) {
             return lowerWithImplicitArgs(accum_val, element_val, QoreIRValue(), loc, nullptr, error,
-                [&]() { return lowerExpression(*root.fold_expr, error); });
+                [&]() { return lowerElementExpression(*root.fold_expr, loc, error); });
         }
 
         VirtualImplicitContext saved = virtual_implicit;
@@ -22998,7 +23362,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         virtual_implicit.active = true;
         virtual_implicit.runtime = false;
 
-        QoreIRValue fold_result = lowerExpression(*root.fold_expr, error);
+        QoreIRValue fold_result = lowerElementExpression(*root.fold_expr, loc, error);
 
         virtual_implicit = saved;
         return fold_result;
@@ -23781,9 +24145,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     // a fold's stage value read from a local of the function that no code in the loop assigns is not released: the local holds
     // the value, so its release cannot be observed, and the IR interpreter, whose read takes a reference of its own,
     // keeps the one that it has when the next element's read gives the same value; one that the loop's code assigns
-    // (a select stage's predicate) can hold the last reference, which the AST interpreter releases with the element.
-    // A write through a reference (\x) or by a closure is not one: the AST interpreter keeps the value read then
-    // until the next element (qore#5883)
+    // (a select stage's predicate) can hold the last reference, which the AST interpreter releases with the element,
+    // and so can one that a reference (\x) or a closure can change: the AST interpreter releases the value read with
+    // the element too (qore#6288; before, it kept it until the next element, qore#5883)
     if (!fold_local_reads.empty()) {
         std::unordered_set<const LocalVar*> written;
         const auto& blocks = builder.getFunction()->blocks;
@@ -23801,7 +24165,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         }
         stage_values.erase(std::remove_if(stage_values.begin(), stage_values.end(), [&](const QoreIRValue& v) {
             auto it = fold_local_reads.find(v.id);
-            return it != fold_local_reads.end() && !written.count(it->second);
+            return it != fold_local_reads.end() && !written.count(it->second) && !it->second->closureUse();
         }), stage_values.end());
     }
     next_inst->release_values = stage_values;
@@ -24298,12 +24662,14 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
     // keeps a cleanup block on the exception stack while the code that it covers is lowered, on every path
+    // (a catch block in the body whose statement raises is left at the cleanup block: see pushExceptionAnchor(),
+    // qore#6472)
     class FusedForeachExceptionTargetScope {
     public:
-        FusedForeachExceptionTargetScope(std::vector<QoreIRBasicBlock*>& stack, QoreIRBasicBlock* target)
-                : stack(stack), active(target != nullptr) {
+        FusedForeachExceptionTargetScope(QoreIRLowering& lowering, QoreIRBasicBlock* target)
+                : lowering(lowering), active(target != nullptr) {
             if (active) {
-                stack.push_back(target);
+                lowering.pushExceptionAnchor(target);
             }
         }
         ~FusedForeachExceptionTargetScope() {
@@ -24311,7 +24677,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
         void end() {
             if (active) {
-                stack.pop_back();
+                lowering.popExceptionAnchor();
                 active = false;
             }
         }
@@ -24319,9 +24685,9 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         FusedForeachExceptionTargetScope& operator=(const FusedForeachExceptionTargetScope&) = delete;
 
     private:
-        std::vector<QoreIRBasicBlock*>& stack;
+        QoreIRLowering& lowering;
         bool active;
-    } foreach_pre_element_target_scope(exception_stack, foreach_pre_element_cleanup_block);
+    } foreach_pre_element_target_scope(*this, foreach_pre_element_cleanup_block);
 
     auto lower_predicate = [&](const QoreValue* pred, const QoreProgramLocation* pred_loc, QoreIRValue element_val,
             QoreIRValue index_val) -> QoreIRValue {
@@ -24500,8 +24866,7 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     QoreIRValue element_val = next_inst->result;
 
     // the iteration's cleanup covers the stages and the body (see above)
-    FusedForeachExceptionTargetScope foreach_exception_target_scope(exception_stack,
-        foreach_exception_cleanup_block);
+    FusedForeachExceptionTargetScope foreach_exception_target_scope(*this, foreach_exception_cleanup_block);
 
     builder.setBlock(body_block);
     // the AST interpreter's functional map iterator releases its input (the element, or the value of the stage
@@ -24662,8 +25027,6 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
         }
     }
 
-    QoreIRValue old_element = builder.createPushImplicitElement(state.foreach_index, loc)->result;
-
     QoreValue var_expr = foreach_stmt->getVar();
     if (var_expr && !var_expr.isNothing()) {
         const auto* var_node = dynamic_cast<const VarRefNode*>(var_expr.getInternalNode());
@@ -24681,6 +25044,10 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
             return false;
         }
     }
+
+    // the implicit element is set after the assignment, as the AST interpreter sets it, so that an exception that the
+    // assignment raises leaves the loop with the enclosing element (qore#6432)
+    QoreIRValue old_element = builder.createPushImplicitElement(state.foreach_index, loc)->result;
 
     // a return from the body releases the iterator, which holds the source, and the source, then the loop
     // variables, before the cleanups of the enclosing blocks run, as for the other value foreach loops (see
@@ -24712,17 +25079,42 @@ bool QoreIRLowering::lowerForeachLazyPipelineFused(const ForEachStatement* forea
     ft.is_switch = false;
     ft.cleanup_stack_depth = cleanup_stack.size();
     ft.old_implicit_element = old_element;
+    // an exception that leaves the body for a handler of this function restores the implicit element first
+    // (qore#6432)
+    QoreIRBasicBlock* element_exception_next = nullptr;
+    QoreIRBasicBlock* element_exception_block = beginForeachElementExceptionRestore(element_exception_next, error);
+    if (element_exception_next && !element_exception_block) {
+        cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
+        return false;
+    }
     pushFlowTarget(ft);
     StatementBlock* body = foreach_stmt->getCode();
+    // $# in the body is this loop's index, also in a foreach nested in the body of another foreach, whose index
+    // would otherwise be the virtual implicit element (qore#6383)
+    VirtualImplicitContext saved_implicit = virtual_implicit;
+    virtual_implicit.arg0 = QoreIRValue();
+    virtual_implicit.arg1 = QoreIRValue();
+    virtual_implicit.element = state.foreach_index;
+    virtual_implicit.active = true;
+    virtual_implicit.runtime = false;
     if (body) {
         ++loop_depth;
         if (!lowerStatementBlock(body, error)) {
+            virtual_implicit = saved_implicit;
             --loop_depth;
+            if (element_exception_block) {
+                popExceptionAnchor();
+            }
             flow_stack.pop_back();
             cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
             return false;
         }
         --loop_depth;
+    }
+    virtual_implicit = saved_implicit;
+    if (element_exception_block) {
+        popExceptionAnchor();
+        emitForeachElementExceptionRestore(element_exception_block, element_exception_next, old_element, loc);
     }
     flow_stack.pop_back();
     cleanup_stack.resize(cleanup_stack.size() - foreach_source_entries);
@@ -24834,12 +25226,82 @@ void QoreIRLowering::releasePredicateValue(QoreIRValue value, const QoreValue& e
 }
 
 // documented in QoreIRLowering.h
+QoreIRBasicBlock* QoreIRLowering::beginForeachElementExceptionRestore(QoreIRBasicBlock*& next, std::string& error) {
+    next = getCurrentExceptionTarget();
+    if (!next) {
+        return nullptr;
+    }
+    QoreIRBasicBlock* block = createBlock("foreach.element.exception");
+    if (!block) {
+        error = "IR builder failed to create the foreach element exception block";
+        return nullptr;
+    }
+    pushExceptionAnchor(block);
+    return block;
+}
+
+void QoreIRLowering::pushExceptionAnchor(QoreIRBasicBlock* block) {
+    exception_stack.push_back(block);
+    anchor_catch_stack.push_back({block, catch_cleanup_depth, {}, false});
+}
+
+void QoreIRLowering::popExceptionAnchor() {
+    assert(!exception_stack.empty() && !anchor_catch_stack.empty()
+        && anchor_catch_stack.back().anchor == exception_stack.back());
+    exception_stack.pop_back();
+    AnchorCatchInfo catches = std::move(anchor_catch_stack.back());
+    anchor_catch_stack.pop_back();
+    if (catches.any) {
+        const QoreIRBasicBlock* block = catches.anchor;
+        exception_block_catches[block] = std::move(catches);
+    }
+}
+
+void QoreIRLowering::emitAnchorCatchLeave(const QoreIRBasicBlock* block, const QoreProgramLocation* loc) {
+    auto i = exception_block_catches.find(block);
+    if (i == exception_block_catches.end()) {
+        return;
+    }
+    emitCatchLeave(i->second, loc);
+    exception_block_catches.erase(i);
+}
+
+void QoreIRLowering::emitCatchLeave(const AnchorCatchInfo& catches, const QoreProgramLocation* loc) {
+    if (!catches.any) {
+        return;
+    }
+    for (LocalVar* var : catches.vars) {
+        auto* ui = builder.createUninstantiateLocal(var, loc);
+        ui->is_block_exit = true;
+    }
+    QoreIRInstruction* close = builder.createCatchCleanup(loc);
+    builder.getFunction()->catch_exit_depths[close] = static_cast<uint32_t>(catches.catch_depth);
+}
+
+void QoreIRLowering::emitForeachElementExceptionRestore(QoreIRBasicBlock* block, QoreIRBasicBlock* next,
+        QoreIRValue old_element, const QoreProgramLocation* loc) {
+    QoreIRBasicBlock* after_block = builder.getBlock();
+    // after the body's blocks, so that native code has seen the PushImplicitElement that the restoration uses
+    builder.getFunction()->moveBlockToEnd(block);
+    builder.setBlock(block);
+    // a catch block in the body whose statement raised the exception is left first (qore#6472)
+    emitAnchorCatchLeave(block, loc);
+    // the exception stays raised
+    builder.createPopImplicitElement(old_element, loc);
+    auto* check_inst = builder.createCheckException(loc);
+    check_inst->exception_target = next;
+    builder.createBranch(next, loc);
+    builder.setBlock(after_block);
+}
+
 void QoreIRLowering::emitForeachExceptionCleanup(QoreIRBasicBlock* cleanup_block, QoreIRBasicBlock* outer_target,
         QoreIRValue iterator, QoreIRValue list, QoreIRValue element, const LVList* lvars,
         const QoreProgramLocation* loc, QoreIRValue partial_result, const std::vector<QoreIRValue>& element_values) {
     QoreIRBasicBlock* after_block = builder.getBlock();
     builder.getFunction()->moveBlockToEnd(cleanup_block);
     builder.setBlock(cleanup_block);
+    // a catch block in the body whose statement raised the exception is left first (qore#6472)
+    emitAnchorCatchLeave(cleanup_block, loc);
     // the exception that the block handles stays raised: the releases below add any exception that a destructor
     // raises, and the handler then gets them all, as the AST interpreter's foreach statement unwinds
     if (element.isValid()) {
@@ -24935,7 +25397,8 @@ QoreIRValue QoreIRLowering::lowerStreamingNative(const QoreStreamingOperatorNode
         }
         return lowerWithImplicitContext(element_val, index_val, loc, stream_cleanup.get(), error,
             [&]() -> QoreIRValue {
-                QoreIRValue pred = lowerExpression(op->getPredicate(), error);
+                // the temporaries of an element's predicate are released with the element (qore#6288)
+                QoreIRValue pred = lowerElementExpression(op->getPredicate(), loc, error);
                 if (!pred.isValid()) {
                     return QoreIRValue();
                 }

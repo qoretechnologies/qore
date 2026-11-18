@@ -40,6 +40,40 @@
 //! the innermost temporary scope of the thread
 static thread_local QoreStatementTempScope* current_temp_scope = nullptr;
 
+//! the functional operators whose element scope flags are decided when the parse of the Program's code ends
+static thread_local std::vector<std::pair<AbstractQoreNode*, q_element_scope_decider_t>>* element_scope_ops = nullptr;
+
+void qore_parse_decide_element_scopes(AbstractQoreNode* op, q_element_scope_decider_t decide) {
+    decide(op);
+    if (element_scope_ops) {
+        element_scope_ops->emplace_back(op, decide);
+        op->ref();
+    }
+}
+
+QoreElementScopeParseHelper::QoreElementScopeParseHelper() {
+    if (!element_scope_ops) {
+        ops = std::make_unique<std::vector<std::pair<AbstractQoreNode*, q_element_scope_decider_t>>>();
+        element_scope_ops = ops.get();
+    }
+}
+
+QoreElementScopeParseHelper::~QoreElementScopeParseHelper() {
+    if (!ops) {
+        return;
+    }
+    assert(element_scope_ops == ops.get());
+    element_scope_ops = nullptr;
+    // an operator that the parse has released since is held by its reference here only, and is not decided
+    ExceptionSink xsink;
+    for (auto& i : *ops) {
+        if (i.first->reference_count() > 1) {
+            i.second(i.first);
+        }
+        i.first->deref(&xsink);
+    }
+}
+
 QoreStatementTempScope* qore_suspend_statement_temp_scope() {
     QoreStatementTempScope* scope = current_temp_scope;
     current_temp_scope = nullptr;

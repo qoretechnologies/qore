@@ -1128,9 +1128,11 @@ DLLEXPORT bool qore_sandbox_allows_uncontrolled_apis(QoreSandboxManagerHelper::P
 
     The calling code is the code of the nearest Program on the thread's call stack that is not the Program of a user
     module: the current Program if it is not a module's, else the Program that entered the module code, through any
-    number of calls between modules.  The parse options of that Program decide (for example
+    number of calls between modules; on a thread that module code started, where no such Program is on the stack,
+    the calling code of the module code that started the thread.  The parse options of that Program decide (for example
     \c PO_NO_DATABASE for \c QDOM_DATABASE), as do the restrictions of a sandboxed caller that the module code runs
-    with; the options of the module's own Program do not.
+    with, and those of the modules on the way that are not library code (a module loaded by its path, which has the
+    restrictions of the Program that loaded it first); the options of a library module's own Program do not.
 
     It reveals only whether the calling code is restricted, so it is not restricted itself.
 

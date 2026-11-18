@@ -175,6 +175,11 @@ printf("%Y\n", ans.body);
 
 
     @section restclientv2_7 RestClient v2.7
+    - errors no longer contain the values of options or credentials, which can be passwords or tokens
+      (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+    - a character set given as the \c Content-Encoding of a response selects only an encoding that %Qore knows or a
+      standard character set (@ref Qore::get_known_encoding() "get_known_encoding()"), and is ignored otherwise
+      (<a href="https://github.com/qoretechnologies/qore/issues/6460">issue 6460</a>)
     - added the @ref RestClient::AbstractRestConnection "AbstractRestConnection" class, which provides all of
       @ref RestClient::RestConnection "RestConnection" (options, OAuth2, features, pings and polling) with
       @ref RestClient::AbstractRestConnection::get() "get()" returning an object of any class, for connections
@@ -1100,7 +1105,9 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
         *string character_encoding;
         bool decoded_content = False;
         if (token =~ /^(?:iso|utf-)/) {
-            character_encoding = token;
+            # the name is untrusted data, which selects only an encoding that Qore knows or a standard character set;
+            # any other name is ignored (issue #6460)
+            character_encoding = get_known_encoding(token);
             content_encoding_charset = token;
         } else if (token.val() && encoding_passthru) {
             # Match HTTPClient's encoding_passthru behavior: any non-character Content-Encoding is returned as
@@ -3303,10 +3310,12 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         if (h.OAuth) {
             h = h.OAuth;
         }
-        debug("login info: %y", h);
+        # only the keys of the response, which holds the tokens
+        debug("login info keys: %y", keys h);
         if (h.token_type.typeCode() != NT_STRING || h.access_token.typeCode() != NT_STRING) {
             throw "REST-LOGIN-ERROR", sprintf("OAuth2 response for grant type %y is invalid, needs both "
-                "token_type (%y) and access_token (%y): %y", oauth2_grant_type, h.token_type, h.access_token, h);
+                "token_type (type %y) and access_token (type %y); keys in the response: %y", oauth2_grant_type,
+                h.token_type.type(), h.access_token.type(), keys h);
         }
         *hash<auto> new_opts = update_options ? getUpdateOptionsAfterLogin(h, refresh) : NOTHING;
         # set the token
@@ -3678,8 +3687,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                     "set; options provided: %y", grant_type, req_opt, keys opts);
             }
             if (opts{req_opt}.typeCode() != NT_STRING) {
+                # only the type of the value, which can be a credential
                 throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y to be set with a string; "
-                    "type provided: %y (value: %y)", grant_type, req_opt, opts{req_opt}.fullType(), opts{req_opt});
+                    "type provided: %y", grant_type, req_opt, opts{req_opt}.fullType());
             }
             self{req_opt} = opts{req_opt};
         }
@@ -5463,8 +5473,9 @@ public class AbstractRestConnection inherits ConnectionProvider::HttpBasedConnec
             case NT_STRING: {
                 auto v = parse_to_qore_value(opts.headers);
                 if (v.typeCode() != NT_HASH) {
+                    # only the type of the value: headers can carry credentials
                     throw "REST-CONNECTION-ERROR", sprintf("\"headers\" option string parsed to "
-                        "type %y (value: %y); expecting \"hash\"", v.type(), v);
+                        "type %y; expecting \"hash\"", v.type());
                 }
                 v = map {$1.key: $1.value.toString()}, v.pairIterator();
                 rv.headers = v;

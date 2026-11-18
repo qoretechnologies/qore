@@ -110,27 +110,41 @@ printf(\"rv=%d deleted=%y\\n\", rv, !exists t);
         hash<auto> r = runChild("%modern
 %no-child-restrictions
 
-int base = call_function(\"dbg_get_thread_program_data_count\");
 Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
 t.parse(\"our int calls = 0; int sub f() { return ++calls; }\", \"t\");
 Counter called(1);
 Counter gone(1);
 int rv;
+# the ID of the thread's data: the test follows the data of this thread only, as other threads of the process can
+# have data too
+int id;
 background sub () {
     rv = t.callFunction(\"f\");
+    id = call_function(\"dbg_get_thread_program_data_id\");
     called.dec();
     gone.waitForZero();
 }();
 called.waitForZero();
-int running = call_function(\"dbg_get_thread_program_data_count\") - base;
+# another thread of the process with data of its own while the data of the thread is followed: its data does not
+# count
+Counter other_started(1);
+Counter other_done(1);
+background sub () {
+    other_started.dec();
+    other_done.waitForZero();
+}();
+other_started.waitForZero();
+on_exit other_done.dec();
+# the data exists while the thread runs
+bool running = !call_function(\"dbg_wait_thread_program_data_released\", id, 0);
 delete t;
 gone.dec();
 # the thread's data is released when the thread has exited
-bool released = call_function(\"dbg_wait_thread_program_data_count\", base, " + StepTimeout + ");
-printf(\"rv=%d running=%d released=%y\\n\", rv, running, released);
+bool released = call_function(\"dbg_wait_thread_program_data_released\", id, " + StepTimeout + ");
+printf(\"rv=%d running=%y released=%y\\n\", rv, running, released);
 ");
         assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
-        assertRegex("rv=1 running=1 released=True", r.output,
+        assertRegex("rv=1 running=True released=True", r.output,
             sprintf("the data of the thread was released after it exited: %s", r.output));
     }
 

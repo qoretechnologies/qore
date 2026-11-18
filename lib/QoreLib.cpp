@@ -2677,6 +2677,20 @@ int check_lvalue(QoreValue n, bool assignment, qore_lvalue_use_e use) {
 
 static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, qore_lvalue_use_e use);
 
+//! checks the lvalue that an element, member, slice or cast of an lvalue is taken of
+/** NOTHING is an lvalue by itself (an operator on it changes nothing), but it has no elements or members, and a
+    path from it is refused (issue #6480); a cast of NOTHING is folded to NOTHING when it is initialized, so the cast
+    case is reached only by a cast that is not folded
+*/
+static int check_lvalue_base(const QoreProgramLocation* loc, QoreValue n, bool assignment, qore_lvalue_use_e use) {
+    if (n.isNothing()) {
+        parse_error(*loc, "the value NOTHING cannot be the base of an lvalue (an element, member, slice or cast of "
+            "it)");
+        return -2;
+    }
+    return check_lvalue_intern(n, assignment, false, use);
+}
+
 //! Raises a parse error for a slice used as an lvalue and returns -2, as the error is reported
 static int check_lvalue_slice(const QoreProgramLocation* loc) {
     parse_error(*loc, "a slice cannot be used as an lvalue except by the remove and delete operators; a slice is "
@@ -2719,7 +2733,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getLeft(), assignment, use);
             }
         }
         {
@@ -2728,7 +2742,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (!slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->get(0), assignment, false, use);
+                return check_lvalue_base(op->loc, op->get(0), assignment, use);
             }
         }
         {
@@ -2737,7 +2751,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getLeft(), assignment, use);
             }
         }
         {
@@ -2759,7 +2773,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                         "the cast instead");
                     return -2;
                 }
-                return check_lvalue_intern(op->getExp(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getExp(), assignment, use);
             }
         }
     }
@@ -4127,10 +4141,28 @@ static bool lvalue_parse_accepts(const QoreTypeInfo* typeInfo, const QoreTypeInf
     return QoreTypeInfo::parseAccepts(typeInfo, valueTypeInfo) != QTI_NOT_EQUAL;
 }
 
+bool qore_lvalue_converts_result(const QoreTypeInfo* typeInfo, qore_type_t t) {
+    if (QoreTypeInfo::parseAcceptsReturns(typeInfo, t)) {
+        return false;
+    }
+    const QoreTypeInfo* result;
+    switch (t) {
+        case NT_INT: result = bigIntTypeInfo; break;
+        case NT_FLOAT: result = floatTypeInfo; break;
+        case NT_NUMBER: result = numberTypeInfo; break;
+        default: return false;
+    }
+    // only a soft type (ex: softstring, softbool, softfloat), which converts values of other types, also a string,
+    // is meant: a float or number lvalue, which an integer can also be assigned, keeps refusing the integer operators
+    return lvalue_parse_accepts(typeInfo, result) && lvalue_parse_accepts(typeInfo, stringTypeInfo);
+}
+
 int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
-    // make sure the lvalue can be assigned an integer value
+    // make sure the lvalue can be assigned an integer value: as for an assignment, a soft type that converts it
+    // (ex: softstring, softbool) is accepted (qore#6304); the operator then follows the lvalue's type
+    // (qore_lvalue_converts_result())
     // raise a parse exception only if parse exceptions are not suppressed
-    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT)) {
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT) && !qore_lvalue_converts_result(typeInfo, NT_INT)) {
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it an integer value", QoreTypeInfo::getName(typeInfo), name);
@@ -4255,9 +4287,10 @@ double qore_plus_equals_nonfloat_float_operand(const QoreValue v) {
 }
 
 int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
-    // make sure the lvalue can be assigned a floating-point value
+    // make sure the lvalue can be assigned a number value, also by a conversion of its soft type (qore#6304)
     // raise a parse exception only if parse exceptions are not suppressed
-    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)) {
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)
+            && !qore_lvalue_converts_result(typeInfo, NT_NUMBER)) {
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a number value", QoreTypeInfo::getName(typeInfo), name);
@@ -4269,9 +4302,10 @@ int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typ
 }
 
 int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& typeInfo, const char* name) {
-    // make sure the lvalue can be assigned a floating-point value
+    // make sure the lvalue can be assigned a floating-point value, also by a conversion of its soft type (qore#6304)
     // raise a parse exception only if parse exceptions are not suppressed
-    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)) {
+    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)
+            && !qore_lvalue_converts_result(typeInfo, NT_FLOAT)) {
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a float value", QoreTypeInfo::getName(typeInfo), name);
@@ -4306,6 +4340,13 @@ int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreType
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT)
             && !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)
             && !QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)) {
+        // a soft type that converts the integer that the operator assigns (ex: softstring, softbool) is accepted, as
+        // for an assignment; the operator's value is then an integer computed from the converted value, but its type
+        // is not known at parse time (qore#6304)
+        if (qore_lvalue_converts_result(typeInfo, NT_INT)) {
+            typeInfo = nullptr;
+            return 0;
+        }
         if (getProgram()->getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator only works "
                 "with integer, floating-point, or numeric lvalues", QoreTypeInfo::getName(typeInfo), name);

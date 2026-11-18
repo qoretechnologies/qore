@@ -44,7 +44,7 @@
 // documented in QoreClassIntern.h
 bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreObject* self, const char* nme,
         QoreListNode* args, const qore_class_private* class_ctx, ExceptionSink* xsink, QoreValue& rv) {
-    const QoreMemberInfo* mi = qcp.runtimeGetMemberInfo(nme, class_ctx);
+    const QoreMemberInfo* mi = qcp.runtimeGetCallableMemberInfo(nme, class_ctx);
     if (!mi) {
         return false;
     }
@@ -77,17 +77,23 @@ bool qore_class_eval_member_code_given_args(const qore_class_private& qcp, QoreO
     if (!ref) {
         return false;
     }
+    rv = qore_invoke_call_ref_given_args(ref, args, xsink);
+    return true;
+}
+
+// documented in QoreClassIntern.h
+QoreValue qore_invoke_call_ref_given_args(const ResolvedCallReferenceNode* ref, QoreListNode* args,
+        ExceptionSink* xsink) {
     // the parameters of a closure or of a reference to user code take the values of the argument list over; the call
     // runs with the sandbox provenance of the reference: a closure's execValueTmpArgs() and invoke() apply it
     // themselves, while the default ResolvedCallReferenceNodeIntern::execValueTmpArgs() calls execValue(), which does
     // not, so it is applied here for that branch only
     if (ref->getType() == NT_RUNTIME_CLOSURE) {
-        rv = static_cast<const QoreClosureBase*>(ref)->execValueTmpArgs(args, xsink);
-    } else if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
-        QoreSandboxProvenanceHelper provenance(ref);
-        rv = rcr->execValueTmpArgs(args, xsink);
-    } else {
-        rv = ref->invoke(args, xsink);
+        return static_cast<const QoreClosureBase*>(ref)->execValueTmpArgs(args, xsink);
     }
-    return true;
+    if (auto* rcr = dynamic_cast<const ResolvedCallReferenceNodeIntern*>(ref)) {
+        QoreSandboxProvenanceHelper provenance(ref);
+        return rcr->execValueTmpArgs(args, xsink);
+    }
+    return ref->invoke(args, xsink);
 }

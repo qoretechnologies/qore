@@ -36,6 +36,18 @@
 
 #include <mutex>
 
+bool QoreClosureBase::createdByModuleInit(const QoreClosureParseNode* n) {
+    // only while library module code is initialized
+    if (!qore_module_init_library()) {
+        return false;
+    }
+    // the Program that defines the closure's code
+    const UserClosureFunction* f = n->getFunction();
+    const AbstractQoreFunctionVariant* v = f ? f->first() : nullptr;
+    const UserVariantBase* uvb = v ? v->getUserVariantBase() : nullptr;
+    return uvb && qore_module_init_closure_creation(uvb->pgm);
+}
+
 static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
     if (!vlist) {
         return nullptr;
@@ -292,6 +304,9 @@ int QoreClosureParseNode::parseInitDeferred() {
         const qore_class_private* old_qc;
         qore_ns_private* old_ns;
         thread_set_class_and_ns(parse_qc, parse_ns, old_qc, old_ns);
+        // the closure is initialized after the code of the Program: the functional operators in it decide which operands
+        // are statements of their own when it has been initialized (qore#6288)
+        QoreElementScopeParseHelper element_scope_helper;
         rc = uf->parseInitClosure();
         if (uf->defaultsNeedObject()) {
             defaults_need_object = true;

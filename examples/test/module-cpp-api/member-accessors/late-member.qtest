@@ -10,13 +10,21 @@
 
 %exec-class LateMemberTest
 
-#! A module can add a builtin member to a class that it has already published (#6272)
-/** module-jni adds the fields of a Java class to its QoreClass (QoreClass::addBuiltinMemberWithAccessors()) when the
-    class is first used, after the class is published, which freezes its members.  Debug builds asserted that a frozen
-    map does not change, and aborted when module-jni was loaded; a change now publishes a new index of the members,
-    which readers load atomically.  MemberAccessorProbe::addLateMember() adds a member to the published probe class
-    in the same way: the first addition makes the class's 8th member, which builds its index, and the next ones
-    replace it while threads read the class's members.
+#! a published class with fewer members than the index threshold and no member with accessors
+class SmallLate {
+    public {
+        int a = 1;
+        int b = 2;
+    }
+}
+
+#! A module can add a builtin member to a class it has committed until code in other threads can reach it (#6272,
+#! #6422)
+/** module-jni adds the fields of a Java class to its QoreClass (QoreClass::addBuiltinMemberWithAccessors()) after
+    committing the class into a namespace, which freezes its members, during its initialization or before the class is
+    published.  Debug builds asserted that a frozen map does not change, and aborted when module-jni was loaded
+    (#6272); a change now publishes a new index of the members.  Once code in other threads can reach a class, it reads
+    the members without a lock, so an addition is refused with CLASS-MEMBER-ADD-ERROR (#6422).
 */
 class LateMemberTest inherits QUnit::Test {
     public {
@@ -25,32 +33,43 @@ class LateMemberTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("LateMemberTest", "1.0") {
         addTestCase("a builtin member added to a published class", \lateMemberTest());
+        addTestCase("a builtin member added to a small class that threads use", \smallClassTest());
         set_return_value(main());
     }
 
     lateMemberTest() {
         bool debug = Option::HAVE_LIBRARY_DEBUGGING;
-        # untyped: the members added below are not known when the test is parsed
-        auto probe = CppApiTest::MemberAccessorProbe::create();
-        CppApiTest::MemberAccessorProbe::addLateMember("late0");
+        # cppapiuser's initialization adds late0 .. late4 to the probe class after committing it into its namespace,
+        # as module-jni adds the fields of Java classes: the 8th member builds the class's index
         if (debug) {
             hash<auto> info = call_function("dbg_class_member_index_info", ClassPath);
             assertTrue(info.frozen, "the class is published");
-            assertTrue(info.indexed, "the 8th member builds an index");
+            assertTrue(info.indexed, "the class has an index from its 8th member");
             assertEq("", info.error, "the index agrees with the member list");
         }
-        # the new member is held in external storage, through the accessors, in an object created before and after
+        # untyped: the members are not known to the parser as declared in the class's qpp
+        auto probe = CppApiTest::MemberAccessorProbe::create();
         probe.late0 = 5;
         assertEq(5, probe.late0);
         assertEq(5, CppApiTest::MemberAccessorProbe::cppRead(probe, "late0", "getReferencedMemberNoMethod"));
-        auto other = CppApiTest::MemberAccessorProbe::create();
-        other.late0 = "x";
-        assertEq("x", other.late0);
-        # declared members are found as before
         probe.count = 3;
         assertEq(3, probe.count);
+        for (int i = 1; i < 5; ++i) {
+            probe{sprintf("late%d", i)} = i;
+            assertEq(i, probe{sprintf("late%d", i)});
+        }
+        # the class is reachable by code in other threads now: a member can no longer be added
+        assertThrows("CLASS-MEMBER-ADD-ERROR", \CppApiTest::MemberAccessorProbe::addLateMember(), "late9");
+        assertThrows("CLASS-MEMBER-ADD-ERROR", \CppApiTest::MemberAccessorProbe::addLateMemberTo(), (probe, "late9"));
+    }
 
-        # more members are added while threads read the members of the class through its index
+    #! a member cannot be added to a class while threads read its members and create its objects (#6422)
+    /** The class has no index (fewer than 8 members) and no member with accessors, so its readers scan its member
+        list and read its flags: an addition would change them under the readers (ThreadSanitizer reported it), and is
+        refused, as the committed class is reachable by code in other threads
+    */
+    smallClassTest() {
+        SmallLate s();
         Counter stop(1);
         Counter done(4);
         Queue errors();
@@ -58,26 +77,22 @@ class LateMemberTest inherits QUnit::Test {
             background sub () {
                 on_exit done.dec();
                 while (stop.getCount()) {
-                    if (probe.late0 != 5 || probe.count != 3) {
+                    SmallLate o();
+                    if (o.a != 1 || s.b != 2) {
                         errors.push("wrong value");
                         return;
                     }
                 }
             }();
         }
-        for (int i = 1; i <= 4; ++i) {
-            string name = sprintf("late%d", i);
-            CppApiTest::MemberAccessorProbe::addLateMember(name);
-            probe{name} = i;
-            if (debug) {
-                assertEq("", call_function("dbg_class_member_index_info", ClassPath).error, name);
-            }
+        # the class is used: each addition is refused, and the readers see the class as it was
+        for (int i = 0; i < 4; ++i) {
+            assertThrows("CLASS-MEMBER-ADD-ERROR", \CppApiTest::MemberAccessorProbe::addLateMemberTo(),
+                (s, sprintf("small%d", i)));
+            usleep(1ms);
         }
         stop.dec();
         assertEq(0, done.waitForZero(60s));
         assertEq(0, errors.size(), errors.size() ? errors.get() : "");
-        for (int i = 1; i <= 4; ++i) {
-            assertEq(i, probe{sprintf("late%d", i)});
-        }
     }
 }

@@ -40,6 +40,8 @@
 #include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 
@@ -1034,6 +1036,92 @@ auto call_function(code callable, ...) {
     return callable->invoke(*vargs, xsink);
 }
 
+//! Returns @ref True if the given code is a closure that the initialization of its library module created
+/** Such a closure can be run later as deferred module initialization with call_module_init_closure().  A module that
+    runs initialization code that other modules register with it for later (for example to register their
+    application actions the first time that they are looked up) tests the code when it is registered.
+
+    A closure qualifies only if it was created by the code of a library module (a module found in the process-wide
+    module path, see @ref user_module_declarations) while that module was initialized (its \c init closure and the code that it
+    calls), or while such a closure ran as deferred module initialization; a closure that any other code creates,
+    including other code of the module and code that runs while the module is initialized but is not the module's,
+    does not.
+
+    @param c the code to test
+
+    @return @ref True if \a c is a closure that can be run as deferred module initialization
+
+    @par Example:
+    @code{.py}
+# keep the qualification of an initializer registered with a module
+bool deferred_init = is_module_init_closure(init);
+    @endcode
+
+    @see call_module_init_closure()
+
+    @since %Qore 3.0
+*/
+bool is_module_init_closure(code c) [flags=RET_VALUE_ONLY] {
+    const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(c);
+    return cb && cb->isModuleInit();
+}
+
+//! Runs a closure that the initialization of its library module created as deferred module initialization
+/** Only the code of a library module can call this function, such as a registry module that runs the deferred
+    initialization that other modules registered with it.
+
+    The closure runs as the initialization of its module does: the functional domains that the module's own code
+    declares are not checked against the code that calls this function (see @ref user_module_declarations), and the threads
+    that it starts do not take that code's restrictions.  Code that it calls back that is not the module's is checked
+    as always.
+
+    @param c a closure for which is_module_init_closure() returns @ref True
+
+    @return the value that the closure returns
+
+    @throw MODULE-INIT-CLOSURE-ERROR \a c is not a closure that the initialization of its library module created,
+    or the code that calls this function is not the code of a library module (a module found in the process-wide
+    module path)
+
+    @par Example:
+    @code{.py}
+# run an initializer that a module registered when it was loaded
+if (deferred_init) {
+    call_module_init_closure(init);
+} else {
+    init();
+}
+    @endcode
+
+    @see is_module_init_closure()
+
+    @since %Qore 3.0
+*/
+auto call_module_init_closure(code c) {
+    const QoreClosureBase* cb = dynamic_cast<const QoreClosureBase*>(c);
+    if (!cb || !cb->isModuleInit()) {
+        return xsink->raiseException("MODULE-INIT-CLOSURE-ERROR", "the code given is not a closure that the "
+            "initialization of its library module created");
+    }
+    // only library module code runs deferred module initialization, such as the registry that the closure was
+    // registered with; other code that gets such a closure cannot run it with the exemption (qore#6337)
+    if (!qore_program_is_library_module(getProgram())) {
+        return xsink->raiseException("MODULE-INIT-CLOSURE-ERROR", "call_module_init_closure() can only be called "
+            "by the code of a library module");
+    }
+    // the closure runs as the initialization of its module: the barrier of a library module's initialization, which
+    // names the module's Program, so that the closures that it creates qualify too
+    QoreModuleInitSandboxBarrierHelper barrier(true);
+    // without its own barrier, the program would be set on an outer one (qore#6337)
+    if (!barrier.recorded()) {
+        xsink->outOfMemory();
+        return QoreValue();
+    }
+    qore_module_init_set_program(qore_call_reference_code_program(c));
+    ProgramCallContextHelper pch(c->getProgram());
+    return c->invoke(nullptr, xsink);
+}
+
 //! Calls a function and returns the return value, using the optional second argument as a list of arguments for the function
 /**
     @param name The name of the function to call
@@ -1657,9 +1745,12 @@ string resolve_url(string base, string reference, int options = 0) [flags=PURE,N
     |JavaScript, form data (\c application/x-www-form-urlencoded)|a byte order mark, else the \c charset parameter, else UTF-8 (RFC 9239, WHATWG URL)
     |any other text|a byte order mark, else the \c charset parameter, else the assumed encoding
 
-    An encoding declared in the body (an XML declaration, a \c meta element, or an \c \@charset rule) is ignored if
-    it is not a supported encoding, and a UTF-16 declaration in HTML or CSS means UTF-8, as the text could not have
-    been read to find it otherwise (WHATWG Encoding).  The \c charset parameter is used as given.
+    A character set name in the \c charset parameter or declared in the body (an XML declaration, a \c meta element,
+    or an \c \@charset rule) is untrusted data: it is used only if it selects an encoding as
+    @ref Qore::get_known_encoding() "get_known_encoding()" does (an encoding that %Qore knows, or a standard character
+    set), and, for a name declared in the body, only if iconv converts to that encoding; it is ignored otherwise, so
+    that the next rule of the table applies; a UTF-16 declaration in HTML or CSS
+    means UTF-8, as the text could not have been read to find it otherwise (WHATWG Encoding).
 
     The \c charset parameter of the \c Content-Type is read as in RFC 9110: parameter names match
     case-insensitively and only as whole names, and a quoted value (ex: <tt>charset="UTF-8"</tt>) is unquoted, with
@@ -1761,16 +1852,19 @@ hash<HttpContentTypeInfo> get_http_content_type_info(string content_type, string
 /** An HTTP server reports it in the header information of a request (the \c "accept-charset" key of the info hash
     of @ref Qore::Socket::readHTTPHeader() "Socket::readHTTPHeader()", and of \c cx."header-info" in an
     @ref HttpServer::HttpServer "HttpServer" request handler, which uses it as \c cx."response-encoding") for every
-    HTTP version.  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
+    HTTP version, with the values of repeated \c Accept-Charset field lines combined into one list (RFC 9110 section
+    5.3).  The value is parsed as RFC 9110 section 12.5.2 defines it: a comma-separated list of charset names
     (tokens, case-insensitive) or \c "*", each with an optional weight (<tt>;q=</tt><em>qvalue</em>, section 12.4.2; 1
     without one), with optional whitespace around the elements and before and after each \c ";"; other parameters,
     with a token or quoted-string value, are ignored, and an element with an invalid weight or another syntax error
     (such as a charset name that is not a token) is ignored.  The result is:
     - \c "utf8" if UTF-8 (\c "utf-8" or \c "utf8") has the highest weight of the acceptable charsets that %Qore
       supports, also with the same weight as another; \c "*" gives UTF-8 its weight if UTF-8 is not listed
-    - otherwise the name of the acceptable charset with the highest weight that %Qore supports (an encoding that
-      %Qore knows, by its name or an alias, and that iconv converts to), as given in the value; of charsets with the
-      same weight, the first in the list
+    - otherwise the name of the acceptable charset with the highest weight that %Qore supports (a name that
+      @ref Qore::get_known_encoding() "get_known_encoding()" accepts, of an encoding that iconv converts to), as given
+      in the value if it is a name or an alias of an encoding that %Qore knows, else (a label of a standard
+      character set, ex: \c "x-sjis") the name of the encoding that it selects; of charsets with the same weight,
+      the first in the list
     - \c "utf8" if there is no value, or no charset in it is acceptable (a weight of 0 means not acceptable) and
       supported, also when UTF-8 has a weight of 0 and \c "*" accepts any other charset: any character set is
       acceptable without the header (RFC 9110 section 12.5.2), and a server may disregard the header otherwise

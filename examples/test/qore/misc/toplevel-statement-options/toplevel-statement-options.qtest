@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the parse options of top-level statements
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+%requires ../../../ExecModeHarness.qm
+
+%exec-class TopLevelStatementOptionsTest
+
+#! Each top-level statement runs with its own parse options in every execution mode (qore#6293)
+/** The statements of top-level code can have different parse options (files with different options parsed into one
+    Program, or a parse directive between statements); the AST interpreter runs each with its own options, and so must
+    the lowered code and the code compiled ahead of time.  An on_exit handler of the top-level code runs with the
+    options of the statement that declares it, also when it runs after statements with other options.  The worker
+    prints the options that each statement and handler runs with; it runs in each execution mode, on the IR tier and as a program compiled with qcc -O0 and -O3, and every run
+    must give the result of the AST interpreter.
+*/
+class TopLevelStatementOptionsTest inherits QUnit::Test {
+    public {
+        const Expected = "restricted-second-file:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "after=False\n"
+            "restricted-first-file:\n"
+            "first=True False\n"
+            "second=True False\n"
+            "after=False\n"
+            "directive-mid-file:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "third=True True\n"
+            "after=False\n"
+            "same-options:\n"
+            "first=True False\n"
+            "second=True False\n"
+            "after=False\n"
+            "return:\n"
+            "first=False False\n"
+            "after=False\n"
+            "on_exit-before-directive:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "handler=False False\n"
+            "after=False\n"
+            "on_exit-after-directive:\n"
+            "first=False False\n"
+            "second=True True\n"
+            "handler=True False\n"
+            "after=False\n"
+            "on_exit-first-file:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "handler=False False\n"
+            "after=False\n"
+            "on_exit-exception:\n"
+            "first=False False\n"
+            "second=True False\n"
+            "handler=False False\n"
+            "on_exit-exception: STOP: \n"
+            "after=False\n"
+            "own-first=False False\n"
+            "own-second=True False\n"
+            "own-third=True True\n"
+            "own-handler2=True True\n"
+            "own-handler1=False False\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("TopLevelStatementOptionsTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s", libqore_dir,
+                qore_bin, mode, getWorker()), ExecModeHarness::NativeCheck::Jit), mode);
+        }
+    }
+
+    testIrTier() {
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=tiered %s",
+            libqore_dir, qore_bin, getWorker())), "IR tier");
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-toplevel-statement-options-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = tmp.path + DirSep + "toplevel-statement-options" + opt;
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s --strip-source -o %s %s 2>&1", libqore_dir,
+                qcc_bin, opt, exe, getWorker()));
+            assertTrue(is_file(exe), sprintf("compiled program (%s): %s", opt, out));
+            assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)), "qcc " + opt);
+        }
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "toplevel-statement-options-worker.q";
+    }
+}

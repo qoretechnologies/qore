@@ -2434,7 +2434,20 @@ static size_t getAOTMaxCompressedMetadataSize() {
 }
 
 //! Compresses AOT metadata as the compression policy wants
+static void finalizeAOTMetadataCompressionIntern(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer);
+
+//! Compresses the metadata as the policy says; its checksum is computed again over the new encoding (qore#6451)
 static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool include_source,
+        bool report_metadata, const QoreAOTBinaryWriter& writer) {
+    bool sealed = qore_aot_unseal_metadata(metadata);
+    finalizeAOTMetadataCompressionIntern(metadata, include_source, report_metadata, writer);
+    if (sealed) {
+        qore_aot_seal_metadata(metadata);
+    }
+}
+
+static void finalizeAOTMetadataCompressionIntern(std::vector<uint8_t>& metadata, bool include_source,
         bool report_metadata, const QoreAOTBinaryWriter& writer) {
     static constexpr uint32_t AOT_HEADER_BYTES = 60;
     static constexpr size_t AOT_HEADER_COMPRESSION_OFFSET = 34;
@@ -18055,7 +18068,9 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
     unsigned param_offset = guarded ? 2 : 0;
     unsigned num_params = static_cast<unsigned>(param_kinds.size());
     unsigned num_captures = static_cast<unsigned>(capture_kinds.size());
-    if (dispatch->arg_size() != param_offset + num_params + num_captures + 2) {
+    // the parameters, the captured values, the cleanup slots of the arguments that the caller gives to the call or
+    // null, the AOT context and the exception sink
+    if (dispatch->arg_size() != param_offset + num_params + num_captures + 3) {
         return fail("the declared dispatch function has another number of arguments");
     }
     if (guarded && return_kind != BatchCalleeReturnKind::Boxed) {
@@ -18075,10 +18090,12 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         llvm::FunctionType::get(i64_ty, {llvm::Type::getDoubleTy(ctx)}, false));
     llvm::Value* guarded_ref = guarded ? dispatch->getArg(0) : nullptr;
     llvm::Value* guarded_identity = guarded ? dispatch->getArg(1) : nullptr;
-    llvm::Value* aot_ctx = dispatch->getArg(
+    llvm::Value* arg_cleanups = dispatch->getArg(
         param_offset + num_params + num_captures);
-    llvm::Value* xsink = dispatch->getArg(
+    llvm::Value* aot_ctx = dispatch->getArg(
         param_offset + num_params + num_captures + 1);
+    llvm::Value* xsink = dispatch->getArg(
+        param_offset + num_params + num_captures + 2);
     dispatch->setLinkage(llvm::GlobalValue::InternalLinkage);
     dispatch->addFnAttr(llvm::Attribute::InlineHint);
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(ctx, "entry", dispatch);
@@ -18166,6 +18183,20 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
         builder.CreateCall(module.getOrInsertFunction("qore_rt_push_native_closure_call_frame",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         llvm::Value* fast_result = builder.CreateCall(fast_fn, fast_args);
+        {
+            // the arguments that the caller gave to the call are released in the closure's frame, as the AST
+            // interpreter's call releases them (issue #6063); a caller that gives none passes null, which a call
+            // that the dispatch is inlined into folds away
+            llvm::BasicBlock* clear_bb = llvm::BasicBlock::Create(ctx, "clear_given_args", dispatch);
+            llvm::BasicBlock* pop_bb = llvm::BasicBlock::Create(ctx, "pop_frame", dispatch);
+            builder.CreateCondBr(builder.CreateIsNotNull(arg_cleanups), clear_bb, pop_bb);
+            builder.SetInsertPoint(clear_bb);
+            builder.CreateCall(module.getOrInsertFunction("qore_rt_clear_given_arg_cleanups",
+                llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty, i32_ty, ptr_ty}, false)),
+                {arg_cleanups, llvm::ConstantInt::get(i32_ty, num_params), xsink});
+            builder.CreateBr(pop_bb);
+            builder.SetInsertPoint(pop_bb);
+        }
         builder.CreateCall(module.getOrInsertFunction("qore_rt_pop_native_call_frame",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {ptr_ty}, false)), {frame_storage});
         // a boxed ABI over a fast body with a native result (a guarded dispatch, or a call site that was lowered
@@ -18228,19 +18259,23 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
 
     llvm::Value* boxed_result = nullptr;
     if (guarded) {
-        auto fallback = module.getOrInsertFunction("qore_rt_call_closure_fast",
+        // with the cleanup slots of the arguments given to the call, if any (with none, the helper is
+        // qore_rt_call_closure_fast())
+        auto fallback = module.getOrInsertFunction("qore_rt_call_closure_fast_consume_args",
             llvm::FunctionType::get(i64_ty,
-                {i64_ty, ptr_ty, i32_ty, ptr_ty}, false));
+                {i64_ty, ptr_ty, ptr_ty, i32_ty, ptr_ty}, false));
         boxed_result = builder.CreateCall(fallback,
-            {guarded_ref, args_array,
+            {guarded_ref, args_array, arg_cleanups,
                 llvm::ConstantInt::get(i32_ty, num_params), xsink});
     } else {
+        // with the cleanup slots of the arguments given to the call, if any (with none, the helper is
+        // qore_rt_call_immediate_closure_aot())
         auto fallback = module.getOrInsertFunction(
-            "qore_rt_call_immediate_closure_aot",
+            "qore_rt_call_immediate_closure_aot_consume_args",
             llvm::FunctionType::get(i64_ty,
-                {ptr_ty, i32_ty, ptr_ty, i32_ty, ptr_ty}, false));
+                {ptr_ty, i32_ty, ptr_ty, ptr_ty, i32_ty, ptr_ty}, false));
         boxed_result = builder.CreateCall(fallback,
-            {aot_ctx, llvm::ConstantInt::get(i32_ty, expr_index), args_array,
+            {aot_ctx, llvm::ConstantInt::get(i32_ty, expr_index), args_array, arg_cleanups,
              llvm::ConstantInt::get(i32_ty, num_params), xsink});
     }
     auto decref = module.getOrInsertFunction("qore_rt_decref",
@@ -27986,6 +28021,23 @@ static bool readQoFragmentBlobs(const std::string& qo_path,
         QoreAOTExtractedFragment frag;
         frag.symbol_name = name.str();
         const uint8_t* p = reinterpret_cast<const uint8_t*>(contents.data() + offset);
+        // Mach-O has no symbol sizes: the size computed for the symbol runs to the next symbol and includes the
+        // padding after the blob; the blob is cut to its metadata and the checksum after it, which its header gives,
+        // so that its readers, including those that do not verify the checksum again, get the bytes that were
+        // written (qore#6451)
+        size_t exact = 0;
+        bool cancelled = false;
+        if (qore_aot_encoded_metadata_length(p, size, exact, &cancelled)) {
+            // metadata of a format before the checksum has none (QORE_AOT_FLAG_METADATA_CHECKSUM in its header flags)
+            uint16_t flags = static_cast<uint16_t>(p[6]) | (static_cast<uint16_t>(p[7]) << 8);
+            size_t trailer = (flags & QORE_AOT_FLAG_METADATA_CHECKSUM) ? QORE_AOT_METADATA_CHECKSUM_SIZE : 0;
+            if (exact + trailer <= size) {
+                size = exact + trailer;
+            }
+        } else if (cancelled) {
+            error = "operation cancelled while the fragment blobs of '" + qo_path + "' were read";
+            return false;
+        }
         frag.bytes.assign(p, p + size);
         out.push_back(std::move(frag));
     }

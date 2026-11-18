@@ -1,0 +1,117 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - run-time type checks of objects against parameterized class types in JIT and AOT code
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../../TestInterpreter.qm
+
+%exec-class ParamClassCheckStepsTest
+
+#! A run-time check of an object against a parameterized class type explores each ancestor of its class once
+/** The lookups of the parameterized base types of a class (instanceof, parameter type checks, overload resolution
+    with objects) walked a class reached with type arguments once for each path to it, so in a lattice of generic
+    classes, where each class of a level inherits both classes of the level below, a check of an object of the top
+    class took time exponential in the depth (qore#6449).  The worker (param-class-check-steps-worker.q) checks
+    objects of the top classes of lattices of depth 4 to 12, of plain classes over \c G<int>, of generic classes over
+    \c G<T>, and of generic classes whose edges wrap the type argument (in \c list<> or \c softlist<>, so that a
+    class is reached with many different type arguments; checked against \c Unrel<int> only), against \c Unrel<int>
+    (\c instanceof and an assignment to a typed local) and \c G<int> (\c instanceof and a parameter), in every execution
+    mode, with tiered execution at the IR tier, and as qcc executables (-O0, -O3).  The results must be the same in
+    every run, and the steps of the lookups of a failing check, counted by a debug hook of the library, at most the
+    number of classes of the lattice times its inheritance edges, and at most five times as many for twice the depth;
+    the steps are not checked by a library built without the hook.
+*/
+class ParamClassCheckStepsTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the depths of the lattices in the worker
+        const Depths = (4, 6, 8, 10, 12);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+    }
+
+    constructor() : QUnit::Test("ParamClassCheckSteps", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        worker = get_script_dir() + DirSep + "param-class-check-steps-worker.q";
+
+        addTestCase("execution modes", \testModes());
+        addTestCase("qcc executables", \testExecutables());
+        set_return_value(main());
+    }
+
+    testModes() {
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            checkOutput(mode, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, worker)));
+        }
+        checkOutput("tiered, IR tier", backquote(sprintf("%s %s --exec-mode=tiered --jit-ir-threshold=1 "
+            "--jit-jit-threshold=1000000 %s 2>&1", env, qore_bin, worker)));
+    }
+
+    testExecutables() {
+        TmpDir tmp("qore-param-class-check-steps-");
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = tmp.path + DirSep + "checks" + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                worker));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            checkOutput("qcc " + opt, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1",
+                libqore_dir, libqore_dir, exe)));
+        }
+    }
+
+    #! checks the results and the steps of a run of the worker
+    private checkOutput(string label, string out) {
+        list<string> lines = (select out.split("\n"), $1 && $1 !~ /^[0-9]+:$/);
+        assertEq(2 * 3 * Depths.size(), lines.size(), label + ": the lines of the two runs: " + out);
+        hash<string, int> steps;
+        foreach string line in (lines) {
+            *list<*string> m = (line =~ x/^(plain|generic|wrap) depth ([0-9]+) neg-steps=([-0-9]+) (.*)$/);
+            if (!m) {
+                assertTrue(False, sprintf("%s: unexpected line: %y", label, line));
+                continue;
+            }
+            assertEq(m[0] == "wrap" ? "neg=False" : "neg=False pos=True param=True unrel=RUNTIME-TYPE-ERROR", m[3],
+                sprintf("%s: %s depth %s", label, m[0], m[1]));
+            if (m[2] == "-") {
+                continue;
+            }
+            int depth = m[1].toInt();
+            int n = m[2].toInt();
+            # the classes: G, the two of level 0 and two for each level above it; the inheritance edges: two for level
+            # 0 and four for each level above it
+            int classes = 3 + 2 * depth;
+            int edges = 2 + 4 * depth;
+            assertTrue(n <= classes * edges, sprintf("%s: %s depth %d: %d steps for %d classes and %d edges (at most "
+                "%d)", label, m[0], depth, n, classes, edges, classes * edges));
+            # the most steps of the runs of the worker in the output
+            string key = m[0] + " " + m[1];
+            if (!exists steps{key} || n > steps{key}) {
+                steps{key} = n;
+            }
+        }
+        if (steps) {
+            # twice the depth: about four times the steps at most, not 2^depth times
+            foreach string kind in (("plain", "generic", "wrap")) {
+                assertTrue(steps{kind + " 12"} <= 5 * steps{kind + " 6"}, sprintf("%s: %s: steps by depth: %y",
+                    label, kind, steps));
+            }
+        }
+    }
+}

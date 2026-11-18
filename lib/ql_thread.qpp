@@ -279,6 +279,10 @@ int num = num_threads();
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
 
+    @note a thread is counted from the time its TID is returned by the @ref background "background" operator, also
+    before the new thread has started running, until it has terminated (see @ref thread_join()); the count is the
+    number of TIDs that @ref thread_list() returns when no thread starts or ends between the two calls
+
     @note a thread whose work has ended is counted until its teardown is complete, which is after any
     @ref on_exit code has run; use @ref thread_join() to wait until a thread is gone (see the teardown order there)
 */
@@ -348,6 +352,12 @@ list<int> l = thread_list();
     @endcode
 
     @note this function is not flagged with @ref CONSTANT since its value could change at runtime
+
+    @note a thread is in the list from the time its TID is returned by the @ref background "background" operator,
+    also before the new thread has started running, until it has terminated (see @ref thread_join()), as it is
+    counted by @ref num_threads(); until the new thread is running, it has no name or call stack:
+    get_thread_name() returns @ref nothing for its TID, and @ref get_all_thread_call_stacks() has no entry for it.
+    A TID that a module has reserved for a thread started outside %Qore is listed and counted as well
 
     @note a thread whose work has ended stays in the list until its teardown is complete, which is after any
     @ref on_exit code has run; use @ref thread_join() to wait until a thread is gone (see the teardown order there)

@@ -11654,7 +11654,7 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
 // --- SseAction implementation ---
 
 void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
-    std::lock_guard<std::mutex> lg(mtx);
+    AsyncActionLocker lg(mtx);
 
     // the stream is discarded after an event exceeded the maximum size; its data counts as consumed
     if (too_large) {

@@ -77,8 +77,9 @@ public class OptionHelper inherits Qore::Serializable {
                 key);
         }
         if (v.typeCode() != type_code) {
-            throw "OPTION-ARG-ERROR", sprintf("required option %y was passed as a %s (%y); expecting %y", key,
-                v.type(), v, type_name);
+            # only the type of the value, which can be a credential
+            throw "OPTION-ARG-ERROR", sprintf("required option %y was passed as a %s; expecting %y", key,
+                v.type(), type_name);
         }
         return v;
     }

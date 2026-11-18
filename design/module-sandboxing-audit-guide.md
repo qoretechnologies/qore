@@ -516,6 +516,17 @@ first and refuse regardless of the policy: `getOptionPolicyManagerRef()` is `nul
 the setter, also for sandboxed code inside a trusted `SandboxManager::callWithSystemPolicy()` barrier, so a missing
 policy is never treated as trust; only an option that the restrictions allow is checked against the policy.
 
+A DBI driver that must not connect to a destination that sandboxed code chose judges a connect by
+`Datasource::getConnectChoosers()`, not by the thread (qore#6142): the record has the creators of the datasource (for a
+copy, the copier and the original's creators; for a pool connection, the pool's creators, whatever thread grows it)
+and the setters of the connection values in use (user, password, database, host, port; not the encoding), and the
+driver adds the setter of each option that chooses its destination with `Datasource::addOptionChooser()`. A connect
+is restricted if any entry's `QoreDatasourceConnectChoosers::allowsUncontrolledApis(i)` is false (read live from the
+entry's policy manager), and is then checked against the policy managers of the restricting entries; a restricted
+entry without a manager is refused. Do not decide with the restrictions' `isSandboxed()`, which does not follow the
+barrier rule of a policy check. Neither these functions nor the `getPending*()` and `getConfig*()` accessors may be
+called from a driver's statement close or free function, which runs with the datasource's internal lock held.
+
 Through library module code the usual rule holds: a sandbox that governs the caller governs the module code that issues
 the command (`isSandboxed()`), a parse option that restricts the caller or that the module's Program inherited from its
 loader does not: a jni classpath command issued at run time by a library module (the Jdbc and Jms data providers) is not

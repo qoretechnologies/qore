@@ -376,6 +376,48 @@ authenticate();
     inside a trusted @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()" call.
     Only an option that the restrictions allow is checked against the setter's policy.
 
+    @subsection sandbox_datasource_connect_choosers A Connection Is Judged by the Code That Chose It
+
+    A DBI driver that must not connect to a destination that sandboxed code chose (such as the \c jdbc driver of the
+    \c jni module, which connects through Java's own network stack) judges a connection by the code that chose it,
+    never by the code that is running when it connects (qore#6142).  A datasource records:
+    - its <b>creators</b>: the code that created it (with a constructor, a connection string or by deserialization);
+      for a copy, the code that copied it and the creators of the original; for a connection of a
+      @ref Qore::SQL::DatasourcePool "DatasourcePool", the creators of the pool (the code that created the pool, and
+      for a copy of a pool also the code that copied it), whatever thread grows the pool
+    - the <b>setter</b> of each connection value: the user name, the password, the database name, the host name and
+      the port; the last setter of a value replaces the previous one.  The encoding is not one of them, as it chooses
+      neither the destination nor the credentials
+    - the setters of the options that the driver names as choosing the destination (see
+      @ref sandbox_datasource_options)
+
+    The setters of the connection values that a connect uses are those of the values that the connection is opened
+    with: a value that is set on an open connection judges the next open (\c open(), \c reset(), a reopen after a lost
+    connection), not a driver's own reconnect with the values in use.  A connection is restricted if any of the code
+    that chose it may not use uncontrolled APIs (see @ref sandbox_uncontrolled_api); for code that a sandbox governs,
+    that is read from the sandbox when the connection is made, so a host that changes
+    @ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()" later is
+    honored in both directions.  So:
+    - sandboxed code that opens or uses a trusted datasource or pool that it did not change is not restricted by
+      the driver: the connection is the trusted code's choice (a behaviour change of %Qore 3.0 for such drivers,
+      which judged the code that opened the connection before)
+    - a trusted pool that grows for sandboxed code, or on a thread that sandboxed code started, is not restricted
+    - a datasource that sandboxed code created, copied or deserialized, or whose connection value or destination
+      option it set, is restricted, also when trusted code opens it, copies it or reconnects it; trusted code that
+      sets a value again replaces the sandboxed setter of that value, but never a sandboxed creator
+    - trusted code that sandboxed code calls (a library function, a closure) records what a policy check of that
+      code would see, which is the sandboxed caller's policy unless the trusted code establishes a barrier
+      (@ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()",
+      @ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()")
+    - a datasource or pool that trusted code creates lazily, when a sandboxed caller first needs it, is restricted for
+      its lifetime: create shared objects of this kind at startup, or inside a barrier
+    - a barrier or a capability that builds a datasource from its caller's arguments, or trusted code that
+      deserializes data that sandboxed code produced, records itself as the code that chose the connection: it must
+      validate those arguments (an allowlist of destinations, for example) or not take them from the caller
+
+    A binary DBI driver reads the record with \c Datasource::getConnectChoosers() and
+    \c Datasource::addOptionChooser() in the C++ API (\c _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS).
+
     @subsection sandbox_module_state Module State
 
     The public variables of a module and the static members of its classes are shared by every Program that imports
@@ -396,15 +438,19 @@ authenticate();
     or a caller restricted from that domain uses the module to do what it cannot do directly:
     - a method or function that is in a domain declares it (<tt>[dom=DATABASE]</tt>, see @ref function_domains); a
       caller restricted from the domain cannot call it, when its code is parsed or at run time through a call
-      reference, a closure or @ref Qore::call_function() "call_function()"
-    - module code that the caller reaches through other code, such as the deserialization of an object or another
-      module, asks whether the calling code is restricted with
+      reference, a closure or @ref Qore::call_function() "call_function()", nor through other code of the module or
+      of another module that calls it for the caller, also on a thread that module code starts: a module's function
+      or method that declares a domain checks the calling code when it is entered (\c INVALID-FUNCTION-ACCESS)
+    - module code that the caller reaches through other code and whose decision depends on its arguments, such as the
+      deserialization of an object, asks whether the calling code is restricted with
       @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"
       (\c qore_caller_restricts_domain() in the C++ API, \c QORE_HAVE_CALLER_RESTRICTS_DOMAIN) and refuses the
       operation with \c PERMISSION-DENIED
 
     The calling code is the code of the nearest %Program on the thread's call stack that is not the %Program of a
-    user module, through any number of calls between modules: its parse options decide (for example
+    user module, through any number of calls between modules (on a thread that module code started, where no such
+    %Program is on the stack, the code that called the module when it started the thread): its parse options decide
+    (for example
     @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" for @ref Qore::DOM_DATABASE "DOM_DATABASE"), as do the restrictions of
     a sandboxed caller that the module code runs with; a sandbox that does not restrict the domain does not, so a
     trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs

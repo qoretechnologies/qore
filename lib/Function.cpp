@@ -951,12 +951,17 @@ static inline bool qore_parse_infer_candidate_type_args(const AbstractQoreFuncti
     variant of a Java method that takes its variable arguments as separate arguments (module jni), whose parameters
     have no types.  The Program of the call is not known at parse time: such a call is resolved at run time.
 */
+bool qore_variant_takes_call_arity(unsigned num_args, unsigned nparams, bool uses_extra_args) {
+    return num_args <= nparams || uses_extra_args;
+}
+
 static bool qore_untyped_variant_cannot_win(const AbstractQoreFunctionVariant* chosen, bool variant_untyped,
         int variant_pmatch, int pmatch, int max_pscore, int score, unsigned num_args) {
     if (!chosen || !variant_untyped || variant_pmatch != pmatch || max_pscore >= score) {
         return false;
     }
-    return num_args <= chosen->getSignature()->numParams() || (chosen->getFlags() & QCF_USES_EXTRA_ARGS);
+    return qore_variant_takes_call_arity(num_args, chosen->getSignature()->numParams(),
+        chosen->getFlags() & QCF_USES_EXTRA_ARGS);
 }
 
 static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVariant* variant,
@@ -2890,7 +2895,7 @@ void UserSignature::setupFromAOTMetadata(
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_program_private* local_pp = localOwnerPgm
         ? qore_program_private::get(*localOwnerPgm) : pp;
-    // Override the default `loc = getLocation(0, 0)` (null-file, line 0)
+    // Override the default `loc = getLocation(0, 0)` (line 0, with the file of the thread's parse, if any)
     // with a program-interned `(file, first_line, last_line)` location when
     // the caller knows the declaring source path.  The parser sets this to
     // the function's real file+line via getLocation(first_line, last_line);
@@ -2898,14 +2903,19 @@ void UserSignature::setupFromAOTMetadata(
     // (see QORE_AOT_FEAT_SIG_LINES) so `xsink->overrideLocation()` reports
     // `<file>:<line> (Qore)` instead of `:0 (Qore)` with no filename.
     if (parseLocFile && *parseLocFile) {
-        // Intern the file string in the program's string pool — `parseLocFile`
+        // Intern the file string in the program's runtime pool — `parseLocFile`
         // typically points into the AOT binary reader's decompressed body,
         // which is freed when the deserializer returns.  QoreProgramLocation
         // stores a raw `const char*`, so without interning the location's
-        // `file` dangles.
-        const char* interned = pp->addString(parseLocFile);
-        QoreProgramLocation tmp(interned, parseLocFirstLine, parseLocLastLine);
-        loc = pp->getLocation(tmp, parseLocFirstLine, parseLocLastLine);
+        // `file` dangles.  The runtime pool is never rolled back with a failed
+        // parse, which did not add the location (issue #6354).
+        QoreProgramLocation tmp(parseLocFile, parseLocFirstLine, parseLocLastLine);
+        loc = pp->getRuntimeLocation(tmp, parseLocFirstLine, parseLocLastLine);
+    } else {
+        // the default location of the constructor (lines 0, with the file of the thread's parse) is in the pool of
+        // parsed code, which a failed parse can roll back: the code deserialized from AOT data takes the same location
+        // from the runtime pool, without reading the old one (issue #6354)
+        loc = pp->getRuntimeLocation(0, 0);
     }
     paramReadOnlyList.assign(nparams, false);
     for (size_t i = 0, e = std::min(nparams, paramFlags.size()); i < e; ++i) {
@@ -4870,6 +4880,13 @@ bool QoreFunction::hasInheritedVariants() const {
         return true;
     }
     return false;
+}
+
+QORE_INTERN_NOINLINE void QoreFunction::noteAncestor(const QoreFunction& ancestor) {
+    const QoreClass* qc = ancestor.getClass();
+    if (qc && qc->hasTypeParameters()) {
+        has_generic_class_ancestor = true;
+    }
 }
 
 // finds a variant at runtime
@@ -9538,7 +9555,7 @@ void UserVariantBase::SpecializedIRCache::evictDeadTypes(const std::set<const Qo
 
 QORE_INTERN_ALWAYS_INLINE void QoreConstructorCompletion::capture(ExceptionSink* xsink) const {
     const qore_es_private* es = qore_es_private::get(*xsink);
-    completed = !es->head && !es->thread_exit;
+    completed = !es->isPending();
 }
 
 template <typename Completion>
@@ -10219,6 +10236,20 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     return val;
 }
 
+int UserVariantBase::checkCallerDomain(const char* name, ExceptionSink* xsink) const {
+    int64 denied = qore_caller_denied_user_domains(declared_domain);
+    if (!denied) {
+        return 0;
+    }
+    if (source_qf) {
+        raise_invalid_function_access(xsink, source_qf, getAbstractFunctionVariant(), denied);
+    } else {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to '%s(%s)'; functional "
+            "domain: %s", name, signature.getSignatureText(), qore_describe_source_domains(denied).c_str());
+    }
+    return -1;
+}
+
 template <typename Completion>
 QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, Completion completion) const {
@@ -10230,6 +10261,12 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     }
 
     //QORE_TRACE("UserVariantBase::evalIntern()");
+    // a module's variant that declares a functional domain is refused to restricted code also when other code of the
+    // module calls it for that code (qore#6337); the fast-call paths that do not come here do not take such variants
+    // (isStaticallyFastCallEligible())
+    if (declared_domain && qore_program_is_module_inline(pgm) && checkCallerDomain(name, xsink)) {
+        return QoreValue();
+    }
     if (!statements && hasLazyAOTFunctionIR()
             && !materializeLazyAOTFunctionIR(name, xsink)) {
         return QoreValue();

@@ -374,7 +374,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
         # a full send buffer takes nothing: the send waits for the buffer to drain and is made again, at most
         # drain_timeout, as on HTTP/2; the wait is woken when the stream's staged data is handed to the transport and
         # when the stream closes, so a reset ends it at once (a fixed retry bound was a hidden timeout)
-        *date deadline;
+        # on the monotonic clock, in microseconds
+        *int deadline;
         while (True) {
             int rv = poll_op.sendStreamData(stream_id, data, end_stream);
             if (ctl) {
@@ -388,9 +389,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
                     stream_id);
             }
             if (!deadline) {
-                deadline = now_us() + milliseconds(drain_timeout);
+                deadline = clock_get_monotonic_us() + drain_timeout * 1000;
             }
-            int remaining = (deadline - now_us()).durationMilliseconds();
+            int remaining = (deadline - clock_get_monotonic_us() + 999) / 1000;
             if (remaining <= 0) {
                 throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: the send buffer did not drain within %d ms; the "
                     "data was not sent", stream_id, drain_timeout);

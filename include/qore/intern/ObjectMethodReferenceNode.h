@@ -121,6 +121,11 @@ protected:
 public:
     DLLLOCAL ParseObjectMethodReferenceNode(const QoreProgramLocation* loc, QoreValue n_exp, char* n_method);
 
+    //! Returns the expression of the object
+    DLLLOCAL QoreValue getExpression() const {
+        return exp;
+    }
+
     //! Creates the copy of a background expression, with the object expression taken when the thread starts
     /** See copy_value_and_resolve_lvar_refs(); the new thread evaluates the copy
     */

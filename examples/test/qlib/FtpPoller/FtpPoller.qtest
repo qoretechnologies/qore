@@ -112,6 +112,8 @@ class FtpPollerTest inherits QUnit::Test {
         addTestCase("regex mask test", \regexMaskTest());
         addTestCase("an observer refusal keeps the file and polling", \observerRefusalTest());
         addTestCase("a post-transfer error stops polling", \postTransferErrorStopsTest());
+        addTestCase("relative paths", \relativePathTest());
+        addTestCase("a failed setup of a new connection is retried", \newConnectionSetupRetryTest());
 
         # Return for compatibility with test harness that checks return value
         set_return_value(main());
@@ -402,6 +404,151 @@ class FtpPollerTest inherits QUnit::Test {
         assertRegex("event handler error in .*REFUSED.*the remote file is kept", capture.getLog());
     }
 
+    # issue #6457: a relative path is resolved against the login directory, like an absolute path; a single relative
+    # path failed on every poll, as the poll changed into it again from the directory that setup had changed into
+    private relativePathTest() {
+        # PORT only supports IPv4, so we can't use "localhost", which may resolve to an IPv6 address
+        FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv.shutdown();
+
+        TmpDir root();
+        serv.setPwd(root.path);
+        # the fixture serves the files themselves (by their absolute paths)
+        serv.setDirect();
+        int port = serv.getPort();
+
+        mkdir(root.path + DirSep + "sub1");
+        mkdir(root.path + DirSep + "sub2");
+        File f();
+        foreach list<string> l in ((("in-login-dir.txt", "login"), ("sub1/one.txt", "one"),
+                ("sub2/two.txt", "two"))) {
+            f.open2(root.path + DirSep + l[0], O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(l[1]);
+            f.close();
+        }
+
+        # a single relative path, polled twice, and after the client connects again (in the login directory)
+        {
+            FtpClient client("ftp://user:pass@127.0.0.1:" + port);
+            MyFtpPoller poller(client, {"path": "sub1"});
+            for (int i = 0; i < 3; ++i) {
+                if (i == 2) {
+                    client.disconnect();
+                    # the fixture has one working directory for all connections: a new connection starts in the
+                    # login directory
+                    serv.setPwd(root.path);
+                    client.connect();
+                }
+                poller.files = ();
+                assertTrue(poller.runOnce(), sprintf("poll %d", i + 1));
+                assertEq(("one.txt",), map $1.name, poller.files);
+                assertEq(root.path + "/sub1/one.txt", poller.files[0].filepath);
+                assertEq(binary("one"), poller.files[0].data);
+            }
+        }
+
+        # several relative paths
+        {
+            serv.setPwd(root.path);
+            MyFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {"path": ("sub1", "sub2/")});
+            for (int i = 0; i < 2; ++i) {
+                poller.files = ();
+                assertTrue(poller.runOnce(), sprintf("poll %d", i + 1));
+                assertEq(("one.txt", "two.txt"), map $1.name, poller.files);
+                assertEq((root.path + "/sub1/one.txt", root.path + "/sub2/two.txt"), map $1.filepath, poller.files);
+                assertEq((binary("one"), binary("two")), map $1.data, poller.files);
+            }
+        }
+
+        # an absolute path with a trailing "/"
+        {
+            serv.setPwd(root.path);
+            MyFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + port), {"path": root.path + "/sub2/"});
+            assertTrue(poller.runOnce());
+            assertEq((root.path + "/sub2/two.txt",), map $1.filepath, poller.files);
+        }
+
+        # the login directory ("."), the default; the file path is relative, which this fixture serves only without
+        # the files themselves, so another server serves the directory
+        {
+            FtpServer serv2(getPort(), m_options.verbose - 1, "127.0.0.1");
+            on_exit serv2.shutdown();
+            serv2.setPwd(root.path);
+            MyFtpPoller poller(new FtpClient("ftp://user:pass@127.0.0.1:" + serv2.getPort()), {"mask": "*.txt"});
+            assertTrue(poller.runOnce());
+            assertEq(("in-login-dir.txt",), map $1.name, poller.files);
+            assertEq("in-login-dir.txt", poller.files[0].filepath);
+        }
+    }
+
+    # issue #6456: a failed setup of a new FtpClient given with updateOptions() is retried after the error delay, and
+    # the state of the previous connection (login directory, user, URL) is not kept for the new one
+    private newConnectionSetupRetryTest() {
+        # PORT only supports IPv4, so we can't use "localhost", which may resolve to an IPv6 address
+        FtpServer serv1(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv1.shutdown();
+        FtpServer serv2(getPort(), m_options.verbose - 1, "127.0.0.1");
+        on_exit serv2.shutdown();
+
+        TmpDir root1();
+        TmpDir root2();
+        serv1.setPwd(root1.path);
+        serv2.setPwd(root2.path);
+
+        mkdir(root1.path + DirSep + "sub");
+        File f();
+        f.open2(root1.path + DirSep + "sub" + DirSep + "first.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.close();
+
+        MessageCollector msgs();
+        EventCollectingFtpPoller poller(new FtpClient("ftp://user1:pass@127.0.0.1:" + serv1.getPort()), {
+            "path": "sub",
+            "poll_interval": 1,
+            "error_delay": 1,
+            "log_error": sub (string msg) { msgs.add(msg); },
+            "log_info": sub (string msg) { msgs.add(msg); },
+        });
+
+        # runs the poller inline in another thread, which ends when polling stops
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                poller.startInline();
+            } catch (hash<ExceptionInfo> ex) {
+                msgs.add(sprintf("polling stopped: %s: %s", ex.err, ex.desc));
+            }
+        }();
+        on_exit {
+            poller.stopNoWait();
+            # only a guard against a hang
+            done.waitForZero(30s);
+        }
+
+        poller.waitFor("first.txt");
+
+        mkdir(root2.path + DirSep + "sub");
+        f.open2(root2.path + DirSep + "sub" + DirSep + "second.txt", O_CREAT | O_TRUNC | O_WRONLY);
+        f.close();
+
+        # a new connection whose setup fails at the connection: its server refuses the login
+        int port2 = serv2.getPort();
+        serv2.setRejectLogin();
+        poller.updateOptions(new FtpClient("ftp://user2:pass@127.0.0.1:" + port2));
+        msgs.waitForMatch("^FTP error in .*waiting 1s for next try");
+
+        # the setup is retried, succeeds once the server accepts the login, and the new connection is polled in its
+        # own login directory
+        serv2.setRejectLogin(False);
+        poller.waitFor("second.txt");
+
+        hash<auto> state = poller.getConnectionState();
+        assertEq(root2.path, state.root);
+        assertEq("user2", state.user);
+        assertRegex("^ftp://user2@127\\.0\\.0\\.1:" + port2 + "$", state.url);
+        assertEq(0, (select msgs.getAll(), $1 =~ /polling stopped|polling terminated/).size(), "polling went on");
+    }
+
     # an error after a file was handled is fatal: polling stops, so the file is not handled more than once
     private postTransferErrorStopsTest() {
         FtpServer serv(getPort(), m_options.verbose - 1, "127.0.0.1");
@@ -597,6 +744,45 @@ try {
     }
 }
 
+#! A poller that collects the names of the files of its events, and can wait for one
+class EventCollectingFtpPoller inherits FtpPoller {
+    private {
+        list<string> ev_names();
+        Mutex ev_m();
+        Condition ev_cond();
+    }
+
+    constructor(FtpClient ftp, hash<auto> opts) : FtpPoller(ftp, opts) {
+    }
+
+    singleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+        AutoLock al(ev_m);
+        ev_names += fih.name;
+        ev_cond.broadcast();
+    }
+
+    postSingleFileEvent(hash<FtpPollerFileEventInfo> fih) {
+    }
+
+    #! Waits for an event for the file \a name; the timeout only guards against a hang
+    waitFor(string name, timeout to = 30s) {
+        int start = clock_get_monotonic_us();
+        AutoLock al(ev_m);
+        while (!(select ev_names, $1 == name)) {
+            int left_ms = to - (clock_get_monotonic_us() - start) / 1000;
+            if (left_ms <= 0) {
+                throw "ERROR", sprintf("no event for %y in %dms; events: %y", name, to, ev_names);
+            }
+            ev_cond.wait(ev_m, left_ms);
+        }
+    }
+
+    #! Returns the state of the current connection
+    hash<auto> getConnectionState() {
+        return {"root": rootFtpPath, "user": user, "url": url};
+    }
+}
+
 #! A poller whose post-transfer handling fails
 class FailingPostFtpPoller inherits FtpPoller {
     public {
@@ -732,6 +918,14 @@ class MessageCollector {
         list<string> msgs();
         Mutex m();
         Condition cond();
+    }
+
+    #! Returns the messages collected so far
+    list<string> getAll() {
+        m.lock();
+        on_exit m.unlock();
+
+        return msgs;
     }
 
     #! Stores a message and wakes any waiter

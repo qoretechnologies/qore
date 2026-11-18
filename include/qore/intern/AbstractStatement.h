@@ -85,6 +85,11 @@ public:
         semantic_policy = policy;
         semantic_policy_bound = true;
     }
+
+    //! Returns the semantic policy of the statement
+    DLLLOCAL LexicalSemanticPolicy getSemanticPolicy() const {
+        return semantic_policy;
+    }
     struct ParseWarnOptions pwo;
 
     DLLLOCAL AbstractStatement(qore_program_private_base* p);
@@ -147,10 +152,6 @@ public:
 
     // should return true if the statement is a declaration and does not represent an executable statement
     DLLLOCAL virtual bool isDeclaration() const {
-        return false;
-    }
-
-    DLLLOCAL virtual bool hasFinalReturn() const {
         return false;
     }
 

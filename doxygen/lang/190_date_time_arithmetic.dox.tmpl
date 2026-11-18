@@ -49,6 +49,10 @@ prompt% qore -X 'get_duration_seconds(2004-02-29Z - 2004-02-28Z)'
     between \c 0001-01-01 and \c 9999999-01-01), the negation of a component that is the smallest 32-bit integer, and
     the conversion of a number to a relative date whose hours do not fit (ex: <tt>date(9223372036855)</tt>) raise
     \c INVALID-DATE; a relative date literal out of range (ex: \c 2147483648h) is a parse error.
+    An absolute date made from a number of seconds whose year does not fit a 32-bit integer is the earliest or the
+    latest absolute date: the start of year -2147483647 or the end of year 2147483646 in local time for a conversion of
+    an int, a float or a number (ex: <tt>softdate d = 1e300n;</tt>), and in UTC for seconds given to a time zone (ex:
+    <tt>TimeZone::get().date(9223372036854775807)</tt>).
 
     @section date_time_arithmetic_zones Timezones and Daylight Savings Time
 

@@ -162,32 +162,30 @@ static const QoreEncoding* get_bom_encoding(const unsigned char* p, size_t len, 
     return nullptr;
 }
 
-// returns the encoding for a charset name, or nullptr if the name is empty
+// returns the encoding for a charset name from a message (a Content-Type value), or nullptr if the name is empty or
+// selects no encoding: the name is untrusted data, which may select only encodings that Qore knows or a standard
+// character set, so that it never makes the registry of encodings grow without limit (qore#6460)
 static const QoreEncoding* get_named_encoding(const std::string& name) {
-    if (name.empty()) {
-        return nullptr;
+    return qore_find_untrusted_encoding(name.data(), name.size());
+}
+
+// returns true if iconv converts text to the encoding, by the name that Qore converts with
+static bool qore_iconv_converts_to(const QoreEncoding* enc) {
+    iconv_t cd = iconv_open(qore_encoding_private::get(*enc)->getIconvTargetCode(), "UTF-8");
+    if (cd == (iconv_t)-1) {
+        return false;
     }
-    return QEM.findCreate(name.c_str());
+    iconv_close(cd);
+    return true;
 }
 
 // returns the encoding for a name declared in the body (an XML declaration, a meta element, or an @charset rule), or
 // nullptr if the name is empty or not a supported encoding, in which case the declaration is ignored (WHATWG Encoding
-// "get an encoding"); names that are not known already are checked with iconv, which converts the text, so that
-// declarations in untrusted data do not register encodings that cannot be used
+// "get an encoding"): the name is untrusted data, looked up as in get_named_encoding() (qore#6460), and the encoding
+// must be one that iconv converts to
 static const QoreEncoding* get_supported_encoding(const std::string& name) {
-    if (name.empty()) {
-        return nullptr;
-    }
-    const QoreEncoding* enc = QoreEncodingManager::find(name.c_str());
-    if (enc) {
-        return enc;
-    }
-    iconv_t cd = iconv_open(name.c_str(), "UTF-8");
-    if (cd == (iconv_t)-1) {
-        return nullptr;
-    }
-    iconv_close(cd);
-    return QEM.findCreate(name.c_str());
+    const QoreEncoding* enc = qore_find_untrusted_encoding(name.data(), name.size());
+    return enc && qore_iconv_converts_to(enc) ? enc : nullptr;
 }
 
 // returns the value of the charset parameter of a Content-Type value, if any
@@ -547,7 +545,11 @@ QoreHttpContentTypeInfo qore_get_http_content_type_info(const char* content_type
     const QoreEncoding* hdr_enc = qore_get_http_header_charset(content_type, assumed);
     qore_http_media_type_param charset;
     if (qore_find_http_media_type_param(content_type, "charset", charset) && !charset.value.empty()) {
-        rv.enc = hdr_enc ? hdr_enc : QEM.findCreate(charset.value.c_str());
+        // a type that is binary by definition: the charset is used if it selects an encoding (qore#6460)
+        if (!hdr_enc) {
+            hdr_enc = get_named_encoding(charset.value);
+        }
+        rv.enc = hdr_enc ? hdr_enc : assumed;
         rv.charset = charset.value;
         // the content type without the charset parameter
         QoreString ct(content_type, charset.begin, QCS_DEFAULT);
@@ -616,22 +618,13 @@ static int parse_http_qvalue(const char* p, const char* end) {
     return rv > 1000 ? -1 : rv;
 }
 
-// returns true if the response can be sent in the charset: an encoding that Qore knows already (by its name or an
-// alias, case-insensitive) and that iconv converts to, by the name that Qore converts with; the value is untrusted
-// request data, and the server registers the encoding that it chooses, so a name that Qore does not know is never
-// chosen (iconv also accepts names with characters that it ignores, so that it would accept an unbounded number of
-// them)
-static bool is_supported_http_charset(const std::string& name) {
-    const QoreEncoding* enc = QoreEncodingManager::find(name.c_str());
-    if (!enc) {
-        return false;
-    }
-    iconv_t cd = iconv_open(qore_encoding_private::get(*enc)->getIconvTargetCode(), "UTF-8");
-    if (cd == (iconv_t)-1) {
-        return false;
-    }
-    iconv_close(cd);
-    return true;
+// returns the encoding that the response can be sent in for a charset of Accept-Charset, or nullptr: an encoding that
+// an untrusted name may select (one that Qore knows, by its name or an alias, case-insensitive, or the encoding of a
+// label of a standard character set; see qore_find_untrusted_encoding()) and that iconv converts to, by the name that
+// Qore converts with; the server registers the encoding that it chooses, so any other name is never chosen (iconv
+// accepts an unbounded number of spellings of one encoding)
+static const QoreEncoding* get_supported_http_charset(const std::string& name) {
+    return get_supported_encoding(name);
 }
 
 std::string qore_get_http_accept_charset(const char* t) {
@@ -738,9 +731,14 @@ std::string qore_get_http_accept_charset(const char* t) {
             continue;
         }
         // q=0 means not acceptable
-        if (q > best_q && is_supported_http_charset(cs)) {
-            best = cs;
-            best_q = q;
+        if (q > best_q) {
+            const QoreEncoding* enc = get_supported_http_charset(cs);
+            if (enc) {
+                // a name or an alias of an encoding that Qore knows is given as it is, a label of a character set
+                // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with
+                best = QoreEncodingManager::find(cs.c_str()) ? cs : std::string(enc->getCode());
+                best_q = q;
+            }
         }
     }
     // UTF-8, given or matched by "*" when not given, is chosen over another charset with the same weight

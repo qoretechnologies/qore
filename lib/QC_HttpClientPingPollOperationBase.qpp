@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_HttpClientPingPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -87,13 +88,22 @@ HttpClientPingPollOperationPriv::~HttpClientPingPollOperationPriv() {
 }
 
 void HttpClientPingPollOperationPriv::cleanup(ExceptionSink* xsink) {
-    if (inner_op) {
-        inner_op->deref(xsink);
+    // the inner operation is taken under the lock that its users hold while they take it, and released after it: a
+    // thread that uses it holds references of its own until it is done
+    SocketPollOperationBase* old_inner_op;
+    QoreObject* old_inner_obj;
+    {
+        AutoLocker al(inner_lock);
+        old_inner_op = inner_op;
         inner_op = nullptr;
-    }
-    if (inner_obj) {
-        inner_obj->deref(xsink);
+        old_inner_obj = inner_obj;
         inner_obj = nullptr;
+    }
+    if (old_inner_op) {
+        old_inner_op->deref(xsink);
+    }
+    if (old_inner_obj) {
+        old_inner_obj->deref(xsink);
     }
     // the output and the recorded error are taken under the lock that their readers hold, and released after it
     QoreHashNode* old_output;
@@ -114,11 +124,50 @@ void HttpClientPingPollOperationPriv::cleanup(ExceptionSink* xsink) {
     }
 }
 
+HttpClientPingPollOperationPriv::InnerRef::InnerRef(const HttpClientPingPollOperationPriv& op) {
+    {
+        AutoLocker al(op.inner_lock);
+        if (op.inner_op) {
+            op.inner_op->ref();
+            inner_op = op.inner_op;
+            if (op.inner_obj) {
+                op.inner_obj->ref();
+                inner_obj = op.inner_obj;
+            }
+        }
+    }
+#ifdef DEBUG
+    if (inner_op) {
+        // a test holds the thread here, with the inner operation taken, while another thread destroys the operation
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::TeardownRead, *op.self);
+    }
+#endif
+}
+
+HttpClientPingPollOperationPriv::InnerRef::~InnerRef() {
+    if (inner_op || inner_obj) {
+        ExceptionSink xsink;
+        if (inner_op) {
+            inner_op->deref(&xsink);
+        }
+        if (inner_obj) {
+            inner_obj->deref(&xsink);
+        }
+        xsink.clear();
+    }
+}
+
+bool HttpClientPingPollOperationPriv::needsWorkerDispatch() const {
+    InnerRef inner(*this);
+    return inner && inner->needsWorkerDispatch();
+}
+
 QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     if (completed.load(std::memory_order_acquire) || closed.load(std::memory_order_acquire)) {
         return nullptr;
     }
 
+    InnerRef inner_op(*this);
     if (!inner_op) {
         setError("inner poll operation is not available", xsink);
         return nullptr;
@@ -153,6 +202,9 @@ QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink
         new_output = new QoreHashNode(autoTypeInfo);
         new_output->setKeyValue("output", out.release(), xsink);
     }
+    // the output that is validated: this thread keeps a reference of its own, as the operation's output can be
+    // released by its cleanup in another thread
+    ReferenceHolder<QoreHashNode> validated_output(new_output ? new_output->hashRefSelf() : nullptr, xsink);
     if (new_output) {
         QoreHashNode* old_output;
         {
@@ -169,26 +221,25 @@ QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink
         }
     }
 
-    // the output is read below without the lock: this thread stored it, and only this thread changes it
-    validateResponse(xsink);
+    validateResponse(*validated_output, xsink);
     completed.store(true, std::memory_order_release);
     return nullptr;
 }
 
-void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
-    if (!output) {
+void HttpClientPingPollOperationPriv::validateResponse(const QoreHashNode* out, ExceptionSink* xsink) {
+    if (!out) {
         setError("no response received from inner poll operation", xsink);
         return;
     }
 
     // Extract status code from output hash "code" key
-    QoreValue code_val = output->getKeyValue("code");
+    QoreValue code_val = out->getKeyValue("code");
     int status_code = code_val.isNullOrNothing() ? 0 : (int)code_val.getAsBigInt();
 
     // Validate status code range
     if (status_code < expected_status_lo || status_code > expected_status_hi) {
         // Try to get status message from response headers
-        QoreValue info_val = output->getKeyValue("info");
+        QoreValue info_val = out->getKeyValue("info");
         std::string status_message;
         if (info_val.getType() == NT_HASH) {
             QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
@@ -216,7 +267,7 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
 
     // Extract response headers for further validation
     QoreHashNode* response_headers = nullptr;
-    QoreValue info_val = output->getKeyValue("info");
+    QoreValue info_val = out->getKeyValue("info");
     if (info_val.getType() == NT_HASH) {
         QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
         if (resp_hdr.getType() == NT_HASH) {
@@ -331,6 +382,7 @@ void HttpClientPingPollOperationPriv::abort(ExceptionSink* xsink) {
         return;
     }
     completed.store(true, std::memory_order_release);
+    InnerRef inner_op(*this);
     if (inner_op) {
         inner_op->abort(xsink);
     }
@@ -354,6 +406,7 @@ const char* HttpClientPingPollOperationPriv::getStateImpl() const {
     if (reached) {
         return "complete";
     }
+    InnerRef inner_op(*this);
     if (inner_op) {
         // getState() can be called from several threads at once: each keeps the inner state in a string of its own,
         // which SocketPollOperationBase::getState() copies before the thread calls this again
@@ -446,7 +499,9 @@ HttpClientPingPollOperationBase::constructor(object operation, int min_status, i
 /** Releases all internal references.
 */
 HttpClientPingPollOperationBase::destructor() {
-    priv->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(priv);
     priv->deref(xsink);
 }
 

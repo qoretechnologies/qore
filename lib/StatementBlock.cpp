@@ -59,6 +59,7 @@
 #include <cstring>
 #include <iostream>
 #include "qore/intern/QoreDeferredRelease.h"
+#include "qore/intern/QoreCompletionAnalysis.h"
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -505,6 +506,12 @@ LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc,
     //printd(5, "push_local_var(): pushing var %s\n", name);
     if (pflag & PF_TOP_LEVEL) {
         lv->setTopLevel();
+        // a later parse of a Program with PO_ALLOW_REPARSE can capture the variable in a closure or take a reference
+        // to it, after threads have instantiated it: its storage is that of a closure-bound variable from its
+        // declaration, as it cannot change once it is instantiated (issue #6462)
+        if (parse_check_parse_option(QoreParseOptions(PO_ALLOW_REPARSE))) {
+            lv->setClosureUse();
+        }
     }
     new VNode(lv, loc, n_refs, pflag & PF_TOP_LEVEL);
     return lv;
@@ -639,6 +646,8 @@ int StatementBlock::parseInitImpl(QoreParseContext& parse_context) {
     // function has the local variables that its condition and log message are checked with
     setParseScope();
 
+    parse_initialized = true;
+
     //printd(5, "StatementBlock::parseInitImpl(this=%p): done (lvars=%p, %d vars, vstack = %p)\n", this, lvars, lvids,
     //    getVStack());
     return err;
@@ -654,25 +663,27 @@ int StatementBlock::parseInit(UserVariantBase* uvb, const QoreClass* class_ctx) 
     // initialize code block
     QoreParseContext parse_context(class_ctx);
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
 }
 
-int StatementBlock::parseCheckReturn() {
-    const QoreTypeInfo* returnTypeInfo = getReturnTypeInfo();
-    if (QoreTypeInfo::hasType(returnTypeInfo) && !QoreTypeInfo::parseAccepts(returnTypeInfo, nothingTypeInfo)) {
-        // make sure the last statement is a return statement if the block has a return type
-        if (statement_list.empty() || !(*statement_list.last())->hasFinalReturn()) {
-            QoreStringNode* desc = new QoreStringNode("this code block has declared return type ");
-            QoreTypeInfo::getThisType(returnTypeInfo, *desc);
-            desc->concat(" but does not have a return statement as the last statement in the block");
-            qore_program_private::makeParseException(getProgram(), *loc, "MISSING-RETURN", desc);
-            return -1;
-        }
+int StatementBlock::parseCheckReturn(const UserVariantBase* uvb) {
+    assert(uvb->getStatementBlock() == this);
+    // the declared return type of the code parsed (and not that of the code running in the thread, which can be
+    // parsing it at run time; issue #5940)
+    const QoreTypeInfo* returnTypeInfo = uvb->getUserSignature()->getReturnTypeInfo();
+    if (!QoreTypeInfo::hasType(returnTypeInfo) || QoreTypeInfo::parseAccepts(returnTypeInfo, nothingTypeInfo)) {
+        return 0;
     }
-    return 0;
+    QoreProgram* pgm = getProgram();
+    // the check of code initialized by a parse waits until the parse has initialized all of its code, as it
+    // analyzes the code of the functions and methods called
+    if (qore_program_private::get(*pgm)->deferMissingReturnCheck(uvb)) {
+        return 0;
+    }
+    return qore_parse_check_missing_return(pgm, uvb);
 }
 
 int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBase* uvb) {
@@ -689,7 +700,7 @@ int StatementBlock::parseInitMethod(const QoreTypeInfo* typeInfo, UserVariantBas
         parse_context.setFlags(PF_CONST_METHOD);
     }
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
@@ -741,7 +752,7 @@ int StatementBlock::parseInitClosure(UserVariantBase* uvb, UserClosureFunction* 
         parse_context.setFlags(PF_CONST_METHOD);
     }
     int err = parseInitImpl(parse_context);
-    if (parseCheckReturn() && !err) {
+    if (parseCheckReturn(uvb) && !err) {
         err = -1;
     }
     return err;
@@ -826,6 +837,12 @@ void TopLevelStatementBlock::parseCommit(QoreProgram* pgm) {
     }
     hwm = statement_list.last();
     committed_native_parse_info = native_parse_info;
+    // the top-level local variables of the parse can now be instantiated by threads (issue #6462)
+    if (lvars) {
+        for (unsigned i = inherited_lvars; i < lvars->size(); ++i) {
+            lvars->lv[i]->setTopLevelCommitted();
+        }
+    }
     markCommitted();
 }
 
@@ -902,6 +919,35 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
     }
 }
 
+namespace {
+//! Sets the parse options of the thread and of its RuntimeConfig for top-level code, and restores them at the end
+/** Both the thread's options and those of the thread-local RuntimeConfig, which code shared with the AST interpreter
+    reads, are set; lowered code whose statements have different options changes them while it runs
+    (QoreIROpcode::SetCodeParseOptions), which this restores (qore#6293)
+*/
+class ToplevelCodeParseOptionsHelper {
+public:
+    DLLLOCAL ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
+        swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
+        rc = &rc_get_tls_ref();
+        old_rc_po = rc->getParseOptions();
+        rc->setParseOptions(po);
+    }
+
+    DLLLOCAL ~ToplevelCodeParseOptionsHelper() {
+        rc->setParseOptions(old_rc_po);
+        restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
+    }
+
+private:
+    const AbstractStatement* old_stmt = nullptr;
+    const QoreProgramLocation* old_loc = nullptr;
+    QoreParseOptions old_po;
+    RuntimeConfig* rc = nullptr;
+    QoreParseOptions old_rc_po;
+};
+}
+
 int TopLevelStatementBlock::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     return execImpl(rc, return_value, xsink);
@@ -920,6 +966,8 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         pgm = rc.getProgram();
     }
     const QoreParseOptions& runtime_parse_options = qore_program_private::getParseWarnOptions(pgm).parse_options;
+    const bool reparse_mode = (runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE))
+        == QoreParseOptions(PO_ALLOW_REPARSE);
 
     // with a debugger attached, the top-level code runs on the AST tier, as a function does (see
     // UserVariantBase::evalTiered()): the debugger's callbacks, such as the exception callback of each statement that
@@ -930,8 +978,10 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // with a debugger attached, top-level code compiled ahead of time runs its debug IR in the IR interpreter, as an AOT
     // function does (UserVariantBase::materializeAOTDebugIR()): native code reads no value that the debugger sets
     // and does not stop for an exception that a try statement catches (qore#5851)
+    // in REPARSE mode, it runs once, as below (issue #6474)
     if (statement_list.empty() && cached_toplevel_aot_ctx && cached_toplevel_aot_ctx->hasLazyDebugIR()
-            && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+            && qore_program_private::get(*pgm)->hasDebuggerAttached()
+            && (!reparse_mode || !aot_toplevel_ran.exchange(true))) {
         QoreIRFunction* debug_ir = getAOTDebugIR(xsink);
         if (!debug_ir) {
             return -1;
@@ -939,9 +989,15 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         return execIR(debug_ir, false, runtime_parse_options, pgm, return_value, xsink);
     }
 
-    // AOT pre-compiled top-level function — execute directly if registered
-    if (!debug_ast
-            && !((runtime_parse_options & QoreParseOptions(PO_ALLOW_REPARSE)) == QoreParseOptions(PO_ALLOW_REPARSE))) {
+    // AOT pre-compiled top-level function — execute directly if registered; in REPARSE mode, it runs once, and later
+    // runs execute the statements that later parses add (issue #6474)
+    if (!debug_ast && (!reparse_mode
+            || ((cached_toplevel_aot_fn || cached_toplevel_jit_fn) && !aot_toplevel_ran.exchange(true)))) {
+        // a run outside of REPARSE mode executes all of the statements (see markExecuted(), issue #6475); the
+        // statements of an image with its source are those of the precompiled code, which a later run in REPARSE mode
+        // does not execute again; the paths below (IR/JIT, AST) are taken from here when there is no precompiled
+        // code, and a run with a debugger outside of REPARSE mode records them on the AST path
+        markExecuted();
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested non-closure body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
@@ -963,11 +1019,16 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             }
 
             uint64_t result_bits = 0;
-            try {
-                result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
-            } catch (const QoreJITException&) {
-                // The raise site has already populated xsink. Keep the normal
-                // top-level cleanup and Qore exception propagation path intact.
+            {
+                // the code starts with the Program's options and sets those of its statements where they differ
+                // (QoreIROpcode::SetCodeParseOptions); they are restored when it ends (qore#6293)
+                ToplevelCodeParseOptionsHelper code_po(runtime_parse_options);
+                try {
+                    result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
+                } catch (const QoreJITException&) {
+                    // The raise site has already populated xsink. Keep the normal
+                    // top-level cleanup and Qore exception propagation path intact.
+                }
             }
 
             // Uninstantiate nested locals after AOT execution (reverse order)
@@ -983,7 +1044,12 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             return 0;
         }
         if (cached_toplevel_jit_fn) {
-            uint64_t result_bits = cached_toplevel_jit_fn(xsink);
+            uint64_t result_bits;
+            {
+                // see above
+                ToplevelCodeParseOptionsHelper code_po(runtime_parse_options);
+                result_bits = cached_toplevel_jit_fn(xsink);
+            }
 
             QoreValue result;
             std::memcpy(&result, &result_bits, sizeof(result));
@@ -1153,7 +1219,11 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         int stmt_rc = 0;
 
         // Determine start position - one past the execution high water mark
-        statement_list_t::iterator start = ehwm;
+        statement_list_t::iterator start;
+        {
+            std::lock_guard<std::mutex> lg(ehwm_lock);
+            start = ehwm;
+        }
         if (start != statement_list.end()) {
             ++start;
         } else {
@@ -1182,6 +1252,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             // Update ehwm to current statement after successful execution
             // so that on exception, only successfully executed statements are marked
             if (!stmt_rc && !*xsink) {
+                std::lock_guard<std::mutex> lg(ehwm_lock);
                 ehwm = i;
             }
             if (*xsink && tlpd->runtimeCheck()) {
@@ -1195,33 +1266,22 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         return stmt_rc;
     }
 
-    // Normal mode - execute all statements
+    // Normal mode - execute all statements; they are recorded as executed, so that a run after PO_ALLOW_REPARSE is set
+    // does not execute them again (issue #6475)
+    markExecuted();
     return execIntern(rc, return_value, xsink);
 }
 
-//! returns the parse options of the top-level code, which its lowered code runs with
-/** The AST interpreter runs each statement with the options of its declaration; the lowered code has no statements,
-    so it runs with the options of the first statement, with the restrictions of any of them and without a positive
-    option that one of them does not have.  Lowered code is %modern, so the options that compiled code relies on
-    (negative offsets, strict arguments) are those of every statement.  The options of the Program can differ: with
-    \c %push-parse-options, the options of the file end with it
-
-    @note when the statements have different restrictions (files parsed into one Program with different options), the
-    lowered code runs all of them with the restrictions of every one, which is more restrictive than the AST interpreter
-    for the statements that have fewer, never less
+//! returns the parse options of the top-level code, which its lowered code starts with
+/** The AST interpreter runs each statement with the options of its declaration, and so does the lowered code: it
+    starts with the options of the first statement, and when the statements do not all have the same options (files
+    parsed into one Program with different options, or a parse directive between statements), it sets the options of
+    each statement where they change (QoreIROpcode::SetCodeParseOptions, qore#6293).  The options of the Program can
+    differ: with \c %push-parse-options, the options of the file end with it
 */
 QoreParseOptions TopLevelStatementBlock::toplevelCodeParseOptions() const {
     assert(!statement_list.empty());
-    const QoreParseOptions& positive = QoreParseOptions::POSITIVE_OPTIONS;
-    QoreParseOptions rv = (*statement_list.begin())->pwo.parse_options;
-    for (const AbstractStatement* stmt : statement_list) {
-        const QoreParseOptions& po = stmt->pwo.parse_options;
-        // the restrictions of any statement
-        rv |= po & ~positive;
-        // the positive options of every statement
-        rv &= po | ~positive;
-    }
-    return rv;
+    return (*statement_list.begin())->pwo.parse_options;
 }
 
 //! Runs the IR of the top-level code: compiled by the JIT if \a use_jit, or in the IR interpreter
@@ -1229,35 +1289,11 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
         QoreProgram* pgm, QoreValue& return_value, ExceptionSink* xsink) {
     // the lowered code runs with the options of its statements, as the AST interpreter runs each statement and a
     // function runs with the options of its declaration, not with those of the Program, which can differ (with
-    // %push-parse-options, the options of a file end with it);
-    // both the thread's options and those of the thread-local RuntimeConfig, which code shared with the AST interpreter
-    // reads, are set.  Top-level code compiled ahead of time has no statements and runs with the Program's options
-    struct ToplevelCodeParseOptionsHelper {
-        bool set;
-        const AbstractStatement* old_stmt = nullptr;
-        const QoreProgramLocation* old_loc = nullptr;
-        QoreParseOptions old_po;
-        RuntimeConfig* rc = nullptr;
-        QoreParseOptions old_rc_po;
-
-        DLLLOCAL ToplevelCodeParseOptionsHelper(bool set, const QoreParseOptions& po) : set(set) {
-            if (!set) {
-                return;
-            }
-            swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
-            rc = &rc_get_tls_ref();
-            old_rc_po = rc->getParseOptions();
-            rc->setParseOptions(po);
-        }
-
-        DLLLOCAL ~ToplevelCodeParseOptionsHelper() {
-            if (!set) {
-                return;
-            }
-            rc->setParseOptions(old_rc_po);
-            restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
-        }
-    } code_po(cached_toplevel_ir_po_set && ir_func == cached_toplevel_ir, cached_toplevel_ir_po);
+    // %push-parse-options, the options of a file end with it).  The debug IR of top-level code compiled ahead of
+    // time starts with the Program's options, and sets those of its statements where they differ, as its native
+    // code does
+    ToplevelCodeParseOptionsHelper code_po(cached_toplevel_ir_po_set && ir_func == cached_toplevel_ir
+        ? cached_toplevel_ir_po : runtime_parse_options);
     if (qore_program_private::get(*pgm)->ir_dump) {
         QoreIRPrinter::print(*ir_func, std::cout);
     }

@@ -154,8 +154,9 @@ poller.waitStop();
     @section ftppollererrors FtpPoller Errors and Retries
 
     An @ref FtpPoller::FtpPoller "FtpPoller" handles errors while polling as follows:
-    - an FTP error while files are listed or transferred is logged, and the poll is retried after the
-      \c "error_delay" option's delay
+    - an FTP error while files are listed or transferred, or while a new connection given with
+      @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is set up, is logged, and the poll is
+      retried after the \c "error_delay" option's delay
     - an error raised while a polled file is handled, by
       @ref FtpPoller::FtpPoller::singleFileEvent() "FtpPoller::singleFileEvent()" or by an observer of an
       @ref FtpPoller::FtpPollerDataProvider "FtpPollerDataProvider" that refuses or fails to handle the file event, is
@@ -191,6 +192,13 @@ poller.waitStop();
     - without the \c "start_thread" option, the \c start_thread capability of the thread that creates the poller is
       used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
       (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - a failed setup of a new FTP connection given with
+      @ref FtpPoller::FtpPoller::updateOptions() "FtpPoller::updateOptions()" is retried after the \c "error_delay"
+      option's delay, and the login directory, user and URL of the previous connection are not kept for the new
+      one; the setup was never retried, and polling could stop or poll with the state of the previous connection
+      (<a href="https://github.com/qoretechnologies/qore/issues/6456">issue 6456</a>)
+    - a relative \c "path" is polled relative to the login directory; a relative path failed on every poll
+      (<a href="https://github.com/qoretechnologies/qore/issues/6457">issue 6457</a>)
     - an error raised while a polled file is handled (ex: an observer that refuses the file event) is logged, the
       remote file is kept, and the poll is retried after the \c "error_delay" option's delay; previously polling
       stopped (see
@@ -333,7 +341,7 @@ public class FtpPoller {
         int port;
 
         #! user
-        string user;
+        *string user;
 
         #! url
         string url;
@@ -440,6 +448,9 @@ public class FtpPoller {
 
         #! Connection to update while polling
         FtpClient new_ftp;
+
+        #! lock for new_ftp, which updateOptions() sets while polling
+        Qore::Thread::Mutex new_ftp_m();
     }
 
     #! creates the FtpPoller object from the @ref Qore::FtpClient "FtpClient" argument and configuration hash argument passed
@@ -466,7 +477,9 @@ public class FtpPoller {
         - \c move_remote_file: the remote target directory on the FTP server where files will be moved to after
           processing; cannot be set if \c delete_remote_file is also set
         - \c path: the remote path(s) for retrieving the files; if a list of strings is given then each path will be
-          polled for matching files according to the \c "mask" or \c "regex_mask" option
+          polled for matching files according to the \c "mask" or \c "regex_mask" option; a relative path is
+          relative to the login directory, and the \c "filepath" of the file events of a path other than \c "." is
+          absolute
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
         - \c regex_mask: a regular expression to use as a mask (overrides any \c "mask" value); an empty string
           matches every file
@@ -586,7 +599,8 @@ public class FtpPoller {
         - \c move_remote_file: the remote target directory on the FTP server where files will be moved to after
           processing; cannot be set if \c delete_remote_file is also set
         - \c pass: the password to use for the connection
-        - \c path: the remote path(s) for retrieving the files
+        - \c path: the remote path(s) for retrieving the files; a relative path is relative to the login directory, and
+          the \c "filepath" of the file events of a path other than \c "." is absolute
         - \c poll_interval: the integer polling interval in seconds (default: 10 seconds; must be > 0 if given)
         - \c port: the integer port number to connect to (default 21; must be > 0 if given)
         - \c protocol: either \c "ftp" (the detault) or \c "ftps" for secure FTP
@@ -710,7 +724,11 @@ public class FtpPoller {
     }
 
     #! Updates options
+    /** The poller sets up the new connection before its next poll; a failed setup is logged and retried after the
+        \c "error_delay" option's delay (see @ref ftppollererrors)
+    */
     updateOptions(FtpClient ftp) {
+        AutoLock al(new_ftp_m);
         new_ftp = ftp;
     }
 
@@ -719,48 +737,67 @@ public class FtpPoller {
         return pollcnt;
     }
 
+    #! returns the absolute directory of a path to poll
+    /** A relative path is resolved against the login directory of the FTP connection (\a root, by default
+        \c rootFtpPath)
+    */
+    private string getPollDir(string dir, *string root) {
+        if (!exists root) {
+            root = rootFtpPath;
+        }
+        # a path that starts with "~" is left for the server to resolve, like an absolute path
+        if (dir !~ /^[\/~]/) {
+            if (dir.empty() || dir == ".") {
+                return root;
+            }
+            dir = root + (root =~ /\/$/ ? "" : "/") + dir;
+        }
+        # remove any trailing "/", except from the root directory
+        dir =~ s/(.)\/+$/$1/;
+        return dir;
+    }
+
+    #! sets up the poller with an FTP connection
+    /** The state of the connection (the client, its login directory, user, password, port and URL) is taken from
+        \a ftp only when the setup succeeds, so that a failed setup leaves no state of the new connection, and the
+        state of a previous connection is not kept for the new one (issue #6456)
+    */
     private setup(FtpClient ftp) {
-        # assign FtpClient object
-        self.ftp = ftp;
+        *string n_user = ftp.getUserName();
+        *string n_pass = ftp.getPassword();
+        int n_port = ftp.getPort();
+        string n_url = sprintf("%s://%s@%s:%d", protocol, n_user ?? "<none>", ftp.getHostName(), n_port);
 
         if (!ftp.isConnected()) {
-            logDetail("%s: logging in", url);
+            logDetail("%s: logging in", n_url);
             # connect to the remote system
             ftp.connect();
         }
 
-        rootFtpPath = ftp.pwd();
+        string root = ftp.pwd();
+        logInfo("%s: root path: %y", n_url, root);
 
-        {
-            *string str = ftp.getUserName();
-            if (str) {
-                user = str;
-            }
-            str = ftp.getPassword();
-            if (str) {
-                pass = str;
-            }
+        logInfo("%s: polling path is %y", n_url, path);
+        if (path && path.size() == 1 && !path[0].empty() && path[0] != ".") {
+            string dir = getPollDir(path[0], root);
+            logInfo("%s: changing directory to %y", n_url, dir);
+            # change to the target directory
+            ftp.cwd(dir);
+        } else {
+            logInfo("%s: connected", n_url);
         }
 
-        port = ftp.getPort();
-
-        url = sprintf("%s://%s@%s:%d", protocol, user ?? "<none>", ftp.getHostName(), port);
-
+        # the setup succeeded: take the state of the connection
+        self.ftp = ftp;
+        rootFtpPath = root;
+        user = n_user;
+        pass = n_pass;
+        port = n_port;
+        url = n_url;
         urlh = parse_url(ftp.getURL());
 
         if (mask) {
             logDetail("%s: file regex mask: %s", url, mask);
-        }
-
-        logInfo("%s: root path: %y", url, rootFtpPath);
-
-        logInfo("%s: polling path is %y", url, path);
-        if (path && path.size() == 1 && !path[0].empty() && path[0] != ".") {
-            logInfo("%s: changing directory to %y", url, path[0]);
-            # change to the target directory
-            ftp.cwd(path[0]);
-        } else {
-            logInfo("%s: connected", url);
         }
     }
 
@@ -1057,15 +1094,13 @@ public class FtpPoller {
         foreach string subdir in (path) {
             get_files = True;
             in_event = False;
-            if (path.size() > 1) {
-                ftp.cwd(rootFtpPath);
-                ftp.cwd(subdir);
-            }
-            string pwd = ftp.pwd();
+            # each poll changes to the absolute directory of the path, so that a relative path is resolved once
+            # against the login directory, like an absolute path (issue #6457)
+            string pwd = getPollDir(subdir);
             logInfo("polling %y", pwd);
 
             subdir =~ s/\/+$//;
-            list<hash<FtpPollerFileEventInfo>> files = getFiles(subdir);
+            list<hash<FtpPollerFileEventInfo>> files = getFiles(pwd);
 
             if (files) {
                 logDetail("got new files in %y: %y", pwd, files);
@@ -1073,7 +1108,9 @@ public class FtpPoller {
                 if (fileEvent(files)) {
                     foreach hash<FtpPollerFileEventInfo> event in (files) {
                         get_files = True;
-                        event.filepath = subdir == "." ? event.name : (subdir + DirSep + event.name);
+                        # remote paths use "/" on every platform
+                        event.filepath = subdir == "." ? event.name
+                            : (pwd + (pwd =~ /\/$/ ? "" : "/") + event.name);
                         if (local_dir) {
                             if (atomic_transfer) {
                                 event = retrieveTempFile(event);
@@ -1385,8 +1422,29 @@ public class FtpPoller {
                 # an error before the files are polled (ex: setting up a new FTP connection) is an FTP error
                 get_files = True;
                 in_event = False;
-                if (new_ftp.val()) {
-                    setup(remove new_ftp);
+                *FtpClient nftp;
+                {
+                    AutoLock al(new_ftp_m);
+                    nftp = new_ftp;
+                }
+                if (nftp) {
+                    # the new client is kept until its setup succeeds, so that a failed setup is retried after the
+                    # error delay like any FTP error (issue #6456)
+                    try {
+                        setup(nftp);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the retry logs in again
+                        try {
+                            nftp.disconnect();
+                        } catch () {
+                        }
+                        rethrow;
+                    }
+                    # updateOptions() may have given another client meanwhile
+                    AutoLock al(new_ftp_m);
+                    if (new_ftp == nftp) {
+                        remove new_ftp;
+                    }
                 }
                 runOnce();
                 ftpSleep(poll_interval);

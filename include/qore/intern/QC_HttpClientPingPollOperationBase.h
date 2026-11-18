@@ -86,9 +86,7 @@ public:
         return goal_reached.load(std::memory_order_acquire);
     }
 
-    DLLLOCAL bool needsWorkerDispatch() const override {
-        return inner_op && inner_op->needsWorkerDispatch();
-    }
+    DLLLOCAL bool needsWorkerDispatch() const override;
 
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override;
     DLLLOCAL void abort(ExceptionSink* xsink) override;
@@ -112,14 +110,67 @@ public:
 
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
 private:
-    //! The inner poll operation (ref'd)
+    //! The inner poll operation and its object, taken with references of their own for one use
+    /** Taken under @ref inner_lock; cleanup() releases the operation's references while other threads can use it
+        (the thread driving the operation, or a thread reading its state or aborting it), which keep it until they are
+        done.  The last references of the inner operation and its object can therefore be released by the thread that
+        holds the InnerRef (for example the I/O thread that drives the operation), and their teardown then runs on
+        that thread
+    */
+    class InnerRef {
+    public:
+        DLLLOCAL InnerRef(const HttpClientPingPollOperationPriv& op);
+        DLLLOCAL ~InnerRef();
+
+        DLLLOCAL explicit operator bool() const {
+            return inner_op != nullptr;
+        }
+
+        DLLLOCAL SocketPollOperationBase* operator->() const {
+            return inner_op;
+        }
+
+    private:
+        SocketPollOperationBase* inner_op = nullptr;
+        QoreObject* inner_obj = nullptr;
+
+        DLLLOCAL InnerRef(const InnerRef&) = delete;
+        DLLLOCAL InnerRef& operator=(const InnerRef&) = delete;
+    };
+
+    //! Protects @ref inner_op and @ref inner_obj, which cleanup() releases while other threads can use them
+    /** A leaf lock: no other lock is taken and no Qore code runs while it is held
+    */
+    mutable QoreThreadLock inner_lock;
+
+    //! The inner poll operation (ref'd); protected by @ref inner_lock
     SocketPollOperationBase* inner_op;
 
-    //! QoreObject wrapper for inner_op (ref'd, keeps inner_op alive)
+    //! QoreObject wrapper for inner_op (ref'd, keeps inner_op alive); protected by @ref inner_lock
     QoreObject* inner_obj;
 
     //! Whether the operation has completed (success or failure)
@@ -173,7 +224,9 @@ private:
     std::atomic<bool> has_error{false};
 
     //! Validates the HTTP response and sets goal_reached or error
-    DLLLOCAL void validateResponse(ExceptionSink* xsink);
+    /** @param out the response output, held by the caller
+    */
+    DLLLOCAL void validateResponse(const QoreHashNode* out, ExceptionSink* xsink);
 
     //! Sets error state with the configured error code
     DLLLOCAL void setError(const char* desc, ExceptionSink* xsink);

@@ -1,0 +1,18 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcProvMap.qm - QORE_DATA_PROVIDERS module that maps a factory to a module whose initialization fails (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module RcProvMap {
+    version = "1.0";
+    desc = "maps a data provider factory to a module whose initialization fails";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! Returns the data provider factory map
+public hash<string, string> sub get_data_provider_map() {
+    return {"qoretestrcfail": "RcFileApiFail"};
+}

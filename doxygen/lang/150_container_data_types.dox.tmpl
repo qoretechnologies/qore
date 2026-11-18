@@ -32,6 +32,13 @@ list list = (
 );
     @endcode \n
     Trailing commas can be left on the end of a list (or a @ref hash "hash"), making it easier to insert and remove elements at the end of a multi-line list.\n\n
+    @anchor list_assignment_parentheses
+    A list that is assigned needs its parentheses, as the comma operator binds less tightly than the assignment
+    operators: <tt>l = 1, 2, 3;</tt> is a list whose first element assigns \c 1 to \c l; as its other elements have
+    no effect, it is a parse error that names the cause.  When another element has an effect, the statement is
+    valid and assigns only the first element (<tt>l = 1, f();</tt> assigns \c 1 and calls \c f()).  Write
+    <tt>l = (1, 2, 3);</tt> (see also
+    @ref broken-list-parsing "%broken-list-parsing").\n\n
     List elements are dereferenced using square brackets: \c "[" and \c "]". The first element in a list has index zero.\n\n
     <b>Example:</b>
     @code{.py}
@@ -932,9 +939,16 @@ sub test() {
       - the condition of an \c if, \c while, \c do or \c for statement, the initializer and the iterator of a \c for
         statement, the list of a \c foreach statement and the value of a \c switch statement are statements of their
         own: their temporary values are destroyed before the code that they select or that follows them runs
-      - so are the expression of a \c map whose value is not used, for each element, and the value assigned to a
-        member or an element of a container or combined with a variable by a compound assignment, \c push or
-        \c unshift: its temporary values are destroyed before the container or variable is changed
+      - so is, for each element, every expression that a functional operator evaluates for an element: the
+        expression and the condition of a \c map, a \c select and a map with a condition, the expression of
+        \c foldl and \c foldr, the key, the value and the condition of a hash \c map, and the condition of a
+        streaming operator such as \c first, \c any or \c takewhile: the temporary values
+        of an element are destroyed when its value has been computed, before the operator goes on with the result
+        or the next element (the value itself is kept), so in <tt>map (new C($1)).get(), l</tt> each object is
+        destroyed right after its \c get() call
+      - so is the value assigned to a member or an element of a container or combined with a variable by a
+        compound assignment, \c push or \c unshift: its temporary values are destroyed before the container or
+        variable is changed
       - a \c foreach statement that a \c return, a \c break or an exception leaves releases the list that it iterates
         and then its loop variables before the code after it runs, such as the \c on_exit and \c on_error handlers of
         the enclosing blocks
