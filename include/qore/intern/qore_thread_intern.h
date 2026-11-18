@@ -2868,6 +2868,9 @@ protected:
     //! receives the exceptions of the exit handler
     ExceptionSink* xsink;
     bool restore;
+    //! the Program whose parse lock the helper took for code that runs in it, without changing the thread's
+    //! Program (issue #6568), or nullptr
+    QoreProgram* locked_pgm = nullptr;
 
 public:
     DLLLOCAL ProgramRuntimeParseCommitContextHelper(ExceptionSink* xsink, QoreProgram* pgm);
