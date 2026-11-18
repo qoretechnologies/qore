@@ -461,7 +461,10 @@ the source continues without the module and fails or not by its own code (with
 `PARSE-EXCEPTION` when it calls the module that it did not load).
 
 Version 2 added the compiled-with and module path lists, version 3 the parse
-option list. Every string is nonempty and contains no NUL; payloads are bounded to 16 MiB and 65,536 entries per list.
+option list, which came with AOT format version 44
+(`QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION`), so that the format that a
+module reports tells which record it has. Every string is nonempty and
+contains no NUL; payloads are bounded to 16 MiB and 65,536 entries per list.
 `QoreAOTModuleFileInfo` in `include/qore/intern/QoreAOTBinary.h` documents the
 layout.
 
