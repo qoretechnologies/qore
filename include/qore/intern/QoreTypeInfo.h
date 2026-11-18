@@ -232,6 +232,13 @@ public:
 
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseReturns(const QoreTypeInfo* ti, QoreTypeSpec t) {
+        return parseReturnsInline(ti, t);
+    }
+
+    //! parseReturns(), inlined explicitly for a call on a hot path whose inlining depended on the size of the libqore
+    //! unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static qore_type_result_e parseReturnsInline(const QoreTypeInfo* ti,
+            QoreTypeSpec t) {
         // a value of a type parameter returns what its bound returns, or anything if it has none (qore#5774)
         if (const QoreTypeInfo* src = getTypeParameterSourceType(ti)) {
             ti = src;
@@ -729,9 +736,10 @@ public:
             str.sprintf("no value");
     }
 
-    // static version of method, checking for null pointer
-    DLLLOCAL static void acceptInputParam(const QoreTypeInfo* ti, int param_num, const char* param_name, QoreValue& n,
-            ExceptionSink* xsink) {
+    // static version of method, checking for null pointer; inlined explicitly: the fast path of the parameters of
+    // every call, whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE static void acceptInputParam(const QoreTypeInfo* ti, int param_num,
+            const char* param_name, QoreValue& n, ExceptionSink* xsink) {
         if (hasType(ti)) {
             if (ti->acceptsRuntimeValueWithoutFilter(n)) {
                 return;

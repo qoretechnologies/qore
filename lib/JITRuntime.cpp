@@ -12588,7 +12588,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
 // Stack location for JIT/AOT-executed frames.
 class QoreJITStackLocation : public QoreStackLocation {
 public:
-    DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
+    // inlined explicitly: on a hot path whose inlining depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreJITStackLocation(const std::string& call_name,
+            const QoreProgramLocation* loc,
             const StatementBlock* statements, QoreProgram* pgm)
         : call_name(call_name), loc(loc), statements(statements), pgm(pgm) {
     }
