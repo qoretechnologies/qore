@@ -6391,8 +6391,10 @@ string sql = table.getSelectSql(sh, \args);
                 throw "PARTITION-ERROR", sprintf("%s: the named partition select qualifier cannot be applied to "
                     "a derived superquery table reference", getDesc());
             }
+            # the columns of the subquery are known names of the superquery; the map is "hash<auto>", as an alias in
+            # the superquery's columns sets its expression in it (issue #6592)
             return getSelectSqlStringIntern(info.query_hash.superquery, sprintf("(%s) subquery", sql), \info.args,
-                subquery_column_map, opt, (map {$1: True}, keys info.pseudo_column_map));
+                subquery_column_map, opt, {} + (map {$1: True}, keys info.pseudo_column_map));
         }
 
         return sql;

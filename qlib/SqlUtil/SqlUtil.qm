@@ -550,6 +550,9 @@ module SqlUtil {
       @ref sql_cop_funcs "column operator" applied to the joined table's columns (see @ref join_column_operators);
       it raised \c RUNTIME-TYPE-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/738">issue 738</a>)
+    - fixed a column alias (@ref SqlUtil::cop_as() "cop_as()") in the columns of a
+      @ref select_option_superquery "superquery", which raised \c RUNTIME-TYPE-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6592">issue 6592</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
