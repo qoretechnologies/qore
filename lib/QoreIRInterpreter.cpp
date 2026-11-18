@@ -5946,9 +5946,26 @@ bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
 */
 class QoreIRInlineCalleeParseOptionsHelper {
 public:
+    //! the tag of the constructor that is inlined explicitly
+    struct HotInline {};
+
     //! \a caller_pgm is the Program the call was made from, before it switched to \a exec_pgm
-    DLLLOCAL QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
+    /** Never inlined: the inline function and static method calls, whose frames are on the per-call path of
+        interpreted code, call it out of line (tools/stack-usage-budgets.txt), so that their frames do not depend on
+        what GCC inlines (qore#6494)
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE QoreIRInlineCalleeParseOptionsHelper(ExceptionSink* xsink, QoreProgram* exec_pgm,
             const UserVariantBase* uvb, QoreProgram* caller_pgm)
+            : po_override(exec_pgm, uvb, caller_pgm),
+            loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
+                uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
+    }
+
+    //! the same, inlined explicitly into the inline method calls of the interpreter, on a hot path whose inlining
+    //! depended on the size of the libqore unit (qore#6494; tools/hot-inlining.txt); not used by the other calls,
+    //! whose frames have a budget that it does not fit (tools/stack-usage-budgets.txt)
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE QoreIRInlineCalleeParseOptionsHelper(HotInline, ExceptionSink* xsink,
+            QoreProgram* exec_pgm, const UserVariantBase* uvb, QoreProgram* caller_pgm)
             : po_override(exec_pgm, uvb, caller_pgm),
             loc_helper(xsink, uvb->getUserSignature()->getParseLocation(), nullptr,
                 uvb->getParseOptions(qore_program_private::getParseOptions(*exec_pgm))) {
@@ -6153,7 +6170,8 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
         qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
     // the inlined body runs with the method's runtime parse options and restrictions, as a call of the method does
-    QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, method_caller_pgm);
+    QoreIRInlineCalleeParseOptionsHelper callee_po(QoreIRInlineCalleeParseOptionsHelper::HotInline(), xsink,
+        exec_pgm, uvb, method_caller_pgm);
     if (xsink && *xsink) {
         result = QoreValue();
         return true;

@@ -3495,7 +3495,7 @@ static bool is_typed_lvalue_type(const QoreTypeInfo* ti) {
 
 bool LValueHelper::intResultNeedsConversion() const {
     return typeInfo && is_typed_lvalue_type(typeInfo)
-        && QoreTypeInfo::parseReturns(typeInfo, NT_INT) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseReturnsInline(typeInfo, NT_INT) == QTI_NOT_EQUAL
         && QoreTypeInfo::parseAccepts(typeInfo, bigIntTypeInfo);
 }
 

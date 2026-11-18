@@ -38,7 +38,7 @@
 #include <typeinfo>
 
 //! the innermost temporary scope of the thread
-static thread_local QoreStatementTempScope* current_temp_scope = nullptr;
+thread_local QoreStatementTempScope* qore_current_temp_scope = nullptr;
 
 //! the functional operators whose element scope flags are decided when the parse of the Program's code ends
 static thread_local std::vector<std::pair<AbstractQoreNode*, q_element_scope_decider_t>>* element_scope_ops = nullptr;
@@ -75,29 +75,23 @@ QoreElementScopeParseHelper::~QoreElementScopeParseHelper() {
 }
 
 QoreStatementTempScope* qore_suspend_statement_temp_scope() {
-    QoreStatementTempScope* scope = current_temp_scope;
-    current_temp_scope = nullptr;
+    QoreStatementTempScope* scope = qore_current_temp_scope;
+    qore_current_temp_scope = nullptr;
     return scope;
 }
 
 void qore_resume_statement_temp_scope(QoreStatementTempScope* scope) {
     // the scopes created while the scope was suspended have ended
-    assert(!current_temp_scope);
-    current_temp_scope = scope;
+    assert(!qore_current_temp_scope);
+    qore_current_temp_scope = scope;
 }
 
-QoreStatementTempScope::QoreStatementTempScope(ExceptionSink* xsink) : prev(current_temp_scope), xsink(xsink),
+QoreStatementTempScope::QoreStatementTempScope(ExceptionSink* xsink) : prev(qore_current_temp_scope), xsink(xsink),
         entries(reinterpret_cast<Entry*>(inline_entries)) {
-    current_temp_scope = this;
+    qore_current_temp_scope = this;
 }
 
-QoreStatementTempScope::~QoreStatementTempScope() {
-    release();
-    assert(current_temp_scope == this);
-    current_temp_scope = prev;
-}
-
-void QoreStatementTempScope::release() {
+void QoreStatementTempScope::releaseIntern() {
     // a destructor run here executes its own statements, which hold their temporaries in their own scopes; the loop
     // handles a value held here all the same.  It must release every value, so it is not cancelled: it runs once for
     // each temporary that the statement holds
@@ -169,7 +163,7 @@ QoreValue QoreStatementTempScope::put(const void* site, QoreValue value) {
 }
 
 void QoreStatementTempScope::hold(const void* site, ValueOptionalRefHolder& holder, ExceptionSink* xsink) {
-    if (!holder.isTemp() || !current_temp_scope || !isObservable(*holder)) {
+    if (!holder.isTemp() || !qore_current_temp_scope || !isObservable(*holder)) {
         return;
     }
     if (hold(site, *holder, xsink)) {
@@ -193,7 +187,7 @@ void QoreOperandEvalHolder::evalOperand(const QoreValue& exp) {
 }
 
 void QoreStatementTempScope::holdRead(const void* site, const QoreValue& value, ExceptionSink* xsink) {
-    QoreStatementTempScope* scope = current_temp_scope;
+    QoreStatementTempScope* scope = qore_current_temp_scope;
     if (!scope || !isObservable(value)) {
         return;
     }
@@ -205,7 +199,7 @@ void QoreStatementTempScope::holdRead(const void* site, const QoreValue& value, 
 }
 
 bool QoreStatementTempScope::hold(const void* site, QoreValue value, ExceptionSink* xsink) {
-    QoreStatementTempScope* scope = current_temp_scope;
+    QoreStatementTempScope* scope = qore_current_temp_scope;
     if (!scope) {
         return false;
     }
