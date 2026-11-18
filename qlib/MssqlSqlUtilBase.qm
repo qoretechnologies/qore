@@ -366,12 +366,12 @@ string sub mssql_get_sql_object_name(string name) {
 
 # returns a string for an SQL string literal: in single quotes, with each single quote doubled
 string sub mssql_get_string_literal(string str) {
-    return "'" + replace(str, "'", "''") + "'";
+    return "'" + replace(sql_literal_check_encoding(str), "'", "''") + "'";
 }
 
 # returns a string for a Unicode SQL string literal: N and the string in single quotes, with each single quote doubled
 string sub mssql_get_unicode_string_literal(string str) {
-    return "N'" + replace(str, "'", "''") + "'";
+    return "N'" + replace(sql_literal_check_encoding(str), "'", "''") + "'";
 }
 
 # returns a name in brackets, with each "]" doubled, without any other check of the name
@@ -3716,7 +3716,7 @@ tc.constraint_name, c1.ordinal_position", schema, name);
             case NT_NUMBER: return string(v);
 
             # double any single quotes in strings
-            case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+            case NT_STRING: v = sql_literal_check_encoding(v); v =~ s/'/''/g; return "'" + v + "'";
 
             case NT_NULL:
             case NT_NOTHING: return "null";

@@ -156,6 +156,10 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - a string that is not valid in its encoding is refused with a \c VALUE-ERROR exception when it would be written into
+      an SQL string literal, with every driver; added @ref SqlUtil::sql_literal_check_encoding()
+      "sql_literal_check_encoding()", which the driver modules use for it, and the check of the value of an immediate
+      insert operator refuses such a string (<a href="https://github.com/qoretechnologies/qore/issues/6553">issue 6553</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
       an existing constraint name is raised without also printing its message, and a debug print of update operators was
       removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

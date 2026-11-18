@@ -176,6 +176,10 @@ int QoreLoggerPattern::setPattern(const QoreStringNode* pattern, ExceptionSink* 
             }
         }
         patt = t5.subst(**patt, xsink);
+        // a substitution raises an exception for a pattern that is not valid UTF-8, and gives no string (qore#6553)
+        if (*xsink) {
+            return -1;
+        }
         //printd(5, "setPattern() final '%s' (%d)\n", patt->c_str(), (int)patt->size());
         pp->push(f.release(), xsink);
         assert(!*xsink);

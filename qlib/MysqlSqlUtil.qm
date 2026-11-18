@@ -419,7 +419,7 @@ public namespace MysqlSqlUtil {
                 "of an emulated sequence, as it is stored in a string literal, which reads a backslash according to "
                 "the sql_mode of the session", name);
         }
-        return "'" + replace(name, "'", "''") + "'";
+        return "'" + replace(sql_literal_check_encoding(name), "'", "''") + "'";
     }
 
     sub parse_schema_name(string nname, reference<*string> schema, reference<string> name) {
@@ -3318,6 +3318,7 @@ end";
                     # with a backslash is given as a hex literal in UTF-8 with a character set introducer, which
                     # every sql_mode reads as the same string; any other string is given as before, with single
                     # quotes doubled
+                    v = sql_literal_check_encoding(v);
                     if (v.find("\\") >= 0) {
                         return "_utf8mb4 X'" + binary(convert_encoding(v, "UTF-8")).toHex() + "'";
                     }

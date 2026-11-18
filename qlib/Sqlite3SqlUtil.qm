@@ -2243,7 +2243,7 @@ string sql = pk.getTableConstraintSql();
                 case NT_NUMBER: return string(v);
 
                 # double any single quotes in strings
-                case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+                case NT_STRING: v = sql_literal_check_encoding(v); v =~ s/'/''/g; return "'" + v + "'";
 
                 case NT_NULL:
                 case NT_NOTHING: return "null";
