@@ -121,6 +121,11 @@
     \c URL-ENCODING-ERROR when the decoded string is not valid UTF-8 (ex: from \c "%C0%AF", a lone \c "%80" or an
     encoded surrogate), which they returned (issue #6554).
 
+    @par HttpServer Refuses a Request Head That Is Not Valid Text
+    The @ref httpserverintro "HttpServer" module answers a request whose path, query, method, HTTP version or header
+    names are not valid text with \c 400 before any handler sees it, and gives a header value that is not valid UTF-8
+    to the handler in ISO-8859-1, as RFC 9110 obs-text (issue #6554).
+
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
     (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a

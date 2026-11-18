@@ -34,9 +34,10 @@ this work; no change).
 | Entry point | Data | Rule | Status |
 |---|---|---|---|
 | `decode_url()` / `decode_uri_request()` (`qore_string_private::concatDecodeUriIntern()`) | path, query, form fields, REST path segments | `URL-ENCODING-ERROR` for a decoded result that is not valid in the target encoding (`%FF`, `%C0%AF`, lone continuations, surrogates, raw invalid bytes) | done |
-| HTTP/1.x request head (`processHttpHeaderString()`, `CHF_REQUEST`) | request target, HTTP version, header names | `SOCKET-HTTP-ERROR` → existing 400 + close (`HttpAsyncSocketIoController`) for an invalid request target, a malformed version and header names that are not tokens | todo |
-| HTTP/1.x, HTTP/2, HTTP/3 header values | field values | ISO-8859-1 when not valid UTF-8 (rule 3) | todo |
-| `HttpServer.qm` `decodeRequestPath()` and `tryInlineRequest()` | decoded path, query, header names (all protocols; nghttp2 passes 0x80-0xFF in `:path` and values) | 400 before the `hdr.path =~ /^\//` checks and before `findHandler()` | todo |
+| `HttpServer.qm` `HttpListener::setupRequestHead()` (the three request setup points: `processNativeRequest()`, the persistent HTTP/1.x loop, the orphaned persistent request) | path and query (`decodeRequestPath()`), method, HTTP version, header names; all protocols (nghttp2 passes 0x80-0xFF in `:path` and values) | `cx."request-head-error"` → 400 in `handleRequest()` before any handler, next to the `%00` check; the path is `"/"` meanwhile, so the code before cannot raise | done (`HttpServerInvalidEncoding.qtest`: HTTP/1.1, HTTP/2, HTTP/3) |
+| same | header values | ISO-8859-1 when not valid UTF-8 (rule 3) | done |
+| `HttpServerNativeAsyncTarget::tryInlineRequest()` | the raw head given to an inline handler | a head that is not valid text or needs a change takes the full path (`inlineHeadValid()`) | done (inline case of the same test) |
+| HTTP/1.x request head in C++ (`processHttpHeaderString()`, `CHF_REQUEST`) | HTTP version format, header-name `tchar`s | optional earlier refusal (`SOCKET-HTTP-ERROR` → 400 + close); the Qore check above already gives 400 for text that is not valid | todo (hardening) |
 | `qore_http_body_string()` / `decodeRequestText()` | buffered request bodies | 400 for a body that is not valid in its charset | todo |
 | WebSocket text frames (HTTP/1, /2, /3; server and client) | messages, close reasons | close 1007 (RFC 6455), after permessage-deflate | todo |
 | Streamed bodies, multipart parts, DataStream / Connect JSON (`binary.toString()`, `binary_to_string()` only tag) | message text | validated where the bytes become a string | todo |
