@@ -10241,6 +10241,20 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     return val;
 }
 
+int UserVariantBase::checkCallerDomain(const char* name, ExceptionSink* xsink) const {
+    int64 denied = qore_caller_denied_user_domains(declared_domain);
+    if (!denied) {
+        return 0;
+    }
+    if (source_qf) {
+        raise_invalid_function_access(xsink, source_qf, getAbstractFunctionVariant(), denied);
+    } else {
+        xsink->raiseException("INVALID-FUNCTION-ACCESS", "parse options do not allow access to '%s(%s)'; functional "
+            "domain: %s", name, signature.getSignatureText(), qore_describe_source_domains(denied).c_str());
+    }
+    return -1;
+}
+
 template <typename Completion>
 QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
         ExceptionSink* xsink, Completion completion) const {
@@ -10252,6 +10266,12 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     }
 
     //QORE_TRACE("UserVariantBase::evalIntern()");
+    // a module's variant that declares a functional domain is refused to restricted code also when other code of the
+    // module calls it for that code (qore#6337); the fast-call paths that do not come here do not take such variants
+    // (isStaticallyFastCallEligible())
+    if (declared_domain && qore_program_is_module_inline(pgm) && checkCallerDomain(name, xsink)) {
+        return QoreValue();
+    }
     if (!statements && hasLazyAOTFunctionIR()
             && !materializeLazyAOTFunctionIR(name, xsink)) {
         return QoreValue();

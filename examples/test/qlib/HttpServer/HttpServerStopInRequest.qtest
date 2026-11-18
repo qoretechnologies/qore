@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Test for a stop of an HttpServer that runs in the thread of one of its requests: the program releases the server
+    while a request runs; the request then releases the last reference to the server (the call of the handler holds
+    the server), whose destructor stops it in the request's thread.  The stop waits for the requests of the
+    listeners, and the request that runs it ends only when the stop has returned to it, so the stop must not wait for
+    that request: it waited forever, and the process never ended (seen in WebSocketProgramEnd.qtest, where the request
+    that opened a WebSocket connection still ran when the program released the server).
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpServerStopInRequestTest
+
+#! Upper bound for any wait that a regression turns into a hang
+const HangTimeout = 30s;
+
+#! A server that reports its destruction
+class ReportingServer inherits HttpServer {
+    private {
+        Queue destroyed;
+    }
+
+    constructor(Queue destroyed) : HttpServer(<HttpServerOptionInfo>{}) {
+        self.destroyed = destroyed;
+    }
+
+    destructor() {
+        destroyed.push(gettid());
+    }
+}
+
+#! A handler that waits in its request until it is released
+class HoldingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives the TID of the request's thread when the request enters the handler
+        Queue entered();
+
+        #! the handler returns when this reaches zero
+        Counter release(1);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        entered.push(gettid());
+        release.waitForZero();
+        return makeResponse(200, "released", {"Content-Type": "text/plain"});
+    }
+}
+
+class HttpServerStopInRequestTest inherits QUnit::Test {
+    constructor() : Test("HttpServerStopInRequestTest", "1.0") {
+        addTestCase("a request that releases the last reference to its server destroys it",
+            \releaseInRequestTest());
+        set_return_value(main());
+    }
+
+    releaseInRequestTest() {
+        Queue destroyed();
+        # receives the TID of the thread that stopped the listener when its stop has ended
+        Queue listener_stopped();
+        HoldingHandler handler();
+        *ReportingServer server = new ReportingServer(destroyed);
+        server.setHandler("handler", "", NOTHING, handler);
+        server.setDefaultHandler("handler", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "stopc": sub (string name) {
+                listener_stopped.push(gettid());
+            },
+        }).port;
+        server.waitForAsyncIo();
+        on_exit if (handler.release.getCount()) {
+            handler.release.dec();
+        }
+
+        Counter client_done(1);
+        HttpClientIo::HttpClientConnectionManager mgr = getManager();
+        background sub () {
+            on_exit client_done.dec();
+            try {
+                mgr.request("http://localhost:" + port, "GET", "/hold");
+            } catch (hash<ExceptionInfo> ex) {
+                # the server is stopped while it answers the request; the result does not matter here
+            }
+        }();
+
+        int request_tid = handler.entered.get(HangTimeout);
+        # the request holds the server while its handler runs: this is not the last reference
+        server = NOTHING;
+        assertEq(0, destroyed.size(), "the server is not destroyed while its request runs");
+
+        handler.release.dec();
+        assertEq(request_tid, destroyed.get(HangTimeout), "the request's thread destroys the server");
+        # the destructor of the subclass runs first: the stop that the destructor of HttpServer runs ends only if it
+        # does not wait for the request that runs it
+        assertEq(request_tid, listener_stopped.get(HangTimeout),
+            "the server's stop in the request's thread does not wait for that request");
+        assertEq(0, client_done.waitForZero(HangTimeout), "the client's request ends");
+    }
+
+    private HttpClientIo::HttpClientConnectionManager getManager() {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            # longer than the waits of the tests, which a request that does not end fails
+            "request_timeout": HangTimeout * 2,
+            "connect_timeout": 15s,
+        });
+    }
+}

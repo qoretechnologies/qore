@@ -7432,8 +7432,11 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                 } catch (hash<ExceptionInfo> ex) {
                     # a type that is not part of this module may still refuse a value with RUNTIME-TYPE-ERROR
                     if (ex.err == "TYPE-VALUE-ERROR" || ex.err == "RUNTIME-TYPE-ERROR") {
-                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y (value %y): "
-                            "%s: %s", i.key, type.getName(), options{i.key}.type(), options{i.key}, ex.err, ex.desc);
+                        # the value, and the type's own error, which describes the value too, are given only for an
+                        # option that is not marked sensitive: the value of a sensitive option can be a credential
+                        type_error = sprintf("option %y of type %y cannot be assigned a value of type %y%s",
+                            i.key, type.getName(), options{i.key}.type(), i.value.sensitive
+                                ? "" : sprintf(" (value %y): %s: %s", options{i.key}, ex.err, ex.desc));
                         continue;
                     }
                     rethrow;
@@ -7455,8 +7458,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                     }
                 }
                 if (!allowed) {
-                    error("OPTION-VALUE-ERROR", sprintf("option %y does not accept value %y; possible values: %y",
-                        i.key, options{i.key}, (map $1.value, i.value.allowed_values)));
+                    # the value of a sensitive option is never given
+                    error("OPTION-VALUE-ERROR", "option %y does not accept %s; possible values: %y",
+                        i.key, i.value.sensitive ? "the value given" : sprintf("value %y", options{i.key}),
+                        (map $1.value, i.value.allowed_values));
                 }
             }
             if (i.value.element_allowed_values && !i.value.element_allowed_values_creatable) {
@@ -7469,8 +7474,10 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
                         }
                     }
                     if (!allowed) {
-                        error("OPTION-VALUE-ERROR", sprintf("Option %y does not accept element value %y; possible "
-                            "element values: %y", i.key, opt, (map $1.value, i.value.element_allowed_values)));
+                        # the value of a sensitive option is never given
+                        error("OPTION-VALUE-ERROR", "Option %y does not accept %s; possible element values: %y",
+                            i.key, i.value.sensitive ? "an element value given" : sprintf("element value %y", opt),
+                            (map $1.value, i.value.element_allowed_values));
                     }
                 }
             }
@@ -7508,11 +7515,12 @@ AbstractDataProvider::checkFieldPathOption("CONSTRUCTOR-ERROR", "fields", fields
             }
         }
         if (!ok) {
+            # only the names of the options provided: their values can be credentials
             if (missing) {
-                throw err, sprintf("missing required options %y; options provided: %y", missing, options);
+                throw err, sprintf("missing required options %y; options provided: %y", missing, keys options);
             } else {
                 throw err, sprintf("missing required options %s; options provided: %y",
-                    (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), options);
+                    (foldl $1 + " OR " + $2, (map sprintf("%y", $1), req_list)), keys options);
             }
         }
     }

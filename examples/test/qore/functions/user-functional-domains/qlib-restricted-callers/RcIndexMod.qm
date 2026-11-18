@@ -1,0 +1,49 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcIndexMod.qm - test module named by a data provider index for an app and a connection scheme (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+%requires ConnectionProvider
+
+module RcIndexMod {
+    version = "1.0";
+    desc = "test module that a data provider index names";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": RcIndexMod::App,
+            "display_name": "Restricted caller index app",
+            "short_desc": "restricted caller index app",
+            "desc": "restricted caller index app",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "rc-index.svg",
+        });
+        ConnectionSchemeCache::registerScheme(RcIndexMod::Scheme, <ConnectionSchemeInfo>{
+            "display_name": "Restricted caller index scheme",
+            "short_desc": "restricted caller index scheme",
+            "desc": "restricted caller index scheme",
+            "schemes": {RcIndexMod::Scheme: True},
+            "base_scheme_map": {RcIndexMod::Scheme: RcIndexMod::Scheme},
+            "cls": Class::forName("RcIndexMod::RcConnection"),
+        });
+    };
+    domains = "PROCESS";
+}
+
+#! The public definitions of the test module
+public namespace RcIndexMod {
+#! The app that the module registers
+public const App = "QoreTestRcIndexApp";
+#! The connection scheme that the module registers
+public const Scheme = "qoretestrcidxscheme";
+
+#! The class of the connection scheme
+public class RcConnection {
+}
+}

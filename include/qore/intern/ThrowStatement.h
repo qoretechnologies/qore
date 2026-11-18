@@ -55,11 +55,6 @@ public:
         return true;
     }
 
-    DLLLOCAL virtual bool hasFinalReturn() const {
-        // throwing an exception trumps any return statement
-        return true;
-    }
-
     DLLLOCAL QoreValue getArgs() const {
         return args;
     }

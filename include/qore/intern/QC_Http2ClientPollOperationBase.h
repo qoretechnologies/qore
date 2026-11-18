@@ -502,6 +502,26 @@ public:
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
     //! Custom cycle scanner for stream_queues / pending_stream_registrations
     //! QoreObject refs that live in C++ containers invisible to the normal
     //! data/cdmap scan.

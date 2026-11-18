@@ -54,6 +54,8 @@ class WebSocketProgramEndTest inherits QUnit::Test {
         addTestCase("a program that returns with an open WebSocket connection serves it until the client closes it",
             \clientClosesTest());
         addTestCase("a program that releases its server with an open WebSocket connection ends", \releaseTest());
+        addTestCase("a program that releases its server while the request that opened a WebSocket connection runs "
+            "ends", \releaseInRequestTest());
         set_return_value(main());
     }
 
@@ -63,6 +65,10 @@ class WebSocketProgramEndTest inherits QUnit::Test {
     }
 
     releaseTest() {
+        testSkip("no process module 2.2 or later");
+    }
+
+    releaseInRequestTest() {
         testSkip("no process module 2.2 or later");
     }
 %else
@@ -111,9 +117,48 @@ class WebSocketProgramEndTest inherits QUnit::Test {
         server.endMain();
         assertTrue(server.wait(), "the server ends with the connection open");
         assertEq(0, server.exitCode());
-        # the release destroys the server at once, and its stop waits for the end of the connection that it closes
-        assertEq(("port", "server destroyed", "connection closed", "main returned"), server.lines(),
-            "the server is destroyed, and its stop closes the connection, whose close callback runs");
+        # the release destroys the server at once, and its stop waits for the end of the connection that it closes;
+        # if the request that opened the connection still runs in the server (its handler thread can be late to
+        # return after the connection is set up), the request releases the last reference to the server when it
+        # ends, after the main program (releaseInRequestTest() tests that order deterministically)
+        list<string> lines = server.lines();
+        if (lines[1] == "main returned") {
+            assertEq(("port", "main returned", "server destroyed", "connection closed"), lines,
+                "the end of the request destroys the server, and its stop closes the connection, whose close "
+                "callback runs");
+        } else {
+            assertEq(("port", "server destroyed", "connection closed", "main returned"), lines,
+                "the server is destroyed, and its stop closes the connection, whose close callback runs");
+        }
+    }
+
+    #! The server's main program releases the server while the request that opened the connection still runs
+    /** The request then releases the last reference to the server, in the handler thread that runs it: the stop of
+        the server that its destruction runs there must not wait for that request, which ends only when the stop has
+        returned (a deadlock, and the process never ended, as when the main program's release of the server raced
+        with the end of the request in releaseTest())
+    */
+    releaseInRequestTest() {
+        ServerProcess server("release-in-request");
+        on_exit server.stop();
+        Queue echoes();
+        WebSocketClient ws(sub (*data msg) {
+            if (exists msg) {
+                echoes.push(msg);
+            }
+        }, {"url": sprintf("ws://127.0.0.1:%d", server.port)});
+        on_exit ws.disconnect();
+        ws.connect();
+        ws.send("before");
+        assertEq("before", echoes.get(HangTimeout), "the connection is served while its request runs");
+
+        server.endMain();
+        assertTrue(server.wait(), "the server ends with the connection open");
+        assertEq(0, server.exitCode());
+        # the end of the request destroys the server, and its stop closes the connection
+        assertEq(("port", "main returned", "server destroyed", "connection closed"), server.lines(),
+            "the end of the request destroys the server, and its stop closes the connection, whose close callback "
+            "runs");
     }
 %endif
 }

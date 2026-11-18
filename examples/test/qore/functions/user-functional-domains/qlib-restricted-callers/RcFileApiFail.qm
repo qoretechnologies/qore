@@ -1,0 +1,28 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcFileApiFail.qm - test module whose initialization registers a file API and then fails (qore#6337)
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires DataProvider
+
+module RcFileApiFail {
+    version = "1.0";
+    desc = "test module whose initialization registers a file API and then fails";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+    init = sub () {
+        DataProviderActionCatalog::registerAppFileApi("QoreTestRcFailApp", <DataProviderFileApiInfo>{
+            "read_action": "read-file",
+            "read_path_option": "path",
+            "read_data_field": "data",
+        });
+        throw "RC-INIT-ERROR", "the initialization of RcFileApiFail fails after registering a file API";
+    };
+    domains = "PROCESS";
+}
+
+#! The public definitions of the test module
+public namespace RcFileApiFail {
+}

@@ -113,7 +113,8 @@ int QoreListAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_cont
         ri.parseInit(parse_context);
         argInfo = parse_context.typeInfo;
 
-        if (QoreTypeInfo::hasType(prototypeInfo)) {
+        // a NOTHING element is not assigned, so any value is accepted for it (issue #6480)
+        if (QoreTypeInfo::hasType(prototypeInfo) && !v.isNothing()) {
             bool may_not_match = false;
             bool may_need_filter = false;
             qore_type_result_e max_result = QTI_NOT_EQUAL;
@@ -174,6 +175,11 @@ QoreValue QoreListAssignmentOperatorNode::evalCommon(bool& needs_deref, Exceptio
     // get values and save
     for (unsigned i = 0; i < llv->size(); i++) {
         QoreValue lv = llv->get(i);
+        // NOTHING is an lvalue for check_lvalue(): its element is not assigned, and the elements after it are
+        // (issue #6480)
+        if (lv.isNothing()) {
+            continue;
+        }
 
         // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
         LValueHelper v(lv, xsink, false, true);

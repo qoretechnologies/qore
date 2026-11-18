@@ -46,6 +46,38 @@
 #include "qore/intern/HttpStreamConsumeHook.h"
 #include <mutex>
 
+#ifdef DEBUG
+//! the number of completion action locks that the calling thread holds (debug builds); see AsyncActionLocker
+DLLLOCAL extern thread_local int qore_dbg_async_action_locks_held;
+#endif
+
+//! Holds the lock of a completion action
+/** A completion action releases the objects that can run user code (an EventNotifier object, whose class can be
+    implemented in Qore) only after it has released its lock: the code can block on, or use, the action again.  In
+    debug builds, the locks are counted for the calling thread, so that a test can check that no such lock is held
+    when user code runs (\c dbg_async_action_locks_held()).
+*/
+class AsyncActionLocker {
+public:
+    DLLLOCAL AsyncActionLocker(std::mutex& m) : lg(m) {
+#ifdef DEBUG
+        ++qore_dbg_async_action_locks_held;
+#endif
+    }
+
+#ifdef DEBUG
+    DLLLOCAL ~AsyncActionLocker() {
+        --qore_dbg_async_action_locks_held;
+    }
+#endif
+
+    DLLLOCAL AsyncActionLocker(const AsyncActionLocker&) = delete;
+    DLLLOCAL AsyncActionLocker& operator=(const AsyncActionLocker&) = delete;
+
+private:
+    std::lock_guard<std::mutex> lg;
+};
+
 //! Pushes the result to a QoreChannel (non-blocking trySend for I/O thread)
 /** Used for streaming responses (SSE, gRPC, WebSocket, A2A). The I/O thread
     pushes each chunk/frame/event via trySend(); the user reads via recv()
@@ -73,7 +105,7 @@ public:
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
         // reports data that the channel's consumer will not take to the consume hook after the lock is released
         QoreConsumeNotifier cn;
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         if (sse_state) {
             // the events parsed from the data are taken from a Queue of their own, which reports the data of each
             // event as it is taken (see installSseState())
@@ -109,7 +141,7 @@ public:
         reports the values its consumer takes, and those dropped with it.
     */
     DLLLOCAL void setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         consume_hook = hook;
         channel->setConsumeHook(std::move(hook));
     }
@@ -117,7 +149,7 @@ public:
     DLLLOCAL bool isStreaming() const override { return true; }
 
     DLLLOCAL void complete(ExceptionSink* xsink) override {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         if (completed) {
             return;
         }
@@ -138,7 +170,7 @@ public:
 
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         if (completed) {
             return;
         }
@@ -174,23 +206,38 @@ public:
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) override {
-        std::lock_guard<std::mutex> lg(mtx);
-        if (sse_state) {
-            sse_state->deref(xsink);
+        // the references are taken under the lock and released after it, in the same order: releasing them can run
+        // user code (the destructor of a user EventNotifier object, also the one of the SSE state), which can block
+        // on, or use, the action again
+        AbstractAsyncAction* old_sse_state;
+        std::unique_ptr<WebSocketStreamFrameState> old_frame_state;
+        QoreObject* old_notifier_obj;
+        QoreEventNotifier* old_notifier;
+        QoreChannel* old_channel;
+        {
+            AsyncActionLocker lg(mtx);
+            old_sse_state = sse_state;
             sse_state = nullptr;
-        }
-        frame_state.reset();  // drops any installed msg_queue ref
-        if (notifier_obj) {
-            notifier_obj->deref(xsink);
+            old_frame_state = std::move(frame_state);
+            old_notifier_obj = notifier_obj;
             notifier_obj = nullptr;
-        }
-        if (notifier) {
-            notifier->deref(xsink);
+            old_notifier = notifier;
             notifier = nullptr;
-        }
-        if (channel) {
-            channel->deref(xsink);
+            old_channel = channel;
             channel = nullptr;
+        }
+        if (old_sse_state) {
+            old_sse_state->deref(xsink);
+        }
+        old_frame_state.reset();  // drops any installed msg_queue ref
+        if (old_notifier_obj) {
+            old_notifier_obj->deref(xsink);
+        }
+        if (old_notifier) {
+            old_notifier->deref(xsink);
+        }
+        if (old_channel) {
+            old_channel->deref(xsink);
         }
     }
 
@@ -203,7 +250,7 @@ public:
         the frame state sent a close frame before (the caller sends none)
     */
     DLLLOCAL int markFrameStateCloseSent() {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         if (!frame_state) {
             return 0;
         }
@@ -231,7 +278,7 @@ public:
     */
     DLLLOCAL void installFrameState(std::unique_ptr<WebSocketStreamFrameState> fs,
             QoreValue initial, ExceptionSink* xsink) {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         if (sse_state) {
             initial.discard(xsink);
             xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -588,7 +635,7 @@ public:
 
     //! Pushes NOTHING sentinel to the Queue (stream complete)
     DLLLOCAL void complete(ExceptionSink* xsink) override {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         // the data of an event that the stream did not end makes no item
         creditPendingLocked();
         if (queue) {
@@ -604,7 +651,7 @@ public:
         @return true: the action always reports the data
     */
     DLLLOCAL bool setConsumeHook(std::shared_ptr<QoreConsumeHook> hook) {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         // the queue's hook serves every stream whose events it receives; without a queue, no event is kept, and the
         // data is credited as it is parsed
         if (queue) {
@@ -617,7 +664,7 @@ public:
     //! Pushes an error hash to the Queue
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
-        std::lock_guard<std::mutex> lg(mtx);
+        AsyncActionLocker lg(mtx);
         creditPendingLocked();
         if (queue) {
             ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
@@ -630,18 +677,29 @@ public:
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) override {
-        std::lock_guard<std::mutex> lg(mtx);
-        if (notifier_obj) {
-            notifier_obj->deref(xsink);
+        // the references are taken under the lock and released after it, in the same order: releasing the notifier's
+        // object can run user code (the destructor of a user EventNotifier class), which can block on, or use, the
+        // action again
+        QoreObject* old_notifier_obj;
+        QoreEventNotifier* old_notifier;
+        Queue* old_queue;
+        {
+            AsyncActionLocker lg(mtx);
+            old_notifier_obj = notifier_obj;
             notifier_obj = nullptr;
-        }
-        if (notifier) {
-            notifier->deref(xsink);
+            old_notifier = notifier;
             notifier = nullptr;
-        }
-        if (queue) {
-            queue->deref(xsink);
+            old_queue = queue;
             queue = nullptr;
+        }
+        if (old_notifier_obj) {
+            old_notifier_obj->deref(xsink);
+        }
+        if (old_notifier) {
+            old_notifier->deref(xsink);
+        }
+        if (old_queue) {
+            old_queue->deref(xsink);
         }
     }
 
@@ -706,7 +764,7 @@ private:
 
 inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* notifier,
         QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink) {
-    std::lock_guard<std::mutex> lg(mtx);
+    AsyncActionLocker lg(mtx);
     if (frame_state) {
         initial.discard(xsink);
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
