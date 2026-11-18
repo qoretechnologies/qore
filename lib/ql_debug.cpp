@@ -13013,6 +13013,22 @@ struct UtServerReleaseGuard {
 // Deterministic lock-order regression fixture.  Pool checkout calls
 // tryReserveStream() while holding pool_lock_; this connection pauses in the
 // capacity query so a concurrent close callback can be timed independently.
+//! the longest wait for a thread of the close callback tests to reach a point: a hang guard only
+constexpr int UT_CLOSE_CALLBACK_HANG_GUARD_MS = 30000;
+
+//! waits until the flag is set; the limit is a hang guard only
+static bool ut_wait_for_flag(const std::atomic<bool>& flag) {
+    auto deadline = std::chrono::steady_clock::now()
+        + std::chrono::milliseconds(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
+    while (!flag.load(std::memory_order_acquire)) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    return true;
+}
+
 class UtBlockingPoolConnection : public HttpClientConnectionBase {
 public:
     DLLLOCAL UtBlockingPoolConnection()
@@ -13146,7 +13162,7 @@ static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c
         reservation_done.store(true, std::memory_order_release);
     });
 
-    bool entered = conn->waitForCapacityCheck(1000);
+    bool entered = conn->waitForCapacityCheck(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
     UT_ASSERT(c, entered, "pool checkout reaches paused connection capacity check");
 
     std::thread callback([&] {
@@ -13154,13 +13170,12 @@ static void ut_manager_close_callback_does_not_wait_for_pool(UnitTestCounters& c
         callback_done.store(true, std::memory_order_release);
     });
 
-    // The close callback must finish while checkout still owns pool_lock_.
-    // Before the queue-based fix it waits on pool_lock_ here, reproducing the
-    // same ABBA edge that stalls the global AsyncIoController thread.
-    for (int i = 0; i < 100 && !callback_done.load(std::memory_order_acquire); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-    UT_ASSERT(c, callback_done.load(std::memory_order_acquire),
+    // The close callback must finish while checkout still owns pool_lock_,
+    // which it holds until the capacity check is released below.  Before the
+    // queue-based fix it waits on pool_lock_ here, reproducing the same ABBA
+    // edge that stalls the global AsyncIoController thread: it would never
+    // finish, and the hang guard ends the wait.
+    UT_ASSERT(c, ut_wait_for_flag(callback_done),
         "close callback does not wait for the connection pool lock");
     UT_ASSERT(c, !reservation_done.load(std::memory_order_acquire),
         "pool checkout remains paused while close callback completes");
@@ -13197,19 +13212,20 @@ static void ut_manager_close_callback_lifetime_handshake(UnitTestCounters& c) {
         callback_done.store(true, std::memory_order_release);
     });
 
-    bool entered = mgr->waitForCallback(1000);
+    bool entered = mgr->waitForCallback(UT_CLOSE_CALLBACK_HANG_GUARD_MS);
     UT_ASSERT(c, entered, "close hook enters manager callback");
     std::thread detach([&] {
         detach_started.store(true, std::memory_order_release);
         conn->setManager(nullptr);
         detach_done.store(true, std::memory_order_release);
     });
-    for (int i = 0; i < 100
-            && !detach_started.load(std::memory_order_acquire); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    UT_ASSERT(c, detach_started.load(std::memory_order_acquire),
+    // the start of the thread is waited for, however long it takes
+    UT_ASSERT(c, ut_wait_for_flag(detach_started),
         "manager detach starts while callback is active");
+    // The callback is held until it is released below, so the detach cannot
+    // finish before then, however the threads are scheduled: the pause only
+    // gives a detach that would not wait the time to finish, and a slow
+    // machine can only make the check miss such a regression, never fail it.
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     UT_ASSERT(c, !detach_done.load(std::memory_order_acquire),
         "manager detach waits for the active close callback");
