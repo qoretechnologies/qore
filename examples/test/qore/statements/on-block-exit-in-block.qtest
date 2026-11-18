@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class OnBlockExitInBlockTest
+
+#! on_exit, on_success and on_error must be statements of a block in braces (issue #240): as the body of another
+#! statement without braces, their scope was unclear, so they are a parse error there
+class OnBlockExitInBlockTest inherits QUnit::Test {
+    public {
+        const Message = "an on_exit, on_success or on_error statement must be a statement of a block in braces, as it "
+            "runs when that block ends; it cannot be the body of another statement (an if, else, loop, try, catch, "
+            "context or on_* statement); put it in braces ({ on_exit ...; })";
+    }
+
+    constructor() : QUnit::Test("on_exit in a block", "1.0") {
+        addTestCase("bodies without braces", \withoutBraces());
+        addTestCase("statements of a block", \inBlocks());
+        set_return_value(main());
+    }
+
+    private withoutBraces() {
+        list<string> cases = (
+            "on_success on_error f();",
+            "on_exit on_exit f();",
+            "on_error on_success f();",
+            "if (x) on_success f();",
+            "if (x) { f(); } else on_error f();",
+            "while (x) on_exit f();",
+            "do on_exit f(); while (x);",
+            "for (int i = 0; i < 1; ++i) on_success f();",
+            "foreach int i in (1, 2) on_exit f();",
+            "try on_exit f(); catch (hash<ExceptionInfo> ex) {}",
+            "try { f(); } catch (hash<ExceptionInfo> ex) on_error f();",
+            "if (x) { f(); } else if (!x) on_exit f();",
+            "context ({\"a\": (1,)}) on_exit f();",
+        );
+        foreach string body in (cases) {
+            *string err = parseError(body);
+            assertNeq(NOTHING, err, body);
+            assertEq(Message, err, body);
+        }
+    }
+
+    private inBlocks() {
+        # in braces, the statement runs when its block ends
+        assertEq(("a", "s", "e"), run("if (x) { on_exit l += \"e\"; on_success l += \"s\"; l += \"a\"; }"));
+        assertEq(("b", "x"), run("if (!x) { } else { on_error l += \"err\"; on_exit l += \"x\"; l += \"b\"; }"));
+        # nested in braces
+        assertEq(("o", "i"), run("on_exit { on_success l += \"i\"; l += \"o\"; }"));
+        # in a loop body in braces: once per iteration
+        assertEq(("0", "1"), run("foreach int i in (0, 1) { on_exit l += string(i); }"));
+        # with a block of its own as its body
+        assertEq(("y",), run("on_exit { l += \"y\"; }"));
+        # the statements of a case of a switch statement are a block: it runs when they end
+        assertEq(("c", "e", "s"), run("switch (1) { case 1: on_exit l += \"e\"; l += \"c\"; } l += \"s\";"));
+    }
+
+    #! returns the list that the code builds in a function of a new Program, after the function's block has ended
+    private list<auto> run(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("list<auto> sub get() { list<auto> l = (); bool x = True; sub_body(\\l, x); return l; }\n"
+            "sub sub_body(reference<list<auto>> l, bool x) { " + body + " }\n", "code");
+        return p.callFunction("get");
+    }
+
+    #! returns the description of the parse error of the code as the body of a function, or NOTHING
+    private *string parseError(string body) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("sub f() {} sub get() { bool x = True; " + body + " }\n", "code");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err, body);
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}
