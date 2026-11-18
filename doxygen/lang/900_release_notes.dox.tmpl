@@ -2296,6 +2296,12 @@
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
       so that two redirects between the same files in opposite directions at the same time can no longer deadlock
       (issue #6567)
+    - @ref httpserverintro "HttpServer", @ref swaggerintro "Swagger" and
+      @ref restschemavalidatorintro "RestSchemaValidator" modules: a handler path or a schema \c pattern that is not a valid regular expression raises
+      \c REGEX-COMPILATION-ERROR when the handler is set or the schema is loaded, and a Swagger path template with a
+      parameter that is not valid raises \c INVALID-PATH-COMPONENT then, instead of failing each request with a 500
+      response; a content type that a request accepts is no longer taken as a regular expression (see @ref http1_7,
+      @ref swagger_2_6 and @ref restschemavalidator_2_5; issue #6603)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)

@@ -496,6 +496,8 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         optional_field(obj_type, oh, "maxLength", NT_INT, \maxLength);
         optional_field(obj_type, oh, "minLength", NT_INT, \minLength);
         optional_field(obj_type, oh, "pattern", NT_STRING, \pattern);
+        # a pattern that is not valid is an error of the schema, not of each request (qore#6603)
+        checkPattern();
         optional_field(obj_type, oh, "maxItems", NT_INT, \maxItems);
         optional_field(obj_type, oh, "minItems", NT_INT, \minItems);
         optional_field(obj_type, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
@@ -2293,7 +2295,9 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
 
                 # test if the content type contains asterisk and generate regex for it
                 bool asteriskCt = (content.find("*") != -1);
-                *string ctRegex = replace(content, "*", ".*");
+                # the content type comes from the request: only its "*" is a wildcard, so that it cannot be a pattern
+                # that fails or that matches more than it says (qore#6603)
+                *string ctRegex = replace(Util::regex_escape(content), "\\*", ".*");
 
                 # check that the content type is valid for the response
                 if (asteriskCt) {
@@ -2609,6 +2613,10 @@ public class PathComponent inherits Qore::Serializable {
 
         #! Partial templates, indexed by their anchored pattern with parameter names removed
         hash<string, PathComponent> templates;
+
+        #! the compiled patterns of \a templates (qore#6603); not serialized: a deserialized component compiles them
+        #! on first use
+        transient *hash<string, Regex> template_res;
     }
 
     #! creates the object
@@ -2674,12 +2682,19 @@ public class PathComponent inherits Qore::Serializable {
             next = wildcard ?? (wildcard = new PathComponent(full_path, l, offset + 1, oh));
         } else if (index(key, "{") >= 0) {
             string pattern = PathComponent::getTemplatePattern(key);
+            # the pattern is compiled here, not in each request (qore#6603)
+            getTemplateRegex(pattern);
             next = templates{pattern} ?? (templates{pattern} = new PathComponent(full_path, l, offset + 1, oh));
         } else {
             next = paths{key} ?? (paths{key} = new PathComponent(full_path, l, offset + 1, oh));
         }
 
         next.add(full_path, l, offset + 1, oh, openapi3);
+    }
+
+    #! Returns the compiled pattern of a partial template of this component
+    private Regex getTemplateRegex(string pattern) {
+        return template_res{pattern} ?? (template_res{pattern} = new Regex(pattern));
     }
 
     #! Builds a literal-safe pattern for a path template, optionally capturing its parameter values
@@ -2727,7 +2742,7 @@ public class PathComponent inherits Qore::Serializable {
             *PathComponent next = w.paths{path[i]};
             if (!next) {
                 foreach hash<auto> entry in (w.templates.pairIterator()) {
-                    if (path[i].regex(entry.key)) {
+                    if (w.getTemplateRegex(entry.key).match(path[i])) {
                         next = entry.value;
                         break;
                     }
@@ -3036,6 +3051,20 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         list<hash<string, list<string>>> security;
     }
 
+    private {
+        #! the compiled pattern of the path template, which captures the value of each parameter (qore#6603)
+        transient *Regex path_template_re;
+    }
+
+
+    #! Returns the compiled pattern of the path template of the operation (qore#6603)
+    /** The pattern is compiled when the operation is created; it is not serialized, so a deserialized operation
+        compiles it on first use
+    */
+    private Regex getPathTemplateRegex() {
+        return path_template_re ?? (path_template_re = new Regex(PathComponent::getTemplatePattern(path, True)));
+    }
+
     #! Constructor.
     /** @param path the path for the operation
         @param method the HTTP method for the operation
@@ -3049,6 +3078,11 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
     public constructor(string path, string method, hash<auto> oh, OpenApi3Schema openapi3) : ObjectBase(oh) {
         self.path = path;
         self.method = method.upr();
+        # the path template is checked and its pattern compiled here, not in each request (qore#6603)
+        # only a path with a parameter uses the pattern (see the check of the path parameters of a request)
+        if (path =~ /\{[^}]+\}/) {
+            getPathTemplateRegex();
+        }
         string obj_type = "Operation";
         *list<auto> tagsObj;
         if (optional_field(obj_type, oh, "tags", NT_LIST, \tagsObj)) {
@@ -3726,7 +3760,7 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         *list<string> path_values;
         if (path_names) {
             string actual_path = h.method.startsWith("/") ? h.method : "/" + h.method;
-            path_values = regex_extract(actual_path, PathComponent::getTemplatePattern(path, True));
+            path_values = getPathTemplateRegex().extractGroups(actual_path);
             if (path_values.size() != path_names.size()) {
                 error("SCHEMA-VALIDATION-ERROR", "Request path %y does not match path template %y",
                     actual_path, path);

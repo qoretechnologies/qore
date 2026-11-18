@@ -249,6 +249,13 @@ log("started listener on %s", lh.desc);
       before any handler sees it, over HTTP/1.x,
       HTTP/2 and HTTP/3; a header value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes
       unchanged, as obs-text (RFC 9110 section 5.5) (issue #6554)
+    - a handler path that is a regular expression is compiled when the handler is set
+      (@ref HttpServer::HttpServer::setHandler() "HttpServer::setHandler()",
+      @ref HttpServer::HttpServer::setDynamicHandler() "HttpServer::setDynamicHandler()",
+      @ref HttpServer::HttpServer::addHandlerToListener() "HttpServer::addHandlerToListener()", the
+      \c handler_info listener option), which raise
+      \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each request, and one that is
+      not valid failed every request with a 500 response (issue #6603)
     - the thread of a persistent HTTP/1.x connection (a handler that called
       @ref HttpServer::AbstractHttpRequestHandler::setPersistent() "setPersistent()") leaves the handler pool for the
       life of the connection, so it does not count against \c max_handler_threads and the other requests of the
@@ -2546,11 +2553,19 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! sets a request handler according to the arguments given
+    /** @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
+        @throw SETHANDLER-ERROR a handler with this name already exists
+    */
     setHandler(string name, hash<HttpHandlerConfigInfo> info) {
         handlers.setHandler(name, info);
     }
 
     #! sets a request handler according to the arguments given
+    /** @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
+        @throw SETHANDLER-ERROR a handler with this name already exists
+    */
     setHandler(string name, string path, *softlist<softstring> content_types, HttpServer::AbstractHttpRequestHandler obj, *softlist<softstring> special_headers, bool isregex = True) {
         handlers.setHandler(name, <HttpHandlerConfigInfo>{
             "path": path,
@@ -2562,11 +2577,19 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! sets a dynamic request handler according to the arguments given
+    /** @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
+        @throw SETHANDLER-ERROR a handler with this name already exists
+    */
     setDynamicHandler(string name, hash<HttpHandlerConfigInfo> info) {
         dhandlers.setHandler(name, info);
     }
 
     #! sets a dynamic request handler according to the arguments given
+    /** @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
+        @throw SETHANDLER-ERROR a handler with this name already exists
+    */
     setDynamicHandler(string name, string path, *softlist<softstring> content_types,
             HttpServer::AbstractHttpRequestHandler obj, *softlist<softstring> special_headers, bool isregex = True) {
         dhandlers.setHandler(name, <HttpHandlerConfigInfo>{
@@ -2619,6 +2642,9 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     }
 
     #! adds a request handler to a listener given the listener's name or bind address
+    /** @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
+    */
     addHandlerToListener(softstring bind, string name, hash<HttpHandlerConfigInfo> info) {
         lm.enter();
         on_exit lm.exit();
@@ -2636,6 +2662,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         propagated to it with a \c "-h3" suffix on the name.
 
         @throw INVALID-LISTENER-ERROR invalid listener id passed
+        @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
     */
     addHandlerToListenerID(softint id, string name, hash<HttpHandlerConfigInfo> info) {
         lm.enter();
@@ -2665,6 +2693,8 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
         @param isregex is the path a regular expression
 
         @throw INVALID-LISTENER-ERROR invalid listener id passed
+        @throw REGEX-COMPILATION-ERROR the handler path is a regular expression that is not valid; it is compiled
+        here, not when a request is matched
     */
     addHandlerToListenerID(softint id, string name, string path, *softlist content_type,
             HttpServer::AbstractHttpRequestHandler obj, *softlist special_headers, bool isregex = True) {
@@ -9058,6 +9088,9 @@ class HandlerInfo {
         HttpServer::AbstractHttpRequestHandler obj;
         string path;
         bool isregex;
+        # the path as a compiled regular expression, if it is one: it is compiled when the handler is set, so that a
+        # pattern that is not valid fails there and not in each request (qore#6603)
+        *Regex path_re;
         # content type map
         *hash<string, bool> content_type_map;
         *list<string> special_header_list;
@@ -9065,6 +9098,7 @@ class HandlerInfo {
 
     #! Creates the object from the parameters
     /** @throw HANDLER-ERROR the handler is missing from the \a info argument
+        @throw REGEX-COMPILATION-ERROR the path is a regular expression that is not valid
     */
     constructor(string name, hash<HttpHandlerConfigInfo> info) {
         self.name = name;
@@ -9074,6 +9108,9 @@ class HandlerInfo {
         obj = info.handler;
         path = info.path;
         isregex = info.isregex;
+        if (isregex && path) {
+            path_re = new Regex(path);
+        }
         content_type_map = map {$1: True}, info.content_types;
         special_header_list = map $1.lwr(), info.headers;
     }
@@ -9084,7 +9121,7 @@ class HandlerInfo {
 
     #! called when matching a request; returns a code giving the match level; 0 = no match, 1 = only the Content-Type matches, 2 = special header matches, 3 = URL matches
     int matchRequest(hash<auto> hdr, int score) {
-        if (path && hdr.path && isregex && regex(hdr.path, path)) {
+        if (path_re && hdr.path && path_re.match(hdr.path)) {
             return 3;
         }
         # the case where isregex is False was already handled by HttpHandlerList::findHandler using TreeMap
