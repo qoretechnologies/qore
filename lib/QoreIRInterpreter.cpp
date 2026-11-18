@@ -1295,6 +1295,17 @@ public:
         v.discard(xsink);
     }
 
+    //! As release(), and returns true if the value released was a node whose release left an exception in the sink
+    /** Every value is released: an enum value holds a reference to its enum, which release() gives up, although it is
+        not a node.  Only the release of a node can run a destructor, so the sink is tested only then (the inline tag
+        test: hasNode() is a call), and a store of a scalar tests no more than release() does (#6244)
+    */
+    DLLLOCAL bool releaseRaised(size_t i, ExceptionSink* xsink) {
+        bool node = slots[i].isPointer();
+        release(i, xsink);
+        return node && *xsink;
+    }
+
     //! Stores a value in the given slot, which takes its reference; the slot's value has been released
     /** An object stored in the slot of an object local is marked with a real reference, as a variable on the runtime
         stack marks the object it holds (see QoreIRFunction::real_reference_locals)
@@ -11758,6 +11769,11 @@ dispatch_folded_step_host:
                 }
                 if (xsink && *xsink) {
                     result.discard(xsink);
+                    // an exception raised by the push, or one that an earlier instruction left in the sink (a
+                    // destructor of a value that a store released), goes to the instruction's handler (#6244)
+                    if (branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     unwindForException();
                     cleanupLocalCaches();
                     return exitAfterUnwind();
@@ -15419,7 +15435,8 @@ load_local_done:
                     assert(local_inst->mode != AssignmentMode::Normal || qore_ir_value_node_type(stored) != NT_REFERENCE
                         || (local_inst->slot_id < func.interpreter_reference_slots.size()
                             && func.interpreter_reference_slots[local_inst->slot_id]));
-                    locals_slot_cache.release(local_inst->slot_id, xsink);
+                    // a destructor of the value replaced can raise an exception (see below)
+                    bool release_raised = locals_slot_cache.releaseRaised(local_inst->slot_id, xsink);
                     locals_slot_cache.set(local_inst->slot_id, stored);
                     if (local_inst->slot_id < locals_instantiated.size()) {
                         // For IR-only locals, this bit also records that the slot
@@ -15434,6 +15451,12 @@ load_local_done:
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
                     markParentLocalStoreDirty(local_inst);
+                    // a destructor of the value replaced raises its exception at the store, which goes to the store's
+                    // handler, as the other paths of the store take it (#6244); an instruction after it without a
+                    // handler of its own would otherwise take it out of the frame
+                    if (release_raised && branchToExceptionTarget(inst)) {
+                        break;
+                    }
                     ++ip;
                     break;
                 }

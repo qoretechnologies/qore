@@ -404,10 +404,205 @@ static void clear_socket_async_io_owner(AbstractPollableIoObjectBase* sock, Exce
 
 // --- SocketPollOperationBase::wakeIoThread ---
 
-void SocketPollOperationBase::wakeIoThread(ExceptionSink* xsink) {
-    if (io_controller && io_sock_obj) {
-        io_controller->wakeSocketByObject(io_sock_obj, xsink);
+namespace {
+//! the locks that serialize the controller back-reference of a C++ poll operation (io_controller) between the I/O
+//! threads that hold the operation and the deletion of its Qore object; see AsyncIoControllerPriv::opObjectDeleted()
+constexpr size_t QoreSpopLockCount = 64;
+
+//! one stripe of the locks, with the attachments of the operations that it covers
+struct QoreSpopStripe {
+    QoreThreadLock lock;
+    //! the ID of the attachment (see AsyncIoControllerPriv::attachOp()) of each attached operation
+    /** Only the cache entry that made the current attachment detaches the operation: an older entry of the same
+        operation (a retired one whose cancellation waits for a step on a worker) must not clear a newer one's
+    */
+    std::unordered_map<const SocketPollOperationBase*, uint64_t> attachments;
+};
+
+QoreSpopStripe& qore_spop_stripe(const SocketPollOperationBase* op) {
+    // never freed: poll operations can be released in the exit of the process
+    static QoreSpopStripe* stripes = new QoreSpopStripe[QoreSpopLockCount];
+    uintptr_t a = reinterpret_cast<uintptr_t>(op);
+    return stripes[((a >> 4) ^ (a >> 10)) % QoreSpopLockCount];
+}
+
+QoreThreadLock& qore_spop_lock(const SocketPollOperationBase* op) {
+    return qore_spop_stripe(op).lock;
+}
+
+//! the source of the attachment IDs; 0 is no attachment
+std::atomic<uint64_t> qore_spop_attach_seq{0};
+
+//! the address that marks the controller back-reference of a poll operation whose Qore object was deleted
+char qore_spop_deleted_mark;
+AsyncIoControllerPriv* const qore_spop_deleted = reinterpret_cast<AsyncIoControllerPriv*>(&qore_spop_deleted_mark);
+}
+
+void SocketPollOperationBase::wakeIoThread(ExceptionSink*) {
+    AsyncIoControllerPriv::wakeOpIoThread(this);
+}
+
+void AsyncIoControllerPriv::wakeOpIoThread(SocketPollOperationBase* op) {
+    // the controller and the socket object are taken under the operation's lock, which keeps them (the cache entry
+    // that attached the operation references both), and used after it: the wake takes locks of the controller and
+    // can release references, whose release must not run under the operation's lock (a cascade into the deletion of
+    // another operation's object can need the same lock)
+    AsyncIoControllerPriv* ctrl;
+    QoreObject* sock_obj;
+    {
+        AutoLocker al(qore_spop_lock(op));
+        ctrl = __atomic_load_n(&op->io_controller, __ATOMIC_RELAXED);
+        sock_obj = op->io_sock_obj;
+        // a controller whose last reference is being released is not taken
+        if (!ctrl || ctrl == qore_spop_deleted || !sock_obj || !ctrl->optRef()) {
+            return;
+        }
+        sock_obj->ref();
     }
+    // a wake is only a hint (the operation runs again at its next event in any case): an error, such as a socket
+    // object without private data any more, is not raised to the caller, which can be a step of an operation
+    ExceptionSink wake_xsink;
+    ctrl->wakeSocketByObject(sock_obj, &wake_xsink);
+    wake_xsink.clear();
+    // the cache entry can have released the socket object meanwhile: the last reference is not released on an I/O
+    // thread
+    AsyncIoDeferredRelease refs;
+    refs.sock_obj = sock_obj;
+    ctrl->releaseOffIoThread(refs, &wake_xsink);
+    // the controller's reference is the last one only if the controller was released meanwhile (its object, and the
+    // reference that each of its I/O threads holds): not on its own I/O thread then, and elsewhere its release is
+    // that of any holder of a reference, as for a worker that releases the controller reference of a step item
+    // (releaseWorkItem())
+    ctrl->deref(&wake_xsink);
+}
+
+void AsyncIoControllerPriv::opObjectDeleted(SocketPollOperationBase* op) {
+    AutoLocker al(qore_spop_lock(op));
+    AsyncIoControllerPriv* ctrl = __atomic_load_n(&op->io_controller, __ATOMIC_RELAXED);
+    if (ctrl == qore_spop_deleted) {
+        return;
+    }
+    if (ctrl) {
+        // the controller cannot go away while the lock is held: it is released only after its I/O threads have
+        // detached each operation of their caches, which takes the lock
+        ctrl->postDeletedOpCancel(op);
+    }
+    // a step that an I/O thread runs from now on sees the mark (see isOpDeleted()); the commands sent above precede it
+    __atomic_store_n(&op->io_controller, qore_spop_deleted, __ATOMIC_RELEASE);
+}
+
+bool AsyncIoControllerPriv::isOpDeleted(const SocketPollOperationBase* op) {
+    return __atomic_load_n(&op->io_controller, __ATOMIC_ACQUIRE) == qore_spop_deleted;
+}
+
+bool AsyncIoControllerPriv::attachOp(SocketPollOperationBase* op, QoreObject* sock_obj, uint64_t& attach_id) {
+    QoreSpopStripe& stripe = qore_spop_stripe(op);
+    AutoLocker al(stripe.lock);
+    if (__atomic_load_n(&op->io_controller, __ATOMIC_RELAXED) == qore_spop_deleted) {
+        return true;
+    }
+    uint64_t id = qore_spop_attach_seq.fetch_add(1, std::memory_order_relaxed) + 1;
+    try {
+        stripe.attachments[op] = id;
+    } catch (std::bad_alloc&) {
+        // no exception can leave an I/O thread here: the operation stays unattached (no wake, and a deletion is
+        // seen only by a step), and it runs and is canceled as before
+        return false;
+    }
+    // set only once recorded, so that the entry's ID always matches the record
+    attach_id = id;
+    __atomic_store_n(&op->io_controller, this, __ATOMIC_RELEASE);
+    op->io_sock_obj = sock_obj;
+    return false;
+}
+
+void AsyncIoControllerPriv::detachOp(SocketPollOperationBase* op, uint64_t attach_id) {
+    QoreSpopStripe& stripe = qore_spop_stripe(op);
+    AutoLocker al(stripe.lock);
+    // only the current attachment is detached
+    auto i = stripe.attachments.find(op);
+    if (i == stripe.attachments.end() || i->second != attach_id) {
+        return;
+    }
+    stripe.attachments.erase(i);
+    // the mark of a deleted object stays
+    if (__atomic_load_n(&op->io_controller, __ATOMIC_RELAXED) != qore_spop_deleted) {
+        __atomic_store_n(&op->io_controller, nullptr, __ATOMIC_RELEASE);
+    }
+    op->io_sock_obj = nullptr;
+}
+
+void AsyncIoControllerPriv::postDeletedOpCancel(SocketPollOperationBase* op, int only_idx) {
+    if (forked()) {
+        return;
+    }
+    AutoLocker al(m);
+    if (!anyThreadRunning()) {
+        return;
+    }
+    for (size_t i = 0; i < io_threads.size(); ++i) {
+        if (only_idx >= 0 && static_cast<int>(i) != only_idx) {
+            continue;
+        }
+        IoThreadContext& tp = *io_threads[i];
+        if (!readsCommands(tp)) {
+            continue;
+        }
+        Command cmd;
+        cmd.cmd = IoCommand::CancelDeletedOp;
+        cmd.cancel_spop_base = op;
+        tp.cmdq.push(std::move(cmd));
+        // the command's reference; taken once the command is queued, which the I/O thread cannot take before m is
+        // released
+        op->ref();
+        ++submit_seq;
+        ++tp.submit_seq;
+        // notify() does not block; notifying under m keeps the context alive until it returns
+        tp.notifier->notify();
+    }
+}
+
+void AsyncIoControllerPriv::releaseOpOnWorker(SocketPollOperationBase* op) {
+    // the global controller's workers release it; the controller is not created here (a new controller in a child
+    // created with fork(), or one after the library's cleanup, or the creation of objects and threads in a scan of the
+    // garbage collector).  The operation's own controller does not hold it any more: an attached operation is
+    // referenced by the controller, so a reference that is the last one is not
+    AsyncIoControllerPriv* ctrl = qore_get_async_io_controller_if_exists();
+    if (ctrl) {
+        ExceptionSink xsink;
+        if (!ctrl->forked()) {
+            ctrl->ensureCallDispatcher();
+            // the release runs in the Program of the operation's object; see AsyncIoDeferredRelease::getProgram()
+            std::unique_ptr<AsyncIoDeferredRelease> refs(new AsyncIoDeferredRelease);
+            refs->spop_base = op;
+            ctrl->call_dispatcher.load(std::memory_order_acquire)->dispatchReleaseAsync(refs.release());
+            op = nullptr;
+        }
+        // the global controller is referenced by its object until the library's cleanup
+        ctrl->deref(&xsink);
+        if (!op) {
+            return;
+        }
+    }
+    // no controller exists in a child process created with fork() (which runs only the thread that forked) and after
+    // the library's cleanup (which follows the destruction of all Programs): the reference is released here, and an
+    // exception that the operation's cleanup raises is reported by the sink, as there is no caller to take it
+    ExceptionSink xsink;
+    op->deref(&xsink);
+}
+
+void qore_socket_poll_op_deref_off_thread(SocketPollOperationBase* op) {
+    if (!op->ROdereference()) {
+        return;
+    }
+    // the last reference: no other holder can take a new one, so it is taken again here and handed over to a callback
+    // worker, whose release runs the operation's cleanup() (see the deref() of the operation classes)
+    op->ROreference();
+    AsyncIoControllerPriv::releaseOpOnWorker(op);
+}
+
+void qore_socket_poll_op_object_deleted(SocketPollOperationBase* op) {
+    AsyncIoControllerPriv::opObjectDeleted(op);
 }
 
 // --- SocketPollInfoLender / SocketPollOperationBase::getSocketPollInfoHash ---
@@ -504,14 +699,22 @@ static void reset_socket_poll_info(QoreHashNode* info, int events, QoreObject* s
 }
 
 QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsink, int events) const {
+    // no hash is returned with an exception (the socket member of an operation whose object was deleted, for
+    // example): a caller that returns nothing on an exception would leak it
+    ExceptionSink sock_xsink;
+    ReferenceHolder<QoreObject> sock(getReferencedSocketObject(&sock_xsink), xsink);
+    if (sock_xsink) {
+        xsink->assimilate(sock_xsink);
+        return nullptr;
+    }
     QoreHashNode* info = SocketPollInfoLender::take();
     if (info) {
-        reset_socket_poll_info(info, events, getReferencedSocketObject(xsink), nullptr, xsink);
+        reset_socket_poll_info(info, events, sock.release(), nullptr, xsink);
         return info;
     }
     ReferenceHolder<QoreHashNode> new_info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
     new_info->setKeyValue("events", events, xsink);
-    new_info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    new_info->setKeyValue("socket", sock.release(), xsink);
     return new_info.release();
 }
 
@@ -527,14 +730,21 @@ QoreHashNode* SocketPollOperationBase::getSocketPollInfoHash(ExceptionSink* xsin
             list->push(h.release(), xsink);
         }
     }
+    // no hash is returned with an exception; see above
+    ExceptionSink sock_xsink;
+    ReferenceHolder<QoreObject> sock(getReferencedSocketObject(&sock_xsink), xsink);
+    if (sock_xsink) {
+        xsink->assimilate(sock_xsink);
+        return nullptr;
+    }
     QoreHashNode* info = SocketPollInfoLender::take();
     if (info) {
-        reset_socket_poll_info(info, events, getReferencedSocketObject(xsink), list.release(), xsink);
+        reset_socket_poll_info(info, events, sock.release(), list.release(), xsink);
         return info;
     }
     ReferenceHolder<QoreHashNode> new_info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
     new_info->setKeyValue("events", events, xsink);
-    new_info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    new_info->setKeyValue("socket", sock.release(), xsink);
     if (list) {
         new_info->setKeyValue("extra_fds", list.release(), xsink);
     }
@@ -560,9 +770,10 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     if (controller && queue && !completion_delivered) {
         controller->deliverBackstopCompletionIfUndelivered(*this, xsink);
     }
-    // Clear controller back-reference before dereffing
-    if (spop_base) {
-        spop_base->setIoController(nullptr, nullptr);
+    // Clear controller back-reference before dereffing; only an entry that attached the operation detaches it
+    if (spop_base && spop_attach_id) {
+        AsyncIoControllerPriv::detachOp(spop_base, spop_attach_id);
+        spop_attach_id = 0;
     }
     if (controller && submit_route_thread_idx >= 0 && !submit_route_sock_hash.empty()) {
         controller->clearProvisionalSocketRoute(submit_route_sock_hash, sock_obj,
@@ -629,7 +840,16 @@ QoreProgram* AsyncIoDeferredRelease::getProgram() const {
     if (spop_obj) {
         return spop_obj->getProgram();
     }
-    return sock_obj ? sock_obj->getProgram() : nullptr;
+    if (sock_obj) {
+        return sock_obj->getProgram();
+    }
+    // a C++ poll operation released without its object (the reference of a CancelDeletedOp command, or the one taken
+    // for the release of a step's result) can run its cleanup with the release: it runs in the Program of the
+    // operation's object, which the operation references weakly (the object references its Program)
+    if (spop_base && *spop_base->self) {
+        return (*spop_base->self)->getProgram();
+    }
+    return nullptr;
 }
 
 void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
@@ -1364,6 +1584,16 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             completeAbandonedLocked(cmd);
             break;
         }
+        case IoCommand::CancelDeletedOp: {
+            // the reference can be the last one, whose release runs the operation's cleanup
+            AsyncIoDeferredRelease refs;
+            refs.spop_base = cmd.cancel_spop_base;
+            cmd.cancel_spop_base = nullptr;
+            releaseOffIoThread(refs, xsink);
+            AutoLocker al(m);
+            completeAbandonedLocked(cmd);
+            break;
+        }
         case IoCommand::CancelByProgram:
         case IoCommand::CancelSocket:
         case IoCommand::CancelOwner:
@@ -1597,6 +1827,16 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     {
         AutoLocker al(m);
 
+        // a release item of a Program whose teardown is in progress is parked: releasing it can run the cleanup of a
+        // C++ poll operation, which must not run in the calling thread (an I/O thread, a thread in a method of an HTTP
+        // connection, a scan of the garbage collector), nor on a worker that can run after the Program's threads were
+        // waited for; the thread that cancels the Program's work releases it in the Program (with its parse options,
+        // counted in its threads), before its threads are waited for (clearProgramShuttingDown())
+        if (!stopping && item.type == DT_RELEASE && item.pgm && shutting_down_programs.count(item.pgm)) {
+            parked_program_releases[item.pgm].push_back(std::move(item));
+            return;
+        }
+
         // Reject enqueues for programs whose teardown is already in progress.
         // markProgramShuttingDown() drained the queue under this same lock; without
         // this check, an I/O thread could complete a poll AFTER cancelByProgram
@@ -1713,6 +1953,13 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 
         // no item can be queued after this point: enqueue() discards items once stopping is set
         remaining.swap(async_queue);
+        // and the release items parked for Programs being destroyed, which would otherwise be lost
+        for (auto& [pgm, items] : parked_program_releases) {
+            for (auto& item : items) {
+                remaining.push_back(std::move(item));
+            }
+        }
+        parked_program_releases.clear();
         for (auto& item : remaining) {
             // Match the enqueue-time increment of active_per_owner so any
             // concurrent waitForOwnerIdle() doesn't hang on drained queue items.
@@ -1864,9 +2111,67 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
     }
 }
 
-void QoreCallDispatcher::clearProgramShuttingDown(QoreProgram* pgm) {
+#ifdef DEBUG
+size_t QoreCallDispatcher::dbgParkedReleases(QoreProgram* pgm) {
     AutoLocker al(m);
-    shutting_down_programs.erase(pgm);
+    auto i = parked_program_releases.find(pgm);
+    return i == parked_program_releases.end() ? 0 : i->second.size();
+}
+
+QoreHashNode* AsyncIoControllerPriv::dbgParkProgramReleaseTest(QoreObject* obj, ExceptionSink* xsink) {
+    QoreProgram* pgm = obj->getProgram();
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(qore_get_async_io_controller_if_exists(), xsink);
+    if (!ctrl || !pgm) {
+        xsink->raiseException("DBG-ERROR", "no async I/O controller, or the object has no Program");
+        return nullptr;
+    }
+    ctrl->ensureCallDispatcher();
+    QoreCallDispatcher* cd = ctrl->call_dispatcher.load(std::memory_order_acquire);
+    // the mark also drains and discards the items of the Program that are queued: the test uses a Program of its own
+    cd->markProgramShuttingDown(pgm, xsink);
+    std::unique_ptr<AsyncIoDeferredRelease> refs(new AsyncIoDeferredRelease);
+    obj->ref();
+    refs->sock_obj = obj;
+    cd->dispatchReleaseAsync(refs.release());
+    int64 parked = cd->dbgParkedReleases(pgm);
+    cd->clearProgramShuttingDown(pgm, xsink);
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("parked", parked, xsink);
+    rv->setKeyValue("after_clear", static_cast<int64>(cd->dbgParkedReleases(pgm)), xsink);
+    return rv.release();
+}
+#endif
+
+void QoreCallDispatcher::clearProgramShuttingDown(QoreProgram* pgm, ExceptionSink* xsink) {
+    // the parked release items are released before the mark is cleared: a release can park more of them
+    while (true) {
+        std::vector<AsyncWorkItem> parked;
+        {
+            AutoLocker al(m);
+            auto i = parked_program_releases.find(pgm);
+            if (i == parked_program_releases.end()) {
+                shutting_down_programs.erase(pgm);
+                return;
+            }
+            parked.swap(i->second);
+            parked_program_releases.erase(i);
+        }
+        // each release runs in the Program, as a worker runs a release item (see workerLoop()): with its parse
+        // options, and counted in its threads; the Program can still be entered, as its threads have not been waited
+        // for yet
+        QoreThreadRuntimeParseOptions item_po;
+        item_po.po = pgm->getParseOptions();
+        QoreThreadRuntimeParseOptionsHelper item_po_helper(&item_po);
+        for (auto& item : parked) {
+            // the helper reports exceptions in its destructor to the sink, which must outlive it
+            ExceptionSink pgm_guard_xsink;
+            ProgramThreadCountContextHelper pgm_guard;
+            pgm_guard.set(&pgm_guard_xsink, pgm, true);
+            // a failure to enter leaves the release outside the Program, as on a worker
+            pgm_guard_xsink.clear();
+            releaseWorkItem(item, xsink);
+        }
+    }
 }
 
 void QoreCallDispatcher::markOwnerShuttingDown(const std::string& owner) {
@@ -3503,6 +3808,14 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.sandbox_ctx = std::move(sandbox_ctx);
         pinfo.sync_release = std::move(sync_release);
 
+        // the controller back-reference (see wakeIoThread()); an operation whose object was deleted meanwhile is
+        // canceled at the next command pass of this thread
+        if (pinfo.spop_base) {
+            if (attachOp(pinfo.spop_base, pinfo.sock_obj, pinfo.spop_attach_id)) {
+                postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+            }
+        }
+
         // Queue for first continuePoll + timeout arming in Phase 1 Step A.
         // Without this the worker-path SubmitOp does (see new_entry_ids
         // push in the SubmitOp handler), an op submitted from I/O-thread
@@ -4982,7 +5295,7 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     {
         QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
         if (cd) {
-            cd->clearProgramShuttingDown(pgm);
+            cd->clearProgramShuttingDown(pgm, xsink);
         }
     }
 }
@@ -6417,6 +6730,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             if (!node) {
                 continue;
             }
+            // an operation whose object was deleted is not continued: the deletion sent a CancelDeletedOp command,
+            // which cancels it at the next command pass; one is sent again, in case it did not reach this thread
+            if (op.spop_base && isOpDeleted(op.spop_base)) {
+                postDeletedOpCancel(op.spop_base, t.thread_idx);
+                continue;
+            }
             PollResult result;
             result.op_id = op.op_id;
             result.spop_obj = op.spop_obj;
@@ -6498,12 +6817,42 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     op.spop_base->setReadyEvents(
                         qore_socket_poll_events_from_controller_events(op.ready_events));
                 }
+#ifdef DEBUG
+                // a test holds the I/O thread here, committed to the step, while another thread deletes the operation
+                if (qore_dbg_continue_poll_hold_armed.load(std::memory_order_relaxed)) {
+                    qore_dbg_http_hold(QoreDbgHttpHoldPoint::ContinuePoll, op.spop_obj);
+                }
+#endif
                 QoreHashNode* new_info;
                 {
                     // the result replaces the operation's poll info, so a previous hash that only the operation
                     // references is lent to the call for reuse (see SocketPollInfoLender)
                     SocketPollInfoLender lender(node->second.poll_info, xsink);
                     new_info = op.spop_base->continuePoll(&poll_xsink);
+                }
+                // the step can have removed or replaced its own operation (a direct submit with its key), which may
+                // have been released: nothing of the operation is read before its entry is found again
+                node = find_queued(op);
+                // the poll info of a step that is not used is released off the I/O thread, as it can hold the last
+                // references to objects; with a reference to the operation, whose Program the release runs in
+                auto release_step_info = [&](QoreHashNode* info) {
+                    AsyncIoDeferredRelease refs;
+                    refs.poll_info = info;
+                    if (node) {
+                        node->second.spop_base->ref();
+                        refs.spop_base = node->second.spop_base;
+                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
+                    }
+                    releaseOffIoThread(refs, xsink);
+                };
+                if (!node || isOpDeleted(node->second.spop_base)) {
+                    // the result is dropped, as Phase 3 would drop it; an operation whose object was deleted while
+                    // the step ran is canceled by the CancelDeletedOp command that the deletion sent
+                    poll_xsink.clear();
+                    if (new_info) {
+                        release_step_info(new_info);
+                    }
+                    continue;
                 }
                 ASYNC_IO_TRACE("Phase2 C++ continuePoll op=%llu -> %s goal=%d\n",
                     (unsigned long long)op.op_id, new_info ? "poll_info" : "null",
@@ -6517,6 +6866,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         result.ex_hash = ex_obj->makeExceptionObject();
                     }
                     poll_xsink.clear();
+                    if (new_info) {
+                        // a step can return its poll info with an exception; the exception ends the operation
+                        release_step_info(new_info);
+                    }
                 } else if (!new_info) {
                     result.completed = true;
                 } else if (qore_extra_poll_entries_check(new_info, &poll_xsink)) {
@@ -6528,25 +6881,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         result.ex_hash = ex_obj->makeExceptionObject();
                     }
                     poll_xsink.clear();
-                    AsyncIoDeferredRelease refs;
-                    refs.poll_info = new_info;
-                    refs.module_cleanup_delegate = async_io_module_cleanup_delegate(node->second.sandbox_ctx);
-                    releaseOffIoThread(refs, xsink);
+                    release_step_info(new_info);
                 } else {
                     result.new_poll_info = new_info;
-                }
-
-                // the call can have removed or replaced its own operation (a direct submit with its key); its result
-                // is then dropped, as Phase 3 would drop it, and its poll operation may have been released
-                node = find_queued(op);
-                if (!node) {
-                    if (result.new_poll_info) {
-                        result.new_poll_info->deref(xsink);
-                    }
-                    if (result.ex_hash) {
-                        result.ex_hash->deref(xsink);
-                    }
-                    continue;
                 }
                 const std::string& op_owner = node->second.owner;
                 const AsyncIoSandboxContext& op_sandbox_ctx = node->second.sandbox_ctx;
@@ -7693,7 +8030,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 } else if (pending_cmd.cmd == IoCommand::CancelSocket
                         || pending_cmd.cmd == IoCommand::CancelAndCloseSocket
-                        || pending_cmd.cmd == IoCommand::CloseSocket) {
+                        || pending_cmd.cmd == IoCommand::CloseSocket
+                        || pending_cmd.cmd == IoCommand::CancelDeletedOp) {
                     abandoned_cmds.push_back(std::move(pending_cmd));
                 } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
                             || pending_cmd.cmd == IoCommand::CancelOwner
@@ -7977,6 +8315,46 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo_copy.cleanup(xsink);
                         }
                     }
+                    break;
+                }
+
+                case IoCommand::CancelDeletedOp: {
+                    // the operation is found by its address, which the command's reference keeps from being reused;
+                    // an operation that has completed, or that runs on another I/O thread, is not found
+                    SocketPollOperationBase* spop_base = cmd.cancel_spop_base;
+                    cmd.cancel_spop_base = nullptr;
+                    PollInfo pinfo_copy;
+                    bool found = false;
+                    for (auto it = t.cache.begin(), e = t.cache.end(); it != e; ++it) {
+                        if (it->second.spop_base == spop_base) {
+                            found = true;
+                            ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL_DELETED_OP key='%s' owner='%s'\n",
+                                it->first.c_str(), it->second.owner.c_str());
+                            std::string key = it->first;
+                            pinfo_copy = retireOp(t, it, xsink);
+                            // a waiter on the key is signaled, as for a Cancel
+                            AutoLocker al(m);
+                            signalCancelLocked(key);
+                            break;
+                        }
+                    }
+                    // the command's reference can be the last one, whose release runs the operation's cleanup: it is
+                    // released off the I/O thread in the Program of the operation's object (see
+                    // AsyncIoDeferredRelease::getProgram()), and under the sandbox of its submission, if found
+                    AsyncIoDeferredRelease refs;
+                    refs.spop_base = spop_base;
+                    if (found) {
+                        refs.module_cleanup_delegate = async_io_module_cleanup_delegate(pinfo_copy.sandbox_ctx);
+                        if (pinfo_copy.continue_poll_in_flight) {
+                            // a step runs on a worker: the cancellation waits for its result, as for a Cancel
+                            uint64_t op_id = pinfo_copy.op_id;
+                            t.pending_aborts.emplace(op_id, std::move(pinfo_copy));
+                        } else {
+                            doCancelIntern(pinfo_copy, xsink);
+                            pinfo_copy.cleanup(xsink);
+                        }
+                    }
+                    releaseOffIoThread(refs, xsink);
                     break;
                 }
 
@@ -8472,9 +8850,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.sandbox_ctx = std::move(cmd.submit_sandbox_ctx);
                     pinfo.sync_release = std::move(cmd.submit_sync_release);
 
-                    // Set controller back-reference so wakeIoThread() works
+                    // Set controller back-reference so wakeIoThread() works; an operation whose object was deleted
+                    // before the submission was processed is canceled at its next command pass
                     if (pinfo.spop_base) {
-                        pinfo.spop_base->setIoController(this, pinfo.sock_obj);
+                        if (attachOp(pinfo.spop_base, pinfo.sock_obj, pinfo.spop_attach_id)) {
+                            postDeletedOpCancel(pinfo.spop_base, t.thread_idx);
+                        }
                     }
 
                     // Queue for first continuePoll in Phase 1

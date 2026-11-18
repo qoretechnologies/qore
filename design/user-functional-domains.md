@@ -71,7 +71,8 @@ rest (class domain, builtins) is checked as before.
   cross-Program call that evaluates the arguments first (`QoreCallProgramEntryHelper`) hides the marker while they
   are evaluated and re-targets it to the evaluated list (`QoreCallReferenceArgEvalHelper`).  In-place references
   (parse-tree `Local*`/`Deferred*` nodes) record nothing.
-- Variants bound at parse time are not checked again (as builtins); module-internal calls are therefore free.
+- Variants bound at parse time are not checked again (as builtins), except a module's own variants that declare a
+  domain, which check the calling code when they are entered (qore#6337, below).
 - **Module code may use the domains its module declares** (C2, David 2026-11-12: a header declaration means the
   module itself ensures safety for restricted callers): the restrictions that a declared domain is checked against
   do not include the domains that the module of the **calling code** declares in its header and that apply to it
@@ -100,7 +101,88 @@ rest (class domain, builtins) is checked as before.
   `\o.m()` on an object of a caller subclass was refused).  Implicit base class constructors stay checked against
   the code running `new` (see below: no module code runs for a module subclass without its own constructor); an
   explicit base constructor list in the module is module code.  A module that hands out a generic dispatcher (`\call_function()`
-  or a `call_object_method()` wrapper that it creates) lets its callers reach its declared code through it.
+  or a `call_object_method()` wrapper that it creates) lets its callers reach the builtin code of its declared domains
+  through it, but not its own code that declares a domain (qore#6337, below).
+- **A module's own code that declares a domain is checked against the calling code when it is entered** (qore#6337,
+  David's decision (a): domains are checked against the restricted code that started the call chain, so an
+  undeclared function, method or constructor of the module does not reach its declared code for that code; threads
+  keep the restriction; no opt-out).  The C2 relief above remains for builtin code and for the variant lookups; a
+  user variant of a module's Program with `declared_domain` raises INVALID-FUNCTION-ACCESS at the top of
+  `UserVariantBase::evalIntern()` (`checkCallerDomain()`) if `qore_caller_denied_user_domains()` gives any of its
+  domains: the restricting options of the nearest Program on the stack that is not a module's (as
+  `qore_caller_restricts_domain()`, #6257), and those of a sandboxed caller that the module code runs with.  Every
+  mode reaches `evalIntern()` for such a variant because `isStaticallyFastCallEligible()` refuses it, which excludes
+  it from the JIT and AOT fast-call, batch and summary paths and from IR interpreter inlining.  Exceptions and
+  extensions:
+  - the initialization of library module code is not a call by the code that loads it: the walk stops at the
+    module initialization barrier (`QoreModuleInitSandboxBarrierHelper`, not under a lift), and the caller
+    restrictions of a sandboxed caller are not taken there, so `init: registered` stays allowed
+  - a thread that module code starts has only the module's Program on its stack: `QoreThreadRuntimeParseOptions`
+    captures the calling code's restricting options (`caller_domain_restrictions`, also when the module has no
+    override in effect: `currentRestrictsNothing()` is false then), and `QoreThreadRuntimeParseOptionsHelper`
+    installs them as `ThreadData::thread_caller_restrictions` (not in `QoreRuntimePoState`, which every user call
+    saves and restores) and restores the previous value, which the walk uses when it finds no Program that is not a
+    module's.  `qore_caller_restricts_domain()` uses the same fallback, so the SqlUtil checks of #6257 hold on such
+    threads too.  The capture stops at the module initialization barrier as the check does: a thread that the
+    initialization of library module code starts is not started for the code that loads it (review finding: with the
+    capture past the barrier, such a worker refused every caller if a restricted Program loaded the module first,
+    and served restricted callers if an unrestricted one did); test case `init_thread`.  Work handed to an existing
+    module thread (through a queue) is outside the call chain: it runs with the restrictions of the code that the
+    thread was started for
+  - a call reference that module code creates and the caller calls is refused the same way: the calling code is on
+    the stack; `user-functional-domains-modes.qtest` cases `own`, `own_dyn`, `closure`, `ref_module*`, `own_cf`,
+    `own_iter`, `own_ref_obj`, `own_thread` and `own_thread_ref` are refused for a restricted Program, with and
+    without a `SandboxManager`, and allowed for one without the restriction
+  - `sqlutil-caller-database.qtest`: a module that opens a table for the caller (`module-chain`) is now refused by
+    the `[dom=DATABASE]` constructor variant when it is entered (INVALID-FUNCTION-ACCESS), before SqlUtil's own
+    data-dependent check (PERMISSION-DENIED)
+- **Deferred module initialization** (qore#6337 A, prof 2026-11-17 for David: the init exemption extends to deferred
+  initialization, strictly qualified, no opt-out for user code).  A closure records `module_init` when it is created
+  (`QoreClosureBase::createdByModuleInit()`): the innermost non-lift module initialization barrier names the library
+  module's Program (`qore_module_init_set_program()`, called where `library_module` is set: source, separated and AOT
+  modules), the closure's defining Program (the closure's own variant, not `::getProgram()`, which is the caller's for
+  a closure created in a method of the caller's object) is that Program, and only library module code runs between
+  the barrier and the code that creates it (`qore_module_init_runs_only_module_code()`).  `is_module_init_closure()`
+  tests it; `call_module_init_closure()` (no arguments) runs it under a library module initialization barrier that
+  names the closure's Program (so the closures that it creates qualify too) and raises MODULE-INIT-CLOSURE-ERROR for
+  any other code, or when the code that calls it is not a library module's.  DataProviderActionCatalog::makeLazyCall()
+  and ConnectionSchemeCache::registerPendingScheme() test a deferred initializer when it is registered and wrap a
+  qualifying one in a closure of their own that calls call_module_init_closure(), which tests it again.
+  INVALID-FUNCTION-ACCESS is a transient failure of a lazy registration.  Review findings fixed in the head:
+  - a closure that restricted code got from the module while a deferred initialization called it back (a catalog
+    change listener) qualified: the creation chain check
+  - a module that restricted code loaded by its path counted as module code in the walks, so its callback could call a
+    library module's declared code during the library module's initialization and get a qualifying closure: only
+    library module Programs (`qore_program_is_library_module()`) are module code in `qore_get_caller_domain_restrictions()`
+    and the creation chain check; a module that is not library code has its loader's restrictions and is calling code
+  - restricted code could run any qualifying closure that it obtained: `call_module_init_closure()` requires a library
+    module caller
+  - third review: stopping the walk at a module that is not library code laundered the options of the Program that
+    loaded it first (such a module is one Program shared by every Program that loads it): the walk adds the
+    restrictions of the modules that are not library code and goes on to the nearest Program that is not a module's;
+    `call_module_init_closure()` ends the process as out of memory (`ExceptionSink::outOfMemory()`, fail-closed)
+    if it cannot record its own barrier
+  - **open design question (third review, reported to prof for David):** under a module initialization barrier, code
+    that runs only in library module Programs is not checked against the code that loaded the module, so state that
+    restricted code put into a library registry before (a call reference to a method of a library object, a library
+    object whose destructor runs then) runs with the exemption when a later library initialization fires it; no qlib
+    chain was found (the catalog listeners are objects of the caller's classes, which are checked), and work handed
+    to a thread is the documented equivalent; a fix would record the restrictions in effect when such state enters a
+    registry, as `thread_caller_restrictions` does for threads
+- qlib internal paths for restricted callers (qore#6337): `ProviderIndexUtil::loadIndexModule()` (the index lookups;
+  `tryLoadModule()` keeps PROCESS_CONTROL), `DataProviderModuleLoader` (not public: `loadKnownFactories()` for DPQL,
+  `tryLoad()`/`loadModule()` for the module's loads; `registerKnownFactories*()` keep their domain),
+  `DataProviderActionCatalog::removeAppFileApi()` (the rollback of a file API registration), and SqlUtil
+  `TableCache::getCached()`.  Review findings fixed: `ImplicitModuleTransaction::savepoint()`, `rollback()` and
+  `commit()` act on the rollback closures of other loads and declare PROCESS_CONTROL (a rollback runs every closure,
+  even if one raises an exception); the module's loads use `DataProviderModuleLoader::loadModule()`, which rolls back
+  only its own failed load (a public `loadModule()` would load any module or path for restricted code); the table
+  cache key is the description that a datasource gives, which a subclass chooses, so `TableCache::get()` declares
+  PROCESS_CONTROL as `put()` does and `getCached()` gives code restricted from the domain only tables of its own
+  datasource and does not cache what it resolves; `ProviderIndexUtil::writeDataProviderIndex*()` declare
+  PROCESS_CONTROL as the index builder does, as restricted code could make the index name a module path of its choice
+  (they declare PROCESS_CONTROL only, not FILESYSTEM, which the modules' headers do not declare; code restricted only
+  by PO_NO_FILESYSTEM can still call them: follow-up).  Test: `qlib-restricted-callers.qtest`.
 - The thread's module definition context (`ThreadData::qmd`) applies only while its module's Program is parsed
   (`QoreModuleDefContext::getDefinitionProgram()`, `get_module_def_context()`): a Program that a module's `init`
   closure parses applied its own `module` block to the loading module (qore#5938: a nested `version` key raised

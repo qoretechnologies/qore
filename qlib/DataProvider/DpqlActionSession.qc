@@ -883,7 +883,9 @@ public class DpqlActionSession {
     #! Returns a data provider for an app action spec
     private AbstractDataProvider getProviderForAppAction(string app_name, string action_name, *string opts) {
         if (!ENV.QORE_PROVIDER_INDEX_DIR) {
-            DataProvider::registerKnownFactories();
+            # the resolution loads the known factory modules for the session's code, also if it is restricted from
+            # loading modules itself (qore#6337)
+            DataProviderModuleLoader::loadKnownFactories();
         }
         *hash<string, hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionHash(app_name);
         if (!actions) {

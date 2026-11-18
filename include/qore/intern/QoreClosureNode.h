@@ -160,9 +160,20 @@ protected:
         pointer, so that the creation, the call and the destruction of any other closure only test it
     */
     QoreClosureTypeContext* type_context = nullptr;
+    //! true if the initialization of the closure's library module created it (qore#6337)
+    /** Only such a closure can be run later as deferred module initialization (call_module_init_closure()); set when
+        the closure is created and never changed
+    */
+    bool module_init;
 
     //! copies the type arguments and the receiver type of the code that creates the closure
     DLLLOCAL void captureTypeContext();
+
+    //! returns true if a closure of \a n created now is created by the initialization of its library module
+    /** The closure's code is that of the Program that defines it, which is not necessarily the current one (see
+        qore_call_reference_code_program())
+    */
+    DLLLOCAL static bool createdByModuleInit(const QoreClosureParseNode* n);
 
     //! sets the receiver type of the closure's type context if none was current when it was created
     /** For a closure created in a method with the method's object: the object's class binds the type parameters of
@@ -194,11 +205,17 @@ protected:
     }
 
 public:
+    //! returns true if the initialization of the closure's library module created it (qore#6337)
+    DLLLOCAL bool isModuleInit() const {
+        return module_init;
+    }
+
    //! constructor is not exported outside the library
     DLLLOCAL QoreClosureBase(const QoreClosureParseNode* n_closure, cvv_vec_t* cv,
             const qore_class_private* class_ctx)
             : ResolvedCallReferenceNode(false, NT_RUNTIME_CLOSURE), closure(n_closure),
-            closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx) {
+            closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx),
+            module_init(createdByModuleInit(n_closure)) {
         //printd(5, "QoreClosureBase::QoreClosureBase() this: %p closure: %p\n", this, closure);
         closure->ref();
         if (closure->needsTypeContext()) {

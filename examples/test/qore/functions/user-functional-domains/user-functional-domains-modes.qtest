@@ -20,8 +20,11 @@
 /** A module declares the functional domains of its code with \c [dom=...] attribute lists, and the domains that its
     own code uses in its module header (\c domains).  A Program restricted with \c PO_NO_PROCESS_CONTROL that loads the
     module is refused direct references at parse time and indirect calls at run time; the module's own code, called
-    from that Program, may use the domains it declares, if the module is library code (found under a process-wide
-    module directory).  A call reference runs with the permissions of the context that created it.
+    from that Program, may use the builtin code of the domains it declares, if the module is library code (found under
+    a process-wide module directory), but not its own code that declares a domain the calling code is restricted from:
+    that is refused when it is entered, also when other code of the module calls it for that code, on a thread that the
+    module starts or through a call reference that the module created (qore#6337).  The initialization of the module is
+    not a call by the code that loads it.  A Program without the restriction calls the same code.
 
     Each case runs the same script with the source module and with the module AOT-compiled with \c -O0 and \c -O3, in
     every execution mode and on the IR tier, and expects the output of the source module with the AST interpreter,
@@ -45,32 +48,52 @@ class UserFunctionalDomainsModesTest inherits QUnit::Test {
         string path_dir;
 
         #! the output of the run-time case
-        const ExpectedRuntimeOutput = "own: 1
-own_dyn: 3,3,3
-closure: 1
+        const ExpectedRuntimeOutput = "own: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
+own_dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
+closure: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
 init: registered
+init_thread: 1
 dyn: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 dyn_plain: 4
 cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
 com: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 create: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS_CONTROL
 sub_implicit: INVALID-FUNCTION-ACCESS: method '::DomMod::Guarded::constructor()'; functional domain: PROCESS_CONTROL
-ref_module: 1
-ref_module_method: 3
+ref_module: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
+ref_module_method: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 ref_runtime: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 ref_runtime_loop: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 ifdef: False
-ref_module_args: 2
+ref_module_args: INVALID-FUNCTION-ACCESS: function 'tagged_args(int x)'; functional domain: PROCESS_CONTROL
 ref_static_by_name: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::s()'; functional domain: PROCESS_CONTROL
 override_dispatch: INVALID-FUNCTION-ACCESS: method '::DomMod::Over::m()'; functional domain: PROCESS_CONTROL
-own_cf: 1
-own_iter: 1,2
-own_ref_obj: 3
+own_cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
+own_iter: INVALID-FUNCTION-ACCESS: method '::DomMod::It::next()'; functional domain: PROCESS_CONTROL
+own_ref_obj: INVALID-FUNCTION-ACCESS: method '::DomMod::Api::m()'; functional domain: PROCESS_CONTROL
 caller_iter: INVALID-FUNCTION-ACCESS: method '::DomMod::It::next()'; functional domain: PROCESS_CONTROL
 thread_cf: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
+own_thread: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
+own_thread_ref: INVALID-FUNCTION-ACCESS: function 'tagged()'; functional domain: PROCESS_CONTROL
 yield_direct: yielded
 yield_cf: yielded
 yield_ref: yielded
+";
+
+        #! the output of the cases of module code that calls its own code with a domain, for code that is not restricted
+        const ExpectedUnrestrictedOutput = "own: 1
+own_dyn: 3,3,3
+closure: 1
+init: registered
+init_thread: 1
+ref_module: 1
+ref_module_method: 3
+ref_module_args: 2
+own_cf: 1
+own_iter: 1,2
+own_ref_obj: 3
+own_thread: 1
+own_thread_ref: 1
+yield_direct: yielded
 ";
 
         #! the output of the parse-time case
@@ -110,6 +133,8 @@ plain method: ok
         writeFile(path_dir + "/DomMod.qm", moduleCode());
 
         addTestCase("indirect calls are checked at run time; module code uses its declared domains", \testRuntime());
+        addTestCase("module code calls its own code with a domain for code that is not restricted",
+            \testUnrestricted());
         addTestCase("direct references are refused at parse time", \testParse());
         addTestCase("a module loaded by its path does not get its declared domains", \testPath());
 
@@ -131,7 +156,8 @@ module DomMod {
     # the init closure, written before the domains key, uses the declared domain, with user code and with a builtin:
     # a closure of the header is checked with the options in effect where it was written (qore#5803 batch I: source
     # modules)
-    init = sub () { DomMod::Api::register(\"registered\"); *object logger = get_async_io_logger(); };
+    init = sub () { DomMod::Api::register(\"registered\"); *object logger = get_async_io_logger();
+        DomMod::start_init_thread(); };
     domains = \"PROCESS\";
 }
 
@@ -175,6 +201,29 @@ public class Api {
 public class Guarded {
     constructor() [dom=PROCESS_CONTROL] {
     }
+}
+
+# the result of a call of the module's tagged code on a thread that the module's initialization starts
+class InitThread {
+    public {
+        static Queue q();
+    }
+}
+
+# a thread that the initialization of the module starts is not started by the code that loads the module, whatever
+# that code's restrictions (qore#6337)
+sub start_init_thread() {
+    background sub () {
+        try {
+            InitThread::q.push(sprintf(\"%d\", tagged()));
+        } catch (hash<ExceptionInfo> ex) {
+            InitThread::q.push(ex.err);
+        }
+    }();
+}
+
+public string sub init_thread_result() {
+    return InitThread::q.get();
 }
 
 public auto sub get_api() {
@@ -231,6 +280,28 @@ public auto sub run_in_thread(code c) {
         throw h.ex.err, h.ex.desc;
     }
     return h.v;
+}
+
+# calls its own tagged code on a thread that it starts (qore#6337)
+public auto sub own_in_thread() {
+    Queue q();
+    background sub () {
+        try {
+            q.push((\"v\": tagged()));
+        } catch (hash<ExceptionInfo> ex) {
+            q.push((\"ex\": ex));
+        }
+    }();
+    hash<auto> h = q.get();
+    if (h.ex) {
+        throw h.ex.err, h.ex.desc;
+    }
+    return h.v;
+}
+
+# calls a reference to its own tagged code on a thread of the module (qore#6337)
+public auto sub own_ref_in_thread() {
+    return run_in_thread(\\call_own());
 }
 
 # an iterator with tagged methods, which the module's own foreach uses
@@ -327,6 +398,7 @@ auto sub own() { return call_own(); }
 auto sub own_dyn() { return call_own_dyn(); }
 auto sub closure() { code c = get_closure(); return c(); }
 auto sub init() { return DomMod::Api::registered(); }
+auto sub init_thread() { return init_thread_result(); }
 auto sub dyn() { auto a = get_api(); return a.m(); }
 auto sub dyn_plain() { auto a = get_api(); return a.plain(); }
 auto sub cf() { return call_function(\"DomMod::tagged\"); }
@@ -359,6 +431,8 @@ class CSub inherits Api {}
 auto sub own_ref_obj() { return DomMod::own_ref_obj(new CSub()); }
 auto sub caller_iter() { list<int> l = (); foreach int v in (new It()) { l += v; } return l.join(\",\"); }
 auto sub thread_cf() { return run_in_thread(auto sub () { return call_function(\"DomMod::tagged\"); }); }
+auto sub own_thread() { return own_in_thread(); }
+auto sub own_thread_ref() { return own_ref_in_thread(); }
 auto sub yield_direct() { return my_yield(); }
 auto sub yield_cf() { return call_function(\"DomMod::my_yield\"); }
 auto sub yield_ref() { code r = \\my_yield(); return r(); }
@@ -366,7 +440,7 @@ auto sub yield_ref() { code r = \\my_yield(); return r(); }
     }
 
     #! the driver: runs the cases in a restricted Program with the execution mode given as the first argument
-    private string driverScript(string code_name, bool sandbox = False) {
+    private string driverScript(string code_name, bool sandbox = False, bool restricted = True) {
         return sprintf("%%modern
 
 hash<string, ExecMode> modes = {\"ast\": EM_AST, \"ir\": EM_IR, \"jit\": EM_JIT, \"tiered\": EM_TIERED};
@@ -381,7 +455,7 @@ string sub ex_str(hash<ExceptionInfo> ex) {
     return ex.err + \": \" + desc;
 }
 
-Program p(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+Program p(PO_NEW_STYLE%s);
 SandboxManager mgr();
 if (%s) {
     # a sandboxed caller: its restrictions are passed on to the module code that it calls
@@ -403,7 +477,7 @@ foreach string f in (ARGV[1..]) {
         printf(\"%%s: %%s\\n\", f, ex_str(ex));
     }
 }
-", code_name, sandbox ? "True" : "False");
+", code_name, restricted ? " | PO_NO_PROCESS_CONTROL" : "", sandbox ? "True" : "False");
     }
 
     #! the driver for the parse-time case
@@ -520,6 +594,13 @@ try {
         # module declares, also in calls of its own code that are resolved at run time
         string sb_script = writeFile(tmp.path + "/runtime-sandbox.q", driverScript("runtime-cases.q", True));
         checkAllModes(sb_script, ExpectedRuntimeOutput, cases);
+    }
+
+    testUnrestricted() {
+        writeFile(tmp.path + "/unrestricted-cases.q", runtimeCode());
+        string script = writeFile(tmp.path + "/unrestricted.q", driverScript("unrestricted-cases.q", False, False));
+        list<string> cases = map ($1 =~ x/^([a-z_]+):/)[0], ExpectedUnrestrictedOutput.split("\n"), $1.val();
+        checkAllModes(script, ExpectedUnrestrictedOutput, cases);
     }
 
     testParse() {

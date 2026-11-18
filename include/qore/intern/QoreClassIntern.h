@@ -33,6 +33,7 @@
 
 #define _QORE_QORECLASSINTERN_H
 
+#include <functional>
 #include <mutex>
 #include "qore/safe_dslist"
 #include "qore/intern/QoreTypeOwner.h"
@@ -101,6 +102,17 @@ typedef std::map<std::string, QoreMethod*> hm_method_t;
 class qore_class_private;
 // the source Program of a class taken for a frame; see CodeContextHelperBase
 struct QoreClassSourceProgramInfo;
+
+#ifdef DEBUG
+//! the parent class edges that the lookups of the parameterized base types of classes have visited (qore#6449)
+/** Read by the dbg_param_class_check_steps() debug hook, so that a test can require a bound on the steps of the
+    run-time checks of objects against parameterized class types independent of the timing
+*/
+DLLLOCAL extern std::atomic<int64> qore_param_class_check_steps;
+#define QORE_PARAM_CLASS_CHECK_STEP() qore_param_class_check_steps.fetch_add(1, std::memory_order_relaxed)
+#else
+#define QORE_PARAM_CLASS_CHECK_STEP()
+#endif
 
 //! Process-wide epoch incremented whenever a callable method table changes or a class or hashdecl is destroyed
 /** A dispatch cache keyed by class, hashdecl or type pointers matches only entries made in the current epoch: the
@@ -3036,6 +3048,15 @@ public:
         only looks for the accessors of such classes
     */
     bool has_member_accessors = false;
+    //! Set when code in other threads can reach the class (issue #6422)
+    /** A builtin class committed into a namespace (QoreNamespace::addSystemClass()) outside a module's
+        initialization, a builtin class committed during a module's initialization once the initialization has
+        returned, and a user class when it is committed.  From then on other threads can read the class's members and
+        flags without a lock, so a module can no longer add a member through the API (QoreClass::addMember(),
+        QoreClass::addBuiltinMemberWithAccessors()); only the API's additions read it, under the lock that also
+        serializes its setting.
+    */
+    std::atomic<bool> reachable{false};
 
     DLLLOCAL QoreValue evalMemberWriteGate(QoreObject* self, const char* member, QoreValue value,
         QoreMemberWriteOp operation, ExceptionSink* xsink) const;
@@ -3057,6 +3078,23 @@ public:
         }
         return findAccessorMember(mem) != nullptr;
     }
+
+    //! marks the class as reachable by code in other threads (issue #6422)
+    DLLLOCAL void markReachable();
+
+    //! called when a builtin class is committed into a namespace: marks it reachable now, or when the module whose
+    //! initialization is running returns from it (issue #6422)
+    DLLLOCAL void systemClassCommitted();
+
+    //! returns true if code in other threads can reach the class
+    DLLLOCAL bool isReachable() const {
+        return reachable.load(std::memory_order_acquire);
+    }
+
+    //! adds a member through the API, unless the class is reachable; returns -1 with CLASS-MEMBER-ADD-ERROR then
+    /** \a add makes the addition, under the lock that serializes the marking (issue #6422)
+    */
+    DLLLOCAL int addMemberApi(const char* mem, ExceptionSink* xsink, const std::function<void()>& add);
 
     //! adds a declared member whose value is held in external storage; see QoreClass::addBuiltinMemberWithAccessors()
     DLLLOCAL void addBuiltinMemberWithAccessors(const char* mem, ClassAccess access, const QoreTypeInfo* n_typeinfo,
@@ -4034,6 +4072,31 @@ public:
             info = nullptr;
         }
 
+        return info;
+    }
+
+    //! returns the member that a call of the name made through the code that a member holds may use (qore#6487)
+    /** this = the object's class; a call through a member (`o.x(...)` where `x` is a member that holds a closure or a
+        call reference) applies the access rules of a read of the member, exactly: the class context is used only if
+        it is in the hierarchy of the object's class (as qore_object_private::checkMemberAccess() callers make it:
+        runtimeCheckPrivateClassAccess()), and a private or internal member is not accessible without one
+
+        @param mem the member name
+        @param class_ctx the class context of the call; set to nullptr if it cannot access private members of this
+        class, so that the caller continues with the context that the member read would use
+
+        @return the member, or nullptr if there is none or the member is not accessible: the call then goes on as for
+        a name that is no member (a pseudo-method, the methodGate or METHOD-DOES-NOT-EXIST)
+    */
+    DLLLOCAL const QoreMemberInfo* runtimeGetCallableMemberInfo(const char* mem,
+            const qore_class_private*& class_ctx) const {
+        if (class_ctx && !runtimeCheckPrivateClassAccess(class_ctx)) {
+            class_ctx = nullptr;
+        }
+        const QoreMemberInfo* info = runtimeGetMemberInfo(mem, class_ctx);
+        if (info && info->access > Public && !class_ctx) {
+            return nullptr;
+        }
         return info;
     }
 
@@ -6357,6 +6420,23 @@ public:
         assert(this->valid());
         return this->i->first;
     }
+};
+
+//! Collects the builtin classes that a module commits into namespaces during its initialization (issue #6422)
+/** They become reachable by code in other threads when the initialization returns (commit()); nested module loads
+    stack
+*/
+class QoreModuleInitClassesHelper {
+public:
+    DLLLOCAL QoreModuleInitClassesHelper();
+    DLLLOCAL ~QoreModuleInitClassesHelper();
+
+    //! marks the classes as reachable; called when the module's initialization has returned without an error
+    DLLLOCAL void commit();
+
+private:
+    std::vector<qore_class_private*> classes;
+    std::vector<qore_class_private*>* prev;
 };
 
 #endif

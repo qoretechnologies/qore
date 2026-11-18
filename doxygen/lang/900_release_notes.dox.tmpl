@@ -107,6 +107,12 @@
     <tt>h.(keys h2)</tt>, is now read as the member name \c keys, usually a parse error; write <tt>h.(keys h2)</tt>
     (see @ref keywords; issue #525).
 
+    @par NOTHING Is Not the Base of an Lvalue
+    An element, member, slice or cast of the value \c NOTHING (also as a constant) used as an lvalue
+    (<tt>remove NOTHING.a</tt>, <tt>trim NOTHING[i]</tt>) is a parse error: such an operator removed nothing or raised
+    an exception at run time; \c NOTHING by itself is still an lvalue that the operators do not change, and a cast of
+    it that allows \c NOTHING (<tt>cast<*string>(NOTHING)</tt>) is \c NOTHING (issue #6480).
+
     @par Strong Encapsulation Refuses Out-of-Line Methods in Namespace Blocks
     @ref strong-encapsulation "%strong-encapsulation" (also set by @ref modern "%modern") refuses an out-of-line method
     definition in a namespace block, as it does at the top level (see
@@ -206,6 +212,11 @@
     and @ref Qore::Program::callStaticMethodArgs() "Program::callStaticMethodArgs()" call private static methods only for
     the class and its subclasses (\c METHOD-IS-PRIVATE, or \c RUNTIME-OVERLOAD-ERROR for a private variant), as documented.
 
+    @par Members Holding Code Are Callable Only Where the Member Is Accessible
+    A member holding code (a closure or a call reference) is callable as a method only where the member itself is
+    accessible, in every execution mode; calling a private member that holds code from outside its class raises
+    \c METHOD-DOES-NOT-EXIST, as for a private method (issue #6487).
+
     @par Debugger Callbacks Run With the Cancellation Deferred
     The notification methods of a @ref Qore::DebugProgram "DebugProgram" run with the cancellation of the thread
     deferred, so a thread that is cancelled or interrupted while it is stopped in the debugger stays stopped until the
@@ -260,6 +271,12 @@
     change the public variables of a trusted module or the static members of its classes, which every importer
     shares: a change raises \c MODULE-VARIABLE-READ-ONLY, and such code must call a function or method that the
     module exports to set the value; see @ref module_public_variables.
+
+    @par Restricted Code Cannot Reach a Module's Declared Code Through Other Code
+    A module's function or method that declares a functional domain checks the calling code when entered, also through
+    other module code (\c INVALID-FUNCTION-ACCESS), and the qlib APIs that act for any caller (such as SqlUtil's
+    TableCache::get()) declare \c PROCESS_CONTROL; see @ref sandbox_caller_domains and @ref sandbox_module_init
+    (issue #6337).
 
     @par Modules May Not Declare Public thread_local Variables
     A module that declares a <tt>public thread_local</tt> variable raises \c MODULE-PUBLIC-THREAD-LOCAL when parsed or
@@ -702,6 +719,10 @@
     - the <tt>const char*</tt> and <tt>struct tm*</tt> constructors of \c DateTime (and, as for
       \c DateTimeNode(bool), of \c DateTimeNode) are \c explicit, so a string or a \c struct \c tm pointer is no
       longer converted implicitly to a date; construct it explicitly (<tt>DateTime(str)</tt>)
+    - a module can add a member to a class with \c QoreClass::addMember() or
+      \c QoreClass::addBuiltinMemberWithAccessors() only until code in other threads can reach the class; a later
+      addition is refused with \c CLASS-MEMBER-ADD-ERROR by the new overloads with an \c ExceptionSink, while the
+      deprecated forms without one report it on standard error (feature macro \c _QORE_HAS_CLASS_MEMBER_ADD_XSINK)
     @endparblock
 
     @par qget Command-Line Changes
@@ -900,6 +921,12 @@
     A character set name in an HTTP header or body or in a MIME message is used only if it selects an encoding that
     %Qore knows or a standard character set (see @ref Qore::get_known_encoding() "get_known_encoding()"); any other
     name is ignored, and the text is read as without one; 2.2.1 registered such names as encodings (issue #6460).
+
+    @par Code with a Return Type Whose End Can Be Reached Is a Parse Error
+    A function, method or closure whose declared return type does not accept @ref nothing "NOTHING" and whose end can
+    be reached without a \c return statement, with conditions assumed to go both ways, now raises a
+    \c MISSING-RETURN parse error (see @ref missing_return); 2.2.1 did not check it, or checked it with the return
+    type of the running code (issue #5940).
 
     @subsection qore_3_0_0_new_features New Features in Qore
     @par Strict Number Parsing
@@ -1447,6 +1474,9 @@
         @ref httpclientiointro "HttpClientIo" I/O with HTTP/2 and HTTP/3; the \c http_version option accepts
         \c "auto" (the default), \c "2.0" and \c "3.0"
       - connection texts can be translated (see @ref connectionprovider_presentation)
+      - connection option errors name the options but no longer contain the options provided or the values of
+        sensitive options, which can be credentials (see @ref connectionprovider_3_1;
+        <a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
       - see @ref connectionprovider_3_1 for all changes
 
     - @ref dataproviderintro "DataProvider" module
@@ -2095,6 +2125,31 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
+      once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
+      @ref overloading_intro; issue #6466)
+    - a call of a method in a diamond class hierarchy tests the variants of a method of a shared ancestor once, not
+      once for each path to the ancestor, so that a later path through a private edge no longer hides the parent
+      classes after it, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see @ref overloading_intro; issue #6488)
+    - @ref connectionproviderintro "ConnectionProvider" module: a list connection option with allowed element values
+      accepts its allowed elements; every non-empty list was refused (see @ref connectionprovider_3_1; issue #6490)
+    - @ref Qore::thread_list() "thread_list()" lists a thread from the time its TID is returned by the
+      @ref background "background" operator, also before the new thread has started running, as
+      @ref Qore::num_threads() "num_threads()" counts it, instead of leaving it out until it ran (issue #6469)
+    - deleting a socket, HTTP or WebSocket poll operation that was submitted to the asynchronous I/O controller
+      cancels it, and its state is released with its last reference in its %Program, so the deletion can no longer
+      crash the process (issue #6464)
+    - a channel or server-sent events completion action releases its notifier objects after its lock, so the
+      destructor of a user notifier class can no longer block on the action (issue #6465)
+    - @ref httpserverintro "HttpServer" module: a server whose last reference is released while a request runs in it
+      stops without waiting for that request, so the process no longer hangs when it ends (issue #6507)
+    - an exception that a destructor raises when a break, continue or return statement releases a block's locals,
+      when a for statement's initializer locals are released, or when a store replaces a value goes to the enclosing
+      try statement in every execution mode, as in the AST interpreter (issues #6084 and #6244)
+    - in native code (JIT and qcc), the value of push and unshift on a member or an element is the list, as in the
+      interpreters, instead of \c NOTHING (issue #6244)
+    - performance: a run-time check of an object against a parameterized class type visits each ancestor once, so
+      its cost grows linearly with the depth of a diamond class hierarchy instead of exponentially (issue #6449)
     - an absolute date literal without its day (<tt>2015-11-</tt>) is no longer read as a date with a day made of
       the text after it, which also ignored a UTC offset there (<tt>2015-11-+10</tt> is now the integer \c 1994), and
       a leap second in a date literal (<tt>2016-12-31T23:59:60Z</tt>) is a parse error that says so, also where
@@ -2102,6 +2157,14 @@
     - a keyword used as a member or method name after the @ref dot_operator ". operator" can have white space or a
       line break between it and the dot (<tt>h. keys()</tt>), as any other name can, instead of being read as the
       keyword's operator (see @ref keywords; issue #525)
+    - the option, login and URL errors of the data provider, REST, SMTP, Telnet, WebSocket and other client modules no
+      longer contain option values, tokens or URL passwords (see @ref connectionprovider_3_1;
+      <a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
+    - an @ref absolute_dates "absolute date" made from a number of seconds whose year does not fit a 32-bit integer
+      (ex: <tt>softdate d = -1e300n;</tt>) is the earliest or the latest absolute date; it was formatted in an
+      overflowed year with an overflowed UTC offset (see @ref date_time_arithmetic_range; issue #6431)
+    - a \c NOTHING element of a list assignment (<tt>(a, NOTHING, b) = l</tt>) is skipped and accepts a value of any
+      type: the elements after it were left unassigned, and the expression returned \c NOTHING (issue #6480)
     - the parse error of a statement that assigns a list without parentheses (<tt>l = 1, 2, 3;</tt>) says that only
       the first element is assigned and that the list needs parentheses, instead of only "statement has no effect
       (list)" (see @ref list_assignment_parentheses "lists"; issue #1946)

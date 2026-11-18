@@ -99,7 +99,8 @@ class GateInternalMember {
     }
 }
 
-# a class with methodGate() and a private member holding a closure, which a call from outside the class calls
+# a class with methodGate() and a private member holding a closure: a call from outside the class does not use the
+# member, which is not accessible there (issue #6487), and calls methodGate()
 class GatePrivateMember {
     private {
         code x = string sub (auto a) { return sprintf("private closure %y", a); };

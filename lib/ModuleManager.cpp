@@ -36,6 +36,7 @@
 // build
 #include "qore/QoreSandboxManager.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ModuleInfo.h"
@@ -4317,6 +4318,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         // module search surface the importer established.
         if (trusted) {
             qore_program_private::get(*mpgm)->library_module = true;
+            // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+            qore_module_init_set_program(mpgm);
         }
         if (p) {
             // library code loaded by code that is not trusted takes only the defines that that code's host set, and
@@ -5379,6 +5382,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         // module search surface the importer established.
         if (trusted) {
             qore_program_private::get(*mpgm)->library_module = true;
+            // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+            qore_module_init_set_program(mpgm);
         }
         if (p) {
             // library code loaded by code that is not trusted takes only the defines that that code's host set, and
@@ -6129,10 +6134,14 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         // the native fast entries that an AOT module's init registers are published when its load is complete
         // (qore#6035)
         QoreAOTPendingFastEntriesHelper aot_fast_entries;
+        // the builtin classes that the module commits into namespaces during its initialization can still be given
+        // members (as module-jni adds the fields of Java classes); they become reachable when it returns (#6422)
+        QoreModuleInitClassesHelper init_classes;
         mod_info.init(ctx, xsink);
         if (xsink) {
             return nullptr;
         }
+        init_classes.commit();
         plugin_scope.commit(&xsink);
         if (xsink) {
             return nullptr;

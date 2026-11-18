@@ -69,7 +69,20 @@ public class ImplicitModuleTransaction {
         if (sp < rollback_list.size()) {
             list<code> to_rollback = rollback_list[sp..];
             rollback_list = sp > 0 ? rollback_list[0..sp - 1] : new list<code>();
-            map $1(), to_rollback;
+            # every closure runs, even if one raises an exception; the first one is raised afterwards (qore#6337)
+            *hash<ExceptionInfo> first;
+            foreach code rb_code in (to_rollback) {
+                try {
+                    rb_code();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (!first) {
+                        first = ex;
+                    }
+                }
+            }
+            if (first) {
+                throw first.err, first.desc, first.arg;
+            }
         }
     }
 
@@ -92,7 +105,7 @@ public class ImplicitModuleTransaction {
     /** Call this before \c load_module() to mark the boundary between pre-existing
         rollback closures and new ones added during the module load.
     */
-    static int savepoint() {
+    static int savepoint() [dom=PROCESS_CONTROL] {
         if (!rb) {
             return 0;
         }
@@ -103,7 +116,7 @@ public class ImplicitModuleTransaction {
     /** Call this when module loading fails to clean up partial registrations from the
         failed module without affecting registrations from previous successful loads.
     */
-    static rollback(int sp) {
+    static rollback(int sp) [dom=PROCESS_CONTROL] {
         if (!rb) {
             return;
         }
@@ -115,7 +128,7 @@ public class ImplicitModuleTransaction {
     /** Call this after a successful module load to discard the rollback closures
         for that module, since its registrations should be kept.
     */
-    static commit(int sp) {
+    static commit(int sp) [dom=PROCESS_CONTROL] {
         if (!rb) {
             return;
         }

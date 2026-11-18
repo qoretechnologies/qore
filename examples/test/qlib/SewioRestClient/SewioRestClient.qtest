@@ -41,6 +41,7 @@ class FakeSewioRestHandler inherits AbstractHttpRequestHandler {
         else if (hdr.method == "PUT") {
             return makeResponse(("Content-Type": m_mime), 200, m_data);
         }
+        return makeResponse(405, "method not allowed");
     }
 }
 
