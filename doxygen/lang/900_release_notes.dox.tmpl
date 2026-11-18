@@ -2241,6 +2241,8 @@
       location, instead of \c PARSE-ERROR without one (issue #6509)
     - a declaration on the first line of a file included with @ref include "%include", and the first one after the
       included file in the including file, are reported at their own locations in diagnostics (issue #6561)
+    - code that runs in a @ref Qore::Program "Program" and parses code in the same Program takes the Program's parse
+      lock; it parsed without it, racing with other parse actions (issue #6568)
     - a \c private:internal member of a class with the same name as one of a base class was not initialized in an
       object of a subclass, so the class's methods read no value, and was serialized without its value (see
       @ref private_members; issue #6402)
