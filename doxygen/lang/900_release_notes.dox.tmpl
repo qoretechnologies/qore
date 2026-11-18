@@ -2301,6 +2301,9 @@
     - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
       views in the DDL of the PostgreSQL, Oracle, MySQL and SQL Server drivers are quoted as identifiers, as the names
       of tables and columns are, and a PostgreSQL function argument list must be one list of types (issue #6579)
+    - an argument of the constructor of a @ref list_complex_type "typed list" that is not a valid element of the list
+      raises an error that names the argument and the element type, the same at parse time and at run time, instead
+      of naming the type of the argument as the value type of the list (issue #6172)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

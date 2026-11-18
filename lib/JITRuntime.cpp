@@ -6433,7 +6433,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreType
 
     QoreValue value = fromBits(value_bits);
     QoreValue init = value.needsRef() ? value.refSelf() : value;
-    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, init, xsink);
+    // the initializer is the list of the arguments of the constructor (issue #6172)
+    QoreListNode* result = qore_list_private::newComplexListFromArgs(typeInfo, init, xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -6486,7 +6487,8 @@ static uint64_t qore_rt_new_complex_from_value_consume_impl(const QoreTypeInfo* 
             holder.release().get<QoreHashNode>(), xsink, !(flags & QORE_RT_COMPLEX_INIT_PRECHECKED));
         return toBits(result ? QoreValue(result) : QoreValue());
     }
-    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, holder.release(), xsink);
+    // the initializer is the list of the arguments of the constructor (issue #6172)
+    QoreListNode* result = qore_list_private::newComplexListFromArgs(typeInfo, holder.release(), xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
