@@ -13106,11 +13106,11 @@ struct QoreRtCrossModuleCallState {
     */
     class RuntimeContextSwap {
     public:
-        DLLLOCAL RuntimeContextSwap(const QoreProgramLocation* loc, const QoreParseOptions& po) {
+        RuntimeContextSwap(const QoreProgramLocation* loc, const QoreParseOptions& po) {
             swap_runtime_statement_location(nullptr, nullptr, loc, po, old_stmt, old_loc, old_po);
         }
 
-        DLLLOCAL ~RuntimeContextSwap() {
+        ~RuntimeContextSwap() {
             update_runtime_statement_location(old_stmt, old_loc, old_po);
         }
 

@@ -1748,12 +1748,12 @@ int QoreModuleDefContext::initClosure(const QoreProgramLocation* loc, QoreValue&
     // the closure has the domains that the header declares, also if it was written before the domains key
     class HeaderClosureInitHelper {
     public:
-        DLLLOCAL HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
+        HeaderClosureInitHelper(QoreProgram* pgm) : pgm(pgm) {
             if (pgm) {
                 prev = qore_program_private::setModuleHeaderClosureInit(*pgm, true);
             }
         }
-        DLLLOCAL ~HeaderClosureInitHelper() {
+        ~HeaderClosureInitHelper() {
             if (pgm) {
                 qore_program_private::setModuleHeaderClosureInit(*pgm, prev);
             }

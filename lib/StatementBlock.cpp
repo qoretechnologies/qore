@@ -927,14 +927,14 @@ namespace {
 */
 class ToplevelCodeParseOptionsHelper {
 public:
-    DLLLOCAL ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
+    ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
         swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
         rc = &rc_get_tls_ref();
         old_rc_po = rc->getParseOptions();
         rc->setParseOptions(po);
     }
 
-    DLLLOCAL ~ToplevelCodeParseOptionsHelper() {
+    ~ToplevelCodeParseOptionsHelper() {
         rc->setParseOptions(old_rc_po);
         restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
     }
