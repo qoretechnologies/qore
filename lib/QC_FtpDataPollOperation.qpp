@@ -59,11 +59,34 @@ static QoreSocketObject* ftp_data_ref_sock(QoreSocketObject* sock) {
     return sock;
 }
 
+// takes a reference to the object of the "sock" member of the operation's object, which the state keeps as long as it
+// lives: the deletion of the operation's object, which releases the member, does not destroy the socket object, whose
+// destructor closes the socket through the async I/O controller and so waits for the I/O thread that runs a step of
+// the operation (#6505)
+static QoreObject* ftp_data_keep_sock_object(QoreObject* self) {
+    if (!self) {
+        return nullptr;
+    }
+    ExceptionSink xsink;
+    ValueHolder v(self->getReferencedMemberNoMethod("sock", &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    if (v->getType() != NT_OBJECT) {
+        return nullptr;
+    }
+    QoreObject* obj = v->get<QoreObject>();
+    obj->ref();
+    return obj;
+}
+
 FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         QoreSocketObject* data_sock, SocketPollOperationBase* connect_op,
         bool secure_data)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       current_op(connect_op),
       direction(FtpDataDirection::RECEIVE),
       secure_data(secure_data),
@@ -75,6 +98,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         bool secure_data, BinaryNode* send_data)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       current_op(connect_op),
       direction(FtpDataDirection::SEND),
       secure_data(secure_data),
@@ -86,6 +110,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         bool secure_data, OutputStream* recv_output_stream)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       current_op(connect_op),
       direction(FtpDataDirection::RECEIVE),
       secure_data(secure_data),
@@ -97,6 +122,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         bool secure_data, InputStream* send_input_stream)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       current_op(connect_op),
       direction(FtpDataDirection::SEND),
       secure_data(secure_data),
@@ -108,6 +134,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         QoreSocketObject* data_sock, bool secure_data, bool recv_mode)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       direction(FtpDataDirection::RECEIVE),
       secure_data(secure_data),
       recv_data(new BinaryNode) {
@@ -137,6 +164,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         QoreSocketObject* data_sock, bool secure_data, BinaryNode* send_data)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       direction(FtpDataDirection::SEND),
       data_state(secure_data ? FtpDataState::SSL_UPGRADE : FtpDataState::SENDING),
       secure_data(secure_data),
@@ -166,6 +194,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         QoreSocketObject* data_sock, bool secure_data, OutputStream* recv_output_stream)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       direction(FtpDataDirection::RECEIVE),
       secure_data(secure_data),
       recv_output_stream(recv_output_stream) {
@@ -193,6 +222,7 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
         QoreSocketObject* data_sock, bool secure_data, InputStream* send_input_stream)
     : SocketPollOperationBase(self),
       data_sock(ftp_data_ref_sock(data_sock)),
+      sock_obj(ftp_data_keep_sock_object(self)),
       direction(FtpDataDirection::SEND),
       data_state(secure_data ? FtpDataState::SSL_UPGRADE : FtpDataState::SENDING),
       secure_data(secure_data),
@@ -225,6 +255,11 @@ void FtpDataPollOperationPriv::deref(ExceptionSink* xsink) {
         if (current_op) {
             current_op->deref(xsink);
             current_op = nullptr;
+        }
+        // the socket object, released with the state (see ftp_data_keep_sock_object())
+        if (sock_obj) {
+            sock_obj->deref(xsink);
+            sock_obj = nullptr;
         }
         // the reference to the data socket that this state holds (see ftp_data_ref_sock())
         if (data_sock) {

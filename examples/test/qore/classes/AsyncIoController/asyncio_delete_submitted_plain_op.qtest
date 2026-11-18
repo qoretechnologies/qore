@@ -15,8 +15,6 @@
 #! The bound on every blocking wait in this test: a hang guard only, never a timing assertion
 const HangGuard = 60s;
 
-#! The bound on the deletion: the I/O thread is held for up to a minute, and a deletion that waits for it fails first
-const DeleteGuard = 30s;
 
 #! a connected TCP socket pair
 class SocketPair {
@@ -45,6 +43,15 @@ class SocketPair {
     #! returns the port of the listener
     int getPort() {
         return listener.getSocketInfo().port;
+    }
+
+    #! returns a new connection accepted by the listener
+    Socket accept() {
+        *Socket s = listener.accept(HangGuard);
+        if (!s) {
+            throw "TEST-ERROR", "the connection was not accepted";
+        }
+        return s;
     }
 
     close() {
@@ -136,7 +143,12 @@ class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
         deleteInStep(s, hc.startPollConnect(), "http-client");
     }
 
-    private deleteInStep(object sock, object op, string name) {
+    #! holds the I/O thread in a step of the submitted operation and deletes the operation from another thread
+    /** @param after_submit code run after the submission, before the step is held: the hold is then armed for a later
+        step, which \a trigger makes the operation run
+        @param trigger code run once the hold is armed
+    */
+    private deleteInStep(object sock, object op, string name, *code after_submit, *code trigger) {
         string owner = sprintf("delete-submitted-plain-%s-%d", name, getpid());
         on_exit AsyncIoController::cancelByOwner(owner);
 
@@ -146,7 +158,9 @@ class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
             release.dec();
         }
         on_exit call_function("dbg_http_hold_clear");
-        call_function("dbg_http_hold_at", "continue-poll", reached, release, op);
+        if (!after_submit) {
+            call_function("dbg_http_hold_at", "continue-poll", reached, release, op);
+        }
 
         # the result Queue is given, as no Queue is returned for an operation with its own onComplete()
         Queue<hash<SocketPollResultInfo>> rq();
@@ -158,6 +172,13 @@ class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
             "to": -1s,
             "resultQueue": rq,
         });
+        if (after_submit) {
+            after_submit();
+            call_function("dbg_http_hold_at", "continue-poll", reached, release, op);
+            if (trigger) {
+                trigger();
+            }
+        }
         # only the hold point decrements the Counter: an operation whose step does not reach it fails the test here
         if (reached.waitForZero(HangGuard)) {
             throw "TEST-ERROR", sprintf("%s: the I/O thread did not continue the operation", name);
@@ -167,17 +188,21 @@ class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
         Counter stepped_again(1);
         call_function("dbg_http_hold_at", "continue-poll", stepped_again, new Counter(0), op);
 
-        # the deletion runs in another thread, so that a deletion that waits for the held I/O thread fails the test
-        # instead of hanging it
+        # the deletion runs in another thread, while the I/O thread stays held at the hold point until the deletion has
+        # returned: a deletion that waits for the I/O thread does not return (the hang guard ends the wait and the test
+        # fails), one that does not wait returns while the I/O thread is provably held, as the hold is released only
+        # below
         Counter deleted(1);
         background sub (object o) {
             on_exit deleted.dec();
             delete o;
         }(op);
-        bool delete_waited = deleted.waitForZero(DeleteGuard) != 0;
+        bool returned_while_held = !deleted.waitForZero(HangGuard);
+        bool still_held = release.getCount() == 1;
         release.dec();
-        assertFalse(delete_waited, name + ": the deletion did not wait for the I/O thread");
-        if (delete_waited && deleted.waitForZero(HangGuard)) {
+        assertTrue(returned_while_held && still_held, name + ": the deletion returned while the I/O thread was held "
+            "in the operation's step");
+        if (!returned_while_held && deleted.waitForZero(HangGuard)) {
             throw "TEST-ERROR", sprintf("%s: the deletion did not end", name);
         }
 
