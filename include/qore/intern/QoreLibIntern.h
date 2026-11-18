@@ -1013,6 +1013,15 @@ struct QoreDiagnostic {
             this->metadata.id = this->code;
         }
     }
+
+    //! An error diagnostic for an exception raised in a parse, at the location of the exception
+    DLLLOCAL QoreDiagnostic(const char* code, const std::string& file, const std::string& source,
+            const QoreProgramLineLocation& loc, const char* message)
+            : error(true), code(code ? code : ""), file(file), source(source), start_line(loc.start_line),
+            end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column),
+            message(message ? message : "") {
+        metadata.id = this->code;
+    }
 };
 
 DLLLOCAL QoreString* findFileInPath(const char* file, const char* path);

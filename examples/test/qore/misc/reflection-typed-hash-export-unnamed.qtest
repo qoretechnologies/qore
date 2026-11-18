@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires reflection
+
+%exec-class ReflectionTypedHashExportUnnamedTest
+
+#! A restricted caller that cannot name a typed hash evaluates its initializers if a user module exports it (qore#6481)
+/** The initializers of a typed hash (TypedHash::doCast() and member default values) were evaluated for a restricted
+    caller only if the caller could name the typed hash in the language, so that code that held a handle of a typed
+    hash that a user module exports, but did not load the module itself (DataProvider's code building data types from
+    the typed hashes of the module that requires it: Pop3ClientDataProvider) was refused with REFLECTION-ACCESS-ERROR,
+    and the module could not be loaded first by restricted code.  An exported typed hash is now treated as an exported
+    class is: its initializers are evaluated, under the caller's restrictions; a typed hash that the module does not
+    export, or that is in a namespace that the module does not export, is still refused.
+
+    The module is loaded first by a restricted Program, so that its Program has the same restrictions, as when
+    restricted code loads Pop3ClientDataProvider, and DataProvider with it; the restricted caller, another Program
+    that does not load the module, gets the handles from it.
+*/
+class ReflectionTypedHashExportUnnamedTest inherits QUnit::Test {
+    public {
+        const Module = "%modern
+%requires reflection
+module ThExportUnnamed {
+    version = \"1.0\";
+    desc = \"qore#6481 test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public namespace ThExportUnnamed {
+    public hashdecl PubHash {
+        int a = 1;
+    }
+    # its initializer needs terminal I/O, which the restricted caller does not have
+    public hashdecl PubTerminalHash {
+        string a = call_function(\"f_printf\", \"%s\", \"x\");
+    }
+    hashdecl HiddenHash {
+        int a = 2;
+    }
+    public class Factory {
+        static TypedHash pub() { return TypedHash::forName(\"ThExportUnnamed::PubHash\"); }
+        static TypedHash pubTerminal() { return TypedHash::forName(\"ThExportUnnamed::PubTerminalHash\"); }
+        static TypedHash hidden() { return TypedHash::forName(\"ThExportUnnamed::HiddenHash\"); }
+        static TypedHash hiddenNs() { return TypedHash::forName(\"ThExportUnnamedPriv::PubHashInHiddenNs\"); }
+    }
+}
+
+namespace ThExportUnnamedPriv {
+    public hashdecl PubHashInHiddenNs {
+        int a = 3;
+    }
+}
+";
+
+        #! the code of the restricted Program that loads the module
+        const Loader = "%%requires reflection
+%%requires %s
+TypedHash sub handle(string name) { return call_static_method(\"ThExportUnnamed::Factory\", name); }
+";
+
+        #! the restricted caller's code
+        const Caller = "%requires reflection
+auto sub member_default(TypedHash th) { return th.getMember(\"a\").getDefaultValue(); }
+auto sub cast(TypedHash th) { return th.doCast({}).a; }
+";
+    }
+
+    private {
+        TmpDir tmp;
+    }
+
+    constructor() : QUnit::Test("ReflectionTypedHashExportUnnamed", "1.0") {
+        tmp = new TmpDir("qore-reflection-typed-hash-export-unnamed-");
+        File f();
+        f.open2(tmp.path + DirSep + "ThExportUnnamed.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Module);
+        f.close();
+
+        addTestCase("restricted caller", \testRestricted());
+        set_return_value(main());
+    }
+
+    #! returns the result of the call, or the error that it raised
+    auto call(Program p, string func, TypedHash th) {
+        try {
+            return p.callFunction(func, th);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    testRestricted() {
+        Program loader(PO_NEW_STYLE | PO_NO_TERMINAL_IO);
+        loader.parse(sprintf(Loader, tmp.path + DirSep + "ThExportUnnamed.qm"), "loader");
+        Program p(PO_NEW_STYLE | PO_NO_TERMINAL_IO);
+        p.parse(Caller, "caller");
+
+        TypedHash pub = loader.callFunction("handle", "pub");
+        TypedHash pub_terminal = loader.callFunction("handle", "pubTerminal");
+        TypedHash hidden = loader.callFunction("handle", "hidden");
+        TypedHash hidden_ns = loader.callFunction("handle", "hiddenNs");
+
+        # an exported typed hash: its initializers are evaluated
+        assertEq(1, call(p, "member_default", pub));
+        assertEq(1, call(p, "cast", pub));
+        # under the restrictions of the caller (and here of the module's Program too)
+        assertEq("INVALID-FUNCTION-ACCESS", call(p, "member_default", pub_terminal));
+        assertEq("INVALID-FUNCTION-ACCESS", call(p, "cast", pub_terminal));
+        # a typed hash that the module does not export, or in a namespace that it does not export, is refused
+        assertEq("REFLECTION-ACCESS-ERROR", call(p, "member_default", hidden));
+        assertEq("REFLECTION-ACCESS-ERROR", call(p, "cast", hidden));
+        assertEq("REFLECTION-ACCESS-ERROR", call(p, "member_default", hidden_ns));
+        assertEq("REFLECTION-ACCESS-ERROR", call(p, "cast", hidden_ns));
+        # an unrestricted caller evaluates the initializers of a typed hash that the module does not export
+        assertEq(2, loader.callFunction("handle", "hidden").getMember("a").getDefaultValue());
+    }
+}

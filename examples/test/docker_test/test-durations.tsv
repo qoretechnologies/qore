@@ -2148,7 +2148,8 @@ examples/test/qore/functions/unicode_byte_order.qtest	0.0	0.0	0.0	1.0	0.0	-	-	0.
 examples/test/qore/functions/untyped-container-args.qtest	0.0	0.0	0.0	1.0	0.0	-	-	0.0	0.0	0.0
 examples/test/qore/functions/untyped-container-args/untyped-container-args.qtest	5.0	4.0	-	-	-	-	-	-	8.0	4.0
 examples/test/qore/functions/user-functional-domains/nested-module-parse.qtest	0.0	0.0	-	-	-	-	-	-	0.0	0.0
-examples/test/qore/functions/user-functional-domains/qlib-all-modules-load.qtest	96.0	36.0	-	-	-	-	-	-	64.0	34.0
+examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-1.qtest	48.0	18.0	-	-	-	-	-	-	32.0	17.0
+examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-2.qtest	48.0	18.0	-	-	-	-	-	-	32.0	17.0
 examples/test/qore/functions/user-functional-domains/qlib-module-domains.qtest	35.0	24.0	-	-	-	-	-	-	23.0	25.0
 examples/test/qore/functions/user-functional-domains/user-functional-domains-modes.qtest	10.0	7.0	-	-	-	6.0	-	-	8.0	7.0
 examples/test/qore/functions/user-functional-domains/user-functional-domains.qtest	0.0	0.0	0.0	0.0	0.0	-	-	0.0	0.0	1.0

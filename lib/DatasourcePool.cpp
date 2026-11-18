@@ -79,7 +79,7 @@ Datasource* DatasourceConfig::get(DatasourceStatementHelper* dsh, ExceptionSink*
     // owned here until it is returned, so that it is freed if its configuration cannot be stored; created with the
     // record of the pool, so that the connection never records the code that grows the pool, which can be any code
     // that uses it (qore#6142)
-    std::unique_ptr<Datasource> ds(new Datasource(driver, dsh, qore_ds_pool_record{creators, opt_setter}));
+    std::unique_ptr<Datasource> ds(qore_ds_private::createPoolConnection(driver, dsh, qore_ds_pool_record{creators, opt_setter}));
     qore_ds_private* dspriv = qore_ds_private::get(*ds.get());
 
     // the values are set by the code that created the pool, not by the code running on this thread (qore#6142)

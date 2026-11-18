@@ -366,8 +366,10 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
                 closeImpl();
             } catch (hash<ExceptionInfo> ex) {
                 # Log to stderr; exceptions must not propagate from a destructor
-                stderr.printf("OpenSearchLoggerAppender: error during cleanup (some log events may be lost): "
-                    "%s: %s\n", ex.err, ex.desc);
+                if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stderr.printf("OpenSearchLoggerAppender: error during cleanup (some log events may be lost): "
+                        "%s: %s\n", ex.err, ex.desc);
+                }
             }
         }
     }
@@ -741,16 +743,20 @@ public class OpenSearchLoggerAppender inherits Logger::LoggerAppenderWithLayout,
 
         if (failCount) {
             # Log to stderr to avoid recursion
-            stderr.printf("OpenSearchLoggerAppender: %d of %d documents failed to index\n",
-                failCount, batchSize);
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("OpenSearchLoggerAppender: %d of %d documents failed to index\n",
+                    failCount, batchSize);
+            }
         }
     }
 
     #! Handles errors during bulk operations
     private handleError(hash<ExceptionInfo> ex, list<hash<auto>> batch) {
         # Log to stderr to avoid recursion
-        stderr.printf("OpenSearchLoggerAppender error: %s: %s (%d events lost)\n",
-            ex.err, ex.desc, batch.size());
+        if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+            stderr.printf("OpenSearchLoggerAppender error: %s: %s (%d events lost)\n",
+                ex.err, ex.desc, batch.size());
+        }
     }
 
     #! Resolves the index name by applying date formatting

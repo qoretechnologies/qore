@@ -200,6 +200,24 @@ class DelayedPreparationTarget inherits TestTarget {
     }
 }
 
+#! Target that steps the system clock back while it prepares a delayed response (debug builds; qore#6534)
+class ClockStepDelayedTarget inherits DelayedPreparationTarget {
+    public {
+        #! the step of the system clock in microseconds
+        int step_us;
+    }
+
+    constructor(int step_us) {
+        self.step_us = step_us;
+    }
+
+    *hash<HttpRequestResultInfo> prepareHttpRequest(hash<HttpConnectionInfo> info) {
+        # the client has taken the time when it sent the request, and the server arms the delay after this
+        call_function("dbg_set_realtime_offset", step_us);
+        return DelayedPreparationTarget::prepareHttpRequest(info);
+    }
+}
+
 #! A non-I/O-thread-safe, memory-backed InputStream (Qore streams block the I/O thread)
 class QoreMemoryInputStream inherits Qore::InputStream {
     private {
@@ -332,6 +350,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             addTestCase("a step back of the system clock does not stop the SSE heartbeat",
                 \sseClockStepHeartbeatTest());
+            addTestCase("a step back of the system clock does not shorten a measured response delay",
+                \delayedResponseClockStepTest());
             addTestCase("a step forward of the system clock does not time out an HttpIdlePollOperation",
                 \idleClockStepTest());
             addTestCase("a step forward of the system clock does not time out an HttpKeepAlivePollOperation",
@@ -613,6 +633,39 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         sock.close();
     }
 
+    #! A step back of the system clock while a response is delayed changes neither the delay nor its measurement
+    /** The server's delay is on the monotonic clock, and the test measures it there too (sendDelayedRequest()):
+        measured on the system clock, a step back can make a response delayed by 200 ms measure as 94 ms (qore#6534).
+        The step is made with dbg_set_realtime_offset() (debug builds) after the request is sent and before the server
+        arms the delay; a step back of an hour would also keep a delay on the system clock from ending within the
+        client's receive timeout.
+    */
+    delayedResponseClockStepTest() {
+        AsyncSocketIoController io_ctrl(False);
+        on_exit io_ctrl.stop();
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        ctrl.start();
+        on_exit delete ctrl;
+
+        ClockStepDelayedTarget target(-3600 * 1000000);
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        on_exit server.close();
+        ctrl.addListener(server, target);
+
+        Socket client();
+        on_exit client.close();
+        client.connect("127.0.0.1:" + server.getSocketInfo().port, 2s);
+        on_exit call_function("dbg_set_realtime_offset", 0);
+        hash<auto> event = sendDelayedRequest(client, "/delayed");
+        assertEq(1, target.preparation_count, "the request reaches preparation once");
+        assertRegex("503 Service Unavailable", event.response, "the delayed response is sent");
+        assertGe(150, event.elapsed_ms,
+            sprintf("the response is measured as delayed after a step back of the system clock (%d ms)",
+                event.elapsed_ms));
+    }
+
     #! a drain counts a connection whose response waits for its delay until the response is sent (qore#5899)
     delayedResponseDrainTest() {
         AsyncSocketIoController io_ctrl(False);
@@ -652,6 +705,21 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         assertTrue(ctrl.waitDrain(30s), "the drain ends when the delayed response has been sent");
     }
 
+    #! Sends a request on the connection and returns the response with the time until it arrived
+    /** The time is measured on the monotonic clock: on the system clock, a step of the clock while the response is
+        delayed changes it, so that a response delayed by 200 ms can be measured as arriving after 94 ms (qore#6534)
+    */
+    static hash<auto> sendDelayedRequest(Socket client, string path) {
+        int started = clock_get_monotonic_us();
+        client.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", path));
+        string response = client.recv(0, 3s);
+        return {
+            "path": path,
+            "response": response,
+            "elapsed_ms": (clock_get_monotonic_us() - started) / 1000,
+        };
+    }
+
     delayedPreparationResponseTest() {
         AsyncSocketIoController io_ctrl(False);
         on_exit io_ctrl.stop();
@@ -676,16 +744,7 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
                 on_exit client.close();
                 client.connect("127.0.0.1:" + port, 2s);
                 foreach string path in (("/delayed", "/delayed-again")) {
-                    date started = now_us();
-                    client.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n",
-                        path));
-                    string response = client.recv(0, 3s);
-                    client_events.push({
-                        "path": path,
-                        "response": response,
-                        "elapsed_ms":
-                            (now_us() - started).durationMilliseconds(),
-                    });
+                    client_events.push(sendDelayedRequest(client, path));
                 }
                 client.send("GET /pending-at-stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
                 client_events.push({"pending_sent": True});
@@ -721,9 +780,10 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             "the long-delay request reaches preparation before shutdown");
         assertEq(1, ctrl.getStats().delayed_responses,
             "the long-delay response is tracked while pending");
-        date started = now_us();
+        # measured on the monotonic clock, as a step of the system clock would change the interval (qore#6534)
+        int started = clock_get_monotonic_us();
         ctrl.stop();
-        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        int elapsed_ms = (clock_get_monotonic_us() - started) / 1000;
         assertTrue(elapsed_ms < 2000,
             sprintf("shutdown cancels pending delayed responses promptly (%d ms)",
                 elapsed_ms));

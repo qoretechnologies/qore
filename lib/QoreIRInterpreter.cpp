@@ -19278,11 +19278,11 @@ load_local_done:
                                 if (lvh.getType() != NT_LIST) {
                                     if (path_inst->binary_mut_op == LVBinaryMutOp::Unshift
                                             || qore_compiled_code_strict_args()) {
-                                        xsink->raiseException(
-                                            path_inst->binary_mut_op == LVBinaryMutOp::Push
-                                                ? "PUSH-ERROR" : "UNSHIFT-ERROR",
-                                            "the lvalue argument is type \"%s\"; expecting \"list\"",
-                                            lvh.getTypeName());
+                                        // the message of the AST interpreter's operator
+                                        bool push = path_inst->binary_mut_op == LVBinaryMutOp::Push;
+                                        xsink->raiseException(push ? "PUSH-ERROR" : "UNSHIFT-ERROR",
+                                            "the lvalue argument to %s is type \"%s\"; expecting \"list\"",
+                                            push ? "push" : "unshift", lvh.getTypeName());
                                     }
                                     break;
                                 }

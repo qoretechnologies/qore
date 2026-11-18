@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+%exec-class DirectiveAtEofTest
+
+#! a parse directive on the last line of the code or of a file without a newline at its end (issue #2740): the rules
+#! of the parse directives end with a newline, so "%endif" there was not read, and the block was left open
+class DirectiveAtEofTest inherits QUnit::Test {
+    constructor() : QUnit::Test("directive at end of input", "1.0") {
+        addTestCase("code without a final newline", \code());
+        addTestCase("an included file without a final newline", \includedFile());
+        addTestCase("a script and standard input without a final newline", \scriptAndStdin());
+        set_return_value(main());
+    }
+
+    private code() {
+        # %endif and %else at the end
+        assertEq(1, callGet("%define X\n%ifdef X\nint sub get() { return 1; }\n%endif"));
+        assertEq(2, callGet("%ifdef UNDEFINED_2740\nint sub get() { return 1; }\n%else\nint sub get() { return 2; }\n"
+            "%endif"));
+        # a directive at the end with white space after it
+        assertEq(3, callGet("%define X\n%ifdef X\nint sub get() { return 3; }\n%endif  "));
+        # a directive that is all the code, and one before the end that ends with a carriage return
+        assertNothing(parseError("%new-style"));
+        assertEq(8, callGet("int sub get() { return 8; }\n%new-style"));
+        assertEq(9, callGet("%define X\n%ifdef X\nint sub get() { return 9; }\n%endif\r"));
+        # code that ends with a newline is unchanged
+        assertEq(4, callGet("%define X\n%ifdef X\nint sub get() { return 4; }\n%endif\n"));
+        # an %endif without its %if is still an error
+        assertRegex("unmatched %endif", parseError("int sub get() { return 5; }\n%endif"));
+    }
+
+    private includedFile() {
+        TmpDir tmp("qore-directive-at-eof-");
+        string path = tmp.path + "/inc.qc";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%define X\n%ifdef X\nint sub get() { return 6; }\n%endif");
+        }
+        assertEq(6, callGet(sprintf("%%include %s\n", path)));
+        # a file that the scanner reads in several blocks
+        string big = tmp.path + "/big.qc";
+        {
+            File f();
+            f.open2(big, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%define X\n");
+            for (int i = 0; i < 3000; ++i) {
+                f.write(sprintf("# a comment line to make the file longer than one block of the scanner: %d\n", i));
+            }
+            f.write("%ifdef X\nint sub get() { return 10; }\n%endif");
+        }
+        assertGt(65536, hstat(big).size);
+        assertEq(10, callGet(sprintf("%%include %s\n", big)));
+        # the code after the include is read after the file's block has ended
+        assertEq(7, callGet(sprintf("%%include %s\nint sub get2() { return 7; }\n", path), "get2"));
+    }
+
+    #! a script file and standard input that end with %endif and %modern without a newline
+    private scriptAndStdin() {
+        string qore = TestInterpreter::qore_interpreter();
+        TmpDir tmp("qore-directive-at-eof-");
+        string path = tmp.path + "/script.q";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("%new-style\n%define X\n%ifdef X\nprintf(\"in\\n\");\n%endif");
+        }
+        int rc;
+        string out = backquote(sprintf("%s %s 2>&1", qore, path), \rc);
+        assertEq(0, rc, out);
+        assertEq("in\n", out);
+        out = backquote(sprintf("%s < %s 2>&1", qore, path), \rc);
+        assertEq(0, rc, out);
+        assertEq("in\n", out);
+        # a script that is only a parse directive without a newline
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write("printf(\"m\\n\");\n%modern");
+        }
+        out = backquote(sprintf("%s %s 2>&1", qore, path), \rc);
+        assertEq(0, rc, out);
+        assertEq("m\n", out);
+    }
+
+    #! returns the result of the function of the code, parsed in a new Program
+    private auto callGet(string code, string func = "get") {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        p.parse(code, "code");
+        return p.callFunction(func);
+    }
+
+    #! returns the description of the parse error of the code, or NOTHING
+    private *string parseError(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+        try {
+            p.parse(code, "code");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}

@@ -1207,8 +1207,10 @@ sse.setEventQueue();
         try {
             LoggerWrapper::logArgs(level, sprintf("ServerSentEventClient %s: ", cid) + message, args);
         } catch (hash<ExceptionInfo> ex) {
-            stderr.printf("ServerSentEventClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
-                vsprintf(message, args));
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stderr.printf("ServerSentEventClient cannot log: %s: %s: %s msg: %s", ex.err, ex.desc, level.getStr(),
+                    vsprintf(message, args));
+            }
         }
     }
 

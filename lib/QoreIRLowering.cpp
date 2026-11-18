@@ -274,6 +274,16 @@ static bool qore_ir_returns_plain(const QoreIRFunction* func, const QoreTypeInfo
     return QoreTypeInfo::parseReturnsPlain(func ? func->specializeType(ti) : ti, t);
 }
 
+//! Returns true if every value of the type is a value of an enum whose values are ints in the function being lowered
+/** The int of such a value is its base value (see lowerIntMutationOperand())
+
+    @param func the function being lowered, or nullptr
+*/
+static bool qore_ir_returns_int_enum(const QoreIRFunction* func, const QoreTypeInfo* ti) {
+    const QoreTypeInfo* sti = func ? func->specializeType(ti) : ti;
+    return QoreTypeInfo::getReturnEnum(sti) && QoreTypeInfo::parseReturns(sti, NT_INT) == QTI_IDENT;
+}
+
 //! Returns true if the type is a plain type of the given base type in the function being lowered
 /** @see qore_ir_returns_plain(), QoreTypeInfo::isPlainType()
 */
@@ -9464,6 +9474,30 @@ QoreIRValue QoreIRLowering::lowerMutationOperand(const QoreValue& lvalue, const 
 }
 
 // documented in QoreIRLowering.h
+QoreIRValue QoreIRLowering::lowerIntMutationOperand(const QoreValue& lvalue, const QoreValue& expr,
+        const QoreProgramLocation* loc, std::string& error, bool force_int) {
+    // a constant-key read of a hash whose values are of an enum type with int values is read as an int when the
+    // operation converts its operand to an int: the value is the enum's base value either way, and the int read needs
+    // no reference and can be hoisted from a loop (qore#6477); a read whose value is observed keeps the enum.  The
+    // operand is lowered as any other (its temporaries are released as before); lowerHashObjectDereference()
+    // recognizes it
+    if (!force_int) {
+        return lowerMutationOperand(lvalue, expr, loc, error);
+    }
+    const AbstractQoreNode* save = int_operand_node;
+    int_operand_node = expr.getInternalNode();
+    QoreIRValue rv;
+    try {
+        rv = lowerMutationOperand(lvalue, expr, loc, error);
+    } catch (...) {
+        int_operand_node = save;
+        throw;
+    }
+    int_operand_node = save;
+    return rv;
+}
+
+// documented in QoreIRLowering.h
 QoreIRValue QoreIRLowering::lowerElementExpression(const QoreValue& expr, const QoreProgramLocation* loc,
         std::string& error) {
     // only a temporary whose release can be observed (a destructor) needs the scope; the others hold references only,
@@ -9830,7 +9864,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         }
     }
 
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10070,7 +10104,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         }
         return inst->result;
     }
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10514,7 +10548,7 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10594,7 +10628,7 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10674,7 +10708,7 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -10754,7 +10788,7 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -11804,7 +11838,7 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -11876,7 +11910,7 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         left_var = nullptr;
     }
     QoreValue right_expr(op->getRight());
-    QoreIRValue right = lowerMutationOperand(op->getLeft(), right_expr, op->loc, error);
+    QoreIRValue right = lowerIntMutationOperand(op->getLeft(), right_expr, op->loc, error, force_int);
     if (!right.isValid()) {
         return QoreIRValue();
     }
@@ -13107,6 +13141,8 @@ static bool qore_ir_is_explicit_hash_value_type(const QoreTypeInfo* type_info) {
 
 QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
+    // the operand of an int compound assignment, which converts it to an int (see lowerIntMutationOperand())
+    const bool int_operand = node && node == int_operand_node;
     auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
     if (!op) {
         return QoreIRValue();
@@ -13161,9 +13197,11 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         }
         const QoreTypeInfo* hash_val_type =
             QoreTypeInfo::getReturnComplexHashOrNothing(base_value_type);
-        // HashKeyAccessInt returns the value as a native int, which a value of an enum type is not (qore#6236)
+        // HashKeyAccessInt returns the value as a native int, which a value of an enum type is not (qore#6236), except
+        // for an operand that the operation converts to an int, which is the enum's base value (qore#6477)
         bool known_int_hash = hash_val_type
-            && qore_ir_returns_plain(builder.getFunction(), hash_val_type, NT_INT);
+            && (qore_ir_returns_plain(builder.getFunction(), hash_val_type, NT_INT)
+                || (int_operand && qore_ir_returns_int_enum(builder.getFunction(), hash_val_type)));
         bool should_invoke = !known_int_hash
             && !exception_stack.empty() && expressionCanThrow(expr);
         // Plain hash<auto> (no hashdecl, not object) never throws on key access

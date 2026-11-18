@@ -462,6 +462,25 @@ static int my_check_connect(Datasource* ds, ExceptionSink* xsink) {
     enum declarations of deleted Programs that were not freed when the library cleanup ended (N must be 0 unless a value
     or a Program held at static scope references them).
 
+    @subsection module_thread_exit Thread Cleanup Functions and Thread-Local Destructors
+
+    A thread that %Qore starts (a \c background thread, a thread of q_start_thread(), a \c ThreadPool worker) runs
+    the thread cleanup functions of the modules (\c tclist.push()) when its code has ended, and then the
+    thread-local destructors of the C++ runtime and of the libraries that the modules use (\c thread_local objects,
+    the destructors of \c pthread_key_create() keys, such as the per-thread state of a client library) when it
+    exits.  Both run on the exiting thread before the library has joined it, and neither may block or take long: a
+    cleanup function or a thread-local destructor that waits for a lock, a network peer or another thread delays
+    the end of its thread, and with it:
+    - qore_cleanup(), which waits without a bound until every thread that %Qore started has been joined, and the end
+      of the main Program of the \c qore binary, which waits so for every thread but the \c ThreadPool workers
+    - \c exit(), which ends the process at once with \c _Exit(), without running the static destructors and the
+      \c atexit() handlers, while a thread is still running its cleanup functions or a thread started with
+      \c QTF_EXTERNAL_LIFECYCLE (a \c ThreadPool worker) has not been joined, and which waits at most 10 seconds
+      for the thread-local destructors of the other threads
+
+    It does not delay the joins of the other threads, which the library joins on other threads meanwhile, but each
+    blocked thread holds its own thread, and a thread of the library joining it, until it ends.
+
     @subsection module_cpp_api_dev Sharing a C++ API Between Modules
 
     A module can publish a C++ API for other binary modules to consume, without the API having to be moved into

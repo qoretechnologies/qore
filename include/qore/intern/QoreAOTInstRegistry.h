@@ -86,12 +86,19 @@ struct AOTInstReadCtx {
         return (it != slot_to_local->end()) ? it->second : nullptr;
     }
 
+    //! set when an instruction holds a block index beyond the blocks of its function (see resolveBlock())
+    mutable bool bad_block_index = false;
+
     //! Resolve block index to block pointer (0xFFFF = nullptr)
+    /** An index beyond the blocks of the function sets bad_block_index, which makes the reader refuse the
+        instruction; it is not read as no block (qore#6468)
+    */
     QoreIRBasicBlock* resolveBlock(uint16_t idx) const {
         if (idx == 0xFFFF) {
             return nullptr;
         }
         if (idx >= blocks.size()) {
+            bad_block_index = true;
             return nullptr;
         }
         return blocks[idx].get();

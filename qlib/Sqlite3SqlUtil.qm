@@ -241,6 +241,8 @@ hash<auto> desc = {
 
 
     @section sqlite3sqlutilv12 Sqlite3SqlUtil_1_2 Sqlite3SqlUtil Module v1.2
+    - implemented @ref select_option_recursive "recursive queries", which need SQLite 3.8.3 or later
+      (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
       described with a default value (the string \c 'null' or \c 0)
       (<a href="https://github.com/qoretechnologies/qore/issues/1746">issue 1746</a>)
@@ -353,6 +355,13 @@ public namespace Sqlite3SqlUtil {
         @since Sqlite3SqlUtil 1.2
     */
     public const SQLITE_ALTER_COLUMN_NOT_NULL_VERSION = "3.53.0";
+
+    #! the first SQLite version that supports recursive queries (\c WITH \c RECURSIVE)
+    /** @see @ref select_option_recursive
+
+        @since Sqlite3SqlUtil 1.2
+    */
+    public const SQLITE_RECURSIVE_QUERY_VERSION = "3.8.3";
 
     #! returns a Sqlite3Table object corresponding to the arguments
     public Sqlite3Table sub get_table(AbstractDatasource nds, string nname, *hash<auto> opts) {
@@ -1631,6 +1640,10 @@ string sql = pk.getTableConstraintSql();
 
         #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
         string getSqlName() {
+            # issue #3544: the common table expression of a recursive query has no schema
+            if (recursive_cte) {
+                return sqlite3_get_sql_identifier(name);
+            }
             return sqlite3_get_sql_object_name(name);
         }
 
@@ -2378,6 +2391,17 @@ string str = table.getSqlValue(date);
             if (info.query_hash.offset) {
                 sql += " offset %v";
                 info.args += info.query_hash.offset.toInt();
+            }
+        }
+
+        #! Returns @ref nothing if the SQLite library supports recursive queries, which need SQLite 3.8.3
+        /** @since Sqlite3SqlUtil 1.2
+        */
+        private *string getRecursiveQueryUnsupportedReasonImpl() {
+            string version = ds.getServerVersion();
+            if (compare_version(version, SQLITE_RECURSIVE_QUERY_VERSION) < 0) {
+                return sprintf("recursive queries need SQLite %s or later; the SQLite library's version is %s",
+                    SQLITE_RECURSIVE_QUERY_VERSION, version);
             }
         }
 

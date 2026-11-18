@@ -38,8 +38,17 @@
 #include "qore/intern/qore_encoding_private.h"
 
 #include <atomic>
+#include <memory>
+#include <string>
 #include <utility>
 #include <vector>
+
+//! frees memory allocated with malloc() (a deleter of std::unique_ptr with no state)
+struct QoreFreeDeleter {
+    DLLLOCAL void operator()(void* p) const {
+        free(p);
+    }
+};
 
 class QoreRegexBase;
 class QoreRegexSubst;
@@ -408,6 +417,34 @@ public:
             ExceptionSink* xsink) const;
     DLLLOCAL int compute_substr_range(qore_offset_t offset, qore_offset_t length, size_t& byte_offset,
             size_t& byte_len, ExceptionSink* xsink) const;
+
+    //! returns the byte offset of \a p in the string's text, or -1 if it does not point into it
+    /** The text can move when the string changes; a source that is part of the target's text (including a view) is
+        located again at its offset after the buffer changes, or copied first
+    */
+    DLLLOCAL qore_offset_t ownDataOffset(const char* p) const {
+        if (view_parent) {
+            return ownDataOffsetViewPath(p);
+        }
+        // one unsigned comparison: a pointer before the buffer gives a difference larger than any length
+        uintptr_t d = reinterpret_cast<uintptr_t>(p) - reinterpret_cast<uintptr_t>(buffer);
+        return d < len ? static_cast<qore_offset_t>(d) : -1;
+    }
+
+    //! returns true if \a src is \a target or its text is part of the text of \a target
+    DLLLOCAL static bool isOwnSource(const qore_string_private& target, const qore_string_private& src) {
+        return &target == &src || (src.len && target.ownDataOffset(src.effective_buf()) >= 0);
+    }
+
+    //! appends a null-terminated source that is part of the string's text
+    DLLLOCAL void concatOwnText(const char* str);
+
+    //! the view path of ownDataOffset(): the text is in the parent's buffer
+    DLLLOCAL qore_offset_t ownDataOffsetViewPath(const char* p) const;
+
+    //! grows the string to hold \a i bytes (check_char()) and returns where \a src is then: in the moved text if it
+    //! was part of it, else \a src (out of line: the slow path of the operations that append a source)
+    DLLLOCAL const char* growKeepingSource(size_t i, const char* src);
 
     DLLLOCAL void check_char(size_t i) {
         if (view_parent) {
@@ -1158,7 +1195,10 @@ public:
     DLLLOCAL void concat_intern(const char* p, size_t plen) {
         assert(p);
         assert(plen);
-        check_char(len + plen);
+        // only growth or a view moves the text (the test is the one that check_char() makes)
+        if (view_parent || len + plen >= allocated) {
+            p = growKeepingSource(len + plen, p);
+        }
         memcpy(ownedBuffer() + len, p, plen);
         len += plen;
         ownedBuffer()[len] = '\0';
@@ -1347,6 +1387,12 @@ public:
     }
 
     DLLLOCAL void concat(const char *str) {
+        // a source that is part of the string is appended with its size, as the string grows while it is read (out
+        // of line, so that this function stays small enough to be inlined)
+        if (str && ownDataOffset(str) >= 0) {
+            concatOwnText(str);
+            return;
+        }
         // if it's not a null string
         if (str) {
             size_t i = 0;
@@ -1376,58 +1422,53 @@ public:
         nothing is appended if the output cannot be formatted, such as an output longer than INT_MAX characters
     */
     DLLLOCAL int vsprintf(const char *fmt, va_list args, bool* failed = nullptr) {
-        mutableBuffer();
-        size_t fmtlen = ::strlen(fmt);
-        // ensure minimum space is free
-        if ((allocated - len - fmtlen) < MIN_SPRINTF_BUFSIZE) {
-            allocated += fmtlen + MIN_SPRINTF_BUFSIZE;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            // resize buffer
-            ownedBuffer() = (char*)realloc(ownedBuffer(), allocated * sizeof(char));
-            sb.sync(allocated);
-        }
-        // set free buffer size
-        qore_offset_t free = allocated - len;
-
-        // copy formatted string to buffer
-        int i = ::vsnprintf(ownedBuffer() + len, free, fmt, args);
-
+        // the arguments may be part of the string's text: it is formatted separately before the string is changed
+        char sbuf[256];
+        va_list args2;
+        va_copy(args2, args);
+        int i = ::vsnprintf(sbuf, sizeof(sbuf), fmt, args);
+        std::unique_ptr<char, QoreFreeDeleter> big;
+        const char* out = sbuf;
 #ifdef HPUX
-        // vsnprintf failed but didn't tell us how big the buffer should be
-        if (i < 0) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " ownedBuffer()=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, ownedBuffer(), fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
-            // resize buffer
-            allocated += STR_CLASS_EXTRA;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            ownedBuffer() = (char*)realloc(ownedBuffer(), sizeof(char) * allocated);
-            sb.sync(allocated);
-            *(ownedBuffer() + len) = '\0';
-            return -1;
+        // vsnprintf() fails without giving the size needed: the buffer is doubled until it is large enough
+        size_t big_size = sizeof(sbuf);
+        while (i < 0 && big_size < (static_cast<size_t>(1) << 30)) {
+            big_size *= 2;
+            big.reset(static_cast<char*>(malloc(big_size)));
+            if (!big) {
+                i = -1;
+                break;
+            }
+            va_list args3;
+            va_copy(args3, args2);
+            i = ::vsnprintf(big.get(), big_size, fmt, args3);
+            va_end(args3);
+            out = big.get();
         }
 #else
+        if (i >= static_cast<int>(sizeof(sbuf))) {
+            big.reset(static_cast<char*>(malloc(static_cast<size_t>(i) + 1)));
+            // a buffer that cannot be allocated fails the call as an output that cannot be formatted
+            i = big ? ::vsnprintf(big.get(), static_cast<size_t>(i) + 1, fmt, args2) : -1;
+            out = big.get();
+        }
+#endif
+        va_end(args2);
         if (i < 0) {
             // the output cannot be formatted: nothing is appended, and repeating the call cannot change that
-            *(ownedBuffer() + len) = '\0';
+            mutableBuffer();
+            if (ownedBuffer()) {
+                *(ownedBuffer() + len) = '\0';
+            }
             if (failed) {
                 *failed = true;
             }
             return 0;
         }
-        if (i >= free) {
-            //printf("DEBUG: vsnprintf() failed: i=%d allocated=" QSD " len=" QSD " ownedBuffer()=%p fmtlen=" QSD
-            //    " (new=i+%d = %d)\n", i, allocated, len, ownedBuffer(), fmtlen, STR_CLASS_EXTRA, i + STR_CLASS_EXTRA);
-            // resize buffer
-            allocated = len + i + STR_CLASS_EXTRA;
-            allocated = (allocated / 0x10 + 1) * 0x10; // use complete cache line
-            ownedBuffer() = (char*)realloc(ownedBuffer(), sizeof(char) * allocated);
-            sb.sync(allocated);
-            *(ownedBuffer() + len) = '\0';
-            return -1;
-        }
-#endif
-
+        check_char(len + i);
+        memcpy(ownedBuffer() + len, out, i);
         len += i;
+        ownedBuffer()[len] = '\0';
         return 0;
     }
 
@@ -1737,5 +1778,51 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     @param len the length of the string in bytes
 */
 DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
+
+
+//! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves
+class QoreStringOwnSource {
+public:
+    //! a source of \a n bytes
+    DLLLOCAL QoreStringOwnSource(const qore_string_private& str, const char* p, size_t n) : ptr(p) {
+        if (p && n && str.ownDataOffset(p) >= 0) {
+            copyIntern(p, n);
+        }
+    }
+
+    //! a null-terminated source
+    DLLLOCAL QoreStringOwnSource(const qore_string_private& str, const char* p) : ptr(p) {
+        if (p && str.ownDataOffset(p) >= 0) {
+            copyIntern(p, ::strlen(p));
+        }
+    }
+
+    DLLLOCAL const char* get() const {
+        return ptr;
+    }
+
+    //! returns false if the source had to be copied and the copy could not be made (the operation then fails)
+    DLLLOCAL bool ok() const {
+        return !failed;
+    }
+
+private:
+    std::unique_ptr<char, QoreFreeDeleter> copy;
+    const char* ptr;
+    bool failed = false;
+
+    //! copies the source with a terminator
+    DLLLOCAL void copyIntern(const char* p, size_t n) {
+        copy.reset(static_cast<char*>(malloc(n + 1)));
+        if (!copy) {
+            ptr = nullptr;
+            failed = true;
+            return;
+        }
+        memcpy(copy.get(), p, n);
+        copy.get()[n] = '\0';
+        ptr = copy.get();
+    }
+};
 
 #endif

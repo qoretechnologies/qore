@@ -3,11 +3,14 @@
 
 %modern
 
+%requires CrossCycleGate
+
 module CrossCycleB {
     version = "1.0";
     desc = "cross-thread circular dependency test module B";
     author = "Qore Technologies, s.r.o.";
     license = "MIT";
-    init = sub () { load_module("CrossCycleA"); };
+    # waits until the other module's init started too (see CrossCycleA.qm)
+    init = sub () { cross_cycle_rendezvous(); load_module("CrossCycleA"); };
 }
 public namespace CrossCycleBNs { public const BVal = 1; }

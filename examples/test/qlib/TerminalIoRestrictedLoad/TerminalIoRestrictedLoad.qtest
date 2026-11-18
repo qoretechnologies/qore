@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - module loading from AOT-compiled qmods and a qcc-compiled executable
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class TerminalIoRestrictedLoadTest
+
+#! Library modules can be loaded first by code without terminal I/O (qore#6438)
+/** A user module inherits the parse restrictions of the Program that loads it first, so a library module that called a
+    terminal I/O function (printf(), print(), flush(), TermIOS) anywhere in its code, even in a debug trace or for a
+    verbose option, could not be loaded first by code restricted with @ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"
+    (DatasourceProvider, and through Logger every module that requires it: DataProvider, ConnectionProvider, SqlUtil and
+    the others), and was then unusable in the process.
+
+    Each module is loaded first in a child process from a Program restricted with PO_NO_TERMINAL_IO, in each execution
+    mode and in a qcc-compiled executable (which load the compiled modules), and from the module sources with debug
+    code enabled (which a compiled module does not have); the verbose output of DatasourceProvider and
+    ConnectionProvider is left out when restricted code loaded the module and written when unrestricted code did.
+*/
+class TerminalIoRestrictedLoadTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the modules that called terminal I/O functions directly, through Logger or in debug code
+        const Modules = (
+            "Logger", "DatasourceProvider", "ConnectionProvider", "DataProvider", "SqlUtil", "Schema", "Swagger",
+            "RestClient", "TelnetClient", "Connect", "YamlRpcClient", "McpClientDataProvider", "EdifactUtil",
+            "DataStreamClient", "DataStreamRequestHandler",
+            # its data types read the member defaults of its own typed hashes through DataProvider's code (qore#6481)
+            "Pop3ClientDataProvider",
+        );
+
+        #! the code that the restricted Program runs after loading the module, if any
+        const Code = {
+            # a provider module that does not exist: the verbose output of its error is left out
+            "DatasourceProvider": "auto sub test() { return get_ds_hash(True); }",
+            "ConnectionProvider": "auto sub test() { return get_connections(True); }",
+        };
+
+        #! the result of the code
+        const Result = {
+            "DatasourceProvider": "null",
+            "ConnectionProvider": "{}",
+        };
+
+        #! the child: loads the module given first from a Program without terminal I/O and runs its test code
+        const Child = "%%modern
+%%prepend-module-path \"%s\"
+string mod = ARGV[0];
+*string code = ARGV[1];
+Program p(PO_NEW_STYLE | (ARGV[2] == \"unrestricted\" ? 0 : PO_NO_TERMINAL_IO));
+try {
+    p.parse(\"%%requires \" + mod + \"\\n\" + code, \"restricted\");
+    if (code) {
+        printf(\"%%s: test: %%y\\n\", mod, p.callFunction(\"test\"));
+    }
+    printf(\"%%s: OK\\n\", mod);
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%%s: %%s: %%s: %%s\\n\", mod, get_ex_pos(ex), ex.err, ex.desc);
+}
+";
+
+        #! the environment of the children: provider modules that do not exist
+        const Env = "QORE_DATASOURCE_PROVIDERS=NoSuchDatasourceProviderModule "
+            "QORE_CONNECTION_PROVIDERS=NoSuchConnectionProviderModule";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("TerminalIoRestrictedLoad", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+
+        addTestCase("restricted first load", \testRestricted());
+        addTestCase("restricted first load from source with debug code", \testSource());
+        addTestCase("verbose output when allowed", \testUnrestricted());
+        set_return_value(main());
+    }
+
+    #! the expected output of a child for a module
+    string expected(string mod) {
+        return (Code{mod} ? sprintf("%s: test: %s\n", mod, Result{mod}) : "") + mod + ": OK\n";
+    }
+
+    #! writes the child program, which loads the modules from the given directory
+    string writeChild(string dir, string qlib = realpath(get_script_dir() + "/../../../../qlib")) {
+        string file = dir + DirSep + "child.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf(Child, qlib));
+        f.close();
+        return file;
+    }
+
+    #! mirrors the module sources with symbolic links, leaving out the compiled modules, which are preferred to them
+    mirrorSources(string src, string dst) {
+        mkdir(dst);
+        Dir d();
+        d.chdir(src);
+        foreach string name in (d.list()) {
+            string path = src + DirSep + name;
+            if (is_dir(path)) {
+                mirrorSources(path, dst + DirSep + name);
+            } else if (name !~ /\.qmod$/) {
+                symlink(path, dst + DirSep + name);
+            }
+        }
+    }
+
+    #! runs the commands in four threads at a time; returns their outputs in the same order
+    list<string> runAll(list<string> cmds) {
+        list<string> out = map "", cmds;
+        Counter c();
+        Queue q();
+        map q.push($#), cmds;
+        # one end marker for each thread
+        map q.push(-1), xrange(4);
+        for (int t = 0; t < 4; ++t) {
+            c.inc();
+            background sub () {
+                on_exit c.dec();
+                while (True) {
+                    int i = q.get();
+                    if (i < 0) {
+                        break;
+                    }
+                    out[i] = backquote(cmds[i] + " 2>&1");
+                }
+            }();
+        }
+        c.waitForZero();
+        return out;
+    }
+
+    testRestricted() {
+        TmpDir tmp("qore-terminal-io-restricted-load-");
+        string child = writeChild(tmp.path);
+        string env = sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", Env, libqore_dir, libqore_dir);
+
+        list<string> cmds;
+        list<string> labels;
+        foreach string mod in (Modules) {
+            string args = sprintf("%s %s", mod, Code{mod} ? sprintf("'%s'", Code{mod}) : "''");
+            foreach string mode in (ExecModes) {
+                cmds += sprintf("%s %s --exec-mode=%s %s %s", env, qore_bin, mode, child, args);
+                labels += sprintf("%s %s", mod, mode);
+            }
+        }
+
+        # a qcc-compiled executable loading each module
+        string exe = tmp.path + DirSep + "child";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O0 -o %s %s 2>&1", libqore_dir, qcc_bin, exe, child));
+        assertTrue(is_file(exe), sprintf("qcc compiled the executable: %s", out));
+        foreach string mod in (Modules) {
+            cmds += sprintf("%s %s %s %s", env, exe, mod, Code{mod} ? sprintf("'%s'", Code{mod}) : "''");
+            labels += sprintf("%s qcc", mod);
+        }
+
+        list<string> outs = runAll(cmds);
+        foreach string label in (labels) {
+            assertEq(expected(label.split(" ")[0]), outs[$#], label);
+        }
+    }
+
+    #! loads the modules from their sources with debug code enabled, which a compiled module does not have
+    testSource() {
+        TmpDir tmp("qore-terminal-io-restricted-source-");
+        string qlib = tmp.path + DirSep + "qlib";
+        mirrorSources(realpath(get_script_dir() + "/../../../../qlib"), qlib);
+        string child = writeChild(tmp.path, qlib);
+        string env = sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", Env, libqore_dir, libqore_dir);
+
+        list<string> cmds = map sprintf("%s %s --enable-debug %s %s %s", env, qore_bin, child, $1,
+            Code{$1} ? sprintf("'%s'", Code{$1}) : "''"), Modules;
+        list<string> outs = runAll(cmds);
+        foreach string mod in (Modules) {
+            assertEq(expected(mod), outs[$#], mod + " source");
+        }
+    }
+
+    testUnrestricted() {
+        TmpDir tmp("qore-terminal-io-unrestricted-load-");
+        string child = writeChild(tmp.path);
+        string env = sprintf("%s LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", Env, libqore_dir, libqore_dir);
+        foreach string mod in (Code.keyIterator()) {
+            string out = backquote(sprintf("%s %s %s %s '%s' unrestricted 2>&1", env, qore_bin, child, mod,
+                Code{mod}));
+            # the error of the provider module that does not exist is written before the result
+            int nl = out.find("\n");
+            assertRegex("LOAD-MODULE-ERROR.*NoSuch[A-Za-z]+ProviderModule", out.substr(0, nl), mod + " error");
+            assertEq(expected(mod), out.substr(nl + 1), mod);
+        }
+    }
+}

@@ -117,7 +117,9 @@ public class McpToolsListDataProvider inherits McpClientDataProviderBase {
         @debug("Listing tools");
         list<auto> tools = mcp.listTools();
         @debug {
-            printf("Found %d tools\n", tools.size());
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Found %d tools\n", tools.size());
+            }
         }
         return {
             "tools": tools,
@@ -174,7 +176,9 @@ public class McpToolCallDataProvider inherits McpClientDataProviderBase {
         @debug("Calling tool %y with arguments: %y", req.name, req.arguments);
         hash<auto> result = mcp.callTool(req.name, req.arguments);
         @debug {
-            printf("Tool %y returned: %y\n", req.name, result);
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Tool %y returned: %y\n", req.name, result);
+            }
         }
         return result;
     }
