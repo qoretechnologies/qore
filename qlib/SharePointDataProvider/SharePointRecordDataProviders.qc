@@ -455,7 +455,7 @@ public class SharePointRecordsDataProvider inherits SharePointDataProviderBase {
         if (exists table_map) {
             return table_map;
         }
-        hash<string, hash<auto>> rv;
+        hash<string, hash<auto>> rv = {};
         foreach hash<auto> site in (getRecordSites()) {
             list<hash<auto>> lists;
             try {

@@ -203,6 +203,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         addTestCase("record flattening", \recordFlattenTest());
         addTestCase("OData filter translation", \odataFilterTest());
         addTestCase("OData literals", \odataLiteralTest());
+        addTestCase("lists with no columns and sites with no lists", \emptyListTest());
         addTestCase("graph url stripping", \graphUrlStripTest());
         addTestCase("event change filtering", \eventFilterTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
@@ -865,6 +866,42 @@ public class SharePointDataProviderTest inherits QUnit::Test {
             map $1, table.searchRecords({"Title": binary_to_string(<41ff2720>, "UTF-8")});
         });
         assertEq("", rest.last_path);
+    }
+
+    #! A list with no writable columns has the item metadata fields only, and a site with no lists has no tables
+    emptyListTest() {
+        checkModule();
+        FakeSharePointRestClientIo rest();
+        rest.response_body = {"value": ()};
+        SharePointRecordTableDataProvider table(rest, "Empty", TestSite, TestList);
+        assertEq(("createdDateTime", "id", "lastModifiedDateTime", "webUrl"), sort(keys table.getRecordType()));
+        *list<auto> found = map $1, table.searchRecords();
+        assertEq(0, found.size());
+        # columns that are all read-only or hidden are left out the same way
+        rest.response_body = {"value": ({"name": "X", "readOnly": True, "text": {}},
+            {"name": "Y", "hidden": True, "text": {}})};
+        assertEq(("createdDateTime", "id", "lastModifiedDateTime", "webUrl"), sort(keys table.getRecordType()));
+
+        # a record with no writable field has nothing to write: an update changes nothing and makes no request
+        assertEq({}, SharePointListItemWriteDataProviderBase::getWritableFields({"id": "1", "webUrl": "x"}));
+        assertEq({}, SharePointListItemWriteDataProviderBase::getWritableFields());
+        rest.response_body = {"value": ()};
+        rest.last_method = "";
+        assertEq(0, table.updateRecords({"webUrl": "x"}, {"id": "1"}));
+        assertNeq("PATCH", rest.last_method);
+
+        # an action whose request takes the list's columns keeps its own request type
+        FakeSharePointRestClientIo arest;
+        SharePointDataProvider::SharePointDataProvider prov = getProvider(\arest);
+        arest.response_body = {"value": ()};
+        AbstractDataProvider create = prov.getChildProvider("create-list-item");
+        assertEq(create.getRequestType().getName(), create.getRequestTypeWithOptions({"site_id": TestSite,
+            "list_id": TestList}).getName());
+
+        rest.response_body = {"id": TestSite, "value": ()};
+        SharePointRecordsDataProvider records(rest, {"site_id": TestSite});
+        assertEq((), (select records.getChildProviderNames(), $1 != AbstractDataProvider::GenericApiCallChildName)
+            ?? ());
     }
 
     graphUrlStripTest() {
