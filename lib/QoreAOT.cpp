@@ -981,31 +981,123 @@ static bool qoreAotWarningsAreErrors() {
     return env && *env && strcmp(env, "0");
 }
 
+//! the form in which the compiler reports the diagnostics of the parse of the code it compiles (issue #6555)
+enum class QoreAotDiagFormat {
+    //! one line per diagnostic on stderr: <file>:<line>[:<col>]: error|warning: <code>: <message>
+    TEXT,
+    //! one JSON array of all of the diagnostics of the run, at its end (QORE_DIAG_FORMAT=json)
+    JSON,
+    //! a code frame per diagnostic on stderr (QORE_CODE_FRAMES)
+    FRAMES,
+};
+
+static QoreAotDiagFormat qoreAotDiagFormat() {
+    QoreEnvironmentValue df_holder("QORE_DIAG_FORMAT");
+    const char* df = df_holder.c_str();
+    if (df && !strcmp(df, "json")) {
+        return QoreAotDiagFormat::JSON;
+    }
+    if (SystemEnvironment::isSet("QORE_CODE_FRAMES")) {
+        return QoreAotDiagFormat::FRAMES;
+    }
+    return QoreAotDiagFormat::TEXT;
+}
+
+//! the diagnostics reported in JSON form, printed at the end of the run (qore_aot_flush_parse_diagnostics())
+static std::mutex aot_json_diag_lock;
+static std::vector<QoreDiagnostic> aot_json_diags;
+static bool aot_json_diags_flushed = false;
+
 //! Reports the exceptions in \a sink, those of the parse of code being compiled, as diagnostics, and clears it
-/** Each is one line on stderr, in the form of other compilers (issue #6555):
-    <file>:<line>[:<col>]: error|warning: <code>: <message>; the column is 1-based
+/** In the form that QORE_DIAG_FORMAT / QORE_CODE_FRAMES select; by default each is one line on stderr, in the form of
+    other compilers (issue #6555): <file>:<line>[:<col>]: error|warning: <code>: <message>; the column is 1-based.
+    The diagnostic of an exception is the one that its Program recorded, with its hints and possible fixes, if it
+    kept it (the Programs that the compiler creates do with QORE_DIAG_FORMAT / QORE_CODE_FRAMES); otherwise it is made
+    from the exception.
 
     @param sink the exceptions: parse errors, or parse warnings if \a warnings
     @param warnings true if the sink holds warnings
 */
 static void qoreAotReportParseDiagnostics(ExceptionSink& sink, bool warnings) {
-    const char* sev = warnings ? "warning" : "error";
+    if (!sink) {
+        return;
+    }
+    std::vector<QoreDiagnostic> diags;
     for (QoreException* e = qore_es_private::get(sink)->head; e; e = e->next) {
-        QoreStringValueHelper err(e->err);
-        QoreStringValueHelper desc(e->desc);
-        // an exception without a source location (raised by builtin code) has no file
-        const char* file = e->isBuiltin() ? "" : e->file.c_str();
-        if (!*file || e->start_line < 0) {
-            // no source location: the file, if known, or the compiler
-            fprintf(stderr, "%s: %s: %s: %s\n", *file ? file : "qcc", sev, err->c_str(), desc->c_str());
-        } else if (e->start_column >= 0) {
-            fprintf(stderr, "%s:%d:%d: %s: %s: %s\n", file, e->start_line, e->start_column + 1, sev, err->c_str(),
-                desc->c_str());
-        } else {
-            fprintf(stderr, "%s:%d: %s: %s: %s\n", file, e->start_line, sev, err->c_str(), desc->c_str());
+        QoreDiagnostic d("", std::string(), std::string(), QoreProgramLineLocation(), nullptr);
+        if (!qore_get_exception_parse_diagnostic(*e, d)) {
+            QoreStringValueHelper err(e->err);
+            QoreStringValueHelper desc(e->desc);
+            // an exception without a source location (raised by builtin code) has no file
+            d = QoreDiagnostic(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e, desc->c_str());
         }
+        d.error = !warnings;
+        diags.push_back(std::move(d));
     }
     sink.clear();
+    switch (qoreAotDiagFormat()) {
+        case QoreAotDiagFormat::JSON: {
+            std::lock_guard<std::mutex> lg(aot_json_diag_lock);
+            aot_json_diags.insert(aot_json_diags.end(), diags.begin(), diags.end());
+            break;
+        }
+        case QoreAotDiagFormat::FRAMES: {
+            // the source of each file is read once
+            std::map<std::string, std::string> sources;
+            qore_render_diagnostic_frames(diags, [&sources] (const QoreDiagnostic& d) -> const char* {
+                if (d.file.empty()) {
+                    return nullptr;
+                }
+                auto i = sources.find(d.file);
+                if (i == sources.end()) {
+                    std::string text;
+                    if (FILE* f = fopen(d.file.c_str(), "r")) {
+                        char buf[4096];
+                        size_t n;
+                        while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+                            text.append(buf, n);
+                        }
+                        fclose(f);
+                    }
+                    i = sources.emplace(d.file, std::move(text)).first;
+                }
+                return i->second.empty() ? nullptr : i->second.c_str();
+            }, stderr);
+            break;
+        }
+        case QoreAotDiagFormat::TEXT:
+            for (const QoreDiagnostic& d : diags) {
+                const char* sev = d.error ? "error" : "warning";
+                if (d.file.empty() || d.start_line < 0) {
+                    // no source location: the file, if known, or the compiler
+                    fprintf(stderr, "%s: %s: %s: %s\n", d.file.empty() ? "qcc" : d.file.c_str(), sev, d.code.c_str(),
+                        d.message.c_str());
+                } else if (d.start_column >= 0) {
+                    fprintf(stderr, "%s:%d:%d: %s: %s: %s\n", d.file.c_str(), d.start_line, d.start_column + 1, sev,
+                        d.code.c_str(), d.message.c_str());
+                } else {
+                    fprintf(stderr, "%s:%d: %s: %s: %s\n", d.file.c_str(), d.start_line, sev, d.code.c_str(),
+                        d.message.c_str());
+                }
+            }
+            break;
+    }
+}
+
+void qore_aot_flush_parse_diagnostics(FILE* out) {
+    if (qoreAotDiagFormat() != QoreAotDiagFormat::JSON) {
+        return;
+    }
+    std::lock_guard<std::mutex> lg(aot_json_diag_lock);
+    if (aot_json_diags_flushed) {
+        return;
+    }
+    aot_json_diags_flushed = true;
+    if (!out) {
+        out = stdout;
+    }
+    fprintf(out, "%s\n", qore_diagnostics_json(aot_json_diags).c_str());
+    fflush(out);
 }
 
 void qore_aot_report_parse_diagnostics(ExceptionSink& sink, bool warnings) {
