@@ -311,6 +311,7 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution mode
         # - aot-dependency-domains (#6351): its checks load modules from source and compiled with qcc in child
         #   processes, as a module is loaded once in a process
+        # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
         self.assertEqual(sorted(["examples/test/ir/AOTConstantImportStale.qtest",
                                  "examples/test/ir/AOTModuleDependencyRestrictions.qtest",
                                  "examples/test/ir/AOTModuleHeaderRequests.qtest",
@@ -388,6 +389,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-1.qtest",
                                  "examples/test/qore/functions/user-functional-domains/QlibAllModulesLoad-2.qtest",
                                  "examples/test/qore/functions/user-functional-domains/qlib-restricted-callers.qtest",
+                                 "examples/test/qlib/DataProvider/TabularProfilerEncoding.qtest",
                                  "examples/test/qlib/HttpClientIo/ConnectionManagerTeardown.qtest",
                                  "examples/test/qlib/RestSchemaActions/RestSchemaImportTool.qtest",
                                  "examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest",
