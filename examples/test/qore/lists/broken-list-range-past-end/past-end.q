@@ -44,3 +44,9 @@ t("or-nothing list across end", auto sub () { *list<int> ol = l; return ol[3..4]
 # a slice in range is a list<int> as before; one outside of it is not, which an assignment to a list<int> checks
 t("in range to list<int>", auto sub () { list<int> x = l[1..2]; return x; });
 t("across end to list<int>", auto sub () { list<int> x = l[2..5]; return x; });
+# remove of a range past the end of a list gives NOTHING for the elements past the end, so the removed list has the
+# or-nothing element type of the list (qore#6434)
+t("remove across end", auto sub () { list<int> rl = l; auto r = remove rl[2..5]; return (r, rl, r.fullType()); });
+t("remove reverse across end", auto sub () { list<int> rl = l; return remove rl[5..2]; });
+t("remove in range", auto sub () { list<int> rl = l; return remove rl[1..2]; });
+t("remove across end to list<int>", auto sub () { list<int> rl = l; list<int> x = remove rl[2..5]; return x; });

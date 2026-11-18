@@ -5036,7 +5036,11 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
             // add additional elements if necessary
             //printd(5, "l->size: %d start: %d stop: %d\n", (int)orig_size, (int)start, (int)stop);
             if (stop >= (int64)orig_size) {
-                qore_list_private::get(*nl)->resize(nl->size() + stop - orig_size + 1);
+                // the elements past the end of the list are NOTHING, so the removed list has the or-nothing element
+                // type of the list (list<*int> for a list<int>), as a range past the end of a list does (qore#6434)
+                qore_list_private* npriv = qore_list_private::get(*nl);
+                npriv->resize(nl->size() + stop - orig_size + 1);
+                npriv->setOrNothingElementType();
             }
             v = nl;
             if (*xsink)

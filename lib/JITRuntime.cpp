@@ -17709,7 +17709,10 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         size_t orig_size = l->size();
         ReferenceHolder<QoreListNode> nl(l->extract(start, stop - start + 1), xsink);
         if (stop >= static_cast<int64>(orig_size)) {
+            // the elements past the end of the list are NOTHING, so the removed list has the or-nothing element
+            // type of the list, as in the AST interpreter (LValueRemoveHelper::doRemove(); qore#6434)
             qore_list_private::get(**nl)->resize(nl->size() + stop - orig_size + 1);
+            qore_list_private::get(**nl)->setOrNothingElementType();
         }
         if (reverse) {
             nl = nl->reverse();

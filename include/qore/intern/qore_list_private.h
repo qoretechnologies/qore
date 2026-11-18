@@ -758,6 +758,7 @@ struct qore_list_private {
 
     //! makes the element type of the list its or-nothing type (list<*int> for a list<int>) if its element type does
     //! not take NOTHING, as for delete or remove of an element of a list held by an lvalue that allows it (qore#6435)
+    //! and for the list that remove of a range past the end of a list gives (qore#6434)
     DLLLOCAL void setOrNothingElementType() {
         if (complexTypeInfo) {
             complexTypeInfo = QoreTypeInfo::getOrNothingListType(complexTypeInfo);
