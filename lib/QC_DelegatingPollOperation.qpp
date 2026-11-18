@@ -79,6 +79,26 @@ public:
         assert(!counter_obj);
     }
 
+    //! Releases the operation's state (cleanup()) with its last reference
+    /** An async I/O controller that holds the operation can still continue it after the destructor of its object
+        (issue #6464)
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink) override {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    //! Releases the operation's state (cleanup()) with its last reference, without a caller's exception sink
+    DLLLOCAL void deref() override {
+        if (ROdereference()) {
+            ExceptionSink xsink;
+            cleanup(&xsink);
+            delete this;
+        }
+    }
+
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         if (inner_obj) {
             inner_obj->deref(xsink);
@@ -247,8 +267,10 @@ bool qore_delegating_poll_op_reads_state_natively(const SocketPollOperationBase*
 // DGC dispatch entry point — see QC_DelegatingPollOperation.h.
 bool qore_delegating_poll_op_scan_members(AbstractPrivateData* priv_data, RObject& obj,
         RSetHelper& rsh, ExceptionSink* xsink) {
-    ReferenceHolder<DelegatingPollOperationPriv> priv(
-        reinterpret_cast<DelegatingPollOperationPriv*>(priv_data), xsink);
+    // the reference can be the last one if the object is deleted meanwhile: its release, which runs the operation's
+    // cleanup, is not made in the scan
+    QorePollOpOffThreadRef<DelegatingPollOperationPriv> priv(
+        reinterpret_cast<DelegatingPollOperationPriv*>(priv_data));
     if (!*priv) {
         return false;
     }
@@ -354,7 +376,9 @@ DelegatingPollOperation::constructor(AbstractPollOperation<?> operation, *code o
 */
 DelegatingPollOperation::destructor() {
     qore_object_private::get(*self)->decScanPrivateData();
-    poll->cleanup(xsink);
+    // the operation's state is released with its last reference, which an async I/O controller that continues the
+    // operation can hold; the controller cancels the operation
+    qore_socket_poll_op_object_deleted(poll);
     poll->deref(xsink);
 }
 

@@ -1,0 +1,35 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# RcSharedPath.qm - test module loaded by its path by an unrestricted and a restricted Program (qore#6337)
+# the test copies it to a directory outside the module path before it is loaded: a file under a directory of the
+# module path is library code, however it is loaded
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires RcHubLib
+
+module RcSharedPath {
+    version = "1.0";
+    desc = "test module loaded by its path, with code that declares a domain and code that calls it";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+#! The public definitions of the test module
+public namespace RcSharedPath {
+#! Code with a functional domain
+public string sub declared(string s) [dom=PROCESS_CONTROL] {
+    return "declared: " + s;
+}
+
+#! Calls declared()
+public string sub wrapper(string s) {
+    return declared(s);
+}
+
+#! Calls the code with a domain of a library module
+public string sub proxy() {
+    return RcHubLib::tagged();
+}
+}

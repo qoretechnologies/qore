@@ -2677,6 +2677,20 @@ int check_lvalue(QoreValue n, bool assignment, qore_lvalue_use_e use) {
 
 static int check_lvalue_intern(QoreValue n, bool assignment, bool direct, qore_lvalue_use_e use);
 
+//! checks the lvalue that an element, member, slice or cast of an lvalue is taken of
+/** NOTHING is an lvalue by itself (an operator on it changes nothing), but it has no elements or members, and a
+    path from it is refused (issue #6480); a cast of NOTHING is folded to NOTHING when it is initialized, so the cast
+    case is reached only by a cast that is not folded
+*/
+static int check_lvalue_base(const QoreProgramLocation* loc, QoreValue n, bool assignment, qore_lvalue_use_e use) {
+    if (n.isNothing()) {
+        parse_error(*loc, "the value NOTHING cannot be the base of an lvalue (an element, member, slice or cast of "
+            "it)");
+        return -2;
+    }
+    return check_lvalue_intern(n, assignment, false, use);
+}
+
 //! Raises a parse error for a slice used as an lvalue and returns -2, as the error is reported
 static int check_lvalue_slice(const QoreProgramLocation* loc) {
     parse_error(*loc, "a slice cannot be used as an lvalue except by the remove and delete operators; a slice is "
@@ -2719,7 +2733,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getLeft(), assignment, use);
             }
         }
         {
@@ -2728,7 +2742,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (!slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->get(0), assignment, false, use);
+                return check_lvalue_base(op->loc, op->get(0), assignment, use);
             }
         }
         {
@@ -2737,7 +2751,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                 if (op->isSlice() && !slice_ok) {
                     return check_lvalue_slice(op->loc);
                 }
-                return check_lvalue_intern(op->getLeft(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getLeft(), assignment, use);
             }
         }
         {
@@ -2759,7 +2773,7 @@ static int check_lvalue_intern(AbstractQoreNode* node, bool assignment, bool dir
                         "the cast instead");
                     return -2;
                 }
-                return check_lvalue_intern(op->getExp(), assignment, false, use);
+                return check_lvalue_base(op->loc, op->getExp(), assignment, use);
             }
         }
     }

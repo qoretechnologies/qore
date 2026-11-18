@@ -3165,10 +3165,13 @@ struct QoreAOTDebugMetadata {
             metadata.insert(metadata.end(), section_data, section_data + sec->size);
         }
         assert(metadata.size() == compact_size);
+        // the copy has the header of the metadata, so it has a checksum of its own (qore#6451)
+        qore_aot_seal_metadata(metadata);
 
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
         std::string open_error;
-        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error)) {
+        // the copy is made from metadata that the reader of the module checked against its checksum (qore#6451)
+        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error, false)) {
             this->reader = std::move(retained_reader);
         }
     }
@@ -3179,8 +3182,10 @@ struct QoreAOTDebugMetadata {
             return reader.get();
         }
         auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
+        // the metadata, or a copy of it, was checked against its checksum by the reader of the module, whose
+        // load it belongs to (qore#6451)
         if (!retained_reader->open(borrowed_data ? borrowed_data : metadata.data(),
-                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error)) {
+                borrowed_data ? borrowed_size : static_cast<uint32_t>(metadata.size()), error, false)) {
             return nullptr;
         }
         // Force retained sections to decode before publishing the reader for
@@ -10739,6 +10744,8 @@ static void inheritAOTModulePathLists(QoreProgram* local_pgm, QoreProgram* paren
     // an AOT module initialized as library code (see QoreModuleInitSandboxBarrierHelper) has a library Program
     if (qore_module_init_library()) {
         local_priv->library_module = true;
+        // the closures that its initialization creates can run as deferred module initialization (qore#6337)
+        qore_module_init_set_program(local_pgm);
     }
 
     // the lists are those of the Program loading the module when the module loader names it, as for the inherited
