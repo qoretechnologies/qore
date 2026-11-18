@@ -107,10 +107,10 @@
     @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"; the type is written into the SQL (issue #6572).
 
     @par SqlUtil Writes No Caller Text Into the SQL of a Select
-    In @ref sqlutilintro "SqlUtil", a \c "comment" or \c "hint" select option that could end its SQL comment or that
-    has a \c "%" placeholder character raises \c OPTION-ERROR, a value given with @ref SqlUtil::cop_value() "cop_value()" to an arithmetic column operator is an
-    SQL literal of the database, an alias referenced in a superquery or a window is given as an identifier, and a string given as the first
-    argument of the Oracle \c in data provider expression is a bound value, as with the other databases (issue #6574).
+    In @ref sqlutilintro "SqlUtil", a \c "comment" or \c "hint" select option that could end its SQL comment or that has
+    a \c "%" placeholder character raises \c OPTION-ERROR; a value given with @ref SqlUtil::cop_value() "cop_value()" to
+    an arithmetic column operator is an SQL literal, an alias referenced in a superquery or a window is an identifier,
+    and a string first argument of the Oracle \c in expression is bound (issue #6574).
 
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
