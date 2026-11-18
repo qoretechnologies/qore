@@ -71,13 +71,13 @@ throws `std::bad_alloc` if the creator's sandbox cannot be resolved (no Program 
 raise an out-of-memory exception and do not parse.
 
 An expression cannot define code: it is parsed as `return (<expression>);`, which code that closes the parenthesis could
-extend with definitions left pending for the next commit, so a definition in an expression is a parse error
-(`check_expression_definition()` in lib/parser.ypp) and the expression's pending code is rolled back (with any pending
-code that the Program had). Parse directives on a line of their own in an expression's code (`%requires`, `%define`)
-still take effect in the Program: that is not code, and a separate issue. The walk's cache of a context with no manager
-on its chain (`sandboxChainClear()`) is shared by policy and other lookups, so a Program with a manager in any slot
-counts as having one: a Program created in a system-policy capability has a kept sandbox but no kept policy manager, and
-a policy check must not cache "none" for the other lookups.
+extend with declarations left pending for the next commit, so a declaration in an expression (also a global or
+`%try-module` variable) is a parse error (`check_expression_declaration()` in lib/parser.ypp, issue #6524) and the
+declarations that the expression added are rolled back (qore_program_private::parseExpression()); an expression cannot
+be created while the Program has code pending. Parse directives in an expression's code are refused. The walk's cache of
+a context with no manager on its chain (`sandboxChainClear()`) is shared by policy and other lookups, so a Program with
+a manager in any slot counts as having one: a Program created in a system-policy capability has a kept sandbox but no
+kept policy manager, and a policy check must not cache "none" for the other lookups.
 
 Trusted infrastructure that builds shared state lazily for whichever caller needs it first (a Program that every caller
 then uses) would give it the first caller's sandbox; it builds it through a capability made during trusted startup with

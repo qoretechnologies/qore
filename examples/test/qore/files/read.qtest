@@ -76,14 +76,14 @@ class ReadTest inherits QUnit::Test {
         ReadOnlyFile rbb2 = bbinfo2.read;
         File wbb2 = bbinfo2.write;
 
-        date bstart = now_us();
+        int bstart = clock_get_monotonic_us();
         background sub() {
             usleep(50ms);
             wbb2.write("yy");
         }();
         *binary bbs = rbb2.readShortBinary(10, 1000);
         testAssertionValue('ReadOnlyFile::readShortBinary() blocking check', bbs.size(), 2);
-        date belapsed = now_us() - bstart;
+        date belapsed = microseconds(clock_get_monotonic_us() - bstart);
         testAssertionValue('ReadOnlyFile::readShortBinary() blocking duration check', belapsed >= 30ms, True);
 
         hash<PipeInfo> tinfo = File::getPipe();

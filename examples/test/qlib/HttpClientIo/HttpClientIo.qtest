@@ -3728,6 +3728,8 @@ class HttpClientIoTest inherits QUnit::Test {
             "service": port,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
+            # HTTP/2 only: no paired QUIC listener, whose UDP bind of this explicit port could find it taken
+            "enable_h3": False,
         }).port;
         assertEq(port, new_port, "H2 stale: new server bound to same port");
         new_server.waitForAsyncIo();

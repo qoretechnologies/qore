@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - JIT and AOT code creating call references and closures, and Program deletion
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class DeletedProgramTypeArgHoldersTest
+
+#! Call references and closures keep the declarations of the type arguments that they hold
+/** A call reference with explicit type arguments and a closure that captures the type arguments of the generic code
+    that created it can outlive the Program that declared those types; they keep the declarations for as long as they
+    live, and release them when they are destroyed (issue #6489).  The worker (deleted-program-types/type-arg-holders.q)
+    makes each in generic code of its own Program for a class of a child Program, deletes the child Program, calls the
+    holder, and counts the declarations of Programs that are not freed (debug builds: dbg_live_type_declarations()).  It
+    runs in each execution mode, at the IR tier and promoted to native code with tiered execution, and as qcc-compiled
+    executables (-O0, -O3).
+*/
+class DeletedProgramTypeArgHoldersTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string worker;
+        string expected;
+    }
+
+    constructor() : QUnit::Test("DeletedProgramTypeArgHoldersTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        worker = get_script_dir() + DirSep + "deleted-program-types" + DirSep + "type-arg-holders.q";
+        string counts = Option::HAVE_LIBRARY_DEBUGGING
+            ? "declarations kept while held: 1, released: yes"
+            : "declarations kept while held: n/a, released: n/a";
+        expected = sprintf("call reference: result: no, %s\nclosure: result: no, %s\n", counts, counts);
+
+        foreach string mode in (ExecModes) {
+            addTestCase("type argument holders of a deleted Program: " + mode, \testMode(), (mode,));
+        }
+        addTestCase("type argument holders of a deleted Program: tiered, IR tier", \testTiered(),
+            ("--exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1000000",));
+        addTestCase("type argument holders of a deleted Program: tiered, promoted", \testTiered(),
+            ("--exec-mode=tiered --jit-ir-threshold=1 --jit-jit-threshold=1",));
+        foreach string opt in (("-O0", "-O3")) {
+            addTestCase("type argument holders of a deleted Program: qcc " + opt, \testQcc(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    testMode(string mode) {
+        check(sprintf("%s --exec-mode=%s %s", qore_bin, mode, worker), mode);
+    }
+
+    testTiered(string opts) {
+        check(sprintf("%s %s %s", qore_bin, opts, worker), opts);
+    }
+
+    testQcc(string opt) {
+        TmpDir tmp("qore-type-arg-holders-");
+        string exe = tmp.path + DirSep + "type-arg-holders" + opt;
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe, worker));
+        assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+        check(exe, "qcc " + opt);
+    }
+
+    #! runs the command and checks its output, and with a debug build that nothing of the Programs is left at the end
+    private check(string cmd, string label) {
+        int status;
+        string out = backquote(sprintf("QORE_TEARDOWN_REPORT=1 QORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s "
+            "DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, libqore_dir, cmd), \status);
+        assertEq(0, status, sprintf("%s: %s", label, out));
+        # the teardown report of a debug build follows the output
+        list<string> lines = (map $1, out.split("\n"), $1 !~ /^\[TEARDOWN\]/ && $1.val());
+        assertEq(expected, (foldl $1 + $2, map $1 + "\n", lines), label);
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            assertRegex("\\[TEARDOWN\\] declarations of Programs left after qore_cleanup\\(\\): 0\n", out, label);
+        }
+    }
+}

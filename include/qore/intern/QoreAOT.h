@@ -1535,7 +1535,7 @@ public:
         module-info globals, the module descriptor, and
         `qore_MOD_register` — AND additionally exports a
         `qore_qoa_register_all(QoreProgram*)` symbol that delegates to
-        `qore_aot_register_into_program`.
+        `qore_aot_register_into_program_v2()` with each module's metadata record.
 
         The glue `.o` and every input `.qo` are bundled into a single
         `ar rcs` archive at `output_path`.  A C++ host links the

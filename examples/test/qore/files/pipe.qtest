@@ -58,14 +58,14 @@ class PipeTest inherits QUnit::Test {
         ReadOnlyFile r = info.read;
         File w = info.write;
 
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         background sub() {
             usleep(50ms);
             w.write("hi");
         }();
         *binary b = r.readShortBinary(10, 1000);
         testAssertionValue('ReadOnlyFile::readShortBinary() blocking value', b, binary("hi"));
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
         testAssertionValue('ReadOnlyFile::readShortBinary() blocking duration', elapsed >= 30ms, True);
     }
 

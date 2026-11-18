@@ -104,10 +104,11 @@ public class OneDriveCreateUploadSessionDataProvider inherits OneDriveDataProvid
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path;
         if (req.parent_id) {
-            path = getDriveBasePath(req) + "/items/" + req.parent_id + ":/" + encode_url(req.filename, True)
-                + ":/createUploadSession";
+            path = getDriveBasePath(req) + "/items/" + getItemIdPathSegment(req.parent_id, "parent ID")
+                + ":/" + getItemNameSegment(req.filename) + ":/createUploadSession";
         } else {
-            path = getDriveBasePath(req) + "/root:/" + encode_url(req.filename, True) + ":/createUploadSession";
+            path = getDriveBasePath(req) + "/root:/" + getItemNameSegment(req.filename)
+                + ":/createUploadSession";
         }
 
         hash<auto> body = {

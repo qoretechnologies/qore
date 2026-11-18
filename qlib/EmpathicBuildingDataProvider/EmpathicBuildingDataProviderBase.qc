@@ -150,7 +150,8 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
         with up to 3 automatic retries — no application-level retry loop is needed.
     */
     private hash<RestClient::RestResponseInfo> doRestCommand(string method, string path, auto body) {
-        debug("REST %y %y (%y) body: %y", method, rest.getUrl(), path, body);
+        # a client URL can hold a password
+        debug("REST %y %y (%y) body: %y", method, get_masked_url(rest.getUrl()), path, body);
         return rest.restDoRequest(method, path, body);
     }
 

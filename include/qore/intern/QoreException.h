@@ -52,6 +52,16 @@ struct QoreExceptionBase {
     //! the ID of the exception for a debugger, given when a debugger's exception event first reports it, or 0; a
     //! rethrow keeps it (see QoreException::getDebugId())
     int64 debug_id = 0;
+    //! the ID of the Program whose parse recorded the exception as a diagnostic (when it was raised, or by
+    //! qore_program_private::addExceptionDiagnostics()), or 0; copies keep it, and an exception that another Program
+    //! recorded (ex: one that a Program parsed by code run in the parse of this Program raised) is not a diagnostic of
+    //! this Program (issue #6516)
+    qore_program_id_t diagnostic_pgm_id = 0;
+    //! the index of the diagnostic of the exception in the diagnostics of that Program, or -1; the record is kept
+    //! while the Program accumulates its diagnostics (issue #6555)
+    int32_t diagnostic_index = -1;
+    //! the generation of the diagnostics of that Program that the index refers to (issue #6555)
+    uint32_t diagnostic_gen = 0;
 
     DLLLOCAL QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValue n_arg = QoreValue(),
         qore_call_t n_type = CT_BUILTIN);
@@ -59,7 +69,8 @@ struct QoreExceptionBase {
     DLLLOCAL QoreExceptionBase(const QoreExceptionBase& old) :
         type(old.type), callStack(old.callStack->copy()),
         err(old.err.refSelf()), desc(old.desc.refSelf()),
-        arg(old.arg.refSelf()), debug_id(old.debug_id) {
+        arg(old.arg.refSelf()), debug_id(old.debug_id), diagnostic_pgm_id(old.diagnostic_pgm_id),
+        diagnostic_index(old.diagnostic_index), diagnostic_gen(old.diagnostic_gen) {
     }
 
     DLLLOCAL ~QoreExceptionBase() {

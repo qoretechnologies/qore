@@ -300,6 +300,9 @@ public namespace DebugUtil {
     }
 
     #! Debug flow control names (user-facing strings for flow control)
+    /** Code that was already running when the debugger attached does not take every request with the IR, JIT and
+        tiered execution modes; see @ref debugger_running_code
+    */
     public enum DebugFlowName : string {
         #! No flow override
         None = "none",

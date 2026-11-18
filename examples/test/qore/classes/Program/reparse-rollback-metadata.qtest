@@ -76,7 +76,7 @@ public class ReparseRollbackMetadataTest inherits QUnit::Test {
         if (Option::HAVE_LIBRARY_DEBUGGING) {
             m0 = call_function("dbg_program_metadata", p);
         }
-        assertThrows("PARSE-EXCEPTION", "cannot be defined in an expression", sub () {
+        assertThrows("PARSE-EXCEPTION", "cannot be declared in the code of an expression", sub () {
             Expression bad(p, "1); sub evil() {} #", "bad-" + get_random_string(20));
         });
         if (m0) {

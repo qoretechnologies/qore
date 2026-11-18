@@ -78,6 +78,30 @@ void qore_capture_call_reference_provenance(const ResolvedCallReferenceNode* ref
     call_reference_provenance_count.fetch_add(1, std::memory_order_relaxed);
 }
 
+void qore_capture_call_reference_origin(const ResolvedCallReferenceNode* ref, const QoreProgram* code_pgm) {
+    // only a reference to library module code records anything, and then only for restricted creating code
+    if (!code_pgm || !qore_program_is_library_module(code_pgm)) {
+        return;
+    }
+    QoreParseOptions origin = qore_creation_origin_restrictions();
+    if (!origin) {
+        return;
+    }
+    auto& registry = call_reference_provenance_registry();
+    std::unique_lock<std::shared_mutex> lock(registry.mutex);
+    auto i = registry.contexts.find(ref);
+    if (i != registry.contexts.end()) {
+        // the sandbox provenance that the reference's construction captured; not yet applied by any call
+        i->second->origin_restrictions |= origin;
+        return;
+    }
+    std::unique_ptr<QoreSandboxContext> context(new QoreSandboxContext(false));
+    context->origin_restrictions = origin;
+    registry.contexts.emplace(ref, context.get());
+    context.release();
+    call_reference_provenance_count.fetch_add(1, std::memory_order_relaxed);
+}
+
 void qore_release_call_reference_provenance(const ResolvedCallReferenceNode* ref) {
     if (!call_reference_provenance_count.load(std::memory_order_relaxed)) {
         return;
@@ -353,6 +377,49 @@ void ResolvedCallReferenceNodeIntern::captureCreatorParseOptions() {
         creator_po = qore_relieve_module_declared_domains(creator_po, pgm);
     }
     has_creator_po = true;
+    // the run-time call reference classes call this from their constructors, when the reference is complete: a
+    // reference to library module code records the restrictions of the code that creates it (qore#6520)
+    qore_capture_call_reference_origin(this, getOriginCodeProgram());
+}
+
+//! returns the Program whose code a user function runs, or nullptr for a builtin function
+static const QoreProgram* qore_function_code_program(const QoreFunction* f) {
+    const AbstractQoreFunctionVariant* v = f ? f->first() : nullptr;
+    const UserVariantBase* uvb = v ? v->getUserVariantBase() : nullptr;
+    return uvb ? uvb->pgm : nullptr;
+}
+
+//! returns the Program whose code a method runs: the Program that defines its class, nullptr for a builtin class
+static const QoreProgram* qore_method_code_program(const QoreMethod* m) {
+    const QoreClass* cls = m ? m->getClass() : nullptr;
+    if (!cls) {
+        return nullptr;
+    }
+    const QoreProgram* pgm = cls->getSourceProgram();
+    return pgm ? pgm : cls->getProgram();
+}
+
+const QoreProgram* ResolvedCallReferenceNodeIntern::getOriginCodeProgram() const {
+    return qore_call_reference_code_program(this);
+}
+
+const QoreProgram* LocalStaticMethodCallReferenceNode::getOriginCodeProgram() const {
+    return qore_method_code_program(method);
+}
+
+const QoreProgram* LocalFunctionCallReferenceNode::getOriginCodeProgram() const {
+    return qore_function_code_program(uf);
+}
+
+const QoreProgram* RunTimeResolvedMethodReferenceNode::getOriginCodeProgram() const {
+    // the method that a call dispatches to on the object's class (see qore_call_reference_code_program())
+    return qore_call_reference_code_program(this);
+}
+
+const QoreProgram* qore_closure_code_program(const ResolvedCallReferenceNode* closure) {
+    // a closure's code is that of the Program that defines it (see qore_call_reference_code_program())
+    const QoreProgram* pgm = qore_function_code_program(closure->getFunction());
+    return pgm ? pgm : closure->getProgram();
 }
 
 AbstractCallReferenceNode::AbstractCallReferenceNode(bool n_needs_eval,
@@ -2176,6 +2243,8 @@ QoreValue LocalFunctionCallReferenceNode::evalImpl(RuntimeConfig& rc, bool& need
         if (qore_resolve_explicit_type_param_instantiation(*explicit_inst, resolved)) {
             rv->explicit_inst = std::make_shared<QoreTypeParamInstantiation>(std::move(resolved));
         }
+        // the reference can outlive the Program of a type argument (issue #6489)
+        rv->holdExplicitTypeArgDecls();
     }
     return rv;
 }

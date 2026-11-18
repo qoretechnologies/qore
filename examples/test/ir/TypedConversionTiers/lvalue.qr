@@ -28,7 +28,8 @@ string sub run() {
             rejected("nested", sub () { nested.x.y = untyped("x"); }, auto sub () { return nested; }),
             rejected("hashdecl", sub () { hd.i = untyped("x"); }, auto sub () { return hd; }),
             rejected("element", sub () { l[0] = untyped("x"); }, auto sub () { return l; }),
-            rejected("beyond", sub () { l[5] = untyped("x"); }, auto sub () { return l; }));
+            # at the end of the list: an index that would leave a gap is refused for the gap instead (qore#6435)
+            rejected("beyond", sub () { l[2] = untyped("x"); }, auto sub () { return l; }));
     }
     return rv;
 }

@@ -117,7 +117,9 @@ public class McpPromptsListDataProvider inherits McpClientDataProviderBase {
         @debug("Listing prompts");
         list<auto> prompts = mcp.listPrompts();
         @debug {
-            printf("Found %d prompts\n", prompts.size());
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Found %d prompts\n", prompts.size());
+            }
         }
         return {
             "prompts": prompts,
@@ -174,7 +176,9 @@ public class McpPromptGetDataProvider inherits McpClientDataProviderBase {
         @debug("Getting prompt %y with arguments: %y", req.name, req.arguments);
         hash<auto> result = mcp.getPrompt(req.name, req.arguments);
         @debug {
-            printf("Prompt %y returned %d messages\n", req.name, result.messages.size());
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Prompt %y returned %d messages\n", req.name, result.messages.size());
+            }
         }
         return result;
     }

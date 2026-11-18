@@ -578,7 +578,7 @@ string sub wait_done() {
         string injected = "1); hash<auto> sub evil(string path) { return {}; } #";
         assertEq("PARSE-EXCEPTION", sandboxed.callFunction("inject_expression", t, injected));
         # nor can trusted code
-        assertThrows("PARSE-EXCEPTION", "cannot be defined in an expression", sub () {
+        assertThrows("PARSE-EXCEPTION", "cannot be declared in the code of an expression", sub () {
             Expression e(t, "1); class Evil {} #", "trusted expression");
         });
         # a global variable declared in an expression is not left pending either

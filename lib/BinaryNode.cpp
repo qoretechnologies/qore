@@ -35,11 +35,58 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 
 // the sandbox memory charge of the buffer is kept in a sparse table (see qore_sb_binary_resize()), since the class
-// has no private data
+// has no private data; the charge is the capacity of the buffer (capacity())
+
+// the capacity is kept in the tail padding of the base class: the layout that modules built with the previous header
+// use is unchanged
+static_assert(sizeof(BinaryNode) == sizeof(SimpleValueQoreNode) + sizeof(void*) + sizeof(size_t),
+    "BinaryNode::cap_code must not change the size of the class");
+
+//! the smallest exponent of a capacity code (BinaryNode::cap_code): the smallest capacity is 16 bytes
+static constexpr unsigned QORE_BINARY_MIN_CAP_EXP = 4;
+//! the largest exponent of a capacity code: 7 << 60 is the largest capacity that a 64-bit size_t holds
+static constexpr unsigned QORE_BINARY_MAX_CAP_EXP = sizeof(size_t) * 8 - 2;
+
+//! returns the byte offset of \a p in the buffer \a buf of \a len bytes, or -1 if it does not point into it
+static inline int64 qore_binary_own_offset(const void* buf, size_t len, const void* p) {
+    if (!buf) {
+        return -1;
+    }
+    uintptr_t b = reinterpret_cast<uintptr_t>(buf);
+    uintptr_t q = reinterpret_cast<uintptr_t>(p);
+    return (q >= b && q < b + len) ? static_cast<int64>(q - b) : -1;
+}
+
+//! returns the capacity that a capacity code gives
+static inline size_t qore_binary_code_capacity(unsigned code) {
+    return static_cast<size_t>(4 + (code & 3)) << ((code >> 2) - 2);
+}
+
+//! returns the code of the smallest capacity that holds the given size, or 0 if none does
+/** The capacities of the codes are (4 + m) * 2^(e - 2) bytes (m = 0..3): consecutive ones grow by factors of 1.14 to
+    1.25, as strings do (qore_string_private::check_char())
+*/
+static unsigned qore_binary_capacity_code(size_t size) {
+    unsigned e = QORE_BINARY_MIN_CAP_EXP;
+    while (e < QORE_BINARY_MAX_CAP_EXP && (static_cast<size_t>(1) << (e + 1)) <= size) {
+        ++e;
+    }
+    for (; e <= QORE_BINARY_MAX_CAP_EXP; ++e) {
+        for (unsigned m = 0; m < 4; ++m) {
+            unsigned code = (e << 2) | m;
+            if (qore_binary_code_capacity(code) >= size) {
+                return code;
+            }
+        }
+    }
+    return 0;
+}
 
 BinaryNode::BinaryNode(void* p, size_t size) : SimpleValueQoreNode(NT_BINARY) {
+    cap_code = 0;
     ptr = p;
     len = size;
     if (p) {
@@ -48,8 +95,9 @@ BinaryNode::BinaryNode(void* p, size_t size) : SimpleValueQoreNode(NT_BINARY) {
 }
 
 BinaryNode::~BinaryNode() {
-    // released even without a buffer: a reallocation that failed has freed it, but not its charge
-    qore_sb_binary_free_check(this, len);
+    // released even without a buffer: a reallocation that failed has freed it, but not its charge; the charge
+    // released is the one recorded, which is the capacity of the buffer
+    qore_sb_binary_free_check(this, capacity());
     if (ptr) {
         free(ptr);
     }
@@ -60,17 +108,78 @@ void BinaryNode::clear() {
     // NOTE: we check and then free & update to avoid writing to memory
     // to avoid cache flushing on SMP systems (as used in the Linux
     // kernel for example)
-    qore_sb_binary_free_check(this, len);
+    // the charge released is the one recorded, which is the capacity of the buffer
+    qore_sb_binary_free_check(this, capacity());
     if (ptr) {
         free(ptr);
         if (len) {
             len = 0;
         }
+        if (cap_code) {
+            cap_code = 0;
+        }
         ptr = nullptr;
-    }
-    else {
+    } else {
         assert(!len);
+        assert(!cap_code);
     }
+}
+
+//! the internal operations of BinaryNode that its public header does not declare (qore#4380)
+class qore_binary_node_private {
+public:
+    //! ensures that the buffer of \a b can hold \a new_len bytes; 0 if OK, -1 if out of memory (the node unchanged)
+    DLLLOCAL static int reserve(BinaryNode& b, size_t new_len);
+};
+
+int qore_binary_node_private::reserve(BinaryNode& b, size_t new_len) {
+    size_t old_cap = b.capacity();
+    if (new_len <= old_cap) {
+        return 0;
+    }
+    // the first data of an empty value is allocated with its exact size (a value made with one append does not keep
+    // unused memory); a value that grows again grows geometrically by factors of 1.14 to 1.25, so a series of appends
+    // reallocates the buffer a logarithmic number of times (issue #6312: an allocator whose realloc() copies made it
+    // quadratic)
+    unsigned code = b.len ? qore_binary_capacity_code(new_len) : 0;
+    size_t new_cap = code ? qore_binary_code_capacity(code) : new_len;
+    void* np = realloc(b.ptr, new_cap);
+    if (!np && code) {
+        // the exact size may still be available
+        code = 0;
+        new_cap = new_len;
+        np = realloc(b.ptr, new_cap);
+    }
+    if (!np) {
+        // the old buffer is unchanged
+        return -1;
+    }
+    b.ptr = np;
+    b.cap_code = static_cast<unsigned char>(code);
+    qore_sb_binary_resize_check(&b, old_cap, new_cap);
+    return 0;
+}
+
+void BinaryNode::trim() {
+    if (!cap_code) {
+        return;
+    }
+    size_t old_cap = capacity();
+    if (!len) {
+        free(ptr);
+        ptr = nullptr;
+        cap_code = 0;
+        qore_sb_binary_free_check(this, old_cap);
+        return;
+    }
+    void* np = realloc(ptr, len);
+    if (!np) {
+        // the value keeps its buffer
+        return;
+    }
+    ptr = np;
+    cap_code = 0;
+    qore_sb_binary_resize_check(this, old_cap, len);
 }
 
 // returns 0 = equal, 1 = not equal
@@ -118,16 +227,19 @@ int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
     if (size > SIZE_MAX - pos) {
         return -1;
     }
+    // data in the buffer itself is found again at its offset if the buffer moves
+    const char* src = static_cast<const char*>(nptr);
+    int64 own = size ? qore_binary_own_offset(ptr, len, src) : -1;
+    bool self = own >= 0;
+    size_t self_offset = self ? static_cast<size_t>(own) : 0;
     if ((pos + size) > len) {
-        // resize buffer
-        ptr = q_realloc(ptr, pos + size);
-        if (!ptr) {
-            // q_realloc() has freed the old buffer: the node is empty, and its charge is released
-            qore_sb_binary_free_check(this, len);
-            len = 0;
+        // resize buffer; the value is unchanged if it fails
+        if (qore_binary_node_private::reserve(*this, pos + size)) {
             return -1;
         }
-        qore_sb_binary_resize_check(this, len, pos + size);
+        if (self) {
+            src = static_cast<const char*>(ptr) + self_offset;
+        }
         // a gap between the old end and the position written becomes part of the value: it must not expose
         // uninitialized memory
         if (pos > len) {
@@ -136,7 +248,10 @@ int BinaryNode::writeTo(size_t pos, const void* nptr, size_t size) {
         // the data written is part of the value
         len = pos + size;
     }
-    memcpy((char*)ptr + pos, nptr, size);
+    // the data may overlap the bytes written
+    if (size) {
+        memmove(static_cast<char*>(ptr) + pos, src, size);
+    }
     return 0;
 }
 
@@ -145,15 +260,23 @@ void BinaryNode::append(const void* nptr, size_t size) {
     if (!size) {
         return;
     }
-    bool self_copy = nptr == ptr;
-    ptr = realloc(ptr, len + size);
-    if (self_copy) {
-        assert(size == len);
-        nptr = ptr;
+    if (size > SIZE_MAX - len) {
+        return;
     }
-    memcpy((char*)ptr + len, nptr, size);
+    // data in the buffer itself is found again at its offset if the buffer moves
+    const char* src = static_cast<const char*>(nptr);
+    int64 own = qore_binary_own_offset(ptr, len, src);
+    bool self = own >= 0;
+    size_t self_offset = self ? static_cast<size_t>(own) : 0;
+    if (qore_binary_node_private::reserve(*this, len + size)) {
+        return;
+    }
+    if (self) {
+        assert(self_offset + size <= len);
+        src = static_cast<const char*>(ptr) + self_offset;
+    }
+    memcpy(static_cast<char*>(ptr) + len, src, size);
     len += size;
-    qore_sb_binary_resize_check(this, len - size, len);
 }
 
 void BinaryNode::append(const BinaryNode* b) {
@@ -169,23 +292,38 @@ void BinaryNode::prepend(const void* nptr, size_t size) {
     if (!size) {
         return;
     }
-    ptr = realloc(ptr, len + size);
+    if (size > SIZE_MAX - len) {
+        return;
+    }
+    // data in the buffer itself is found again at its offset if the buffer moves, and is then moved forward
+    const char* src = static_cast<const char*>(nptr);
+    int64 own = qore_binary_own_offset(ptr, len, src);
+    bool self = own >= 0;
+    size_t self_offset = self ? static_cast<size_t>(own) : 0;
+    if (qore_binary_node_private::reserve(*this, len + size)) {
+        return;
+    }
     // move memory forward
-    memmove((char*)ptr + size, ptr, len);
+    memmove(static_cast<char*>(ptr) + size, ptr, len);
+    if (self) {
+        assert(self_offset + size <= len);
+        src = static_cast<const char*>(ptr) + size + self_offset;
+    }
     // copy new memory to beginning
-    memcpy((char*)ptr, nptr, size);
+    memcpy(ptr, src, size);
     len += size;
-    qore_sb_binary_resize_check(this, len - size, len);
 }
 
 void* BinaryNode::giveBuffer() {
     // the buffer leaves the node, and with it its sandbox charge
     if (ptr) {
-        qore_sb_binary_free_check(this, len);
+        // the charge released is the one recorded, which is the capacity of the buffer
+        qore_sb_binary_free_check(this, capacity());
     }
     void* p = ptr;
     ptr = nullptr;
     len = 0;
+    cap_code = 0;
     return p;
 }
 
@@ -236,14 +374,16 @@ const char *BinaryNode::getTypeName() const {
 
 int BinaryNode::preallocate(size_t size) {
     //printd(5, "BinaryNode::preallocate(%zu) this: %p ptr: %p len: %zu\n", size, this, ptr, len);
-    size_t old_len = len;
+    size_t old_cap = capacity();
+    // the buffer is allocated with the size given
+    cap_code = 0;
     ptr = q_realloc(ptr, size);
     if (ptr) {
         len = size;
-        qore_sb_binary_resize_check(this, old_len, size);
+        qore_sb_binary_resize_check(this, old_cap, size);
         return 0;
     }
-    qore_sb_binary_free_check(this, old_len);
+    qore_sb_binary_free_check(this, old_cap);
     len = 0;
     return -1;
 }
@@ -338,6 +478,17 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* 
     else
         end = offset + length;
 
+    // data in the buffer itself is moved by the changes below: it is copied first, before anything is changed
+    std::unique_ptr<char, decltype(&free)> self_copy(nullptr, &free);
+    if (data_len && qore_binary_own_offset(ptr, len, data) >= 0) {
+        self_copy.reset(static_cast<char*>(malloc(data_len)));
+        if (!self_copy) {
+            return;
+        }
+        memcpy(self_copy.get(), data, data_len);
+        data = self_copy.get();
+    }
+
     // add to extract string if any
     if (extract && length)
         extract->append((char*)ptr + offset, length);
@@ -347,7 +498,9 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* 
         size_t ol = len;
 
         // resize buffer
-        ptr = q_realloc(ptr, len - length + data_len);
+        if (qore_binary_node_private::reserve(*this, len - length + data_len)) {
+            return;
+        }
 
         // move trailing entries forward if necessary
         if (end != ol)
@@ -359,11 +512,7 @@ void BinaryNode::splice(qore_offset_t offset, qore_offset_t length, const void* 
     memcpy((char*)ptr + offset, data, data_len);
 
     // calculate new length
-    size_t old_len = len;
     len = len - length + data_len;
-    if (len > old_len) {
-        qore_sb_binary_resize_check(this, old_len, len);
-    }
 }
 
 int BinaryNode::substr(BinaryNode& b, qore_offset_t offset) const {

@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes and in qcc executables
+# test-platform: macos - the AOT code generation of outlined function-body helpers that run block-exit handlers
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class AOTOutlinedHandlerReleaseTest
+
+#! A value that a block-exit handler in an outlined helper replaces in a local is released at the assignment
+/** qcc outlines regions of a large function into helpers that run with the frame of the function (the coordinator).
+    A local that only the on_exit, on_error or on_success handler of a block in the region references was not a
+    local that the helper shares with the coordinator: the coordinator kept its reference to the local's value
+    across the call of the helper, so the value that the handler replaced was released only when the coordinator
+    next reloaded the local, after the handler (qore#6545).
+
+    The functions of handlers.q reassign locals and parameters in handlers that run on an exception, on a return and
+    at the end of their block, nested and in a loop; their destructors log the order of the releases.  The output is
+    compared with the AST in the ir, jit and tiered modes and in executables made by qcc at -O0 and -O3, with the
+    functions outlined (forced thresholds: the functions of \c Outlined) and not outlined.  The others are compared
+    too: one with on_exit and on_success handlers whose block the outliner leaves in the function, and one whose
+    handler has a statement whose locals the outliner cannot collect, so that no helper holds its block.
+*/
+class AOTOutlinedHandlerReleaseTest inherits QUnit::Test {
+    public {
+        #! the environment that outlines the small functions
+        const ForceEnv = "QORE_AOT_OUTLINE_FN_MIN_INSTS=20 QORE_AOT_OUTLINE_FN_MIN_BLOCKS=1 "
+            "QORE_AOT_OUTLINE_FN_TARGET_INSTS=20";
+
+        #! the functions that the forced thresholds outline
+        const Outlined = ("onError", "paramError", "exitThrow", "successOnly", "onExitReturn", "nested", "loop");
+
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTOutlinedHandlerReleaseTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("block-exit handlers in outlined helpers release replaced values at once", \handlerTest());
+        set_return_value(main());
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s -b --enable-debug "
+            "--exec-mode=%s %s", qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts in the environment \a env
+    /** @return the output of qcc
+    */
+    private string compile(string src, string out, string opts, string env) {
+        int rc;
+        string output = backquote(sprintf("%s QORE_AOT_DEBUG=1 %s %s %s -o %s %s 2>&1", lib_env, env, qcc_bin, opts,
+            out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+        return output;
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    handlerTest() {
+        TmpDir dir("qore-aot-outlined-handler-release-");
+        string src = join_paths(dir.path, "handlers.q");
+        copy_file(get_script_dir() + "/handlers.q", src);
+        string expected = runMode(src, "ast");
+        assertRegex("^rv0:.*\nrv1:.*\nrv2:.*\n$", expected, "the AST prints the three result lines");
+        # the handler releases the value that it replaces at the assignment, before it logs
+        assertRegex("^rv0:[^ ]* ~w0\\|e\\|c\\|a~w1 ", expected, "the AST releases the replaced value in the handler");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), mode);
+        }
+        foreach string opt in (OptLevels) {
+            string exe = join_paths(dir.path, "outlined" + opt);
+            string out = compile(src, exe, opt, ForceEnv);
+            foreach string name in (Outlined) {
+                assertRegex(sprintf("AOT-OUTLINE-FN: '%s' outlined [1-9][0-9]* regions", name), out,
+                    sprintf("qcc %s: %s outlined", opt, name));
+            }
+            # no helper holds a block whose handler has a statement whose locals cannot be collected
+            assertRegex("AOT-OUTLINE-FN:   region \\[[0-9.]+\\]: on-block-exit handler references locals that cannot "
+                "be collected", out, sprintf("qcc %s: breakHandler's block left in the function", opt));
+            assertEq(expected, runExe(exe), sprintf("qcc %s, outlined", opt));
+            exe = join_paths(dir.path, "inline" + opt);
+            out = compile(src, exe, opt, "QORE_AOT_OUTLINE_FN=0");
+            assertFalse(out.regex("AOT-OUTLINE-FN: '[A-Za-z]+' outlined"), sprintf("qcc %s: nothing outlined", opt));
+            assertEq(expected, runExe(exe), sprintf("qcc %s, not outlined", opt));
+        }
+    }
+}

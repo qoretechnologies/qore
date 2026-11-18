@@ -1,0 +1,97 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - threads that create, run and delete the expressions of one Program at the same time
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ExpressionConcurrencyTest
+
+#! Expressions of one Program created, run and deleted by several threads at the same time (issue #6493)
+/** The Program keeps its expressions in a set that the parse of an expression adds to, the run of an expression looks
+    up and the deletion of an Expression object removes from; several threads did so without a common lock, while
+    other threads created and parsed Programs of their own, which corrupted the set (a segmentation fault or a heap
+    error).  The threads create, run and delete their expressions at the same time (the parse of an expression does
+    not keep the other threads out of the Program, issue #6518).  Each thread checks the values of its expressions.
+    The race is shown reliably by ThreadSanitizer, which reported it in this test before the fix.
+*/
+public class ExpressionConcurrencyTest inherits QUnit::Test {
+    public {
+        #! the number of threads of each kind
+        const Threads = 6;
+        #! the number of expressions or Programs per thread
+        const Iterations = 150;
+    }
+
+    constructor() : QUnit::Test("ExpressionConcurrencyTest", "1.0", \ARGV) {
+        addTestCase("expressions of a shared Program in several threads", \sharedProgramTest());
+        set_return_value(main());
+    }
+
+    sharedProgramTest() {
+        Program shared(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        shared.parse("int sub f(int x) { return x * 2; } our int g = 1;", "shared");
+        shared.run();
+
+        Mutex m();
+        list<string> errors = ();
+        int evaluated = 0;
+        Counter done(Threads * 2);
+        for (int t = 0; t < Threads; ++t) {
+            # expressions created, run and deleted in the shared Program
+            background sub (int t) {
+                on_exit done.dec();
+                try {
+                    for (int i = 0; i < Iterations; ++i) {
+                        Expression e(shared, sprintf("f(%d) + g + %d", i, t), "expr");
+                        int v = e.eval();
+                        # the expression is deleted while other threads create and run theirs
+                        delete e;
+                        if (v != i * 2 + 1 + t) {
+                            m.lock();
+                            on_exit m.unlock();
+                            errors += sprintf("thread %d, expression %d: %d", t, i, v);
+                        }
+                        m.lock();
+                        on_exit m.unlock();
+                        ++evaluated;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    m.lock();
+                    on_exit m.unlock();
+                    errors += sprintf("thread %d: %s: %s", t, ex.err, ex.desc);
+                }
+            }(t);
+            # Programs of their own created, parsed and run, with an expression each
+            background sub (int t) {
+                on_exit done.dec();
+                try {
+                    for (int i = 0; i < Iterations; ++i) {
+                        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+                        p.parse(sprintf("class C { int m(int x) { return x + %d; } } "
+                            "int sub h() { return new C().m(%d); }", i, i), "own");
+                        p.run();
+                        Expression e(p, "h()", "own-expr");
+                        int v = e.eval();
+                        if (v != i * 2) {
+                            m.lock();
+                            on_exit m.unlock();
+                            errors += sprintf("own Program %d of thread %d: %d", i, t, v);
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    m.lock();
+                    on_exit m.unlock();
+                    errors += sprintf("own Program thread %d: %s: %s", t, ex.err, ex.desc);
+                }
+            }(t);
+        }
+        done.waitForZero();
+        assertEq((), errors);
+        assertEq(Threads * Iterations, evaluated);
+    }
+}

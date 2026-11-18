@@ -405,6 +405,18 @@ public:
     //! Emit PushTempMark to start a statement-scoped cleanup region.  Pairs
     //! with a later DiscardTemps that drains back to this mark.
     QoreIRInstruction* createPushTempMark(const QoreProgramLocation* loc = nullptr);
+    //! Emit the PushTempMark of a temp scope nested in the innermost open one, fused with that scope's mark if it is
+    //! the last instruction of the current block
+    /** When the current block ends with the PushTempMark of the innermost open scope, which the instructions
+        appended next would record, nothing comes between the two marks: that mark becomes a PushTempMarkPair that
+        opens the new scope too, and the IR interpreter dispatches one instruction for both (qore#6444).  Otherwise
+        a PushTempMark is emitted, as by createPushTempMark().  The scope is closed as one opened by
+        createPushTempMark() is.
+
+        @param loc optional source location for diagnostics (of a new PushTempMark only)
+        @return the PushTempMarkPair or the PushTempMark that opens the scope
+    */
+    QoreIRInstruction* createNestedPushTempMark(const QoreProgramLocation* loc = nullptr);
     //! Emit DiscardTempsKeep to close the innermost temp scope while keeping one value.
     /** Every temp registered since the matching PushTempMark is released, except \a value, whose result is an
         independent reference owned by the enclosing temp scope.  Lvalue mutations use this to release the
@@ -443,6 +455,37 @@ public:
     uint32_t allocateUnmarkedTempScopeId();
     //! Drop the current temp scope after lowering emits a terminating instruction.
     void abandonTempScope();
+
+    //! The temp scopes open at a lowering position (see saveTempScopeState())
+    struct TempScopeState {
+        std::vector<uint32_t> temp_scope_id_stack;
+        uint32_t exception_temp_scope_id = 0;
+        std::vector<uint32_t> exception_temp_scope_id_stack;
+    };
+    //! Returns the temp scopes open at the current lowering position
+    /** For code lowered out of the order of the code around it, as the paths of a debugger's flow requests at a step
+        event (QoreIRLowering::lowerDebugFlowPath()), whose jumps end the scopes that the code after them still has
+    */
+    TempScopeState saveTempScopeState() const {
+        return {temp_scope_id_stack, exception_temp_scope_id, exception_temp_scope_id_stack};
+    }
+    //! Closes the temp scopes above \a depth at the current lowering position, as their DiscardTemps would, for code
+    //! lowered with fewer temp scopes open than the code around it; restored with restoreTempScopeState()
+    void truncateTempScopes(size_t depth) {
+        if (depth < temp_scope_id_stack.size()) {
+            if (depth < exception_temp_scope_id_stack.size()) {
+                exception_temp_scope_id = exception_temp_scope_id_stack[depth];
+                exception_temp_scope_id_stack.resize(depth);
+            }
+            temp_scope_id_stack.resize(depth);
+        }
+    }
+    //! Restores the temp scopes open at a lowering position saved with saveTempScopeState()
+    void restoreTempScopeState(TempScopeState state) {
+        temp_scope_id_stack = std::move(state.temp_scope_id_stack);
+        exception_temp_scope_id = state.exception_temp_scope_id;
+        exception_temp_scope_id_stack = std::move(state.exception_temp_scope_id_stack);
+    }
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
     //! the IR interpreter's DebugProgram hook path.
     //! Creates the instruction of the step event of the start of a block

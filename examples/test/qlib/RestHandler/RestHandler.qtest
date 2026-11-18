@@ -368,6 +368,7 @@ public class RestHandlerTest inherits QUnit::Test {
         addTestCase("pre-encoded-URLs test", \preEncodedUrlsTest());
         addTestCase("test bad request", \badRequestTest());
         addTestCase("query parameter name with a NUL character", \queryNulTest());
+        addTestCase("Accept header not valid in its encoding", \invalidAcceptTest());
         addTestCase("Test direct interface", \directTest());
         addTestCase("Test external serialization", \serializationTest());
         addTestCase("Raw response test", \rawResponseTest());
@@ -502,6 +503,30 @@ public class RestHandlerTest inherits QUnit::Test {
         on_exit socket.close();
         socket.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", target));
         return socket.readHTTPHeader(30s).status_code;
+    }
+
+    # sends a GET request with the Accept header given as bytes over a socket and returns the response's status code
+    private static int rawGetStatusWithAccept(int port, string target, *binary accept) {
+        Socket socket();
+        socket.connect("localhost:" + port, 30s);
+        on_exit socket.close();
+        binary req = binary(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n", target));
+        if (accept) {
+            req += binary("Accept: ") + accept + binary("\r\n");
+        }
+        req += binary("\r\n");
+        socket.send(req);
+        # the timeout is a guard only: the server answered at once, or never (it looped forever on such a header)
+        return socket.readHTTPHeader(30s).status_code;
+    }
+
+    #! an Accept header value that is not valid in its encoding, with a parameter, is skipped (qore#6553): its
+    #! parameters cannot be removed by a regular expression substitution, which left the handler looping forever
+    invalidAcceptTest() {
+        int expected = rawGetStatusWithAccept(port, "/test?action=action");
+        assertEq(200, expected);
+        assertEq(expected, rawGetStatusWithAccept(port, "/test?action=action", parse_hex_string("ff3b713d31")),
+            "the request with the invalid Accept value is answered as one without an Accept header");
     }
 
     badRequestTest() {

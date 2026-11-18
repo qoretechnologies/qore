@@ -74,7 +74,8 @@ public class OneDriveDownloadFileDataProvider inherits OneDriveDataProviderBase 
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # Get item metadata which includes the pre-authenticated download URL
-        hash<auto> item = doRestCommand("GET", getDriveBasePath(req) + "/items/" + req.id).body;
+        hash<auto> item = doRestCommand("GET", getDriveBasePath(req) + "/items/"
+            + getItemIdPathSegment(req.id)).body;
         return {
             "name": item.name,
             "size": item.size,

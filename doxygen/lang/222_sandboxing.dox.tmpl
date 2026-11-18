@@ -456,6 +456,13 @@ authenticate();
     trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs
     in the %Program that created it, so a closure of restricted code that trusted code calls back is restricted code.
 
+    State of library code that restricted code creates keeps the restrictions of its creator: an object of a class of
+    a library module, a call reference to a library module's function or method and a closure of a library module's
+    code that restricted code creates, directly or through the library's code that it calls, are run for that code
+    whoever runs them later, also when a library registry runs them during the initialization of another library
+    module, where the calling code is not looked up (see @ref sandbox_module_init): a declared domain that their code
+    calls is refused as it would be for their creator (\c INVALID-FUNCTION-ACCESS).
+
     The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
     variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
     @ref SqlUtil::AbstractDatabase::getDatabase() "AbstractDatabase::getDatabase()" and the constructors of
@@ -546,11 +553,10 @@ authenticate();
     @subsection sandbox_static_modules Statically Linked Modules
 
     A module compiled by qcc to a <tt>.qo</tt> object and linked into a program is registered by native code (the
-    <tt>qore_</tt><em>name</em><tt>_register()</tt> function that qcc emits, or
-    \c ModuleManager::registerAOTStaticModule() in the embedding API), not loaded from a file.  It is never library
-    code, whatever path the registration names: its code is linked into the program, not loaded from a directory of
-    library code.  It is checked as a load of the same module by path from outside the directories of library code,
-    for the code that calls the registration:
+    <tt>qore_</tt><em>name</em><tt>_register()</tt> function that qcc emits for it), not loaded from a file.  It is
+    never library code, whatever path the registration names: its code is linked into the program, not loaded from a
+    directory of library code.  It is checked as a load of the same module by path from outside the directories of
+    library code, for the code that calls the registration:
     - that is the %Qore code running in the calling thread, also when it registers the module into another %Program
       (through a native function that it calls); an embedding application that registers a module with no %Qore code
       running is trusted, unless the target %Program has a @ref Qore::SandboxManager "SandboxManager": the target's
@@ -886,6 +892,56 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @note Incoming connections accepted by a listening socket, datagrams received, and DNS lookups are not
     controlled by the network policy; use @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" to disable network access
     completely.
+
+    @subsection sandbox_dbi_connections Database Connections
+
+    A database connection that code governed by a sandbox chose is checked against the policy of that sandbox before
+    the DBI driver connects, if the sandbox restricts network or filesystem access.  The code that chose a connection
+    is the code that created the @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool
+    "DatasourcePool" (for a copy, also the code that copied it) and the code that set the connection values that the
+    connection uses (such as the host and the port): the policy that applies is the one of the code that decided
+    where the connection leads, not the one of the code that opens it.  A datasource that trusted code configured can
+    therefore be used by sandboxed code, while a datasource whose host sandboxed code set is checked against the
+    sandbox also when trusted code opens it.  The policy is read when the connection is opened, so every new
+    connection, including a reconnection after the datasource was closed, is checked with the policy as it is then.
+
+    The driver reports the destinations of the connection, as its client library determines them (with the defaults
+    that the library reads from the environment and its configuration, and every host of a list of hosts), and each
+    destination is checked as a socket connection to it would be (see @ref sandbox_net_rules): every address of a host,
+    with the host name, against the network policy, and a UNIX socket against the network and the filesystem policy.
+    The driver is then given the checked addresses and connects to them only, also when it reconnects, so that a host
+    name that resolves to another address after the check cannot redirect the connection.  A destination that cannot be
+    checked, such as a host that cannot be resolved or an abstract UNIX socket, is denied
+    (\c NETWORK-ACCESS-DENIED).
+
+    A driver that cannot report the destinations of its connections, because its client library chooses them in a way
+    that cannot be checked in advance, cannot be used for a connection chosen by code whose sandbox restricts network
+    or filesystem access: it is refused with \c NETWORK-ACCESS-DENIED before it connects.  A driver whose connections
+    reach local files only (it declares @ref Qore::SQL::DBI_CAP_LOCAL_ONLY "DBI_CAP_LOCAL_ONLY") checks these files
+    against the filesystem policy of the code that chose them itself.  See the documentation of each DBI driver for
+    the destinations that it reports.
+
+    The DBI drivers of the %Qore modules for a connection chosen by code whose sandbox restricts network or filesystem
+    access:
+    |!Driver|!Module|!Connection
+    |\c pgsql|\c pgsql|checked: the driver reports the destinations of the connection, as the PostgreSQL client \
+library determines them, and connects to the checked addresses only (needs the PostgreSQL client library 12 or later)
+    |\c mysql|\c mysql|checked: the driver reports the destination of the connection (a host and port, or a UNIX \
+socket) and connects to the checked addresses only
+    |\c sqlite3|\c sqlite3|local: the database file is checked against the filesystem policy
+    |\c oracle|\c oracle|refused (\c NETWORK-ACCESS-DENIED)
+    |\c odbc|\c odbc|refused (\c NETWORK-ACCESS-DENIED)
+    |\c freetds, \c sybase|\c sybase|refused (\c NETWORK-ACCESS-DENIED)
+    |\c jdbc|\c jni|refused (\c NETWORK-ACCESS-DENIED)
+
+    The drivers that are refused cannot report destinations that can be checked before they connect: their client
+    libraries determine where a connection leads from names and configuration that the library resolves itself, or
+    follow a server that sends the connection to another server while it is established.  A connection of such a
+    driver can be made by code that no restricting sandbox governs, such as a datasource or pool that trusted code
+    configured and gives to sandboxed code.
+
+    A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
+    code) does not check database connections.
 
     @subsection sandbox_net_protocols Protocol Constants
 

@@ -222,7 +222,7 @@ public class IOInterruptTest inherits QUnit::Test {
 
         # Don't write anything - read should timeout
         bool got_timeout = False;
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         try {
             *binary data = pis.read(100);
         } catch (hash<ExceptionInfo> ex) {
@@ -230,7 +230,7 @@ public class IOInterruptTest inherits QUnit::Test {
                 got_timeout = True;
             }
         }
-        date elapsed = now_us() - start;
+        date elapsed = microseconds(clock_get_monotonic_us() - start);
 
         # Read should timeout
         assertTrue(got_timeout, "read should raise TIMEOUT-ERROR");

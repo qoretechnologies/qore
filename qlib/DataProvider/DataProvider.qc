@@ -307,6 +307,7 @@ public class DataProvider {
             "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
+            "convertapi": "ConvertApiDataProvider",
             "segment": "SegmentDataProvider",
             "imap": "ImapClientDataProvider",
             "pop3": "Pop3ClientDataProvider",
@@ -1980,7 +1981,9 @@ if (action.data_provider_info) {
             try {
                 i.value();
             } catch (hash<ExceptionInfo> ex) {
-                stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
+                if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                    stderr.printf("Error in data provider shutdown handler %y: %s", i.key, get_exception_string(ex));
+                }
             }
         }
     }
@@ -2053,8 +2056,10 @@ if (action.data_provider_info) {
                 try {
                     p.loadModule(mod);
                 } catch (hash<ExceptionInfo> ex) {
-                    stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
-                        ex.err, ex.desc);
+                    if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                        stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod, get_ex_pos(ex),
+                            ex.err, ex.desc);
+                    }
                     continue;
                 }
                 try {
@@ -2065,7 +2070,7 @@ if (action.data_provider_info) {
                     }
                 } catch (hash<ExceptionInfo> ex) {
                     # ignore NO-FUNCTION error
-                    if (ex.err != "NO-FUNCTION") {
+                    if (ex.err != "NO-FUNCTION" && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                         stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: %s: "
                             "%s\n", mod, type, ex.err, ex.desc);
                     }
@@ -2128,7 +2133,7 @@ if (action.data_provider_info) {
                             "description": ex.desc,
                             "argument": ex.arg,
                         });
-                    } else {
+                    } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                         stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS module %y %s: %s: %s\n", mod,
                             get_ex_pos(ex), ex.err, ex.desc);
                     }
@@ -2148,7 +2153,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else {
+                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                             stderr.printf("ERROR: error in QORE_DATA_PROVIDERS module %y %s registration function: "
                                 "%s: %s\n", mod, type, ex.err, ex.desc);
                         }
@@ -2178,7 +2183,7 @@ if (action.data_provider_info) {
                                 "description": ex.desc,
                                 "argument": ex.arg,
                             });
-                        } else {
+                        } else if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
                             stderr.printf("ERROR: invalid QORE_DATA_PROVIDERS provider module %y %s: %s: %s\n",
                                 mod_str, get_ex_pos(ex), ex.err, ex.desc);
                         }
@@ -2441,7 +2446,7 @@ class DataProviderModuleLoader {
                 } else {
                     logger.error("%s", err);
                 }
-            } else if (!init) {
+            } else if (!init && !(get_parse_options() & PO_NO_TERMINAL_IO)) {
                 stderr.print(err + "\n");
             }
         }

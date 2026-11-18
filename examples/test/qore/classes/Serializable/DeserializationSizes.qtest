@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - each case is deserialized in a child process started without an execution mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+
+%exec-class DeserializationSizesTest
+
+#! A size in serialized data that is larger than the data that follows raises DESERIALIZATION-ERROR (#6502)
+/** The sizes of string and binary values, of encoding names, and the element counts of lists and hashes are checked
+    against the data; each case is deserialized from a binary and from a stream, in a child process.
+*/
+class DeserializationSizesTest inherits QUnit::Test {
+    public {
+        #! the serialized form of the size of a 4-byte value: int1 code 7, size 4
+        const Size4 = <0704>;
+
+        #! the 4 bytes of the string "abcd" and of the binary value <01020304>
+        const StringBytes = <61626364>;
+        const BinaryBytes = <01020304>;
+
+        #! the result of a child that raised DESERIALIZATION-ERROR from a binary and from a stream
+        const Expected = "rc=0 DESERIALIZATION-ERROR DESERIALIZATION-ERROR";
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("DeserializationSizesTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("a string whose size is larger than the data", \stringSizeTest());
+        addTestCase("a binary value whose size is larger than the data", \binarySizeTest());
+        addTestCase("an encoding name whose size is larger than the data", \encodingNameSizeTest());
+        addTestCase("a list or hash whose element count is larger than the data", \countTest());
+        addTestCase("deeply nested lists", \nestingTest());
+        addTestCase("values whose size matches the data", \validTest());
+        set_return_value(main());
+    }
+
+    stringSizeTest() {
+        checkSizes(Serializable::serialize("abcd"), StringBytes);
+    }
+
+    binarySizeTest() {
+        checkSizes(Serializable::serialize(BinaryBytes), BinaryBytes);
+    }
+
+    encodingNameSizeTest() {
+        # a string in another encoding than UTF-8 gives the name of its encoding, here of size 10
+        binary name = binary("ISO-8859-1");
+        checkSizes(Serializable::serialize(convert_encoding("abcd", "ISO-8859-1")), name, NOTHING, NOTHING, <070a>);
+    }
+
+    countTest() {
+        # the list's elements: list code 4, count 1, the string "x"
+        checkSizes(Serializable::serialize(("x",)), <03070178>, <04>, (5, 0xfffffffffff, MAXINT), <0701>);
+        # the hash's members: hash code 0, count 1, the key "k" and the value "v"
+        checkSizes(Serializable::serialize({"k": "v"}), <0307016b03070176>, <00>, (5, 0xfffffffffff, MAXINT),
+            <0701>);
+    }
+
+    #! the elements of a list replaced by deeply nested lists of one element: an exception, and the child ends
+    #! normally
+    nestingTest() {
+        binary data = Serializable::serialize((1, 2));
+        binary old = <040702> + <07010702>;
+        int i = data.find(old);
+        assertGe(0, i, "the serialized data has the list");
+        binary nested = parse_hex_string(strmul("040701", 200000) + "0701");
+        hash<auto> r = runChild(data.substr(0, i) + nested + data.substr(i + old.size()));
+        assertEq("0", r.rc, sprintf("the child ends normally: %s", r.output.substr(0, 400)));
+        assertNeq("none", (r.output =~ x/ERR1=([^:\n]+)/)[0], "deserializing from a binary raises an exception");
+        assertNeq("none", (r.output =~ x/ERR2=([^:\n]+)/)[0], "deserializing from a stream raises an exception");
+    }
+
+    #! the unchanged data is deserialized as before
+    validTest() {
+        assertEq("abcd", Serializable::deserialize(Serializable::serialize("abcd")));
+        assertEq(BinaryBytes, Serializable::deserialize(Serializable::serialize(BinaryBytes)));
+        assertEq(("", binary()), Serializable::deserialize(Serializable::serialize(("", binary()))));
+        string iso = convert_encoding("abcd", "ISO-8859-1");
+        assertEq(iso, Serializable::deserialize(Serializable::serialize(iso)));
+        # values that take more than one chunk of the reader
+        string big = strmul("0123456789abcdef", 100000);
+        assertEq(big, Serializable::deserialize(Serializable::serialize(big)));
+        assertEq(big, Serializable::deserialize(new BinaryInputStream(Serializable::serialize(big))));
+        binary bigbin = binary(big);
+        assertEq(bigbin, Serializable::deserialize(Serializable::serialize(bigbin)));
+        assertEq(bigbin, Serializable::deserialize(new BinaryInputStream(Serializable::serialize(bigbin))));
+    }
+
+    #! sizes larger than the 4 bytes that follow: just larger, large but allocatable, larger than the memory, and the
+    #! largest
+    private list<int> sizes() {
+        return (5, 1024 * 1024 * 1024, 0xfffffffffff, MAXINT);
+    }
+
+    #! returns the data with the size before \a bytes replaced by an 8-byte size
+    /** @param size1 the serialized size before the bytes in the data: an int1 code and the size
+        @param code the type code before the size, if any
+    */
+    private binary replaceSize(binary data, binary bytes, int size, binary size1 = Size4, binary code = binary()) {
+        binary old = code + size1 + bytes;
+        int i = data.find(old);
+        assertGe(0, i, "the serialized data has the value");
+        binary size8 = code + <0a>;
+        size8 += size.encodeMsb(8);
+        return data.substr(0, i) + size8 + bytes + data.substr(i + old.size());
+    }
+
+    #! deserializes the data with each size in a child, and checks that each child ends normally with
+    #! DESERIALIZATION-ERROR from a binary and from a stream
+    private checkSizes(binary data, binary bytes, *binary code, *list<int> sizes, binary size1 = Size4) {
+        hash<string, string> expected = {};
+        hash<string, string> results = {};
+        foreach int size in (sizes ?? self.sizes()) {
+            hash<auto> r = runChild(replaceSize(data, bytes, size, size1, code ?? binary()));
+            *list<*string> err1 = (r.output =~ x/ERR1=([^:\n]+)/);
+            *list<*string> err2 = (r.output =~ x/ERR2=([^:\n]+)/);
+            expected{size} = Expected;
+            results{size} = sprintf("rc=%s %s %s", r.rc, err1[0] ?? "(no result)", err2[0] ?? "(no result)");
+            if (results{size} != Expected) {
+                printf("size %d: %s", size, r.output.substr(0, 1000));
+            }
+        }
+        assertEq(expected, results);
+    }
+
+    #! deserializes the data from a binary (ERR1) and from a stream (ERR2) in a child process
+    private hash<auto> runChild(binary data) {
+        TmpDir tmp("qore-deserialization-sizes-");
+        string script = tmp.path + "/child.q";
+        string data_file = tmp.path + "/data.bin";
+        File f();
+        f.open2(data_file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(data);
+        f.close();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%new-style
+binary data = ReadOnlyFile::readBinaryFile(ARGV[0]);
+try {
+    auto v = Serializable::deserialize(data);
+    delete v;
+    print(\"ERR1=none\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"ERR1=%s: %s\\n\", ex.err, ex.desc);
+}
+try {
+    auto v = Serializable::deserialize(new BinaryInputStream(data));
+    delete v;
+    print(\"ERR2=none\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"ERR2=%s: %s\\n\", ex.err, ex.desc);
+}
+");
+        f.close();
+        string output = backquote(sprintf("%s %s %s 2>&1; echo \"rc=$?\"", qore_bin, script, data_file));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        return {"rc": rc[0], "output": output};
+    }
+}

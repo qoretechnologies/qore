@@ -1,0 +1,28 @@
+# The calls on libqore's hot paths that are inlined explicitly, checked by tools/check-hot-inlining.py (qore#6494)
+#
+# libqore is one compilation unit, at GCC's unit-wide inline growth limit: which of the inlines that the limit allows
+# GCC keeps depends on the size of the whole unit, so a change anywhere could make GCC stop inlining a call on a hot
+# path that it does not touch.  qore#6494 measured the calls into the hottest functions of the callgrind rows that
+# GCC dropped when the unit had less room (--param inline-unit-growth=35 and 30): their callees are inlined
+# explicitly (QORE_INTERN_ALWAYS_INLINE), at all their call sites or, for a callee with many other callers, through
+# a variant that only the hot caller calls.  A caller that inlines its callee has no out-of-line call to it.
+#
+# <caller> <callee> [<out-of-line calls allowed>]; names without template arguments, parameters or return type
+
+# the parse options of the callee of an inline method call in the IR interpreter
+executeInterpreterInlineIRMethodTarget QoreIRInlineCalleeParseOptionsHelper::QoreIRInlineCalleeParseOptionsHelper
+# the location of a JIT call that can deoptimize
+execJITWithDeopt QoreJITStackLocation::QoreJITStackLocation
+# the parameters of a fast call (JIT runtime) and of a call of a user variant
+instantiateFastCallParams QoreTypeInfo::acceptInputParam
+instantiateFastCallParams LocalVar::applyNoNarrowContainerType
+UserVariantBase::setupCall QoreTypeInfo::acceptInputParam
+# the eligibility of a method for a fast call (JIT runtime)
+MethodVariantBase::isStaticallyFastMethodCallEligible UserVariantBase::isStaticallyFastCallEligible
+# the release of a local variable's value
+VarValueBase::del QoreLValue::removeValue
+# the temporaries of each statement of a for loop (the AST interpreter)
+ForStatement::execImpl QoreStatementTempScope::release
+ForStatement::execImpl QoreStatementTempScope::~QoreStatementTempScope
+# the conversion check of an integer result assigned to an lvalue
+LValueHelper::intResultNeedsConversion QoreTypeInfo::parseReturns

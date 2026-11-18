@@ -29,6 +29,9 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
     private {
         #! The table being iterated
         AbstractTable table;
+
+        #! the \c "recursive" search option, if any: the rows are those of a recursive query
+        *hash<auto> recursive;
     }
 
     #! creates the iterator
@@ -44,6 +47,7 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
                 + {"where": where_cond}),
             search_options) {
         self.table = table;
+        recursive = search_options.recursive;
     }
 
     #! Returns the value of the given field in the current record, if the iterator is valid
@@ -61,7 +65,7 @@ public class DbTableRecordIterator inherits AbstractDbRecordIterator {
     /** @return the record type of the iterator
     */
     *hash<string, AbstractDataField> getRecordType() {
-        return table.getRecordType();
+        return DbTableReadHelper::getSearchRecordType(table, {"recursive": recursive});
     }
 }
 }

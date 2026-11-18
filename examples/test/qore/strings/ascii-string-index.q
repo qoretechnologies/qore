@@ -208,8 +208,9 @@ foreach string key in (("ascii", "2-byte at start", "3-byte in middle")) {
 }
 
 # text that is not valid UTF-8: the offsets before the invalid bytes are characters, the others raise exceptions as
-# without the cache
-sub check_invalid(string s, int valid_chars, string label) {
+# without the cache; the length counts each byte that does not start a complete character as one character
+# (qore#6597)
+sub check_invalid(string s, int valid_chars, int length, string label) {
     for (int how = 0; how < 3; ++how) {
         # reading invalid text fills the cache up to the invalid bytes before it raises the exception
         try {
@@ -218,7 +219,7 @@ sub check_invalid(string s, int valid_chars, string label) {
             expect_same(ex.err, "INVALID-ENCODING", label, "prime");
         }
         for (int pass = 0; pass < 2; ++pass) {
-            expect_same(s.length(), valid_chars, label, "length()");
+            expect_same(s.length(), length, label, "length()");
             for (int i = -s.size() - 2; i < s.size() + 2; ++i) {
                 ++checks;
                 try {
@@ -243,10 +244,10 @@ sub check_invalid(string s, int valid_chars, string label) {
 
 {
     string a20 = ascii.substr(0, 20);
-    check_invalid(binary_to_string(binary(a20) + <c3>, "UTF-8"), 20, "truncated 2-byte at end");
-    check_invalid(binary_to_string(binary(a20) + <e9> + binary("cd"), "UTF-8"), 20, "invalid 3-byte in middle");
-    check_invalid(binary_to_string(binary(a20) + <f09f98>, "UTF-8"), 20, "truncated 4-byte at end");
-    check_invalid(binary_to_string(<c3> + binary(a20), "UTF-8"), 0, "invalid at start");
+    check_invalid(binary_to_string(binary(a20) + <c3>, "UTF-8"), 20, 21, "truncated 2-byte at end");
+    check_invalid(binary_to_string(binary(a20) + <e9> + binary("cd"), "UTF-8"), 20, 23, "invalid 3-byte in middle");
+    check_invalid(binary_to_string(binary(a20) + <f09f98>, "UTF-8"), 20, 23, "truncated 4-byte at end");
+    check_invalid(binary_to_string(<c3> + binary(a20), "UTF-8"), 0, 21, "invalid at start");
     # a continuation byte on its own is a character of one byte
     string s = binary_to_string(binary(a20) + <80> + binary("xy"), "UTF-8");
     for (int how = 0; how < 3; ++how) {

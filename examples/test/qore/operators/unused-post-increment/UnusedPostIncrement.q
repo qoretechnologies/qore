@@ -416,7 +416,8 @@ hash<auto> sub lists() {
     l[0]++;
     l[1]--;
     l[2]++;
-    l[5]++;
+    # an element at the end of the list: one past it would leave a gap, which a list<int> refuses (qore#6435)
+    l[3]++;
     list<auto> la = (1.5, "2", NOTHING);
     la[0]++;
     la[1]++;

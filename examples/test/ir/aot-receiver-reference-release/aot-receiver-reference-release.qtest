@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - its checks run in children that set their own execution modes and in qcc executables
+# test-platform: macos - the release of method call receivers in the native code of qcc executables
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+%requires ../../TestInterpreter.qm
+
+%exec-class AOTReceiverReferenceReleaseTest
+
+#! A method call's receiver read through a reference lives until the end of its statement in every mode
+/** A method call through an untyped local that holds a reference reads the object through the reference.  The
+    AST and IR interpreters keep that receiver until the end of the statement; the native code of qcc released it
+    when the method returned, so the destructor of an object whose other holder the method removed ran before the
+    rest of the statement (qore#6559).  So did a closure called through such a local.
+
+    The functions of receivers.q call such methods in a foreach over references, with arguments, in a chain, in the
+    condition of an if statement and in a loop, and such a closure, and a method through a local declared with a
+    reference; their destructors log the order of the releases.  The output is compared with the AST in the ir, jit
+    and tiered modes and in executables made by qcc at -O0 and -O3.
+*/
+class AOTReceiverReferenceReleaseTest inherits QUnit::Test {
+    public {
+        #! the execution modes compared with the AST
+        const Modes = ("ir", "jit", "tiered");
+        #! the qcc optimization levels
+        const OptLevels = ("-O0", "-O3");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        #! the library path of the qcc compiles and of the executables
+        string lib_env;
+    }
+
+    constructor() : QUnit::Test("AOTReceiverReferenceReleaseTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        lib_env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("a receiver read through a reference lives until the end of its statement", \receiverTest());
+        set_return_value(main());
+    }
+
+    #! Returns the output of the script \a path in \a mode
+    private string runMode(string path, string mode) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s %s -b --enable-debug "
+            "--exec-mode=%s %s", lib_env, qore_bin, mode, path));
+        assertEq(0, r.rc, sprintf("%s: exit status (output: %y)", mode, r.out));
+        return r.stdout;
+    }
+
+    #! Compiles \a src with qcc to \a out with the options \a opts
+    private compile(string src, string out, string opts) {
+        int rc;
+        string output = backquote(sprintf("%s %s %s -o %s %s 2>&1", lib_env, qcc_bin, opts, out, src), \rc);
+        assertEq(0, rc, sprintf("qcc %s %s: exit status (output: %s)", opts, src, output.substr(-2000)));
+    }
+
+    #! Returns the output of the executable \a exe
+    private string runExe(string exe) {
+        int rc;
+        # -b must be the first argument of a compiled program
+        string out = backquote(sprintf("%s %s -b", lib_env, exe), \rc);
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", exe, out));
+        return out;
+    }
+
+    receiverTest() {
+        TmpDir dir("qore-aot-receiver-reference-release-");
+        string src = join_paths(dir.path, "receivers.q");
+        copy_file(get_script_dir() + "/receivers.q", src);
+        string expected = runMode(src, "ast");
+        # the receiver is released at the end of the statement, after the call that takes the method's result
+        assertRegex("^\\|m\\|pu~u\\|a ", expected, "the AST releases the receiver at the end of its statement");
+        foreach string mode in (Modes) {
+            assertEq(expected, runMode(src, mode), mode);
+        }
+        foreach string opt in (OptLevels) {
+            string exe = join_paths(dir.path, "receivers" + opt);
+            compile(src, exe, opt);
+            assertEq(expected, runExe(exe), "qcc " + opt);
+        }
+    }
+}

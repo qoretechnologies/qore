@@ -35,6 +35,7 @@
 
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <map>
 
@@ -125,6 +126,9 @@ struct QoreClosureTypeContext {
     QoreTypeParamInstantiation inst;
     //! the receiver type of the creating code if it is a generic class, or nullptr
     const QoreTypeInfo* receiver_type_info = nullptr;
+    //! the declarations of the type arguments and of the receiver type, which the closure can outlive (a closure
+    //! made by generic code of one Program for a class of another; issue #6489)
+    QoreTypeDeclRefs decls;
 };
 
 class QoreClosureBase : public ResolvedCallReferenceNode {
@@ -343,6 +347,8 @@ public:
             const qore_class_private* class_ctx = nullptr) : QoreClosureBase(n_closure, cv, class_ctx),
             pgm(::getProgram()) {
         pgm->depRef();
+        // a closure of library module code records the restrictions of the code that creates it (qore#6520)
+        qore_capture_call_reference_origin(this, qore_closure_code_program(this));
     }
 
     DLLLOCAL virtual ~QoreClosureNode() {
@@ -400,6 +406,8 @@ public:
         if (closure->needsTypeContext()) {
             captureObjectReceiver(obj);
         }
+        // a closure of library module code records the restrictions of the code that creates it (qore#6520)
+        qore_capture_call_reference_origin(this, qore_closure_code_program(this));
     }
 
     DLLLOCAL ~QoreObjectClosureNode() {

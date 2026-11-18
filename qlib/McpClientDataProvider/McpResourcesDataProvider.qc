@@ -117,7 +117,9 @@ public class McpResourcesListDataProvider inherits McpClientDataProviderBase {
         @debug("Listing resources");
         list<auto> resources = mcp.listResources();
         @debug {
-            printf("Found %d resources\n", resources.size());
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Found %d resources\n", resources.size());
+            }
         }
         return {
             "resources": resources,
@@ -174,7 +176,9 @@ public class McpResourceReadDataProvider inherits McpClientDataProviderBase {
         @debug("Reading resource: %y", req.uri);
         hash<auto> result = mcp.readResource(req.uri);
         @debug {
-            printf("Resource %y returned %d content items\n", req.uri, result.contents.size());
+            if (!(get_parse_options() & PO_NO_TERMINAL_IO)) {
+                stdout.printf("Resource %y returned %d content items\n", req.uri, result.contents.size());
+            }
         }
         return result;
     }

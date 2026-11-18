@@ -1646,6 +1646,13 @@ int port = get_free_port();
     - Do not try to close that window by keeping the socket bound without listening on it: a connect to a
       bound-but-not-listening socket is not refused promptly on all platforms (Darwin in particular), so
       negative connection tests written that way fail there.
+    - The port is free for TCP only: TCP and UDP ports are separate, so the same port number can be in use by a UDP
+      socket, and the function cannot be used for a UDP port, such as the port of an HTTP/3 (QUIC) server or a port
+      where an HTTP/3 connection fails.  For a server, bind UDP port \c 0 and read the port back (ex:
+      \c HttpServer::addQuicListener() with port \c 0 returns the bound port in its \c port key).  For a port where
+      a connection fails, hold the port with a UDP socket connected to another local socket while it is used: a
+      connected UDP socket receives only its peer's datagrams, so the system refuses the client's, whereas a bound
+      socket that is not connected receives them and the client waits for its timeout.
     - Requires network access; this function cannot be called in a @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK"
       @ref Qore::Program "Program".
 

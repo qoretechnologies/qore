@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_TreeMap.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/RSet.h"
@@ -176,6 +177,29 @@ void TreeMapData::destructor(ExceptionSink* xsink) {
     for (Map::iterator i = values.begin(), e = values.end(); i != e; ++i) {
         i->second.discard(xsink);
     }
+}
+
+QoreHashNode* TreeMapData::getAll(const QoreTypeInfo* valueTypeInfo) const {
+    QoreAutoRWReadLocker al(rwl);
+
+    if (data.empty()) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(valueTypeInfo), nullptr);
+    qore_hash_private* hp = qore_hash_private::get(**h);
+    // the values were accepted by the type of the values when they were stored, so in a typed hash they are not
+    // converted again: a reference would otherwise be resolved to check the type of its lvalue, which needs an
+    // exception sink; the values of an untyped hash are only stripped of complex types
+    bool typed = QoreTypeInfo::hasType(valueTypeInfo);
+    for (Map::const_iterator i = data.begin(), e = data.end(); i != e; ++i) {
+        if (typed) {
+            hp->setKeyValueKnownAbsentIntern(i->first.c_str(), i->second.refSelf());
+        } else {
+            h->setKeyValue(i->first.c_str(), i->second.refSelf(), nullptr);
+        }
+    }
+    return h.release();
 }
 
 void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreValue value, ExceptionSink* xsink) {

@@ -123,8 +123,8 @@ same-named symbol from a different module, and "this module does not export the 
 answered accurately rather than "nothing in the process exports it".
 
 `RTLD_DEFAULT` remains the fallback for a module with no `dlopen()` handle — a statically
-registered AOT module (`ModuleManager::registerAOTStaticModule()`), whose code is linked into the
-host image.
+registered AOT module (registered with the `qore_<name>_register()` function that qcc emits for it), whose
+code is linked into the host image.
 
 ### 4. The producer's namespace is not imported anywhere
 

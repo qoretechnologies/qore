@@ -324,10 +324,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         on_exit releaseSettings();
 
         HTTPClient client = getClient(srv.port, ShortConnectTimeout);
-        date start = now_us();
+        int start = clock_get_monotonic_us();
         assertThrows("HTTP3-EXTENDED-CONNECT-ERROR", "did not arrive within the connect timeout",
             \client.sendHttp3Connect(), ("/tunnel", NOTHING, "bidi-stream"));
-        timeout elapsed = (now_us() - start).durationMilliseconds();
+        timeout elapsed = (clock_get_monotonic_us() - start) / 1000;
         # the deadline is the start of the connection, made in the call, plus the connect timeout
         assertTrue(elapsed >= ShortConnectTimeout, sprintf("the wait ends at the connect deadline (%d ms)", elapsed));
         assertTrue(elapsed < ShortConnectTimeout + 15000, sprintf("the wait ends at the connect deadline (%d ms)",

@@ -34,6 +34,7 @@
 
 #include <qore/common.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -289,5 +290,38 @@ DLLLOCAL size_t qore_type_owner_group_count();
 //! Returns the number of survivors of deleted Programs that only each other keep (see delete_qore_types()), which the
 //! library cleanup frees; nothing is freed
 DLLLOCAL size_t qore_cyclic_type_owner_count();
+
+//! The global epoch of type retirement (issue #6419; see design/derived-type-retirement.md)
+/** Incremented once for each retirement of declarations or derived types; each retired item records the epoch after
+    the increment.  A thread publishes the epoch when it enters Qore code (its Program context is set from none) and
+    clears it when it leaves (see qore_type_retirement_scan()): an item retired at epoch E can be freed once no thread
+    runs Qore code since an epoch before E.  Nothing is freed before library cleanup yet; the epochs are bookkeeping,
+    reported by qore_type_retirement_info().
+*/
+DLLLOCAL extern std::atomic<uint64_t> qore_type_retire_epoch;
+
+//! The bookkeeping of the declarations and derived types retired and not freed yet (see qore_type_retire_epoch)
+struct QoreTypeRetirementInfo {
+    //! the current epoch
+    uint64_t epoch = 0;
+    //! the number of declarations retired and not freed
+    size_t pending_declarations = 0;
+    //! the number of derived types retired and not freed
+    size_t pending_derived_types = 0;
+    //! the number of those declarations whose grace period has passed: no thread runs Qore code since before them
+    size_t freeable_declarations = 0;
+    //! the number of those derived types whose grace period has passed
+    size_t freeable_derived_types = 0;
+    //! the epoch of the oldest item retired and not freed, or 0 if there is none
+    uint64_t oldest_pending_epoch = 0;
+    //! the epoch of the newest item retired and not freed, or 0 if there is none
+    uint64_t newest_pending_epoch = 0;
+    //! the lowest epoch of the threads that run Qore code, or 0 if no thread does
+    uint64_t min_active_epoch = 0;
+};
+
+//! Returns the bookkeeping of the retired declarations and derived types; the threads are scanned after the items are
+//! counted, so an item counted as freeable is one that no thread can read
+DLLLOCAL void qore_type_retirement_info(QoreTypeRetirementInfo& info);
 
 #endif

@@ -144,6 +144,7 @@ class QoreSocket {
     friend class SocketSendAndReadHeaderPollOperation;
     friend class SocketSendStreamAndReadHeaderPollOperation;
     friend class my_socket_priv;
+    friend class qore_socket_object_private;
     friend class SocketHttp2ServerPollOperation;
     friend class SocketHttp2SendResponsePollOperation;
     friend class SocketHttp2SendStreamingResponsePollOperation;

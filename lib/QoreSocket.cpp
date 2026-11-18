@@ -471,7 +471,7 @@ thread_local QoreSocketDbgConnectFailure qore_socket_dbg_connect_failure = {-1, 
 
 //! Ends the connect failure that the hook models when the check of the connect returns
 struct QoreSocketDbgConnectFailureScope {
-    DLLLOCAL ~QoreSocketDbgConnectFailureScope() {
+    ~QoreSocketDbgConnectFailureScope() {
         qore_socket_dbg_connect_failure = {-1, 0};
     }
 };
@@ -13658,9 +13658,11 @@ static void qore_socket_set_bind_no_address_error() {
 
 #ifndef _Q_WINDOWS
 //! Applies the rules of a sandbox for a UNIX socket path; see qore_socket_check_unix_sandbox()
-/** @return 0 if allowed, -1 if denied (an exception is raised)
+/** Also used for the UNIX socket destinations of a DBI connection (qore#5747)
+
+    @return 0 if allowed, -1 if denied (an exception is raised)
 */
-static int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
+int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
         ExceptionSink* xsink) {
     struct sockaddr_un addr = {};
     addr.sun_family = AF_UNIX;
@@ -20048,7 +20050,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
+            int idle_rc = qore_socket_object_private(sock).checkIdleDataForAsyncPollLocked(xsink, true);
             if (*xsink || idle_rc < 0) {
                 phase = Phase::Closed;
                 qore_socket_close_from_controller(sock->priv->socket);
@@ -20336,7 +20338,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::enterIdle(ExceptionSink* xsi
     // then read and answered with Connection: close; the controller closes the connection when the operation
     // completes in the closed phase (qore#5899)
     if (sock->priv->http_draining.load(std::memory_order_acquire)) {
-        int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
+        int idle_rc = qore_socket_object_private(sock).checkIdleDataForAsyncPollLocked(xsink, true);
         if (*xsink || idle_rc <= 0) {
             phase = Phase::Closed;
             if (idle_rc < 0) {
@@ -20416,7 +20418,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::enterIdle(ExceptionSin
     // then read and answered with Connection: close; the controller closes the connection when the operation
     // completes in the closed phase (qore#5899)
     if (sock->priv->http_draining.load(std::memory_order_acquire)) {
-        int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
+        int idle_rc = qore_socket_object_private(sock).checkIdleDataForAsyncPollLocked(xsink, true);
         if (*xsink || idle_rc <= 0) {
             phase = Phase::Closed;
             if (idle_rc < 0) {
@@ -20685,7 +20687,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePollIntern(Exc
                     set_non_block = false;
                     return nullptr;
                 }
-                int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink, true);
+                int idle_rc = qore_socket_object_private(sock).checkIdleDataForAsyncPollLocked(xsink, true);
                 if (*xsink || idle_rc < 0) {
                     phase = Phase::Closed;
                     qore_socket_close_from_controller(sock->priv->socket);
@@ -20791,6 +20793,7 @@ QoreValue SocketSendStreamAndReadHeaderPollOperation::getOutput() const {
 
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/HttpClientDrainDebug.h"
+#include "qore/intern/QoreSocketObjectPrivate.h"
 
 SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock) {
@@ -21576,7 +21579,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePollIntern(
                     // (HTTP-STREAM-ERROR + Phase::Error + connection close).
                     if (content_length >= 0 && bytes_sent < content_length) {
                         ExceptionSink rst_xsink;
-                        sock->resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        qore_socket_object_private(sock).resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         rst_xsink.clear();
                         xsink->raiseException("HTTP-STREAM-ERROR",
                             "InputStream provided " QLLD " bytes but "
@@ -21606,7 +21609,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePollIntern(
                     if (poll_rv < 0) {
                         // Send RST_STREAM to notify client of the error
                         ExceptionSink rst_xsink;
-                        sock->resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        qore_socket_object_private(sock).resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         rst_xsink.clear();
                         return nullptr;
                     }
@@ -21625,7 +21628,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePollIntern(
                     if (*xsink) {
                         // Send RST_STREAM to notify client of the error
                         ExceptionSink rst_xsink;
-                        sock->resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        qore_socket_object_private(sock).resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         rst_xsink.clear();
                         return nullptr;
                     }
@@ -21642,7 +21645,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePollIntern(
                     if (*xsink) {
                         // Send RST_STREAM to notify client of the error
                         ExceptionSink rst_xsink;
-                        sock->resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
+                        qore_socket_object_private(sock).resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
                         rst_xsink.clear();
                         return nullptr;
                     }

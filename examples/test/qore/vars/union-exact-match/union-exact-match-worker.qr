@@ -1,0 +1,228 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks that a union accepts a value of one of its member types as it is; run by union-exact-match.qtest
+
+/** A union whose members include the type of a value keeps the value as it is, whatever the order of its members,
+    although a member that comes before could accept it by converting it (qore#6407).  Each check prints
+    "name=type", where the type is the full type of the value stored.
+*/
+
+%modern
+%requires UnionExactModule
+
+enum EI : int {
+    One = 1,
+    Two = 2,
+}
+
+typedef UIS = union<int, string>;
+typedef UON = *union<int, string>;
+
+class B {
+}
+
+class D inherits B {
+}
+
+hashdecl HU {
+    union<float, int> fi;
+    union<int, float> i_f;
+    union<string, float, EI> sfe;
+}
+
+sub show(string name, auto v) {
+    printf("%s=%s\n", name, v.fullType());
+}
+
+union<float, int> sub ret_fi(int i) {
+    return i;
+}
+
+auto sub param_fi(union<float, int> v) {
+    return v;
+}
+
+auto sub param_nf(union<number, float> v) {
+    return v;
+}
+
+auto sub param_plus(union<float, int> v) {
+    v += 0.5;
+    return v;
+}
+
+sub run(EI e, int i, float f, string s, B o) {
+    # an enum value in a union with its base type (union-enum-member.qtest checks the other enum cases)
+    {
+        hash<HU> hu = <HU>{"sfe": e};
+        show("hashdecl-string-float-enum", hu.sfe);
+        # a value of the base type is accepted as it is
+        union<EI, int> ib = 3;
+        show("var-enum-int-int", ib);
+    }
+
+    # an int in a union with float
+    {
+        union<float, int> a = i;
+        show("var-float-int", a);
+        union<int, float> b = i;
+        show("var-int-float", b);
+        union<string, float, int> c = i;
+        show("var-string-float-int", c);
+        list<union<float, int>> l = (i,);
+        show("list-float-int", l[0]);
+        hash<HU> hu = <HU>{"fi": i, "i_f": i};
+        show("hashdecl-float-int", hu.fi);
+        show("hashdecl-int-float", hu.i_f);
+        show("return-float-int", ret_fi(i));
+        show("param-float-int", param_fi(i));
+        # a value of no member type is still converted by the first member that accepts it
+        union<float, string> fs = i;
+        show("var-float-string-int", fs);
+    }
+
+    # a float in a union with number
+    {
+        union<number, float> a = f;
+        show("var-number-float", a);
+        union<float, number> b = f;
+        show("var-float-number", b);
+        show("param-number-float", param_nf(f));
+    }
+
+    # soft types
+    {
+        union<softint, string> a = s;
+        show("var-softint-string", a);
+        union<string, softint> b = s;
+        show("var-string-softint", b);
+        union<softstring, int> c = i;
+        show("var-softstring-int", c);
+        union<int, softstring> d = i;
+        show("var-int-softstring", d);
+    }
+
+    # an enum of a module, which the script holds a copy of
+    {
+        union<int, MI> a = MI::Two;
+        show("module-enum-var-int-enum", a);
+        show("module-return-int-enum", mod_ret_ie(MI::Two));
+        show("module-return-enum-int", mod_ret_ei(MI::Two));
+        show("module-param-int-enum", mod_param_ie(MI::Two));
+        show("module-local-int-enum", mod_local_ie());
+        hash<MH> mh = <MH>{"ie": MI::Two, "ei": MI::Two};
+        show("module-hashdecl-int-enum", mh.ie);
+        show("module-hashdecl-enum-int", mh.ei);
+    }
+
+    # dates and containers
+    {
+        date d = 2026-01-01;
+        union<softstring, date> a = d;
+        show("var-softstring-date", a);
+        union<softint, date> b = d;
+        show("var-softint-date", b);
+        hash<auto> h = {"a": 1};
+        union<softlist<auto>, hash<auto>> c = h;
+        show("var-softlist-hash", c);
+        list<int> li = (1, 2);
+        union<list<float>, list<int>> l = li;
+        show("var-list-float-list-int", l);
+        union<list<float>, list<number>> ln = li;
+        show("var-list-float-list-number", ln);
+    }
+
+    # casts to unions
+    {
+        show("cast-float-int-int", cast<union<float, int>>(i));
+        show("cast-int-float-float", cast<union<int, float>>(f));
+        show("cast-int-enum-enum", cast<union<int, EI>>(e));
+        show("cast-float-string-int", cast<union<float, string>>(i));
+    }
+
+    # arithmetic on union lvalues
+    {
+        union<float, int> a = 1;
+        a += 0.5;
+        show("plus-equals-float", a);
+        union<float, int> b = 1;
+        b -= 0.5;
+        show("minus-equals-float", b);
+        union<number, int> c = 1;
+        c += 0.5n;
+        show("plus-equals-number", c);
+        union<float, int> d = 1;
+        d += 1;
+        show("plus-equals-int", d);
+        union<float, int> m = 1;
+        m *= 0.5;
+        show("multiply-equals-float", m);
+        union<float, int> v = 1;
+        v++;
+        show("increment-int", v);
+        show("param-plus-equals-float", param_plus(1));
+        union<int, float> fi = 1;
+        fi += 0.5;
+        show("int-first-plus-equals-float", fi);
+        union<int, float> fm = 1;
+        fm -= 0.5;
+        show("int-first-minus-equals-float", fm);
+        # a union that accepts no float is given the int result of += as before
+        union<int, string> is = 1;
+        is += 0.5;
+        show("no-float-member-plus-equals-float", is);
+        hash<HU> hu = <HU>{"i_f": 1};
+        hu.i_f += 0.5;
+        show("hashdecl-member-plus-equals-float", hu.i_f);
+    }
+
+    # a nested union, and soft and timeout members of the value's base type
+    {
+        union<float, UIS> a = i;
+        show("nested-float-union", a);
+        union<UIS, float> b = i;
+        show("nested-union-float", b);
+        show("cast-nested-float-union", cast<union<float, UIS>>(i));
+        union<float, UON> on = i;
+        show("nested-float-or-nothing-union", on);
+        union<UON, float> no = i;
+        show("nested-or-nothing-union-float", no);
+        union<float, softint> c = i;
+        show("var-float-softint", c);
+        union<softint, float> d = i;
+        show("var-softint-float", d);
+        union<number, softfloat> e1 = f;
+        show("var-number-softfloat", e1);
+        union<float, timeout> g = i;
+        show("var-float-timeout", g);
+        union<timeout, float> h = i;
+        show("var-timeout-float", h);
+    }
+
+    # += with a result type that no member has
+    {
+        union<int, softstring> a = 1;
+        a += 0.5;
+        show("softstring-member-plus-equals-float", a);
+        union<int, softfloat> b = 1;
+        b += 0.5;
+        show("softfloat-member-plus-equals-float", b);
+        union<int, float> c = 1;
+        c += 2.5n;
+        show("no-number-member-plus-equals-number", c);
+        union<int, number> d = 1;
+        d -= 0.5n;
+        show("number-member-minus-equals-number", d);
+    }
+
+    # objects are accepted as they are by a base class or their own class
+    {
+        union<B, D> a = o;
+        show("var-base-sub", a);
+        union<D, B> b = o;
+        show("var-sub-base", b);
+    }
+}
+
+run(EI::Two, 1, 1.5, "1", new D());
