@@ -26805,6 +26805,25 @@ static QoreValue f_dbg_env_read_race_result(const QoreListNode* params, RuntimeC
 #endif
 
 #ifdef DEBUG
+//! Arms a rendezvous of the next calls of File::redirect() with the first of their two locks held (issue #6567)
+static QoreValue f_dbg_file_redirect_rendezvous(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    qore_dbg_file_redirect_rendezvous(static_cast<int>(get_param_value(params, 0).getAsBigInt()),
+        static_cast<int>(get_param_value(params, 1).getAsBigInt()));
+    return QoreValue();
+}
+
+//! Returns the calls of File::redirect() that arrived at the last rendezvous and those that waited until its timeout
+static QoreValue f_dbg_file_redirect_rendezvous_result(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int arrived, timed_out;
+    qore_dbg_file_redirect_rendezvous_result(arrived, timed_out);
+    QoreHashNode* h = new QoreHashNode(bigIntTypeInfo);
+    h->setKeyValue("arrived", arrived, xsink);
+    h->setKeyValue("timed_out", timed_out, xsink);
+    return h;
+}
+
 //! Makes the next step of an entry into another Program at the given site fail with std::bad_alloc
 /** Tests that a failed entry leaves the thread as it was (ProgramThreadCountContextHelper; issue #6198); several sites
     can be armed, each fails once; -1 disarms all of them
@@ -27090,6 +27109,11 @@ void init_debug_functions(QoreNamespace& qns) {
         bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_finish", f_dbg_hold_next_thread_finish, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
+    qns.addBuiltinVariant("dbg_file_redirect_rendezvous", f_dbg_file_redirect_rendezvous, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", bigIntTypeInfo,
+        QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_file_redirect_rendezvous_result", f_dbg_file_redirect_rendezvous_result, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_tls_exit", f_dbg_hold_next_thread_tls_exit, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "ms");
     qns.addBuiltinVariant("dbg_wait_thread_finish_held", f_dbg_wait_thread_finish_held, QCF_NO_FLAGS,

@@ -2187,6 +2187,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
+      so that two redirects between the same files in opposite directions at the same time can no longer deadlock
+      (issue #6567)
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see
       @ref overloading_intro; issue #6466)
