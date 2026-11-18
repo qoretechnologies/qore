@@ -4529,9 +4529,11 @@ static bool qore_ir_opcode_is_call(QoreIROpcode op) {
 
 class QoreIRInlineCallStackLocation : public QoreStackLocation {
 public:
-    DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, std::string call_name,
+    //! \a call_name must outlive the location: the variant's name (UserVariantBase::getCallName()), which is built
+    //! once, so that a call does not build or copy it (qore#6623)
+    DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, const std::string& call_name,
             qore_call_t call_type)
-            : loc(loc), call_name(std::move(call_name)), call_type(call_type) {
+            : loc(loc), call_name(&call_name), call_type(call_type) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -4539,7 +4541,7 @@ public:
     }
 
     DLLLOCAL const std::string& getCallName() const override {
-        return call_name;
+        return *call_name;
     }
 
     DLLLOCAL qore_call_t getCallType() const override {
@@ -4556,7 +4558,8 @@ public:
 
 private:
     const QoreProgramLocation* loc = nullptr;
-    std::string call_name;
+    //! the name of the call, which outlives the location (see the constructor)
+    const std::string* call_name;
     qore_call_t call_type;
     // written by stack_helper through its constructor's output references, so they take no initializers
     const AbstractStatement* stmt;
@@ -4576,24 +4579,6 @@ static const QoreProgramLocation* qore_ir_call_frame_location(const QoreIRInstru
     }
     const UserSignature* sig = uvb ? uvb->getUserSignature() : nullptr;
     return sig ? sig->getParseLocation() : nullptr;
-}
-
-static std::string qore_ir_function_call_name(const QoreFunction* func) {
-    return func ? func->getName() : "<function>";
-}
-
-static std::string qore_ir_method_call_name(const QoreMethod* method) {
-    std::string rv;
-    if (method) {
-        if (const QoreClass* qc = method->getClass()) {
-            rv = qc->getName();
-            rv += "::";
-        }
-        rv += method->getName();
-    } else {
-        rv = "<method>";
-    }
-    return rv;
 }
 
 static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction* inst,
@@ -6028,7 +6013,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
-        qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
+        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER);
     // the inlined body runs with the callee's runtime parse options, as a call of the function does
     QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, caller_pgm);
     if (xsink && *xsink) {
@@ -6151,7 +6136,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
-        qore_ir_method_call_name(method), inst->variant ? inst->variant->getCallType() : CT_USER);
+        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER);
     // the inlined body runs with the method's runtime parse options and restrictions, as a call of the method does
     QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, method_caller_pgm);
     if (xsink && *xsink) {
@@ -6475,7 +6460,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     const QoreIRFunction* callee_ir = inst->cached_callee_ir;
     const UserSignature* sig = uvb->getUserSignature();
     QoreIRInlineCallStackLocation stack_loc(qore_ir_call_frame_location(inst, uvb),
-        qore_ir_method_call_name(inst->method), inst->variant ? inst->variant->getCallType() : CT_USER);
+        uvb->getCallName(), inst->variant ? inst->variant->getCallType() : CT_USER);
     // the inlined body runs with the static method's runtime parse options and restrictions, as a call of the
     // method does: module code also with the restrictions of its caller
     QoreIRInlineCalleeParseOptionsHelper callee_po(xsink, exec_pgm, uvb, caller_pgm);
@@ -6792,7 +6777,9 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
         return true;
     }
     // the closure's call stack frame, from the call site, as an AST call of a closure pushes it
-    QoreIRInlineCallStackLocation stack_loc(call_loc ? call_loc : sig->getParseLocation(), "<anonymous closure>",
+    // the location keeps a pointer to its name, which must outlive it (qore#6623)
+    static const std::string closure_call_name("<anonymous closure>");
+    QoreIRInlineCallStackLocation stack_loc(call_loc ? call_loc : sig->getParseLocation(), closure_call_name,
         CT_USER);
     ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
     if (xsink && *xsink) {

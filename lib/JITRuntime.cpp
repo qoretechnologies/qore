@@ -12608,9 +12608,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
 // Stack location for JIT/AOT-executed frames.
 class QoreJITStackLocation : public QoreStackLocation {
 public:
+    //! \a call_name must outlive the location: the variant's name (UserVariantBase::getCallName()), built once, or a
+    //! static string, so that a call does not copy it (qore#6623)
     DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
             const StatementBlock* statements, QoreProgram* pgm)
-        : call_name(call_name), loc(loc), statements(statements), pgm(pgm) {
+        : call_name(&call_name), loc(loc), statements(statements), pgm(pgm) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -12618,7 +12620,7 @@ public:
     }
 
     DLLLOCAL const std::string& getCallName() const override {
-        return call_name;
+        return *call_name;
     }
 
     DLLLOCAL qore_call_t getCallType() const override {
@@ -12636,7 +12638,8 @@ public:
     }
 
 private:
-    std::string call_name;
+    //! the name of the call, which outlives the location (see the constructor)
+    const std::string* call_name;
     const QoreProgramLocation* loc;
     const StatementBlock* statements;
     QoreProgram* pgm;
