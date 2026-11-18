@@ -338,9 +338,9 @@
 
     @par Temporary Values Live Until the End of Their Statement
     A temporary value, such as an object returned by a call in a chain of member accesses and method calls, the operand
-    of an operator or a value read through a reference, lives until the end of its statement; given to a call as an
-    argument, it is released when the call returns.  Code that relies on earlier destruction must assign the value to
-    a variable; see @ref temporary_lifetime.
+    of an operator or a value read through a reference, lives until the end of its statement; an argument that nothing
+    else holds is taken over by the parameter and released when the call returns, or earlier, when the callee
+    overwrites or removes the parameter; see @ref temporary_lifetime.
 
     @par Data Provider Types Restored From Their Descriptions Can Be Cyclic and Shared
     \c DataProvider::AbstractDataProviderType::get() restores each type of a description once, so a recursive type is
