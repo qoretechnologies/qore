@@ -983,6 +983,23 @@ static bool isSharedVar(const VarRefNode* var) {
 
 static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
 
+//! Returns the runtime location of a statement whose location is \a loc in the code of the statement whose runtime
+//! location is \a outer (see QoreIRInstruction::stmt_loc)
+/** A statement on the lines of the statement that contains it, such as the body of a loop written on one line, takes
+    the location of the containing statement: an exception gives the same file and lines with either (the columns of a
+    location are not part of an exception's location), and the IR interpreter and native code then do not store the
+    location at each change between the two statements (qore#6646)
+*/
+static const QoreProgramLocation* qore_ir_statement_location(const QoreProgramLocation* outer,
+        const QoreProgramLocation* loc) {
+    if (outer && loc && outer->start_line == loc->start_line && outer->end_line == loc->end_line
+            && outer->getFile() == loc->getFile() && outer->getSource() == loc->getSource()
+            && outer->offset == loc->offset && outer->getLanguage() == loc->getLanguage()) {
+        return outer;
+    }
+    return loc;
+}
+
 //! Returns true if evaluating \a val may create a temporary besides its value whose release can be observed
 /** A value made by a call or a construction, and a value that can hold an object read from a variable that other code
     can change while the expression runs - a global, thread-local or closure-bound variable, a local that a closure
@@ -5074,7 +5091,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // which is restored after it: the code that the enclosing statement runs after it, such as the release of
         // the locals of its block, the next iteration of a loop or its condition, runs in the enclosing statement's
         // location (qore#6646)
-        QoreIRStatementLocationHelper stmt_loc_helper(builder, (*it)->loc);
+        QoreIRStatementLocationHelper stmt_loc_helper(builder,
+            qore_ir_statement_location(builder.getStatementLocation(), (*it)->loc));
         if (set_code_parse_options && (!code_po_statement
                 || !qore_ir_statement_parse_options_equal(code_po_statement, *it))) {
             builder.createSetCodeParseOptions((*it)->pwo.parse_options, (*it)->loc);

@@ -14555,6 +14555,18 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     builder->CreateCondBr(attached, fire, cont, llvm::MDBuilder(ctx).createBranchWeights(1, 2000));
 
     builder->SetInsertPoint(fire);
+    // the event of a step instruction runs in its own location while a debugger is attached: a statement's in the
+    // statement's location, as with the IR interpreter (#6248), a block's in the location of the statement that
+    // contains the block, as the AST interpreter makes the event of a block before its statements; the location that
+    // the code stored before is restored after it, so that the code without a debugger, which stores no location for
+    // the event, continues in the same location as the code with one (qore#6646)
+    const QoreProgramLocation* event_loc = nullptr;
+    if (!folded_host) {
+        event_loc = synthetic ? inst->stmt_loc : inst->loc;
+        if (event_loc) {
+            emitRuntimeLocationStore(event_loc);
+        }
+    }
     if (synthetic) {
         // the entered block, which the parse tree outlives the native code with; without it, the block is resolved
         // from the marker's file and line
@@ -14602,6 +14614,8 @@ void QoreIRToLLVM::emitDebugStepHook(llvm::Module& module, llvm::Function* llvm_
     // the operation then runs in its own runtime location if it differs, as after a DebugStatement instruction
     if (folded_host && folded_host->stmt_loc && inst->loc && folded_host->stmt_loc != inst->loc) {
         emitRuntimeLocationStore(folded_host->stmt_loc);
+    } else if (event_loc && last_runtime_loc && event_loc != last_runtime_loc) {
+        emitRuntimeLocationStore(last_runtime_loc);
     }
     builder->CreateBr(cont);
     builder->SetInsertPoint(cont);
@@ -17406,7 +17420,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // Update runtime_loc for exception stack traces (per source line change)
             // Skip for PHI nodes — LLVM requires PHI nodes at the top of basic blocks;
             // emitting a runtime call before the PHI would violate this constraint.
-            if (inst->opcode != QoreIROpcode::Phi) {
+            // nor for the step events of the debugger, which store their own location while a debugger is attached,
+            // and nothing without one (see emitDebugStepHook())
+            if (inst->opcode != QoreIROpcode::Phi && inst->opcode != QoreIROpcode::DebugStatement
+                    && inst->opcode != QoreIROpcode::DebugBlock) {
                 emitRuntimeLocationUpdate(inst, module);
             }
             if (q_env_is_set("QORE_LLVM_DEBUG")) {
