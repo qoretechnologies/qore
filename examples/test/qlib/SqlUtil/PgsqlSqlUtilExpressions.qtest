@@ -104,6 +104,7 @@ class PgsqlExpressionTest inherits QUnit::Test {
 
         # Date/string function tests
         addTestCase("DP_FUNC_FORMAT_DATE", \testDpFuncFormatDate());
+        addTestCase("cast type names", \testCastTypeNames());
         addTestCase("DP_FUNC_SUBSTR", \testDpFuncSubstr());
         addTestCase("DP_FUNC_DIGEST", \testDpFuncDigest());
 
@@ -483,6 +484,24 @@ class PgsqlExpressionTest inherits QUnit::Test {
     }
 
     # --- Date/string function tests ---
+
+    #! a cast writes its type name into the SQL; only a type name is accepted (qore#6572)
+    testCastTypeNames() {
+        if (!table) { testSkip("no DB connection"); }
+
+        *hash<auto> row = selectExprRow("result", expr(COP_CAST, (fref("id"), "text")), 1);
+        assertEq("1", row.result);
+        row = selectExprRow("result", expr(COP_CAST, (fref("id"), "character varying")), 1);
+        assertEq("1", row.result);
+        # a size after a word of a type name of several words
+        row = selectExprRow("result", expr(COP_CAST, (fref("created_at"), "timestamp(0) without time zone")), 1);
+        assertEq(2026-01-15T10:30:00, row.result);
+        # the type name ran SQL of its own in the cast: current_user
+        assertThrows("OPERATOR-ERROR", "invalid cast type name", \selectExprRow(),
+            ("result", expr(COP_CAST, (fref("id"), "text) || current_user || cast(1 as text")), 1));
+        # the column operator
+        assertEq("1", table.selectRow({"columns": (cop_as(cop_cast("id", "text"), "result"),), "where": {"id": 1}}).result);
+    }
 
     testDpFuncFormatDate() {
         if (!table) { testSkip("no DB connection"); }
