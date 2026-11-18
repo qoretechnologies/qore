@@ -1648,6 +1648,7 @@ public:
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
+    bool auto_local_string_append = false;  // Transient: paired auto-local load or generic +=, guarded by runtime type
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
     // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
     // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)
@@ -4696,6 +4697,7 @@ public:
     //! checks to it, which prunes them with the facts that it refines (qore#6072, qore_ir_prune_release_checks());
     //! the pruning gives handlers and converts checks, which a later run cannot undo
     bool defer_release_check_prune = false;
+    bool has_generic_add_assign = false;  //!< Collected during slot setup for the final local append analysis.
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at

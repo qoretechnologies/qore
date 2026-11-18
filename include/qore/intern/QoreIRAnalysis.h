@@ -32,6 +32,9 @@ using QoreIRBlockVisitor = std::function<void(QoreIRBasicBlock*)>;
 bool qore_ir_visit_value_operands(const QoreIRInstruction& inst, const QoreIRValueVisitor& visitor,
     size_t* check_count = nullptr, const char* operation = nullptr);
 
+//! Marks a sole-consumer load, generic += and store back to the same auto local (qore#6279).
+DLLLOCAL void qore_ir_mark_auto_string_appends(QoreIRFunction& func);
+
 //! Visit every normal control-flow successor exactly once.
 //! @param inst control-flow instruction whose successors are visited
 //! @param visitor callback invoked once per successor

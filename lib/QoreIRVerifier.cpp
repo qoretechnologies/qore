@@ -3333,8 +3333,14 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // first appears, but a later run of this pass keeps the slots of an earlier one (next_local_slot then starts
     // after all of them)
     uint32_t seen_slots = 0;
+    has_generic_add_assign = false;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
+            inst->auto_local_string_append = false;
+            if (inst->opcode == QoreIROpcode::AddAssignAny || (inst->opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction&>(*inst).invoke_opcode == QoreIROpcode::AddAssignAny)) {
+                has_generic_add_assign = true;
+            }
             const uint32_t slots_before = seen_slots;
             if (inst->result.isValid() && inst->result.id > max_vid) {
                 max_vid = inst->result.id;
@@ -3670,6 +3676,10 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 }
             }
         }
+    }
+    // Includes functions and handlers read from stripped AOT images.
+    if (has_generic_add_assign && !defer_release_check_prune) {
+        qore_ir_mark_auto_string_appends(*this);
     }
 }
 #endif // QORE_IR_TAKE_OVER_UNIT
