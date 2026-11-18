@@ -141,11 +141,15 @@
 
     A request that is ignored lets the statement run as without the request; the step events of the code and its
     breakpoints are still reported.  A function that such native code calls directly, as compiled together with it,
-    also runs as native code and ignores the requests.  A method or static method that such an IR frame ran inline
-    before the debugger attached is called as a call made after the attach: it runs on the AST interpreter with a
-    frame of local variables of its own and takes every request
-    (see <a href="https://github.com/qoretechnologies/qore/issues/6473">issue 6473</a>).  The next call of the function
-    runs on the AST interpreter and takes every request.
+    also runs as native code and ignores the requests.  A call of a method or static method that such an IR frame
+    makes after the debugger attached, and that the IR interpreter ran inline before, is made as a call made after the
+    attach: with a frame of local variables of its own, and it takes every request
+    (see <a href="https://github.com/qoretechnologies/qore/issues/6473">issue 6473</a>).  A call that the IR
+    interpreter was already running inline when the debugger attached (or that a thread started inline just as the
+    debugger attached) finishes in the caller's IR frame: the call stack lists the method, but it has no frame of
+    local variables of its own (the debugger shows the caller's), a return request in it returns from the method
+    without a value, and a break or continue request is ignored.  The next call of the function runs on the AST
+    interpreter and takes every request.
 
     @subsection debugging_variables Variables and Expressions
 

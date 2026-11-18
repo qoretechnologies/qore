@@ -610,8 +610,12 @@ functions, native leaves and closures.  Inline methods and static methods have n
 `executeInterpreterInlineIRMethodTarget()` cost +58 Ir per IR method call, as it stopped the inlining of its helpers,
 and +10 in its callers): instead, attaching a debugger suspends the eligible inline call states of the call sites
 whose callees belong to the debugged Program (`qore_ir_suspend_inline_states()`, #6473), so that the calls of the IR
-frame are made by the call path and take the requests as the AST interpreter; `debugger-step-flow.qtest` checks the
-break and continue in such a callee and its frame.  In the IR interpreter, the DebugBlock and DebugStatement
+frame made after the attach are made by the call path and take the requests as the AST interpreter;
+`debugger-step-flow.qtest` checks the break and continue in such a callee and its frame.  The suspension only affects
+later calls: a call that was already running inline when the debugger attached, or the one call of a thread that
+loaded the eligible state just before it was suspended (see the inline call-state publication note in QoreIR.h),
+finishes in the caller's IR frame: it is listed on the call stack but has no frame of local variables of its own (the
+debugger shows the caller's), a return request returns from the method, and a break or a continue is ignored.  In the IR interpreter, the DebugBlock and DebugStatement
 cases take the return when the instruction has no `QoreIRDebugFlowTargets` (`qore_ir_debug_flow_targets()` is null);
 an instruction with a record and no target (the body of a handler lowered inline in debug IR) still returns for every
 request.  A handler without paths never reports a request (`qore_ir_set_handler_flow()`), so the ScopeExit case gets
