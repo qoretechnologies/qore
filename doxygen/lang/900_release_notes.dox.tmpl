@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par An Encoding That Is Not Predefined Has One Canonical Name
+    The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
+    \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used
+    it, which made the name depend on the order of use (see @ref character_encoding_overview; issue #6570).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or
@@ -2193,10 +2198,6 @@
     - @ref zohoinvoicerestclientintro "ZohoInvoiceRestClient": REST client for the Zoho Invoice API
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
-    - an encoding that is not predefined has one canonical name, whatever the spelling of its first use, and
-      @ref Qore::get_known_encoding() "get_known_encoding()" selects the standard character set of a label even when
-      the program used the label as a name; the names depended on the order in which a program used them (see
-      @ref character_encoding_overview; issue #6570)
 
     - a call of a method that a class declares with the name of a parent class's method tests the parent's variants
       once, not once more for each subclass of the class, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see

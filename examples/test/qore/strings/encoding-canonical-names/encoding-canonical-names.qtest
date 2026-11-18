@@ -68,5 +68,8 @@ class EncodingCanonicalNamesTest inherits QUnit::Test {
         assertEq("X-SJIS", name("x-sjis"));
         assertEq("Shift_JIS", get_known_encoding("x-sjis"));
         assertEq("Shift_JIS", get_known_encoding("X-SJIS"));
+        # an HTTP server chooses the character set of the label, which it can convert to, not the encoding that the
+        # program registered with the label's name
+        assertEq("Shift_JIS", get_http_accept_charset("x-sjis"));
     }
 }
