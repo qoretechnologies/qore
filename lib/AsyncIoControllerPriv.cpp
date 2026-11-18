@@ -954,6 +954,8 @@ namespace {
 struct AsyncIoDebugHeldTimers {
     //! True while fired timer callbacks are held; checked without the lock first
     std::atomic<bool> hold{false};
+    //! True to make the next hold fail as if the memory for it could not be allocated (see dbgFailNextTimerHold())
+    bool fail_next = false;
     QoreThreadLock lock;
     QoreCondition cond;
     struct Held {
@@ -977,6 +979,12 @@ void AsyncIoControllerPriv::dbgHoldTimerCallbacks(bool hold) {
     AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
     AutoLocker al(state.lock);
     state.hold.store(hold, std::memory_order_release);
+}
+
+void AsyncIoControllerPriv::dbgFailNextTimerHold() {
+    AsyncIoDebugHeldTimers& state = AsyncIoDebugHeldTimers::get();
+    AutoLocker al(state.lock);
+    state.fail_next = true;
 }
 
 bool AsyncIoControllerPriv::dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms) {
@@ -1026,8 +1034,24 @@ bool AsyncIoControllerPriv::dbgHoldTimerCallback(ResolvedCallReferenceNode* code
     if (!state.hold.load(std::memory_order_relaxed)) {
         return false;
     }
-    ref();
-    state.held.push_back({this, code, owner, std::move(sandbox_ctx), std::move(runtime_po)});
+    // a callback that cannot be held is dispatched as usual by the caller, with its context and options: the room is
+    // made and the owner copied first, and the context and options are moved (after the owner, in the order of the
+    // members) and the controller referenced only once nothing can throw any more; moving the entry into the room
+    // made for it does not throw
+    try {
+        if (state.fail_next) {
+            state.fail_next = false;
+            throw std::bad_alloc();
+        }
+        if (state.held.size() == state.held.capacity()) {
+            state.held.reserve(state.held.empty() ? 8 : state.held.size() * 2);
+        }
+        AsyncIoDebugHeldTimers::Held h{this, code, owner, std::move(sandbox_ctx), std::move(runtime_po)};
+        ref();
+        state.held.push_back(std::move(h));
+    } catch (std::bad_alloc&) {
+        return false;
+    }
     state.cond.broadcast();
     return true;
 }

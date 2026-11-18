@@ -2253,6 +2253,12 @@ public:
     */
     DLLLOCAL static void dbgHoldTimerCallbacks(bool hold);
 
+    //! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
+    /** Called by the dbg_async_io_fail_next_timer_hold() test hook: the callback is then dispatched as usual, as it is
+        when timer callbacks are not held
+    */
+    DLLLOCAL static void dbgFailNextTimerHold();
+
     //! Debug-only: waits until at least @p count timer callbacks are held; returns false if the wait timed out
     DLLLOCAL static bool dbgWaitHeldTimerCallbacks(size_t count, int64_t timeout_ms);
 
