@@ -239,7 +239,7 @@ per statement. Only a variable that an element or a store that can be a referenc
 (`QoreIRFunction::reference_element_locals`, `reference_store_locals`) has these slots: the variable of a loop over a
 list of ints reads its cache as before. The IR interpreter does not give such a read to a call: it releases the value
 read at the end of the statement, so a method that writes the referenced variable and its parameter destroys the object
-after the call, not at the write as in the AST interpreter (as on develop; a follow-up, #TBD-IR-METHOD-ORDER). Native
+after the call, not at the write as in the AST interpreter (as on develop; a follow-up, qore#6538). Native
 code makes a call that may give such a read in both forms and makes the call that gives nothing when no slot holds its
 value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after the call only if it holds the value,
 tested inline. A typed variable is never assigned a reference.
