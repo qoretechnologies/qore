@@ -3419,10 +3419,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    # the arguments are the expression, the type, and an optional size and scale; the type name is checked
+                    # first, as it is written into the SQL (qore#6572)
+                    string name = QoreTypeMap{args[1]} ?? SqlUtil::sql_check_cast_type(args[1]);
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
-                    # the arguments are the expression, the type, and an optional size and scale
-                    string name = QoreTypeMap{args[1]} ?? args[1];
                     *hash<auto> desc = PgsqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", exp0, name);
                     if (desc.size == SZ_MAND) {
@@ -3898,7 +3899,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         const PgsqlCopMap = {
             COP_CAST: (
                 "code": string sub (string cve, list<auto> args) {
-                    string name = QoreTypeMap{args[0]} ?? args[0];
+                    string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
                     hash desc = PgsqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", cve, name);
                     switch (name) {

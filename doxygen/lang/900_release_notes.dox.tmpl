@@ -101,6 +101,11 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par SqlUtil Casts Accept Only Type Names
+    A cast in @ref sqlutilintro "SqlUtil" (@ref SqlUtil::cop_cast() "cop_cast()" and the cast data provider
+    expression) raises \c OPERATOR-ERROR for a type that is not a type name, as checked by
+    @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"; the type is written into the SQL (issue #6572).
+
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
     \c if or \c else, a loop, a \c try or \c catch, a context statement, or another \c on_exit, \c on_success or

@@ -1426,7 +1426,8 @@ string sql = pk.getTableConstraintSql();
             const Sqlite3CopMap = (
                 COP_CAST: (
                     "code": string sub (string cve, list<auto> args) {
-                        return sprintf("cast(%s as %s)", cve, QoreTypeMap{args[0]} ?? args[0]);
+                        return sprintf("cast(%s as %s)", cve,
+                            QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]));
                     },
                 ),
                 COP_PREPEND: (

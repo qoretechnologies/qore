@@ -156,6 +156,10 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - a cast (@ref SqlUtil::cop_cast() "cop_cast()" and the cast data provider expression) accepts only a type name
+      (see @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"), as the type is written into the SQL; any
+      other value raises \c OPERATOR-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6572">issue
+      6572</a>)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): an error for
       an existing constraint name is raised without also printing its message, and a debug print of update operators was
       removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
@@ -3808,16 +3812,47 @@ public namespace SqlUtil {
         @endcode
 
         @param column the column specification for the column (string name or dot notation for use in joins) or any other column "cop_..." function
-        @param arg the new datatype to cast the column value(s) to
+        @param arg the new datatype to cast the column value(s) to: a %Qore type name (ex: \c "string") or a type name
+        of the database, as sql_check_cast_type() accepts it
         @param arg1 optional, type dependent, specification (e.g. size or precision)
         @param arg2 optional, type dependent, specification (e.g. scale)
 
         @return a @ref ColumnOperatorInfo hash corresponding to the arguments for use in the @ref select_option_columns "columns" argument of a @ref select_option_hash "select option hash"
 
+        @throw OPERATOR-ERROR \a arg is not a type name (see sql_check_cast_type())
+
         @see SqlUtil::cop_value for SQL literals handling
     */
     public hash<ColumnOperatorInfo> sub cop_cast(auto column, string arg, auto arg1, auto arg2) {
-        return make_cop(COP_CAST, column, (arg, arg1, arg2));
+        return make_cop(COP_CAST, column, (sql_check_cast_type(arg), arg1, arg2));
+    }
+
+    #! the regular expression of a type name for a cast (see sql_check_cast_type())
+    const CastTypeNameRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*(?:\\.[A-Za-z_][A-Za-z0-9_$]*)?(?: [A-Za-z_][A-Za-z0-9_$]*)*"
+        "(?:\\([0-9]+(?:, ?[0-9]+)?\\))?(?:\\[\\])*\\z";
+
+    #! Checks that a string is a type name for a cast and returns it
+    /** A cast writes its type name into the SQL, so only a type name is accepted: one or more words of ASCII letters,
+        digits, \c "_" and \c "$" (the first character of each word not a digit) separated by single spaces (ex:
+        \c "double precision", \c "timestamp with time zone"), with an optional schema prefix (\c "schema.type"), an
+        optional size or precision and scale in parentheses (ex: \c "numeric(10,2)") and optional array brackets
+        (\c "[]"); quotes, comments, statement separators and any other character are refused
+
+        @param type the type name
+
+        @return \a type
+
+        @throw OPERATOR-ERROR \a type is not a type name
+
+        @since SqlUtil 3.11
+    */
+    public string sub sql_check_cast_type(string type) {
+        if (!type.isDataAscii() || !regex(type, CastTypeNameRegex)) {
+            throw "OPERATOR-ERROR", sprintf("invalid cast type name %y: only a type name is accepted (letters, digits, "
+                "\"_\" and \"$\" in words separated by single spaces, an optional schema prefix, size and array "
+                "brackets)", type.isDataAscii() ? type : sprintf("<%d bytes>", type.size()));
+        }
+        return type;
     }
 
     #! returns a @ref ColumnOperatorInfo hash for the \c "prepend" operator with the given argument

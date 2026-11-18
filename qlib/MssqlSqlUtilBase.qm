@@ -2567,7 +2567,7 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         const MssqlCopMap = (
             COP_CAST: (
                 "code": string sub (string cve, list<auto> args) {
-                    string name = QoreTypeMap{args[0]} ?? args[0];
+                    string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
                     hash desc = MssqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", cve, name);
                     switch (name) {
