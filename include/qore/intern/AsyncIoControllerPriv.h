@@ -1192,8 +1192,8 @@ private:
         GetInfo,             //!< Snapshot cache info on the I/O thread
         //! Cancel the operation of a C++ poll operation whose Qore object was deleted (see opObjectDeleted())
         CancelDeletedOp,
-        //! Cancel the operation of a poll operation without a C++ poll operation (one implemented in Qore, an
-        //! HTTPClientPollOperation) whose Qore object was deleted (see qoreOpObjectDeleted(); qore#6531)
+        //! Cancel the operation of a poll operation without a C++ poll operation (one implemented in Qore) whose Qore
+        //! object was deleted (see qoreOpObjectDeleted(); qore#6531)
         CancelDeletedObj,
     };
 
