@@ -527,6 +527,10 @@ call of the generic constructor); see the report for the check from a second scr
 
 ### Known limits and risks
 
+- A declaration whose tombstone cannot be made is kept until library cleanup, as before: one nested deeper than
+  `QORE_TOMBSTONE_MAX_DEPTH` (64) declarations and types (ex: a class at the top of a chain of 40 diamonds, which is 80
+  classes deep), and the kinds listed above.  A fingerprint stops as soon as it fails, as the declarations on its path
+  are not memoized: a walk that went on would follow every path of a chain of diamonds.
 - A frame counted as unsafe whose `CodeEvaluationHelper` constructor ends with a C++ exception (`std::bad_alloc`)
   after it was counted leaves the count raised: the thread's waits are not quiescent afterwards, which delays frees
   and never makes them unsafe.

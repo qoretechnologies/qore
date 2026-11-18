@@ -88,6 +88,11 @@ static QoreTombstoneRegistry& tombstone_registry() {
 }
 
 //! the deepest nesting of declarations and types followed when a tombstone is made; deeper ones are not tombstoned
+/** A declaration whose tombstone cannot be made is kept until library cleanup (QoreTypeOwner::type_owner_unfreeable),
+    as before issue #6419.  A fingerprint that fails stops at once: the declarations on its path are not memoized, so
+    a walk that went on would follow every path of a hierarchy that reaches a class by many paths (a chain of
+    diamonds)
+*/
 constexpr int QORE_TOMBSTONE_MAX_DEPTH = 64;
 
 static void fp_ptr(std::string& fp, const void* p) {
@@ -138,6 +143,9 @@ public:
 
     //! Appends the fingerprint of a type; \a user is set if it names a user declaration
     DLLLOCAL void fpType(std::string& fp, const QoreTypeInfo* ti, bool& user, int depth) {
+        if (failed) {
+            return;
+        }
         if (!ti) {
             fp += '-';
             return;
@@ -160,6 +168,9 @@ public:
     }
 
     DLLLOCAL void fpClassRef(std::string& fp, const qore_class_private* p, int depth) {
+        if (failed) {
+            return;
+        }
         if (p->sys) {
             fp += 'S';
             fp_ptr(fp, p);
@@ -204,7 +215,7 @@ public:
         fp += "|b";
         if (p->scl) {
             for (BCNode* n : *p->scl) {
-                if (!n->sclass) {
+                if (failed || !n->sclass) {
                     failed = true;
                     break;
                 }
@@ -223,6 +234,9 @@ public:
     }
 
     DLLLOCAL void fpHashDeclRef(std::string& fp, const typed_hash_decl_private* p, int depth) {
+        if (failed) {
+            return;
+        }
         if (p->isTypeOwnerSystem()) {
             fp += 'S';
             fp_ptr(fp, p);
