@@ -10,6 +10,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
 %requires FsUtil
+# the interpreter that the test runner runs (examples/test/runner/test_interpreter_lookup)
+%requires ../../TestInterpreter.qm
 
 %exec-class RestrictedFirstModulesTest
 
@@ -30,7 +32,7 @@ class RestrictedFirstModulesTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("RestrictedFirstModules", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = TestInterpreter::qore_interpreter();
         script_dir = get_script_dir() + "/restricted-first";
 
         addTestCase("FilePoller", \testModule(), "filepoller.q");

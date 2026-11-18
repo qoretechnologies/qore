@@ -12,6 +12,8 @@
 %requires DataProvider
 %requires ConnectionProvider
 %requires FilePoller
+# the interpreter that the test runner runs (examples/test/runner/test_interpreter_lookup)
+%requires ../../TestInterpreter.qm
 
 %exec-class FilePollerTest
 
@@ -191,7 +193,7 @@ public class FilePollerTest inherits QUnit::Test {
         f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
         f.write(RestrictedScript);
         f.close();
-        string qore_bin = ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string qore_bin = TestInterpreter::qore_interpreter();
         string module_dir = get_script_dir() + "/../../../../qlib"
             + (ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "");
         string out = backquote(sprintf("QORE_MODULE_DIR=%s %s -b %s %s 2>&1", module_dir, qore_bin, script,
