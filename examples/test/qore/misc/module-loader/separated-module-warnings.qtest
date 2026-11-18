@@ -178,9 +178,11 @@ class SeparatedModuleWarningsTest inherits QUnit::Test {
     }
 
     #! returns the warnings in qcc output, by the name of the file each one is in
+    /** qcc reports each one in a line: <file>:<line>[:<col>]: warning: <code>: <message> (issue #6555)
+    */
     private static hash<string, list<string>> warningsByFile(string out) {
         hash<string, list<string>> rv = {};
-        *list<*string> matches = (out =~ x/warning encountered at ([^\n]+):[0-9]+ \([^\n]*\)\n([A-Z][A-Z-]+):/g);
+        *list<*string> matches = (out =~ x/(?:^|\n)([^\n]+?):[0-9]+(?::[0-9]+)?: warning: ([A-Z][A-Z-]+):/g);
         for (int i = 0; i < matches.size(); i += 2) {
             rv{basename(matches[i])} += (matches[i + 1],);
         }
