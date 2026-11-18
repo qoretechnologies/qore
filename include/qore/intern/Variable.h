@@ -578,14 +578,20 @@ struct ObjCountRec {
     const AbstractQoreNode* con;
     // initial count (true = possible recursive cycle, false = no cycle possible)
     bool before;
-    // true if the types of the container's members are declared: an object or a hashdecl hash (qore#6435)
-    bool declared_members = false;
-    // true if the container was reached through a weak reference: it is shared, so it is not retyped (qore#6435)
-    bool shared = false;
-    // the declared type of the lvalue holding the container (qore#6435)
-    const QoreTypeInfo* holder_type = nullptr;
-    // the declared type of a reference naming the container, if any (qore#6435)
-    const QoreTypeInfo* ref_type = nullptr;
+    // the following members are set only when the path is resolved for delete or remove (see
+    // LValueHelper::pushPathContainer()), except declared_members for an object, which is always set (qore#6435)
+    // true if the types of the container's members are declared: an object or a hashdecl hash
+    bool declared_members;
+    // true if the container was reached through a weak reference: it is shared, so it is not retyped
+    bool shared;
+    // the declared type of the lvalue holding the container
+    const QoreTypeInfo* holder_type;
+    // the declared type of a reference naming the container, if any
+    const QoreTypeInfo* ref_type;
+#ifdef DEBUG
+    // true if the members above were set (the path was resolved for delete or remove)
+    bool path_info = false;
+#endif
 
     DLLLOCAL ObjCountRec(const QoreListNode* c);
     DLLLOCAL ObjCountRec(const QoreHashNode* c);
@@ -1105,15 +1111,20 @@ private:
     //! set while the containers of a write-protected variable are resolved to read an element; see
     //! setReadOnlyResolution()
     bool read_only_resolution = false;
-    //! the declared types of the references resolved on the path that name the current value: the one deciding
-    //! whether the value can be a list<*T> (ref_list_type) and the one deciding whether it can be a container with a
-    //! widened element or value type (ref_decl_type); set by noteReferenceType() and consumed by the next container
-    //! of the path (pushPathContainer()) or dropped at an object (qore#6435)
-    const QoreTypeInfo* ref_list_type = nullptr;
-    const QoreTypeInfo* ref_decl_type = nullptr;
     //! set when the value of a reference is only read (ReadAccess): the containers on the whole path, also past an
     //! object, are resolved without being changed (qore#6435)
     bool read_value_only = false;
+    //! the declared types of the references resolved on a path resolved for delete or remove that name the current
+    //! value: the one deciding whether the value can be a list<*T> (ref_list_type) and the one deciding whether it
+    //! can be a container with a widened element or value type (ref_decl_type); set up by startRemovalPath(), set by
+    //! noteReferenceType(), consumed by the next container of the path (pushPathContainer()), and dropped at an
+    //! object; not set up or used on other paths (qore#6435)
+    const QoreTypeInfo* ref_list_type;
+    const QoreTypeInfo* ref_decl_type;
+#ifdef DEBUG
+    //! true if the path is resolved for delete or remove (startRemovalPath())
+    bool removal_path = false;
+#endif
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
@@ -1360,20 +1371,39 @@ public:
     */
     DLLLOCAL void rollbackVivification();
 
-    //! adds a list or a hash of the path to ocvec with the declared type of the lvalue holding it, the type of a
-    //! reference naming it, and whether it was reached through a weak reference (\a shared); see
-    //! prepareTypedListElementRemoval() (qore#6435)
+    //! adds a list or a hash of the path to ocvec; for delete or remove (\a for_remove), with the declared type of
+    //! the lvalue holding it, the type of a reference naming it, whether its members have declared types and whether
+    //! it was reached through a weak reference (\a shared); see prepareTypedListElementRemoval() (qore#6435)
     template <typename T>
-    DLLLOCAL void pushPathContainer(const T* c, bool shared = false) {
+    DLLLOCAL void pushPathContainer(const T* c, bool shared, bool for_remove) {
         static_assert(std::is_same<T, QoreListNode>::value || std::is_same<T, QoreHashNode>::value,
             "the path containers are lists and hashes");
         ocvec.emplace_back(c);
-        ObjCountRec& r = ocvec.back();
-        r.shared = shared;
-        r.holder_type = typeInfo;
-        r.ref_type = ref_decl_type;
+        if (for_remove) {
+            setPathInfo(containerHasDeclaredMembers(c), shared);
+        }
+    }
+
+    //! sets the path information of the container added last to ocvec on a path resolved for delete or remove
+    DLLLOCAL void setPathInfo(bool declared_members, bool shared);
+
+    //! sets up the reference types of a path resolved for delete or remove (qore#6435)
+    DLLLOCAL void startRemovalPath() {
         ref_list_type = nullptr;
         ref_decl_type = nullptr;
+#ifdef DEBUG
+        removal_path = true;
+#endif
+    }
+
+    //! handles the entries created by navigation when the helper is destroyed; see ~LValueHelper()
+    DLLLOCAL void finishVivified();
+
+    //! returns true if the hash is a hashdecl hash, whose members have declared types
+    DLLLOCAL static bool containerHasDeclaredMembers(const QoreHashNode* h);
+    //! returns false: the elements of a list have the list's element type
+    DLLLOCAL static bool containerHasDeclaredMembers(const QoreListNode*) {
+        return false;
     }
 
     //! called when the path crosses an object: the containers before it are no longer part of the chain
@@ -1851,7 +1881,7 @@ DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
     @param index the index
     @param xsink for exceptions
     @param for_del true for delete, false for remove (for the error of an element that cannot be left without a value,
-    see qore_list_private::prepareElementRemoval())
+    see qore_list_private::prepareElementRemoval(), and the operator named by INVALID-ENCODING, qore#6595)
 
     @return the value removed, owned by the caller
 */

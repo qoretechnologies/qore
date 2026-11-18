@@ -2623,22 +2623,22 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
             ),
             COP_YEAR: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 4)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 4)", arg1);
                 }
             ),
             COP_YEAR_MONTH: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 7)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 7)", arg1);
                 }
             ),
             COP_YEAR_DAY: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 10)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 10)", arg1);
                 }
             ),
             COP_YEAR_HOUR: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 13)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 13)", arg1);
                 }
             ),
             COP_SEQ: (
@@ -4384,8 +4384,8 @@ tc.constraint_name, c1.ordinal_position", schema, name);
         # this rule is broken here with reason:
         # In a SELECT statement, always use an ORDER BY clause with the TOP clause.
         # This is the only way to predictably indicate which rows are affected by TOP
-        sql = regex_subst(sql, "^select ", sprintf("select top %d ", info.query_hash.limit));
-        info.args += info.query_hash.limit.toInt();
+        # the limit is written in the SQL, so it is not a bind argument, and it follows "distinct" (issue #6583)
+        sql = regex_subst(sql, "^select (distinct )?", sprintf("select $1top %d ", info.query_hash.limit));
     }
 
     #! processes a string for use in SQL select statements when there is an "order by" and "offset" argument

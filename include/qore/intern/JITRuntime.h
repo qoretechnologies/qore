@@ -1961,6 +1961,21 @@ void qore_rt_pop_closure_var(LocalVar* var, ExceptionSink* xsink);
 */
 uint64_t qore_rt_load_local_weak(LocalVar* var, int8_t* owned_out, ExceptionSink* xsink);
 
+//! Loads a weak-assigned local that is the receiver of a method call, keeping the object of a weak reference
+/** \a owned_out is set to 2 when the object of a weak reference was given a reference, which
+    qore_rt_end_weak_receiver_call() releases when the call returns, and to 1 as qore_rt_load_local_weak() sets it
+*/
+uint64_t qore_rt_load_local_weak_receiver(LocalVar* var, int8_t* owned_out, ExceptionSink* xsink);
+
+//! Loads a weak-assigned local that is the receiver of a method call through an AOT context slot
+/** @see qore_rt_load_local_weak_receiver()
+*/
+uint64_t qore_rt_load_local_weak_receiver_aot(QoreAOTContext* ctx, int32_t idx, int8_t* owned_out,
+        ExceptionSink* xsink);
+
+//! Releases the receiver kept by qore_rt_load_local_weak_receiver() when its call returns
+void qore_rt_end_weak_receiver_call(uint64_t* slot, int8_t* owned_flag, ExceptionSink* xsink);
+
 //! Loads a weak-assigned local through an AOT context slot, preserving the borrow
 /** @see qore_rt_load_local_weak()
 */

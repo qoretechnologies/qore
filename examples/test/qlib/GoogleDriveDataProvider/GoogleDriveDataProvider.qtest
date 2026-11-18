@@ -250,6 +250,7 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("file API registration", \fileApiTest());
         addTestCase("shared drive support", \sharedDriveTest());
+        addTestCase("query escaping", \queryEscapingTest());
         addTestCase("event providers", \eventProviderTest());
         addTestCase("change classification", \changeClassificationTest());
         addTestCase("resumable upload", \resumableUploadTest());
@@ -460,6 +461,64 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         assertEq(DPAT_API, rename.action_code);
         assertEq(True, rename.options.name.required);
         assertEq("files", rename.options.file_id.ref_data);
+    }
+
+    #! Values in a Drive query are string literals with backslash escapes, and strings that are not valid are refused
+    queryEscapingTest() {
+        # a backslash and a single quote are escaped with a backslash; other characters are kept
+        assertEq("O\\'Brien", GoogleDriveListFilesDataProvider::escape("O'Brien"));
+        assertEq("a\\\\b", GoogleDriveListFilesDataProvider::escape("a\\b"));
+        assertEq("\\\\\\'", GoogleDriveListFilesDataProvider::escape("\\'"));
+        assertEq("\\'\\'", GoogleDriveListFilesDataProvider::escape("''"));
+        assertEq("Zoë 中文 😀 \"x\"", GoogleDriveListFilesDataProvider::escape("Zoë 中文 😀 \"x\""));
+        # a string in another encoding is written in UTF-8
+        string e = GoogleDriveListFilesDataProvider::escape(convert_encoding("Zoë'", "ISO-8859-1"));
+        assertEq("UTF-8", e.encoding());
+        assertEq("Zoë\\'", e);
+        # a string with an invalid encoding, also with a quote after the invalid byte, or with a NUL is refused
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \GoogleDriveListFilesDataProvider::escape(),
+            (binary_to_string(<41ff2720>, "UTF-8"),));
+        assertThrows("VALUE-ERROR", "NUL", \GoogleDriveListFilesDataProvider::escape(),
+            (binary_to_string(<41002720>, "UTF-8"),));
+
+        # the query is made of the escaped literals
+        assertEq("'f\\'1' in parents and name contains 'a\\\\\\' or name contains \\'' and mimeType = 'text/plain' "
+            "and trashed = false", GoogleDriveListFilesDataProvider::buildQuery({
+                "folder_id": "f'1",
+                "name": "a\\' or name contains '",
+                "mime_type": "text/plain",
+            }));
+
+        # the request carries the query percent-encoded as one parameter
+        FakeGoogleRestClientIo rest();
+        rest.bodies = ({"files": ()},);
+        GoogleDriveListFilesDataProvider prov(rest);
+        prov.doRequest({"name": "it's & co", "order_by": "folder, modifiedTime desc"});
+        assertEq(GoogleDriveDataProviderBase::addSharedDriveSupport(sprintf("/drive/v3/files?pageSize=%d&fields=%s"
+            "&q=name%%20contains%%20%%27it%%5C%%27s%%20%%26%%20co%%27%%20and%%20trashed%%20%%3D%%20false"
+            "&orderBy=folder%%2CmodifiedTime%%20desc&includeItemsFromAllDrives=true", DefaultPageSize,
+            encode_url("nextPageToken,files(" + GoogleDriveDataProviderBase::getFileFields() + ")", True))),
+            rest.last().path);
+
+        # the order is a list of sort keys
+        assertEq("name_natural,createdTime desc", GoogleDriveListFilesDataProvider::checkOrderBy("name_natural,"
+            "createdTime desc"));
+        assertThrows("VALUE-ERROR", "sort keys", \GoogleDriveListFilesDataProvider::checkOrderBy(),
+            ("name desc&q=x",));
+        assertThrows("VALUE-ERROR", "sort keys", \GoogleDriveListFilesDataProvider::checkOrderBy(), ("name asc",));
+        assertThrows("VALUE-ERROR", "sort keys", \GoogleDriveListFilesDataProvider::checkOrderBy(), ("",));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \GoogleDriveListFilesDataProvider::checkOrderBy(),
+            (binary_to_string(<6eff>, "UTF-8"),));
+
+        # no request is made with a string that is not valid
+        int count = rest.requests.size();
+        assertThrows("VALUE-ERROR", "not valid in its encoding", \prov.doRequest(),
+            ({"name": binary_to_string(<41ff2720>, "UTF-8")},));
+        assertThrows("VALUE-ERROR", "sort keys", \prov.doRequest(), ({"order_by": "name)"},));
+        assertThrows("VALUE-ERROR", "not valid in its encoding", sub () {
+            map $1, prov.searchRecords(NOTHING, {"folder_id": binary_to_string(<41ff2720>, "UTF-8")});
+        });
+        assertEq(count, rest.requests.size());
     }
 
     #! The module must offer triggers, not only actions

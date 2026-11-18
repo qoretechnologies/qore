@@ -2673,6 +2673,13 @@ public:
     // classes is a builtin class or a class whose own sml is complete; then the base classes do not have to be walked
     // again to add the ancestors to a subclass or to search the hierarchy (issue #6106)
     bool sml_complete = false;
+    //! true if the hierarchy reaches each ancestor through one path only (no diamond); set with sml_complete
+    /** Then the lookups of the hierarchy search it with the recursion through BCNode, which visits each class once
+        here; otherwise (a diamond, or a hierarchy not known to be complete, such as that of a builtin class or of a
+        class that is still being initialized) they search it with a walk that visits each class once (qore#6522).
+        It does not change once set: the hierarchy of a class does not change after it has been initialized.
+    */
+    bool diamond_free = false;
 
     DLLLOCAL BCList(BCNode* n) {
         push_back(n);
@@ -2681,7 +2688,8 @@ public:
     DLLLOCAL BCList() {
     }
 
-    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete) {
+    DLLLOCAL BCList(const BCList& old) : sml(old.sml), sml_complete(old.sml_complete),
+            diamond_free(old.diamond_free) {
         assert(old.valid);
         reserve(old.size());
         for (bclist_t::const_iterator i = old.begin(), e = old.end(); i != e; ++i)
@@ -2798,15 +2806,7 @@ public:
         }
     }
 
-    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const {
-        for (auto& i : *this) {
-            const ConstantEntry* ce = (*i).findConstantEntry(name);
-            if (ce) {
-                return ce;
-            }
-        }
-        return nullptr;
-    }
+    DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
 };
 
 // BCEANode
@@ -4376,6 +4376,11 @@ public:
     DLLLOCAL QoreValue parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
             const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc = nullptr);
 
+    //! the search of parseFindConstantValueIntern() in the class itself: \a found is set only for an accessible
+    //! constant
+    DLLLOCAL QoreValue parseFindLocalAccessibleConstantValue(const char* cname, const QoreTypeInfo*& cTypeInfo,
+            bool& found, const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc);
+
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
 
@@ -4391,6 +4396,21 @@ public:
     }
 
     DLLLOCAL QoreVarInfo* parseFindStaticVarIntern(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check, bool toplevel) const {
+        bool stop = false;
+        QoreVarInfo* vi = parseFindLocalStaticVarIntern(vname, qc, access, check, toplevel, stop);
+        if (vi || stop) {
+            return vi;
+        }
+
+        return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
+    }
+
+    //! the search of parseFindStaticVarIntern() in the class itself
+    /** @param stop set to true if the class has the variable but it is not accessible: the search stops in this class
+        and its base classes are not searched
+    */
+    DLLLOCAL QoreVarInfo* parseFindLocalStaticVarIntern(const char* vname, const QoreClass*& qc, ClassAccess& access,
+            bool check, bool toplevel, bool& stop) const {
         QoreVarInfo* vi = vars.find(vname);
 
         if (vi) {
@@ -4404,6 +4424,7 @@ public:
                 // an internal member is accessible only in its own class, not in subclasses
                 if (check && (access > Public)
                     && ((access >= Internal && parse_get_class_priv() != this) || !parseCheckPrivateClassAccess())) {
+                    stop = true;
                     return nullptr;
                 }
 
@@ -4412,7 +4433,7 @@ public:
             }
         }
 
-        return scl ? scl->parseFindStaticVar(vname, qc, access, check, toplevel) : nullptr;
+        return nullptr;
     }
 
     //! adds a member

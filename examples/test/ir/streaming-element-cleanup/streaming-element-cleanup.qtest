@@ -47,6 +47,10 @@
     made visible.  Code delegated to the AST interpreter that raises while an element is the implicit argument must
     restore the implicit argument, which holds a reference to the element, before the handler runs.
 
+    Issue #5713 nests an operator that returns a list inside another operator's predicate or map expression. Each
+    evaluation releases its inner result and source before the next element, including when an exception leaves
+    a function that has no handler.
+
     Each script runs its cases and logs the release of every object and the objects that were not released exactly
     once when the case returned.  Its output with the AST interpreter is checked, and it must be the same in every
     other execution mode, on the IR tier and as an AOT executable.
@@ -93,6 +97,16 @@ class StreamingElementCleanupTest inherits QUnit::Test {
                 "released p3; released q3; itdone it; c 2; after",
             "fpm_list: released p1; released p2; released h1; released h2; first 0; after",
             "fpm_raises: released it1; released p1; released it2; released p2; itdone it; catch SELECT/p2; after",
+            "nested_select_normal: itdone in; released in1; released in2; itdone in; released in1; released in2; "
+                "itdone out; result 2; released out1; released out2",
+            "nested_select_map_raises: released in1; released in2; itdone in; released out1; itdone out; "
+                "ESCAPED SELECT/in2",
+            "nested_select_in_map: released in2; released in1; itdone in; released out1; itdone out; "
+                "ESCAPED SELECT/in2",
+            "deep_normal: released in1; released in2; itdone in; released in1; released in2; itdone in; itdone mid; "
+                "released mid1; released mid2; released out1; itdone out; result 1",
+            "deep_nohandler: released in1; released in2; itdone in; released mid1; itdone mid; released out1; "
+                "itdone out; ESCAPED SELECT/in2",
             "nh_rethrow: released in1; itdone in; released out1; itdone out; catch NEXT/in2; after",
             "nh_throw: itdone in; released out1; itdone out; catch STREAMING-OPERATOR-ERROR/take operator expression "
                 "requires a non-negative count, got -1; after",
@@ -179,10 +193,16 @@ class StreamingElementCleanupTest inherits QUnit::Test {
         }
         TmpDir dir("streaming-element-cleanup-aot-");
         foreach string s in ((script, review_script)) {
-            string exe = dir.path + "/" + basename(s);
-            string out = ExecModeHarness::run_any(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, s));
-            assertTrue(is_file(exe), "qcc compiles " + basename(s) + ": " + out);
-            assertEq(ast(s), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), basename(s) + " AOT");
+            string expected = ast(s);
+            foreach string level in (s == review_script ? ("-O0", "-O3") : ("-O3",)) {
+                string exe = dir.path + "/" + basename(s) + level;
+                hash<ExecModeHarness::ModeRunResult> compiled = ExecModeHarness::run_command(
+                    sprintf("%s %s %s -o %s %s", env, qcc_bin, level, exe, s));
+                assertEq(0, compiled.rc, compiled.out);
+                hash<ExecModeHarness::ModeRunResult> run = ExecModeHarness::run_command(sprintf("%s %s", env, exe));
+                assertEq(0, run.rc, run.out);
+                assertEq(expected, run.out, basename(s) + " " + level);
+            }
         }
     }
 

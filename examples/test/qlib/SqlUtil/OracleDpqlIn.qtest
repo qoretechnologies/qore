@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires DataProvider
+%requires ./OracleTestIsolation.qm
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%exec-class OracleDpqlInTest
+
+#! the "in" expression on Oracle tables with the values as a list and as the other arguments (issue #6581)
+/** the DPQL parser gives the values of \c in as the arguments after the field (field, v1, v2, ...); the Oracle "in"
+    expression took the second argument as the list of values and raised \c RUNTIME-OVERLOAD-ERROR; runs when
+    \c QORE_DB_CONNSTR_ORACLE is set (a schema of its own needs \c QORE_DB_CONNSTR_ORACLE_SYS)
+*/
+class OracleDpqlInTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        string skip = "QORE_DB_CONNSTR_ORACLE is not set";
+        *AbstractTable table;
+    }
+
+    constructor() : Test("OracleDpqlIn", "1.0", \ARGV) {
+        addTestCase("in with the values as arguments", \varargsTest());
+        addTestCase("in with a list", \listTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoOracle
+        if (!ENV.QORE_DB_CONNSTR_ORACLE) {
+            return;
+        }
+        try {
+            Datasource d(OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE, "OracleDpqlIn"));
+            if (d.getDriverName() != "oracle") {
+                skip = sprintf("the connection uses driver %y", d.getDriverName());
+                return;
+            }
+            d.open();
+            ds = d;
+        } catch (hash<ExceptionInfo> ex) {
+            skip = sprintf("cannot connect to Oracle: %s: %s", ex.err, ex.desc);
+            return;
+        }
+        AbstractTable t = new Table(ds, "dpql_in_6581").getTable();
+        if (t.inDb()) {
+            t.drop();
+        }
+        t.addColumn("id", {"qore_type": Type::Int}, False);
+        t.addColumn("name", {"qore_type": Type::String, "size": 20});
+        t.create();
+        foreach hash<auto> row in (({"id": 1, "name": "a"}, {"id": 2, "name": "b"}, {"id": 3, "name": "c"},
+            {"id": 4, "name": NULL})) {
+            t.insert(row);
+        }
+        ds.commit();
+        table = t;
+%else
+        skip = "no oracle module";
+%endif
+    }
+
+    globalTearDown() {
+        if (table) {
+            table.dropCommit();
+        }
+        if (ds) {
+            ds.rollback();
+            delete ds;
+        }
+        OracleRunSchema::teardown();
+    }
+
+    varargsTest() {
+        if (!table) {
+            testSkip(skip);
+        }
+        # what the DPQL parser gives
+        assertEq((1, 4), ids(DataProvider::parseDpqlExpression("@id in (1, 4)")));
+        assertEq((3,), ids(DataProvider::parseDpqlExpression("@id in (3)")));
+        assertEq((2, 3), ids(DataProvider::parseDpqlExpression("@name in (\"b\", \"c\", \"x\")")));
+        # the varargs form built directly, with a NULL value, which matches no row
+        assertEq((1, 2), ids(expr((fref("id"), 1, NULL, 2))));
+        assertEq((2,), ids(expr((fref("name"), "b"))));
+        # a value of a type that is not supported (the first value gives the type of the values) is an error of the
+        # operator, not an overload error
+        assertThrows("ORACLE-IN-OPERATOR-ERROR", \ids(), expr((fref("id"), {"a": 1}, 1)));
+    }
+
+    listTest() {
+        if (!table) {
+            testSkip(skip);
+        }
+        assertEq((1, 4), ids(expr((fref("id"), (1, 4)))));
+        assertEq((1, 3), ids(expr((fref("name"), ("a", "c")))));
+        # an empty list matches no row
+        assertEq((), ids(expr((fref("id"), ()))));
+    }
+
+    private hash<DataProviderFieldReference> fref(string name) {
+        return <DataProviderFieldReference>{"field": name};
+    }
+
+    private hash<DataProviderExpression> expr(list<auto> args) {
+        return <DataProviderExpression>{"exp": DP_SEARCH_OP_IN, "args": args};
+    }
+
+    #! returns the ids of the rows that match the condition, in order
+    private list<auto> ids(hash<DataProviderExpression> cond) {
+        on_exit ds.rollback();
+        return table.select({"columns": ("id",), "where": cond, "orderby": "id"}).id ?? ();
+    }
+}

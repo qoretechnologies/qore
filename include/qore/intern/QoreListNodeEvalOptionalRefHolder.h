@@ -111,6 +111,13 @@ public:
         editIntern();
     }
 
+    //! releases the values of the temporary list given to the holder (see tmp_source), unless it is \a keep
+    /** For a list made from its values, which holds references of its own (the arguments of a named call bound to the
+        parameters), so that the list made holds their last references, which the parameters take over, as they take
+        over the values of the temporary list of a call with positional arguments (issues #5958, #6486)
+    */
+    DLLLOCAL void releaseTmpSourceValues(const QoreListNode* keep);
+
     DLLLOCAL QoreValue& getEntryReference(size_t index);
 
     DLLLOCAL size_t size() const {

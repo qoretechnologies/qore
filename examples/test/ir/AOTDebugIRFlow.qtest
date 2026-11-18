@@ -1,0 +1,136 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+# test-platform: macos - AOT code generation and linking of the debug IR of a program that a debugger runs
+
+# A debugger's return, break or continue request at a step event of AOT code is taken as by the AST interpreter
+# (#6200, #6201).
+#
+# Once a debugger is attached, an AOT function runs its serialized debug IR in the IR interpreter
+# (UserVariantBase::materializeAOTDebugIR()): from format version QORE_AOT_DEBUG_FLOW_VERSION, the step events of
+# the debug IR have the paths of the requests (QoreIRDebugFlowTargets), and so do the ScopeExit instructions whose
+# handlers run out of line.  The program aot-debug-ir-flow/flow.q attaches a debugger to itself and calls a function
+# in a thread of its own; the debugger requests a flow at a step event of a statement of a loop or of a handler.
+# The program is also compiled with the loop body of outlined() outlined (design/aot-function-outlining.md): outlined
+# code is native code only, and the debug IR of the function, which has the paths of the requests, is the same with
+# and without outlining; and with callees whose return facts the native code of their callers can rely on.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%exec-class AOTDebugIRFlowTest
+
+class AOTDebugIRFlowTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string tmp_dir;
+        string src = get_script_dir() + "/aot-debug-ir-flow/flow.q";
+        hash<string, int> tags = {};
+
+        #! the function, the request and the tag and the hit of its statement
+        const Cases = (
+            ("loop", "break", "loop_first", 2),
+            ("loop", "continue", "loop_first", 2),
+            ("loop", "return", "loop_first", 2),
+            ("handler", "break", "handler_body", 2),
+            ("handler", "continue", "handler_body", 2),
+            ("handler", "return", "handler_body", 2),
+            ("mixed", "break", "mixed_body", 2),
+            ("mixed", "return", "mixed_body", 2),
+            ("outlined", "break", "outlined_first", 2),
+            ("outlined", "continue", "outlined_first", 2),
+            ("outlined", "return", "outlined_first", 2),
+            ("outlined", "break", "outlined_last", 3),
+            ("outlined", "continue", "outlined_last", 3),
+            ("outlined", "return", "outlined_last", 3),
+            # the return facts of a callee (#6201)
+            ("facts_argument", "return", "facts_string_first", 3),
+            ("facts_argument", "break", "facts_string_first", 3),
+            ("facts_typed", "return", "facts_typed_first", 3),
+            # an immediately called closure, whose return facts the native code of a caller can rely on
+            ("facts_closure", "return", "facts_closure_first", 3),
+        );
+
+        #! the environment that has the AOT compiler outline the loop body of outlined() (see
+        #! design/aot-function-outlining.md)
+        const OutlineEnv = "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=100 QORE_AOT_OUTLINE_FN_TARGET_INSTS=100";
+    }
+
+    constructor() : QUnit::Test("AOTDebugIRFlow", "1.0") {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        tmp_dir = sprintf("%s/qore-aot-debug-ir-flow-%d", (ENV.TMPDIR ?? "/tmp"), getpid());
+        mkdir(tmp_dir);
+        list<string> lines = ReadOnlyFile::readTextFile(src).split("\n");
+        for (int i = 0; i < lines.size(); ++i) {
+            *list<*string> tag = lines[i] =~ x/### ([a-z_]+)$/;
+            if (tag) {
+                tags{tag[0]} = i + 1;
+            }
+        }
+        addTestCase("the requests of a debugger in AOT code", \testFlows());
+        addTestCase("the debug IR of outlined code", \testDebugIR());
+        set_return_value(main());
+    }
+
+    destructor() {
+        system(sprintf("rm -rf %s", tmp_dir));
+    }
+
+    testFlows() {
+        string exe = compile("flow.aot", "");
+        string outlined_exe = compile("flow-outlined.aot", OutlineEnv);
+        foreach list<auto> c in (Cases) {
+            string args = sprintf("%s %s %d %d", c[0], c[1], tags{c[2]}, c[3]);
+            # the AST interpreter is the reference
+            string ast_out = backquote(sprintf("%s -b --exec-mode=ast %s %s 2>&1", qore_bin, src, args));
+            assertRegex("^RESULT:", ast_out, sprintf("%s: AST", args));
+            assertEq(ast_out, run(exe, args), sprintf("%s: AOT code takes the request as the AST interpreter", args));
+            # the debug IR of outlined code is that of the function as it was (#6201)
+            assertEq(ast_out, run(outlined_exe, args), sprintf("%s: outlined AOT code takes the request as the AST "
+                "interpreter", args));
+        }
+    }
+
+    #! the debug IR of a function with the paths of a debugger's requests is the same with and without outlining
+    /** A function that may be outlined is optimized as such (aotFunctionBodyMayBeOutlined(): its outline regions are
+        preserved, so its constant CSE differs), so its debug IR differs from that of the same function compiled with
+        outlining off for that reason alone, which is not compared; the IR is compared with that of the same
+        optimization without the transform (QORE_AOT_OUTLINE_FN=analyze), which differs only if outlining leaves
+        something of the transform in it (design/aot-function-outlining.md, decision 11)
+    */
+    testDebugIR() {
+        list<string> plain = dumpDebugIR("QORE_AOT_OUTLINE_FN=analyze " + OutlineEnv);
+        list<string> outlined = dumpDebugIR(OutlineEnv);
+        assertTrue((select plain, $1 =~ /^AOT-DEBUG-IR: outlined\(/).size() == 1, "the dump has the debug IR of "
+            "outlined(): " + plain.join("|"));
+        assertEq(plain, outlined, "the serialized debug IR does not depend on outlining");
+    }
+
+    #! the digests of the serialized debug IR of the functions (QORE_AOT_DEBUG_IR_DIGEST), in order
+    private list<string> dumpDebugIR(string env) {
+        # the same output file: its name is in the image
+        string out = backquote(sprintf("QORE_LIBDIR=%s QORE_AOT_DEBUG_IR_DIGEST=1 %s %s -b --compile --output "
+            "%s/digest.aot %s 2>&1", libqore_dir, env, qore_bin, tmp_dir, src));
+        return select out.split("\n"), $1 =~ /^AOT-DEBUG-IR: /;
+    }
+
+    private string compile(string name, string env) {
+        string exe = tmp_dir + "/" + name;
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s %s -b --compile --output %s %s 2>&1", libqore_dir,
+            env, qore_bin, exe, src));
+        assertTrue(is_file(exe), "AOT compile succeeds: " + compile_out);
+        if (env) {
+            # the loop body with its step events is outlined
+            assertRegex("AOT-OUTLINE-FN: 'outlined[^']*' outlined [1-9]", compile_out, "outlined() is outlined");
+        }
+        return exe;
+    }
+
+    private string run(string exe, string args) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s %s 2>&1", libqore_dir, libqore_dir, exe,
+            args));
+    }
+}

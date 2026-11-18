@@ -735,8 +735,9 @@ std::string qore_get_http_accept_charset(const char* t) {
             const QoreEncoding* enc = get_supported_http_charset(cs);
             if (enc) {
                 // a name or an alias of an encoding that Qore knows is given as it is, a label of a character set
-                // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with
-                best = QoreEncodingManager::find(cs.c_str()) ? cs : std::string(enc->getCode());
+                // (see qore_find_untrusted_encoding()) as the name of its encoding, which the server converts with;
+                // a label that the program registered as a name of another encoding is a label (qore#6570)
+                best = QoreEncodingManager::find(cs.c_str()) == enc ? cs : std::string(enc->getCode());
                 best_q = q;
             }
         }

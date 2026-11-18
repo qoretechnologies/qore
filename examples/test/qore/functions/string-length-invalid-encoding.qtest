@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class StringLengthInvalidEncodingTest
+
+#! the character count of a string that is not valid in its encoding (qore#6597)
+/** Each byte of a byte sequence that is not valid in the encoding of the string counts as one character, in every
+    form of the count: the count stopped at the first such sequence and was less than the number of characters of the
+    string.
+*/
+class StringLengthInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("string length of invalid strings", "1.0", \ARGV) {
+        addTestCase("length forms", \lengthForms());
+        addTestCase("short literals", \shortLiterals());
+        addTestCase("compiled int expressions", \intExpressions());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("valid strings are unaffected", \validStrings());
+        set_return_value(main());
+    }
+
+    #! returns a string tagged as UTF-8 with the given bytes
+    private static string utf8(string hex) {
+        return binary_to_string(parse_hex_string(hex), "UTF-8");
+    }
+
+    #! returns the strings to check with their expected counts
+    private static hash<string, int> cases() {
+        return {
+            # a truncated two-byte character at the end
+            "61c3": 2,
+            # an invalid byte before a two-byte character: "a", 0xff, "é"
+            "61ffc3a9": 3,
+            # an invalid byte after a two-byte character: "é", 0xff, "a"
+            "c3a9ff61": 3,
+            # a truncated three-byte character at the end: "a", "é", 0xe2 0x82
+            "61c3a9e282": 4,
+            # ASCII text and an invalid byte at the end
+            "616263ff": 4,
+            # only invalid bytes
+            "fffe": 2,
+        };
+    }
+
+    lengthForms() {
+        foreach hash<auto> i in (cases().pairIterator()) {
+            string s = utf8(i.key);
+            assertEq(i.value, length(s), i.key + " length()");
+            assertEq(i.value, s.length(), i.key + " <string>::length()");
+            assertEq(i.value, elements s, i.key + " elements");
+            # a string in a hash and the length of a concatenation
+            hash<auto> h = {"k": s};
+            assertEq(i.value, h.k.length(), i.key + " hash value");
+            assertEq(i.value + 1, length(s + "z"), i.key + " concatenation");
+            assertEq(i.value + 1, ("z" + s).length(), i.key + " concatenation method");
+            # the bytes at the end of a part can make a character with the next part: the length of a concatenation
+            # is the length of the concatenated string
+            string c = s + "€";
+            assertEq(length(c), length(s + "€"), i.key + " concatenation with a non-ASCII part");
+            assertEq(c.length(), (s + "€").length(), i.key + " concatenation method with a non-ASCII part");
+            # the count is never less than the number of characters before the invalid bytes, nor more than the bytes
+            assertTrue(s.length() <= s.size(), i.key + " bytes");
+            # character offsets into the string still raise INVALID-ENCODING (qore#6595)
+            assertThrows("INVALID-ENCODING", sub () { string r = s[0..]; });
+        }
+    }
+
+    #! short literals, which compiled code can keep in the value itself
+    shortLiterals() {
+        assertEq(3, "a\xffé".length());
+        assertEq(3, length("é\xffa"));
+        assertEq(2, elements "\xff\xfe");
+        assertEq(3, "ab\xff".length());
+        string s = "a\xffé";
+        assertEq(3, s.length());
+        # the elements of a buffer of strings are short strings, which compiled code counts on its own
+        buffer<string> buf = new buffer<string>(("a\xffé", "ab\xff", "\xff\xfe", "a\xc3"));
+        assertEq(3, buf[0].length());
+        assertEq(3, length(buf[1]));
+        assertEq(2, elements buf[2]);
+        assertEq(2, buf[3].length());
+        string c = buf[3] + "€";
+        assertEq(length(c), length(buf[3] + "€"));
+        assertEq(c.length(), (buf[3] + "€").length());
+    }
+
+    #! functions whose integer result compiled code can compute natively
+    intExpressions() {
+        code f = int sub (string s) { return s.length() + 1; };
+        foreach hash<auto> i in (cases().pairIterator()) {
+            assertEq(i.value + 1, f(utf8(i.key)), i.key);
+            assertEq(i.value * 2, plusLength(utf8(i.key), utf8(i.key)), i.key);
+        }
+    }
+
+    private static int plusLength(string a, string b) {
+        return a.length() + b.length();
+    }
+
+    #! a string in another multi-byte encoding
+    otherEncodings() {
+        # a Shift_JIS character, a lead byte without a valid second byte, two ASCII characters
+        string sj = binary_to_string(parse_hex_string("82a0822741"), "SHIFT_JIS");
+        assertEq(4, sj.length());
+        # a string in a single-byte encoding has one character per byte
+        string l = binary_to_string(parse_hex_string("e9ff41"), "ISO-8859-1");
+        assertEq(3, l.length());
+    }
+
+    validStrings() {
+        assertEq(0, "".length());
+        assertEq(3, "abc".length());
+        assertEq(4, "aébü".length());
+        assertEq(4, length("aébü"));
+        assertEq(4, elements "aébü");
+        assertEq(2, "€a".length());
+    }
+}
