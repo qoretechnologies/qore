@@ -4320,9 +4320,9 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 if (cmd.immediate) {
                     # only an identifier is given to the operator's code, as the SQL that it returns is inserted
                     # directly into the query, as for AbstractTable::insert(); the value must match the allowed
-                    # characters as a whole, so that a string that cannot be matched (one that is not valid UTF-8) is
-                    # refused
-                    if (arg !~ /\A[A-Za-z\._0-9]*\z/) {
+                    # characters as a whole; a string that is not valid in its encoding, which cannot be matched, is
+                    # refused first
+                    if ((arg.typeCode() == NT_STRING && !arg.isEncodingValid()) || arg !~ /\A[A-Za-z\._0-9]*\z/) {
                         # a value that is not valid in its encoding is not given in the message (qore#6553)
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s "
                             "which contains illegal characters", getDesc(), iop,

@@ -43,6 +43,9 @@ class EchoHandler inherits AbstractHttpRequestHandler {
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         ++calls;
+        if (body.typeCode() == NT_STRING) {
+            return makeResponse(200, sprintf("body %s %s", body.encoding(), body.toBinary().toHex()));
+        }
         *string v = hdr."x-test";
         if (!exists v) {
             return makeResponse(200, "none");
@@ -58,6 +61,7 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         addTestCase("HTTP/1.1 header names", \http1HeaderNames());
         addTestCase("HTTP/1.1 header values", \http1HeaderValues());
         addTestCase("HTTP/1.1 inline path", \http1Inline());
+        addTestCase("HTTP/1.1 request bodies", \http1Bodies());
         addTestCase("HTTP/2", \http2());
         addTestCase("HTTP/3", \http3());
         set_return_value(main());
@@ -152,6 +156,34 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         assertEq(2, handler.calls);
     }
 
+    private http1Bodies() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        EchoHandler handler();
+        server.setDefaultHandler("default", handler);
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+
+        # JSON is UTF-8: a body with a byte that is not valid UTF-8 is refused before the handler sees it
+        hash<auto> response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
+            "Content-Type: application/json\r\nContent-Length: 10\r\n\r\n") + <7b2261223a2261ff227d>, "ISO-8859-1"));
+        assertEq(400, response.hdr.status_code);
+        assertRegex("the request body of 10 bytes has an invalid encoding: it is not valid text in encoding UTF-8",
+            response.body);
+        assertTrue(response.closed);
+        # a declared UTF-8 charset
+        response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
+            "Content-Type: text/plain; charset=utf-8\r\nContent-Length: 4\r\n\r\n") + <636166e9>, "ISO-8859-1"));
+        assertEq(400, response.hdr.status_code);
+        assertEq(0, handler.calls);
+        # the same bytes in a declared Latin-1 charset are valid text
+        response = rawRequest(port, binary_to_string(binary("POST /a HTTP/1.1\r\nHost: localhost\r\n"
+            "Connection: close\r\nContent-Type: text/plain; charset=iso-8859-1\r\nContent-Length: 4\r\n\r\n")
+            + <636166e9>, "ISO-8859-1"));
+        assertEq(200, response.hdr.status_code);
+        assertEq("body ISO-8859-1 636166e9", response.body);
+        assertEq(1, handler.calls);
+    }
+
     private http2() {
         HttpServer server(<HttpServerOptionInfo>{});
         on_exit server.stop();
@@ -174,6 +206,10 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         hash<auto> info = send(client, "/a", {"X-Test": binary_to_string(<636166e9>, "UTF-8")});
         assertEq(200, info."response-headers".status_code);
         assertEq("ISO-8859-1 match 636166e9", info.body);
+        assertEq(1, handler.calls);
+        # a request body that is not valid text in its encoding
+        info = post(client, "/a", <7b2261223a2261ff227d>, "application/json");
+        assertEq(400, info."response-headers".status_code);
         assertEq(1, handler.calls);
     }
 
@@ -199,6 +235,23 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         assertEq("ISO-8859-1 match 636166e9", info.body);
         assertTrue(client.isHttp3Active());
         assertEq(1, handler.calls);
+        # a request body that is not valid text in its encoding
+        info = post(client, "/a", <7b2261223a2261ff227d>, "application/json");
+        assertEq(400, info."response-headers".status_code);
+        assertEq(1, handler.calls);
+    }
+
+    # sends a POST request with the given body; returns the request information hash
+    private static hash<auto> post(HTTPClient client, string target, binary body, string ct) {
+        hash<auto> info;
+        try {
+            client.send(body, "POST", target, {"Content-Type": ct}, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "HTTP-CLIENT-RECEIVE-ERROR") {
+                rethrow;
+            }
+        }
+        return info;
     }
 
     # sends a GET request with the given pre-encoded target; returns the request information hash with the body

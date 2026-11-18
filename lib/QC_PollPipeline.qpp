@@ -708,6 +708,18 @@ int PollPipelinePriv::addSetContextValue(const char* key, const char* value) {
     });
 }
 
+int PollPipelinePriv::addSetContextValue(const char* key, const QoreString& value) {
+    std::string k(key);
+    std::string val(value.c_str(), value.size());
+    const QoreEncoding* enc = value.getEncoding();
+    return addTransform([k, val, enc](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        ctx.extra->setKeyValue(k.c_str(), new QoreStringNode(val.data(), val.size(), enc), xsink);
+    });
+}
+
 int PollPipelinePriv::addSetContextBinary(const char* key, BinaryNode* data) {
     std::string k(key);
     // Take ownership of the caller's ref and keep it alive for the transform
@@ -2726,7 +2738,8 @@ int PollPipeline::addRecvImapResponse(string tag_key, string resp_key, string er
     @since %Qore 3.0
 */
 int PollPipeline::addSetContextValue(string context_key, string value) [flags=NAMED_ARGS] {
-    return priv->addSetContextValue(context_key->c_str(), value->c_str());
+    // the string is stored with its encoding and all of its bytes
+    return priv->addSetContextValue(context_key->c_str(), *value);
 }
 
 //! Adds a transform step that sets binary data in the context extra hash

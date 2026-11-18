@@ -1549,12 +1549,20 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
 
         @param hdr the request headers
         @param body the request body
+
+        @throw INVALID-ENCODING the body is not valid text in its encoding; the request is answered with 400 (qore#6554)
     */
     private string decodeRequestText(hash<auto> hdr, binary body) {
         string assumed = getDefaultTextEncoding();
         auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
         data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed);
-        return rv.typeCode() == NT_STRING ? rv : body.toString(assumed);
+        string str = rv.typeCode() == NT_STRING ? rv : body.toString(assumed);
+        # text from outside the server is checked where it enters it, before any handler processes it
+        if (!str.isEncodingValid()) {
+            throw "INVALID-ENCODING", sprintf("the request body of %d bytes has an invalid encoding: it is not valid "
+                "text in encoding %s", body.size(), str.encoding());
+        }
+        return str;
     }
 
     #! To call a listener's stop callback
@@ -4553,7 +4561,23 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                         || hdr."content-type" =~ /^multipart\//i) {
                     body = body_data;
                 } else {
-                    body = decodeRequestText(hdr, body_data);
+                    try {
+                        body = decodeRequestText(hdr, body_data);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "INVALID-ENCODING") {
+                            rethrow;
+                        }
+                        listener.logError("%s: from %s", ex.desc, cx."peer-info".address_desc);
+                        cx.close = True;
+                        if (async_response_out) {
+                            async_response_out = buildAsyncErrorResponse(400, ex.desc, cx, listener, s,
+                                !is_multiplexed);
+                        } else {
+                            sendRequestError(listener, \cx, s, 400, ex.desc, NOTHING, NOTHING,
+                                cx."response-encoding", hdr.method == "HEAD");
+                        }
+                        return NOTHING;
+                    }
                 }
             }
         } else if (cx."header-info".body) {
@@ -4579,7 +4603,18 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 body = cx."header-info".body;
             } else {
                 # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
-                body = decodeRequestText(hdr, cx."header-info".body);
+                try {
+                    body = decodeRequestText(hdr, cx."header-info".body);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "INVALID-ENCODING") {
+                        rethrow;
+                    }
+                    listener.logError("%s: from %s", ex.desc, cx."peer-info".address_desc);
+                    cx.close = True;
+                    sendRequestError(listener, \cx, s, 400, ex.desc, NOTHING, NOTHING, cx."response-encoding",
+                        hdr.method == "HEAD");
+                    return NOTHING;
+                }
             }
         } else if (exists hdr."content-length" && !is_multiplexed) {
             # HTTP/1.x only: the request body is read from the raw socket here.
