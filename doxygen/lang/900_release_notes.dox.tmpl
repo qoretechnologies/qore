@@ -3386,6 +3386,10 @@
       the field, as the DPQL parser gives them (ex: <tt>\@id in (1, 4)</tt>), which raised
       \c DATA-PROVIDER-EXPRESSION-ERROR or \c RUNTIME-OVERLOAD-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/6581">issue 6581</a>)
+    - fixed @ref SqlUtil::cop_year() "cop_year()", @ref SqlUtil::cop_year_month() "cop_year_month()",
+      @ref SqlUtil::cop_year_day() "cop_year_day()" and @ref SqlUtil::cop_year_hour() "cop_year_hour()" of
+      @ref sqlutilintro "SqlUtil" on SQL Server, which used the column name \c dt instead of their column
+      (<a href="https://github.com/qoretechnologies/qore/issues/6582">issue 6582</a>)
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)

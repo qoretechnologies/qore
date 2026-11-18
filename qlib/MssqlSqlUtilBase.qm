@@ -2611,22 +2611,22 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
             ),
             COP_YEAR: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 4)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 4)", arg1);
                 }
             ),
             COP_YEAR_MONTH: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 7)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 7)", arg1);
                 }
             ),
             COP_YEAR_DAY: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 10)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 10)", arg1);
                 }
             ),
             COP_YEAR_HOUR: (
                 "code": string sub (string arg1, auto arg) {
-                    return sprintf("substring(convert(varchar, dt, 120), 1, 13)", arg1);
+                    return sprintf("substring(convert(varchar, %s, 120), 1, 13)", arg1);
                 }
             ),
             COP_SEQ: (
