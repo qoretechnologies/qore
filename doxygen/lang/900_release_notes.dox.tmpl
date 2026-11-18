@@ -117,6 +117,11 @@
     \c INVALID-ENCODING exception for a string that is not valid in its encoding, which cannot be matched,
     and previously returned such a string unchanged (issue #6553).
 
+    @par Database Connections Are Checked Against the Sandbox
+    A database connection chosen by code whose sandbox restricts network or filesystem access is checked against that
+    sandbox before the DBI driver connects, and a driver that cannot report the destinations of its connections is
+    refused for it with \c NETWORK-ACCESS-DENIED (see @ref sandbox_dbi_connections; issue #5747).
+
     @par An Octal Integer Literal Cannot Contain 8 or 9
     An integer literal with a leading zero is octal (<tt>010</tt> is \c 8), and one that contains \c 8 or \c 9
     (<tt>08</tt>, <tt>019</tt>), which was read as a decimal, is a parse error, as is an octal literal too large for a

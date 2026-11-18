@@ -861,6 +861,37 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     controlled by the network policy; use @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" to disable network access
     completely.
 
+    @subsection sandbox_dbi_connections Database Connections
+
+    A database connection that code governed by a sandbox chose is checked against the policy of that sandbox before
+    the DBI driver connects, if the sandbox restricts network or filesystem access.  The code that chose a connection
+    is the code that created the @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool
+    "DatasourcePool" (for a copy, also the code that copied it) and the code that set the connection values that the
+    connection uses (such as the host and the port): the policy that applies is the one of the code that decided
+    where the connection leads, not the one of the code that opens it.  A datasource that trusted code configured can
+    therefore be used by sandboxed code, while a datasource whose host sandboxed code set is checked against the
+    sandbox also when trusted code opens it.  The policy is read when the connection is opened, so every new
+    connection, including a reconnection after the datasource was closed, is checked with the policy as it is then.
+
+    The driver reports the destinations of the connection, as its client library determines them (with the defaults
+    that the library reads from the environment and its configuration, and every host of a list of hosts), and each
+    destination is checked as a socket connection to it would be (see @ref sandbox_net_rules): every address of a host,
+    with the host name, against the network policy, and a UNIX socket against the network and the filesystem policy.
+    The driver is then given the checked addresses and connects to them only, also when it reconnects, so that a host
+    name that resolves to another address after the check cannot redirect the connection.  A destination that cannot be
+    checked, such as a host that cannot be resolved or an abstract UNIX socket, is denied
+    (\c NETWORK-ACCESS-DENIED).
+
+    A driver that cannot report the destinations of its connections, because its client library chooses them in a way
+    that cannot be checked in advance, cannot be used for a connection chosen by code whose sandbox restricts network
+    or filesystem access: it is refused with \c NETWORK-ACCESS-DENIED before it connects.  A driver whose connections
+    reach local files only (it declares @ref Qore::SQL::DBI_CAP_LOCAL_ONLY "DBI_CAP_LOCAL_ONLY") checks these files
+    against the filesystem policy of the code that chose them itself.  See the documentation of each DBI driver for
+    the destinations that it reports.
+
+    A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
+    code) does not check database connections.
+
     @subsection sandbox_net_protocols Protocol Constants
 
     The following constants control network protocols:

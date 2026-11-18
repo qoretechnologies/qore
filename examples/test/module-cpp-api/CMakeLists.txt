@@ -145,6 +145,28 @@ if (CMAKE_HOST_APPLE)
     target_link_options(dsoptprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
 endif()
 
+# --- the module with DBI drivers that report the destinations of their connections (qore#5747) ------------------------
+# (datasource-sandbox-targets/dbitargetprobe-module.cpp)
+
+add_library(dbitargetprobe MODULE datasource-sandbox-targets/dbitargetprobe-module.cpp)
+add_dependencies(dbitargetprobe libqore)
+target_include_directories(dbitargetprobe PRIVATE
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(dbitargetprobe PRIVATE
+    BUILDING_DLL=1
+    HAVE_UNIX_CONFIG_H
+    PACKAGE_VERSION="${VERSION}"
+    $<$<BOOL:${HAVE_GCC_VISIBILITY}>:HAVE_GCC_VISIBILITY=1>)
+set_target_properties(dbitargetprobe PROPERTIES
+    PREFIX ""
+    SUFFIX "${_cppapi_test_module_suffix}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/modules/dbitargetprobe")
+if (CMAKE_HOST_APPLE)
+    target_link_options(dbitargetprobe PRIVATE -Wl,-undefined -Wl,dynamic_lookup)
+endif()
+
 foreach(_forkexit_module forkexita forkexitb)
     add_library(${_forkexit_module} MODULE fork-exit/forkexit-module.cpp)
     add_dependencies(${_forkexit_module} libqore)
@@ -282,7 +304,7 @@ target_compile_definitions(aotv1fail PRIVATE AOTV1_FAIL=1)
 target_compile_definitions(aotv1ok PRIVATE AOTV1_FAIL=0)
 
 # remove the files of these modules built for another module API (see qore_remove_stale_module_api_files())
-foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe dsoptprobe forkexita
-        forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb)
+foreach(_cppapi_test_module cppapitest cppapiuser cmdctxaware cmdctxlegacy uncontrolledprobe dsoptprobe dbitargetprobe
+        forkexita forkexitb apicur apiold tdpgmowner aotv1fail aotv1ok pluginordera pluginorderb)
     qore_remove_stale_module_api_files(${_cppapi_test_module})
 endforeach()
