@@ -672,6 +672,12 @@
     they ignored them (<a href="https://github.com/qoretechnologies/qore/issues/757">issue 757</a>); see
     @ref sqlutilv3_11_0.
 
+    @par SqlUtil delete_others Deletes Every Row for an Empty Input and Needs Key Values
+    An upsert with the \c delete_others option and an empty input deletes every row of the table, as documented,
+    as does strict reference data of a schema that gives a table no rows; it deleted nothing.  An input row without a
+    plain value of each column of the primary key raises \c UPSERT-ERROR, where every row was deleted
+    (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>); see @ref sqlutilv3_11_0.
+
     @par Schemas Align Their Views
     The views that a @ref Schema::AbstractSchema "schema" gives with \c getViewsImpl(), as the schema classes that
     SchemaReverse generates do, are aligned with the schema (see @ref schema_views); they were ignored
@@ -3543,6 +3549,10 @@
     - fixed a select of @ref sqlutilintro "SqlUtil" on SQL Server with a limit and no offset or ordering, which wrote
       <tt>top N</tt> and also bound the limit as an argument that the SQL does not use, and put \c top before
       \c distinct (<a href="https://github.com/qoretechnologies/qore/issues/6583">issue 6583</a>)
+    - fixed the \c delete_others upsert option of @ref sqlutilintro "SqlUtil", which deleted a row that the upsert
+      wrote when the database stores its key in another form (ex: a date in another time zone), and deleted rows while
+      reading the table, which lost the connection on SQL Server
+      (<a href="https://github.com/qoretechnologies/qore/issues/6607">issue 6607</a>)
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
