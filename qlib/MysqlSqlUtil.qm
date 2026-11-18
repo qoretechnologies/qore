@@ -1557,18 +1557,35 @@ end";
         #! Compares the query of a view with the query of a view of a schema description as MySQL normalizes them
         /** MySQL keeps the query of a view in a form of its own (with qualified, quoted names), which it gives for
             the query of the view of the description as well, made as a view with a name of its own on another
-            connection, so that its DDL does not commit the transaction of this connection, and dropped
+            connection, so that its DDL does not commit the transaction of this connection, and dropped; only a query
+            that AbstractDatabase::viewProbeSourceSafe() accepts is given to it (qore#6578), and it is made also when
+            the SQL is only returned (ex: \c qschema \c diff or \c --dry-run make and drop a probe view)
         */
         private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
             string live_src = AbstractDatabase::normalizeViewSource(live.src);
             if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
                 return True;
             }
+            # another query is compared as text, so the view is created again by the alignment
+            if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src)) {
+                return False;
+            }
             Datasource pds(ds.getConfigHash());
             string probe = "qore_view_probe_" + get_random_string(12).lwr();
-            on_exit {
-                pds.execRaw(sprintf("drop view if exists %s", mysql_get_sql_object_name(probe)));
+            # the probe is dropped also when making or reading it fails; a drop that fails then does not hide that
+            # error, and a drop that fails otherwise is raised
+            string drop_sql = sprintf("drop view if exists %s", mysql_get_sql_object_name(probe));
+            on_success {
+                pds.execRaw(drop_sql);
                 pds.commit();
+            }
+            on_error {
+                try {
+                    pds.execRaw(drop_sql);
+                    pds.commit();
+                } catch (hash<ExceptionInfo> ex) {
+                    pds.rollback();
+                }
             }
             pds.execRaw(sprintf("create view %s as %s", mysql_get_sql_object_name(probe), tmpl.src));
             *string src = pds.selectRow("select view_definition from information_schema.views where table_schema = "

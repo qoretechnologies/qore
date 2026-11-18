@@ -168,8 +168,26 @@ public class DbDataProviderBase inherits AbstractDataProvider {
         return db.getCurrentSequenceValue(sequence_name);
     }
 
+    #! Throws \c DB-SANDBOX-ERROR if a sandbox governs the caller, who cannot give SQL text (qore#6578)
+    /** Uses Qore::SandboxManager::isSandboxed(), which also sees a sandbox under a policy barrier
+
+        @param what what the caller gives, for the error message
+
+        @throw DB-SANDBOX-ERROR a sandbox governs the caller
+
+        @since DbDataProvider 2.5
+    */
+    static checkRawSqlAllowed(string what) {
+        if (SandboxManager::isSandboxed()) {
+            throw "DB-SANDBOX-ERROR", sprintf("code that a sandbox governs cannot give %s: it is SQL text, which "
+                "the database runs as it is", what);
+        }
+    }
+
     #! Returns a table description hash from a field description
     /** @throw TABLE-DESC-ERROR error in table description
+        @throw DB-SANDBOX-ERROR a sandbox governs the caller and an index column is not a field (it would be written
+        into the SQL as an expression)
     */
     hash<auto> makeTableDesc(string name, hash<string, AbstractDataField> fields, *hash<auto> opts) {
         hash<string, hash<GenericColumnInfo>> cols = map {$1.key: getColumnDesc(db, $1.value, opts)},
@@ -198,6 +216,17 @@ public class DbDataProviderBase inherits AbstractDataProvider {
         }
         # process indexes
         if (opts.indexes) {
+            # an index column that is not a column is written into the SQL as an expression (qore#6578)
+            if (SandboxManager::isSandboxed()) {
+                foreach hash<auto> ix in (opts.indexes.pairIterator()) {
+                    foreach auto col in (ix.value.typeCode() == NT_HASH ? ix.value.columns : ()) {
+                        if (col.typeCode() != NT_STRING || !fields{col}) {
+                            DbDataProviderBase::checkRawSqlAllowed(sprintf("the index expression %y of index %y "
+                                "(an index column must be a field)", col, ix.key));
+                        }
+                    }
+                }
+            }
             tdesc.indexes = opts.indexes;
         }
         # process foreign_constraints

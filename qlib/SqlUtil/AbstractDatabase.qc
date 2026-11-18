@@ -873,6 +873,66 @@ list l = db.getDropSchemaSql(schema_hash);
         return AbstractDatabase::normalizeViewSource(live.src) == AbstractDatabase::normalizeViewSource(tmpl.src);
     }
 
+    #! Returns @ref True if the query of a view can be given to a probe of the database to normalize it
+    /** A driver that normalizes the query of a view of a schema description by making a view of it (a probe; see
+        viewSourceEqualImpl()) gives the database only a query that can be nothing but one \c select or \c with
+        statement: one that starts with \c select or \c with (after any opening parentheses) and has no statement
+        separator (\c ";"), comment (\c "--", \c "/*" or \c "#"), dollar quote (\c "$") outside of its quoted
+        literals and names, and no backslash, which can change where a literal ends (qore#6578).  A query that is
+        not accepted is not given to the database: it is compared as text, so a view with it is created again by the
+        alignment.
+
+        @param src the query of the view
+
+        @return @ref True if the query can be given to a probe
+
+        @since SqlUtil 3.11.0
+    */
+    static bool viewProbeSourceSafe(string src) {
+        src =~ s/\s*;\s*$//;
+        trim src;
+        if (src !~ /^\(*\s*(select|with)\b/i || src.find("\\") != -1) {
+            return False;
+        }
+        # the characters that decide are ASCII, so the bytes of the query are read
+        binary b = binary(src);
+        int len = b.size();
+        int i = 0;
+        while (i < len) {
+            int c = b[i];
+            # a quoted literal or name: '...', "...", `...`, with a doubled quote as a quote in it
+            if (c == 0x27 || c == 0x22 || c == 0x60) {
+                ++i;
+                while (True) {
+                    if (i >= len) {
+                        # an unterminated quote
+                        return False;
+                    }
+                    if (b[i] == c) {
+                        if (i + 1 < len && b[i + 1] == c) {
+                            i += 2;
+                            continue;
+                        }
+                        break;
+                    }
+                    ++i;
+                }
+                ++i;
+                continue;
+            }
+            # ";", "#", "$"
+            if (c == 0x3b || c == 0x23 || c == 0x24) {
+                return False;
+            }
+            # "--", "/*"
+            if (i + 1 < len && ((c == 0x2d && b[i + 1] == 0x2d) || (c == 0x2f && b[i + 1] == 0x2a))) {
+                return False;
+            }
+            ++i;
+        }
+        return True;
+    }
+
     #! Returns the query of a view with its whitespace collapsed, trimmed and without a trailing semicolon
     /** @since SqlUtil 3.11.0
     */

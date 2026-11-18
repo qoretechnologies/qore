@@ -1,0 +1,252 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A schema at the untrusted access level runs no SQL text from its description: it is refused when it is created if
+# any key of it gives SQL text, and MigrationExecutor refuses such a step at that level before it runs (qore#6578).
+
+%modern
+
+%try-module sqlite3
+%define NoSqlite
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires Schema
+
+%exec-class SchemaUntrustedAccessTest
+
+class SchemaUntrustedAccessTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        *string db_file;
+    }
+
+    constructor() : Test("Schema untrusted access level", "1.0") {
+        addTestCase("access levels", \accessLevelTest());
+        addTestCase("description keys that give SQL text", \descriptionTest());
+        addTestCase("migration steps that give SQL text", \migrationTest());
+        addTestCase("DataSchema at each access level", \dataSchemaTest());
+        addTestCase("MigrationExecutor at the untrusted access level", \executorTest());
+        addTestCase("an untrusted schema aligns without SQL text", \alignTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite
+        db_file = tmp_location() + DirSep + sprintf("schema-untrusted-%d-%s.db", getpid(), get_random_string(8));
+        ds = new Datasource(sprintf("sqlite3:x/x@%s", db_file));
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.close();
+        }
+        if (db_file && is_file(db_file)) {
+            unlink(db_file);
+        }
+    }
+
+    private skipNoDb() {
+        if (!ds) {
+            testSkip("the sqlite3 module is not available");
+        }
+    }
+
+    #! a description with no SQL text
+    private static hash<auto> base() {
+        return {
+            "schema": {"name": "untrusted_test", "version": "1.0"},
+            "tables": {
+                "items": {
+                    "columns": {
+                        "id": {"type": "int", "notnull": True},
+                        "name": {"type": "varchar", "size": 40},
+                        "price": {"type": "int"},
+                    },
+                    "primary_key": {"name": "pk_items", "columns": ("id",)},
+                    "indexes": {
+                        "ix_items_name": {"columns": ("name",), "unique": False},
+                    },
+                },
+            },
+        };
+    }
+
+    private static hash<auto> normalized(hash<auto> raw) {
+        return DataSchemaLoader::loadHash(raw);
+    }
+
+    accessLevelTest() {
+        foreach string al in (AL_UNTRUSTED, AL_TRUSTED, AL_ADMIN) {
+            assertEq(al, SchemaAccessCheck::checkAccessLevel(al));
+        }
+        # an unknown level was taken as trusted
+        foreach string al in ("Untrusted", "", "none") {
+            assertThrows("SCHEMA-ACCESS-ERROR", "unknown access level", \SchemaAccessCheck::checkAccessLevel(), (al,),
+                al);
+        }
+    }
+
+    descriptionTest() {
+        # the base description is accepted
+        SchemaAccessCheck::checkUntrustedDescription(SchemaUntrustedAccessTest::normalized(base()));
+
+        # the cases change a normalized description, as the hash constructor of DataSchema takes one
+        hash<auto> b = SchemaUntrustedAccessTest::normalized(base());
+        list<hash<auto>> cases = (
+            {"where": "functions", "desc": b + {"functions": {"f": "returns int as $$ select 1 $$ language sql"}}},
+            {"where": "procedures", "desc": b + {"procedures": {"p": "as begin null; end;"}}},
+            {"where": "types", "desc": b + {"types": {"t": "as enum ('a')"}}},
+            {"where": "packages", "desc": b + {"packages": {"pk": {"src": "x"}}}},
+            {"where": "materialized_views", "desc": b + {"materialized_views": {"mv": {"src": "select 1"}}}},
+            {"where": "tables.items.triggers", "desc": b + {"tables": {"items": b.tables.items + {
+                "triggers": {"tr": "before insert on items begin select 1; end"}}}}},
+            {"where": "tables.items.driver.pgsql.triggers", "desc": b + {"tables": {"items": b.tables.items + {
+                "driver": {"pgsql": {"triggers": {"tr": "x"}}}}}}},
+            {"where": "tables.items.driver.pgsql.functions", "desc": b + {"tables": {"items": b.tables.items + {
+                "driver": {"pgsql": {"functions": {"f": "x"}}}}}}},
+            {"where": "tables.items.columns.name.default_value_native", "desc": b + {"tables": {"items":
+                b.tables.items + {"columns": b.tables.items.columns + {"name": {"qore_type": "string", "size": 40,
+                "default_value": "current_user", "default_value_native": True}}}}}},
+            {"where": "tables.items.columns.price.native_type", "desc": b + {"tables": {"items":
+                b.tables.items + {"columns": b.tables.items.columns + {"price": {"qore_type": "number",
+                "native_type": "numeric(10,2)) ; drop table items; --"}}}}}},
+            {"where": "tables.items.columns.price.driver.pgsql.native_type", "desc": b + {"tables": {"items":
+                b.tables.items + {"columns": b.tables.items.columns + {"price": {"qore_type": "number",
+                "driver": {"pgsql": {"native_type": "int /* x */"}}}}}}}},
+            {"where": "tables.items.indexes.ix_items_name.columns", "desc": b + {"tables": {"items":
+                b.tables.items + {"indexes": {"ix_items_name": {"columns": ("lower(name)",)}}}}}},
+            {"where": "tables.items.indexes.ix_items_name.where", "desc": b + {"tables": {"items":
+                b.tables.items + {"indexes": {"ix_items_name": {"columns": ("name",), "where": "1=1"}}}}}},
+            {"where": "tables.items.indexes.ix_items_name.method", "desc": b + {"tables": {"items":
+                b.tables.items + {"indexes": {"ix_items_name": {"columns": ("name",), "method": "btree"}}}}}},
+            {"where": "tables.items.indexes.ix_items_name.index_tablespace", "desc": b + {"tables": {"items":
+                b.tables.items + {"indexes": {"ix_items_name": {"columns": ("name",),
+                "index_tablespace": "ts; drop table items"}}}}}},
+            {"where": "tables.items.partitions.p1.bound_sql", "desc": b + {"tables": {"items":
+                b.tables.items + {"partition_strategy": {"type": "range", "columns": ("id",)},
+                "partitions": {"p1": {"bound_sql": "maxvalue"}}}}}},
+            {"where": "column_options.data_tablespace", "desc": b + {"column_options": {
+                "data_tablespace": "ts; drop table items"}}},
+        );
+        foreach hash<auto> c in (cases) {
+            assertThrows("SCHEMA-ACCESS-ERROR", "^" + regex_escape(c.where) + ": .* is SQL text",
+                \SchemaAccessCheck::checkUntrustedDescription(), (c.desc,), c.where);
+        }
+        # a native type that is only a type name is accepted
+        SchemaAccessCheck::checkUntrustedDescription(b + {"tables": {"items": b.tables.items + {"columns":
+            b.tables.items.columns + {"price": {"qore_type": "number", "native_type": "numeric(10,2)"}}}}});
+
+        # a backfill expression in SQL; a DPQL or value backfill is accepted
+        hash<auto> n = b;
+        n.tables.items.columns.name.populate = {"sql": "upper(id)"};
+        assertThrows("SCHEMA-ACCESS-ERROR", "populate.sql", \SchemaAccessCheck::checkUntrustedDescription(), (n,));
+        n.tables.items.columns.name.populate = "a value";
+        SchemaAccessCheck::checkUntrustedDescription(n);
+
+        # names, numbers and booleans as option values are accepted
+        SchemaAccessCheck::checkUntrustedDescription(b + {
+            "index_options": {"index_tablespace": "users_idx", "replace": True},
+        });
+    }
+
+    #! a migration with one post-align step
+    private static hash<auto> withStep(hash<auto> step) {
+        return SchemaUntrustedAccessTest::normalized(base()) + {"migrations": ({"version": "1.0",
+            "post_align": (step,)},)};
+    }
+
+    migrationTest() {
+        list<hash<auto>> cases = (
+            {"action": "sql", "statements": ("delete from items",)},
+            {"action": "script", "file": "x.q"},
+            {"action": "add_trigger", "table": "items", "name": "tr", "source": "x"},
+            {"action": "add_constraint", "table": "items", "name": "ck", "constraint_type": "check",
+                "expression": "1=1) or (1=1"},
+            {"action": "add_column", "table": "items", "column": "c", "type": {"qore_type": "string",
+                "default_value": "current_user", "default_value_native": True}},
+            {"action": "modify_column", "table": "items", "column": "name", "type": "varchar(40); drop table x"},
+        );
+        foreach hash<auto> step in (cases) {
+            hash<auto> n = SchemaUntrustedAccessTest::withStep(step);
+            assertThrows("SCHEMA-ACCESS-ERROR", "^migrations\\[0\\]\\.post_align\\[0\\]",
+                \SchemaAccessCheck::checkUntrustedDescription(), (n,), step.action);
+        }
+        # data-driven steps are accepted
+        foreach hash<auto> step in (
+                {"action": "update", "table": "items", "set": {"name": "x"}, "where": {"id": 1}},
+                {"action": "add_constraint", "table": "items", "name": "uk", "constraint_type": "unique",
+                    "columns": ("name",)},
+                {"action": "add_column", "table": "items", "column": "c", "type": {"type": "string", "size": 10}},
+                {"action": "modify_column", "table": "items", "column": "name", "type": "varchar(80)"},
+            ) {
+            SchemaAccessCheck::checkUntrustedDescription(SchemaUntrustedAccessTest::withStep(step));
+        }
+    }
+
+    dataSchemaTest() {
+        skipNoDb();
+        hash<auto> sql_desc = base() + {"tables": {"items": base().tables.items + {
+            "triggers": {"tr": "x"}}}};
+        hash<auto> sql_norm = SchemaUntrustedAccessTest::normalized(base());
+        sql_norm.tables.items.triggers = {"tr": "x"};
+        # refused when created at the untrusted level; nothing is created
+        assertThrows("SCHEMA-ACCESS-ERROR", "tables.items.triggers", sub () {
+            DataSchema s(ds, sql_norm, NOTHING, AL_UNTRUSTED);
+        });
+        assertThrows("SCHEMA-ACCESS-ERROR", "unknown access level", sub () {
+            DataSchema s(ds, SchemaUntrustedAccessTest::normalized(base()), NOTHING, "Untrusted");
+        });
+        # accepted at the trusted and admin levels
+        foreach string al in (AL_TRUSTED, AL_ADMIN) {
+            DataSchema s(ds, sql_norm, NOTHING, al);
+            assertEq(al, s.getAccessLevel());
+        }
+        # the file constructor checks as well
+        string file = tmp_location() + DirSep + sprintf("schema-untrusted-%d-%s.jsm", getpid(),
+            get_random_string(8));
+        on_exit unlink(file);
+        File f();
+        f.open2(file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(make_json(sql_desc));
+        f.close();
+        assertThrows("SCHEMA-ACCESS-ERROR", "tables.items.triggers", sub () {
+            DataSchema s(ds, file, NOTHING, AL_UNTRUSTED);
+        });
+    }
+
+    executorTest() {
+        skipNoDb();
+        assertThrows("SCHEMA-ACCESS-ERROR", "unknown access level", sub () {
+            MigrationExecutor e(ds, "Untrusted");
+        });
+        MigrationExecutor e(ds, AL_UNTRUSTED);
+        foreach hash<auto> step in (
+                {"action": "add_trigger", "table": "items", "name": "tr", "source": "x"},
+                {"action": "add_constraint", "table": "items", "name": "ck", "constraint_type": "check",
+                    "expression": "1=1"},
+                {"action": "add_column", "table": "items", "column": "c", "type": {"qore_type": "string",
+                    "native_type": "text; drop table items"}},
+            ) {
+            # refused before the step runs: the table does not exist, so running it would fail differently
+            assertThrows("MIGRATION-ACCESS-ERROR", "is SQL text", \e.executeStep(), (step,), step.action);
+        }
+    }
+
+    alignTest() {
+        skipNoDb();
+        DataSchema s(ds, SchemaUntrustedAccessTest::normalized(base()), NOTHING, AL_UNTRUSTED);
+        s.align(False, 0);
+        on_exit {
+            ds.exec("drop table items");
+            ds.commit();
+        }
+        assertEq(0, ds.selectRow("select count(1) as c from items").c);
+    }
+}

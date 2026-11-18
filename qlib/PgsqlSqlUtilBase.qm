@@ -2418,12 +2418,18 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     #! Compares the query of a view with the query of a view of a schema description as PostgreSQL normalizes them
     /** PostgreSQL keeps the query of a view in a form of its own (ex: with qualified column names and casts), which
         it gives for the query of the view of the description as well, made as a temporary view in a savepoint that
-        is rolled back
+        is rolled back; only a query that AbstractDatabase::viewProbeSourceSafe() accepts is given to it, also when
+        the SQL is only returned (ex: \c qschema \c diff or \c --dry-run)
     */
     private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
         string live_src = AbstractDatabase::normalizeViewSource(live.src);
         if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
             return True;
+        }
+        # only a query that can be nothing but one select statement is given to the probe (qore#6578); another is
+        # compared as text, so the view is created again by the alignment
+        if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src)) {
+            return False;
         }
         return live_src == AbstractDatabase::normalizeViewSource(getServerViewSource(tmpl.src));
     }

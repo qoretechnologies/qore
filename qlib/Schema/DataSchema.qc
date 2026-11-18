@@ -75,12 +75,16 @@ public class DataSchema inherits AbstractVersionedSchema {
     /** @param ds the datasource connection
         @param file_path the path to the .ysm or .jsm file
         @param opts schema options (data_ts, index_ts, db_opts)
-        @param al access level for migration actions
+        @param al the access level (see @ref schema_upgrade_access)
+
+        @throw SCHEMA-ACCESS-ERROR the access level is unknown, or it is @ref Schema::AL_UNTRUSTED "AL_UNTRUSTED" and
+        a key of the schema gives SQL text (see @ref schema_upgrade_access)
     */
     constructor(Qore::SQL::AbstractDatasource ds, string file_path,
             *hash<SchemaOptionInfo> opts, string al = AL_TRUSTED) {
-        access_level = al;
+        access_level = SchemaAccessCheck::checkAccessLevel(al);
         schema_data = DataSchemaLoader::loadFile(file_path);
+        checkAccess();
         initDataSchema(ds, opts);
     }
 
@@ -88,13 +92,24 @@ public class DataSchema inherits AbstractVersionedSchema {
     /** @param ds the datasource connection
         @param data the pre-loaded and normalized schema data hash
         @param opts schema options
-        @param al access level for migration actions
+        @param al the access level (see @ref schema_upgrade_access)
+
+        @throw SCHEMA-ACCESS-ERROR the access level is unknown, or it is @ref Schema::AL_UNTRUSTED "AL_UNTRUSTED" and
+        a key of the schema gives SQL text (see @ref schema_upgrade_access)
     */
     constructor(Qore::SQL::AbstractDatasource ds, hash<auto> data,
             *hash<SchemaOptionInfo> opts, string al = AL_TRUSTED) {
-        access_level = al;
+        access_level = SchemaAccessCheck::checkAccessLevel(al);
         schema_data = data;
+        checkAccess();
         initDataSchema(ds, opts);
+    }
+
+    #! Refuses a schema at the untrusted access level that gives SQL text, before it does anything (qore#6578)
+    private checkAccess() {
+        if (access_level == AL_UNTRUSTED) {
+            SchemaAccessCheck::checkUntrustedDescription(schema_data);
+        }
     }
 
     #! Initializes the schema after schema_data is set
