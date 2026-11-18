@@ -4930,9 +4930,9 @@ bool qore_string_encoding_valid(const QoreString& str) {
 
 // documented in qore_string_private.h
 QoreStringNode* qore_http_field_value_string(const char* p, size_t len) {
-    QoreStringNode* str = new QoreStringNode(p, len, QCS_DEFAULT);
-    qore_http_field_value_check(str);
-    return str;
+    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(p, len, QCS_DEFAULT));
+    qore_http_field_value_check(*str);
+    return str.release();
 }
 
 // documented in qore_string_private.h
@@ -4940,4 +4940,47 @@ void qore_http_field_value_check(QoreStringNode* str) {
     if (!qore_string_encoding_valid(*str)) {
         str->setEncoding(QCS_ISO_8859_1);
     }
+}
+
+// documented in qore_string_private.h
+bool qore_http_target_text_valid(const char* p, size_t len) {
+    // the common case: ASCII without percent encoding
+    bool simple = true;
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c == '%' || c > 0x7f || !c) {
+            simple = false;
+            break;
+        }
+    }
+    if (simple) {
+        return true;
+    }
+    auto hex = [](unsigned char c) -> int {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
+    };
+    std::string decoded;
+    decoded.reserve(len);
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c == '%' && i + 2 < len && hex(p[i + 1]) >= 0 && hex(p[i + 2]) >= 0) {
+            c = static_cast<unsigned char>(hex(p[i + 1]) * 16 + hex(p[i + 2]));
+            i += 2;
+        }
+        if (!c) {
+            return false;
+        }
+        decoded.push_back(static_cast<char>(c));
+    }
+    bool incomplete;
+    return IconvHelper::validUtf8Prefix(decoded.data(), decoded.size(), incomplete) == decoded.size();
 }

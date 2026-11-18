@@ -1494,6 +1494,10 @@ public:
 using Http2SessionPtr = std::shared_ptr<Http2Session>;
 
 //! Convert HTTP/2 or HTTP/3 multi-value headers map to a QoreHashNode
+// see qore_string_private.h
+DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
+
 /** Template to accept maps with any comparator (e.g. std::less or ltstrcase).
 
     Handles duplicate header names per RFC 7540 Section 8.1.2.5:
@@ -1505,10 +1509,6 @@ using Http2SessionPtr = std::shared_ptr<Http2Session>;
     @param lowercase if true, convert header names to lowercase
     @return new QoreHashNode with the converted headers
 */
-// see qore_string_private.h
-DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
-DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
-
 template<typename Comparator>
 DLLLOCAL inline QoreHashNode* httpMultiHeadersToQoreHash(
     const std::map<std::string, std::vector<std::string>, Comparator>& h2_headers,

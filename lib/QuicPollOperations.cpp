@@ -1842,8 +1842,9 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
     }
     // RFC 9220: Add :protocol to headers hash (parallel to HTTP/2 for handler compatibility)
     if (!cached_stream_->stream->connect_protocol.empty()) {
-        headers->setKeyValue(":protocol",
-            new QoreStringNode(cached_stream_->stream->connect_protocol), nullptr);
+        // obs-text is given in ISO-8859-1 (qore#6554)
+        const std::string& proto = cached_stream_->stream->connect_protocol;
+        headers->setKeyValue(":protocol", qore_http_field_value_string(proto.data(), proto.size()), nullptr);
     }
     h->setKeyValue("headers", headers.release(), nullptr);
 

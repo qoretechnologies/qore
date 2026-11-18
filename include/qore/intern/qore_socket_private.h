@@ -4241,7 +4241,9 @@ public:
                 if (isdigit(*(t2))) {
                     h->setKeyValue("status_code", atoi(t2), nullptr);
                     if (strlen(t2) > 4) {
-                        h->setKeyValue("status_message", new QoreStringNode(t2 + 4), nullptr);
+                        // a reason phrase can have obs-text (RFC 9112 section 4), given in ISO-8859-1 (qore#6554)
+                        h->setKeyValue("status_message", qore_http_field_value_string(t2 + 4, strlen(t2 + 4)),
+                            nullptr);
                     }
                 }
             }

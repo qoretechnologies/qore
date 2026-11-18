@@ -111,7 +111,15 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         assertEq(400, response.hdr.status_code);
         assertRegex("a header name of the request is not a token", response.body);
         assertTrue(response.closed);
+        # a name that is valid UTF-8 with a byte above 0x7f is not a token either (RFC 9110 section 5.1)
+        response = rawRequest(port, "GET /a HTTP/1.1\r\nHost: localhost\r\nX-é: 1\r\n\r\n");
+        assertEq(400, response.hdr.status_code);
+        assertRegex("a header name of the request is not a token", response.body);
         assertEq(0, handler.calls);
+        # the flag of one request does not stay for the next request of the connection
+        response = rawRequest(port, "GET /a HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nX-e: 1\r\n\r\n");
+        assertEq(200, response.hdr.status_code);
+        assertEq(1, handler.calls);
     }
 
     private http1HeaderValues() {
@@ -144,9 +152,13 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
             hash<auto> response = rawRequest(port, sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", target));
             assertEq(400, response.hdr.status_code, target);
         }
+        # a header name that is not a token takes the full path, which answers it with 400
+        hash<auto> response = rawRequest(port, "GET /a HTTP/1.1\r\nHost: localhost\r\nX-é: 1\r\n\r\n");
+        assertEq(400, response.hdr.status_code);
+        assertRegex("a header name of the request is not a token", response.body);
         assertEq(0, handler.calls);
-        # a header value that needs a change takes the full path, which gives it in ISO-8859-1
-        hash<auto> response = rawRequest(port, binary_to_string(binary("GET /a HTTP/1.1\r\nHost: localhost\r\n"
+        # a header value that is not valid UTF-8 is given in ISO-8859-1
+        response = rawRequest(port, binary_to_string(binary("GET /a HTTP/1.1\r\nHost: localhost\r\n"
             "Connection: close\r\nX-Test: caf") + <e9> + binary("\r\n\r\n"), "ISO-8859-1"));
         assertEq(200, response.hdr.status_code);
         assertEq("ISO-8859-1 match 636166e9", response.body);

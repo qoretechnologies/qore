@@ -1798,6 +1798,12 @@ DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len)
 //! Gives an HTTP field value made by concatenation in ISO-8859-1 if it is not valid in its encoding (qore#6554)
 DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
 
+//! Returns true if an HTTP request target (a path with an optional query) decodes to valid UTF-8 text without a NUL
+/** As the HTTP server requires of a request (qore#6554); \c "%" not followed by two hexadecimal digits is taken as it
+    is.  Never raises an exception; O(n), with no allocation for a target without \c "%" and bytes above 0x7f.
+*/
+DLLLOCAL bool qore_http_target_text_valid(const char* p, size_t len);
+
 
 //! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves
 class QoreStringOwnSource {

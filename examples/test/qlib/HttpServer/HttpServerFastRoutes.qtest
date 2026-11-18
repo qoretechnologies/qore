@@ -59,6 +59,7 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         addTestCase("FastResponseSlot", \testSlot());
         addTestCase("the first request of a connection", \testFirstRequest());
         addTestCase("requests that do not qualify take the normal path", \testFallbacks());
+        addTestCase("requests that are not valid text take the normal path", \testInvalidText());
         addTestCase("HEAD requests", \testHead());
         addTestCase("pipelined requests", \testPipelined());
         addTestCase("replace and remove a route", \testReplaceRemove());
@@ -606,6 +607,28 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         assertEq("handler", er.body);
     }
 
+    # the normal path answers a request with text that is not valid with 400 (qore#6554), so a route never answers it
+    testInvalidText() {
+        hs.addFastRoute("/it", {"public": True, "response": textResponse(200, "fast")});
+        on_exit hs.removeFastRoute("/it");
+        # a valid query, also percent-encoded UTF-8, is answered by the route
+        Socket c = warmUp();
+        assertEq("fast", request(c, "GET", "/it?q=caf%C3%A9").body);
+        int before = hs.getFastRouteInfo().fallbacks.invalid_text;
+        # a query that does not decode to valid UTF-8 or that decodes to a NUL, read by the strict parser; and a
+        # header name that is not a token, read by the normal parser
+        foreach hash<auto> i in ({"path": "/it?q=%FF"}, {"path": "/it?q=%C0%AF"},
+                {"path": "/it", "hdr": {"X-é": "1"}}) {
+            Socket c1 = warmUp();
+            hash<auto> r = request(c1, "GET", i.path, i.hdr);
+            assertEq(400, r.code, sprintf("%y", i));
+        }
+        # a NUL character in the query: the route leaves it to the normal path, which decides
+        Socket c2 = warmUp();
+        assertEq("handler", request(c2, "GET", "/it?q=a%00b").body);
+        assertEq(before + 4, hs.getFastRouteInfo().fallbacks.invalid_text);
+    }
+
     testPipelined() {
         hs.addFastRoute("/pipe", {"public": True, "response": textResponse(200, "fast")});
         on_exit hs.removeFastRoute("/pipe");
@@ -1011,6 +1034,6 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         }
         assertEq(before + 7, hs.getFastRouteInfo().routes{"/count"});
         assertEq(("no_route", "not_http_1_1", "body", "expect", "upgrade", "connection", "pipelined", "stale",
-            "no_rule"), keys hs.getFastRouteInfo().fallbacks);
+            "no_rule", "invalid_text"), keys hs.getFastRouteInfo().fallbacks);
     }
 }
