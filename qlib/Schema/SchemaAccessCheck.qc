@@ -94,13 +94,49 @@ public class SchemaAccessCheck {
             "remainder": "value",
             "is_default": "value",
             "subpartitions": "partitions",
-            "schema": "identifier",
             "relation_name": "identifier",
             "sql_name": "identifier",
         };
 
-        #! the regular expression of a name given where the SQL has a name: ASCII letters, digits, \c "_" and \c "$"
-        const IdentifierRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*\\z";
+        #! the regular expression of a name given where the SQL has a name: ASCII letters, digits and \c "_"
+        const IdentifierRegex = "\\A[A-Za-z_][A-Za-z0-9_]*\\z";
+
+        #! the size of a word of a type name (as for a cast; see SqlUtil::sql_check_cast_type())
+        const TypeSizeRegex = "(?:\\((?:[0-9]+|(?i:max)|\\*)(?:, ?[0-9]+)?(?: (?i:char|byte))?\\))?";
+
+        #! a type name of one word, with an optional schema, size and array brackets
+        const SingleWordTypeRegex = "\\A[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)?" + TypeSizeRegex
+            + "(?:\\[\\])*\\z";
+
+        #! the type names of more than one word, without their sizes: the words after a type in a column definition
+        #! are column clauses (ex: \c "int references t" or \c "int default 1"), so only these are accepted
+        const MultiWordTypes = {
+            "double precision": True,
+            "character varying": True,
+            "national character": True,
+            "national character varying": True,
+            "national char": True,
+            "national char varying": True,
+            "bit varying": True,
+            "timestamp with time zone": True,
+            "timestamp without time zone": True,
+            "timestamp with local time zone": True,
+            "time with time zone": True,
+            "time without time zone": True,
+            "interval year to month": True,
+            "interval day to second": True,
+            "long raw": True,
+            "long varchar": True,
+            "tinyint unsigned": True,
+            "smallint unsigned": True,
+            "mediumint unsigned": True,
+            "int unsigned": True,
+            "integer unsigned": True,
+            "bigint unsigned": True,
+            "decimal unsigned": True,
+            "float unsigned": True,
+            "double unsigned": True,
+        };
     }
 
     #! Checks an access level and returns it
@@ -124,11 +160,14 @@ public class SchemaAccessCheck {
     */
     static checkUntrustedDescription(hash<auto> schema_data) {
         foreach string section in (SqlSourceSections) {
-            if (schema_data{section}) {
+            if (exists schema_data{section}) {
                 SchemaAccessCheck::refuse(section, "the source of database objects");
             }
         }
         foreach string section in (("index_options", "column_options")) {
+            if (exists schema_data{section} && schema_data{section}.typeCode() != NT_HASH) {
+                SchemaAccessCheck::refuse(section, "options that are not a hash of options");
+            }
             foreach hash<auto> i in (schema_data{section}.pairIterator()) {
                 SchemaAccessCheck::checkOptionValue(sprintf("%s.%s", section, i.key), i.value);
             }
@@ -153,6 +192,9 @@ public class SchemaAccessCheck {
         @throw SCHEMA-ACCESS-ERROR the step gives SQL text, which a schema at the untrusted access level cannot run
     */
     static checkUntrustedStep(string loc, hash<auto> step) {
+        if (step.action.typeCode() != NT_STRING) {
+            SchemaAccessCheck::refuse(loc + ".action", "an action that is not an action name");
+        }
         switch (step.action) {
             case "sql":
             case "script":
@@ -171,8 +213,9 @@ public class SchemaAccessCheck {
             case "modify_column":
                 if (step.type.typeCode() == NT_HASH) {
                     # checked as MigrationExecutor gives it to SqlUtil
-                    SchemaAccessCheck::checkColumn(loc + ".type", DataSchemaLoader::normalizeColumn(step.table ?? "",
-                        step.column ?? "", step.type));
+                    SchemaAccessCheck::checkColumn(loc + ".type", DataSchemaLoader::normalizeColumn(
+                        step.table.typeCode() == NT_STRING ? step.table : "",
+                        step.column.typeCode() == NT_STRING ? step.column : "", step.type));
                 } else if (exists step.type) {
                     SchemaAccessCheck::checkNativeType(loc + ".type", step.type);
                 }
@@ -230,6 +273,9 @@ public class SchemaAccessCheck {
             }
             SchemaAccessCheck::checkIndex(sprintf("%s.indexes.%s", loc, ix.key), ix.value);
         }
+        if (exists t.auto_triggers && t.auto_triggers.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc + ".auto_triggers", "auto triggers that are not a hash");
+        }
         if (exists t.partition_strategy) {
             SchemaAccessCheck::checkPartitionStrategy(loc + ".partition_strategy", t.partition_strategy);
         }
@@ -256,6 +302,9 @@ public class SchemaAccessCheck {
                 case "populate":
                     if (i.value.typeCode() == NT_HASH && exists i.value.sql) {
                         SchemaAccessCheck::refuse(kloc + ".sql", "the SQL expression of a backfill");
+                    }
+                    if (i.value.typeCode() == NT_LIST) {
+                        SchemaAccessCheck::refuse(kloc, "a backfill that is not a value or a backfill description");
                     }
                     continue;
                 case "driver":
@@ -290,16 +339,28 @@ public class SchemaAccessCheck {
     }
 
     private static checkNativeType(string loc, auto type) {
-        if (type.typeCode() != NT_STRING) {
-            SchemaAccessCheck::refuse(loc, "a type name that is not a string");
+        if (type.typeCode() != NT_STRING || !type.isDataAscii()) {
+            SchemaAccessCheck::refuse(loc, "a type name that is not only a type name");
         }
+        if (regex(type, SingleWordTypeRegex)) {
+            return;
+        }
+        # a type of more than one word: each word with an optional size, and the words a known type name
+        string words = type;
+        words =~ s/\((?:[0-9]+|max|\*)(?:, ?[0-9]+)?(?: (?:char|byte))?\)//gi;
+        words =~ s/(\[\])+$//;
+        bool type_name = True;
         try {
             SqlUtil::sql_check_cast_type(type);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "OPERATOR-ERROR") {
                 rethrow;
             }
-            SchemaAccessCheck::refuse(loc, "a type name that is not only a type name");
+            type_name = False;
+        }
+        if (!type_name || !MultiWordTypes{words.lwr()}) {
+            SchemaAccessCheck::refuse(loc, "a type name that is not only a type name (the words after a type are "
+                "column clauses)");
         }
     }
 
@@ -406,7 +467,14 @@ public class SchemaAccessCheck {
                     SchemaAccessCheck::checkPartitions(kloc, i.value);
                     break;
                 case "value":
-                    # bound values are converted to literals of the column type
+                    # bound values are converted to literals of the column type; PostgreSQL gives the DDL of
+                    # subpartitions in a "do" block, whose quote tag a value must not have
+                    foreach auto v in (i.value) {
+                        if (v.typeCode() == NT_STRING && v.find("$") != -1) {
+                            SchemaAccessCheck::refuse(kloc, "a partition value with \"$\", which can end the quoted "
+                                "block of the DDL of a partition");
+                        }
+                    }
                     break;
                 default:
                     # the "_sql" bounds and "driver" are SQL text or replace the partition

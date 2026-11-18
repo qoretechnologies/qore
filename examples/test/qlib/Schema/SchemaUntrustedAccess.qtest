@@ -161,8 +161,32 @@ class SchemaUntrustedAccessTest inherits QUnit::Test {
                 \SchemaAccessCheck::checkUntrustedDescription(), (c.desc,), c.where);
         }
         # a native type that is only a type name is accepted
-        SchemaAccessCheck::checkUntrustedDescription(b + {"tables": {"items": b.tables.items + {"columns":
-            b.tables.items.columns + {"price": {"qore_type": "number", "native_type": "numeric(10,2)"}}}}});
+        foreach string nt in ("numeric(10,2)", "varchar(40)", "double precision", "timestamp(3) with time zone",
+                "character varying(20)", "int unsigned", "public.mytype", "text[]", "varchar2(10 char)") {
+            SchemaAccessCheck::checkUntrustedDescription(b + {"tables": {"items": b.tables.items + {"columns":
+                b.tables.items.columns + {"price": {"qore_type": "number", "native_type": nt}}}}});
+        }
+        # words after a type are column clauses, which are refused
+        foreach string nt in ("int references victim on delete cascade", "int default(5) unique",
+                "int generated always as(5) stored", "int primary key", "varchar(10) not null", "int$x") {
+            assertThrows("SCHEMA-ACCESS-ERROR", "native_type", \SchemaAccessCheck::checkUntrustedDescription(),
+                (b + {"tables": {"items": b.tables.items + {"columns": b.tables.items.columns + {"price": {
+                "qore_type": "number", "native_type": nt}}}}},), nt);
+        }
+        # a partition value with the quote tag of the PostgreSQL DDL block, and a partition in another schema
+        assertThrows("SCHEMA-ACCESS-ERROR", "partitions.p1.values", \SchemaAccessCheck::checkUntrustedDescription(),
+            (b + {"tables": {"items": b.tables.items + {"partition_strategy": {"method": "list", "columns": ("name",)},
+            "partitions": {"p1": {"values": ("a$qore_sqlutil$; drop table zz; --",)}}}}},));
+        assertThrows("SCHEMA-ACCESS-ERROR", "partitions.p1.schema", \SchemaAccessCheck::checkUntrustedDescription(),
+            (b + {"tables": {"items": b.tables.items + {"partition_strategy": {"method": "list", "columns": ("name",)},
+            "partitions": {"p1": {"values": ("a",), "schema": "pg_catalog"}}}}},));
+        # odd shapes are refused with the access error
+        assertThrows("SCHEMA-ACCESS-ERROR", "index_options", \SchemaAccessCheck::checkUntrustedDescription(),
+            (b + {"index_options": "x"},));
+        assertThrows("SCHEMA-ACCESS-ERROR", "functions", \SchemaAccessCheck::checkUntrustedDescription(),
+            (b + {"functions": ""},));
+        assertThrows("SCHEMA-ACCESS-ERROR", "auto_triggers", \SchemaAccessCheck::checkUntrustedDescription(),
+            (b + {"tables": {"items": b.tables.items + {"auto_triggers": "x"}}},));
 
         # a backfill expression in SQL; a DPQL or value backfill is accepted
         hash<auto> n = b;
@@ -200,6 +224,9 @@ class SchemaUntrustedAccessTest inherits QUnit::Test {
             assertThrows("SCHEMA-ACCESS-ERROR", "^migrations\\[0\\]\\.post_align\\[0\\]",
                 \SchemaAccessCheck::checkUntrustedDescription(), (n,), step.action);
         }
+        # an action that is not a name
+        assertThrows("SCHEMA-ACCESS-ERROR", "action", \SchemaAccessCheck::checkUntrustedDescription(),
+            (SchemaUntrustedAccessTest::withStep({"action": ("sql",)}),));
         # the steps of a migration that has an "action" key are checked as well
         hash<auto> n = SchemaUntrustedAccessTest::normalized(base()) + {"migrations": ({"version": "1.0",
             "action": "update", "post_align": ({"action": "sql", "statements": ("delete from items",)},)},)};
