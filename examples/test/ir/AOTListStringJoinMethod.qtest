@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - checks native JIT and AOT code generation for list string joins
 
 %modern
 %no-child-restrictions
@@ -121,6 +122,9 @@ string method_formatted_map = (map sprintf(\"pre-%+04d-post\", $1), sparse_numbe
 string method_generic_map = (map \"v:\" + string($1), numbers).join(\"/\");
 string method_encoded_map = (map sprintf(\"n:%02d\", $1), numbers).join(latin1_separator);
 
+# The concat-shaped fold has a second loop flag tracking whether it has started the string join.
+printf(\"%s\\n\", (foldl \$1 + \"/\" + \$2, (map \$1.substr(1), regular)));
+
 printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\\n\",
     regular.join(\", \"),
     sparse.join(\", \"),
@@ -184,7 +188,7 @@ string sub runAot(string suffix, string env) {
     return result;
 }
 
-string expected = "alpha, beta, gamma|alpha, , gamma|, , ||solo|left/right|VS|"
+string expected = "lpha/eta/amma\nalpha, beta, gamma|alpha, , gamma|, , ||solo|left/right|VS|"
     + "caf\u00e9 / d\u00e9j\u00e0|ISO-8859-1|ENCODING-CONVERSION-ERROR|"
     + "PSEUDO-METHOD-DOES-NOT-EXIST|PSEUDO-METHOD-DOES-NOT-EXIST|"
     + "alpha, beta, gamma||solo|RUNTIME-TYPE-ERROR|dense/local|RUNTIME-TYPE-ERROR|"
@@ -212,6 +216,37 @@ if (ir_dump !~ /list\.string\.join\.identity-map/) {
 }
 if (ir_dump !~ /string\.method\.join\.start/ || ir_dump !~ /string\.join\.append/) {
     printf("fused method map string join opcodes missing from IR dump:\n%s", ir_dump);
+    exit(2);
+}
+# Both paths produce the same output even with a stale IR interpreter slot. Check that the
+# fold-body edge never takes a value defined only in the sibling initialization block (#6549).
+hash<string, hash<string, bool>> init_defs;
+*string block;
+hash<string, bool> checked_exits;
+foreach string line in (ir_dump.split("\n")) {
+    if (line =~ /^func /) {
+        init_defs = {};
+    }
+    if (line =~ /^\S+:/) {
+        block = line.substr(0, -1);
+    } else if (block =~ /^stream\.fused\.fold\.init\./) {
+        *string value = (line =~ x/ -> (%\d+)/)[0];
+        if (exists value) {
+            init_defs{block}{value} = True;
+        }
+    } else if (block =~ /^stream\.fused\.fold\.cont\./) {
+        *list<string> edges = line =~ x/\[%\d+, (stream\.fused\.fold\.init\.\d+)\], \[(%\d+), stream\.fused\.(fold\.body|join\.cont)\.\d+\]/;
+        if (edges) {
+            checked_exits{edges[2]} = True;
+            if (init_defs{edges[0]}{edges[1]}) {
+                printf("Fold body takes %s defined only in %s:\n%s\n", edges[1], edges[0], line);
+                exit(2);
+            }
+        }
+    }
+}
+if (!checked_exits{"fold.body"} || !checked_exits{"join.cont"}) {
+    printf("Missing method-join or foldl join phi in IR dump:\n%s", ir_dump);
     exit(2);
 }
 if (ir_dump !~ /list\.int\.sprintf\.join/) {

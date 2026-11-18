@@ -23540,6 +23540,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     QoreIRValue fold_initial_accum;
     QoreIRValue fold_initial_has_accum;
+    QoreIRValue fold_true;
     QoreIRValue fold_initial_join_started;
 
     builder.setBlock(preheader_block);
@@ -23570,6 +23571,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (root_accumulator) {
         fold_initial_accum = builder.createConstNothing(loc)->result;
         fold_initial_has_accum = builder.createConstBool(false, loc)->result;
+        // Both the first element and subsequent elements leave an accumulator. Define the flag
+        // once, where it dominates the backedges of both paths, including string join continuations.
+        fold_true = builder.createConstBool(true, loc)->result;
         if (root_string_join) {
             fold_initial_join_started = builder.createConstBool(false, loc)->result;
         }
@@ -24006,7 +24010,6 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.createBranchIf(state.fold_has_accum, fold_block, init_accum_block, loc);
 
         builder.setBlock(init_accum_block);
-        QoreIRValue true_val = builder.createConstBool(true, loc)->result;
         QoreIRValue false_val = root_string_join
             ? builder.createConstBool(false, loc)->result : QoreIRValue();
         QoreIRValue init_accum_val;
@@ -24097,14 +24100,12 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.setBlock(fold_cont_block);
         auto* next_accum_phi = builder.createPhi(
             {{init_accum_val, init_accum_exit_block}, {fold_result, fold_exit_block}}, loc);
-        auto* next_has_phi = builder.createPhi({{true_val, init_accum_exit_block}, {true_val, fold_exit_block}},
-            loc);
         FusedLoopState next_state = state;
         next_state.fold_accum = next_accum_phi->result;
-        next_state.fold_has_accum = next_has_phi->result;
+        next_state.fold_has_accum = fold_true;
         if (root_string_join) {
             auto* next_join_started_phi = builder.createPhi(
-                {{false_val, init_accum_exit_block}, {true_val, fold_exit_block}}, loc);
+                {{false_val, init_accum_exit_block}, {fold_true, fold_exit_block}}, loc);
             next_state.fold_join_started = next_join_started_phi->result;
         }
         if (count_joined_values) {
