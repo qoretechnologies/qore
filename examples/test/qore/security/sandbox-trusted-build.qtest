@@ -97,6 +97,17 @@ auto sub build_calling(code c) {
     return c();
 }
 
+#! trusted code that a build runs: runs the code of a Program that keeps state (the build's own call)
+auto sub build_in_program(Program x, int n) {
+    code keeper = x.callFunction("mk_keeper", n);
+    return keeper();
+}
+
+#! trusted code that a build runs: calls a function of a Program
+auto sub build_call_pgm(Program p, string f, softint n) {
+    return p.callFunction(f, n);
+}
+
 #! trusted code: creates a trusted build capability
 code sub make_capability(code c) {
     return SandboxManager::createTrustedBuildCall(c);
@@ -183,6 +194,10 @@ class SandboxTrustedBuildTest inherits QUnit::Test {
         code BuildRead;
         code BuildThread;
         code BuildCalling;
+        #! a trusted build that calls a function of a Program
+        code BuildCallPgm;
+        #! a trusted build that runs the code of a Program by itself
+        code BuildInProgram;
         code BuildObjRead;
         code BuildObjMk;
         code BuildAlloc;
@@ -237,6 +252,9 @@ Program sub mk(string src) {
             \memory());
         addTestCase("work that a build hands to the event loop is not a part of the caller's call", \memoryAsync());
         addTestCase("each sandbox of a composite governs the caller's code in a build", \compositeMemory());
+        addTestCase("the code of other sandboxes in a build, and nested builds", \nestedAndForeignCode());
+        addTestCase("a thread that the caller's code starts in a build keeps its stack limit", \stackInBuildThread());
+        addTestCase("the build's own code is charged to its creator only", \buildOwnAccounting());
         addTestCase("the memory limit of the Program that created the capability governs the build",
             \creatorMemory());
         set_return_value(main());
@@ -254,6 +272,8 @@ Program sub mk(string src) {
         BuildRead = SandboxManager::createTrustedBuildCall(\build_read());
         BuildThread = SandboxManager::createTrustedBuildCall(\build_thread());
         BuildCalling = SandboxManager::createTrustedBuildCall(\build_calling());
+        BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
+        BuildInProgram = SandboxManager::createTrustedBuildCall(\build_in_program());
         BuildObjRead = SandboxManager::createTrustedBuildCall(\build_obj_read());
         BuildObjMk = SandboxManager::createTrustedBuildCall(\build_obj_mk());
         BuildAlloc = SandboxManager::createTrustedBuildCall(\build_alloc());
@@ -579,16 +599,17 @@ sub release() {
         # manager of its own: its code is governed by both sandboxes, and in a build each of their limits applies;
         # the members of a composite sandbox are ordered by address, so each pair of managers is used in both roles:
         # one of the two runs enters the Program's own sandbox (no budget yet) before the tenant's (whose budget is
-        # below the build)
+        # below the build); and each of the two has the small limit in turn
         SandboxManager x();
         SandboxManager y();
-        foreach list<SandboxManager> roles in ((x, y), (y, x)) {
-            SandboxManager tenant_sm = roles[0];
-            SandboxManager own_sm = roles[1];
+        foreach list<auto> run in ((x, y, True), (y, x, True), (x, y, False), (y, x, False)) {
+            SandboxManager tenant_sm = run[0];
+            SandboxManager own_sm = run[1];
+            bool own_small = run[2];
             tenant_sm.setUncontrolledApiPolicy(True);
-            tenant_sm.setMemoryLimit(256 * 1024 * 1024);
+            tenant_sm.setMemoryLimit(own_small ? 256 * 1024 * 1024 : 1024 * 1024);
             own_sm.setUncontrolledApiPolicy(True);
-            own_sm.setMemoryLimit(1024 * 1024);
+            own_sm.setMemoryLimit(own_small ? 1024 * 1024 : 256 * 1024 * 1024);
             Program tenant(PO_MODERN);
             tenant.setSandboxManager(tenant_sm);
             # mk() creates a Program from the source given
@@ -603,13 +624,436 @@ code sub mk() {
         return l.size();
     };
 }
+# the same allocation in a thread that the closure starts: the error of the thread is returned
+code sub mk_thread() {
+    return string sub () {
+        Qore::Thread::Queue q();
+        background sub () {
+            try {
+                list<string> l = ();
+                for (int i = 0; i < 200000; ++i) {
+                    l += sprintf(\"composite thread entry %d with some padding to use memory\", i);
+                }
+                q.push(\"allocated\");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    };
+}
 ");
             p.setSandboxManager(own_sm);
             code c = tenant.callFunction("call", \p.callFunction(), "mk");
-            # called by the tenant directly, and through a build: the Program's own limit applies
+            # called by the tenant directly, and through a build: the smaller limit applies
             assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", c));
             assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", BuildCalling, c));
+            # also in a thread that the closure starts, which continues its call
+            code t = tenant.callFunction("call", \p.callFunction(), "mk_thread");
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", t));
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", BuildCalling, t));
         }
+    }
+
+    #! the source of a Program that a tenant creates: closures that allocate, keep data or start a thread
+    const OwnSource = "%modern
+our list<string> hoard;
+int sub alloc(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"own entry %d with some padding to use memory\", i);
+    }
+    return l.size();
+}
+code sub mk_alloc(int n) {
+    return int sub () { return alloc(n); };
+}
+code sub mk_keeper(int n) {
+    return int sub () {
+        list<string> l = ();
+        for (int i = 0; i < n; ++i) {
+            l += sprintf(\"kept entry %d with some padding to use memory\", i);
+        }
+        hoard = l;
+        return l.size();
+    };
+}
+# a closure that runs another closure in a thread that it starts, and returns its result or its error
+code sub mk_thread(code c) {
+    return string sub () {
+        Qore::Thread::Queue q();
+        background sub () {
+            try {
+                q.push(sprintf(\"%y\", c()));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    };
+}
+auto sub run_cap(code cap, code c) {
+    return cap(c);
+}
+sub release() {
+    remove hoard;
+}
+";
+
+    #! the source of a tenant: mk() creates a Program, outer() a closure that calls a capability with a closure
+    const TenantSource = SandboxedSource + "code sub outer(code cap, code inner) {
+    return auto sub () { return cap(inner); };
+}
+# a closure of the tenant that allocates in a thread that it starts
+code sub thread_alloc(int n) {
+    return string sub () {
+        Qore::Thread::Queue q();
+        background sub () {
+            try {
+                list<string> l = ();
+                for (int i = 0; i < n; ++i) {
+                    l += sprintf(\"tenant thread entry %d with some padding to use memory\", i);
+                }
+                q.push(sprintf(\"%d\", l.size()));
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.err);
+            }
+        }();
+        return q.get();
+    };
+}
+our *list<string> kept;
+# a closure of the tenant that keeps what code of another sandbox returns
+code sub keeps(code q, int n) {
+    return int sub () {
+        kept = q(n);
+        return kept.size();
+    };
+}
+";
+
+    #! returns a tenant Program and a Program that it created, which the host gave a manager of its own
+    private list<Program> tenantProgram(SandboxManager tenant_sm, SandboxManager own_sm) {
+        Program tenant(PO_MODERN);
+        tenant.setSandboxManager(tenant_sm);
+        tenant.parse(TenantSource, "tenant");
+        Program p = tenant.callFunction("mk", OwnSource);
+        p.setSandboxManager(own_sm);
+        return (tenant, p);
+    }
+
+    #! returns a manager with the given memory limit (0 for none)
+    private SandboxManager newManager(int limit) {
+        SandboxManager m();
+        m.setUncontrolledApiPolicy(True);
+        if (limit) {
+            m.setMemoryLimit(limit);
+        }
+        return m;
+    }
+
+    nestedAndForeignCode() {
+        # a creator with a memory limit: the code of other sandboxes that its build runs is not charged to it
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+auto sub run(code c) {
+    return c();
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\run());
+}
+", "limited-creator");
+        code cap = creator.callFunction("mk");
+        SandboxManager cs = newManager(1024 * 1024);
+        creator.setSandboxManager(cs);
+
+        {
+            # a tenant without a memory limit, whose Program has one: the data that the Program's code keeps in the
+            # build (about 3 MB) is charged to the Program's sandbox, not to the creator
+            SandboxManager ma = newManager(0);
+            SandboxManager m2 = newManager(64 * 1024 * 1024);
+            list<Program> l = tenantProgram(ma, m2);
+            Program tenant = l[0];
+            Program p = l[1];
+            on_exit p.callFunction("release");
+            code keeper = tenant.callFunction("call", \p.callFunction(), ("mk_keeper", 30000));
+            assertEq(30000, tenant.callFunction("call", cap, keeper));
+            assertGt(1024 * 1024, m2.getMemoryUsage());
+            assertEq(0, cs.getMemoryUsage());
+            # also in a thread that the closure starts
+            code thr = tenant.callFunction("call", \p.callFunction(), ("mk_thread", keeper));
+            assertEq("30000", tenant.callFunction("call", cap, thr));
+            assertEq(0, cs.getMemoryUsage());
+        }
+
+        {
+            # the host calls the capability with a tenant's closure: the tenant's data is charged to the tenant
+            SandboxManager ma = newManager(64 * 1024 * 1024);
+            Program tenant(PO_MODERN);
+            tenant.setSandboxManager(ma);
+            tenant.parse(OwnSource, "tenant-own");
+            on_exit tenant.callFunction("release");
+            code keeper = tenant.callFunction("mk_keeper", 30000);
+            assertEq(30000, cap(keeper));
+            assertGt(1024 * 1024, ma.getMemoryUsage());
+            assertEq(0, cs.getMemoryUsage());
+        }
+
+        # nested builds, and builds called by the Program's own code: the Program's own 1 MB limit applies to its
+        # closure in every case, in both orders of the members of its composite sandbox
+        SandboxManager x();
+        SandboxManager y();
+        foreach list<SandboxManager> roles in ((x, y), (y, x)) {
+            SandboxManager ma = roles[0];
+            SandboxManager m2 = roles[1];
+            ma.setUncontrolledApiPolicy(True);
+            ma.setMemoryLimit(256 * 1024 * 1024);
+            m2.setUncontrolledApiPolicy(True);
+            m2.setMemoryLimit(1024 * 1024);
+            list<Program> l = tenantProgram(ma, m2);
+            Program tenant = l[0];
+            Program p = l[1];
+            # about 20 MB
+            code pc = tenant.callFunction("call", \p.callFunction(), ("mk_alloc", 200000));
+            code pthr = tenant.callFunction("call", \p.callFunction(), ("mk_thread", pc));
+            # the Program's code calls a build with its closure: both sandboxes have budgets below the build
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", \p.callFunction(),
+                ("run_cap", BuildCalling, pc)));
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", \p.callFunction(),
+                ("run_cap", BuildCalling, pthr)));
+            # the Program's code calls a build with the tenant's closure, which calls a build with the Program's
+            code outer = tenant.callFunction("outer", BuildCalling, pc);
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", \p.callFunction(),
+                ("run_cap", BuildCalling, outer)));
+            code outer_thr = tenant.callFunction("outer", BuildCalling, pthr);
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", \p.callFunction(),
+                ("run_cap", BuildCalling, outer_thr)));
+            # a build that calls a function of the Program, which is entered with its own sandbox and the one that it
+            # keeps
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", BuildCallPgm, (p, "alloc", 200000)));
+            # the Program's code calls a build with the tenant's closure, which allocates in a thread that it starts:
+            # the thread continues the Program's call, whose limit applies
+            code tthr = tenant.callFunction("thread_alloc", 200000);
+            assertEq("SANDBOX-MEMORY-LIMIT", tenant.callFunction("call", \p.callFunction(),
+                ("run_cap", BuildCalling, tthr)));
+        }
+
+        {
+            # the caller's own code in a build calls code of another sandbox and keeps what it returns: the caller's
+            # limit applies, as when it calls that code directly
+            SandboxManager ma = newManager(2 * 1024 * 1024);
+            Program tenant(PO_MODERN);
+            tenant.setSandboxManager(ma);
+            tenant.parse(TenantSource, "keeping-tenant");
+            Program q(PO_MODERN);
+            q.setSandboxManager(newManager(0));
+            q.parse("%modern
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"other sandbox entry %d with some padding to use memory\", i);
+    }
+    return l;
+}
+", "other-sandbox");
+            code keeper = tenant.callFunction("keeps", q.getCallReference("make"), 200000);
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", keeper));
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", BuildCalling, keeper));
+        }
+
+        {
+            # a build that runs the code of a sandboxed Program by itself (a Program that the host keeps for every
+            # caller): the state that it keeps there is charged to that Program's sandbox, not to the caller
+            SandboxManager ma = newManager(1024 * 1024);
+            Program tenant(PO_MODERN);
+            tenant.setSandboxManager(ma);
+            tenant.parse(SandboxedSource, "small-tenant");
+            SandboxManager mx = newManager(64 * 1024 * 1024);
+            Program x(PO_MODERN);
+            x.setSandboxManager(mx);
+            x.parse(OwnSource, "shared-program");
+            on_exit x.callFunction("release");
+            assertEq(30000, tenant.callFunction("call", BuildInProgram, (x, 30000)));
+            assertGt(1024 * 1024, mx.getMemoryUsage());
+            assertLt(256 * 1024, ma.getMemoryUsage());
+        }
+
+        {
+            # the host calls a build that runs the code of a Program that a tenant created and the host gave a manager
+            # of its own: the Program is entered with its own sandbox and the one that it keeps, and its own 1 MB limit
+            # applies to the build's call
+            list<Program> l = tenantProgram(newManager(0), newManager(1024 * 1024));
+            Program p = l[1];
+            on_exit p.callFunction("release");
+            # about 20 MB
+            assertThrows("SANDBOX-MEMORY-LIMIT", BuildInProgram, (p, 200000));
+        }
+
+        {
+            # the caller's code calls code of a sandbox with no memory limit, which calls a build with its own
+            # closure: the caller's limit governs that code, in the build as well
+            SandboxManager ma = newManager(1024 * 1024);
+            Program tenant(PO_MODERN);
+            tenant.setSandboxManager(ma);
+            tenant.parse(SandboxedSource, "outer-tenant");
+            Program inner(PO_MODERN);
+            inner.setSandboxManager(newManager(0));
+            inner.parse(OwnSource + "auto sub go(code cap) {
+    return cap(mk_alloc(200000));
+}
+", "inner-code");
+            code go = inner.getCallReference("go");
+            assertThrows("SANDBOX-MEMORY-LIMIT", \tenant.callFunction(), ("call", go, BuildCalling));
+        }
+    }
+
+    buildOwnAccounting() {
+        # a creator with a sandbox of its own whose code calls its capability: a tenant that calls that code is not
+        # charged for the state that the build keeps
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+our list<string> state;
+sub build(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"creator state entry %d with some padding to use memory\", i);
+    }
+    state = l;
+}
+# runs a closure in a thread that the build's own code starts and waits for
+auto sub run_in_thread(code c) {
+    Qore::Thread::Queue q();
+    background sub () {
+        try {
+            q.push(c());
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err);
+        }
+    }();
+    return q.get();
+}
+auto sub run(code c) {
+    return c();
+}
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += sprintf(\"creator made entry %d with some padding to use memory\", i);
+    }
+    return l;
+}
+code sub mk_maker() {
+    return list<string> sub (int n) { return make(n); };
+}
+code build_cap;
+code thread_cap;
+code run_cap;
+sub mk() {
+    build_cap = Qore::SandboxManager::createTrustedBuildCall(\\build());
+    thread_cap = Qore::SandboxManager::createTrustedBuildCall(\\run_in_thread());
+    run_cap = Qore::SandboxManager::createTrustedBuildCall(\\run());
+}
+code sub get_run_cap() {
+    return run_cap;
+}
+sub use_cap(int n) {
+    build_cap(n);
+}
+code sub get_thread_cap() {
+    return thread_cap;
+}
+int sub state_size() {
+    return state.size();
+}
+sub clear() {
+    remove state;
+}
+", "own-creator");
+        creator.callFunction("mk");
+        code thread_cap = creator.callFunction("get_thread_cap");
+        on_exit creator.callFunction("clear");
+        SandboxManager cs = newManager(64 * 1024 * 1024);
+        creator.setSandboxManager(cs);
+
+        SandboxManager ma = newManager(64 * 1024 * 1024);
+        Program tenant(PO_MODERN);
+        tenant.setSandboxManager(ma);
+        tenant.parse(OwnSource + "auto sub call(code c, *softlist<auto> args) {
+    return call_function_args(c, args);
+}
+", "own-tenant");
+        on_exit tenant.callFunction("release");
+        # about 3 MB of state, built by the creator's code that the tenant calls
+        tenant.callFunction("call", creator.getCallReference("use_cap"), 30000);
+        assertEq(30000, creator.callFunction("state_size"));
+        assertGt(1024 * 1024, cs.getMemoryUsage());
+        assertLt(1024 * 1024, ma.getMemoryUsage());
+
+        # the tenant's closure, run in a thread that the build's own code starts, is charged to the tenant only: not
+        # to the creator, whose limit is too small for it
+        cs.setMemoryLimit(1024 * 1024);
+        creator.callFunction("clear");
+        code keeper = tenant.callFunction("mk_keeper", 30000);
+        assertEq(30000, tenant.callFunction("call", thread_cap, keeper));
+        assertGt(1024 * 1024, ma.getMemoryUsage());
+
+        # the caller's code in a build calls the creator's own code (a function, a closure) and keeps what it returns:
+        # the caller's limit applies, as when it calls that code directly, and the creator is not charged
+        cs.setMemoryLimit(64 * 1024 * 1024);
+        code run_cap = creator.callFunction("get_run_cap");
+        SandboxManager small = newManager(2 * 1024 * 1024);
+        Program keeping(PO_MODERN);
+        keeping.setSandboxManager(small);
+        keeping.parse(TenantSource, "creator-code-tenant");
+        int cs_before = cs.getMemoryUsage();
+        foreach code maker in ((creator.getCallReference("make"), creator.callFunction("mk_maker"))) {
+            code keeps = keeping.callFunction("keeps", maker, 200000);
+            assertThrows("SANDBOX-MEMORY-LIMIT", \keeping.callFunction(), ("call", keeps));
+            assertThrows("SANDBOX-MEMORY-LIMIT", \keeping.callFunction(), ("call", run_cap, keeps));
+            assertLt(cs_before + 1024 * 1024, cs.getMemoryUsage());
+        }
+
+        # a tenant whose limit allows it keeps what the creator's code returns through the build: the data is charged
+        # to the tenant, and not to the creator (or a tenant could fill the creator's limit)
+        SandboxManager large = newManager(256 * 1024 * 1024);
+        Program large_tenant(PO_MODERN);
+        large_tenant.setSandboxManager(large);
+        large_tenant.parse(TenantSource, "creator-code-large-tenant");
+        code large_keeps = large_tenant.callFunction("keeps", creator.getCallReference("make"), 60000);
+        assertEq(60000, large_tenant.callFunction("call", run_cap, large_keeps));
+        assertGt(1024 * 1024, large.getMemoryUsage());
+        assertLt(cs_before + 1024 * 1024, cs.getMemoryUsage());
+    }
+
+    stackInBuildThread() {
+        # a thread that the caller's code starts in a build keeps the caller's stack limit
+        const int Limit = 256 * 1024;
+        SandboxManager m = newManager(0);
+        m.setMaxStackSize(Limit);
+        Program tenant(PO_MODERN);
+        tenant.setSandboxManager(m);
+        tenant.parse(SandboxedSource + "int sub recurse(int n) {
+    return recurse(n + 1);
+}
+code sub deep_thread() {
+    return auto sub () {
+        Qore::Thread::Queue q();
+        background sub () {
+            try {
+                recurse(0);
+                q.push(\"no limit\");
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex.arg);
+            }
+        }();
+        return q.get();
+    };
+}
+", "stack-tenant");
+        code c = tenant.callFunction("deep_thread");
+        # the sandbox's limit is named in the exception argument; the thread's own stack limit is not
+        assertEq({"max_stack_size": Limit}, tenant.callFunction("call", c));
+        assertEq({"max_stack_size": Limit}, tenant.callFunction("call", BuildCalling, c));
     }
 
     memoryAsync() {
@@ -643,8 +1087,27 @@ sub clear() {
 code sub mk() {
     return Qore::SandboxManager::createTrustedBuildCall(\\build_async());
 }
+int sub recurse(int n) {
+    return n ? recurse(n - 1) + 1 : 0;
+}
+# recurses in work handed to the event loop: returns the depth or the error's argument
+auto sub build_async_deep(int n) {
+    Queue done();
+    Qore::AsyncIoController::addTimerDelay(1ms, sub () {
+        try {
+            done.push(recurse(n));
+        } catch (hash<ExceptionInfo> ex) {
+            done.push(ex.arg ?? ex.err);
+        }
+    });
+    return done.get(60s);
+}
+code sub mk_deep() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\build_async_deep());
+}
 ", "async-creator");
         code cap = creator.callFunction("mk");
+        code deep = creator.callFunction("mk_deep");
         on_exit creator.callFunction("clear");
         SandboxManager cs();
         cs.setUncontrolledApiPolicy(True);
@@ -660,6 +1123,11 @@ code sub mk() {
         assertEq(True, p.callFunction("call", cap, 20000));
         assertEq(20000, creator.callFunction("state_size"));
         assertEq(0, m.getMemoryUsage());
+
+        # nor the caller's stack limit: the work recurses deeper than the caller may
+        m.setMaxStackSize(32 * 1024);
+        assertThrows("STACK-LIMIT-EXCEEDED", \p.callFunction(), ("call", \creator.callFunction(), ("recurse", 500)));
+        assertEq(500, p.callFunction("call", deep, 500));
     }
 
     #! runs spin() of the Program in a thread, requests the sandbox's interrupt once it spins, returns its result

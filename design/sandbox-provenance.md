@@ -37,37 +37,38 @@ decisions made from it (what it creates, the paths reserved for trusted code), b
 limit, so the code called in those ways ran with the freedom of the trusted code that called it.
 
 So the Program also keeps the sandbox itself: `qore_program_private::creator_sandbox_manager` and
-`creator_policy_manager`, the managers that `qore_caller_sandbox_refs()` resolves for the creating code for all
-purposes and for policy checks (none for policy under a policy barrier or a system-policy capability, so a helper
-Program that trusted code creates there for a sandboxed caller keeps the caller's interrupts and limits but not its
-policy, as the capability's own code does), are set in the constructor whenever the constructor marks the Program
-sandboxed, and when code that sandboxed code parsed is committed (a later addition is combined with the one set, so
-it only adds restrictions). A parse entry point resolves them before it switches to the Program
-(`getParseCreatorSandbox()`), records them as the sandbox of the pending code once nothing can refuse the parse any
-more (`pendCreatorSandbox()`), and `internParseCommit()` attaches them just before it merges the code, so the code is
-never committed without its sandbox (an allocation failure refuses the commit); `internParseRollback()` drops them,
-so a refused or failed parse, or pending code that the host rolls back, changes nothing. An expression
-(`parseExpression()`) attaches nothing: it is governed through the provenance of its `Expression` object. The
-attached sandbox governs all of the Program's code, its earlier code included. It is separate from the Program's own
-manager:
-`QoreProgram::setSandboxManager()` (also with `nullptr`) and `Program::getSandboxManager()` act on the own manager
-only, and the two govern the Program's code together. Every lookup of a Program's sandbox resolves both:
-`getSandboxManagerRefs()` returns references to the own manager and the creator's manager (its policy manager for a
-policy check) without allocating, which the walk of the thread's sandbox stack visits
-(`visit_thread_sandbox_stack()`), so the uncontrolled-API check still allocates
-nothing; `getSandboxManagerRef()` combines them (a composition is allocated only when both are set and differ); and
-entering the Program starts the call budgets of both (`ProgramThreadCountContextHelper`). Adding it increments
+`creator_policy_manager`, the managers that `qore_caller_sandbox_refs()` resolves for the creating code for all purposes
+and for policy checks (none for policy under a policy barrier or a system-policy capability, so a helper Program that
+trusted code creates there for a sandboxed caller keeps the caller's interrupts and limits but not its policy, as the
+capability's own code does), are set in the constructor whenever the constructor marks the Program sandboxed, and when
+code that sandboxed code parsed is committed (a later addition is combined with the one set, so it only adds
+restrictions). A parse entry point resolves them before it switches to the Program (`getParseCreatorSandbox()`), records
+them as the sandbox of the pending code once nothing can refuse the parse any more (`pendCreatorSandbox()`), and
+`internParseCommit()` attaches them just before it merges the code, so the code is never committed without its sandbox
+(an allocation failure refuses the commit); `internParseRollback()` drops them, so a refused or failed parse, or pending
+code that the host rolls back, changes nothing. An expression (`parseExpression()`) attaches nothing: it is governed
+through the provenance of its `Expression` object. The attached sandbox governs all of the Program's code, its earlier
+code included. It is separate from the Program's own manager: `QoreProgram::setSandboxManager()` (also with `nullptr`)
+and `Program::getSandboxManager()` act on the own manager only, and the two govern the Program's code together. Every
+lookup of a Program's sandbox resolves both: `getSandboxManagerRefs()` returns references to the own manager and the
+creator's manager (its policy manager for a policy check) without allocating, which the walk of the thread's sandbox
+stack visits (`visit_thread_sandbox_stack()`), so the uncontrolled-API check still allocates nothing;
+`getSandboxManagerRef()` combines them (a composition is allocated only when both are set and differ); and entering the
+Program starts the call budgets of both (`ProgramThreadCountContextHelper`). Adding it increments
 `qore_sandbox_manager_generation`, as setting a manager does, so that no thread's cached "no manager on the chain"
-result hides it. In the walk, only a Program's own manager ends the lookup (the nearest Program with a manager of
-its own governs alone, as before); the kept sandbox only adds to the sandbox of the callers, and the walk goes on, so
-a stricter caller still governs the code that it calls in a Program that a laxer sandbox created. Reflection
-(`QoreReflectionCaller::checkProgramAccess()`) compares the Program's own manager only: the kept sandbox gives the
-code that created it no privileges in the Program. A manager that code a sandbox governs gives a Program
+result hides it. In the walk, only a Program's own manager ends the lookup (the nearest Program with a manager of its
+own governs alone, as before); the kept sandbox only adds to the sandbox of the callers, and the walk goes on, so a
+stricter caller still governs the code that it calls in a Program that a laxer sandbox created. Reflection
+(`QoreReflectionCaller::checkProgramAccess()`) compares the Program's own manager only: the kept sandbox gives the code
+that created it no privileges in the Program. A manager that code a sandbox governs gives a Program
 (`Program::setSandboxManager()`, also through trusted code that it calls) is additive
-(`qore_program_private::own_manager_additive`): the walk visits it and goes on to the callers, as for the kept
-sandbox, because a Program's own manager otherwise governs its code alone and a laxer manager would govern the calling
-code's own calls into the Program; the host's own calls are governed by that manager alone, as before. A manager that
-trusted code that no sandbox governs sets, and one set with the C++ API, governs alone.
+(`qore_program_private::own_manager_additive`): the walk visits it and goes on to the callers, as for the kept sandbox,
+because a Program's own manager otherwise governs its code alone and a laxer manager would govern the calling code's own
+calls into the Program; the host's own calls are governed by that manager alone, as before. A manager that trusted code
+that no sandbox governs sets, and one set with the C++ API, governs alone. The kept managers of a Program are released
+with its own manager when the Program is cleared, or when it is destroyed without being cleared. The Program constructor
+throws `std::bad_alloc` if the creator's sandbox cannot be resolved (no Program is created); the parse entry points
+raise an out-of-memory exception and do not parse.
 
 An expression cannot define code: it is parsed as `return (<expression>);`, which code that closes the parenthesis could
 extend with definitions left pending for the next commit, so a definition in an expression is a parse error
@@ -96,22 +97,40 @@ thread, not found by the walk) still count the build; the caller's interrupt req
 The memory that the build's own code allocates is shared state, charged to no caller (`QoreTrustedBuildChargeHelper`,
 `QoreSandboxBudgetStack::suspendCharge()`): storage keeps the charge it was created with, so a charged build would bill
 the first caller for as long as the state lives, and for its later growth by any caller. It is charged to the sandbox of
-the Program that created the capability: the helper enters that Program's sandboxes above the charge floor, as entering
-the Program does, so that its budgets apply also when its own code called the capability (the Program is current then,
-and entering it again enters nothing). The caller's code that the build calls stays charged to the caller: entering its
-sandbox, whose budget is below the build, pushes a frame that makes that budget's charge current again
-(`enterBelowBuild()`). That charge is combined with a charge that the same entry made current already (a constituent of
-a composite manager ordered before it, whose budget was started in the build), but not with a charge made current before
-the entry (the creator's): the caller's code is charged to its own sandboxes only. Work that the build hands to another
-thread captures only the budgets entered in the build (`capture()`), so it is not a part of the caller's call either.
+the Program that created the capability, if that Program has a sandbox with a memory limit: the helper enters that
+Program's sandboxes in the build, as entering the Program does, so that its budgets apply also when its own code called
+the capability (the Program is current then, and entering it again enters nothing). Before the barrier is set, the build
+records the sandboxes that govern the caller (`qore_find_thread_sandbox_manager_ref()`) and the charge of the caller's
+call. In the build, each entry into a sandbox (`QoreSandboxBudgetStack::enterInBuild()`) starts the budgets that its
+sandboxes do not have yet, pushes again the budgets of its sandboxes that are below the build (the caller's calls in
+progress: a continuation captures them, with their time and stack limits), and makes current a charge of the union of
+the accounts of all of its budgets, of the charge that the same entry made current already (a Program is entered with
+its own sandbox and the one that it keeps, in two calls), and, if a sandbox of the caller governs the code (the caller's
+code), of the caller's call; that charge is carried by a budget of its own that is pushed last, so a thread that the
+code starts makes it current too. The build's own entries of the creator's sandboxes (`enterBuildOwn()`) charge the
+creator's own accounts only, never the caller's, also when the caller is the creator's code. Each entry charges the own
+accounts of its sandboxes, not the chained charges of their budgets, whose accounts include those of the code that
+called them when they started. The build's charge (the creator's) is never added: the caller's code is charged as when
+the caller calls it directly, also in nested builds, whatever the order of the members of a composite sandbox, and the
+code of other sandboxes that the build runs is charged to those sandboxes only. A capability's callback must therefore
+not run code of another sandbox that the caller supplies: the caller would keep memory beyond its own limit through it
+(a follow-up would give code passed in the arguments the caller's provenance). Code that the caller's code runs is a
+part of the caller's call, as a nested call is: an entry under a carrier of the caller's code
+(`QoreSandboxCallBudget::caller_carrier`) chains that carrier's charge and carries the caller's code itself, whatever
+its sandboxes; under a carrier of the build's own code (`build_own_carrier`) or of other code that the build runs by
+itself, nothing is chained. The sandboxes of the creator govern the code that the build's code calls (a stricter caller
+governs the code that it calls), so they are members of the composite sandbox of that code; their accounts are charged
+by the build's own entries only (`isBuildOwnSandbox()`), and an entry of build-own sandboxes only is the build's own
+code when it is not under a carrier of the caller's code (the creator's code that the caller's code calls is a part of
+the caller's call). A continuation of code in a build (a thread, a pool task, async I/O) attaches a floor with no caller
+(`attach()`, `QoreSandboxContext::in_build`) and the carriers that it captured, so a thread that the caller's code
+starts keeps the caller's charge, and one that the build's own code starts charges the code that it runs to that code's
+own sandboxes only. Work that the build hands to another thread captures only the budgets entered in the build
+(`capture()`), so it is not a part of the caller's call either.
 
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
 provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build
 capability cannot be registered with `createSystemPolicyCall()` either.
-
-The managers are released with the own manager when the Program is cleared, or when it is destroyed without being
-cleared. The constructor throws `std::bad_alloc` if the creator's sandbox cannot be resolved
-(no Program is created); the parse entry points raise an out-of-memory exception and do not parse.
 
 The existing nearest-caller rule is otherwise unchanged. Interrupt checks include every contributing manager;
 threads reserve a slot in each distinct contributing manager and roll back all reservations on failure. The

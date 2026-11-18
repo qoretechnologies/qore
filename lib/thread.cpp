@@ -5702,13 +5702,14 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
-QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator) {
+QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers)
+        : callers(callers) {
     ThreadData* td = thread_data.get();
     if (!td) {
         return;
     }
     try {
-        saved = td->sandbox_budgets.suspendCharge();
+        td->sandbox_budgets.suspendCharge(callers);
     } catch (std::bad_alloc&) {
         return;
     }
@@ -5726,10 +5727,10 @@ QoreTrustedBuildChargeHelper::QoreTrustedBuildChargeHelper(QoreProgram* creator)
     ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
     ReferenceHolder<QoreSandboxManager> creator_sm(creator_ptr, nullptr);
     if (own) {
-        td->sandbox_budgets.enter(tid, *own, this);
+        td->sandbox_budgets.enterBuildOwn(tid, *own, this);
     }
     if (creator_sm) {
-        td->sandbox_budgets.enter(tid, *creator_sm, this);
+        td->sandbox_budgets.enterBuildOwn(tid, *creator_sm, this);
     }
 }
 
@@ -5738,7 +5739,10 @@ QoreTrustedBuildChargeHelper::~QoreTrustedBuildChargeHelper() {
         ThreadData* td = thread_data.get();
         // the frames entered for the creator are above the floor and on the top of the stack again
         td->sandbox_budgets.leave(tid, this);
-        td->sandbox_budgets.resumeCharge(saved);
+        td->sandbox_budgets.resumeCharge();
+    }
+    if (callers) {
+        callers->deref(nullptr);
     }
 }
 
@@ -5938,6 +5942,7 @@ QoreSandboxContext::QoreSandboxContext(bool capture_budgets) {
     ThreadData* td = thread_data.get();
     if (capture_budgets && td) {
         td->sandbox_budgets.capture(budgets);
+        in_build = td->sandbox_budgets.inBuild();
     }
     // a continuation of work that the module cleanup runs is part of the cleanup (see qore_close_module_programs())
     module_cleanup_delegate = capture_budgets && qore_module_cleanup_delegation();
@@ -6127,7 +6132,7 @@ QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx
         td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
         active = true;
         // the operation continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx.budgets, this);
+        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build);
     }
 }
 
@@ -6184,7 +6189,7 @@ QoreInheritedSandboxHelper::QoreInheritedSandboxHelper(const QoreSandboxContext*
         td->thread_start_sandbox_context = ctx;
         active = true;
         // the thread continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx->budgets, this);
+        td->sandbox_budgets.attach(td->tid, ctx->budgets, this, ctx->in_build);
     }
 }
 
@@ -6244,7 +6249,7 @@ QoreSandboxCaptureHelper::QoreSandboxCaptureHelper(const QoreSandboxCapture& cap
         td->inherited_sandbox_context = capture.isSandboxed() ? capture.ctx : nullptr;
         active = true;
         // the task continues the call that submitted it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this);
+        td->sandbox_budgets.attach(td->tid, capture.ctx->budgets, this, capture.ctx->in_build);
     }
 }
 

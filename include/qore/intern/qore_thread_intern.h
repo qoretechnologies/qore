@@ -741,11 +741,14 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
 class QoreTrustedBuildChargeHelper {
 public:
     //! Starts it; established() is false if it could not be recorded for lack of memory
-    /** @param creator the Program that created the capability, or nullptr: its sandboxes are entered above the
-        charge floor, so that its memory limit governs the build also when its own code called the capability (it is
-        current already, so entering it does not enter its sandboxes again)
+    /** @param creator the Program that created the capability, or nullptr: its sandboxes are entered in the build,
+        so that its memory limit governs the build also when its own code called the capability (it is current
+        already, so entering it does not enter its sandboxes again)
+        @param callers the sandboxes that governed the caller before the build's barrier was set (a referenced manager
+        or composite, which the helper takes over), or nullptr: the code that they govern is the caller's code (see
+        QoreSandboxBudgetStack::suspendCharge())
     */
-    DLLLOCAL QoreTrustedBuildChargeHelper(QoreProgram* creator);
+    DLLLOCAL QoreTrustedBuildChargeHelper(QoreProgram* creator, QoreSandboxManager* callers);
     DLLLOCAL ~QoreTrustedBuildChargeHelper();
 
     //! returns true if the accounting is in effect
@@ -757,7 +760,8 @@ public:
     DLLLOCAL QoreTrustedBuildChargeHelper& operator=(const QoreTrustedBuildChargeHelper&) = delete;
 
 private:
-    QoreSandboxCharge* saved = nullptr;
+    //! the sandboxes of the caller (referenced), or nullptr
+    QoreSandboxManager* callers;
     bool started = false;
     //! the TID of the thread
     int tid = 0;
@@ -882,6 +886,8 @@ public:
     QoreSandboxManager* provenance_policy_manager = nullptr;
     //! The call budgets of the capturing thread (referenced) for a continuation, empty otherwise
     QoreSandboxBudgetList budgets;
+    //! true if the context was captured in a trusted build (see QoreSandboxBudgetStack::attach())
+    bool in_build = false;
     //! True for a continuation that the module cleanup hands over (qore_module_cleanup_delegation() in the capturing
     //! thread): it can enter the Programs of the modules while the cleanup has closed them, applied with
     //! QoreModuleCleanupDelegateHelper (see qore_close_module_programs())
