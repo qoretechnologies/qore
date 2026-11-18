@@ -26942,14 +26942,35 @@ static QoreValue f_dbg_file_redirect_rendezvous(const QoreListNode* params, Runt
     return QoreValue();
 }
 
-//! Returns the calls of File::redirect() that arrived at the last rendezvous and those that waited until its timeout
+//! returns the name of the outcome of a rendezvous of File::redirect() calls
+static const char* dbg_file_redirect_outcome_name(QoreDbgFileRedirectOutcome outcome) {
+    switch (outcome) {
+        case QDFR_ARRIVED: return "arrived";
+        case QDFR_WAITER: return "waiter";
+        case QDFR_TIMEOUT: return "timeout";
+        default: return "none";
+    }
+}
+
+//! Waits until the outcome of the armed rendezvous of File::redirect() calls is known, for up to the given
+//! milliseconds, and returns it: "arrived", "waiter", "timeout", or "none" if it is not known yet
+static QoreValue f_dbg_file_redirect_rendezvous_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return new QoreStringNode(dbg_file_redirect_outcome_name(qore_dbg_file_redirect_rendezvous_wait(
+        static_cast<int>(get_param_value(params, 0).getAsBigInt()))));
+}
+
+//! Returns the calls of File::redirect() that arrived at the last rendezvous, those that waited until its timeout,
+//! and its outcome
 static QoreValue f_dbg_file_redirect_rendezvous_result(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     int arrived, timed_out;
-    qore_dbg_file_redirect_rendezvous_result(arrived, timed_out);
-    QoreHashNode* h = new QoreHashNode(bigIntTypeInfo);
+    QoreDbgFileRedirectOutcome outcome;
+    qore_dbg_file_redirect_rendezvous_result(arrived, timed_out, outcome);
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
     h->setKeyValue("arrived", arrived, xsink);
     h->setKeyValue("timed_out", timed_out, xsink);
+    h->setKeyValue("outcome", new QoreStringNode(dbg_file_redirect_outcome_name(outcome)), xsink);
     return h;
 }
 
@@ -27247,6 +27268,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_file_redirect_rendezvous", f_dbg_file_redirect_rendezvous, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, nothingTypeInfo, 2, bigIntTypeInfo, QORE_PARAM_NO_ARG, "count", bigIntTypeInfo,
         QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_file_redirect_rendezvous_wait", f_dbg_file_redirect_rendezvous_wait, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, stringTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_file_redirect_rendezvous_result", f_dbg_file_redirect_rendezvous_result, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
     qns.addBuiltinVariant("dbg_hold_next_thread_tls_exit", f_dbg_hold_next_thread_tls_exit, QCF_NO_FLAGS,
