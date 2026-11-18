@@ -4326,7 +4326,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                         # a value that is not valid in its encoding is not given in the message (qore#6553)
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s "
                             "which contains illegal characters", getDesc(), iop,
-                            arg.typeCode() == NT_STRING && !(arg =~ /^/)
+                            arg.typeCode() == NT_STRING && !arg.isEncodingValid()
                                 ? sprintf("a string of %d bytes not valid in its encoding", arg.size())
                                 : sprintf("%y", arg));
                     }

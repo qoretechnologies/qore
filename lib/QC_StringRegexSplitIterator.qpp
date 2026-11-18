@@ -244,6 +244,8 @@ StringRegexSplitIterator::copy() {
 /** @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called
     from any thread other than the thread that created the object
     @throw REGEX-ERROR an unexpected PCRE2 runtime error occurred
+    @throw INVALID-ENCODING the subject string is not valid in its encoding (see
+    @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()")
  */
 bool StringRegexSplitIterator::next() {
     if (i->check(xsink))

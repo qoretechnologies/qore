@@ -181,6 +181,12 @@ int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink) {
         const char* msg = pcre2_get_error_message(rc, buffer, sizeof(buffer)) < 0
             ? "unknown error"
             : reinterpret_cast<const char*>(buffer);
+        if (qore_pcre2_invalid_utf_error(rc)) {
+            // a match cannot tell whether such a subject matches (qore#6554)
+            xsink->raiseException("INVALID-ENCODING", "regular expression match: the subject string is not valid "
+                "UTF-8 (PCRE2 error %d: %s)", rc, msg);
+            return -1;
+        }
         switch (rc) {
             case PCRE2_ERROR_MATCHLIMIT:
             case PCRE2_ERROR_DEPTHLIMIT:

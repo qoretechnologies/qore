@@ -91,11 +91,11 @@ namespace DataStreamClientIoPrivate {
     # that the caller, which handles an error, does not raise another one (qore#6553)
     string sub ds_error_line(hash<ExceptionInfo> ex) {
         auto err = ex.err;
-        if (err.typeCode() == NT_STRING && !(err =~ /^/)) {
+        if (err.typeCode() == NT_STRING && !err.isEncodingValid()) {
             err = "<error code not valid in its encoding>";
         }
         auto desc = ex.desc;
-        if (desc.typeCode() == NT_STRING && !(desc =~ /^/)) {
+        if (desc.typeCode() == NT_STRING && !desc.isEncodingValid()) {
             desc = "<description not valid in its encoding>";
         }
         string str = sprintf("%s: %s", err, desc);

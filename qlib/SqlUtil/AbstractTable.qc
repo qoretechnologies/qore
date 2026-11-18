@@ -4223,7 +4223,7 @@ table.insert(row);
                     if (v !~ /\A[A-Za-z\._0-9]*\z/) {
                         # a value that is not valid in its encoding is not given in the message (qore#6553)
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s which "
-                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !(v =~ /^/)
+                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !v.isEncodingValid()
                                 ? sprintf("a string of %d bytes not valid in its encoding", v.size())
                                 : sprintf("%y", v));
                     }

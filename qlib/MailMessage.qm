@@ -545,7 +545,7 @@ public string sub decode_mime_filename(string filename) {
 */
 public string sub sanitize_filename(string filename) {
     # a name that is not valid in its encoding cannot be sanitized; the default name is given (qore#6553)
-    if (!(filename =~ /^/)) {
+    if (!filename.isEncodingValid()) {
         return "attachment";
     }
     # Remove control characters, path separators, and other unsafe characters

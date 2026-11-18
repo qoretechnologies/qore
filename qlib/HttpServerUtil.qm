@@ -1515,9 +1515,8 @@ public nothing sub http_send_streamed_response(Socket sock, int code, string sta
     and URL passwords; before, it masked only the first \c pass or \c password
 */
 public string sub http_mask_data(string msg) {
-    # a regular expression does not match a string with invalid UTF-8, so nothing in it would be masked; this expression
-    # matches every valid string
-    if (!(msg =~ /^/)) {
+    # a string that is not valid in its encoding cannot be matched, so it cannot be masked; it is not given
+    if (!msg.isEncodingValid()) {
         return sprintf("<masked: invalid string of %d bytes>", msg.size());
     }
     # INVARIANT: keep the names in step with http_is_sensitive_key(), and consume a value only when its end is certain;

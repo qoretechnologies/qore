@@ -1497,7 +1497,7 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         # a value that is not valid in its encoding (request data) names no media type, and the substitution below
         # cannot remove its parameters (qore#6553)
-        if (!(astr =~ /^/)) {
+        if (!astr.isEncodingValid()) {
             return False;
         }
         do {
