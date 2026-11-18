@@ -1238,7 +1238,8 @@ const PO_ALLOW_DEBUGGER = PO_ALLOW_DEBUGGER;
     has executed yet, once each, also when several threads run the Program at the same time: each run takes the next
     statement before it executes it, so the statements of runs in different threads can execute at the same time.  A
     statement that raises an exception is not executed again; the run ends with the exception, and the next run
-    executes the statements after it.
+    executes the statements after it, unless they are skipped with
+    @ref Qore::Program::skipPendingStatements() "Program::skipPendingStatements()".
 
     @note Parsing is only allowed when no threads are active in the Program.
 
@@ -2285,6 +2286,38 @@ pgm.run();
  */
 auto Program::run() {
     return p->run(xsink);
+}
+
+//! Skips the top-level statements that no run has executed yet: later runs do not execute them
+/** With @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", a run executes the top-level statements that no run has
+    executed yet; when a statement raises an exception, the run ends, and the next run executes the statements after
+    it.  A caller that treats the code of a parse as one unit (such as an interactive REPL, which runs the code of each
+    input) calls this method after such a run, so that the statements of the parse after the one that raised the
+    exception are not executed by the run of the next parse.
+
+    @return the number of statements skipped; 0 without @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", where a run
+    executes all of the statements
+
+    @par Example:
+    @code{.py}
+try {
+    pgm.run();
+} catch (hash<ExceptionInfo> ex) {
+    pgm.skipPendingStatements();
+    rethrow;
+}
+    @endcode
+
+    @note Code that is parsed but not committed yet is not affected; the method waits for a parse in progress in
+    another thread to end
+
+    @throw PROGRAM-ERROR the Program was deleted while the method waited for a parse in another thread to end, or the
+    wait would close a cycle of threads waiting for the parse locks of Programs (see @ref Qore::Program "Program")
+
+    @since %Qore 3.0
+ */
+int Program::skipPendingStatements() {
+    return qore_program_private::skipPendingStatements(*p, xsink);
 }
 
 //! Imports a function into the program object's space; any calls to the imported function will run with the parent Program object's permissions
