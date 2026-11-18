@@ -541,6 +541,8 @@ constexpr AOTOpcodeLayout aot_opcode_layouts[] = {
     {O::GePlugin, {G::Base, G::Expr}, true},
     {O::HandlerReturn, {G::Base}},
     {O::SetCodeParseOptions, {G::Base}},
+    // written as two PushTempMark instructions (serializeIRFunction())
+    {O::PushTempMarkPair, {G::Base}},
 };
 
 constexpr bool aotOpcodeLayoutsIndexed() {

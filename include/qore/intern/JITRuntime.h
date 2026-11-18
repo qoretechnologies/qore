@@ -631,6 +631,10 @@ uint64_t qore_rt_load_local_raw(LocalVar* var, ExceptionSink* xsink);
 
 //! Reads a cached value that can be a reference: the referenced value, or the value itself, with a reference
 uint64_t qore_rt_read_reference_local(uint64_t value, ExceptionSink* xsink);
+//! Reads the cache of an untyped IR-only variable of a foreach loop; a value read through a reference is held in
+//! \a current, whose value moves to \a previous, whose value is released, and \a held is set
+uint64_t qore_rt_read_element_local_held(uint64_t val, uint64_t* current, uint64_t* previous, uint8_t* held,
+    ExceptionSink* xsink);
 //! Assigns a value (whose reference is taken) through the reference in the native cache of an IR-only local
 void qore_rt_reference_slot_write(uint64_t ref, uint64_t value, ExceptionSink* xsink);
 //! Stores an element to the native cache of the IR-only variable of a foreach loop; returns the value of the cache

@@ -41,6 +41,8 @@
 #include <mutex>
 #include <new>
 #include <set>
+#include <string>
+#include <utility>
 
 //! serializes the insertion of a new value into the value set of any SyncParseOptions object (issue #6177)
 /** A leaf lock, held only around the insertion (which allocates): it is acquired by the fork handlers before fork()
@@ -450,5 +452,39 @@ private:
     //! returns the options in effect for the current thread when a frame may be linked
     DLLLOCAL ParseWarnOptions getView() const;
 };
+
+//! A module that a directive of a Program loaded, with the parse options that the directive gave it (qore#6406)
+/** An AOT module records them in its module metadata (QoreAOTModuleFileInfo::dependency_restrictions), so that the
+    loader loads its dependencies as its source does
+*/
+struct QoreModuleDependencyRestriction {
+    //! the module's name
+    std::string module;
+    //! the parse options that the directive gave the module to inherit (not those that relieve restrictions)
+    QoreParseOptions options;
+    //! QMDR_* flags
+    uint32_t flags = 0;
+
+    DLLLOCAL QoreModuleDependencyRestriction(std::string module, const QoreParseOptions& options, uint32_t flags = 0)
+            : module(std::move(module)), options(options), flags(flags) {
+    }
+};
+
+//! The module was requested before the header of a module that declares functional domains (qore#6386)
+/** Its source loads it with the restrictions of the loading code, before the declared domains relieve them: the
+    loader loads it before the AOT module's initialization, with those restrictions
+*/
+constexpr uint32_t QMDR_BEFORE_HEADER = (1u << 0);
+
+//! The modules that the module requests before its header cannot be recorded exactly (qore#6386)
+/** A conditional directive before the header of a module that declares functional domains can request other modules
+    where the module is loaded than where it was compiled: every module that the record lists is loaded before the
+    AOT module's initialization, with the restrictions of the loading code, and none is relieved by the declared
+    domains (fail-closed); set on every entry of such a record
+*/
+constexpr uint32_t QMDR_INEXACT = (1u << 1);
+
+//! The flags that a module metadata record can have (any other bit makes the record invalid)
+constexpr uint32_t QMDR_ALL_FLAGS = QMDR_BEFORE_HEADER | QMDR_INEXACT;
 
 #endif

@@ -92,6 +92,26 @@ public class FoldedDebugStepDensityTest inherits QUnit::Test {
 }
 ";
 
+        #! a function stepped like work() of ChildScript with two statements on one line and a statement that starts
+        #! on the line after the start of the statement that contains it (#6248)
+        const SameLineChildScript = "%modern
+*string sub work(int n, code attach, code detach) {
+    int a = 0;
+    for (int i = 0; i < n; ++i) {
+        if (i == 2) {                       ### if
+            attach();
+        }
+        a += i; a += 1;                     ### same_line
+        while (a <                          ### while
+               0) {
+            a = 0;
+        }
+    }
+    detach();                               ### detach
+    return sprintf(\"%d\", a);
+}
+";
+
         #! a function stepped like work() of ChildScript whose fused local int statements are in a try block
         /** An operation in a try block can have the try block's handler as its exception target, for the exceptions
             that it raises itself (qore#6197); its statement is then not folded (qore_ir_fold_debug_statements()),
@@ -149,6 +169,8 @@ class StepRecorder inherits DebugProgram {
     public {
         list<int> step_lines = ();
         list<int> call_lines = ();
+        list<string> call_locs = ();
+        list<string> stmt_locs = ();
         int flow_value;
         int flow_line;
         int flow_hits = 0;
@@ -173,6 +195,9 @@ class StepRecorder inherits DebugProgram {
                 foreach hash<CallStackInfo> frame in (get_thread_call_stack()) {
                     if (frame.function == "StepRecorder::onStep") {
                         push call_lines, frame.line;
+                        # the start of the runtime location and of the statement, with their columns
+                        push call_locs, sprintf("%d:%d", frame.line, frame.start_column);
+                        push stmt_locs, sprintf("%d:%d", loc.start_line, loc.start_column ?? -1);
                         break;
                     }
                 }
@@ -214,6 +239,8 @@ printf("ALLOW:%d\n", p.getParseOptions() & PO_ALLOW_DEBUGGER ? 1 : 0);
 printf("RESULT:<%s>\n", r ?? "none");
 printf("STEPLINES:%y\n", dbg.step_lines);
 printf("CALLLINES:%y\n", dbg.call_lines);
+printf("CALLLOCS:%y\n", dbg.call_locs);
+printf("STMTLOCS:%y\n", dbg.stmt_locs);
 ';
     }
 
@@ -227,6 +254,7 @@ printf("CALLLINES:%y\n", dbg.call_lines);
         addTestCase("a debugger break at a folded statement", \testDebuggerBreak());
         addTestCase("the step event of a folded statement of more than one line", \testMultiLineStatement());
         addTestCase("the step events of fused local int statements in a try block", \testTryBlock());
+        addTestCase("the runtime location of a step event is its statement's", \testStatementLocation());
         set_return_value(main());
     }
 
@@ -361,12 +389,16 @@ printf("CALLLINES:%y\n", dbg.call_lines);
         *list<*string> calls = out =~ x/CALLLINES:\[([-0-9, ]*)\]/;
         *list<*string> result = out =~ x/RESULT:<([^>]*)>/;
         *list<*string> allow = out =~ x/ALLOW:([01])/;
+        *list<*string> call_locs = out =~ x/CALLLOCS:\[([^\]]*)\]/;
+        *list<*string> stmt_locs = out =~ x/STMTLOCS:\[([^\]]*)\]/;
         return {
             "out": out,
             "allow": allow ? allow[0] : NOTHING,
             "result": result ? result[0] : NOTHING,
             "step_lines": steps ? (map trim($1).toInt(), steps[0].split(","), trim($1) != "") : (),
             "call_lines": calls ? (map trim($1).toInt(), calls[0].split(","), trim($1) != "") : (),
+            "call_locs": call_locs ? ((call_locs[0] =~ x/"(-?[0-9]+:-?[0-9]+)"/g) ?? ()) : (),
+            "stmt_locs": stmt_locs ? ((stmt_locs[0] =~ x/"(-?[0-9]+:-?[0-9]+)"/g) ?? ()) : (),
         };
     }
 
@@ -501,5 +533,32 @@ printf("CALLLINES:%y\n", dbg.call_lines);
         # folded
         assertSameAsReference(res, runSteps("reference", "return", tags.add_local, TryChildScript),
             "try block return");
+    }
+
+    #! the runtime location at a step event is the statement's own (its start line and column), also for a statement
+    #! that starts on the line where the code before it ends: the location of the code is only updated when the line
+    #! changes (#6248)
+    testStatementLocation() {
+        hash<string, int> tags = tagLines(SameLineChildScript);
+        # the steps after the attach at i == 2: the rest of the iteration, the next one and the detach
+        list<int> expected = map tags{$1}, ("same_line", "same_line", "while", "if", "same_line", "same_line",
+            "while", "detach");
+        foreach string target in (("folded", "reference")) {
+            hash<string, hash<auto>> res = runSteps(target, "steps", 0, SameLineChildScript);
+            foreach hash<auto> i in (res.pairIterator()) {
+                string what = sprintf("%s %s", target, i.key);
+                assertEq("10", i.value.result, what + ": the function's result: " + i.value.out);
+                assertEq(expected, i.value.step_lines, what + ": the step event of every statement");
+                assertEq(expected.size(), i.value.stmt_locs.size(), what + ": the location of every statement");
+                # the AST interpreter does not set the runtime location of a statement before its event
+                if (i.key != "ast") {
+                    assertEq(i.value.stmt_locs, i.value.call_locs, what + ": the runtime location of every step "
+                        "event is its statement's start");
+                }
+                # the events of JIT and tiered execution are those of native code
+                assertEq(i.key == "jit" || i.key == "tiered", i.value.native, what + ": work() runs as native code "
+                    "when the debugger attaches with JIT and tiered execution");
+            }
+        }
     }
 }

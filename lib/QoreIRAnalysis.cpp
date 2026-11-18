@@ -6802,6 +6802,9 @@ static bool qore_ir_loop_temp_scopes_are_closed(const QoreIRNaturalLoop& loop,
             }
             if (inst->opcode == QoreIROpcode::PushTempMark && inst->temp_scope_id) {
                 marks.insert(inst->temp_scope_id);
+            } else if (inst->opcode == QoreIROpcode::PushTempMarkPair && inst->temp_scope_id) {
+                marks.insert(inst->temp_scope_id);
+                marks.insert(inst->unwind_inner_temp_scope_id);
             }
         }
     }
@@ -19717,29 +19720,112 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
                 return false;
         }
     };
-    // the statement writes the local after the read at pos in block, before the statement ends
-    auto written_later = [](const QoreIRBasicBlock* block, size_t pos, const LocalVar* local, uint32_t scope) {
-        const auto& insts = block->instructions;
-        for (size_t j = pos + 1; j < insts.size(); ++j) {
-            const QoreIRInstruction* next = insts[j].get();
-            if (qore_ir_get_written_local(next) == local) {
-                return true;
-            }
-            if (scope && (next->opcode == QoreIROpcode::DiscardTemps || next->opcode == QoreIROpcode::DiscardTempsKeep)
-                    && next->temp_scope_id == scope) {
-                return false;
+    // For each read of a local in a block, by position: whether the statement writes the local after the read, before
+    // the statement ends (the DiscardTemps of the read's temp scope); a read whose statement continues in another
+    // block is taken as written.  Computed for a block when a read in it is first asked about, by one backward scan
+    // that keeps the position of the next write of each local and of the next end of each temp scope, so the reads
+    // of a statement cost no more than the statement itself (qore#6515); the answers are those of a forward scan from
+    // each read.
+    std::unordered_map<const QoreIRBasicBlock*, std::vector<uint8_t>> written_after;
+    auto written_later = [&written_after](const QoreIRBasicBlock* block, size_t pos) -> bool {
+        auto [i, inserted] = written_after.try_emplace(block);
+        std::vector<uint8_t>& answers = i->second;
+        if (inserted) {
+            const auto& insts = block->instructions;
+            answers.assign(insts.size(), 1);
+            std::unordered_map<const LocalVar*, size_t> next_write;
+            std::unordered_map<uint32_t, size_t> next_end;
+            for (size_t j = insts.size(); j-- > 0;) {
+                const QoreIRInstruction* inst = insts[j].get();
+                if (inst->opcode == QoreIROpcode::LoadLocal) {
+                    const LocalVar* local = static_cast<const QoreIRLocalInstruction*>(inst)->local;
+                    const uint32_t scope = inst->temp_scope_id;
+                    auto w = next_write.find(local);
+                    if (w != next_write.end()) {
+                        // a write after the read: is it before the end of the statement?
+                        auto e = scope ? next_end.find(scope) : next_end.end();
+                        answers[j] = e == next_end.end() || w->second < e->second;
+                    } else {
+                        // no write after the read in the block: written only if the statement continues in another
+                        // block
+                        answers[j] = !scope || next_end.find(scope) == next_end.end();
+                    }
+                }
+                if (const LocalVar* written = qore_ir_get_written_local(inst)) {
+                    next_write[written] = j;
+                }
+                if ((inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep)
+                        && inst->temp_scope_id) {
+                    next_end[inst->temp_scope_id] = j;
+                }
             }
         }
-        // the statement continues in another block: assume a write
-        return true;
+        assert(pos < answers.size());
+        return answers[pos];
     };
-    // a value that the temporary holds whose release can be observed
-    std::function<bool(QoreIRValue, unsigned)> holds_observable = [&](QoreIRValue value, unsigned depth) -> bool {
+    // The results of holds_observable() by value id, so that a value that several containers hold is not walked once
+    // for each path to it (qore#6515), with the answers of the depth-limited walk: a value found to hold an observable
+    // value within the limit holds one at any depth; one that the depth limit decided (true) is kept as the least
+    // depth at which it was found, and holds for any visit at that depth or deeper, which has less depth left; one
+    // found to hold none (false, the limit not reached) is kept as the greatest depth at which it was found, and holds
+    // for any visit at that depth or shallower, which has more depth left - a deeper visit walks it again.  A value is
+    // so walked at most once for each depth.
+    enum : uint8_t { HoldsUnknown = 0, HoldsYes = 2 };
+    std::vector<int16_t> holds_no_depth(max_id + 1, -1);
+    // whether the function can create a reference to a local (QoreIRFunction::detectCreatesReference(), which walks
+    // the whole function): asked once, when a read of a local is first walked, not for each read (qore#6515)
+    enum : uint8_t { RefUnknown = 0, RefNo = 1, RefYes = 2 };
+    uint8_t creates_reference = RefUnknown;
+    std::vector<uint8_t> holds_result(max_id + 1, HoldsUnknown);
+    std::vector<uint8_t> holds_limit_depth(max_id + 1, UINT8_MAX);
+    // a value that the temporary holds whose release can be observed; limited is set if the depth limit decided it
+    std::function<bool(QoreIRValue, unsigned, bool&)> holds_observable_walk;
+    // the walk of a value that has no result yet; see holds_observable_walk
+    std::function<bool(const Def&, QoreIRValue, unsigned, bool&)> holds_observable_value;
+    auto holds_observable = [&](QoreIRValue value, unsigned depth) -> bool {
+        bool limited = false;
+        return holds_observable_walk(value, depth, limited);
+    };
+    holds_observable_walk = [&](QoreIRValue value, unsigned depth, bool& limited) -> bool {
         auto it = defs.find(value.id);
-        if (it == defs.end() || depth > 16) {
+        if (it == defs.end()) {
             return true;
         }
-        const QoreIRInstruction* def = it->second.inst;
+        if (depth > 16) {
+            limited = true;
+            return true;
+        }
+        assert(value.id <= max_id);
+        if (holds_result[value.id] == HoldsYes) {
+            return true;
+        }
+        if (static_cast<int>(depth) <= holds_no_depth[value.id]) {
+            return false;
+        }
+        if (depth >= holds_limit_depth[value.id]) {
+            limited = true;
+            return true;
+        }
+        bool walk_limited = false;
+        bool rv = holds_observable_value(it->second, value, depth, walk_limited);
+        if (walk_limited) {
+            // the depth limit decided it, which makes it true (see below)
+            assert(rv);
+            limited = true;
+            if (depth < holds_limit_depth[value.id]) {
+                holds_limit_depth[value.id] = static_cast<uint8_t>(depth);
+            }
+        } else {
+            if (rv) {
+                holds_result[value.id] = HoldsYes;
+            } else if (static_cast<int>(depth) > holds_no_depth[value.id]) {
+                holds_no_depth[value.id] = static_cast<int16_t>(depth);
+            }
+        }
+        return rv;
+    };
+    holds_observable_value = [&](const Def& d, QoreIRValue value, unsigned depth, bool& limited) -> bool {
+        const QoreIRInstruction* def = d.inst;
         if (def->opcode == QoreIROpcode::ConstInt || def->opcode == QoreIROpcode::ConstFloat
                 || def->opcode == QoreIROpcode::ConstBool || def->opcode == QoreIROpcode::ConstNothing
                 || def->opcode == QoreIROpcode::ConstNull || def->opcode == QoreIROpcode::ConstString
@@ -19762,14 +19848,18 @@ void qore_ir_find_observable_temp_call_args(const QoreIRFunction& func, std::vec
             const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
             // a read through a reference, or of a closure-bound or top-level local, lives until the end of the
             // statement; the value of a plain local that the statement does not write stays in the local
-            if (func.detectCreatesReference() || !qore_ir_is_plain_local_read(*load)) {
+            if (creates_reference == RefUnknown) {
+                creates_reference = func.detectCreatesReference() ? RefYes : RefNo;
+            }
+            if (creates_reference == RefYes || !qore_ir_is_plain_local_read(*load)) {
                 return false;
             }
-            return written_later(it->second.block, it->second.pos, load->local, def->temp_scope_id);
+            return written_later(d.block, d.pos);
         }
         if (is_temp_container(def)) {
+            // an operand that the depth limit decided gives true, so a result that it affected is true
             for (const QoreIRValue& operand : def->operands) {
-                if (operand.isValid() && holds_observable(operand, depth + 1)) {
+                if (operand.isValid() && holds_observable_walk(operand, depth + 1, limited)) {
                     return true;
                 }
             }

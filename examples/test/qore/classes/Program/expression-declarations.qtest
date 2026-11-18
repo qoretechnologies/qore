@@ -1,0 +1,59 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ExpressionDeclarationsTest
+
+#! Declarations in the code of an expression (issue #6524)
+/** The code of an expression is parsed as "return (<code>);", so code that closes the parenthesis and the statement
+    could declare functions, classes, constants and the like after the return statement: they stayed pending in the
+    Program, where later expressions found them, and its next commit committed them.  An expression adds no code to
+    its Program: a declaration in its code is a parse error, and nothing that the expression's parse added stays in the
+    Program.  The probes (expression-declarations/probes.q) declare each kind of declaration, also after comments,
+    strings and line breaks, and check that later expressions do not find them and that a later parse can declare the
+    same names; expression-declarations-modes.qtest runs them in each execution mode and in qcc executables.
+*/
+public class ExpressionDeclarationsTest inherits QUnit::Test {
+    private {
+        string dir = get_script_dir() + DirSep + "expression-declarations" + DirSep;
+    }
+
+    constructor() : QUnit::Test("ExpressionDeclarationsTest", "1.0", \ARGV) {
+        addTestCase("declarations in an expression", \declarationsTest());
+        addTestCase("a declaration in an expression leaves no pending code", \pendingTest());
+        set_return_value(main());
+    }
+
+    declarationsTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(ReadOnlyFile::readTextFile(dir + "probes.q"), "probes.q");
+        list<string> actual = p.callFunction("probes").split("\n");
+        string text = ReadOnlyFile::readTextFile(dir + "expected.txt");
+        # the file ends with a line break
+        text =~ s/\n$//;
+        list<string> expected = text.split("\n");
+        assertEq(expected.size(), actual.size());
+        foreach string line in (expected) {
+            assertEq(line, actual[$#]);
+        }
+    }
+
+    pendingTest() {
+        # a Program without PO_ALLOW_REPARSE, which can be parsed once: a failed expression does not use its parse,
+        # and the declarations in it are neither found by a later expression nor pending in its parse
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", "cannot be declared in the code of an expression",
+            sub () { new Expression(p, "1); int sub f() { return 7; } const X = (1", "decl"); });
+        assertThrows("PARSE-EXCEPTION", sub () { new Expression(p, "f() + X", "later"); });
+        # the Program accepts the same declarations in its own code, which is committed without them
+        p.parse("int sub f() { return 7; } const X = 1; int sub g() { return 2; }", "f");
+        assertEq(2, p.callFunction("g"));
+        assertEq(8, new Expression(p, "f() + X", "later").eval());
+    }
+}

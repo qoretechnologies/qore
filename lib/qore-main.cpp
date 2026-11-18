@@ -549,6 +549,17 @@ void qore_cleanup() {
     }
 #endif
 
+    // the declarations and derived types retired and not freed yet, which the library cleanup frees (issue #6419)
+    if (q_env_is_set("QORE_DEBUG_TYPE_RETIREMENT")) {
+        QoreTypeRetirementInfo info;
+        qore_type_retirement_info(info);
+        fprintf(stderr, "[TYPE-RETIREMENT] epoch %llu: pending declarations: %zu (freeable: %zu), pending derived types: "
+            "%zu (freeable: %zu), oldest pending epoch: %llu, lowest epoch of the threads in Qore code: %llu\n",
+            (unsigned long long)info.epoch, info.pending_declarations, info.freeable_declarations,
+            info.pending_derived_types, info.freeable_derived_types, (unsigned long long)info.oldest_pending_epoch,
+            (unsigned long long)info.min_active_epoch);
+    }
+
     // delete default type values
     delete_qore_types();
     // Qore values released from here on are released after their types (see qore_ns_private::~qore_ns_private())

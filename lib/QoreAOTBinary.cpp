@@ -752,6 +752,54 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
             || !put_list(info.appended_module_paths, "appended module path")) {
         return false;
     }
+    // the restrictions that the module's directives give its dependencies (qore#6406): a count, then each module's
+    // name, the low and high words of its restrictions and its QMDR_* flags (qore#6386)
+    if (info.dependency_restrictions.size() > QORE_AOT_MODULE_INFO_MAX_COUNT) {
+        error = "too many module dependency restrictions (" + std::to_string(info.dependency_restrictions.size())
+            + ") for the AOT module metadata";
+        return false;
+    }
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 4) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(info.dependency_restrictions.size()));
+    for (const auto& i : info.dependency_restrictions) {
+        if (!put_string(i.module, "module dependency restriction")) {
+            return false;
+        }
+        if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 20) {
+            error = "the AOT module metadata exceeds the maximum size of "
+                + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+            return false;
+        }
+        for (uint64_t w : {static_cast<uint64_t>(i.options.getLo()), static_cast<uint64_t>(i.options.getHi())}) {
+            moduleInfoPut32(payload, static_cast<uint32_t>(w));
+            moduleInfoPut32(payload, static_cast<uint32_t>(w >> 32));
+        }
+        moduleInfoPut32(payload, i.flags);
+    }
+    // the declared domains (version 4): a u64 as two u32, low word first
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains)));
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.declared_domains) >> 32));
+    // the dependencies required only after the header (version 4)
+    if (!put_list(info.post_header_dependencies, "dependency required after the module header")) {
+        return false;
+    }
+    // the domains that the module's code restricts (version 4): a u64 as two u32, low word first
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 8) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains)));
+    moduleInfoPut32(payload, static_cast<uint32_t>(static_cast<uint64_t>(info.restricted_domains) >> 32));
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
@@ -863,6 +911,56 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
     if (!get_list(info.prepended_module_paths) || !get_list(info.appended_module_paths)) {
         return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid module path list")
             : cancel_error);
+    }
+    {
+        // each entry needs a four-byte length, one byte of name, sixteen bytes of options and four of flags
+        uint32_t count = 0;
+        if (!get32(count) || count > QORE_AOT_MODULE_INFO_MAX_COUNT || count > (size - pos) / 25) {
+            return fail(moduleInfoDamaged("the record has an invalid list of dependency restrictions"));
+        }
+        info.dependency_restrictions.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            std::string name;
+            uint32_t w[4];
+            uint32_t flags = 0;
+            if (!get_string(name) || !get32(w[0]) || !get32(w[1]) || !get32(w[2]) || !get32(w[3]) || !get32(flags)
+                    || (flags & ~QMDR_ALL_FLAGS)) {
+                return fail(moduleInfoDamaged("the record has an invalid list of dependency restrictions"));
+            }
+            // only the options that qcc writes (see qore_program_private::parse_module_restrictions): a damaged
+            // record cannot relieve the restrictions of a dependency or give it other options
+            info.dependency_restrictions.emplace_back(std::move(name), QoreParseOptions(
+                static_cast<int64>(static_cast<uint64_t>(w[0]) | (static_cast<uint64_t>(w[1]) << 32)),
+                static_cast<int64>(static_cast<uint64_t>(w[2]) | (static_cast<uint64_t>(w[3]) << 32)))
+                & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions::FREE_OPTIONS
+                & ~QoreParseOptions(PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG), flags);
+        }
+    }
+    {
+        uint32_t lo = 0, hi = 0;
+        if (!get32(lo) || !get32(hi)) {
+            return fail(moduleInfoDamaged("the record has no declared domains"));
+        }
+        info.declared_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+        // only functional domains: a damaged record cannot relieve another restriction of a dependency
+        if (info.declared_domains & ~static_cast<int64>(QDOM_ALL)) {
+            return fail(moduleInfoDamaged("the record declares unknown functional domain bits"));
+        }
+    }
+    if (!get_list(info.post_header_dependencies)) {
+        return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid list of the dependencies "
+            "required after the module header") : cancel_error);
+    }
+    {
+        uint32_t lo = 0, hi = 0;
+        if (!get32(lo) || !get32(hi)) {
+            return fail(moduleInfoDamaged("the record has no restricted domains"));
+        }
+        info.restricted_domains = static_cast<int64>((static_cast<uint64_t>(hi) << 32) | lo);
+        // only functional domains, as qcc writes them
+        if (info.restricted_domains & ~static_cast<int64>(QDOM_ALL)) {
+            return fail(moduleInfoDamaged("the record restricts unknown functional domain bits"));
+        }
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "
@@ -15849,7 +15947,14 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
             return false;
         }
         for (auto& block : func.blocks) {
-            if (!checkCount(block->instructions.size(), u16_max, "instructions in a basic block")) {
+            // a PushTempMarkPair is written as two instructions (see below)
+            size_t inst_count = block->instructions.size();
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                    ++inst_count;
+                }
+            }
+            if (!checkCount(inst_count, u16_max, "instructions in a basic block")) {
                 return false;
             }
             for (auto& inst_ptr : block->instructions) {
@@ -16024,10 +16129,28 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
         writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
             | (static_cast<uint8_t>(block->loop_cancel) << 1)));
-        writer.writeU16(static_cast<uint16_t>(block->instructions.size()));
+        // a PushTempMarkPair is written as the two PushTempMark instructions that it stands for (qore#6444)
+        size_t inst_count = block->instructions.size();
+        for (const auto& inst_ptr : block->instructions) {
+            if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                ++inst_count;
+            }
+        }
+        writer.writeU16(static_cast<uint16_t>(inst_count));
 
         for (size_t inst_idx = 0; inst_idx < block->instructions.size(); ++inst_idx) {
             auto& inst_ptr = block->instructions[inst_idx];
+            if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                // the outer mark has the location that the pair has, as the statement's mark had it
+                QoreIRInstruction mark(QoreIROpcode::PushTempMark);
+                mark.loc = inst_ptr->loc;
+                QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
+                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr)
+                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr)) {
+                    return false;
+                }
+                continue;
+            }
             uint32_t inst_start = writer.position();
             QoreIRInstGroup group = classifyInstruction(inst_ptr.get());
             if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");
@@ -22454,21 +22577,24 @@ bool readFunctionalDomain(const QoreAOTBinaryReader& reader, QoreParseOptions& d
     return true;
 }
 
-void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header) {
+void serializeTimeZone(QoreAOTBinaryWriter& writer, const std::string& zone, bool after_module_header,
+        bool trusted_only) {
     if (zone.empty()) {
         return;
     }
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::TIME_ZONE);
     writer.writeStringRef(zone.c_str());
-    // 1 if the directive follows the header of a user module (qore#6270)
-    writer.writeU8(after_module_header ? 1 : 0);
+    // flags: 1 if the directive follows the header of a module (qore#6270), 2 if it applies only to a load of the
+    // module as library code (qore#6352)
+    writer.writeU8((after_module_header ? 1 : 0) | (trusted_only ? 2 : 0));
     writer.endSection(sec_idx);
 }
 
 bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& after_module_header,
-        std::string& error) {
+        bool& trusted_only, std::string& error) {
     zone.clear();
     after_module_header = false;
+    trusted_only = false;
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::TIME_ZONE);
     if (!sec) {
         return true;
@@ -22484,7 +22610,13 @@ bool readTimeZone(const QoreAOTBinaryReader& reader, std::string& zone, bool& af
         return false;
     }
     zone = z;
-    after_module_header = QoreAOTBinaryReader::readU8(ptr) != 0;
+    uint8_t flags = QoreAOTBinaryReader::readU8(ptr);
+    if (flags & ~3u) {
+        error = "invalid TIME_ZONE section: unknown flags";
+        return false;
+    }
+    after_module_header = flags & 1;
+    trusted_only = flags & 2;
     return true;
 }
 

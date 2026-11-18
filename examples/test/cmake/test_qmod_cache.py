@@ -82,9 +82,14 @@ def sign_build(cache, build, key_path, env=None):
                           input=key_path + "\n", capture_output=True, text=True, timeout=120, env=full)
 
 
-def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append=(), version=2):
-    """An AOT module metadata record (version 2): with @p compiled_with, the module names of the module's compile-time
-    closure, and its own module path directives; @p version 1 writes the earlier layout, without them"""
+def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append=(), restrictions=(), version=4,
+                domains=0, post_header=(), restricted=0):
+    """An AOT module metadata record (version 4): with @p compiled_with, the module names of the module's compile-time
+    closure, its own module path directives, the parse options that its directives gave its dependencies
+    (@p restrictions: (name, lo, hi) tuples, written with no flags, or (name, lo, hi, flags) tuples), the functional
+    domains it declares, the dependencies it requires only after its header and the functional domains its code
+    restricts; @p version 3 writes the layout without the version 4 fields, @p version 2 the one without the parse
+    options either, @p version 1 the earlier layout, without the closure and the paths either"""
     def s(v):
         b = v.encode()
         return struct.pack("<I", len(b)) + b
@@ -93,6 +98,14 @@ def qami_record(name, deps=(), optional=(), compiled_with=(), prepend=(), append
     payload = s(name) + lst(deps) + lst(optional)
     if version != 1:
         payload += lst(compiled_with) + lst(prepend) + lst(append)
+    if version not in (1, 2):
+        payload += struct.pack("<I", len(restrictions)) + b"".join(
+            s(r[0]) + struct.pack("<IIIII", r[1] & 0xffffffff, r[1] >> 32, r[2] & 0xffffffff, r[2] >> 32,
+                                  r[3] if len(r) > 3 else 0)
+            for r in restrictions)
+    if version not in (1, 2, 3):
+        payload += struct.pack("<II", domains & 0xffffffff, domains >> 32) + lst(post_header) \
+            + struct.pack("<II", restricted & 0xffffffff, restricted >> 32)
     return b"QAMI" + struct.pack("<II", version, len(payload)) + payload
 
 
@@ -154,16 +167,21 @@ class ModuleInfoTest(unittest.TestCase):
                          (info.dependencies, info.optional, info.compiled_with))
 
     def test_other_versions(self):
-        """Only version 2 records are read: a module with a record of version 1 (before the closure was recorded) or
-        of a later version is refused, saying which version it has"""
-        for version in (1, 3):
+        """Only version 4 records are read: a module with a record of an earlier version (version 1, before the
+        closure was recorded, version 2, before the options of its directives were, or version 3, before the declared
+        domains were) or of a later version is refused, saying which version it has"""
+        for version in (1, 2, 3, 5):
             with self.assertRaisesRegex(qc.CacheError, "metadata record of version %d" % version):
                 qc.read_module_info(self.write(qami_record("M", ["Util"], version=version)), "M")
 
-    def test_record_v2(self):
+    def test_record_v2_v3_v4(self):
         """Version 2 adds the names of every module of the compile-time closure (re-exported ones too) and the
-        module's own module path directives"""
-        p = self.write(b"junk" + qami_record("M", ["Util"], ["xml"], ["Util", "Base", "Re"], ["/p1", "/p2"], ["/a"])
+        module's own module path directives; version 3 the parse options that the module's directives gave its
+        dependencies, with their flags; version 4 the functional domains that the module declares, the dependencies it
+        requires only after its header and the functional domains its code restricts"""
+        p = self.write(b"junk" + qami_record("M", ["Util"], ["xml"], ["Util", "Base", "Re"], ["/p1", "/p2"], ["/a"],
+                                             domains=0x1000000, post_header=["Util"], restricted=0x20,
+                                             restrictions=[("Util", 0x1000000000, 0x2), ("Pre", 0x4, 0, 1)])
                        + b"tail")
         info = qc.read_module_info(p, "M")
         self.assertEqual(["Util"], info.dependencies)
@@ -171,11 +189,30 @@ class ModuleInfoTest(unittest.TestCase):
         self.assertEqual(["Util", "Base", "Re"], info.compiled_with)
         self.assertEqual(["/p1", "/p2"], info.prepend_paths)
         self.assertEqual(["/a"], info.append_paths)
+        self.assertEqual([("Util", (0, 0x10, 2, 0), 0), ("Pre", (4, 0, 0, 0), 1)], info.dependency_restrictions)
+        self.assertEqual(0x1000000, info.declared_domains)
+        self.assertEqual(["Util"], info.post_header_dependencies)
+        self.assertEqual(0x20, info.restricted_domains)
         info = qc.read_module_info(self.write(qami_record("M")), "M")
-        self.assertEqual(([], [], []), (info.compiled_with, info.prepend_paths, info.append_paths))
-        # a version 2 record must hold all six fields, and nothing after them
+        self.assertEqual(([], [], [], [], 0, [], 0), (info.compiled_with, info.prepend_paths, info.append_paths,
+                                                     info.dependency_restrictions, info.declared_domains,
+                                                     info.post_header_dependencies, info.restricted_domains))
+        # version 3 adds the parse options that the module's directives gave its dependencies
+        info = qc.read_module_info(self.write(qami_record("M", ["Util"], compiled_with=["Util"],
+                                                          restrictions=[("Util", 1 << 40 | 2, 0)])), "M")
+        self.assertEqual(["Util"], info.dependencies)
+        self.assertEqual([("Util", (2, 1 << 8, 0, 0), 0)], info.dependency_restrictions)
+        rec = bytearray(qami_record("M", restrictions=[("Util", 0, 0)]))
+        short = rec[:-1]
+        struct.pack_into("<I", short, 8, len(short) - 12)
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(short)), "M")
+        # a flag that the record format does not define makes it invalid
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(qami_record("M", restrictions=[("Util", 0, 0, 4)])), "M")
+        # a version 4 record must hold all ten fields, and nothing after them
         rec = bytearray(qami_record("M", compiled_with=["A"]))
-        short = rec[:-4]
+        short = rec[:-8]
         struct.pack_into("<I", short, 8, len(short) - 12)
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(short)), "M")
@@ -185,11 +222,29 @@ class ModuleInfoTest(unittest.TestCase):
             qc.read_module_info(self.write(bytes(longer)), "M")
         v1 = qami_record("M", ["Util"], version=1)
         rec = bytearray(v1)
-        rec[4] = 2
+        rec[4] = 3
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(rec)), "M")
         rec = bytearray(qami_record("M", compiled_with=["A"]))
-        rec[4] = 3
+        rec[4] = 5
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(rec)), "M")
+        # a version 2 record labelled version 4 has neither the version 3 nor the version 4 fields, a version 3 record
+        # labelled version 4 has no version 4 fields
+        for version in (2, 3):
+            rec = bytearray(qami_record("M", compiled_with=["A"], version=version))
+            rec[4] = 4
+            with self.assertRaises(qc.CacheError, msg=version):
+                qc.read_module_info(self.write(bytes(rec)), "M")
+        # a restriction entry that is cut short, and a count of restrictions that the record cannot hold
+        rec = bytearray(qami_record("M", restrictions=[("A", 1, 2)]))
+        name_end = 12 + 4 + 1 + 5 * 4 + 4 + 4 + 1
+        short = rec[:name_end + 8] + rec[name_end + 16:]
+        struct.pack_into("<I", short, 8, len(short) - 12)
+        with self.assertRaises(qc.CacheError):
+            qc.read_module_info(self.write(bytes(short)), "M")
+        rec = bytearray(qami_record("M"))
+        struct.pack_into("<I", rec, 12 + 4 + 1 + 5 * 4, 65537)
         with self.assertRaises(qc.CacheError):
             qc.read_module_info(self.write(bytes(rec)), "M")
 
@@ -893,7 +948,7 @@ def s(v):
     return struct.pack("<I", len(b)) + b
 payload = s(out.stem) + struct.pack("<I", len(required)) + b"".join(s(r) for r in required) \
     + struct.pack("<I", len(optional)) + b"".join(s(o) for o in optional)
-qami_version = 2
+qami_version = 4
 # a qcc before version 2 of the record (qami-v1.txt), which wrote no closure
 if (here / "qami-v1.txt").exists():
     qami_version = 1
@@ -913,6 +968,9 @@ else:
     # a module path directive (qami-paths.txt): the module's own %prepend-module-path, compiled in
     paths = [str(here / "elsewhere")] if (here / "qami-paths.txt").exists() else []
     payload += struct.pack("<I", len(paths)) + b"".join(s(x) for x in paths) + struct.pack("<I", 0)
+    # the restrictions that its directives gave its dependencies (version 3), the declared domains, the dependencies
+    # required after the header and the restricted domains (version 4)
+    payload += struct.pack("<I", 0) + struct.pack("<Q", 0) + struct.pack("<I", 0) + struct.pack("<Q", 0)
 digest = hashlib.sha256(text.encode() + b"".join(p.read_bytes() for p in deps)).hexdigest()
 noise = str(time.time()) if (here / "nondeterministic.txt").exists() else ""
 tmp = out.with_name(out.name + ".tmp")
@@ -1277,7 +1335,7 @@ QORE_FINALIZE_USER_MODULE_DEPENDENCIES()
         entry_path.write_text(json.dumps(entry))
         self.assertEqual(["Base"], self.build_all())
         self.assertRegex(self.output, r"stored module: module '[^']*' has a metadata record of version 1; the cache "
-                                      r"uses only version 2")
+                                      r"uses only version 4")
 
     def test_module_path_in_v2_metadata_is_not_stored(self):
         """A module whose metadata records module path directives of its own is not stored"""
@@ -2287,7 +2345,7 @@ def qmod_metadata_version(build_dir):
         while pos >= 0:
             if pos + 12 <= len(data):
                 version, size = struct.unpack_from("<II", data, pos + 4)
-                if pos + 12 + size <= len(data) and version in (1, 2):
+                if pos + 12 + size <= len(data) and version in (1, 2, 3, 4):
                     return version
             pos = data.find(b"QAMI", pos + 1)
     return None
@@ -2301,11 +2359,11 @@ class RealQccTest(unittest.TestCase):
         if not self.qore_build:
             self.skipTest("QORE_TEST_BUILD_DIR must name a Qore build tree with qcc and qore")
         version = qmod_metadata_version(self.qore_build)
-        if version != 2:
-            # the cache uses only modules with version 2 records; a build of this branch alone (before
-            # fix/qmod-staleness-gaps, whose qcc writes them) has none, and every module is uncacheable
-            self.skipTest("the qcc of %s writes AOT module metadata of version %s; the cache needs version 2"
-                          % (self.qore_build, version))
+        if version != qc.QAMI_VERSION:
+            # the cache uses only modules with records of its version; a build of a qcc that writes another version
+            # has none, and every module is uncacheable
+            self.skipTest("the qcc of %s writes AOT module metadata of version %s; the cache needs version %d"
+                          % (self.qore_build, version, qc.QAMI_VERSION))
         if not shutil.which(CMAKE):
             self.skipTest("CMake is required")
         d = tempfile.TemporaryDirectory(prefix="qore-qmod-cache-real-")

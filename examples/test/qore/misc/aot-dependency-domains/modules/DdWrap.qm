@@ -1,0 +1,19 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that requires a module that uses locale control; DdTry requests it
+# with %try-module after its header (qore#6351)
+
+%modern
+
+module DdWrap {
+    version = "1.0";
+    desc = "a module that requires another";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+%requires DdInner
+
+public namespace DdWrap {
+}

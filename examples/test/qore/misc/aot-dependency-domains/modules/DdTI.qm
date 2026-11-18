@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain, requires DdPreChild
+# before its header through an included file, whose initialization loads the inner module first, and requests DdWrap,
+# which requires the inner module, with %try-module after its header, which qcc loads before the parse: the inner
+# module is loaded with the restriction (qore#6351)
+
+%modern
+%include DdTI.inc
+
+module DdTI {
+    version = "1.0";
+    desc = "a module whose dependency is loaded before its header outside its dependencies";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%try-module DdWrap
+%define NO_DD_WRAP
+%endtry
+%requires DdInner
+
+public namespace DdTI {
+    public string sub run() {
+        return DdInner::run();
+    }
+}
