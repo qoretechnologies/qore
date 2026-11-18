@@ -713,7 +713,10 @@ public:
     DLLLOCAL int resolveTypes();
 
     DLLLOCAL virtual void addAbstractParameterSignature(std::string& str) const {
-        if (resolved) {
+        // a signature read from an AOT image has its parameter types and no parse types before it is resolved: its
+        // abstract signature is made from its types, so that the variants of a method are told apart when they are
+        // added to their class (issue #6161)
+        if (resolved || parseTypeList.size() < typeList.size()) {
             AbstractFunctionSignature::addAbstractParameterSignature(str);
             return;
         }

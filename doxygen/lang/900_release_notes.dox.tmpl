@@ -2574,6 +2574,10 @@
     - a call through \c self of an @ref abstract "abstract method" that another parent class implements raised
       \c RUNTIME-OVERLOAD-ERROR instead of calling the implementation, except in programs compiled with qcc
       (<a href="https://github.com/qoretechnologies/qore/issues/3070">issue 3070</a>)
+    - a call of an @ref abstract "abstract method" variant that another parent class implements raised
+      \c RUNTIME-OVERLOAD-ERROR when the class that declares the variant also has a concrete variant of the method,
+      as did a call of that concrete variant whose variant is resolved at run time
+      (<a href="https://github.com/qoretechnologies/qore/issues/6161">issue 6161</a>)
     - a method call whose arguments deleted the object ran the method on the deleted object in the AST interpreter
       and raised \c OBJECT-ALREADY-DELETED without the class of the method in the compiled modes; it now raises
       \c OBJECT-ALREADY-DELETED naming the method (<tt>cannot call C::m()</tt>) in every mode

@@ -1046,6 +1046,9 @@ void AbstractMethodMap::parseInit(qore_class_private& qc, BCList* scl) {
                 if (!m) {
                     m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
                     qc.hm[m->getName()] = m;
+                    // the method of the class also has the variants that the parent classes define: the concrete
+                    // variants of the class that declares the abstract variant are found through it (issue #6161)
+                    scl->parseAddAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
@@ -1097,6 +1100,9 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
                 if (!m) {
                     m = new QoreMethod(qc.cls, new NormalUserMethod(qc.cls, i->first.c_str()), false);
                     qc.hm[m->getName()] = m;
+                    // the method of the class also has the variants that the parent classes define: the concrete
+                    // variants of the class that declares the abstract variant are found through it (issue #6161)
+                    scl->addAncestors(m);
                 }
                 qore_method_private::get(*m)->getFunction()->replaceAbstractVariant(v);
                 continue;
