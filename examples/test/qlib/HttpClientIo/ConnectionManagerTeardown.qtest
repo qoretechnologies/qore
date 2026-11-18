@@ -61,15 +61,17 @@ class ConnectionManagerTeardownTest inherits QUnit::Test {
         qore_bin = TestInterpreter::qore_interpreter();
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         foreach string mode in (ExecModes) {
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
             foreach hash<auto> i in (Cases.pairIterator()) {
                 string name = i.key;
                 string expected = i.value;
                 addTestCase(sprintf("%s: %s: no Program is left after the cleanup", mode, name), sub () {
-                    runCase(mode, name, expected, "h1");
+                    runCase(mode_value, name, expected, "h1");
                 });
             }
             addTestCase(sprintf("%s: auto protocol through an unconnectable proxy (issue #6286)", mode), sub () {
-                runCase(mode, "proxy", "HTTPCLIENT-CONNECT-ERROR", "auto");
+                runCase(mode_value, "proxy", "HTTPCLIENT-CONNECT-ERROR", "auto");
             });
         }
         set_return_value(main());
