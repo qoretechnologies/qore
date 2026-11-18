@@ -4876,6 +4876,15 @@ public:
         referenced
     */
     bool collectHandlerLocals(std::unordered_set<const void*>& locals) const;
+
+    //! Collects the locals that the handler of an on_exit, on_error or on_success instruction references
+    /** its statements and its IR, as collectHandlerLocals() does for every handler of a function
+
+        @return false if the handler has code whose locals cannot be collected, in which case any local can be
+        referenced
+    */
+    static bool collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
+        std::unordered_set<const void*>& locals);
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the
