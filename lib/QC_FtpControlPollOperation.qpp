@@ -55,12 +55,35 @@ static QoreSocketObject* ftp_ctrl_ref_sock(QoreSocketObject* sock) {
     return sock;
 }
 
+// takes a reference to the object of the "sock" member of the operation's object, which the state keeps as long as it
+// lives: the deletion of the operation's object, which releases the member, does not destroy the socket object, whose
+// destructor closes the socket through the async I/O controller and so waits for the I/O thread that runs a step of
+// the operation (#6505)
+static QoreObject* ftp_ctrl_keep_sock_object(QoreObject* self) {
+    if (!self) {
+        return nullptr;
+    }
+    ExceptionSink xsink;
+    ValueHolder v(self->getReferencedMemberNoMethod("sock", &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    if (v->getType() != NT_OBJECT) {
+        return nullptr;
+    }
+    QoreObject* obj = v->get<QoreObject>();
+    obj->ref();
+    return obj;
+}
+
 FtpControlPollOperationPriv::FtpControlPollOperationPriv(QoreObject* self,
         QoreSocketObject* ctrl_sock, SocketPollOperationBase* connect_op,
         bool secure, bool secure_data,
         const char* user, const char* pass)
     : SocketPollOperationBase(self),
       ctrl_sock(ftp_ctrl_ref_sock(ctrl_sock)),
+      sock_obj(ftp_ctrl_keep_sock_object(self)),
       current_op(connect_op),
       secure(secure),
       secure_data(secure_data),
@@ -84,6 +107,11 @@ void FtpControlPollOperationPriv::deref(ExceptionSink* xsink) {
         if (current_op) {
             current_op->deref(xsink);
             current_op = nullptr;
+        }
+        // the socket object, released with the state (see ftp_ctrl_keep_sock_object())
+        if (sock_obj) {
+            sock_obj->deref(xsink);
+            sock_obj = nullptr;
         }
         // the reference to the control socket that this state holds (see ftp_ctrl_ref_sock())
         if (ctrl_sock) {
@@ -903,6 +931,7 @@ FtpPortAcceptPollOperationPriv::FtpPortAcceptPollOperationPriv(QoreObject* self,
     : SocketPollOperationBase(self),
       current_op(accept_op),
       listener(ftp_ctrl_ref_sock(listener)),
+      sock_obj(ftp_ctrl_keep_sock_object(self)),
       client_sock_obj(nullptr, nullptr),
       secure_data(secure_data) {
 }
@@ -933,6 +962,11 @@ void FtpPortAcceptPollOperationPriv::deref(ExceptionSink* xsink) {
         if (accept_obj) {
             accept_obj->deref(xsink);
             accept_obj = nullptr;
+        }
+        // the socket object, released with the state (see ftp_ctrl_keep_sock_object())
+        if (sock_obj) {
+            sock_obj->deref(xsink);
+            sock_obj = nullptr;
         }
         // the reference to the listener that this state holds (see ftp_ctrl_ref_sock())
         if (listener) {

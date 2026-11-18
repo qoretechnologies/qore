@@ -151,6 +151,8 @@ protected:
 
 private:
     QoreSocketObject* ctrl_sock;                    //!< control socket (ref'd)
+    //! the object of the "sock" member of the operation's object (ref'd), kept with the state (#6505)
+    QoreObject* sock_obj;
     SocketPollOperationBase* current_op = nullptr;  //!< current inner operation (ref'd)
 
     FtpCtrlState ctrl_state = FtpCtrlState::CONNECTING;
@@ -272,6 +274,8 @@ private:
     //! operation's steps read: the object is kept as long as this state, which is released off the I/O threads (#6525)
     QoreObject* accept_obj = nullptr;
     QoreSocketObject* listener = nullptr;          //!< listener socket (ref'd)
+    //! the object of the "sock" member of the operation's object (ref'd), kept with the state (#6505)
+    QoreObject* sock_obj = nullptr;
     QoreSocketObject* client_sock = nullptr;       //!< accepted client socket (ref'd)
     mutable ReferenceHolder<QoreObject> client_sock_obj;  //!< QoreObject wrapper (ref'd)
     AcceptState state = AcceptState::ACCEPTING;
