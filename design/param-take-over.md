@@ -244,7 +244,8 @@ a method that writes the referenced variable and its parameter destroys the obje
 interpreter.  Whether the call gives an argument is decided when it is made: such a call has
 `QORE_IR_GIVES_CALL_REFERENCE_READS` rather than `QORE_IR_GIVES_CALL_ARGS`, and looks for an argument to give
 (`hasConsumedCallArgs()`) only once a frame has read a value through a reference (`qore_ir_reference_read_seen`, a
-process-wide hint that costs the frames no store, `qore_ir_call_may_give()`).  Native code makes a call that may give such a read in both forms and makes the call that
+process-wide hint set by `qore_local_reference_eval()`, which costs the frames and the interpreter's loop no
+code), tested in `hasConsumedCallArgs()` so that the code of the calls in the interpreter's loop is as before.  Native code makes a call that may give such a read in both forms and makes the call that
 gives nothing when no slot holds its value (`emitGivenOrPlainCall()`, also for method calls), and releases a slot after
 the call only if it holds the value, tested inline.  A typed variable is never assigned a reference.
 
