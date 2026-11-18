@@ -132,7 +132,8 @@
     A response body that is not valid in its encoding is given in ISO-8859-1 with its bytes when it is HTML or other
     text, as a page's declared charset is often wrong, and fails with \c INVALID-ENCODING when it is JSON, YAML, XML or
     another structured type, with @ref Qore::HTTPClient "HTTPClient", also for an error status, which raised
-    \c HTTP-CLIENT-RECEIVE-ERROR (issue #6554).
+    \c HTTP-CLIENT-RECEIVE-ERROR; a response header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110
+    obs-text (issue #6554).
 
     @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
     A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)

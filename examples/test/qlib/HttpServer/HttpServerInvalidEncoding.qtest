@@ -109,7 +109,7 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         hash<auto> response = rawRequest(port, binary_to_string(binary("GET /a HTTP/1.1\r\nHost: localhost\r\nX-")
             + <c0af> + binary(": 1\r\n\r\n"), "ISO-8859-1"));
         assertEq(400, response.hdr.status_code);
-        assertRegex("a header name of [0-9]+ bytes is not valid text", response.body);
+        assertRegex("a header name of the request is not a token", response.body);
         assertTrue(response.closed);
         assertEq(0, handler.calls);
     }

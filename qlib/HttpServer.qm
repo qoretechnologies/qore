@@ -7637,40 +7637,27 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
     #! Checks the request head before the request is processed, for every HTTP version (qore#6554)
     /** Text from outside the server is checked where it enters it, before any handler or regular expression processes
-        it: the request target (decodeRequestPath()), the method, the HTTP version and the header names must be valid
-        text; a request that is not valid is answered with 400 by handleRequest() (\c cx."request-head-error").  A
-        header value that is not valid UTF-8 is obs-text (RFC 9110 section 5.5): it is given in ISO-8859-1, its bytes
-        unchanged.
+        it: the request target (decodeRequestPath()), the method and the HTTP version must be valid text, and the
+        header names tokens (the socket flags a name with a byte above 0x7f in \a header_info); a request that is not
+        valid is answered with 400 by handleRequest() (\c cx."request-head-error").  A header value that is not valid
+        UTF-8 is obs-text (RFC 9110 section 5.5), which the socket gives in ISO-8859-1 with its bytes unchanged.
     */
-    private setupRequestHead(reference<hash<auto>> hdr, reference<hash<auto>> cx) {
+    private setupRequestHead(reference<hash<auto>> hdr, reference<hash<auto>> cx, *hash<auto> header_info) {
         cx.raw_path = hdr.path;
         *string err;
         hdr.path = decodeRequestPath(hdr.path, \err);
-        foreach hash<auto> i in (hdr.pairIterator()) {
-            if (!i.key.isEncodingValid()) {
+        foreach string key in ("method", "http_version") {
+            if (hdr{key}.typeCode() == NT_STRING && !hdr{key}.isEncodingValid()) {
                 if (!err) {
-                    err = sprintf("a header name of %d bytes is not valid text", i.key.size());
+                    err = sprintf("the %s of the request is not valid text", key);
                 }
-                continue;
+                # the value is given in ISO-8859-1, so that the code that runs before the request is answered (ex:
+                # the log of the request) can process it
+                hdr{key} = force_encoding(hdr{key}, "ISO-8859-1");
             }
-            switch (i.value.typeCode()) {
-                case NT_STRING:
-                    if (!i.value.isEncodingValid()) {
-                        if (i.key == "method" || i.key == "http_version" || i.key == "path") {
-                            if (!err) {
-                                err = sprintf("the %s of the request is not valid text", i.key);
-                            }
-                        }
-                        # the value is given in ISO-8859-1, so that the code that runs before the request is answered
-                        # (ex: the log of the request) can process it
-                        hdr{i.key} = force_encoding(i.value, "ISO-8859-1");
-                    }
-                    break;
-                case NT_LIST:
-                    # a header given more than once
-                    hdr{i.key} = HttpListener::obsText(i.value);
-                    break;
-            }
+        }
+        if (!err && header_info."invalid-field-name") {
+            err = "a header name of the request is not a token";
         }
         if (err) {
             cx."request-head-error" = err;
@@ -7760,7 +7747,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # Process path: decode URL-encoded characters in the resource path only
-        setupRequestHead(\hdr, \cx);
+        setupRequestHead(\hdr, \cx, header_info);
         cx += {
             "orig_path": hdr.path,
             "masked_path": maskRequestPath(cx.raw_path),
@@ -8696,7 +8683,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 request_helper.log_info = isLogInfoEnabled();
 
                 # Context setup — mirrors processNativeRequest()
-                setupRequestHead(\req_hdr, \cx);
+                setupRequestHead(\req_hdr, \cx, conn_info.header_info);
                 cx += {
                     "orig_path": req_hdr.path,
                     "masked_path": maskRequestPath(cx.raw_path),
@@ -8921,7 +8908,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             cx = cx_listener;
             # whether the request's INFO messages are logged is decided for each request
             request_helper.log_info = isLogInfoEnabled();
-            setupRequestHead(\req_hdr, \cx);
+            setupRequestHead(\req_hdr, \cx, conn_info.header_info);
             cx += {
                 "orig_path": req_hdr.path,
                 "masked_path": maskRequestPath(cx.raw_path),
@@ -9418,25 +9405,14 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         self.logger = logger;
     }
 
-    #! Returns True if the request head is valid text that needs no change (see HttpListener::setupRequestHead())
-    private static bool inlineHeadValid(hash<auto> hdr) {
-        foreach hash<auto> i in (hdr.pairIterator()) {
-            if (!i.key.isEncodingValid()) {
+    #! Returns True if the request head is valid text (see HttpListener::setupRequestHead())
+    private static bool inlineHeadValid(hash<auto> hdr, *hash<auto> header_info) {
+        if (header_info."invalid-field-name") {
+            return False;
+        }
+        foreach string key in ("method", "http_version", "path") {
+            if (hdr{key}.typeCode() == NT_STRING && !hdr{key}.isEncodingValid()) {
                 return False;
-            }
-            switch (i.value.typeCode()) {
-                case NT_STRING:
-                    if (!i.value.isEncodingValid()) {
-                        return False;
-                    }
-                    break;
-                case NT_LIST:
-                    foreach auto v in (i.value) {
-                        if (v.typeCode() == NT_STRING && !v.isEncodingValid()) {
-                            return False;
-                        }
-                    }
-                    break;
             }
         }
         # the path and the query must decode to valid text
@@ -9477,9 +9453,9 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         if (info.hdr."content-length" || info.hdr."transfer-encoding") {
             return NOTHING;
         }
-        # the inline path gives the request head to the handler as it is: a head that is not valid text, or that needs
-        # a change (a header value in ISO-8859-1), takes the full path, which answers or changes it (qore#6554)
-        if (!inlineHeadValid(info.hdr)) {
+        # the inline path gives the request head to the handler as it is: a head that is not valid text takes the full
+        # path, which answers it with 400 (qore#6554)
+        if (!inlineHeadValid(info.hdr, info.header_info)) {
             return NOTHING;
         }
         HttpListener listener = cast<HttpListener>(info.listener);

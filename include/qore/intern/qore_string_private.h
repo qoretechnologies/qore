@@ -1788,6 +1788,16 @@ DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
 */
 DLLLOCAL bool qore_string_encoding_valid(const QoreString& str);
 
+//! Returns a new string for an HTTP field value (a header or trailer value)
+/** The value is in the default encoding, or in ISO-8859-1 with its bytes unchanged if it is not valid in it: a field
+    value with bytes that are not valid UTF-8 is obs-text (RFC 9110 section 5.5), which is valid text in ISO-8859-1
+    (qore#6554)
+*/
+DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+
+//! Gives an HTTP field value made by concatenation in ISO-8859-1 if it is not valid in its encoding (qore#6554)
+DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
+
 
 //! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves
 class QoreStringOwnSource {

@@ -4927,3 +4927,17 @@ bool qore_string_encoding_valid(const QoreString& str) {
     return !qore_string_private::convert_encoding_intern(str.c_str(), str.size(), enc, utf8, QCS_UTF8, nullptr,
         false);
 }
+
+// documented in qore_string_private.h
+QoreStringNode* qore_http_field_value_string(const char* p, size_t len) {
+    QoreStringNode* str = new QoreStringNode(p, len, QCS_DEFAULT);
+    qore_http_field_value_check(str);
+    return str;
+}
+
+// documented in qore_string_private.h
+void qore_http_field_value_check(QoreStringNode* str) {
+    if (!qore_string_encoding_valid(*str)) {
+        str->setEncoding(QCS_ISO_8859_1);
+    }
+}

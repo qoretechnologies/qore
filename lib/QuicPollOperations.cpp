@@ -61,6 +61,7 @@ constexpr int QUIC_MAX_RECV_BATCH = 16;
 // not loss-detected, so the peer's retransmission timer drives recovery then.
 #include "qore/intern/QuicPollTimeout.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/qore_string_private.h"
 
 //! Maximum packets to process per continuePoll() call for QUIC client connections.
 /** Prevents a single connection from monopolizing the shared I/O thread when
@@ -763,11 +764,12 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
     ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& hdr : cached_stream->headers) {
         if (hdr.second.size() == 1) {
-            headers->setKeyValue(hdr.first.c_str(), new QoreStringNode(hdr.second[0]), nullptr);
+            headers->setKeyValue(hdr.first.c_str(), qore_http_field_value_string(hdr.second[0].data(),
+                hdr.second[0].size()), nullptr);
         } else {
             ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), nullptr);
             for (const auto& v : hdr.second) {
-                values->push(new QoreStringNode(v), nullptr);
+                values->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             headers->setKeyValue(hdr.first.c_str(), values.release(), nullptr);
         }
@@ -1805,7 +1807,8 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
     ReferenceHolder<QoreHashNode> headers(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& hdr : cached_stream_->stream->headers) {
         if (hdr.second.size() == 1) {
-            headers->setKeyValue(hdr.first.c_str(), new QoreStringNode(hdr.second[0]), nullptr);
+            headers->setKeyValue(hdr.first.c_str(), qore_http_field_value_string(hdr.second[0].data(),
+                hdr.second[0].size()), nullptr);
         } else if (hdr.first == "cookie") {
             // RFC 9114 section 4.2.1: concatenate cookie values with "; "
             QoreStringNode* combined = new QoreStringNode;
@@ -1815,12 +1818,13 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
                 }
                 combined->concat(hdr.second[i]);
             }
+            qore_http_field_value_check(combined);
             headers->setKeyValue("cookie", combined, nullptr);
         } else if (hdr.first == "set-cookie") {
             // set-cookie must not be combined (RFC 7230 section 3.2.2)
             ReferenceHolder<QoreListNode> values(new QoreListNode(autoTypeInfo), nullptr);
             for (const auto& v : hdr.second) {
-                values->push(new QoreStringNode(v), nullptr);
+                values->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             headers->setKeyValue("set-cookie", values.release(), nullptr);
         } else {
@@ -1832,6 +1836,7 @@ QoreValue SocketQuicServerPollOperation::getOutput() const {
                 }
                 combined->concat(hdr.second[i]);
             }
+            qore_http_field_value_check(combined);
             headers->setKeyValue(hdr.first.c_str(), combined, nullptr);
         }
     }
