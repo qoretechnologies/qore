@@ -1,0 +1,63 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes, and in qcc executables
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+
+%exec-class ExpressionDeclarationsModesTest
+
+#! Declarations in the code of an expression in each execution mode and in qcc executables (issue #6524)
+/** Runs the probes of expression-declarations.qtest (expression-declarations/probes.q) in a child process in each
+    execution mode and as qcc-compiled executables (-O0, -O3); the expected output is
+    expression-declarations/expected.txt.
+*/
+class ExpressionDeclarationsModesTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string dir = get_script_dir() + DirSep + "expression-declarations" + DirSep;
+    }
+
+    constructor() : QUnit::Test("ExpressionDeclarationsModes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        addTestCase("declarations in an expression in each execution mode", \testModes());
+        set_return_value(main());
+    }
+
+    testModes() {
+        string expected = ReadOnlyFile::readTextFile(dir + "expected.txt");
+        TmpDir tmp("qore-expression-declarations-");
+        string file = tmp.path + DirSep + "prog.q";
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(ReadOnlyFile::readTextFile(dir + "probes.q") + "\nprintf(\"%s\\n\", probes());\n");
+        f.close();
+
+        string env = sprintf("QORE_JIT_SYNC_COMPILE=1 QORE_JIT_THRESHOLD=1 LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s",
+            libqore_dir, libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, file)), mode);
+        }
+        foreach string opt in (("-O0", "-O3")) {
+            string exe = file + opt;
+            string out = backquote(sprintf("QORE_LIBDIR=%s %s %s -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+                file));
+            assertTrue(is_file(exe), sprintf("qcc %s compiled the executable: %s", opt, out));
+            assertEq(expected, backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s 2>&1", libqore_dir,
+                libqore_dir, exe)), "qcc " + opt);
+        }
+    }
+}

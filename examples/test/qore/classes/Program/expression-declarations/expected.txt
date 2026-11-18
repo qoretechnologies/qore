@@ -1,0 +1,54 @@
+function: refused
+function in a namespace: refused
+class: refused
+hashdecl: refused
+enum: refused
+typedef: refused
+typedef in a namespace: refused
+constant: refused
+constant in a namespace: refused
+method: refused
+namespace: refused
+global variable: refused
+thread-local variable: refused
+global variable list: refused
+thread-local variable list: refused
+global variable list in the expression: refused
+function variant: refused
+namespace member: refused
+method variant: refused
+function and constant: refused
+function after a comment: refused
+function after a string: refused
+function on lines of their own: refused
+function after a valid declaration: refused
+later f(): PARSE-EXCEPTION: function 'f()' cannot be found; did you mean 'f0'?
+later X: PARSE-EXCEPTION: cannot resolve bareword 'X' to any reachable object
+later N0::f(): PARSE-EXCEPTION: cannot resolve call 'N0::f()' to any reachable and callable object
+later N0::X: PARSE-EXCEPTION: cannot resolve bareword 'X' to any reachable object in any namespace or class 'N0'
+later new C0().m(): METHOD-DOES-NOT-EXIST: no method C0::m() has been defined and no pseudo-method <object>::m() is available (class lang: Qore)
+later N::Y: PARSE-EXCEPTION: cannot find any namespace or class 'N' in 'N::Y' providing a constant or static class variable 'Y'
+later g: PARSE-EXCEPTION: cannot resolve bareword 'g' to any reachable object
+later t: PARSE-EXCEPTION: cannot resolve bareword 't' to any reachable object
+later new C(): PARSE-EXCEPTION: reference to undefined class 'C'; did you mean 'C0'?
+later <H>{}: PARSE-EXCEPTION: illegal access to unknown member in undefined hashdecl 'H'
+later E::A: PARSE-EXCEPTION: cannot find any namespace or class 'E' in 'E::A' providing a constant or static class variable 'A'
+later cast<T>(1): PARSE-EXCEPTION: reference to undefined type 'T'
+later ga: PARSE-EXCEPTION: cannot resolve bareword 'ga' to any reachable object
+later ta: PARSE-EXCEPTION: cannot resolve bareword 'ta' to any reachable object
+later gc: PARSE-EXCEPTION: cannot resolve bareword 'gc' to any reachable object
+later f0(2): PARSE-TYPE-ERROR: no variant matching 'f0(int)' can be found; the following variants were tested:
+   f0()
+later N0::Z: PARSE-EXCEPTION: cannot resolve bareword 'Z' to any reachable object in any namespace or class 'N0'
+later new C0().n(2): PARSE-TYPE-ERROR: no variant matching 'C0::n(int)' can be found; the following variants were tested:
+   C0::n()
+later declarations: [1, 6]
+valid comment: created: 2
+valid line comment: created: 3
+valid string: created: "); int sub f() { return 7; } const X = (1"
+valid closure: created: 7
+valid parentheses: created: 3
+refused after a valid expression: refused
+valid expression after a refused one: 2
+implicit global variable: refused
+later implicit global variable: refused

@@ -123,9 +123,10 @@
     <tt>i.next</tt> for <tt>i.next()</tt>, is now a parse exception in every mode, also without type declarations
     (see @ref member_method_names; issue #2967).
 
-    @par Parse Directives Are Not Allowed in an Expression
-    A parse directive in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
-    applied; it changed the parse state of the Program that the expression was created in (see
+    @par Parse Directives and Declarations Are Not Allowed in an Expression
+    A parse directive, a declaration after code that ends the expression or a global variable that is declared or
+    created implicitly in the source of an @ref Qore::Expression "Expression" is now a parse exception and is not
+    applied; it changed the parse state of the Program that the expression was created in or added code to it (see
     @ref Qore::Expression::constructor() "Expression::constructor()").
 
     @par A Locked Program Keeps Its Restrictions
