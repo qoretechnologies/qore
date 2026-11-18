@@ -8558,11 +8558,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             }
         }
 
-        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
-        // (qore#6435)
-        if (qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
-            return toBits(QoreValue());
-        }
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap:
+        // setEntry() refuses it (qore#6435)
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -8589,11 +8586,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-        // a gap before the first element of a new list whose element type does not take NOTHING (qore#6435)
-        if (qore_list_private::get(*new_l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
-            new_l->deref(nullptr);
-            return toBits(QoreValue());
-        }
+        // a gap before the first element of a new list whose element type does not take NOTHING: setEntry() refuses
+        // it (qore#6435)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
@@ -8659,11 +8653,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
                 return toBits(QoreValue());
             }
         }
-        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
-        // (qore#6435)
-        if (qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
-            return toBits(QoreValue());
-        }
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap:
+        // setEntry() refuses it (qore#6435)
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -8690,11 +8681,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-        // a gap before the first element of a new list whose element type does not take NOTHING (qore#6435)
-        if (qore_list_private::get(*new_l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
-            new_l->deref(nullptr);
-            return toBits(QoreValue());
-        }
+        // a gap before the first element of a new list whose element type does not take NOTHING: setEntry() refuses
+        // it (qore#6435)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
