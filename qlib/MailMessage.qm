@@ -544,8 +544,14 @@ public string sub decode_mime_filename(string filename) {
     @since MailMessage 1.5
 */
 public string sub sanitize_filename(string filename) {
-    # a name that is not valid in its encoding cannot be sanitized; the default name is given (qore#6553)
-    if (!(filename =~ /^/)) {
+    # a name that is not valid in its encoding cannot be sanitized; the default name is given (qore#6553): a regular
+    # expression matches every valid string, and raises an exception for one that is not valid in its encoding
+    # (INVALID-ENCODING in UTF-8, a conversion error in another encoding)
+    try {
+        if (!(filename =~ /^/)) {
+            return "attachment";
+        }
+    } catch (hash<ExceptionInfo> ex) {
         return "attachment";
     }
     # Remove control characters, path separators, and other unsafe characters
