@@ -1567,7 +1567,7 @@ end";
                 return True;
             }
             # another query is compared as text, so the view is created again by the alignment
-            if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src)) {
+            if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src, True)) {
                 return False;
             }
             Datasource pds(ds.getConfigHash());

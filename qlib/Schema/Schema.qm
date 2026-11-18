@@ -640,15 +640,22 @@ module Schema {
     Any other access level raises \c SCHEMA-ACCESS-ERROR.  A schema at the \c untrusted level is refused when it is
     created, with \c SCHEMA-ACCESS-ERROR, if any key of its description gives SQL text (qore#6578):
     - the \c types, \c functions, \c procedures, \c packages and \c materialized_views sections
-    - the \c triggers of a table, and the \c triggers and \c functions of its \c driver overrides
+    - a table key other than \c columns, \c primary_key, \c indexes, \c unique_constraints,
+      \c foreign_constraints, \c comment, \c partition_strategy, \c partitions and \c auto_triggers (so also the
+      \c triggers and the \c driver overrides of a table), and a table, column or index named \c driver
     - a column with \c default_value_native, a \c native_type that is not only a type name (see
-      @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"), or a \c populate expression with \c sql
-    - an index column that is not a column of the table (an expression), and the index options other than
-      \c columns, \c unique, \c replace, \c partition_aligned and \c index_tablespace (a name)
-    - the \c bound_sql, \c bound_from_sql, \c bound_to_sql and \c values_sql keys of partitions
+      @ref SqlUtil::sql_check_cast_type() "sql_check_cast_type()"), a \c populate expression with \c sql, or an
+      option other than \c qore_type, \c comment and \c default_value that is not a number or a boolean; a column's
+      own \c driver overrides are checked as columns
+    - an index column that is not a name (an expression), and the index options other than \c columns, \c unique,
+      \c replace, \c partition_aligned and \c index_tablespace (a name)
+    - a partition strategy key other than \c method, \c columns and \c subpartition (so also \c auto), and a
+      partition key that gives SQL text (\c bound_sql, \c bound_from_sql, \c bound_to_sql, \c values_sql) or
+      \c driver
     - a value of \c index_options or \c column_options that is not a name, a number or a boolean
     - the migration actions \c sql, \c script and \c add_trigger, \c add_constraint with
-      <tt>constraint_type: check</tt>, and \c add_column and \c modify_column with a column as above
+      <tt>constraint_type: check</tt>, \c add_index with a column that is not a name, and \c add_column and
+      \c modify_column with a column as above
 
     @ref Schema::MigrationExecutor "MigrationExecutor" refuses such a step at the \c untrusted level as well, with
     \c MIGRATION-ACCESS-ERROR, before it runs.

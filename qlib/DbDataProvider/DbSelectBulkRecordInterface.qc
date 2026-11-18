@@ -53,8 +53,8 @@ public class DbSelectBulkRecordInterface inherits AbstractDataProviderBulkRecord
         }
         # release the transaction with a rollback in the destructor by default if we do not already have a transaction
         # lock
-        DbDataProviderBase::checkRawSqlAllowed("the \"sql\" search option");
         release_transaction = !ds.currentThreadInTransaction();
+        DbDataProviderBase::checkRawSqlAllowed("the \"sql\" search option");
         stmt = ds.getSQLStatement();
         # the destructor does not run if the constructor fails, so an implicit transaction acquired by a failed
         # statement is released here

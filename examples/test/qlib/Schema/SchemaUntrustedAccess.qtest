@@ -107,10 +107,27 @@ class SchemaUntrustedAccessTest inherits QUnit::Test {
             {"where": "materialized_views", "desc": b + {"materialized_views": {"mv": {"src": "select 1"}}}},
             {"where": "tables.items.triggers", "desc": b + {"tables": {"items": b.tables.items + {
                 "triggers": {"tr": "before insert on items begin select 1; end"}}}}},
-            {"where": "tables.items.driver.pgsql.triggers", "desc": b + {"tables": {"items": b.tables.items + {
+            # a table-level driver block can replace the columns and indexes of the table
+            {"where": "tables.items.driver", "desc": b + {"tables": {"items": b.tables.items + {
                 "driver": {"pgsql": {"triggers": {"tr": "x"}}}}}}},
-            {"where": "tables.items.driver.pgsql.functions", "desc": b + {"tables": {"items": b.tables.items + {
-                "driver": {"pgsql": {"functions": {"f": "x"}}}}}}},
+            {"where": "tables.items.driver", "desc": b + {"tables": {"items": b.tables.items + {
+                "driver": {"pgsql": {"columns": {"id": {"qore_type": "integer"}}}}}}}},
+            # a table key that SqlUtil takes as SQL text
+            {"where": "tables.items.functions", "desc": b + {"tables": {"items": b.tables.items + {
+                "functions": {"f": "x"}}}}},
+            # the tables or columns of a driver, which SqlUtil adds
+            {"where": "tables.driver", "desc": b + {"tables": b.tables + {"driver": {"pgsql": {"t2": {
+                "columns": {"id": {"qore_type": "integer"}}, "triggers": {"tr": "x"}}}}}}},
+            {"where": "tables.items.columns.driver", "desc": b + {"tables": {"items":
+                b.tables.items + {"columns": b.tables.items.columns + {"driver": {"qore_type": "integer",
+                "sqlite3": {"evil": {"qore_type": "string", "default_value": "(41+1)",
+                "default_value_native": True}}}}}}}},
+            {"where": "tables.items.indexes.driver", "desc": b + {"tables": {"items":
+                b.tables.items + {"indexes": {"driver": {"pgsql": {"ix": {"columns": ("lower(name)",)}}}}}}}},
+            # a column option that is not known as a value
+            {"where": "tables.items.columns.name.collate", "desc": b + {"tables": {"items":
+                b.tables.items + {"columns": b.tables.items.columns + {"name": {"qore_type": "string",
+                "size": 40, "collate": "x) ; drop table items; --"}}}}}},
             {"where": "tables.items.columns.name.default_value_native", "desc": b + {"tables": {"items":
                 b.tables.items + {"columns": b.tables.items.columns + {"name": {"qore_type": "string", "size": 40,
                 "default_value": "current_user", "default_value_native": True}}}}}},
@@ -130,8 +147,12 @@ class SchemaUntrustedAccessTest inherits QUnit::Test {
                 b.tables.items + {"indexes": {"ix_items_name": {"columns": ("name",),
                 "index_tablespace": "ts; drop table items"}}}}}},
             {"where": "tables.items.partitions.p1.bound_sql", "desc": b + {"tables": {"items":
-                b.tables.items + {"partition_strategy": {"type": "range", "columns": ("id",)},
+                b.tables.items + {"partition_strategy": {"method": "range", "columns": ("id",)},
                 "partitions": {"p1": {"bound_sql": "maxvalue"}}}}}},
+            # an interval or expression of an automatic partition strategy is SQL text
+            {"where": "tables.items.partition_strategy.auto", "desc": b + {"tables": {"items":
+                b.tables.items + {"partition_strategy": {"method": "range", "columns": ("id",), "auto": {
+                "interval": "numtoyminterval(1,'MONTH')"}}}}}},
             {"where": "column_options.data_tablespace", "desc": b + {"column_options": {
                 "data_tablespace": "ts; drop table items"}}},
         );
@@ -172,19 +193,25 @@ class SchemaUntrustedAccessTest inherits QUnit::Test {
             {"action": "add_column", "table": "items", "column": "c", "type": {"qore_type": "string",
                 "default_value": "current_user", "default_value_native": True}},
             {"action": "modify_column", "table": "items", "column": "name", "type": "varchar(40); drop table x"},
+            {"action": "add_index", "table": "items", "name": "ix2", "columns": ("lower(name)",)},
         );
         foreach hash<auto> step in (cases) {
             hash<auto> n = SchemaUntrustedAccessTest::withStep(step);
             assertThrows("SCHEMA-ACCESS-ERROR", "^migrations\\[0\\]\\.post_align\\[0\\]",
                 \SchemaAccessCheck::checkUntrustedDescription(), (n,), step.action);
         }
+        # the steps of a migration that has an "action" key are checked as well
+        hash<auto> n = SchemaUntrustedAccessTest::normalized(base()) + {"migrations": ({"version": "1.0",
+            "action": "update", "post_align": ({"action": "sql", "statements": ("delete from items",)},)},)};
+        assertThrows("SCHEMA-ACCESS-ERROR", "post_align", \SchemaAccessCheck::checkUntrustedDescription(), (n,));
         # data-driven steps are accepted
         foreach hash<auto> step in (
                 {"action": "update", "table": "items", "set": {"name": "x"}, "where": {"id": 1}},
                 {"action": "add_constraint", "table": "items", "name": "uk", "constraint_type": "unique",
                     "columns": ("name",)},
-                {"action": "add_column", "table": "items", "column": "c", "type": {"type": "string", "size": 10}},
+                {"action": "add_column", "table": "items", "column": "c", "type": {"type": "varchar", "size": 10}},
                 {"action": "modify_column", "table": "items", "column": "name", "type": "varchar(80)"},
+                {"action": "add_index", "table": "items", "name": "ix2", "columns": ("name",)},
             ) {
             SchemaAccessCheck::checkUntrustedDescription(SchemaUntrustedAccessTest::withStep(step));
         }

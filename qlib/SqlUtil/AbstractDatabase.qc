@@ -883,12 +883,15 @@ list l = db.getDropSchemaSql(schema_hash);
         alignment.
 
         @param src the query of the view
+        @param backtick_quotes @ref True if \c "`" quotes names (MySQL); otherwise it is an ordinary character
 
         @return @ref True if the query can be given to a probe
 
         @since SqlUtil 3.11.0
     */
-    static bool viewProbeSourceSafe(string src) {
+    static bool viewProbeSourceSafe(string src, bool backtick_quotes = False) {
+        # the bytes are read in UTF-8, in which the bytes of ASCII characters are only those characters
+        src = convert_encoding(src, "UTF-8");
         src =~ s/\s*;\s*$//;
         trim src;
         if (src !~ /^\(*\s*(select|with)\b/i || src.find("\\") != -1) {
@@ -901,7 +904,7 @@ list l = db.getDropSchemaSql(schema_hash);
         while (i < len) {
             int c = b[i];
             # a quoted literal or name: '...', "...", `...`, with a doubled quote as a quote in it
-            if (c == 0x27 || c == 0x22 || c == 0x60) {
+            if (c == 0x27 || c == 0x22 || (c == 0x60 && backtick_quotes)) {
                 ++i;
                 while (True) {
                     if (i >= len) {

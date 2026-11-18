@@ -86,6 +86,7 @@ class DbDataProviderSandboxTest inherits QUnit::Test {
         assertThrows("DB-SANDBOX-ERROR", "an SQL statement to execute", \tenant.callFunction(), ("exec_sql", dp));
         assertThrows("DB-SANDBOX-ERROR", "\"sql\" search option", \tenant.callFunction(), ("search_sql", dp));
         assertThrows("DB-SANDBOX-ERROR", "\"sql\" search option", \tenant.callFunction(), ("record_type_sql", dp));
+        assertThrows("DB-SANDBOX-ERROR", "\"sql\" search option", \tenant.callFunction(), ("search_bulk_sql", dp));
         # createChildProvider() gives the error as CREATE-CHILD-PROVIDER-ERROR
         assertThrows("CREATE-CHILD-PROVIDER-ERROR", "DB-SANDBOX-ERROR.*index expression", \tenant.callFunction(),
             ("create_with_expression", dp, DbDataProviderSandboxTest::fields()));
@@ -106,6 +107,8 @@ class DbDataProviderSandboxTest inherits QUnit::Test {
             "auto sub exec_sql(object dp) { return dp.getChildProviderEx(\"exec-sql\").doRequest("
                 "{\"sql\": \"delete from sbx_t\"}); }\n"
             "auto sub search_sql(object dp) { return dp.searchRecords(NOTHING, "
+                "{\"sql\": \"select name from sbx_t\"}).getValue(); }\n"
+            "auto sub search_bulk_sql(object dp) { return dp.searchRecordsBulk(1000, NOTHING, "
                 "{\"sql\": \"select name from sbx_t\"}).getValue(); }\n"
             "auto sub record_type_sql(object dp) { return dp.getRecordType({\"sql\": \"select name from sbx_t\"}); }\n"
             "auto sub create_with_expression(object dp, hash<auto> fields) { return dp.createChildProvider(\"sbx_t3\", "

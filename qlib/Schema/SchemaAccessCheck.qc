@@ -53,8 +53,51 @@ public class SchemaAccessCheck {
             "index_tablespace": "identifier",
         };
 
-        #! the keys of a partition description that give SQL text
-        const PartitionSqlKeys = ("bound_sql", "bound_from_sql", "bound_to_sql", "values_sql");
+        #! the keys of a table that a schema at the untrusted access level can give (a table-level \c driver block
+        #! can replace the columns and indexes of the table, so it is not one of them)
+        const UntrustedTableKeys = {
+            "columns": True,
+            "primary_key": True,
+            "indexes": True,
+            "unique_constraints": True,
+            "foreign_constraints": True,
+            "comment": True,
+            "partition_strategy": True,
+            "partitions": True,
+            "auto_triggers": True,
+        };
+
+        #! the keys of a column whose values are written into the SQL as text: checked or quoted
+        const UntrustedColumnStringKeys = {
+            "qore_type": True,
+            "native_type": True,
+            "comment": True,
+            "default_value": True,
+        };
+
+        #! the keys of a partition strategy that a schema at the untrusted access level can give
+        const UntrustedPartitionStrategyKeys = {
+            "method": "identifier",
+            "columns": "identifiers",
+            "subpartition": "strategy",
+        };
+
+        #! the keys of a partition that a schema at the untrusted access level can give
+        const UntrustedPartitionKeys = {
+            "name": "identifier",
+            "method": "identifier",
+            "columns": "identifiers",
+            "bound_from": "value",
+            "bound_to": "value",
+            "values": "value",
+            "modulus": "value",
+            "remainder": "value",
+            "is_default": "value",
+            "subpartitions": "partitions",
+            "schema": "identifier",
+            "relation_name": "identifier",
+            "sql_name": "identifier",
+        };
 
         #! the regular expression of a name given where the SQL has a name: ASCII letters, digits, \c "_" and \c "$"
         const IdentifierRegex = "\\A[A-Za-z_][A-Za-z0-9_$]*\\z";
@@ -90,7 +133,14 @@ public class SchemaAccessCheck {
                 SchemaAccessCheck::checkOptionValue(sprintf("%s.%s", section, i.key), i.value);
             }
         }
+        if (exists schema_data.tables && schema_data.tables.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse("tables", "tables that are not table descriptions");
+        }
         foreach hash<auto> t in (schema_data.tables.pairIterator()) {
+            # SqlUtil takes a "driver" key of the tables as the tables of a driver
+            if (t.key == "driver") {
+                SchemaAccessCheck::refuse("tables.driver", "the tables of a driver");
+            }
             SchemaAccessCheck::checkTable("tables." + t.key, t.value);
         }
         SchemaAccessCheck::checkMigrations("migrations", schema_data.migrations);
@@ -114,10 +164,15 @@ public class SchemaAccessCheck {
                     SchemaAccessCheck::refuse(loc, "the expression of a check constraint");
                 }
                 break;
+            case "add_index":
+                SchemaAccessCheck::checkIndexColumns(loc + ".columns", step.columns);
+                break;
             case "add_column":
             case "modify_column":
                 if (step.type.typeCode() == NT_HASH) {
-                    SchemaAccessCheck::checkColumn(loc + ".type", step.type);
+                    # checked as MigrationExecutor gives it to SqlUtil
+                    SchemaAccessCheck::checkColumn(loc + ".type", DataSchemaLoader::normalizeColumn(step.table ?? "",
+                        step.column ?? "", step.type));
                 } else if (exists step.type) {
                     SchemaAccessCheck::checkNativeType(loc + ".type", step.type);
                 }
@@ -131,8 +186,10 @@ public class SchemaAccessCheck {
             case NT_HASH:
                 if (exists v.action) {
                     SchemaAccessCheck::checkUntrustedStep(loc, v);
-                } else {
-                    foreach hash<auto> i in (v.pairIterator()) {
+                }
+                # also the steps of a migration hash that has an "action" key
+                foreach hash<auto> i in (v.pairIterator()) {
+                    if (i.value.typeCode() == NT_HASH || i.value.typeCode() == NT_LIST) {
                         SchemaAccessCheck::checkMigrations(sprintf("%s.%s", loc, i.key), i.value);
                     }
                 }
@@ -145,63 +202,96 @@ public class SchemaAccessCheck {
         }
     }
 
-    private static checkTable(string loc, hash<auto> t) {
-        if (t.triggers) {
-            SchemaAccessCheck::refuse(loc + ".triggers", "the source of triggers");
+    private static checkTable(string loc, auto t) {
+        if (t.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc, "a table that is not a table description");
+        }
+        foreach string key in (keys t) {
+            if (!UntrustedTableKeys{key}) {
+                SchemaAccessCheck::refuse(sprintf("%s.%s", loc, key), sprintf("the table key %y", key));
+            }
+        }
+        if (exists t.columns && t.columns.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc + ".columns", "columns that are not column descriptions");
         }
         foreach hash<auto> c in (t.columns.pairIterator()) {
-            if (c.value.typeCode() == NT_HASH) {
-                SchemaAccessCheck::checkColumn(sprintf("%s.columns.%s", loc, c.key), c.value);
+            # SqlUtil takes a "driver" key of the columns as the columns of a driver
+            if (c.key == "driver") {
+                SchemaAccessCheck::refuse(loc + ".columns.driver", "the columns of a driver");
             }
+            SchemaAccessCheck::checkColumn(sprintf("%s.columns.%s", loc, c.key), c.value);
         }
-        *hash<auto> column_names = map {$1: True}, keys t.columns;
+        if (exists t.indexes && t.indexes.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc + ".indexes", "indexes that are not index descriptions");
+        }
         foreach hash<auto> ix in (t.indexes.pairIterator()) {
-            SchemaAccessCheck::checkIndex(sprintf("%s.indexes.%s", loc, ix.key), ix.value, column_names);
+            if (ix.key == "driver") {
+                SchemaAccessCheck::refuse(loc + ".indexes.driver", "the indexes of a driver");
+            }
+            SchemaAccessCheck::checkIndex(sprintf("%s.indexes.%s", loc, ix.key), ix.value);
         }
-        SchemaAccessCheck::checkPartitions(loc + ".partitions", t.partitions);
-        foreach hash<auto> drv in (t.driver.pairIterator()) {
-            string dwhere = sprintf("%s.driver.%s", loc, drv.key);
-            if (drv.value.typeCode() != NT_HASH) {
-                continue;
-            }
-            if (drv.value.triggers) {
-                SchemaAccessCheck::refuse(dwhere + ".triggers", "the source of triggers");
-            }
-            if (drv.value.functions) {
-                SchemaAccessCheck::refuse(dwhere + ".functions", "the source of functions");
-            }
-            foreach hash<auto> c in (drv.value.columns.pairIterator()) {
-                if (c.value.typeCode() == NT_HASH) {
-                    SchemaAccessCheck::checkColumn(sprintf("%s.columns.%s", dwhere, c.key), c.value);
-                }
-            }
-            foreach hash<auto> ix in (drv.value.indexes.pairIterator()) {
-                SchemaAccessCheck::checkIndex(sprintf("%s.indexes.%s", dwhere, ix.key), ix.value, column_names);
-            }
-            SchemaAccessCheck::checkPartitions(dwhere + ".partitions", drv.value.partitions);
+        if (exists t.partition_strategy) {
+            SchemaAccessCheck::checkPartitionStrategy(loc + ".partition_strategy", t.partition_strategy);
+        }
+        if (exists t.partitions) {
+            SchemaAccessCheck::checkPartitions(loc + ".partitions", t.partitions);
         }
     }
 
-    private static checkColumn(string loc, hash<auto> c) {
-        if (c.default_value_native) {
-            SchemaAccessCheck::refuse(loc + ".default_value_native", "a default value as SQL text");
+    private static checkColumn(string loc, auto c, bool driver_ok = True) {
+        if (c.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc, "a column that is not a column description");
         }
-        if (exists c.native_type) {
-            SchemaAccessCheck::checkNativeType(loc + ".native_type", c.native_type);
-        }
-        if (c.populate.typeCode() == NT_HASH && exists c.populate.sql) {
-            SchemaAccessCheck::refuse(loc + ".populate.sql", "the SQL expression of a backfill");
-        }
-        foreach hash<auto> drv in (c.driver.pairIterator()) {
-            if (drv.value.typeCode() == NT_HASH) {
-                SchemaAccessCheck::checkColumn(sprintf("%s.driver.%s", loc, drv.key), drv.value);
+        foreach hash<auto> i in (c.pairIterator()) {
+            string kloc = sprintf("%s.%s", loc, i.key);
+            switch (i.key) {
+                case "default_value_native":
+                    if (i.value) {
+                        SchemaAccessCheck::refuse(kloc, "a default value as SQL text");
+                    }
+                    continue;
+                case "native_type":
+                    SchemaAccessCheck::checkNativeType(kloc, i.value);
+                    continue;
+                case "populate":
+                    if (i.value.typeCode() == NT_HASH && exists i.value.sql) {
+                        SchemaAccessCheck::refuse(kloc + ".sql", "the SQL expression of a backfill");
+                    }
+                    continue;
+                case "driver":
+                    if (!driver_ok || i.value.typeCode() != NT_HASH) {
+                        SchemaAccessCheck::refuse(kloc, "a driver override that is not a column description");
+                    }
+                    foreach hash<auto> drv in (i.value.pairIterator()) {
+                        SchemaAccessCheck::checkColumn(sprintf("%s.%s", kloc, drv.key), drv.value, False);
+                    }
+                    continue;
+            }
+            # another key: a boolean or a number (ex: size, notnull, unsigned), or a string that is checked or quoted
+            switch (i.value.typeCode()) {
+                case NT_BOOLEAN:
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_NOTHING:
+                    break;
+                case NT_STRING:
+                    if (!UntrustedColumnStringKeys{i.key}) {
+                        SchemaAccessCheck::refuse(kloc, sprintf("the column option %y", i.key));
+                    }
+                    break;
+                default:
+                    if (i.key != "default_value") {
+                        SchemaAccessCheck::refuse(kloc, sprintf("the column option %y", i.key));
+                    }
+                    break;
             }
         }
     }
 
     private static checkNativeType(string loc, auto type) {
         if (type.typeCode() != NT_STRING) {
-            return;
+            SchemaAccessCheck::refuse(loc, "a type name that is not a string");
         }
         try {
             SqlUtil::sql_check_cast_type(type);
@@ -213,9 +303,19 @@ public class SchemaAccessCheck {
         }
     }
 
-    private static checkIndex(string loc, auto ix, *hash<auto> column_names) {
+    #! index columns: names only (a string that is not a column is written into the SQL as an expression)
+    private static checkIndexColumns(string loc, auto cols) {
+        foreach auto col in (cols) {
+            if (col.typeCode() != NT_STRING || !regex(col, IdentifierRegex)) {
+                SchemaAccessCheck::refuse(loc, sprintf("the index expression %y (an index column must be a name)",
+                    col));
+            }
+        }
+    }
+
+    private static checkIndex(string loc, auto ix) {
         if (ix.typeCode() != NT_HASH) {
-            return;
+            SchemaAccessCheck::refuse(loc, "an index that is not an index description");
         }
         foreach hash<auto> i in (ix.pairIterator()) {
             *string kind = UntrustedIndexKeys{i.key};
@@ -224,20 +324,48 @@ public class SchemaAccessCheck {
             }
             switch (kind) {
                 case "columns":
-                    foreach auto col in (i.value) {
-                        # a string that is not a column of the table is written into the SQL as an expression
-                        if (col.typeCode() != NT_STRING || !column_names{col}) {
-                            SchemaAccessCheck::refuse(sprintf("%s.columns", loc),
-                                sprintf("the index expression %y (an index column must be a column of the table)",
-                                    col));
-                        }
-                    }
+                    SchemaAccessCheck::checkIndexColumns(sprintf("%s.columns", loc), i.value);
                     break;
                 case "identifier":
-                    if (i.value.typeCode() != NT_STRING || !regex(i.value, IdentifierRegex)) {
-                        SchemaAccessCheck::refuse(sprintf("%s.%s", loc, i.key), "a name that is not only a name");
+                    SchemaAccessCheck::checkIdentifier(sprintf("%s.%s", loc, i.key), i.value);
+                    break;
+                case "bool":
+                    if (i.value.typeCode() != NT_BOOLEAN) {
+                        SchemaAccessCheck::refuse(sprintf("%s.%s", loc, i.key), "an index option that is not a "
+                            "boolean");
                     }
                     break;
+            }
+        }
+    }
+
+    private static checkIdentifier(string loc, auto v) {
+        if (v.typeCode() != NT_STRING || !regex(v, IdentifierRegex)) {
+            SchemaAccessCheck::refuse(loc, "a name that is not only a name");
+        }
+    }
+
+    private static checkPartitionStrategy(string loc, auto ps) {
+        if (ps.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc, "a partition strategy that is not a description");
+        }
+        foreach hash<auto> i in (ps.pairIterator()) {
+            string kloc = sprintf("%s.%s", loc, i.key);
+            switch (UntrustedPartitionStrategyKeys{i.key}) {
+                case "identifier":
+                    SchemaAccessCheck::checkIdentifier(kloc, i.value);
+                    break;
+                case "identifiers":
+                    foreach auto v in (i.value) {
+                        SchemaAccessCheck::checkIdentifier(kloc, v);
+                    }
+                    break;
+                case "strategy":
+                    SchemaAccessCheck::checkPartitionStrategy(kloc, i.value);
+                    break;
+                default:
+                    # "auto" (an interval or expression) and "driver" are SQL text or replace the strategy
+                    SchemaAccessCheck::refuse(kloc, sprintf("the partition strategy key %y", i.key));
             }
         }
     }
@@ -246,17 +374,44 @@ public class SchemaAccessCheck {
         switch (v.typeCode()) {
             case NT_HASH:
                 foreach hash<auto> i in (v.pairIterator()) {
-                    if (inlist(i.key, PartitionSqlKeys)) {
-                        SchemaAccessCheck::refuse(sprintf("%s.%s", loc, i.key), "the SQL text of a partition bound");
-                    }
-                    SchemaAccessCheck::checkPartitions(sprintf("%s.%s", loc, i.key), i.value);
+                    SchemaAccessCheck::checkPartition(sprintf("%s.%s", loc, i.key), i.value);
                 }
                 break;
             case NT_LIST:
                 foreach auto e in (v) {
-                    SchemaAccessCheck::checkPartitions(sprintf("%s[%d]", loc, $#), e);
+                    SchemaAccessCheck::checkPartition(sprintf("%s[%d]", loc, $#), e);
                 }
                 break;
+            default:
+                SchemaAccessCheck::refuse(loc, "partitions that are not partition descriptions");
+        }
+    }
+
+    private static checkPartition(string loc, auto p) {
+        if (p.typeCode() != NT_HASH) {
+            SchemaAccessCheck::refuse(loc, "a partition that is not a partition description");
+        }
+        foreach hash<auto> i in (p.pairIterator()) {
+            string kloc = sprintf("%s.%s", loc, i.key);
+            switch (UntrustedPartitionKeys{i.key}) {
+                case "identifier":
+                    SchemaAccessCheck::checkIdentifier(kloc, i.value);
+                    break;
+                case "identifiers":
+                    foreach auto v in (i.value) {
+                        SchemaAccessCheck::checkIdentifier(kloc, v);
+                    }
+                    break;
+                case "partitions":
+                    SchemaAccessCheck::checkPartitions(kloc, i.value);
+                    break;
+                case "value":
+                    # bound values are converted to literals of the column type
+                    break;
+                default:
+                    # the "_sql" bounds and "driver" are SQL text or replace the partition
+                    SchemaAccessCheck::refuse(kloc, sprintf("the partition key %y", i.key));
+            }
         }
     }
 

@@ -202,19 +202,32 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
             "views": {"vwa_a": "select id from vwa_t"},
         };
         align(ds, schema, "probe setup");
-        # an existing view whose query is changed to one with a second statement: the SQL is only returned, so
-        # nothing of it runs; the probe would have run it
-        schema.views.vwa_a = "select id from vwa_t; commit; drop table vwa_t";
+        # a table of its own that the statements after the query would drop
+        ds.exec("create table vwa_marker (id int)");
+        ds.commit();
+        on_exit {
+            try {
+                ds.exec("drop table vwa_marker");
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+        # an existing view whose query is changed to one with more statements: the SQL is only returned, so nothing
+        # of it runs; the probe would have given the statements to the database
+        schema.views.vwa_a = "select id from vwa_t; commit; drop table vwa_marker";
         list<auto> sql = db.getAlignSql(schema);
         assertTrue(sql.size() > 0, "the view is created again by the alignment");
-        assertTrue(exists db.getTable("vwa_t"), "the second statement did not run");
+        assertTrue(exists db.getTable("vwa_marker"), "the statements after the query did not run");
         # a query that the probe cannot make: its error is raised, and no probe view is left
         schema.views.vwa_a = "select id from vwa_no_such_table";
+        bool raised;
         try {
             db.getAlignSql(schema);
         } catch (hash<ExceptionInfo> ex) {
-            # the error of the probe
+            raised = True;
         }
+        assertTrue(raised, "the error of the probe is raised");
         if (driver == "mysql") {
             assertEq(0, ds.selectRow("select count(1) as c from information_schema.views where table_schema = "
                 "database() and table_name like 'qore_view_probe%'").c.toInt(), "no probe view is left");
@@ -237,6 +250,9 @@ class SqlUtilViewAlignmentTest inherits QUnit::Test {
                 "update t set a = 1 returning (select 1)", "") {
             assertFalse(AbstractDatabase::viewProbeSourceSafe(src), src);
         }
+        # "`" quotes names on MySQL only; elsewhere it is an ordinary character, so a ";" after it is outside
+        assertTrue(AbstractDatabase::viewProbeSourceSafe("select `a;b` from t", True));
+        assertFalse(AbstractDatabase::viewProbeSourceSafe("select `a;b` from t"));
     }
 
     #! checks the alignment of views
