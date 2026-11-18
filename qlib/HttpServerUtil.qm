@@ -1185,11 +1185,17 @@ public hash<Util::UriQueryInfo> sub parse_uri_query(string path) {
 
     @param path the raw or decoded URI request target
     @return the request target with sensitive query values replaced by
-        \c "<masked>"
+        \c "<masked>"; the bytes of a target that is not valid in its encoding are read as ISO-8859-1, so the result is
+        valid text
 
     @since HttpServerUtil 1.6
 */
 public string sub mask_sensitive_url_query_values(string path) {
+    # a target from a request can have bytes that are not valid text; the query is split at ASCII characters, so its
+    # bytes are taken as ISO-8859-1, in which each byte is a character (qore#6554)
+    if (!path.isEncodingValid()) {
+        path = force_encoding(path, "ISO-8859-1");
+    }
     int query_start = path.find("?");
     if (query_start == -1) {
         return path;

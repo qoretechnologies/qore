@@ -4956,31 +4956,22 @@ bool qore_http_target_text_valid(const char* p, size_t len) {
     if (simple) {
         return true;
     }
-    auto hex = [](unsigned char c) -> int {
-        if (c >= '0' && c <= '9') {
-            return c - '0';
-        }
-        if (c >= 'a' && c <= 'f') {
-            return c - 'a' + 10;
-        }
-        if (c >= 'A' && c <= 'F') {
-            return c - 'A' + 10;
-        }
-        return -1;
-    };
-    std::string decoded;
-    decoded.reserve(len);
-    for (size_t i = 0; i < len; ++i) {
-        unsigned char c = static_cast<unsigned char>(p[i]);
-        if (c == '%' && i + 2 < len && hex(p[i + 1]) >= 0 && hex(p[i + 2]) >= 0) {
-            c = static_cast<unsigned char>(hex(p[i + 1]) * 16 + hex(p[i + 2]));
-            i += 2;
-        }
-        if (!c) {
+    // the path and the query are decoded as HttpServer decodes them (decodeRequestPath(): decode_url() of each), with
+    // the same decoder, so that the result is the same; a NUL character is refused in the decoded path only
+    const char* q = static_cast<const char*>(memchr(p, '?', len));
+    size_t path_len = q ? static_cast<size_t>(q - p) : len;
+    auto decode = [](const char* s, size_t l, bool no_nul) -> bool {
+        QoreString src(s, l, QCS_UTF8);
+        QoreString out(QCS_UTF8);
+        ExceptionSink xsink;
+        if (out.concatDecodeUrl(src, &xsink)) {
+            xsink.clear();
             return false;
         }
-        decoded.push_back(static_cast<char>(c));
+        return !no_nul || !memchr(out.c_str(), 0, out.size());
+    };
+    if (!decode(p, path_len, true)) {
+        return false;
     }
-    bool incomplete;
-    return IconvHelper::validUtf8Prefix(decoded.data(), decoded.size(), incomplete) == decoded.size();
+    return !q || decode(q + 1, len - path_len - 1, false);
 }

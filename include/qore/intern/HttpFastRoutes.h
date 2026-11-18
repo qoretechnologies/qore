@@ -209,9 +209,9 @@ struct HttpFastRequestView {
     bool has_upgrade = false;
     //! true if bytes of a following request are already buffered
     bool pending = false;
-    //! true if the request has text that the normal path answers with 400 (qore#6554): a target that does not decode
-    //! to valid UTF-8 or that decodes to a NUL character, or an HTTP/1.x header name that is not a token; set by the
-    //! code that makes the view, which can use the interpreter's text checks
+    //! true if the request has text that the normal path answers with 400 (qore#6554): a target whose path or query
+    //! does not decode to valid UTF-8 or whose path decodes to a NUL character, or an HTTP/1.x header name with a
+    //! byte above 0x7f; set by the code that makes the view, which can use the interpreter's text checks
     bool invalid_text = false;
 };
 

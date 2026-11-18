@@ -20258,8 +20258,9 @@ int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t 
         return 0;
     }
     view.pending = sp->buflen > 0;
-    // a target that the normal path refuses with 400 (qore#6554); the strict parser accepts only token header names
-    view.invalid_text = !qore_http_target_text_valid(view.path.data(), view.path.size());
+    // the strict parser accepts no "%" and no byte above 0x7f in the target and only token header names, so the
+    // request has no text that the normal path refuses (qore#6554)
+    assert(qore_http_target_text_valid(view.path.data(), view.path.size()));
 
     int us;
     int64 epoch_s = q_epoch_us(us);

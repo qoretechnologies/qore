@@ -615,17 +615,20 @@ class HttpServerFastRoutesTest inherits QUnit::Test {
         Socket c = warmUp();
         assertEq("fast", request(c, "GET", "/it?q=caf%C3%A9").body);
         int before = hs.getFastRouteInfo().fallbacks.invalid_text;
-        # a query that does not decode to valid UTF-8 or that decodes to a NUL, read by the strict parser; and a
-        # header name that is not a token, read by the normal parser
+        # a query or path that does not decode to valid UTF-8 (also a multi-byte character whose first byte is
+        # percent-encoded and the next not, which decode_url() refuses), a NUL in the decoded path, and a header name
+        # with a byte above 0x7f; the strict parser leaves them all to the normal parser
         foreach hash<auto> i in ({"path": "/it?q=%FF"}, {"path": "/it?q=%C0%AF"},
-                {"path": "/it", "hdr": {"X-é": "1"}}) {
+                {"path": binary_to_string(binary("/it?q=%C3") + <a9>, "UTF-8")}, {"path": "/it%FF"},
+                {"path": "/it%00"}, {"path": "/it", "hdr": {"X-é": "1"}}) {
             Socket c1 = warmUp();
             hash<auto> r = request(c1, "GET", i.path, i.hdr);
             assertEq(400, r.code, sprintf("%y", i));
         }
-        # a NUL character in the query: the route leaves it to the normal path, which decides
+        # a NUL character in the query is accepted by the normal path, and by the route
         Socket c2 = warmUp();
-        assertEq("handler", request(c2, "GET", "/it?q=a%00b").body);
+        assertEq("fast", request(c2, "GET", "/it?q=a%00b").body);
+        # the targets whose path is not that of the route take the normal path as no_route
         assertEq(before + 4, hs.getFastRouteInfo().fallbacks.invalid_text);
     }
 

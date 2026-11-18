@@ -97,6 +97,27 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         response = rawRequest(port, "GET /a?x=caf%C3%A9 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
         assertEq(200, response.hdr.status_code);
         assertEq(1, path_handler.calls);
+
+        # the later request of a connection, with a percent-encoded lead byte and a raw continuation byte in the
+        # query, which decode_url() refuses; the code that masks the target for the log processed its characters and
+        # raised, so the connection was closed without a response
+        Socket s();
+        on_exit s.close();
+        s.connect("127.0.0.1:" + port);
+        s.send("GET /a HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> h = s.readHTTPHeader(30s);
+        assertEq(200, h.status_code);
+        s.recv(h."content-length".toInt(), 30s);
+        s.send(binary("GET /a?x=%C3") + <a9> + binary(" HTTP/1.1\r\nHost: localhost\r\n\r\n"));
+        assertEq(400, s.readHTTPHeader(30s).status_code);
+        assertEq(2, path_handler.calls);
+
+        # the masking of a target that is not valid text
+        string masked = mask_sensitive_url_query_values(binary_to_string(binary("/a?token=s") + <e9>
+            + binary("&b=") + <ff>, "UTF-8"));
+        # the bytes that are not valid are read as ISO-8859-1, so the result is valid text
+        assertTrue(masked.isEncodingValid());
+        assertEq("/a?token=<masked>&b=ÿ", masked);
     }
 
     private http1HeaderNames() {
@@ -116,7 +137,7 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         assertEq(400, response.hdr.status_code);
         assertRegex("a header name of the request is not a token", response.body);
         assertEq(0, handler.calls);
-        # the flag of one request does not stay for the next request of the connection
+        # a name that is a token is accepted
         response = rawRequest(port, "GET /a HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nX-e: 1\r\n\r\n");
         assertEq(200, response.hdr.status_code);
         assertEq(1, handler.calls);
