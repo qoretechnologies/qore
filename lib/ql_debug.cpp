@@ -355,6 +355,42 @@ static QoreValue f_dbg_retired_type_declarations(const QoreListNode* params, Run
     return static_cast<int64>(qore_retired_type_owner_count());
 }
 
+//! Returns the bookkeeping of the retired declarations and derived types (issue #6419; see qore_type_retire_epoch)
+static QoreValue f_dbg_type_retirement_info(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreTypeRetirementInfo info;
+    qore_type_retirement_info(info);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+    h->setKeyValue("epoch", static_cast<int64>(info.epoch), xsink);
+    h->setKeyValue("pending declarations", static_cast<int64>(info.pending_declarations), xsink);
+    h->setKeyValue("pending derived types", static_cast<int64>(info.pending_derived_types), xsink);
+    h->setKeyValue("freeable declarations", static_cast<int64>(info.freeable_declarations), xsink);
+    h->setKeyValue("freeable derived types", static_cast<int64>(info.freeable_derived_types), xsink);
+    h->setKeyValue("oldest pending epoch", static_cast<int64>(info.oldest_pending_epoch), xsink);
+    h->setKeyValue("newest pending epoch", static_cast<int64>(info.newest_pending_epoch), xsink);
+    h->setKeyValue("min active epoch", static_cast<int64>(info.min_active_epoch), xsink);
+    return h.release();
+}
+
+//! Returns the threads that the retired declarations and derived types wait for: each thread that runs Qore code
+//! since an epoch before the newest item retired, as a hash with its \c tid and \c epoch (issue #6419)
+static QoreValue f_dbg_type_retirement_blockers(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreTypeRetirementInfo info;
+    qore_type_retirement_info(info);
+    std::vector<QoreTypeRetirementThread> threads;
+    if (info.newest_pending_epoch) {
+        qore_type_retirement_scan(info.newest_pending_epoch, &threads);
+    }
+    ReferenceHolder<QoreListNode> l(new QoreListNode(autoHashTypeInfo), xsink);
+    for (const QoreTypeRetirementThread& t : threads) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(bigIntTypeInfo), xsink);
+        h->setKeyValue("tid", static_cast<int64>(t.tid), xsink);
+        h->setKeyValue("epoch", static_cast<int64>(t.epoch), xsink);
+        l->push(h.release(), xsink);
+    }
+    return l.release();
+}
+
 //! Returns the declarations and derived types kept until library cleanup, by kind, and the sizes of the derived type
 //! caches (issue #6419)
 static QoreValue f_dbg_type_retention_breakdown(const QoreListNode* params, RuntimeConfig& rc,
@@ -26994,6 +27030,10 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_type_retention_breakdown", f_dbg_type_retention_breakdown, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retirement_info", f_dbg_type_retirement_info, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_type_retirement_blockers", f_dbg_type_retirement_blockers, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, listTypeInfo);
     qns.addBuiltinVariant("dbg_cyclic_type_declarations", f_dbg_cyclic_type_declarations, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
