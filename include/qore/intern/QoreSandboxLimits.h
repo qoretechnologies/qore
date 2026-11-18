@@ -177,6 +177,13 @@ private:
     std::atomic<bool> expired{false};
     //! the limit that expired the budget (@ref QSB_LIMIT_WALL_TIME or @ref QSB_LIMIT_CPU_TIME); set before expired
     unsigned expired_kind = 0;
+    //! true for the budget that carries the charge of an entry into a sandbox in a trusted build (see
+    //! QoreSandboxBudgetStack::enterInBuild()); set before the budget is shared
+    bool carrier = false;
+    //! true for a carrier of the caller's code: the code that it runs is the caller's call as well
+    bool caller_carrier = false;
+    //! true for a carrier of the build's own entry of a sandbox of the Program that created the capability
+    bool build_own_carrier = false;
 
     //! a thread attached to the budget; guarded by the watchdog lock
     struct Attachment {
@@ -299,6 +306,9 @@ public:
 private:
     //! Enters \a sm inside a trusted build (see suspendCharge())
     DLLLOCAL void enterInBuild(int tid, QoreSandboxManager* sm, const void* owner, bool build_own = false);
+
+    //! Returns true if \a sm is a sandbox that the build entered as its own (see enterBuildOwn())
+    DLLLOCAL bool isBuildOwnSandbox(size_t floor_frames, const QoreSandboxManager* sm) const;
 
 public:
 

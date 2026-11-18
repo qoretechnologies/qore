@@ -114,10 +114,18 @@ called them when they started. The build's charge (the creator's) is never added
 the caller calls it directly, also in nested builds, whatever the order of the members of a composite sandbox, and the
 code of other sandboxes that the build runs is charged to those sandboxes only. A capability's callback must therefore
 not run code of another sandbox that the caller supplies: the caller would keep memory beyond its own limit through it
-(a follow-up would give code passed in the arguments the caller's provenance). A continuation of code in a build (a
-thread, a pool task, async I/O) attaches a floor with no caller (`attach()`, `QoreSandboxContext::in_build`), so the
-code that it runs is charged to its own sandboxes only. Work that the build hands to another thread captures only the
-budgets entered in the build (`capture()`), so it is not a part of the caller's call either.
+(a follow-up would give code passed in the arguments the caller's provenance). Code that the caller's code runs is a
+part of the caller's call, as a nested call is: an entry under a carrier of the caller's code
+(`QoreSandboxCallBudget::caller_carrier`) chains that carrier's charge and carries the caller's code itself, whatever
+its sandboxes; under a carrier of the build's own code (`build_own_carrier`) or of other code that the build runs by
+itself, nothing is chained. The sandboxes of the creator govern the code that the build's code calls (a stricter caller
+governs the code that it calls), so they are members of the composite sandbox of that code; their accounts are charged
+by the build's own entries only (`isBuildOwnSandbox()`), and an entry of build-own sandboxes only is the build's own
+code. A continuation of code in a build (a thread, a pool task, async I/O) attaches a floor with no caller (`attach()`,
+`QoreSandboxContext::in_build`) and the carriers that it captured, so a thread that the caller's code starts keeps the
+caller's charge, and one that the build's own code starts charges the code that it runs to that code's own sandboxes
+only. Work that the build hands to another thread captures only the budgets entered in the build (`capture()`), so it is
+not a part of the caller's call either.
 
 Creating the capability is refused to code that a sandbox governs or that is sandboxed, and for a callback that has
 provenance, belongs to a sandboxed or deleted Program, or is a bound callback or a capability; a trusted build

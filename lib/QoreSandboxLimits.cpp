@@ -646,6 +646,18 @@ static bool qore_sandbox_is_caller(const QoreSandboxManager* callers, const Qore
     return callers == sm;
 }
 
+bool QoreSandboxBudgetStack::isBuildOwnSandbox(size_t floor_frames, const QoreSandboxManager* sm) const {
+    // the carriers of the build's own entries are on the stack above the floor, also in a continuation, which
+    // captures them
+    for (size_t i = floor_frames; i < frames.size(); ++i) {
+        const QoreSandboxCallBudget* b = frames[i].budget;
+        if (b->build_own_carrier && b->manager == sm) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void QoreSandboxBudgetStack::enterBuildOwn(int tid, QoreSandboxManager* sm, const void* owner) {
     if (lost_owner) {
         return;
@@ -660,6 +672,17 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
     const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(sm);
     QoreSandboxManager* const* first = members ? members->data() : &sm;
     const size_t count = members ? members->size() : 1;
+    // an entry of sandboxes that the build entered as its own only is the build's own code (the Program that created
+    // the capability, entered again for the callback)
+    if (!build_own) {
+        build_own = true;
+        for (size_t n = 0; n < count; ++n) {
+            if (!isBuildOwnSandbox(floor.frames, first[n])) {
+                build_own = false;
+                break;
+            }
+        }
+    }
 
     // a charge that the same entry made current already (a Program is entered with its own sandbox and the sandbox
     // that it keeps, in two calls with the same owner) is kept in the union below; a charge that another entry made
@@ -693,6 +716,22 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
             break;
         }
     }
+    // code that the caller's code runs (any sandbox, also in a thread that the caller's code started in the build) is
+    // a part of the caller's call, as a nested call is: it is charged to the charge of the innermost carrier as well,
+    // if that carries the caller's code; a carrier of the build's own code or of code that the build runs by itself is
+    // not chained
+    const QoreSandboxCallBudget* outer_caller = nullptr;
+    if (!build_own) {
+        for (size_t i = frames.size(); i > floor.frames; --i) {
+            const QoreSandboxCallBudget* b = frames[i - 1].budget;
+            if (b->carrier) {
+                if (b->caller_carrier) {
+                    outer_caller = b;
+                }
+                break;
+            }
+        }
+    }
 
     // the code runs under the budgets of its sandboxes that are below the build (the caller's ongoing calls): they
     // are pushed again without being attached again, so that a continuation of the code (a thread that it starts)
@@ -723,6 +762,9 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
         if (caller_code) {
             add(floor.saved);
         }
+        if (outer_caller) {
+            add(outer_caller->charge);
+        }
         add(same_entry);
         for (size_t n = 0; n < count; ++n) {
             QoreSandboxManager* member = first[n];
@@ -739,7 +781,10 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
             if (!budget) {
                 continue;
             }
-            if (member->getMemoryLimit() > 0) {
+            // the sandboxes of the Program that created the capability govern the code that the build's code calls (a
+            // stricter caller governs the code that it calls), so they are members of the composite sandbox of that
+            // code; their accounts are charged by the build's own entries only (see enterBuildOwn())
+            if (member->getMemoryLimit() > 0 && (build_own || !isBuildOwnSandbox(floor.frames, member))) {
                 accounts_add_own(member);
             }
             if (index < floor.frames) {
@@ -752,6 +797,9 @@ void QoreSandboxBudgetStack::enterInBuild(int tid, QoreSandboxManager* sm, const
             account->ref();
         }
         carrier = new QoreSandboxCallBudget(sm, 0, 0, 0, 0, charge);
+        carrier->carrier = true;
+        carrier->caller_carrier = caller_code || outer_caller;
+        carrier->build_own_carrier = build_own;
         charge = nullptr;
         frames.push_back({carrier, owner, false, 0, 0, nullptr, false});
     } catch (std::bad_alloc&) {
