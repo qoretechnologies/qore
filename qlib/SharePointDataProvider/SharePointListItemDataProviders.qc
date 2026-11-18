@@ -262,7 +262,7 @@ public class SharePointListItemWriteDataProviderBase inherits SharePointDataProv
     static hash<auto> getWritableFields(*hash<auto> fields) {
         # heterogeneous by nature: the values are whatever the list's columns are typed as, and the
         # OData annotations added alongside them are strings
-        hash<auto!> rv;
+        hash<auto!> rv = {};
         foreach hash<auto> p in (fields.pairIterator()) {
             if (ReadOnlyItemFields{p.key} || p.key =~ /^@odata/ || p.key =~ /^_/) {
                 continue;

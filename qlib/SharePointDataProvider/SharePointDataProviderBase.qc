@@ -553,7 +553,7 @@ string seg = SharePointDataProviderBase::getSitePathSegment("contoso.sharepoint.
         can always be produced
     */
     private hash<auto> getListColumnFields(*hash<auto> opts) {
-        hash<auto> rv;
+        hash<auto> rv = {};
         try {
             foreach hash<auto> col in (getListColumns(opts)) {
                 if (*hash<auto> field = SharePointDataProviderBase::getColumnField(col)) {
