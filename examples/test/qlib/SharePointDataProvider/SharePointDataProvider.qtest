@@ -447,7 +447,7 @@ public class SharePointDataProviderTest inherits QUnit::Test {
         assertEq(root + "/items/ITEM1", rest.last_path);
 
         prov.getChildProvider("get-item").doRequest(base + {"path": "/Shared Documents/spec.docx"});
-        assertEq(root + "/root:/Shared Documents/spec.docx", rest.last_path);
+        assertEq(root + "/root:/Shared%20Documents/spec.docx", rest.last_path);
 
         prov.getChildProvider("create-folder").doRequest(base + {"name": "Contracts"});
         assertEq("POST", rest.last_method);
