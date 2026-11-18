@@ -4435,6 +4435,60 @@ struct IRTakeOverParam {
     const LocalVar* var;
 };
 
+
+//! An immutable set of locals in an open-addressing table with linear probing, for lookups on the hot path of the IR
+//! interpreter (qore#6627): a lookup is an inlined probe, without the node chase and the out-of-line call of a
+//! std::unordered_set
+class QoreIRLocalProbeSet {
+public:
+    //! builds the table from \a set, replacing what it held
+    DLLLOCAL void build(const std::unordered_set<const LocalVar*>& set) {
+        size_t size = 8;
+        // at most half full, so that a probe is short
+        while (size < set.size() * 2) {
+            size *= 2;
+        }
+        table.assign(size, nullptr);
+        for (const LocalVar* lv : set) {
+            if (!lv) {
+                continue;
+            }
+            size_t i = hash(lv) & (size - 1);
+            while (table[i] && table[i] != lv) {
+                i = (i + 1) & (size - 1);
+            }
+            table[i] = lv;
+        }
+    }
+
+    //! empties the table
+    DLLLOCAL void clear() {
+        table.clear();
+    }
+
+    //! returns true if \a lv is in the set
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool contains(const LocalVar* lv) const {
+        if (table.empty() || !lv) {
+            return false;
+        }
+        size_t mask = table.size() - 1;
+        for (size_t i = hash(lv) & mask; table[i]; i = (i + 1) & mask) {
+            if (table[i] == lv) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    std::vector<const LocalVar*> table;
+
+    DLLLOCAL static size_t hash(const LocalVar* lv) {
+        uintptr_t a = reinterpret_cast<uintptr_t>(lv);
+        return static_cast<size_t>((a >> 4) ^ (a >> 13));
+    }
+};
+
 class QoreIRFunction {
 public:
     explicit QoreIRFunction(std::string n_name, std::string n_display_name = {})
@@ -4769,7 +4823,26 @@ public:
     // Cached pre-instantiated set (params + argvid + ast_visible_body_locals)
     // This is built once during IR lowering and reused on every call.
     // selfid is handled separately since it's conditional on (self && selfid).
-    mutable std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
+    // Set only with setCachedPreInstantiated(), which builds cached_pre_instantiated_probe from it (qore#6627); the
+    // set is not changed afterwards, only replaced
+    const std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
+
+    //! The locals of cached_pre_instantiated in an open-addressing table, which the IR interpreter probes for each
+    //! local of a call instead of hashing into the std::unordered_set (qore#6627); built with the set, by
+    //! setCachedPreInstantiated(), and so always holding the same locals
+    QoreIRLocalProbeSet cached_pre_instantiated_probe;
+
+    //! Replaces cached_pre_instantiated (which is deleted) with \a set, owned by the function from now on, and builds
+    //! cached_pre_instantiated_probe from it
+    DLLLOCAL void setCachedPreInstantiated(std::unordered_set<const LocalVar*>* set) {
+        delete cached_pre_instantiated;
+        cached_pre_instantiated = set;
+        if (set) {
+            cached_pre_instantiated_probe.build(*set);
+        } else {
+            cached_pre_instantiated_probe.clear();
+        }
+    }
 
     //! The locals whose values the native code of the AOT-compiled function keeps in native storage, with their
     //! QORE_AOT_LOCAL_SLOT_NATIVE_* flags (see QoreAOTBinary.h)
