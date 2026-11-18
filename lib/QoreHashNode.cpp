@@ -133,10 +133,14 @@ QoreListNode* qore_hash_private::getKeys() const {
 
 QoreListNode* qore_hash_private::getValues() const {
     ReferenceHolder<QoreListNode> list(new QoreListNode(getValueTypeInfo()), nullptr);
-    qore_list_private::get(**list)->reserve(member_list.size());
+    qore_list_private* l = qore_list_private::get(**list);
+    l->reserve(member_list.size());
 
     for (auto& i : member_list) {
-        list->push(i->val.refSelf(), nullptr);
+        // the hash's values have the type of the list's elements already, so they are not converted again: a
+        // reference would otherwise be resolved to check the type of its lvalue, which needs an exception sink, and
+        // the values of an untyped hash are only stripped of complex types, as for any untyped list
+        l->pushWithoutTypeConversion(i->val.refSelf(), nullptr);
     }
     return list.release();
 }

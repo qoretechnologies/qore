@@ -1,19 +1,8 @@
-#!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
-# test-exec-mode: children - every run is a child process that sets its own execution mode
-# test-platform: macos - the AOT module loader and the IR interpreter run patched, ad hoc re-signed modules
 
-%modern
-%no-child-restrictions
-
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires FsUtil
-%requires ../../TestInterpreter.qm
-%requires ../../ExecModeHarness.qm
-
-%exec-class AotIrValueIdsTest
+# The cases of qore#6451, which AotIrValueIds-<part>.qtest run in parts so that each test takes a short time
+# (qore#6562): part 1 runs the valid case and every part a quarter of the patched modules (see addPartCase())
 
 #! qore#6451: the value ids of the IR of an AOT module are checked before the IR is used
 /** AotIrIdsMod.qm has closures, an on_exit handler and a background expression with every kind of instruction that
@@ -32,8 +21,11 @@
     handles of objects, is aot_ir_value_ids.cpp (AOTIRValueIds.qtest).  A patch that changes an id to another valid
     one, or that changes the control flow, gives valid IR with other semantics, which only a full verification of the
     IR read from a module could refuse (see qore#6451).
+
+    The patched modules are divided between the parts (qore#6562): each part runs every PatchedParts-th of them, and
+    part 1 also runs the valid case.
 */
-class AotIrValueIdsTest inherits QUnit::Test {
+class AotIrValueIdsBase inherits QUnit::Test {
     public {
         #! the magic number of the metadata ("QORD")
         const Magic = binary("QORD");
@@ -49,6 +41,8 @@ class AotIrValueIdsTest inherits QUnit::Test {
         const PatchValues = (0x400, 0x7fffffff, 0xffffffff);
         #! the number of runs at once
         const Workers = 4;
+        #! the number of parts that the patched modules are divided between (see addPartCase())
+        const PatchedParts = 4;
         #! the CPU time limit of a run in seconds
         const CpuLimitSecs = 120;
     }
@@ -69,14 +63,28 @@ class AotIrValueIdsTest inherits QUnit::Test {
         #! the file positions of the value ids of the IR instructions
         list<int> id_positions = ();
         int variant_id = 0;
+        #! the part of the cases that this test runs (see addPartCase())
+        int part;
     }
 
-    constructor() : QUnit::Test("AOT IR value ids", "1.0", \ARGV) {
+    constructor(string name, int part) : QUnit::Test(name, "1.0", \ARGV) {
+        self.part = part;
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         reseal_bin = ENV.QORE_AOT_RESEAL ?? dirname(qore_bin) + "/qore-aot-reseal";
-        addTestCase("the AOT module gives the results of its source", \valid());
-        addTestCase("patched IR value ids", \patched());
+        addPartCase(1, "the AOT module gives the results of its source", \valid());
+        # each part runs every PatchedParts-th patched module, so that the parts take about as long
+        addPartCase(1, "patched IR value ids (part 1)", \patched(), 0);
+        addPartCase(2, "patched IR value ids (part 2)", \patched(), 1);
+        addPartCase(3, "patched IR value ids (part 3)", \patched(), 2);
+        addPartCase(4, "patched IR value ids (part 4)", \patched(), 3);
         set_return_value(main());
+    }
+
+    #! adds the case if it is in the part that this test runs
+    private addPartCase(int case_part, string name, code call, *softlist<auto> args) {
+        if (case_part == part) {
+            addTestCase(name, call, args);
+        }
     }
 
     globalSetUp() {
@@ -235,7 +243,8 @@ class AotIrValueIdsTest inherits QUnit::Test {
         }
     }
 
-    patched() {
+    #! runs the patched modules whose index modulo PatchedParts is the given slice
+    patched(int slice) {
         # evenly spaced value id positions
         list<hash<auto>> variants = ();
         int step = max(1, id_positions.size() / MaxIdPositions);
@@ -247,6 +256,8 @@ class AotIrValueIdsTest inherits QUnit::Test {
                 };
             }
         }
+        # this part's share of the variants, every PatchedParts-th of the whole list
+        variants = select variants, $# % PatchedParts == slice;
         Queue q();
         map q.push($1), variants;
         for (int i = 0; i < Workers; ++i) {

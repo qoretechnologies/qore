@@ -2172,6 +2172,19 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
     return !unknown_node_found;
 }
 
+bool QoreIRFunction::collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
+        std::unordered_set<const void*>& locals) {
+    bool unknown_node_found = false;
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
+    if (obe.stmt) {
+        collectLocalsFromStatementBlock(obe.stmt->getCode(), locals, unknown_node_found);
+    }
+    if (obe.handler_ir && visited_handlers.insert(obe.handler_ir.get()).second) {
+        collectLocalsFromIRFunction(*obe.handler_ir, locals, unknown_node_found, visited_handlers);
+    }
+    return !unknown_node_found;
+}
+
 void QoreIRFunction::computeIROnlyLocals() {
     // the write inventories are recomputed: the take-over analysis cached from them for the AOT IR is computed again
     // when it is needed (see take_over_params_state)

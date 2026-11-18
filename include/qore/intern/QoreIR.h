@@ -3270,9 +3270,16 @@ public:
       winning a CAS from QORE_IR_INLINE_UNCHECKED to QORE_IR_INLINE_CLAIMED.  That makes
       the payload single-writer.
     - A thread may read the payload only after an acquire load of the state returns a
-      value > 0.  That load is the only edge ordering the writer's stores against the
-      reader; a plain read at any other state is a data race and can observe a
-      half-published cache.
+      value > 0, or a suspended state (QORE_IR_INLINE_SUSPENDED_DIRECT_PARAMS,
+      QORE_IR_INLINE_SUSPENDED_BOXED_PARAMS), which only an eligible state becomes and which
+      only becomes eligible again or ineligible, so that the payload is never written again.
+      That load is the only edge ordering the writer's stores against the reader; a plain read
+      at any other state is a data race and can observe a half-published cache.
+    - While a debugger is attached to the callee's Program, an eligible state is suspended
+      (qore_ir_suspend_inline_states()), and the call is made by the generic call path, which
+      runs the callee with the debugger; the next call after the debugger is removed resumes
+      it (qore_ir_resume_inline_state()).  A thread that loaded the eligible state before the
+      suspension still makes that one call inline.
     - A claim holder writes the payload only immediately before publishing its verdict, so
       a holder that bails out early leaves the payload untouched and can safely return the
       state to QORE_IR_INLINE_UNCHECKED for a later attempt.
@@ -3291,6 +3298,37 @@ constexpr int8_t QORE_IR_INLINE_CLAIMED = -2;
 constexpr int8_t QORE_IR_INLINE_DIRECT_PARAMS = 1;
 //! Eligible for inlining with parameters instantiated on the local variable stack.
 constexpr int8_t QORE_IR_INLINE_BOXED_PARAMS = 2;
+//! QORE_IR_INLINE_DIRECT_PARAMS suspended while a debugger is attached to the callee's Program; the payload is readable
+constexpr int8_t QORE_IR_INLINE_SUSPENDED_DIRECT_PARAMS = -3;
+//! QORE_IR_INLINE_BOXED_PARAMS suspended while a debugger is attached to the callee's Program; the payload is readable
+constexpr int8_t QORE_IR_INLINE_SUSPENDED_BOXED_PARAMS = -4;
+
+//! Publishes an eligible inline call state, unless a debugger is attached to the callee's Program
+/** Called by the holder of the state's claim after it wrote the payload.  A call site whose callee can be debugged is
+    recorded, so that qore_ir_suspend_inline_states() can suspend it when a debugger attaches; \a recorded is then
+    set, and the instruction's destructor removes it with qore_ir_forget_inline_state().
+
+    @return the state published, or QORE_IR_INLINE_UNCHECKED if none was (the claim is then released by its holder)
+*/
+DLLLOCAL int8_t qore_ir_publish_inline_state(std::atomic<int8_t>& state, std::atomic<bool>& recorded,
+        int8_t eligible, const QoreIRFunction* callee);
+
+//! Removes a call site recorded by qore_ir_publish_inline_state(); called when the instruction is destroyed
+DLLLOCAL void qore_ir_forget_inline_state(std::atomic<int8_t>& state);
+
+//! Resumes a suspended inline call state if no debugger is attached to the callee's Program any more
+/** @return QORE_IR_INLINE_UNCHECKED: the call is made by the generic call path this time
+*/
+DLLLOCAL int8_t qore_ir_resume_inline_state(std::atomic<int8_t>& state, const QoreIRFunction* callee);
+
+//! Suspends the eligible inline call states of the call sites whose callees belong to the Program given
+/** Called when a debugger attaches to it: the inlined call of a callee gives it no frame and skips the debugger's
+    requests, so the calls of the frames that already run in the IR interpreter are made by the call path, which
+    starts them on the AST interpreter (issue #6473)
+
+    @param dpgm_addr the address of the Program's attached debug program (QoreIRFunction::source_dpgm_addr)
+*/
+DLLLOCAL void qore_ir_suspend_inline_states(const void* dpgm_addr);
 
 //! Scoped claim on an instruction's inline call-state cache payload.
 /** Construct one before writing any payload field.  If held() is false another thread owns
@@ -3549,6 +3587,10 @@ public:
     }
 
     ~QoreIRCallMethodDirectInstruction() override {
+        // a debugger attaching later must not find the freed call site
+        if (inline_ir_recorded.load(std::memory_order_acquire)) {
+            qore_ir_forget_inline_state(inline_ir_state);
+        }
         if (expr) {
             ExceptionSink xsink;
             expr.discard(&xsink);
@@ -3562,7 +3604,9 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
 
     // Phase 3: Aggressive inlining fields
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
+    //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
+    mutable std::atomic<bool> inline_ir_recorded{false};
     mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -3588,6 +3632,10 @@ public:
     }
 
     ~QoreIRInvokeMethodDirectInstruction() override {
+        // a debugger attaching later must not find the freed call site
+        if (inline_ir_recorded.load(std::memory_order_acquire)) {
+            qore_ir_forget_inline_state(inline_ir_state);
+        }
         if (expr) {
             ExceptionSink xsink;
             expr.discard(&xsink);
@@ -3602,7 +3650,9 @@ public:
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
 
     // Cached inline IR call state (computed on first execution, avoids repeated lookups)
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
+    //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
+    mutable std::atomic<bool> inline_ir_recorded{false};
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -3626,6 +3676,10 @@ public:
     }
 
     ~QoreIRCallStaticDirectInstruction() override {
+        // a debugger attaching later must not find the freed call site
+        if (inline_ir_recorded.load(std::memory_order_acquire)) {
+            qore_ir_forget_inline_state(inline_ir_state);
+        }
         ExceptionSink xsink;
         expr.discard(&xsink);
     }
@@ -3638,7 +3692,9 @@ public:
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
 
     // Phase 3: Aggressive inlining fields
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
+    //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
+    mutable std::atomic<bool> inline_ir_recorded{false};
     mutable const QoreIRFunction* cached_callee_ir = nullptr; //!< Cached callee IR for inlining
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -3673,6 +3729,10 @@ public:
     }
 
     ~QoreIRDotEvalMethodDirectInstruction() override {
+        // a debugger attaching later must not find the freed call site
+        if (inline_ir_recorded.load(std::memory_order_acquire)) {
+            qore_ir_forget_inline_state(inline_ir_state);
+        }
         ExceptionSink xsink;
         expr.discard(&xsink);
         free(const_cast<char*>(fallback_method_name));
@@ -3713,7 +3773,9 @@ public:
     bool aot_string_transform_upper = false;
 
     // Cached inline IR call state for direct object-method calls.
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
+    //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
+    mutable std::atomic<bool> inline_ir_recorded{false};
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -3746,6 +3808,10 @@ public:
     }
 
     ~QoreIRInvokeDotEvalMethodDirectInstruction() override {
+        // a debugger attaching later must not find the freed call site
+        if (inline_ir_recorded.load(std::memory_order_acquire)) {
+            qore_ir_forget_inline_state(inline_ir_state);
+        }
         ExceptionSink xsink;
         expr.discard(&xsink);
         free(const_cast<char*>(fallback_method_name));
@@ -3772,7 +3838,9 @@ public:
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
 
     // Cached inline IR call state for direct object-method calls.
-    mutable std::atomic<int8_t> inline_ir_state{0};  //!< 0=unchecked, 1=eligible, -1=ineligible
+    mutable std::atomic<int8_t> inline_ir_state{0};  //!< a QORE_IR_INLINE_* state
+    //! true if the call site is recorded for qore_ir_suspend_inline_states() (see qore_ir_publish_inline_state())
+    mutable std::atomic<bool> inline_ir_recorded{false};
     mutable const QoreIRFunction* cached_callee_ir = nullptr;
     mutable const UserVariantBase* cached_uvb = nullptr;
     mutable const QoreTypeInfo* cached_return_type = nullptr;
@@ -3801,6 +3869,13 @@ DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRDotEvalMethodDirectIn
 //! Debug-only: as above, for the call site in a try block
 DLLLOCAL bool qore_ir_dbg_try_inline_dot_eval_method(QoreIRInvokeDotEvalMethodDirectInstruction* inst,
         QoreValue base, const char* method_name, QoreProgram* caller_pgm, QoreValue& result, ExceptionSink* xsink);
+
+//! Debug-only: counts the recorded inline call sites whose callees can be debugged, by state
+/** @param eligible the number of the sites that inline their calls
+    @param suspended the number of the sites suspended while a debugger is attached to the callee's Program (see
+    qore_ir_suspend_inline_states())
+*/
+DLLLOCAL void qore_ir_dbg_inline_site_states(int64& eligible, int64& suspended);
 #endif
 
 //! Creates a FunctionalOperatorInterface from a list or iterable expression
@@ -4236,7 +4311,8 @@ public:
     //! The shared locals that the helper can assign or remove: the release before the call and the reload after it
     //! are made only for these, as a local that the helper only reads keeps its value across the call (qore#6314)
     /** A shared local is in it if an instruction of the helper writes it (anything but a load and the read operands
-        of the fused int operations), or if a reference, a closure or code evaluated through the AST can reach it
+        of the fused int operations), if an on_exit, on_error or on_success handler declared in the helper references it
+        (qore#6545), or if a reference, a closure or code evaluated through the AST can reach it
     */
     std::vector<const LocalVar*> written_shared_locals;
 };
@@ -4908,6 +4984,15 @@ public:
         referenced
     */
     bool collectHandlerLocals(std::unordered_set<const void*>& locals) const;
+
+    //! Collects the locals that the handler of an on_exit, on_error or on_success instruction references
+    /** its statements and its IR, as collectHandlerLocals() does for every handler of a function
+
+        @return false if the handler has code whose locals cannot be collected, in which case any local can be
+        referenced
+    */
+    static bool collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
+        std::unordered_set<const void*>& locals);
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the

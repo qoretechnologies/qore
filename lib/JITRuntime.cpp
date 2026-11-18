@@ -8558,6 +8558,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             }
         }
 
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
+        // (qore#6435)
+        if (qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
+            return toBits(QoreValue());
+        }
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
@@ -8584,6 +8589,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+        // a gap before the first element of a new list whose element type does not take NOTHING (qore#6435)
+        if (qore_list_private::get(*new_l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
+            new_l->deref(nullptr);
+            return toBits(QoreValue());
+        }
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
@@ -8649,6 +8659,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
                 return toBits(QoreValue());
             }
         }
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
+        // (qore#6435)
+        if (qore_list_private::get(*l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
+            return toBits(QoreValue());
+        }
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
@@ -8675,6 +8690,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         const QoreTypeInfo* varTI = var->getTypeInfo();
         const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
         QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+        // a gap before the first element of a new list whose element type does not take NOTHING (qore#6435)
+        if (qore_list_private::get(*new_l)->checkAssignmentGap(static_cast<size_t>(index), xsink)) {
+            new_l->deref(nullptr);
+            return toBits(QoreValue());
+        }
         QoreValue entry = val.needsRef() ? val.refSelf() : val;
         // Apply element type coercion if needed
         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
@@ -17766,7 +17786,10 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         size_t orig_size = l->size();
         ReferenceHolder<QoreListNode> nl(l->extract(start, stop - start + 1), xsink);
         if (stop >= static_cast<int64>(orig_size)) {
+            // the elements past the end of the list are NOTHING, so the removed list has the or-nothing element
+            // type of the list, as in the AST interpreter (LValueRemoveHelper::doRemove(); qore#6434)
             qore_list_private::get(**nl)->resize(nl->size() + stop - orig_size + 1);
+            qore_list_private::get(**nl)->setOrNothingElementType();
         }
         if (reverse) {
             nl = nl->reverse();
@@ -17972,7 +17995,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // binary object, and any other value is removed itself; res holds the value removed: it is the
                 // caller's result for "remove", and for "delete" it keeps the value alive until the destructor
                 // can be run below, with the lvalue locks released
-                res = qore_lvalue_remove_index(lvh, last_step.index, inst->unary_op == LVUnaryOp::Delete, xsink);
+                res = qore_lvalue_remove_index(lvh, last_step.index, xsink, inst->unary_op == LVUnaryOp::Delete);
                 pending_delete_finish = true;
                 handled_multistep_remove = true;
             } else if (last_is_hash_slice && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {

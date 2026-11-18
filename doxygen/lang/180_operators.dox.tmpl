@@ -539,7 +539,7 @@ list<int> l1 = new list<int>(2);
 
     @par Synopsis
     The delete operator deletes the contents of an lvalue. If the delete operator is called on an object, the object will be destroyed unconditionally. The delete operator does not return any value.\n<br>
-    When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
+    When called on a hash key, the key is removed from the hash entirely; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change); a list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>) becomes a list whose value type accepts it (<tt>list&lt;*int&gt;</tt>), or, if the declared type of the lvalue holding the list requires its value type, a \c RUNTIME-TYPE-ERROR exception is raised (see @ref list_holes; use @ref splice "splice" or @ref extract "extract" to remove elements from such a list).\n<br>
     The delete operator will delete multiple keys from a hash (i.e. delete a slice from a hash) when called on a hash dereferenced by a list of strings, giving the keys to delete (see example below).\n<br>
     The delete operator will also remove characters from strings, bytes from binary objects, and elements from lists as well.\n<br>
     @anchor remove_selector_list A list of selectors in square brackets (more than one selector, any of which can be an index range, ex: <tt>delete x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order and nothing is deleted; a single index on such a value deletes the value as a whole.\n<br>
@@ -578,7 +578,7 @@ delete l[2,5..7,8];
 
     @par Synopsis
     The remove operator removes a value from a data structure, or, in the case the operand of the remove operator is a simple value, the value itself is removed from the variable and returned. The remove operator returns the value removed from the \a lvalue.\n<br>
-    When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change).\n<br>
+    When called on a hash key, the key is removed from the hash entirely, and the value returned is the value of the key removed from the hash; when called on a list element, the element is assigned @ref nothing (i.e. the list size does not change); a list whose value type does not accept @ref nothing (ex: <tt>list&lt;int&gt;</tt>) becomes a list whose value type accepts it (<tt>list&lt;*int&gt;</tt>), or, if the declared type of the lvalue holding the list requires its value type, a \c RUNTIME-TYPE-ERROR exception is raised (see @ref list_holes; use @ref splice "splice" or @ref extract "extract" to remove elements from such a list).\n<br>
     The remove operator will remove and return a slice from a hash when called on a hash dereferenced by a list of strings, giving the keys to remove (see example below).\n<br>
     The remove operator will also remove characters from strings, bytes from binary objects, and elements from lists as well; when removing invalid or non-existant indices from strings and binary objects, no data is written to the output value, however in the case of a list lvalue, @ref nothing is written to the output list in these cases.  In case the same index is referenced multiple times, the value is repeated in the output value.\n<br>
     A list of selectors in square brackets (ex: <tt>remove x[0, 2..3]</tt>) selects nothing from a value that is not a list, a string or a binary object: the selectors are evaluated in order, nothing is removed and the value returned is @ref nothing; a single index on such a value removes the value as a whole (see @ref remove_selector_list).\n<br>
@@ -2085,7 +2085,12 @@ str =~ s{http://old\.example\.com}{https://new.example.com}g;
     |!Argument|!Processing
     |@ref string_type "string"|This operator substitutes text in the \a lvalue string if the regular expression matches. Subpattern backreferences are supported in \a target_string, <tt>$1</tt>=first subpattern, <tt>$2</tt>=second subpattern, etc..
 
-    This operator does not throw any exceptions.
+    <b>Exceptions Thrown by =~ s///</b>
+    |!err|!desc
+    |\c INVALID-ENCODING|the \a lvalue string is not valid in its encoding: such a string cannot be matched, and the operator does not leave it unchanged as if nothing in it matched, so that a substitution that escapes or removes text cannot let it through unprocessed; the \a lvalue is not changed
+    |\c ENCODING-CONVERSION-ERROR|the \a lvalue string is not in UTF-8 and cannot be converted to it
+    |\c REGEX-SUBST-ERROR|infinite recursion detected: an empty pattern matched with the global option
+    |\c REGEX-ERROR|the regular expression engine gave up before it could determine a result (match, depth or heap limit), or a match that ends inside a UTF-8 character (as with \c \\C) left the next match at an offset inside a character
 
     <hr>
     @subsection regex_extract_operator Regular Expression Pattern Extraction Operator

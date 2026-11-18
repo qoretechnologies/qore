@@ -578,6 +578,14 @@ struct ObjCountRec {
     const AbstractQoreNode* con;
     // initial count (true = possible recursive cycle, false = no cycle possible)
     bool before;
+    // true if the types of the container's members are declared: an object or a hashdecl hash (qore#6435)
+    bool declared_members = false;
+    // true if the container was reached through a weak reference: it is shared, so it is not retyped (qore#6435)
+    bool shared = false;
+    // the declared type of the lvalue holding the container (qore#6435)
+    const QoreTypeInfo* holder_type = nullptr;
+    // the declared type of a reference naming the container, if any (qore#6435)
+    const QoreTypeInfo* ref_type = nullptr;
 
     DLLLOCAL ObjCountRec(const QoreListNode* c);
     DLLLOCAL ObjCountRec(const QoreHashNode* c);
@@ -773,8 +781,9 @@ protected:
     //! ensureUnique() and ensureUnique(const char*): \a desc is used only if \a Checked
     template <bool Checked>
     DLLLOCAL int ensureUniqueImpl(const char* desc) {
-        // a write-protected variable's container is only read (see setReadOnlyResolution())
-        if (read_only_resolution) {
+        // a write-protected variable's container is only read (see setReadOnlyResolution()), as is one on the path of
+        // a reference whose value is read
+        if (read_only_resolution || read_value_only) {
             return 0;
         }
         member_lvalue_modified = true;
@@ -1096,6 +1105,15 @@ private:
     //! set while the containers of a write-protected variable are resolved to read an element; see
     //! setReadOnlyResolution()
     bool read_only_resolution = false;
+    //! the declared types of the references resolved on the path that name the current value: the one deciding
+    //! whether the value can be a list<*T> (ref_list_type) and the one deciding whether it can be a container with a
+    //! widened element or value type (ref_decl_type); set by noteReferenceType() and consumed by the next container
+    //! of the path (pushPathContainer()) or dropped at an object (qore#6435)
+    const QoreTypeInfo* ref_list_type = nullptr;
+    const QoreTypeInfo* ref_decl_type = nullptr;
+    //! set when the value of a reference is only read (ReadAccess): the containers on the whole path, also past an
+    //! object, are resolved without being changed (qore#6435)
+    bool read_value_only = false;
     //! set when the lvalue rejected the value an operation converted for it; see ~LValueHelper()
     bool write_rejected = false;
     bool member_lvalue_modified = false;
@@ -1310,8 +1328,26 @@ public:
         }
     }
 
+    //! prepares delete or remove of element \a ind of \a l, the value of the lvalue (its own copy), which assign
+    //! NOTHING to it
+    /** A list whose element type does not take NOTHING (ex: list<int>) cannot hold NOTHING: the list is widened to the
+        or-nothing element type (list<*int>) if the declared type of the lvalue holding it allows it (no type, auto,
+        any, list, list<auto>, list<*int>), and RUNTIME-TYPE-ERROR is raised if it requires elements that are not
+        NOTHING (list<int>, softlist<int>).  A list held in a list or a hash of the path (not an object member or a
+        hashdecl member), whose type comes from the value, is decided by the declared type of the lvalue holding the
+        outermost such container, and the containers are retyped for the widened list (qore#6435).
+
+        @return -1 if an exception was raised, 0 if not
+
+        @note defined inline in Variable.cpp, so only usable there
+    */
+    DLLLOCAL inline int prepareListElementRemoval(QoreListNode& l, size_t ind, bool for_del);
+
     //! records a hash key created while navigating to the lvalue target
     DLLLOCAL void trackVivifiedKey(qore_hash_private* h, const char* key);
+
+    //! prepareListElementRemoval() for a list whose element type does not take NOTHING
+    DLLLOCAL int prepareTypedListElementRemoval(qore_list_private& l, size_t ind, bool for_del);
 
     //! records the size a list had before it was extended while navigating to the lvalue target
     DLLLOCAL void trackVivifiedListSize(qore_list_private* l, size_t size);
@@ -1323,6 +1359,36 @@ public:
     /** the removed values are saved and dereferenced when the lvalue locks are released
     */
     DLLLOCAL void rollbackVivification();
+
+    //! adds a list or a hash of the path to ocvec with the declared type of the lvalue holding it, the type of a
+    //! reference naming it, and whether it was reached through a weak reference (\a shared); see
+    //! prepareTypedListElementRemoval() (qore#6435)
+    template <typename T>
+    DLLLOCAL void pushPathContainer(const T* c, bool shared = false) {
+        static_assert(std::is_same<T, QoreListNode>::value || std::is_same<T, QoreHashNode>::value,
+            "the path containers are lists and hashes");
+        ocvec.emplace_back(c);
+        ObjCountRec& r = ocvec.back();
+        r.shared = shared;
+        r.holder_type = typeInfo;
+        r.ref_type = ref_decl_type;
+        ref_list_type = nullptr;
+        ref_decl_type = nullptr;
+    }
+
+    //! called when the path crosses an object: the containers before it are no longer part of the chain
+    DLLLOCAL void clearPathContainers() {
+        ocvec.clear();
+        ref_list_type = nullptr;
+        ref_decl_type = nullptr;
+    }
+
+    //! records the declared type of a reference that was resolved on the path and names the current value (qore#6435)
+    DLLLOCAL void noteReferenceType(const QoreTypeInfo* ti);
+
+    //! returns true if a slot that navigation added to a list whose element type does not take NOTHING still holds
+    //! NOTHING: such a list cannot hold NOTHING (qore#6435); defined inline in Variable.cpp, so only usable there
+    DLLLOCAL inline bool vivifiedTypedListHole() const;
 
     //! Enters the Program of a reference that the lvalue is reached through until the lvalue has been used
     /** The Program's teardown waits until the helper is destroyed, so that it cannot release the variable while the
@@ -1783,11 +1849,12 @@ DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 
     @param lvh the lvalue holding the container, after LValueHelper::startContainerRemoval()
     @param index the index
-    @param for_delete true for the delete operator, false for the remove operator, for exception descriptions
     @param xsink for exceptions
+    @param for_del true for delete, false for remove (for the error of an element that cannot be left without a value,
+    see qore_list_private::prepareElementRemoval(), and the operator named by INVALID-ENCODING, qore#6595)
 
     @return the value removed, owned by the caller
 */
-DLLLOCAL QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, bool for_delete, ExceptionSink* xsink);
+DLLLOCAL QoreValue qore_lvalue_remove_index(LValueHelper& lvh, int64 index, ExceptionSink* xsink, bool for_del);
 
 #endif // _QORE_VARIABLE_H

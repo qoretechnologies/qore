@@ -174,9 +174,10 @@ int sub run(string f) {
                 "ir": {"function": 4990, "method": 5980, "static method": 4960},
             },
             # measured: ast 2641, 2641, 2526; ir 4495, 5991, 4447
+            # ir static method measured: 4766 (CI 66455, AG; develop growth since calibration, not an AG member)
             "aarch64-linux-gnu debug": {
                 "ast": {"function": 2830, "method": 2830, "static method": 2700},
-                "ir": {"function": 4810, "method": 6400, "static method": 4750},
+                "ir": {"function": 4810, "method": 6400, "static method": 5070},
             },
             # measured: ast 2752, 2608, 2608; ir 4686, 5614, 4655
             "aarch64-alpine-linux-musl release": {
@@ -184,9 +185,10 @@ int sub run(string f) {
                 "ir": {"function": 5010, "method": 6000, "static method": 4980},
             },
             # measured: ast 2639, 2641, 2526; ir 4495, 5983, 4447
+            # ir static method measured: 4766 (CI 66455, AG; develop growth since calibration, not an AG member)
             "aarch64-alpine-linux-musl debug": {
                 "ast": {"function": 2820, "method": 2830, "static method": 2700},
-                "ir": {"function": 4810, "method": 6390, "static method": 4750},
+                "ir": {"function": 4810, "method": 6390, "static method": 5070},
             },
         };
     }
@@ -380,9 +382,8 @@ int sub run(string f) {
                 string msg = sprintf("%s %s recursion, %s build: %d bytes per level (budget %d; depth %d with a "
                     "%d KB stack)", m.key, i.key, build_type, i.value.bpl, budget, i.value.large,
                     i.value.size / 1024);
-                if (m_options.verbose || reason) {
-                    printf("%s\n", msg);
-                }
+                # always printed, so that every CI job logs every value (for the calibration of the budgets)
+                printf("%s\n", msg);
                 if (!reason && i.value.bpl > budget) {
                     over += msg;
                 }

@@ -102,9 +102,10 @@ public class RuntimeDiagnosticsTest inherits QUnit::Test {
     }
 
     testForeachGap() {
-        # elements between the end of a list and an index assigned beyond it have no value
+        # elements between the end of a list and an index assigned beyond it have no value; only a list whose element
+        # type takes NOTHING gets them (a list<int> refuses the gap: qore#6435)
         hash<RuntimeDiagnosticInfo> diag = getDiagnostic(sub () {
-            list<int> l = (1,);
+            list<*int> l = (1,);
             l[3] = 2;
             int sum = 0;
             foreach int i in (l) {
@@ -113,7 +114,7 @@ public class RuntimeDiagnosticsTest inherits QUnit::Test {
         }, "RUNTIME-TYPE-ERROR", "NO-VALUE-FOR-TYPE");
         assertEq({"expectedType": "int"}, diag.facts);
         hash<ExceptionInfo> ex = getException(sub () {
-            list<string> l = ("a",);
+            list<*string> l = ("a",);
             l[2] = "b";
             string str = "";
             foreach string s in (l) {

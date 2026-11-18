@@ -162,12 +162,57 @@ void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
     }
 }
 
+void qore_list_private::raiseElementRemovalError(size_t ind, bool for_del, const QoreTypeInfo* holder_type,
+        ExceptionSink* xsink) const {
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot %s element " QLLD " of a list of type '%s' held by an "
+            "lvalue declared as '%s': the element would have no value (NOTHING), which the declared type does not "
+            "take; use splice or extract to remove elements from the list, or declare the lvalue with an element type "
+            "that takes NOTHING (ex: list<*int>)", for_del ? "delete" : "remove", (int64)ind,
+            QoreTypeInfo::getName(complexTypeInfo), QoreTypeInfo::getName(holder_type));
+    }
+}
+
+int qore_list_private::raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const {
+    if (!elementTypeRejectsNothing()) {
+        return 0;
+    }
+    const QoreTypeInfo* vti = getValueTypeInfo();
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot assign element " QLLD " of a list with " QLLD " elements "
+            "of type '%s': the elements between the end of the list and the index would have no value (NOTHING), "
+            "which the element type '%s' does not take; push the elements in order, or declare the element type to "
+            "take NOTHING (ex: list<*int>)", (int64)ind, (int64)length, QoreTypeInfo::getName(complexTypeInfo),
+            QoreTypeInfo::getName(vti));
+    }
+    return -1;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getOrNothingListTypeIntern(const QoreTypeInfo* lti) {
+    const QoreTypeInfo* vti = getComplexListValueType(lti);
+    const QoreTypeInfo* rv = runtimeTakesNothing(vti)
+        ? lti
+        : qore_get_complex_list_type(get_or_nothing_type_check(vti));
+    lti->or_nothing_list_cache.store(rv, std::memory_order_release);
+    return rv;
+}
+
 int qore_list_private::getLValue(size_t ind, LValueHelper& lvh, bool for_remove, ExceptionSink* xsink) {
     if (checkValid(xsink)) {
         return -1;
     }
 
     if (ind >= length) {
+        // an element past the end of the list is not created for delete or remove, as a key of a hash is not
+        // (qore_hash_private::getLValue())
+        if (for_remove) {
+            return -1;
+        }
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
+        // (qore#6435)
+        if (checkAssignmentGap(ind, xsink)) {
+            return -1;
+        }
         // the elements are added for this assignment; a rejected assignment removes them again
         lvh.trackVivifiedListSize(this, length);
         resize(ind + 1);
@@ -556,6 +601,9 @@ int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
         val.discard(xsink);
         return -1;
     }
+    // a list whose element type does not take NOTHING holds no NOTHING element, as a gap or as a hole (qore#6435):
+    // the callers check the value and the index
+    assert((val && index <= priv->length) || !priv->elementTypeRejectsNothing());
     if (index >= priv->length) {
         priv->resize(index + 1);
     }

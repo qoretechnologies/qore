@@ -216,18 +216,6 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
     return slice(*seq, *start_index, *stop_index, broken_list_range, negative_offsets, xsink);
 }
 
-//! makes the element type of a slice of a list that does not take NOTHING its or-nothing type (qore#6435)
-/** for a NOTHING element of the slice: a hole of the list (left by delete or remove, or a gap filled by an assignment
-    past its end) or, with %broken-list-range, an element outside of the list
-*/
-static void setSliceOrNothingType(QoreListNode& rv) {
-    qore_list_private* priv = qore_list_private::get(rv);
-    const QoreTypeInfo* vti = priv->getValueTypeInfo();
-    if (QoreTypeInfo::runtimeAcceptsValue(vti, QoreValue()) == QTI_NOT_EQUAL) {
-        priv->complexTypeInfo = qore_get_complex_list_type(get_or_nothing_type_check(vti));
-    }
-}
-
 QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value, const QoreValue& start_value,
         const QoreValue& stop_value, bool broken_list_range, bool negative_offsets, ExceptionSink* xsink) {
     // the evaluated operands, under the names that the code below has always used
@@ -267,28 +255,16 @@ QoreValue QoreSquareBracketsRangeOperatorNode::slice(const QoreValue& seq_value,
             ReferenceHolder<QoreListNode> rv(new QoreListNode(out_of_range
                 ? get_or_nothing_type_check(l->getValueTypeInfo()) : l->getValueTypeInfo()), xsink);
             if (!empty || broken_list_range) {
-                // a typed list can hold NOTHING in its range: a hole left by delete or remove, or a gap filled by an
-                // assignment past its end; the first one makes the element type of the slice the or-nothing type
-                // (qore#6435); !v is the inline test for NOTHING, which a list holds only as VAL_NOTHING
-                bool hole = out_of_range;
+                // a list whose element type does not take NOTHING holds no NOTHING element (qore#6435), so every
+                // element in range has the element type of the slice
                 if (start < stop) {
                     for (int64 i = start; i <= stop; ++i) {
-                        QoreValue v = l->getReferencedEntry(i);
-                        if (!hole && !v) {
-                            hole = true;
-                            setSliceOrNothingType(**rv);
-                        }
-                        qore_list_private::pushCanonical(**rv, v, xsink);
+                        qore_list_private::pushCanonical(**rv, l->getReferencedEntry(i), xsink);
                         assert(!*xsink);
                     }
                 } else {
                     for (int64 i = start; i >= stop; --i) {
-                        QoreValue v = l->getReferencedEntry(i);
-                        if (!hole && !v) {
-                            hole = true;
-                            setSliceOrNothingType(**rv);
-                        }
-                        qore_list_private::pushCanonical(**rv, v, xsink);
+                        qore_list_private::pushCanonical(**rv, l->getReferencedEntry(i), xsink);
                         assert(!*xsink);
                     }
                 }

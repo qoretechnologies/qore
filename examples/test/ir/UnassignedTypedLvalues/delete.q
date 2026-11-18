@@ -28,7 +28,7 @@ list<auto> sub d4() {
 }
 list<auto> sub d5() { string s = "a"; delete s; return (s + s, s == s); }
 list<auto> sub d6() { hash<string, int> h = {"a": 1}; delete h.a; return (h.a + h.a,); }
-list<auto> sub d7() { list<int> l = (1, 2); delete l[0]; return (l[0] + l[0],); }
+list<auto> sub d7() { list<*int> l = (1, 2); delete l[0]; return (l[0] + l[0],); }
 list<auto> sub d8() { hash<string, int> h = {"a": 1}; remove h.a; return (h.a + 1,); }
 list<auto> sub d9() { int x = 1; reference<int> r = \x; remove r; return (x + x,); }
 show("delete local", \d1()); show("remove local", \d2()); show("remove via reference arg", \d3());

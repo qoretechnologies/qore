@@ -53,6 +53,39 @@
 #include <vector>
 
 class QoreSandboxManager;
+
+#ifndef _Q_WINDOWS
+//! applies the rules of a sandbox for connecting to (or binding) a UNIX socket path (see QoreSocket.cpp)
+/** @return 0 if allowed, -1 if denied (an exception is raised)
+*/
+DLLLOCAL int qore_socket_check_unix_sandbox_rules(QoreSandboxManager& sm, const char* path, bool bind,
+        ExceptionSink* xsink);
+#endif
+
+//! the sandboxes that restrict a connection, each once, with a reference to each (qore#5747)
+class QoreDsRestrictingManagers {
+public:
+    DLLLOCAL QoreDsRestrictingManagers() = default;
+
+    DLLLOCAL ~QoreDsRestrictingManagers();
+
+    //! adds a manager; takes the reference given, which is released at once if the manager is already in the list
+    DLLLOCAL void add(QoreSandboxManager* sm);
+
+    DLLLOCAL bool empty() const {
+        return managers.empty();
+    }
+
+    DLLLOCAL const std::vector<QoreSandboxManager*>& get() const {
+        return managers;
+    }
+
+    QoreDsRestrictingManagers(const QoreDsRestrictingManagers&) = delete;
+    QoreDsRestrictingManagers& operator=(const QoreDsRestrictingManagers&) = delete;
+
+private:
+    std::vector<QoreSandboxManager*> managers;
+};
 class HashMember;
 
 typedef std::set<QoreSQLStatement*> stmt_set_t;
@@ -472,6 +505,19 @@ struct qore_ds_private : public QoreDbiForkObject {
         in use: by the thread that holds the connection
     */
     qore_ds_setter_t param_setter[QDCP_COUNT];
+    //! the creators of the datasource as they were when the values in use were copied (qore#5747)
+    /** Copied from the pending values with the values in use and their setters, in the same section
+        (setConnectionValues()), so that the code that chose a connection is read from the snapshot that the
+        connection is opened with; written and read like the values in use: by the thread that holds the connection
+    */
+    qore_ds_creators_t conn_creators;
+
+    //! the destinations of the open connection as they were checked against the sandbox, or nullptr (qore#5747)
+    /** Set by checkConnectTargets() before the driver connects, for a connection chosen by code that a sandbox
+        restricting network or filesystem access governed, and kept while the connection is open, so that the driver
+        also reconnects to the checked destinations only; written and read by the thread that holds the connection
+    */
+    QoreListNode* checked_targets = nullptr;
 
     // options per connection
     QoreHashNode* opt;
@@ -607,6 +653,7 @@ struct qore_ds_private : public QoreDbiForkObject {
         assert(orphan_stmts.empty());
         clearTypedResultHashDeclCache();
         ExceptionSink xsink;
+        clearCheckedTargets();
         if (opt) {
             opt->deref(&xsink);
         }
@@ -796,6 +843,19 @@ struct qore_ds_private : public QoreDbiForkObject {
     */
     DLLLOCAL int getConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const;
 
+    //! fills \a c with the creators and the setters of the connection values in use, as the connection uses them
+    /** The creators copied with the values in use (\c conn_creators) are used, so that no other section on the
+        pending values is taken and the code that chose the connection is read from the snapshot that the connection
+        is opened with (qore#5747); before the values in use were first copied, the current creators are used
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int getInUseConnectChoosers(QoreDatasourceConnectChoosers& c, ExceptionSink* xsink) const;
+
+    //! fills \a c with the given creators and the setters of the connection values in use
+    DLLLOCAL int getConnectChoosersIntern(const qore_ds_creators_t& cr, QoreDatasourceConnectChoosers& c,
+            ExceptionSink* xsink) const;
+
     //! copies the pending connection values of \a other and their setters to this datasource
     /** The values of \a other and its creators are copied with its lock held and then swapped into this datasource
         with this lock held, so the two locks are never held together; the previous values are freed after the lock is
@@ -815,8 +875,9 @@ struct qore_ds_private : public QoreDbiForkObject {
     */
     DLLLOCAL void setConnectionValues() {
         assert(!dsh || dsh->helperHoldsConnectionValuesLock());
-        // the previous setters of the values in use, released after the lock
+        // the previous setters of the values in use and the previous creators, released after the lock
         qore_ds_setter_t old_setters[QDCP_COUNT];
+        qore_ds_creators_t old_creators;
         QoreDsLock al(m, QoreDsLock::Leaf);
         qore_ds_pending_params::ConstView v(pending, al);
         const qore_ds_pending_params::Values& p = v.get();
@@ -833,6 +894,12 @@ struct qore_ds_private : public QoreDbiForkObject {
                 old_setters[i] = std::move(param_setter[i]);
                 param_setter[i] = p.setter[i];
             }
+        }
+        // the creators with the values that they chose, for the sandbox check of the connection (qore#5747): a
+        // pointer copy, as getCreators() makes
+        if (conn_creators != v.creators()) {
+            old_creators = std::move(conn_creators);
+            conn_creators = v.creators();
         }
     }
 
@@ -1301,6 +1368,33 @@ struct qore_ds_private : public QoreDbiForkObject {
         @return 0 if the connection was closed without an error or was not open, -1 if an error closing it or one of
         its statements was added to \a xsink
     */
+    //! releases the checked destinations of the connection
+    DLLLOCAL void clearCheckedTargets() {
+        if (checked_targets) {
+            // a list of strings, ints and hashes of them: no object can be released here
+            checked_targets->deref(nullptr);
+            checked_targets = nullptr;
+        }
+    }
+
+    //! returns the sandboxes that restrict the connection: the policy managers of the code that chose it
+    /** The policy managers of the creators of the datasource and of the setters of the connection values in use (see
+        getConnectChoosers()) that restrict network or filesystem access, each once
+
+        @return 0 for success, -1 if an exception was raised (the record cannot be read)
+    */
+    DLLLOCAL int getRestrictingManagers(QoreDsRestrictingManagers& managers, ExceptionSink* xsink) const;
+
+    //! checks the destinations of a connection against the sandboxes of the code that chose it (qore#5747)
+    /** Called before the driver opens the connection: for a connection that no sandbox restricting network or
+        filesystem access chose, nothing is done; otherwise the driver must report its destinations
+        (QDBI_METHOD_GET_CONNECT_TARGETS), which are checked against every such sandbox and kept for the driver
+        (Datasource::getCheckedConnectTargets()), unless it declares DBI_CAP_LOCAL_ONLY, or the connection is refused
+
+        @return 0 if the connection may be opened, -1 if an exception was raised
+    */
+    DLLLOCAL int checkConnectTargets(ExceptionSink* xsink);
+
     DLLLOCAL int close(ExceptionSink* xsink) {
         assert(xsink);
         // a transaction of the parent of a child process created with fork() ends with the connection without an
@@ -1330,6 +1424,7 @@ struct qore_ds_private : public QoreDbiForkObject {
             transactionDone(false, true, &close_xsink);
             qore_dbi_private::get(*dsl)->close(ds, &close_xsink);
             isopen = false;
+            clearCheckedTargets();
             setInTransaction(false);
             active_transaction = false;
             commit_in_progress = false;

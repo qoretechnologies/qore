@@ -310,6 +310,46 @@ public:
         return ti ? ti->isType(t) : false;
     }
 
+    //! returns true if the type takes NOTHING at run time (no type takes everything); cached in the type
+    /** a list whose element type does not take NOTHING cannot hold NOTHING (qore#6435)
+    */
+    DLLLOCAL static bool runtimeTakesNothing(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return true;
+        }
+        signed char c = ti->takes_nothing_cache.load(std::memory_order_relaxed);
+        if (c >= 0) {
+            return c;
+        }
+        bool rv = ti->runtimeAcceptsValue(QoreValue()) != QTI_NOT_EQUAL;
+        ti->takes_nothing_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+        return rv;
+    }
+
+    //! returns true if the element type of the complex list type \a lti takes NOTHING; cached in the list type
+    /** a list whose element type does not take NOTHING cannot hold NOTHING (qore#6435)
+    */
+    DLLLOCAL static bool listElementTakesNothing(const QoreTypeInfo* lti) {
+        signed char c = lti->list_elem_takes_nothing_cache.load(std::memory_order_relaxed);
+        if (c >= 0) {
+            return c;
+        }
+        bool rv = runtimeTakesNothing(getComplexListValueType(lti));
+        lti->list_elem_takes_nothing_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+        return rv;
+    }
+
+    //! returns the list type whose element type is the or-nothing type of the element type of the complex list type
+    //! \a lti (list<*int> for list<int>), or \a lti if its element type takes NOTHING; cached in the list type
+    //! (qore#6435)
+    DLLLOCAL static const QoreTypeInfo* getOrNothingListType(const QoreTypeInfo* lti) {
+        const QoreTypeInfo* rv = lti->or_nothing_list_cache.load(std::memory_order_acquire);
+        return rv ? rv : getOrNothingListTypeIntern(lti);
+    }
+
+    //! computes and caches the type returned by getOrNothingListType()
+    DLLLOCAL static const QoreTypeInfo* getOrNothingListTypeIntern(const QoreTypeInfo* lti);
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e runtimeAcceptsValue(const QoreTypeInfo* ti, const QoreValue n) {
         return ti && hasType(ti) ? ti->runtimeAcceptsValue(n) : QTI_WILDCARD;
@@ -1529,6 +1569,13 @@ protected:
 private:
     const q_accept_vec_t accept_vec;
     mutable std::atomic<signed char> contains_type_parameter_cache {-1};
+    //! whether the type takes NOTHING at run time: -1 = not known yet; see runtimeTakesNothing()
+    mutable std::atomic<signed char> takes_nothing_cache {-1};
+    //! for a complex list type: whether its element type takes NOTHING: -1 = not known yet; see
+    //! listElementTakesNothing()
+    mutable std::atomic<signed char> list_elem_takes_nothing_cache {-1};
+    //! for a complex list type: its list<*T> type; see getOrNothingListType()
+    mutable std::atomic<const QoreTypeInfo*> or_nothing_list_cache {nullptr};
 };
 
 class QoreAnyTypeInfo : public QoreTypeInfo {

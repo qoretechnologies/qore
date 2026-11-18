@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class ImplicitArgDecimalTest
+
+#! the number of an implicit argument reference is decimal (issue #6529): $010 was the eighth argument (octal) and $08
+#! a parse error ("offsets must be greater than 0")
+class ImplicitArgDecimalTest inherits QUnit::Test {
+    constructor() : QUnit::Test("implicit argument numbers are decimal", "1.0") {
+        addTestCase("leading zeros", \leadingZeros());
+        addTestCase("errors", \offsetErrors());
+        set_return_value(main());
+    }
+
+    private leadingZeros() {
+        list<int> args = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+        assertEq(8, call("$08", args));
+        assertEq(9, call("$09", args));
+        assertEq(10, call("$010", args));
+        assertEq(1, call("$01", args));
+        assertEq(11, call("$11", args));
+        assertEq(11, call("$0011", args));
+        # in a list-processing operator
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("list<auto> sub get() { return map $01 * 2, (1, 2, 3); }", "map");
+        assertEq((2, 4, 6), p.callFunction("get"));
+    }
+
+    private offsetErrors() {
+        assertRegex("implicit argument offsets must be greater than 0", parseError("$0"));
+        assertRegex("implicit argument offsets must be greater than 0", parseError("$00"));
+        assertEq("implicit argument offset '$99999999999999999999' is too large", parseError("$99999999999999999999"));
+        # larger than an int, but not than a long: it was truncated
+        assertEq("implicit argument offset '$4294967297' is too large", parseError("$4294967297"));
+    }
+
+    #! returns the value of the implicit argument expression in a function called with the arguments
+    private auto call(string expr, list<auto> args) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("auto sub get(...) { return " + expr + "; }", "arg");
+        return p.callFunctionArgs("get", args);
+    }
+
+    #! returns the description of the first parse error of the expression, or NOTHING
+    private *string parseError(string expr) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        try {
+            p.parse("auto sub get(...) { return " + expr + "; }", "arg");
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.desc;
+        }
+        return NOTHING;
+    }
+}
