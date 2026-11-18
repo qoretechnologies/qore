@@ -16,6 +16,36 @@
 const HangGuard = 60s;
 
 
+#! A poll operation implemented in Qore that waits for data on a socket (qore#6531)
+class QoreRecvOperation inherits AbstractPollOperation<auto> {
+    private {
+        Socket sock;
+    }
+
+    constructor(Socket sock) {
+        self.sock = sock;
+    }
+
+    string getGoal() {
+        return "recv";
+    }
+
+    string getState() {
+        return "receiving";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": sock,
+        };
+    }
+}
+
 #! a connected TCP socket pair
 class SocketPair {
     public {
@@ -75,6 +105,7 @@ class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
         addTestCase("FTP data operation", \ftpDataTest());
         addTestCase("FTP PORT accept operation", \ftpPortAcceptTest());
         addTestCase("HTTPClient connect operation", \httpClientTest());
+        addTestCase("operation implemented in Qore", \qoreOperationTest());
         set_return_value(main());
     }
 
@@ -148,6 +179,15 @@ class AsyncIoDeleteSubmittedPlainOpTest inherits QUnit::Test {
         step, which \a trigger makes the operation run
         @param trigger code run once the hold is armed
     */
+    #! an operation implemented in Qore: its steps run on a callback worker (qore#6531)
+    qoreOperationTest() {
+        checkDebug();
+        SocketPair p();
+        on_exit p.close();
+        # the operation waits for data that the server never sends
+        deleteInStep(p.client, new QoreRecvOperation(p.client), "qore-operation");
+    }
+
     private deleteInStep(object sock, object op, string name, *code after_submit, *code trigger) {
         string owner = sprintf("delete-submitted-plain-%s-%d", name, getpid());
         on_exit AsyncIoController::cancelByOwner(owner);

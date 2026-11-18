@@ -1,0 +1,138 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file CleanupCancelStep.qm cancels an operation whose step is in flight in the module cleanup (qore#6510)
+
+/*  CleanupCancelStep.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module CleanupCancelStep {
+    version = "1.0";
+    desc = "cancels an operation whose continuePoll() step is in flight in the module cleanup";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the namespace of the module
+public namespace CleanupCancelStep {
+#! the owner of the operation
+public const Owner = "module-cleanup-cancel-step";
+
+#! an operation whose abort() and onComplete() are module code, run on a callback worker
+public class StepOperation inherits AbstractPollOperation<auto> {
+    private {
+        #! receives the result in onComplete()
+        Queue completed;
+    }
+
+    constructor(Queue completed) {
+        self.completed = completed;
+    }
+
+    string getGoal() {
+        return "done";
+    }
+
+    string getState() {
+        return "pending";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    #! the step's result is held by the test hook, so the operation stays in its step
+    *hash<SocketPollInfo> continuePoll() {
+        return NOTHING;
+    }
+
+    abort() {
+        printf("abort\n");
+        flush();
+    }
+
+    onComplete(hash<SocketPollResultInfo> result) {
+        printf("onComplete: canceled: %y\n", result.canceled);
+        flush();
+        completed.push(result.canceled);
+    }
+}
+
+#! cancels the operation when the module cleanup deletes it, after it has closed the modules' Programs
+public class Canceller {
+    private {
+        #! receives the operation's result in its onComplete() (the module's static variables can be cleared
+        #! before this object)
+        Queue completed;
+    }
+
+    constructor(Queue completed) {
+        self.completed = completed;
+    }
+
+    destructor() {
+        # the cancel waits for the operation's step (pending_aborts); the step's result, released after it, is
+        # sent with the context of the worker that made the step, not of the cleanup
+        AsyncIoController::cancelByOwner(Owner);
+        call_function("dbg_async_io_release_held_step_results");
+        # the canceled operation's abort() and onComplete() run once the step's result has been processed; the wait
+        # ends when onComplete() has received the result
+        auto canceled;
+        try {
+            canceled = completed.get(20s);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+        printf("result received: %y\n", canceled === True);
+        flush();
+        AsyncIoController::flushCallbacksByOwner(Owner);
+    }
+}
+
+#! keeps the operation's objects until the modules are deleted
+public class Holder {
+    public {
+        static *EventNotifier notifier;
+        static *Queue completed;
+        static *Canceller canceller;
+    }
+
+    #! submits the operation and returns once the result of its first step is held
+    static bool start() {
+        call_function("dbg_async_io_hold_step_results", True);
+        # only the first step's result is held
+        on_exit call_function("dbg_async_io_hold_step_results", False);
+        notifier = new EventNotifier();
+        completed = new Queue();
+        canceller = new Canceller(completed);
+        AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new StepOperation(completed),
+            "owner": Owner,
+            "to": -1s,
+        });
+        return call_function("dbg_async_io_wait_held_step_results", 1, 20s);
+    }
+}
+}

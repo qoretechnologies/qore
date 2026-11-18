@@ -55,6 +55,7 @@
 #include <qore/SystemEnvironment.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/SyncParseOptions.h"
 
 class AbstractQoreNode;
 class QoreValue;
@@ -564,6 +565,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the encoded metadata is followed by the XXH64 checksum (seed 0, u64 little-endian) of all of its bytes,
 //!        and the header flags have QORE_AOT_FLAG_METADATA_CHECKSUM; the reader checks it before it reads anything
 //!        else, so that metadata corrupted after it was written is refused (qore#6451)
+//! v44 (batch AE; one format version for the format changes of the batch, one line each):
+//!      - the module metadata record of an AOT module (QORE_AOT_MODULE_INFO_VERSION 3) has the restrictions that its
+//!        code gives the modules it requires, each with QMDR_* flags, which the loader applies before the module's
+//!        initialization (qore#6406, qore#6386)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -634,10 +639,17 @@ static_assert(QORE_AOT_LVPATH_REF_RV_VERSION == QORE_AOT_CODE_PARSE_OPTIONS_VERS
 constexpr uint16_t QORE_AOT_METADATA_CHECKSUM_VERSION = 43;
 //! The size of the checksum that follows the encoded metadata (see QORE_AOT_METADATA_CHECKSUM_VERSION)
 constexpr uint32_t QORE_AOT_METADATA_CHECKSUM_SIZE = 8;
+//! First format version whose modules have the module metadata record with dependency restrictions (see v44 above)
+/** The record is outside the metadata, and its own version (QORE_AOT_MODULE_INFO_VERSION) gives its readers its
+    layout; the format version of the artifacts that carry it changes with it, so that the format that a module
+    reports (qcc --dump-info, the aot-format-version of its build information) tells which record it has (qore#6406,
+    qore#6386)
+*/
+constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_METADATA_CHECKSUM_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -3190,14 +3202,25 @@ struct QoreAOTModuleFileInfo {
     std::vector<std::string> prepended_module_paths;
     //! the module's own %append-module-path directories, in the order its initialization searches them
     std::vector<std::string> appended_module_paths;
+    //! the options that the module's directives gave the modules that they loaded, in directive order
+    /** The parse options that the module's Program gave each module that a directive loaded, which it inherits from
+        it (not those that relieve restrictions); the loader loads the module's dependencies with them, as the module's
+        source would (qore#6406; see qore_program_private::parse_module_restrictions); each entry has QMDR_* flags: the
+        modules that a module declaring functional domains requested before its header, and every module of a record
+        whose requests before the header could not be recorded exactly, are loaded before the module's
+        initialization with the restrictions of the loading code (qore#6386)
+    */
+    std::vector<QoreModuleDependencyRestriction> dependency_restrictions;
 };
 
 //! The magic number of an AOT module metadata record: 'QAMI' little-endian
 static constexpr uint32_t QORE_AOT_MODULE_INFO_MAGIC = 0x494d4151u;
 //! The format version of AOT module metadata records
-/** version 2 added the names of the modules the module was compiled with and its own module path directories
+/** version 2 added the names of the modules the module was compiled with and its own module path directories;
+    version 3 the restrictions that its code gives the modules it requires (qore#6406), each with QMDR_* flags
+    (qore#6386), from AOT format version 44 (QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION)
 */
-static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 2u;
+static constexpr uint32_t QORE_AOT_MODULE_INFO_VERSION = 3u;
 //! The size of the header of an AOT module metadata record: magic, version and payload size
 static constexpr size_t QORE_AOT_MODULE_INFO_HEADER_SIZE = 12;
 //! The segment of the Mach-O section holding AOT module metadata

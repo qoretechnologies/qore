@@ -752,6 +752,34 @@ bool qoreAOTEncodeModuleInfo(const QoreAOTModuleFileInfo& info, std::vector<uint
             || !put_list(info.appended_module_paths, "appended module path")) {
         return false;
     }
+    // the restrictions that the module's directives give its dependencies (qore#6406): a count, then each module's
+    // name, the low and high words of its restrictions and its QMDR_* flags (qore#6386)
+    if (info.dependency_restrictions.size() > QORE_AOT_MODULE_INFO_MAX_COUNT) {
+        error = "too many module dependency restrictions (" + std::to_string(info.dependency_restrictions.size())
+            + ") for the AOT module metadata";
+        return false;
+    }
+    if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 4) {
+        error = "the AOT module metadata exceeds the maximum size of "
+            + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+        return false;
+    }
+    moduleInfoPut32(payload, static_cast<uint32_t>(info.dependency_restrictions.size()));
+    for (const auto& i : info.dependency_restrictions) {
+        if (!put_string(i.module, "module dependency restriction")) {
+            return false;
+        }
+        if (payload.size() > QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE - 20) {
+            error = "the AOT module metadata exceeds the maximum size of "
+                + std::to_string(QORE_AOT_MODULE_INFO_MAX_PAYLOAD_SIZE) + " bytes";
+            return false;
+        }
+        for (uint64_t w : {static_cast<uint64_t>(i.options.getLo()), static_cast<uint64_t>(i.options.getHi())}) {
+            moduleInfoPut32(payload, static_cast<uint32_t>(w));
+            moduleInfoPut32(payload, static_cast<uint32_t>(w >> 32));
+        }
+        moduleInfoPut32(payload, i.flags);
+    }
     record.reserve(QORE_AOT_MODULE_INFO_HEADER_SIZE + payload.size());
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_MAGIC);
     moduleInfoPut32(record, QORE_AOT_MODULE_INFO_VERSION);
@@ -863,6 +891,30 @@ QoreAOTModuleInfoStatus qoreAOTDecodeModuleInfo(const uint8_t* data, size_t len,
     if (!get_list(info.prepended_module_paths) || !get_list(info.appended_module_paths)) {
         return fail(cancel_error.empty() ? moduleInfoDamaged("the record has an invalid module path list")
             : cancel_error);
+    }
+    {
+        // each entry needs a four-byte length, one byte of name, sixteen bytes of options and four of flags
+        uint32_t count = 0;
+        if (!get32(count) || count > QORE_AOT_MODULE_INFO_MAX_COUNT || count > (size - pos) / 25) {
+            return fail(moduleInfoDamaged("the record has an invalid list of dependency restrictions"));
+        }
+        info.dependency_restrictions.reserve(count);
+        for (uint32_t i = 0; i < count; ++i) {
+            std::string name;
+            uint32_t w[4];
+            uint32_t flags = 0;
+            if (!get_string(name) || !get32(w[0]) || !get32(w[1]) || !get32(w[2]) || !get32(w[3]) || !get32(flags)
+                    || (flags & ~QMDR_ALL_FLAGS)) {
+                return fail(moduleInfoDamaged("the record has an invalid list of dependency restrictions"));
+            }
+            // only the options that qcc writes (see qore_program_private::parse_module_restrictions): a damaged
+            // record cannot relieve the restrictions of a dependency or give it other options
+            info.dependency_restrictions.emplace_back(std::move(name), QoreParseOptions(
+                static_cast<int64>(static_cast<uint64_t>(w[0]) | (static_cast<uint64_t>(w[1]) << 32)),
+                static_cast<int64>(static_cast<uint64_t>(w[2]) | (static_cast<uint64_t>(w[3]) << 32)))
+                & ~QoreParseOptions::POSITIVE_OPTIONS & ~QoreParseOptions::FREE_OPTIONS
+                & ~QoreParseOptions(PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG), flags);
+        }
     }
     if (pos != size) {
         return fail(moduleInfoDamaged("the record has " + std::to_string(size - pos) + " unexpected bytes after "
@@ -15849,7 +15901,14 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
             return false;
         }
         for (auto& block : func.blocks) {
-            if (!checkCount(block->instructions.size(), u16_max, "instructions in a basic block")) {
+            // a PushTempMarkPair is written as two instructions (see below)
+            size_t inst_count = block->instructions.size();
+            for (const auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                    ++inst_count;
+                }
+            }
+            if (!checkCount(inst_count, u16_max, "instructions in a basic block")) {
                 return false;
             }
             for (auto& inst_ptr : block->instructions) {
@@ -16024,10 +16083,28 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
         writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
             | (static_cast<uint8_t>(block->loop_cancel) << 1)));
-        writer.writeU16(static_cast<uint16_t>(block->instructions.size()));
+        // a PushTempMarkPair is written as the two PushTempMark instructions that it stands for (qore#6444)
+        size_t inst_count = block->instructions.size();
+        for (const auto& inst_ptr : block->instructions) {
+            if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                ++inst_count;
+            }
+        }
+        writer.writeU16(static_cast<uint16_t>(inst_count));
 
         for (size_t inst_idx = 0; inst_idx < block->instructions.size(); ++inst_idx) {
             auto& inst_ptr = block->instructions[inst_idx];
+            if (inst_ptr->opcode == QoreIROpcode::PushTempMarkPair) {
+                // the outer mark has the location that the pair has, as the statement's mark had it
+                QoreIRInstruction mark(QoreIROpcode::PushTempMark);
+                mark.loc = inst_ptr->loc;
+                QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
+                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr)
+                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr)) {
+                    return false;
+                }
+                continue;
+            }
             uint32_t inst_start = writer.position();
             QoreIRInstGroup group = classifyInstruction(inst_ptr.get());
             if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");

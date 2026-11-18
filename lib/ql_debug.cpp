@@ -1383,7 +1383,8 @@ static void ut_fork_waits_for_lock_holders(UnitTestCounters& c) {
         "encodings", "utc_offset_zones", "module_options", "app_registry", "complex_types", "external_types",
         "aot_deferred_types", "builtin_locations", "class_ids", "scan_waits", "node_watches", "async_io_logger",
         "cipher_cache", "digest_cache", "jit_cache", "jit_bg_queue", "aot_pending_constants",
-        "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers",
+        "aot_regex_cache", "llvm_target_init", "environment", "program_thread_containers", "dbg_start_hold",
+        "dbg_finish_hold",
         nullptr,
     };
     for (const char** name = names; *name; ++name) {
@@ -17849,6 +17850,13 @@ static QoreValue f_dbg_async_io_hold_timer_callbacks(const QoreListNode* params,
     return QoreValue();
 }
 
+//! Debug-only: makes the next hold of a timer callback fail as if its memory could not be allocated
+static QoreValue f_dbg_async_io_fail_next_timer_hold(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgFailNextTimerHold();
+    return QoreValue();
+}
+
 //! Debug-only: waits until at least the given number of timer callbacks are held; False if the wait timed out
 static QoreValue f_dbg_async_io_wait_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -17861,6 +17869,27 @@ static QoreValue f_dbg_async_io_wait_held_timer_callbacks(const QoreListNode* pa
 static QoreValue f_dbg_async_io_release_held_timer_callbacks(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
     return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldTimerCallbacks(xsink));
+}
+
+//! Debug-only: holds the results of continuePoll() steps that callback workers send from now on (True), or not
+static QoreValue f_dbg_async_io_hold_step_results(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    AsyncIoControllerPriv::dbgHoldStepResults(get_param_value(params, 0).getAsBool());
+    return QoreValue();
+}
+
+//! Debug-only: waits until at least the given number of step results are held; False if the wait timed out
+static QoreValue f_dbg_async_io_wait_held_step_results(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64_t count = get_param_value(params, 0).getAsBigInt();
+    return AsyncIoControllerPriv::dbgWaitHeldStepResults(count < 0 ? 0 : static_cast<size_t>(count),
+        get_param_value(params, 1).getAsBigInt());
+}
+
+//! Debug-only: sends the step results held to their I/O threads and returns their number
+static QoreValue f_dbg_async_io_release_held_step_results(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return static_cast<int64>(AsyncIoControllerPriv::dbgReleaseHeldStepResults(xsink));
 }
 
 //! Debug-only: sets the number of responses that an HTTP/2 or HTTP/3 client dispatches in one read pass; 0: the default
@@ -27193,11 +27222,22 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_async_io_hold_timer_callbacks", f_dbg_async_io_hold_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_fail_next_timer_hold", f_dbg_async_io_fail_next_timer_hold,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_async_io_wait_held_timer_callbacks", f_dbg_async_io_wait_held_timer_callbacks,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
         timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_async_io_release_held_timer_callbacks", f_dbg_async_io_release_held_timer_callbacks,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_async_io_hold_step_results", f_dbg_async_io_hold_step_results,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
+        boolTypeInfo, QORE_PARAM_NO_ARG, "hold");
+    qns.addBuiltinVariant("dbg_async_io_wait_held_step_results", f_dbg_async_io_wait_held_step_results,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, boolTypeInfo, 2,
+        bigIntTypeInfo, QORE_PARAM_NO_ARG, "count",
+        timeoutTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_async_io_release_held_step_results", f_dbg_async_io_release_held_step_results,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_http_client_drain_limit", f_dbg_http_client_drain_limit,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,

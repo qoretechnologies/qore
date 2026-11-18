@@ -15,10 +15,9 @@
 /** The Program keeps its expressions in a set that the parse of an expression adds to, the run of an expression looks
     up and the deletion of an Expression object removes from; several threads did so without a common lock, while
     other threads created and parsed Programs of their own, which corrupted the set (a segmentation fault or a heap
-    error).  The threads create and run their expressions one at a time (a Program that a thread parses an expression
-    into refuses to run the code of other threads), and delete them at the same time as other threads create theirs.
-    Each thread checks the values of its expressions.  The race is shown reliably by ThreadSanitizer, which reported
-    it in this test before the fix.
+    error).  The threads create, run and delete their expressions at the same time (the parse of an expression does
+    not keep the other threads out of the Program, issue #6518).  Each thread checks the values of its expressions.
+    The race is shown reliably by ThreadSanitizer, which reported it in this test before the fix.
 */
 public class ExpressionConcurrencyTest inherits QUnit::Test {
     public {
@@ -39,8 +38,6 @@ public class ExpressionConcurrencyTest inherits QUnit::Test {
         shared.run();
 
         Mutex m();
-        # serializes the creation and the run of the expressions of the shared Program, not their deletion
-        Mutex em();
         list<string> errors = ();
         int evaluated = 0;
         Counter done(Threads * 2);
@@ -50,15 +47,9 @@ public class ExpressionConcurrencyTest inherits QUnit::Test {
                 on_exit done.dec();
                 try {
                     for (int i = 0; i < Iterations; ++i) {
-                        *Expression e;
-                        int v;
-                        {
-                            em.lock();
-                            on_exit em.unlock();
-                            e = new Expression(shared, sprintf("f(%d) + g + %d", i, t), "expr");
-                            v = e.eval();
-                        }
-                        # the expression is deleted with the lock released, while other threads create theirs
+                        Expression e(shared, sprintf("f(%d) + g + %d", i, t), "expr");
+                        int v = e.eval();
+                        # the expression is deleted while other threads create and run theirs
                         delete e;
                         if (v != i * 2 + 1 + t) {
                             m.lock();

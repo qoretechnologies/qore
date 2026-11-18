@@ -1,0 +1,8 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# makes a request whose connection a module keeps open until the end of the process (qore#6510)
+# arguments: the URL and the protocol of the connection manager ("h1", "h2" or "h3")
+
+%requires CleanupCancelHolder
+
+printf("status: %d\n", Holder::get(ARGV[0], ARGV[1]));
