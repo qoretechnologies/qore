@@ -1,0 +1,90 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+/*  program-context-thread-data.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires cppapiuser
+
+%exec-class ProgramContextThreadDataTest
+
+/** A module that makes a Program current with QoreProgramContextHelper and then enters it with
+    QoreExternalProgramContextHelper (as qore_program_thread_entry_pending() asks for a Program with thread entry
+    handlers) calls the Program's code with the thread's data in the Program, as a call from another Program does:
+    on the thread's first entry into the Program, the Program's thread initialization code runs, and the code sees
+    the Program's global variables (ProgramContextProbe::callInContext(), the cppapiuser test module).  The helper
+    left the thread's data in the calling Program, so the code ran with it (qore#6537).
+*/
+class ProgramContextThreadDataTest inherits QUnit::Test {
+    public {
+        #! the code of the Program under test: thread initialization code that counts its runs, and a function that
+        #! returns the count
+        const Source = "our int inits = 0;\ncode sub mkinit() { return sub () { ++inits; }; }\n"
+            "int sub get() { return inits; }\n";
+    }
+
+    constructor() : QUnit::Test("program-context-thread-data", "1.0") {
+        addTestCase("a direct first call in a thread (reference)", sub () { firstCallTest(False, False); });
+        addTestCase("a first call through the module", sub () { firstCallTest(True, False); });
+        addTestCase("a first call through the module with thread entry handlers",
+            sub () { firstCallTest(True, True); });
+        set_return_value(main());
+    }
+
+    #! returns a Program that loads the module, has the test's code and thread initialization code
+    private static Program makeProgram(bool handlers) {
+        Program p(PO_NEW_STYLE);
+        p.loadModule("cppapiuser");
+        p.parse(Source, "program-context-thread-data");
+        p.setThreadInit(p.callFunction("mkinit"));
+        if (handlers) {
+            p.setThreadEntryHandler(sub () {}, sub (auto token) {});
+        }
+        return p;
+    }
+
+    #! a new thread calls the Program, first through the module (\a via_module) or directly, then directly
+    private firstCallTest(bool via_module, bool handlers) {
+        Program p = makeProgram(handlers);
+        Counter done(1);
+        auto first;
+        auto second;
+        *hash<ExceptionInfo> err;
+        background sub () {
+            on_exit done.dec();
+            try {
+                first = via_module ? ProgramContextProbe::callInContext(p, "get") : p.callFunction("get");
+                second = p.callFunction("get");
+            } catch (hash<ExceptionInfo> ex) {
+                err = ex;
+            }
+        }();
+        done.waitForZero();
+        assertEq(NOTHING, err, sprintf("%y", err));
+        assertEq(1, first, "the thread initialization code ran once, before the first call");
+        assertEq(1, second, "it did not run again");
+    }
+}
