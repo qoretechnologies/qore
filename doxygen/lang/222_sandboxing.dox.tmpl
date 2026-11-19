@@ -294,6 +294,38 @@ authenticate();
       governs the caller also governs the code that runs for it in the other %Program, and the objects and call
       references created for the caller keep the caller's sandbox as their provenance, also when trusted code uses
       them later (see @ref sandbox_provenance)
+    - <b>A %Program that sandboxed code creates keeps its sandbox</b>: a %Program that sandboxed code creates (with
+      @ref Qore::Program::constructor() "Program::constructor()", in a thread that it starts, or through library code
+      that it calls), or commits code in (@ref Qore::Program::parse() "Program::parse()" of a %Program that it was
+      given, or @ref Qore::Program::parsePending() "Program::parsePending()" whose code is committed later, by any
+      code), keeps the sandbox that governs that code, and its code is governed by it wherever it runs: also when
+      trusted code calls it without the Program object, such as a function that it imported into a %Program of the
+      host, or a function copied into an evaluation %Program
+      (@ref Qore::ProgramControl::createEvalProgram() "ProgramControl::createEvalProgram()"), and also on a thread
+      that a binary module enters the %Program with.  The sandbox's interrupts and call limits apply to that code as
+      well, together with the sandbox of the code that calls it.  This is the whole %Program's code: a %Program of the host that sandboxed code commits code in is governed
+      by that sandbox from then on, its earlier code included, so a host gives sandboxed code a %Program that it may
+      add code to only for the sandbox's own use.  A parse that is refused or rolled back, and an
+      @ref Qore::Expression "Expression" (which is governed through its object and cannot define code: an expression
+      that tries to is refused, and the code pending in the %Program is rolled back with it), add no code
+      and give the %Program no sandbox.  A manager that code a sandbox governs gives a %Program with
+      @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" (also through trusted code that it calls)
+      adds to the sandbox of the code that calls the %Program, as the sandbox that a %Program keeps does, instead of
+      governing its code alone, so sandboxed code cannot loosen its own calls into a %Program by giving it a laxer
+      manager.  The policy that the %Program keeps is the one that governed the code that created it: a %Program
+      that trusted code creates in a system-policy capability
+      (@ref Qore::SandboxManager::createSystemPolicyCall() "SandboxManager::createSystemPolicyCall()") for a sandboxed
+      caller keeps the caller's interrupts and limits but not its filesystem, network and uncontrolled-API policy, as
+      the capability's own code has.  @ref Qore::Program::setSandboxManager() "Program::setSandboxManager()" adds a manager of the
+      %Program's own, which governs its code together with the sandbox that it keeps; it never removes that sandbox,
+      and @ref Qore::Program::getSandboxManager() "Program::getSandboxManager()" returns only the %Program's own
+      manager
+    - <b>Build shared state with a trusted build capability</b>: as a %Program that trusted code creates while it
+      runs for a sandboxed caller keeps that caller's sandbox, trusted infrastructure that builds shared state lazily
+      (a %Program that every caller then uses) for whichever caller needs it first creates it through a capability that
+      it made during trusted startup with
+      @ref Qore::SandboxManager::createTrustedBuildCall() "SandboxManager::createTrustedBuildCall()": what that builds
+      keeps no sandbox of the caller, and is governed only by the manager that the host gives it
     - <b>Give tenant code only what the tenant may do</b>: a host must not give tenant or sandboxed code a
       @ref Qore::Program "Program" object with more freedom than the tenant itself has, such as the %Program of the
       host or of another tenant, or a %Program with fewer parse-option restrictions than the tenant's own.  To give
@@ -423,6 +455,13 @@ authenticate();
     a sandboxed caller that the module code runs with; a sandbox that does not restrict the domain does not, so a
     trusted %Program that a sandbox governs only for its resources or I/O policy keeps the operation.  A closure runs
     in the %Program that created it, so a closure of restricted code that trusted code calls back is restricted code.
+
+    State of library code that restricted code creates keeps the restrictions of its creator: an object of a class of
+    a library module, a call reference to a library module's function or method and a closure of a library module's
+    code that restricted code creates, directly or through the library's code that it calls, are run for that code
+    whoever runs them later, also when a library registry runs them during the initialization of another library
+    module, where the calling code is not looked up (see @ref sandbox_module_init): a declared domain that their code
+    calls is refused as it would be for their creator (\c INVALID-FUNCTION-ACCESS).
 
     The \c SqlUtil and \c DbDataProvider modules refuse a connection string or datasource configuration this way: the
     variants of @ref SqlUtil::AbstractTable::getTable() "AbstractTable::getTable()",
@@ -853,6 +892,56 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @note Incoming connections accepted by a listening socket, datagrams received, and DNS lookups are not
     controlled by the network policy; use @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" to disable network access
     completely.
+
+    @subsection sandbox_dbi_connections Database Connections
+
+    A database connection that code governed by a sandbox chose is checked against the policy of that sandbox before
+    the DBI driver connects, if the sandbox restricts network or filesystem access.  The code that chose a connection
+    is the code that created the @ref Qore::SQL::Datasource "Datasource" or @ref Qore::SQL::DatasourcePool
+    "DatasourcePool" (for a copy, also the code that copied it) and the code that set the connection values that the
+    connection uses (such as the host and the port): the policy that applies is the one of the code that decided
+    where the connection leads, not the one of the code that opens it.  A datasource that trusted code configured can
+    therefore be used by sandboxed code, while a datasource whose host sandboxed code set is checked against the
+    sandbox also when trusted code opens it.  The policy is read when the connection is opened, so every new
+    connection, including a reconnection after the datasource was closed, is checked with the policy as it is then.
+
+    The driver reports the destinations of the connection, as its client library determines them (with the defaults
+    that the library reads from the environment and its configuration, and every host of a list of hosts), and each
+    destination is checked as a socket connection to it would be (see @ref sandbox_net_rules): every address of a host,
+    with the host name, against the network policy, and a UNIX socket against the network and the filesystem policy.
+    The driver is then given the checked addresses and connects to them only, also when it reconnects, so that a host
+    name that resolves to another address after the check cannot redirect the connection.  A destination that cannot be
+    checked, such as a host that cannot be resolved or an abstract UNIX socket, is denied
+    (\c NETWORK-ACCESS-DENIED).
+
+    A driver that cannot report the destinations of its connections, because its client library chooses them in a way
+    that cannot be checked in advance, cannot be used for a connection chosen by code whose sandbox restricts network
+    or filesystem access: it is refused with \c NETWORK-ACCESS-DENIED before it connects.  A driver whose connections
+    reach local files only (it declares @ref Qore::SQL::DBI_CAP_LOCAL_ONLY "DBI_CAP_LOCAL_ONLY") checks these files
+    against the filesystem policy of the code that chose them itself.  See the documentation of each DBI driver for
+    the destinations that it reports.
+
+    The DBI drivers of the %Qore modules for a connection chosen by code whose sandbox restricts network or filesystem
+    access:
+    |!Driver|!Module|!Connection
+    |\c pgsql|\c pgsql|checked: the driver reports the destinations of the connection, as the PostgreSQL client \
+library determines them, and connects to the checked addresses only (needs the PostgreSQL client library 12 or later)
+    |\c mysql|\c mysql|checked: the driver reports the destination of the connection (a host and port, or a UNIX \
+socket) and connects to the checked addresses only
+    |\c sqlite3|\c sqlite3|local: the database file is checked against the filesystem policy
+    |\c oracle|\c oracle|refused (\c NETWORK-ACCESS-DENIED)
+    |\c odbc|\c odbc|refused (\c NETWORK-ACCESS-DENIED)
+    |\c freetds, \c sybase|\c sybase|refused (\c NETWORK-ACCESS-DENIED)
+    |\c jdbc|\c jni|refused (\c NETWORK-ACCESS-DENIED)
+
+    The drivers that are refused cannot report destinations that can be checked before they connect: their client
+    libraries determine where a connection leads from names and configuration that the library resolves itself, or
+    follow a server that sends the connection to another server while it is established.  A connection of such a
+    driver can be made by code that no restricting sandbox governs, such as a datasource or pool that trusted code
+    configured and gives to sandboxed code.
+
+    A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
+    code) does not check database connections.
 
     @subsection sandbox_net_protocols Protocol Constants
 
@@ -1403,11 +1492,15 @@ assert(sm.limitsRestrict() && !sm.networkRestricts());
     of the sandboxes of several callers; for such a combination each predicate is true if any member's is.  The feature
     macro \c _QORE_HAS_SANDBOX_RESTRICTS_API is defined by the headers that declare them.
 
-    A module that refuses an operation that only an unrestricted caller may use refuses it if and only if
-    <tt>!trustsUncontrolledApis() && restricts()</tt> on the governing manager (resolved with
-    QoreSandboxManagerHelper::Policy): a sandbox that restricts nothing, or whose host trusts its code to use
-    uncontrolled APIs, does not make the caller untrusted.  Unlike the other predicates, a combination of sandboxes
-    trusts only if every member does (the AND over the members), because one member that does not trust is enough.
+    A module that refuses an operation that only an unrestricted caller may use (one that runs code or does I/O that
+    %Qore does not see, as an uncontrolled API does) refuses it unless <tt>trustsUncontrolledApis()</tt> is true on
+    the governing manager (resolved with QoreSandboxManagerHelper::Policy): only a sandbox whose host trusts its code
+    to use uncontrolled APIs lets the code use it.  What the sandbox restricts does not matter: a sandbox that allows
+    all I/O and sets no limit but does not trust its code still keeps that code from such operations, as
+    @ref Qore::SandboxManager::setUncontrolledApiPolicy() "setUncontrolledApiPolicy()" describes; the predicates above
+    are for a module that applies the sandbox's I/O policy or limits itself.  Unlike the other predicates, a
+    combination of sandboxes trusts only if every member does (the AND over the members), because one member that does
+    not trust is enough.
 
     The predicates are a snapshot of the current configuration: concurrent reconfiguration of a shared manager is not
     synchronized (as for the other readers of the manager), and the interrupt state (requestInterrupt()) is not a

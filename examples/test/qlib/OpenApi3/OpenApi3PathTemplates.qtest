@@ -12,6 +12,8 @@ class PathTemplatesTest inherits QUnit::Test {
         addTestCase("literal and template routing", \routingTest());
         addTestCase("parameter extraction", \parametersTest());
         addTestCase("invalid and ambiguous templates", \invalidTest());
+        addTestCase("deserialized schema", \deserializedTest());
+        addTestCase("webhooks, patterns and Accept content types", \patternsTest());
         set_return_value(main());
     }
 
@@ -68,6 +70,46 @@ class PathTemplatesTest inherits QUnit::Test {
         assertEq({"id": "abc"}, req.path_args);
         req = s.parseRequest("GET", "/files/reports/file-september.json", NOTHING, \headers);
         assertEq({"folder": "reports", "name": "september"}, req.path_args);
+    }
+
+    # the compiled patterns of the templates are not serialized; a deserialized schema compiles them when they are used
+    # (qore#6603)
+    private deserializedTest() {
+        OpenApi3Schema s = Serializable::deserialize(schema(("/batches/{id}:cancel", "/files/{folder}/file-{name}.json",
+            "/files/{folder}/{name}")).serialize());
+        hash<auto> headers;
+        assertEq({"id": "abc"}, s.parseRequest("GET", "/batches/abc:cancel", NOTHING, \headers).path_args);
+        assertEq({"folder": "reports", "name": "september"},
+            s.parseRequest("GET", "/files/reports/file-september.json", NOTHING, \headers).path_args);
+        assertEq("/files/{folder}/{name}", s.paths.match("/files/reports/other.json").getOperation("get",
+            "/files/reports/other.json").path);
+    }
+
+    # patterns of a schema are compiled when it is loaded; a webhook name is not a path template (qore#6603)
+    private patternsTest() {
+        hash<auto> ok_response = {"200": {"description": "ok", "content": {"application/json": {"schema": {
+            "type": "object"}}}}};
+        hash<auto> doc = {
+            "openapi": "3.1.0", "info": {"title": "patterns", "version": "1"},
+            "paths": {"/a": {"get": {
+                "parameters": ({"name": "q", "in": "query", "required": True,
+                    "schema": {"type": "string", "pattern": "^[0-9]+$"}},),
+                "responses": ok_response,
+            }}},
+            "webhooks": {"pet{event": {"post": {"responses": {"200": {"description": "ok"}}}}},
+        };
+        OpenApi3Schema s("", doc);
+        hash<auto> headers;
+        assertEq({"q": "12"}, s.parseRequest("GET", "/a?q=12", NOTHING, \headers).query);
+        assertThrows("SCHEMA-VALIDATION-ERROR", \s.parseRequest(), ("GET", "/a?q=x", NOTHING, \headers));
+        # a pattern that is not valid is an error when the schema is loaded
+        hash<auto> bad = doc;
+        bad.paths."/a".get.parameters[0].schema.pattern = "(x";
+        assertThrows("REGEX-COMPILATION-ERROR", sub () { OpenApi3Schema b("", bad); });
+        # the characters of a content type from the request other than "*" are not a pattern
+        assertEq(MimeTypeJson, s.processResponse("GET", "/a", 200, {"x": 1}, NOTHING,
+            ("application/*",)).hdr."Content-Type");
+        assertThrows("ACCEPT-ERROR", \s.processResponse(), ("GET", "/a", 200, {"x": 1}, NOTHING, ("a/(*",)));
     }
 
     private invalidTest() {

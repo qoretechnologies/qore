@@ -10,6 +10,7 @@
 %requires FsUtil
 %requires QUnit
 %requires ../../../TestInterpreter.qm
+%requires ../../../QoreBuildTree.qm
 
 %exec-class AotBinarySymbolResolutionTest
 
@@ -18,9 +19,10 @@ class AotBinarySymbolResolutionTest inherits QUnit::Test {
     /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
         linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
     */
-    private static list<string> libqoreTargetFlags() {
+    private static list<string> libqoreTargetFlags(string lib_dir) {
         *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
-        return m ? (m[0],) : ();
+        # a sanitizer build of libqore needs the same sanitizer in what links with it (qore#6682)
+        return (m ? (m[0],) : ()) + QoreBuildTree::sanitizer_flags(lib_dir);
     }
 
     private {
@@ -109,7 +111,7 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
             "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore%s %s 2>&1",
             shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
             shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir), undefined_flag,
-            libqoreTargetFlags().join(" ")));
+            libqoreTargetFlags(libqore_dir).join(" ")));
         assertTrue(is_file(qmod_path), "compiled unresolved-symbol qmod: " + build_out);
 
         # different dynamic linkers report the unresolved symbol differently: glibc -> "undefined symbol:
@@ -145,7 +147,7 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
             "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore %s 2>&1",
             shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
             shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir),
-            libqoreTargetFlags().join(" "));
+            libqoreTargetFlags(libqore_dir).join(" "));
 
         setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);
         on_exit unsetenv("QORE_AOT_LOAD_COUNTER_FILE");
@@ -198,7 +200,7 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
             "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore %s 2>&1",
             shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
             shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir),
-            libqoreTargetFlags().join(" ")));
+            libqoreTargetFlags(libqore_dir).join(" ")));
         assertTrue(is_file(qmod_path), "compiled qmod without metadata: " + build_out);
 
         setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);

@@ -125,6 +125,24 @@ public class CdsRestDataProviderBase inherits DataProvider::AbstractDataProvider
             "]": "%5D",
             "`": "%60",
         };
+
+        #! Characters percent-encoded in the values of query options in addition to those in @ref PathEncodingMap
+        /** These characters end a query option or start another one, or are read as a space
+        */
+        const QueryValueEncodingMap = PathEncodingMap + {
+            "&": "%26",
+            "+": "%2B",
+            "=": "%3D",
+            ";": "%3B",
+        };
+
+        #! Characters percent-encoded in a segment of a request path in addition to those in @ref QueryValueEncodingMap
+        /** These characters end the segment or the path
+        */
+        const PathSegmentEncodingMap = QueryValueEncodingMap + {
+            "/": "%2F",
+            "?": "%3F",
+        };
     }
 
     #! Creates the object
@@ -275,6 +293,51 @@ string path = CdsRestDataProviderBase::encodeRequestPath("accounts?$filter=name 
         return CdsRestDataProviderBase::encodeRequestPathIntern(path, True);
     }
 
+    #! Returns the given value of a query option percent-encoded
+    /** The characters percent-encoded by @ref encodeRequestPath() are encoded, and also \c "&", \c "+", \c "=" and
+        \c ";", so that the value, such as an OData \c $filter expression with string literals, is read as one value
+        of one option whatever characters its literals have
+
+        @param value the value of a query option, such as an OData \c $filter expression
+
+        @return the value percent-encoded
+
+        @throw ENCODING-CONVERSION-ERROR the value is not in UTF-8 and cannot be converted to UTF-8
+
+        @par Example:
+        @code{.py}
+string value = CdsRestDataProviderBase::encodeQueryValue("name eq 'A&B'");
+# value: "name%20eq%20'A%26B'"
+        @endcode
+
+        @since CdsRestDataProvider 2.2
+    */
+    static string encodeQueryValue(string value) {
+        return CdsRestDataProviderBase::encodeIntern(value, True, QueryValueEncodingMap);
+    }
+
+    #! Returns the given segment of a request path percent-encoded
+    /** The characters percent-encoded by @ref encodeQueryValue() are encoded, and also \c "/" and \c "?", so that the
+        segment, such as an entity key predicate with a string literal, is read as one segment of the path
+
+        @param segment the segment of a request path, such as an entity key predicate
+
+        @return the segment percent-encoded
+
+        @throw ENCODING-CONVERSION-ERROR the segment is not in UTF-8 and cannot be converted to UTF-8
+
+        @par Example:
+        @code{.py}
+string segment = CdsRestDataProviderBase::encodePathSegment("accounts('a/b')");
+# segment: "accounts('a%2Fb')"
+        @endcode
+
+        @since CdsRestDataProvider 2.2
+    */
+    static string encodePathSegment(string segment) {
+        return CdsRestDataProviderBase::encodeIntern(segment, True, PathSegmentEncodingMap);
+    }
+
     #! Returns the CDS REST client for the \c cdsrestclient option
     /** @param rest the value of the option
 
@@ -300,13 +363,20 @@ string path = CdsRestDataProviderBase::encodeRequestPath("accounts?$filter=name 
         percent-encoded characters, which are left unchanged
     */
     static private string encodeRequestPathIntern(string path, bool encode_pct) {
-        # fast path: nothing to encode
-        if (path !~ /[^!$&-;=?-Z_a-z]/) {
-            return path;
-        }
-        # the request target is encoded byte by byte from the UTF-8 representation of the path
-        binary b = path.encoding() == "UTF-8" ? path.toBinary() : convert_encoding(path, "UTF-8").toBinary();
-        string rv;
+        return CdsRestDataProviderBase::encodeIntern(path, encode_pct, PathEncodingMap);
+    }
+
+    #! Percent-encodes the characters of a string in the given map, control characters and non-ASCII characters
+    /** @param str the string to encode
+        @param encode_pct if @ref True, \c "%" is encoded as well; otherwise the string is assumed to contain
+        percent-encoded characters, which are left unchanged
+        @param enc_map the characters to encode and their encodings
+    */
+    static private string encodeIntern(string str, bool encode_pct, hash<auto> enc_map) {
+        # the string is encoded byte by byte from its UTF-8 representation; every byte is checked, as a regular
+        # expression does not match a string whose encoding is invalid
+        binary b = str.encoding() == "UTF-8" ? str.toBinary() : convert_encoding(str, "UTF-8").toBinary();
+        string rv = "";
         int size = b.size();
         for (int i = 0; i < size; ++i) {
             int code = b[i];
@@ -315,7 +385,7 @@ string path = CdsRestDataProviderBase::encodeRequestPath("accounts?$filter=name 
                 continue;
             }
             string c = chr(code);
-            *string enc = (c != "%" || encode_pct) ? PathEncodingMap{c} : NOTHING;
+            *string enc = (c != "%" || encode_pct) ? enc_map{c} : NOTHING;
             rv += enc ?? c;
         }
         return rv;

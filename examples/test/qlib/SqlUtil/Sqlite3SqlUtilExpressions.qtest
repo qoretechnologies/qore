@@ -826,8 +826,10 @@ class Sqlite3ExpressionTest inherits QUnit::Test {
         assertEq("%H:%M:%S.%f", Sqlite3Table::convertDateFormat("HH:mm:SS.ms"));
         # ensure MM is converted to %m
         assertEq("%m-%d", Sqlite3Table::convertDateFormat("MM-DD"));
-        # ensure single quotes are escaped for SQL safety
-        assertEq("%Y''%m''%d", Sqlite3Table::convertDateFormat("YYYY'MM'DD"));
+        # the format is converted without quoting; getDateFormatLiteral() gives it as an SQL string literal (qore#6557)
+        assertEq("%Y'%m'%d", Sqlite3Table::convertDateFormat("YYYY'MM'DD"));
+        assertEq("'%Y''%m''%d'", Sqlite3Table::getDateFormatLiteral("YYYY'MM'DD"));
+        assertEq("'%Y\\%m'", Sqlite3Table::getDateFormatLiteral("YYYY\\MM"));
     }
 
     testExpressionMapKeys() {

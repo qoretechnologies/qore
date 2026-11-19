@@ -1,0 +1,109 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class SqlUtilSuperqueryAliasTest
+
+#! aliases (cop_as()) in the columns of a superquery (issue #6592)
+/** the superquery's map of the names that it knows was typed \c hash<string, bool>, and an alias in its columns sets
+    its expression there, which raised \c RUNTIME-TYPE-ERROR; runs on SQLite and on PostgreSQL when
+    \c QORE_DB_CONNSTR_PGSQL is set
+*/
+class SqlUtilSuperqueryAliasTest inherits QUnit::Test {
+    private {
+        *Datasource pgsql;
+    }
+
+    constructor() : Test("SqlUtilSuperqueryAlias", "1.0", \ARGV) {
+        addTestCase("SQLite: aliases in a superquery", \sqliteTest());
+        addTestCase("PostgreSQL: aliases in a superquery", \pgsqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "SqlUtilSuperqueryAlias");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        check(ds);
+    }
+
+    pgsqlTest() {
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set or no pgsql module");
+        }
+        on_exit pgsql.rollback();
+        check(pgsql);
+    }
+
+    private check(Datasource ds) {
+        AbstractTable t = new Table(ds, "sq_alias").getTable();
+        t.addColumn("id", {"qore_type": Type::Int}, False);
+        t.addColumn("name", {"qore_type": Type::String, "size": 20}, False);
+        t.create();
+        foreach hash<auto> row in (({"id": 1, "name": "a"}, {"id": 2, "name": "b"}, {"id": 3, "name": "c"})) {
+            t.insert(row);
+        }
+
+        # the example of the issue: an alias of an expression of a column of the subquery
+        string sql;
+        assertEq(({"y": 5},), t.selectRows({
+            "columns": (cop_as("id", "x"),),
+            "where": {"id": 3},
+            "superquery": {"columns": (cop_as(cop_plus("x", cop_value(2)), "y"),)},
+        }, \sql));
+        assertRegex("as y from \\(select ", sql);
+
+        # aliases of a column and of an expression, the ordering by an alias of the superquery and a where clause on a
+        # column of the subquery
+        assertEq(({"n": "c", "z": 30}, {"n": "b", "z": 20}), t.selectRows({
+            "columns": (cop_as("id", "x"), cop_as("name", "nm")),
+            "superquery": {
+                "columns": (cop_as("nm", "n"), cop_as(cop_multiply("x", cop_value(10)), "z")),
+                "where": {"x": op_gt(1)},
+                "orderby": "-z",
+            },
+        }));
+
+        # a column of the subquery with and without an alias in the superquery
+        assertEq(({"x": 1, "w": "a"},), t.selectRows({
+            "columns": (cop_as("id", "x"), "name"),
+            "where": {"id": 1},
+            "superquery": {"columns": ("x", cop_as("name", "w"))},
+        }));
+    }
+}

@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - mutexes of two Files taken by threads that redirect descriptors with dup2()
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires QUnit
+%requires ../../../../ExecModeHarness.qm
+%requires ../../../../TestInterpreter.qm
+
+%exec-class FileRedirectLockOrderTest
+
+#! Redirects between two Files in opposite directions at the same time do not deadlock (#6567)
+/** File::redirect() locked the File it was called on and then its argument, so <tt>a.redirect(b)</tt> and
+    <tt>b.redirect(a)</tt> took the two locks in opposite orders: run at the same time, each held one lock and waited
+    for the other.  It now locks the two Files in address order.
+
+    RedirectLockOrder.q runs the two redirects in two threads.  With a DEBUG build of the library, the first redirect
+    to take the first of its two locks waits there, with the lock held, until the outcome is known
+    (dbg_file_redirect_rendezvous()): with the locks in call order, the other redirect takes the other File's lock and
+    arrives there too, and the two then deadlock, which the script reports at once; in address order, the other
+    redirect waits for the lock that the first one holds, which releases the first one at once, and the two end one
+    after the other.  The 5 s timeout of the rendezvous is only a safety net.  Without a DEBUG build, the redirects are
+    only checked to end.
+*/
+class FileRedirectLockOrderTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("FileRedirectLockOrder", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        addTestCase("redirects in opposite directions", \redirectTest());
+        set_return_value(main());
+    }
+
+    redirectTest() {
+        string script = get_script_dir() + "/RedirectLockOrder.q";
+        # the second redirect waits for the first one's lock, and arrives at the rendezvous once that one has ended
+        string expected = Option::HAVE_LIBRARY_DEBUGGING ? "RESULT:ok RENDEZVOUS:2 0 waiter" : "RESULT:ok";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf("%s --exec-mode=%s %s",
+                qore_bin, mode, script));
+            *list<*string> line = r.out =~ x/^(RESULT:.*)$/m;
+            assertEq(expected, line ? line[0] : r.out, mode);
+            assertEq(0, r.rc, mode + ": exit status");
+        }
+    }
+}

@@ -444,16 +444,29 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** The following keys can be set for this option:
             - \c commit_block: the number of changes made before an automatic commit is made for upsert methods that
               perform commits
-            - \c delete_others: if this option is @ref True "True", then a hash of primary key values in the input
-              data is built as the input data is iterated.  After iterating, if the row count of the table and the
-              input data matches, then nothing more is done, otherwise, every row of the table is iterated and
-              compared to the primary key hash; if a row does not match a primary key value, then it is deleted.
-              This operation allows tables to be completely synchronized by removing rows in the target table not
-              present in the source table. This operation is expensive for large data sets.
+            - \c delete_others: if this option is @ref True "True", then the primary key values of the input data
+              are kept as the input data is iterated; afterwards, every row of the table is read, and the rows whose
+              primary key values are not those of an input row are deleted, so an empty input deletes every row.  The
+              values are compared as values of their types (a date with its time zone, a number by its value); an
+              input value that the database stores in another form (ex: a date in another time zone, a float with an
+              integer value for an integer column, a string with trailing spaces) is looked up in the database, which
+              compares it with the stored values; a value that the column rounds (ex: a date with microseconds in a
+              column with whole seconds, or <tt>1.005</tt> in a column with two decimals) is converted to the type of
+              the column for the comparison by the drivers whose database rounds such values (PostgreSQL, MySQL,
+              Oracle and SQL Server, not Sybase), so that it is found as it was stored.  This operation
+              allows tables to be completely synchronized by removing rows in the target table not present in the
+              source table. This operation is expensive for large data sets.  The table must have a primary key, and
+              each input row must have a plain value (not \c NULL, an operator, a list or an object) of each column
+              of the primary key, or
+              \c UPSERT-ERROR is raised; a row of list values (bulk DML: its first value is a list) gives the key of
+              each of its rows, whose value of a key column is the element of the column's list, which must be as
+              long as the first value, or the column's value if it is not a list; for an input row without one, the rows before it have been upserted (and
+              committed with \c commit_block).
             - \c info_callback: see @ref upsert_info_callback
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
-              key should be set to the columns to omit in the update clause
+              key should be set to the columns to omit in the update clause; a select-first upsert neither compares
+              nor updates them, and a row with no other column to update is unchanged when its key exists
             - \c upsert_columns: a list of column names that identifies the unique index or constraint to use for the
               upsert operation
         */
@@ -785,6 +798,8 @@ table.create();
         @note it's generally not safe to call this method while SQL operations are in progress in other threads on the same table
     */
     setDatasource(AbstractDatasource nds) {
+        # the types of the key columns are read from the new datasource (issue #6676)
+        remove upsert_key_casts;
         l.lock();
         on_exit l.unlock();
 
@@ -1460,7 +1475,8 @@ target.createAsSelectCommit(source, {
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1470,6 +1486,10 @@ target.createAsSelectCommit(source, {
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1488,7 +1508,8 @@ target.createAsSelect(source, {"columns": ("id", "name")});
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1498,6 +1519,10 @@ target.createAsSelect(source, {"columns": ("id", "name")});
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1519,7 +1544,8 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
         @param source the source table for the select statement; this table must use the exact same datasource
         object as the current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1530,6 +1556,10 @@ hash<SqlResultInfo> info = target.createAsSelectWithInfo(source, {"columns": ("i
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1553,7 +1583,8 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param args an optional reference to a list for any bind arguments
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
@@ -1564,6 +1595,10 @@ string sql = target.getCreateAsSelectSql(source, {"columns": ("id", "name")}, \a
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -1592,7 +1627,8 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional creation and data callback options; see
         @ref SqlUtil::AbstractTable::CreateAsSelectOptions for more info
 
@@ -1602,6 +1638,10 @@ hash<SqlResultInfo> info = target.getCreateAsSelectSqlWithInfo(source, {"columns
         @throw CREATE-TABLE-ERROR table has already been read from or created in the database
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive), or the
+        database cannot run it in a create-as-select (see @ref select_option_recursive_insert_create)
+        @throw VALUE-ERROR a value cannot be given in the SQL of a database that refuses bind values in a
+        create-as-select (Oracle)
 
         @since SqlUtil 1.10
     */
@@ -4218,10 +4258,14 @@ table.insert(row);
 
                 if (cmd.immediate) {
                     # make sure only identifiers are given to the operator's code, as the SQL that it returns from
-                    # the argument is inserted directly into the query
-                    if (v =~ /[^a-z\._0-9]/i) {
-                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y which "
-                            "contains illegal characters", getDesc(), iop, v);
+                    # the argument is inserted directly into the query; the value must match the allowed characters
+                    # as a whole; a string that is not valid in its encoding, which cannot be matched, is refused first
+                    if ((v.typeCode() == NT_STRING && !v.isEncodingValid()) || v !~ /\A[A-Za-z\._0-9]*\z/) {
+                        # a value that is not valid in its encoding is not given in the message (qore#6553)
+                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s which "
+                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !v.isEncodingValid()
+                                ? sprintf("a string of %d bytes not valid in its encoding", v.size())
+                                : sprintf("%y", v));
                     }
                     phl += cmd.code ? cmd.code(key, v) : v;
                     continue;
@@ -4261,7 +4305,8 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
+        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for
+        information about this argument; for a recursive query, see @ref select_option_recursive_insert_create
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
 
@@ -4271,6 +4316,8 @@ int rows = table.insertFromSelectCommit(("id", "name", "created"), source_table,
         @throw COLUMN-ERROR unknown or invalid column in insert list
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @note this method does not take insert options because it is executed entirely in the database server; use insertFromIterator() or insertFromIteratorCommit() to insert arbitrary data with insert options
     */
@@ -4322,7 +4369,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement; it must use the exact same datasource object as the
         current target table
-        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for information about this argument
+        @param sh a hash of conditions for the select statement; see @ref select_option_hash "select option hash" for
+        information about this argument; for a recursive query, see @ref select_option_recursive_insert_create
         @param sql an optional reference to a string to return the SQL generated for the select statement
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for more inf
 
@@ -4332,6 +4380,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @throw COLUMN-ERROR unknown or invalid column in insert list
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR \c 'offset' supplied without \c 'orderby' or \c 'limit', \c 'orderby' with \c 'limit' and \c 'offset' does not match any unique constraint
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @note this method does not take insert options because it is executed entirely in the database server; use insertFromIterator() or insertFromIteratorCommit() to insert arbitrary data with insert options
     */
@@ -4364,7 +4414,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         @param cols the list of column names to use to insert in the current table
         @param source the source table for the select statement
         @param select_hash a hash of conditions for the select statement; see
-        @ref select_option_hash "select option hash" for information about this argument
+        @ref select_option_hash "select option hash" for information about this argument; for a recursive
+        query, see @ref select_option_recursive_insert_create
         @param opt optional SQL data operation callback options; see @ref AbstractTable::SqlDataCallbackOptions for
         more info
 
@@ -4376,6 +4427,8 @@ int rows = table.insertFromSelect(("id", "name", "created"), source_table, (("co
         projection cardinality mismatch
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @since SqlUtil 1.7
     */
@@ -4402,7 +4455,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
 
         @param cols the ordered target column names
         @param source the source table; it must use the exact same datasource object as the target table
-        @param select_hash source select options; see @ref select_option_hash
+        @param select_hash source select options; see @ref select_option_hash, and
+        @ref select_option_recursive_insert_create for a recursive query
         @param args an optional reference receiving the ordered bind arguments
         @param opt optional SQL data operation options used while resolving the structured source select; see
         @ref AbstractTable::SqlDataCallbackOptions
@@ -4414,6 +4468,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
         projection cardinality mismatch
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @since SqlUtil 3.0.0
     */
@@ -4428,7 +4484,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
     #! returns insert-select SQL and bind arguments without executing the statement
     /** @param cols the ordered target column names
         @param source the source table; it must use the exact same datasource object as the target table
-        @param select_hash source select options; see @ref select_option_hash
+        @param select_hash source select options; see @ref select_option_hash, and
+        @ref select_option_recursive_insert_create for a recursive query
         @param opt optional SQL data operation options used while resolving the structured source select; see
         @ref AbstractTable::SqlDataCallbackOptions
 
@@ -4439,6 +4496,8 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
         projection cardinality mismatch
         @throw DATASOURCE-ERROR source and target do not use the same datasource object
         @throw SELECT-ERROR invalid select option or select statement
+        @throw RECURSIVE-QUERY-ERROR invalid recursive query (see @ref select_option_recursive and
+        @ref select_option_recursive_insert_create)
 
         @since SqlUtil 3.0.0
     */
@@ -4492,9 +4551,15 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
         }
 
         validateInsertFromSelectCardinality(cols, source, select_hash);
-        string select_sql = getSetOperationSelectSql(source, select_hash, \args, opt, "insert-select");
-        return sprintf("insert into %s (%s) %s", getSqlName(),
-            (foldl $1 + "," + $2, getColumnSqlNames(cols)), select_sql);
+        hash<auto> select_parts = getSetOperationSelectSqlParts(source, select_hash, \args, opt, "insert-select");
+        string insert_sql = sprintf("insert into %s (%s)", getSqlName(),
+            (foldl $1 + "," + $2, getColumnSqlNames(cols)));
+        # issue #6495: a recursive query is placed in the statement as the database needs it
+        if (select_parts.rq) {
+            return getRecursiveInsertSelectSqlImpl(insert_sql, select_parts.with_sql, select_parts.select_sql,
+                select_parts.rq);
+        }
+        return insert_sql + " " + select_parts.select_sql;
     }
 
     private validateInsertFromSelectCardinality(list<auto> target_columns, AbstractTable source,
@@ -4513,6 +4578,21 @@ string sql = target.getInsertFromSelectSql(("id", "name"), source,
             if (source_columns.size() != target_columns.size()) {
                 throw "COLUMN-ERROR", sprintf("%s: insert-select has %d target columns but %d source select "
                     "expressions", getDesc(), target_columns.size(), source_columns.size());
+            }
+            return;
+        }
+
+        # issue #6495: the outer select of a recursive query selects the columns of its common table expression
+        if (exists select_hash.recursive) {
+            if (!select_hash.join && select_hash.recursive.typeCode() == NT_HASH
+                    && select_hash.recursive.columns.typeCode() == NT_LIST) {
+                int cte_column_count = select_hash.recursive.columns.size()
+                    + (exists select_hash.recursive.depth ? 1 : 0);
+                if (cte_column_count != target_columns.size()) {
+                    throw "COLUMN-ERROR", sprintf("%s: insert-select has %d target columns but the common table "
+                        "expression of the recursive query has %d columns", getDesc(), target_columns.size(),
+                        cte_column_count);
+                }
             }
             return;
         }
@@ -4698,6 +4778,9 @@ map upsert($1), row_list;
         @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating
         closure; the closure returned by this method is faster than the one returned by
         @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
+
+        @note the SQL of the closure is made with the table's description when the closure is made; the closure keeps
+        working after @ref clear(), but does not follow a change of the table's definition in the database
     */
     code<int(hash<auto>)> getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # check upsert options
@@ -4726,6 +4809,34 @@ map upsert($1), row_list;
 
         Columns cols = checkUpsertRow(upsert_row, \upsert_strategy);
 
+        code<int(hash<auto>)> c = getUpsertStrategyClosure(cols, row, upsert_strategy, opt);
+        # the SQL converts the key values by the types of the values of the example row (ex: MySQL converts a number
+        # bound as a string to an integer column otherwise than a float): a row whose key values need other
+        # conversions uses a closure of its own, made from it (issue #6676)
+        *hash<string, string> casts = getUpsertKeyCastTypes(cols);
+        if (!casts) {
+            return c;
+        }
+        # the conversions are taken once, so that a row costs only the signature of its values
+        hash<string, code> by_sig = {getUpsertCastSignatureIntern(casts, row): c};
+        int strategy = upsert_strategy;
+        return int sub (hash<auto> r) {
+            # rows of list values (bulk DML) use the closure of the example row
+            if (r.firstValue().typeCode() == NT_LIST) {
+                return c(r);
+            }
+            string sig = getUpsertCastSignatureIntern(casts, r);
+            *code rc = by_sig{sig};
+            if (!rc) {
+                rc = by_sig{sig} = getUpsertStrategyClosure(cols, r, strategy, opt);
+            }
+            return rc(r);
+        };
+    }
+
+    #! returns the closure of an upsert strategy for the given key columns and example row
+    private code<int(hash<auto>)> getUpsertStrategyClosure(Columns cols, hash<auto> row, int upsert_strategy,
+            *hash<auto> opt) {
         switch (upsert_strategy) {
             case UpsertInsertFirst:
                 return getUpsertInsertFirst(cols, row, opt);
@@ -4981,7 +5092,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then every row of the table whose primary key values are not those of an input row is deleted after the input data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others for how the values are compared).  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
 
         @see
         - upsertFromIteratorCommit()
@@ -5022,7 +5133,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then every row of the table whose primary key values are not those of an input row is deleted after the input data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others for how the values are compared).  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
 
         @see
         - upsertFromIteratorCommit()
@@ -5050,22 +5161,50 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
+        # the primary key is read from the database if it is not yet known
+        list<string> pkl = opt.delete_others ? getPrimaryKey().keys() : ();
+        if (opt.delete_others && !pkl) {
+            # there is no key to match the rows by; the delete step raised RUNTIME-TYPE-ERROR after the input was
+            # upserted
+            throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a primary key, which the table does "
+                "not have", getDesc());
+        }
+
         # try to get initial row
         if (!i.next()) {
-            return;
+            # an empty input keeps no row of the table (issue #6607)
+            if (!opt.delete_others) {
+                return;
+            }
+            opt.change_count = 0;
+            hash<string, hash<auto>> none = {};
+            return doDeleteOthersIntern(none, pkl, opt);
         }
 
         # result hash
         hash<string, int> rh;
 
-        # primary key value hash for "delete_others"
-        hash<string, bool> pkh;
+        # the primary key values of the input for "delete_others", by their exact key
+        hash<string, hash<auto>> pkh;
 
         hash<auto> row = i.getValue();
+        # the primary key values of the rows of the current input row if it is a row of list values (bulk DML), for
+        # "delete_others", checked before the row is upserted (issue #6687)
+        *list<hash<auto>> bulk_keys;
+        # the first row is checked before the upsert closure is made from it
+        bool first_row = True;
+        if (opt.delete_others) {
+            bulk_keys = checkDeleteOthersInputRow(row, pkl);
+        }
         code upsert = getUpsertClosure(row, upsert_strategy, opt);
 
         opt.change_count = 0;
         do {
+            if (first_row) {
+                first_row = False;
+            } else if (opt.delete_others) {
+                bulk_keys = checkDeleteOthersInputRow(row, pkl);
+            }
             int code = upsert(row);
             ++rh{AbstractTable::UpsertResultMap{code}};
             if (opt.info_callback) {
@@ -5081,33 +5220,311 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
 
             # save primary key value in primary key hash if "delete_others" is set
             if (opt.delete_others) {
-                pkh{foldl $1 + "-" + $2, (map row.$1.toString(), primaryKey.keyIterator())} = True;
+                if (bulk_keys) {
+                    foreach hash<auto> k in (bulk_keys) {
+                        pkh{getDeleteOthersKey(k, pkl)} = k;
+                    }
+                } else {
+                    pkh{getDeleteOthersKey(row, pkl)} = row{pkl};
+                }
             }
         } while (i.next() && (row = i.getValue()));
 
         if (opt.delete_others) {
-            rh += doDeleteOthersIntern(pkh, opt);
+            rh += doDeleteOthersIntern(pkh, pkl, opt);
         }
 
         return rh;
     }
 
-    private *hash<string, int> doDeleteOthersIntern(hash<auto> pkh, *hash<auto> opt) {
-        hash<string, int> rh;
+    #! checks the primary key values of an input row for the "delete_others" upsert option
+    /** @return NOTHING for a hash row, whose key values are checked with checkDeleteOthersRow(); for a row of list
+        values (bulk DML: its first value is a list), the key values of each of its rows, which are the elements of
+        the lists of the key columns, or a column's value if it is not a list; each is checked with
+        checkDeleteOthersRow() (issue #6687)
 
-        # iterate through the table to find rows that do not belong and delete them
-        list<string> pkl = primaryKey.keys();
-        foreach hash<auto> row in (getStatement()) {
-            string k = foldl $1 + "-" + $2, (map row.$1.toString(), pkl);
-            if (pkh{k})
+        @throw UPSERT-ERROR a key value is missing or not a plain value, or the list of a key column has another
+        length than the first value of a row of list values
+    */
+    private *list<hash<auto>> checkDeleteOthersInputRow(hash<auto> row, list<string> pkl) {
+        if (row.firstValue().typeCode() != NT_LIST) {
+            checkDeleteOthersRow(row, pkl);
+            return;
+        }
+        int size = row.firstValue().size();
+        foreach string col in (pkl) {
+            if (row{col}.typeCode() == NT_LIST && row{col}.size() != size) {
+                throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a value of each column of the "
+                    "primary key (%y) for each row of a row of list values; the list of column %y has %d element%s, "
+                    "the first value %d, in: %y", getDesc(), pkl, col, row{col}.size(),
+                    row{col}.size() == 1 ? "" : "s", size, row);
+            }
+        }
+        list<hash<auto>> rv = ();
+        for (int n = 0; n < size; ++n) {
+            hash<auto> k = map {$1: row{$1}.typeCode() == NT_LIST ? row{$1}[n] : row{$1}}, pkl;
+            checkDeleteOthersRow(k, pkl, row);
+            rv += k;
+        }
+        return rv;
+    }
+
+    #! raises UPSERT-ERROR if an input row of an upsert with the "delete_others" option has no plain value of a
+    #! column of the primary key
+    /** @param row the key values to check
+        @param pkl the columns of the primary key
+        @param input_row the input row that gives \a row if it is a row of list values, for the error message
+    */
+    private checkDeleteOthersRow(hash<auto> row, list<string> pkl, *hash<auto> input_row) {
+        # the row that an input row gives cannot be known without its primary key values: a missing or NULL
+        # value (which the database may generate) or an operator
+        foreach string col in (pkl) {
+            switch (row{col}.typeCode()) {
+                case NT_NOTHING:
+                case NT_NULL:
+                    throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a value of each column "
+                        "of the primary key (%y) in each input row; column %y has no value in: %y", getDesc(),
+                        pkl, col, input_row ?? row);
+                case NT_HASH:
+                case NT_LIST:
+                case NT_OBJECT:
+                    throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a plain value of each "
+                        "column of the primary key (%y) in each input row; the value of column %y is an "
+                        "operator, a list or an object in: %y", getDesc(), pkl, col, input_row ?? row);
+            }
+        }
+    }
+
+    #! returns the exact key of the primary key values of a row for the "delete_others" upsert option
+    /** each value is given with its type and its length, so that different values cannot give the same key (values
+        joined with a separator did: ("a-b", "c") and ("a", "b-c"); issue #6580); a date is given with its
+        microseconds and its UTC offset, a float as the shortest text that gives it back, and a number by its value
+        (issue #6607)
+
+        Values with the same key are stored in the same way by the database; values that the database stores in the
+        same way can still have different keys (ex: a date in another time zone, a float for an integer column), which
+        doDeleteOthersIntern() resolves in the database
+    */
+    private static string getDeleteOthersKey(hash<auto> row, list<string> pkl) {
+        string key = "";
+        foreach string col in (pkl) {
+            auto v = row{col};
+            string val;
+            switch (v.typeCode()) {
+                case NT_NOTHING:
+                case NT_NULL:
+                    key += "n;";
+                    continue;
+                case NT_DATE:
+                    val = v.relative() ? "r" + v.toString() : "d" + v.format("YYYYMMDDHHmmSSxx Z");
+                    break;
+                case NT_INT:
+                    val = "i" + v;
+                    break;
+                case NT_FLOAT:
+                    val = "f" + v.toString();
+                    break;
+                case NT_NUMBER:
+                    val = "m" + v.toString();
+                    break;
+                case NT_BINARY:
+                    val = "b" + v.toHex();
+                    break;
+                case NT_STRING:
+                    val = "s" + v;
+                    break;
+                default:
+                    val = "o" + v.typeCode() + ":" + v.toString();
+                    break;
+            }
+            key += sprintf("%d:%s;", val.length(), val);
+        }
+        return key;
+    }
+
+    private {
+        #! the largest number of input keys that doDeleteOthersIntern() looks up with one query
+        const DeleteOthersLookupBlockSize = 100;
+        #! the largest number of values that a lookup of doDeleteOthersIntern() binds (SQL Server binds at most 2100)
+        const DeleteOthersLookupMaxArgs = 2000;
+
+        #! the types that upserts convert the bound values of key columns to, by the key columns (issue #6676)
+        hash<string, *hash<string, string>> upsert_key_casts;
+    }
+
+    #! returns the SQL types that the "delete_others" upsert option converts the values of key columns to when it looks them up
+    /** @param pkl the columns of the primary key
+
+        @return the SQL type of each key column whose values the database rounds or converts when it stores them (a
+        numeric, date or time type, or a fixed-length character type that the database pads), as the database declares
+        it (ex: \c "numeric(10,2)",
+        \c "timestamp(0) without time zone"), or @ref nothing if the values are compared as they are bound
+
+        doDeleteOthersIntern() and the upserts (issue #6676) compare a bound input value converted to this type with
+        the stored value, so that a
+        value that the column rounds (ex: \c 10:00:00.7 in a \c timestamp(0) column, \c 1.005 in a
+        \c numeric(10,2) column, \c 1.4 in an integer column) is found; the base class returns @ref nothing; a driver
+        whose database rounds values when it stores them returns the types from its catalog (issue #6635)
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+    }
+
+    #! returns the SQL expression that converts a key value to the type of its column for a comparison with the stored value (issues #6635, #6676)
+    /** @param expr the expression of the value (ex: \c "%v" for a bound value)
+        @param type the type from getDeleteOthersKeyCastType()
+
+        @return \c "cast(<expr> as <type>)"; a driver whose cast of a longer value truncates it returns an expression
+        that gives \c NULL for such a value, so that it matches no row
+    */
+    private string getKeyCastExpr(string expr, string type) {
+        return sprintf("cast(%s as %s)", expr, type);
+    }
+
+    #! returns the SQL type that the "delete_others" upsert option converts a bound key value to for its lookup
+    /** @param type the type of the column given by getDeleteOthersKeyCastTypes()
+        @param val the value of the key that is bound
+
+        @return the type to convert the value to, or @ref nothing to compare the value as it is bound; the base class
+        returns \a type; a driver whose database converts values of different types differently when it stores them
+        (ex: MySQL rounds a string but a cast to an integer type truncates it) returns the type that converts the value
+        as the database stores it (issues #6635, #6675)
+    */
+    private *string getDeleteOthersKeyCastType(string type, auto val) {
+        return type;
+    }
+
+    #! returns the rows of the table with the given key values, each converted to the type of its column
+    /** @param pkl the columns of the primary key
+        @param casts the types to convert the values of key columns to (getDeleteOthersKeyCastTypes())
+        @param key_list the key values to look up; a row is returned if its key matches any of them
+
+        @return the key values of the rows found
+    */
+    private *list<hash<auto>> selectDeleteOthersKeys(list<string> pkl, hash<string, string> casts,
+            list<hash<auto>> key_list) {
+        list<string> conds = ();
+        list<auto> args = ();
+        foreach hash<auto> key in (key_list) {
+            list<string> cond = ();
+            foreach string col in (pkl) {
+                auto v = key{col};
+                string cn = getColumnSqlName(col);
+                if (!exists v || v === NULL) {
+                    cond += cn + " is null";
+                    continue;
+                }
+                *string ct = casts{col} ? getDeleteOthersKeyCastType(casts{col}, v) : NOTHING;
+                cond += cn + " = " + (ct ? getKeyCastExpr("%v", ct) : "%v");
+                args += v;
+            }
+            conds += "(" + cond.join(" and ") + ")";
+        }
+        string sql = sprintf("select %s from %s where %s",
+            (map getColumnSqlName($1) + " as " + getAliasSqlName($1), pkl).join(", "), getSqlName(),
+            conds.join(" or "));
+        return ds.vselectRows(sql, args);
+    }
+
+    #! returns the key of each of the given columns in a row read from the table (issue #6674)
+    /** @param row a row read from the table
+        @param cols the columns as the table's description gives them
+        @param what the operation that needs the columns, for the error message
+
+        @return each column mapped to the key that gives its value in \a row: the column's name, or the key that is
+        the name in another case (a driver may give the names of the result in lower case, ex: MySQL)
+
+        @throw UPSERT-ERROR a column is not in the row, so that the row could not be matched by it
+    */
+    private hash<string, string> getResultColumnKeys(hash<auto> row, list<string> cols, string what) {
+        hash<string, string> rv;
+        foreach string col in (cols) {
+            if (row.hasKey(col)) {
+                rv{col} = col;
                 continue;
+            }
+            string lc = col.lwr();
+            *list<string> ks = select keys row, $1.lwr() == lc;
+            if (ks.size() != 1) {
+                throw "UPSERT-ERROR", sprintf("%s: %s cannot find the column %y in the rows read from the table "
+                    "(columns: %y)", getDesc(), what, col, keys row);
+            }
+            rv{col} = ks[0];
+        }
+        return rv;
+    }
 
-            hash<auto> h = row{pkl};
-            self.del(h);
+    #! deletes the rows of the table that are not in the input of an upsert with the "delete_others" option
+    /** @param pkh the primary key values of the input, by their exact key (getDeleteOthersKey())
+        @param pkl the columns of the primary key
+        @param opt the upsert options
+
+        A row is kept if its exact key is the key of an input row.  The database may store the value of an input row
+        in another form than the input gives it (ex: a date in another time zone, a float with an integer value for an
+        integer column, a string with trailing spaces), so that the exact keys differ: if any row is not matched, the
+        rows that the database finds for the keys of the input that matched no row are kept too (looked up in blocks
+        of where hashes with their values bound, which are combined with "or").  A value of a column that rounds it
+        is compared after the database converts it to the column's type (getDeleteOthersKeyCastTypes()), so that it
+        is found as it was stored (issue #6635).  The rows are deleted after all are read (issue #6607).
+    */
+    private *hash<string, int> doDeleteOthersIntern(hash<string, hash<auto>> pkh, list<string> pkl,
+            *hash<auto> opt) {
+        # the rows whose exact key is not the key of an input row; only their key values are kept, unless the info
+        # callback is given the rows
+        list<hash<auto>> unmatched = ();
+        # the names of the key columns in the rows read, which a driver may give in another case than the table's
+        # description (ex: MySQL); a row's key values are always taken by these names (issue #6674)
+        *hash<string, string> rkeys;
+        foreach hash<auto> row in (getStatement()) {
+            if (!rkeys) {
+                rkeys = getResultColumnKeys(row, pkl, "the 'delete_others' option");
+            }
+            hash<auto> rk = (map {$1: row{rkeys{$1}}}, pkl);
+            string key = getDeleteOthersKey(rk, pkl);
+            if (exists pkh{key}) {
+                # each key is the key of one row: the input keys that remain matched no row
+                remove pkh{key};
+                continue;
+            }
+            unmatched += {"key": rk, "row": exists opt.info_callback ? row : NOTHING};
+        }
+        if (!unmatched) {
+            return;
+        }
+
+        # the rows that the database finds for the input keys that matched no row, looked up in blocks with their
+        # values bound, so that the database compares them as the upsert did
+        hash<string, bool> kept;
+        # a list of where hashes is combined with "or"; a block binds at most DeleteOthersLookupMaxArgs values
+        list<hash<auto>> lookup = pkh.values();
+        int block_size = max(1, min(DeleteOthersLookupBlockSize, DeleteOthersLookupMaxArgs / pkl.size()));
+        # the types that the database converts the bound values to, as it converts them when it stores them, so that
+        # a value that the column rounds is found (issue #6635)
+        *hash<string, string> casts = lookup ? getDeleteOthersKeyCastTypes(pkl) : NOTHING;
+        for (int start = 0; start < lookup.size(); start += block_size) {
+            list<hash<auto>> block = lookup[start..(start + block_size - 1)];
+            *list<hash<auto>> found = casts
+                ? selectDeleteOthersKeys(pkl, casts, block)
+                : selectRows({"columns": pkl, "where": block});
+            *hash<string, string> fkeys;
+            foreach hash<auto> frow in (found) {
+                if (!fkeys) {
+                    fkeys = getResultColumnKeys(frow, pkl, "the 'delete_others' option");
+                }
+                kept{getDeleteOthersKey((map {$1: frow{fkeys{$1}}}, pkl), pkl)} = True;
+            }
+        }
+
+        hash<string, int> rh;
+        foreach hash<auto> u in (unmatched) {
+            if (kept{getDeleteOthersKey(u.key, pkl)}) {
+                continue;
+            }
+            self.del(u.key);
 
             ++rh.deleted;
-            if (opt.info_callback)
-                opt.info_callback(getSqlName(), row, UR_Deleted);
+            if (opt.info_callback) {
+                opt.info_callback(getSqlName(), u.row, UR_Deleted);
+            }
             if (opt.commit_block) {
                 if (++opt.change_count >= opt.commit_block) {
                     ds.commit();
@@ -5161,12 +5578,11 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
         unique constraint/index are used in the upsert statement
 
         @note
-        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a
-          hash of primary key values in the input data is built as the input data is iterated.  After iterating, if
-          the row count of the table and the input data matches, then nothing more is done, otherwise, every row of
-          the table is iterated and compared to the primary key hash; if a row does not match a primary key value,
-          then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is
-          expensive for large data sets.
+        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then
+          every row of the table whose primary key values are not those of an input row is deleted after the input
+          data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions
+          "upsert option" \c delete_others for how the values are compared).  This operation is only executed if
+          \c delete_others is @ref True "True" and is expensive for large data sets.
         - this method also calls commit() or rollback() on the source table to release the transaction lock on the
           underlying source table datasource as an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object
           is used to pipeline the data to the upsert code; use upsertFromSelect() to do manual transaction management
@@ -5228,7 +5644,7 @@ hash h = table.upsertFromSelect(table2, ("where": ("account_type": "CUSTOMER")),
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
         @note
-        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then every row of the table whose primary key values are not those of an input row is deleted after the input data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others for how the values are compared).  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
         - this method uses an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object to pipeline the select data to the upsert code; to release the transaction lock acquired by the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object, a commit() or rollback() action must be executed on the underlying datasource object as in the example above
         - unlike insertFromSelect() and insertFromSelectCommit(), this method processes arbitrary input data and accepts @ref SqlUtil::AbstractTable::UpsertOptions "upsert options"
 
@@ -5947,6 +6363,23 @@ string sql = table.getSelectSql(sh, \args);
         }
     }
 
+    #! Returns the text of a comment or hint of a select, which is written into an SQL comment (qore#6574)
+    /** The text cannot end the comment (\c "*" followed by \c "/") or open another one (\c "/" followed by \c "*",
+        as comments nest in some databases), and cannot have the placeholder character \c "%", as some database
+        drivers (ex: sqlite3) read placeholders in comments; a text with any of them is refused, as is a text with a
+        NUL character
+
+        @throw OPTION-ERROR the text has a character or a character sequence that is not allowed in a comment
+    */
+    private static string checkCommentText(string option, string text) {
+        if (text.find("*/") >= 0 || text.find("/*") >= 0 || text.find("\0") >= 0 || text.find("%") >= 0) {
+            throw "OPTION-ERROR", sprintf("the %y select option cannot contain the character sequences \"/*\" or "
+                "\"*/\", the placeholder character \"%%\", or a NUL character, as it is written into an SQL comment",
+                option);
+        }
+        return text;
+    }
+
     private string getSelectSqlStringIntern(*hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
         if (!columns) {
             l.lock();
@@ -6367,18 +6800,20 @@ string sql = table.getSelectSql(sh, \args);
             }
         }
 
-        # issue #4206: splice comments and hints into the SQL query string last
+        # issue #4206: splice comments and hints into the SQL query string last, right after the select keyword, where a
+        # hint must be, and where no text of the query can be (qore#6574: the first " from " could be in a literal)
         if (info.query_hash.comment || info.query_hash.hint) {
+            # a hint is first, as the databases that read hints (Oracle, PostgreSQL with pg_hint_plan) read only the
+            # first comment after the select keyword
             string comment;
-            if (info.query_hash.comment) {
-                comment = sprintf("/* %s */ ", replace(info.query_hash.comment, "*/", ""));
-            }
             if (info.query_hash.hint) {
-                comment += sprintf("/*+ %s */ ", replace(info.query_hash.hint, "*/", ""));
+                comment = sprintf("/*+ %s */ ", AbstractTable::checkCommentText("hint", info.query_hash.hint));
             }
-            # splice comment / hint test right before the " from " text in the query
-            int i = sql.find(" from ");
-            splice sql, i + 1, 0, comment;
+            if (info.query_hash.comment) {
+                comment += sprintf("/* %s */ ", AbstractTable::checkCommentText("comment", info.query_hash.comment));
+            }
+            # every query starts with the select keyword here; any other query would have the comment at its start
+            splice sql, (sql =~ /^select /) ? 7 : 0, 0, comment;
         }
 
         if (setop_keys) {
@@ -6391,8 +6826,10 @@ string sql = table.getSelectSql(sh, \args);
                 throw "PARTITION-ERROR", sprintf("%s: the named partition select qualifier cannot be applied to "
                     "a derived superquery table reference", getDesc());
             }
+            # the columns of the subquery are known names of the superquery; the map is "hash<auto>", as an alias in
+            # the superquery's columns sets its expression in it (issue #6592)
             return getSelectSqlStringIntern(info.query_hash.superquery, sprintf("(%s) subquery", sql), \info.args,
-                subquery_column_map, opt, (map {$1: True}, keys info.pseudo_column_map));
+                subquery_column_map, opt, {} + (map {$1: True}, keys info.pseudo_column_map));
         }
 
         return sql;
@@ -6617,6 +7054,46 @@ string sql = table.getSelectSql(sh, \args);
         return with_sql + " " + select_sql;
     }
 
+    #! Returns the SQL of an insert-select whose select is a recursive query
+    /** The default implementation places the recursive query after the insert, as in
+        <tt>insert into t (c1, c2) with recursive ... select ...</tt>, with the recursion limit clause of
+        getRecursiveQuerySqlImpl(); a driver whose database needs the WITH clause or a recursion limit elsewhere
+        overrides it
+
+        @param insert_sql the start of the insert, with the target table and its columns
+        @param with_sql the WITH clause, with the common table expression
+        @param select_sql the select from the common table expression
+        @param rq the prepared recursive query; \c max_depth is the depth limit of the query, if any
+
+        @return the SQL of the insert-select
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveInsertSelectSqlImpl(string insert_sql, string with_sql, string select_sql,
+            hash<auto> rq) {
+        return insert_sql + " " + getRecursiveQuerySqlImpl(with_sql, select_sql, rq);
+    }
+
+    #! Returns the SQL of a create-as-select whose select is a recursive query
+    /** The default implementation gives the recursive query, with the recursion limit clause of
+        getRecursiveQuerySqlImpl(), to getCreateAsSelectSqlImpl(), as in
+        <tt>create table t as with recursive ... select ...</tt>; a driver whose database needs the WITH clause or a
+        recursion limit elsewhere overrides it
+
+        @param with_sql the WITH clause, with the common table expression
+        @param select_sql the select from the common table expression
+        @param rq the prepared recursive query; \c max_depth is the depth limit of the query, if any
+        @param opt the create-as-select options
+
+        @return the SQL of the create-as-select
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getRecursiveCreateAsSelectSqlImpl(string with_sql, string select_sql, hash<auto> rq,
+            *hash<auto> opt) {
+        return getCreateAsSelectSqlImpl(getRecursiveQuerySqlImpl(with_sql, select_sql, rq), opt);
+    }
+
     #! the prefix of the key of the depth limit in the where hash of the step of a recursive query
     /** a disposable unique prefix, which is removed from the column name (see @ref where_clauses)
     */
@@ -6629,6 +7106,19 @@ string sql = table.getSelectSql(sh, \args);
 
     #! Returns the SQL of a recursive query (issue #3544)
     private string getRecursiveSelectSqlIntern(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
+        hash<auto> parts = getRecursiveSelectSqlPartsIntern(qh, \args, opt);
+        return getRecursiveQuerySqlImpl(parts.with_sql, parts.select_sql, parts.rq);
+    }
+
+    #! Returns the parts of the SQL of a recursive query (issues #3544, #6495)
+    /** Column information must be retrieved before calling this method
+
+        @return a hash with the following keys:
+        - \c with_sql: the WITH clause, with the common table expression
+        - \c select_sql: the select from the common table expression
+        - \c rq: the prepared recursive query (see prepareRecursiveQueryIntern())
+    */
+    private hash<auto> getRecursiveSelectSqlPartsIntern(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
         foreach string key in (RecursiveQueryRefusedOptions) {
             if (exists qh{key}) {
                 throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the %y select option cannot be combined with the "
@@ -6649,7 +7139,11 @@ string sql = table.getSelectSql(sh, \args);
         string with_sql = sprintf("%s %s (%s) as (%s %s %s)", getRecursiveWithSqlImpl(), cte.getSqlName(),
             (foldl $1 + ", " + $2, (map cte.getColumnSqlName($1), rq.columns)), anchor_sql,
             rq.union_all ? "union all" : "union", step_sql);
-        return getRecursiveQuerySqlImpl(with_sql, select_sql, rq);
+        return {
+            "with_sql": with_sql,
+            "select_sql": select_sql,
+            "rq": rq,
+        };
     }
 
     #! Validates a recursive query and prepares its parts (issue #3544)
@@ -7277,9 +7771,12 @@ string sql = table.getSelectSql(sh, \args);
             arg = getSqlValue(arg);
         } else if (cmd.argcolumn) {
             if (!cmd.argoptional || arg) {
-                # issue #2555: allow the use of literal with other column operators
+                # issue #2555: allow the use of literal with other column operators; the value is written as an SQL
+                # literal of the database, as cop_value() gives it in the select list, never as its text (qore#6574);
+                # it is not bound, as the SQL of a column expression is also copied (an alias in a where clause, a
+                # group by or order by position) and rendered out of the order of its text (a superquery)
                 if (arg.cop == COP_VALUE) {
-                    arg = arg.arg.toString();
+                    arg = getSqlValue(arg.arg);
                 } else {
                     if (arg.typeCode() != NT_STRING) {
                         throw "SELECT-ERROR", sprintf("%s: expecting a string column designation for column "
@@ -7379,6 +7876,10 @@ string sql = table.getSelectSql(sh, \args);
                 if (column_name =~ /^distinct\s+/i) {
                     return regex_subst(column_name, "^distinct\\s+", "", RE_Caseless);
                 }
+            } else if (!getPseudoColumnHash(){column_name}) {
+                # a reference to an alias is the alias as an SQL identifier, as the select list gives it, never its
+                # text (qore#6574); a pseudocolumn of the database (ex: rownum) is given as the driver names it
+                column_name = getAliasSqlName(column_name);
             }
             # issue #4214: use table prefixes in a join for pseudocolumns
             return use_prefix ? sprintf("%s.%s", getSqlName(), column_name) : column_name;
@@ -8795,7 +9296,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     }
 
     private Columns checkUpsertRow(hash<auto> row, reference<int> upsert_strategy) {
-        return getAllUpsertColumns(row).firstValue();
+        # the upsert closures keep the columns of the key: a copy of the key's column list, as clear() deletes the
+        # key object of the table (issue #6686)
+        return new Columns(getAllUpsertColumns(row).firstValue());
     }
 
     #! Returns a closure that inserts a row and updates the row with its upsert key if the insert is a duplicate
@@ -8809,7 +9312,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
         # a row with only key columns (or with all other columns omitted from the update) has nothing to update
-        *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols);
+        *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols, example_row);
 
         return int sub (hash<auto> row) {
             if (tryInsertImpl(insert_sql, row)) {
@@ -8847,10 +9350,14 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     private code<int(hash<auto>)> getUpsertSelectFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         #printf("getUpsertSelectFirst() %s: %y\n", name, cols.keys());
         list<string> updc();
-        string select_sql = getUpsertSelectSql(example_row, cols, \updc);
+        string select_sql = getUpsertSelectSql(example_row, cols, \updc, opt);
         string insert_sql = getUpsertInsertSql(example_row);
-        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
+        # nothing to update: an existing row is unchanged (issue #6683)
+        *string update_sql = updc ? getUpsertUpdateSql(example_row, cols, \updc, opt) : NOTHING;
 
+        # the names of the columns in the row read, which a driver may give in another case than the table's
+        # description (ex: MySQL) (issue #6674)
+        *hash<string, string> dkeys;
         return int sub (hash<auto> row) {
             list<auto> args = row.(cols.keys()).values();
             #printf("select_sql: %s args: %y\n", select_sql, args);
@@ -8859,7 +9366,13 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
                 ds.vexec(insert_sql, row.values());
                 return UR_Inserted;
             }
-            if (dbrow == row{updc})
+            if (!update_sql) {
+                return UR_Unchanged;
+            }
+            if (!dkeys) {
+                dkeys = getResultColumnKeys(dbrow, updc, "a select-first upsert");
+            }
+            if ((map {$1: dbrow{dkeys{$1}}}, updc) == row{updc})
                 return UR_Unchanged;
 
             #printf("dbrow: %y row{%y}: %y\n", dbrow, updc, row{updc});
@@ -8876,7 +9389,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     */
     private code<int(hash<auto>)> getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
-        string key_sql = getUpsertKeySelectSql(cols);
+        string key_sql = getUpsertKeySelectSql(cols, example_row);
 
         return int sub (hash<auto> row) {
             if (tryInsertImpl(insert_sql, row)) {
@@ -8892,12 +9405,78 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         };
     }
 
+    #! returns the conditions of an upsert's SQL that compare the key columns with their bound values
+    /** @param cols the key columns
+        @param example_row a row of the input, whose value types select the conversion of the bound values
+
+        @return the conditions joined with \c "and"; a key column whose values the database rounds or pads when it
+        stores them (getDeleteOthersKeyCastTypes()) is compared with its bound value converted as the database stores
+        it, so that the row of a key given in another form than it is stored in is found (issue #6676)
+    */
+    private string getUpsertKeyConditions(Columns cols, hash<auto> example_row) {
+        return (map getColumnSqlName($1) + " = " + getUpsertValuePlaceholder(cols, example_row, $1), cols.keys())
+            .join(" and ");
+    }
+
+    #! returns the placeholder of a value of an upsert: a value of a key column that the database rounds or pads when it stores it is converted as the database stores it (issue #6676)
+    /** @param cols the key columns
+        @param example_row a row of the input, whose value types select the conversion of the bound values
+        @param col the column of the value
+
+        @return \c "cast(%v as <type>)" for a key column with a type from getDeleteOthersKeyCastTypes(), otherwise
+        \c "%v"; a driver's upsert that compares or selects key values in SQL of its own (ex: a \c MERGE statement)
+        uses it for the key values, so that the row stored for a key is found
+    */
+    private string getUpsertValuePlaceholder(Columns cols, hash<auto> example_row, string col) {
+        *string ct = getUpsertKeyCastType(cols, example_row, col);
+        return ct ? getKeyCastExpr("%v", ct) : "%v";
+    }
+
+    #! returns the type that an upsert converts the bound value of a key column to, or @ref nothing (issue #6676)
+    private *string getUpsertKeyCastType(Columns cols, hash<auto> example_row, string col) {
+        if (!cols.hasKey(col)) {
+            return;
+        }
+        *string type = getUpsertKeyCastTypes(cols){col};
+        return type ? getDeleteOthersKeyCastType(type, example_row{col}) : NOTHING;
+    }
+
+    #! returns the types of the key columns that upserts convert bound values to, read from the catalog once for each set of key columns and cached until clear() (issue #6676)
+    private *hash<string, string> getUpsertKeyCastTypes(Columns cols) {
+        list<string> kl = cols.keys();
+        string ck = kl.join("\x01");
+        # upsert() makes a closure for each row: the catalog is not read each time
+        if (!upsert_key_casts.hasKey(ck)) {
+            upsert_key_casts{ck} = getDeleteOthersKeyCastTypes(kl);
+        }
+        return upsert_key_casts{ck};
+    }
+
+    #! returns the conditions of the \c ON clause of a \c MERGE upsert that compare the key columns of the target \c t with the values of \c source (issue #6676)
+    /** a value is converted as the column stores it for the comparison only, so that the value inserted is the value
+        as bound, as with a plain insert
+    */
+    private string getUpsertMergeKeyConditions(Columns cols, hash<auto> example_row, string eq = " = ") {
+        list<string> conds = ();
+        foreach string col in (cols.keyIterator()) {
+            string cn = getColumnSqlName(col);
+            *string ct = getUpsertKeyCastType(cols, example_row, col);
+            conds += sprintf("t.%s%s%s", cn, eq, ct ? getKeyCastExpr("source." + cn, ct) : "source." + cn);
+        }
+        return conds.join(" and ");
+    }
+
+    #! returns the signature of the conversions of the key values of a row by an upsert: rows with the same signature use the same SQL (issue #6676)
+    private string getUpsertCastSignatureIntern(hash<string, string> casts, hash<auto> row) {
+        return (map getDeleteOthersKeyCastType($1.value, row{$1.key}) ?? "-", casts.pairIterator()).join("\x01");
+    }
+
     #! Returns SQL that selects the row with the upsert key given by the bind values of the key columns in order
-    private string getUpsertKeySelectSql(Columns cols) {
+    private string getUpsertKeySelectSql(Columns cols, hash<auto> example_row) {
         return sprintf("select %s from %s where %s",
             (foldl $1 + ", " + $2, getColumnSqlNames(cols.keys())),
             getSqlName(),
-            (foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator())));
+            getUpsertKeyConditions(cols, example_row));
     }
 
     private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
@@ -8983,18 +9562,19 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         return False;
     }
 
-    private string getUpsertSelectSql(hash<auto> row, Columns cols, reference<list<string>> updc) {
+    private string getUpsertSelectSql(hash<auto> row, Columns cols, reference<list<string>> updc,
+            *hash<auto> opt) {
         if (cols.size() != row.size()) {
-            # make list of columns not in unique key
-            map updc += $1, keys row, !cols.hasKey($1);
-        } else {
-            updc = cols.keys();
+            # make list of columns not in unique key, without the columns that are not updated (issue #6683)
+            *hash<string, bool> suh = map {$1: True}, opt.omit_update;
+            map updc += $1, keys row, !cols.hasKey($1) && !suh{$1};
         }
-
+        # a row with only key columns, or whose other columns are all omitted from the update, has nothing to compare
+        # or update: the key columns are selected to find the row (issue #6683)
         return sprintf("select %s from %s where %s",
-                        (foldl $1 + ", " + $2, getColumnSqlNames(updc)),
+                        (foldl $1 + ", " + $2, getColumnSqlNames(updc ? updc : cols.keys())),
                         getSqlName(),
-                        (foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator()))
+                        getUpsertKeyConditions(cols, row)
             );
     }
 
@@ -9019,7 +9599,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string sql = sprintf("update %s set ", getSqlName());
         sql += foldl $1 + ", " + $2, (map getColumnSqlName($1) + " = " + getColumnValuePlaceholder($1), updc);
         sql += " where ";
-        sql += foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator());
+        sql += getUpsertKeyConditions(cols, row);
 
         return sql;
     }
@@ -9139,6 +9719,8 @@ table.clear();
         @endcode
     */
     clear() {
+        # the types of the key columns are read again (issue #6676)
+        remove upsert_key_casts;
         l.lock();
         on_exit l.unlock();
 
@@ -13700,12 +14282,15 @@ string sql = table.getAlignSqlString(table2);
 
         @code{.py}
 # t is a AbstractTable/Table object
-# custom operator hash
-hash<auto> to_char = (
-"code" : string sub(string arg1, auto arg) {
-                return sprintf("to_char(%s, '%s')", arg1, arg);
-            },
-);
+# custom operator hash: the argument is a string that is given to the code as an SQL literal ("sqlvalue"), so the
+# code writes it as it is; a value from outside the program is never written into the SQL in quotes of its own
+hash<auto> to_char = {
+    "arg": Type::String,
+    "sqlvalue": True,
+    "code": string sub (string cve, string arg) {
+        return sprintf("to_char(%s, %s)", cve, arg);
+    },
+};
 # operator registration
 t.addCustomCopOperator("to_char", to_char);
 # example usage
@@ -13790,27 +14375,133 @@ on_exit printf("SQL> %s\n", sql);
         }
         validateOptionsIntern("OPTION-ERROR", getCreateAsSelectOptions(), \opt);
 
-        string select_sql = getSetOperationSelectSql(source, select_hash, \args, opt, "create-as-select");
-        string sql = AbstractDatabase::doCallback(opt, getCreateAsSelectSqlImpl(select_sql, opt),
-            AbstractDatabase::AC_Create, "table", name);
+        hash<auto> select_parts = getSetOperationSelectSqlParts(source, select_hash, \args, opt,
+            "create-as-select");
+        # issue #6495: a recursive query is placed in the statement as the database needs it
+        string create_sql = select_parts.rq
+            ? getRecursiveCreateAsSelectSqlImpl(select_parts.with_sql, select_parts.select_sql, select_parts.rq,
+                opt)
+            : getCreateAsSelectSqlImpl(select_parts.select_sql, opt);
+        # issue #6495: a database that does not bind values in a create-as-select gets them in the SQL
+        if (args && !createAsSelectBindsValuesImpl()) {
+            create_sql = inlineBindValues(create_sql, \args);
+        }
+        string sql = AbstractDatabase::doCallback(opt, create_sql, AbstractDatabase::AC_Create, "table", name);
         if (opt.sqlarg_callback) {
             opt.sqlarg_callback(sql, args);
         }
         return sql;
     }
 
-    private string getSetOperationSelectSql(AbstractTable source, *hash<auto> select_hash,
+    #! Returns the SQL of the select of an insert-select or a create-as-select
+    /** @return a hash with a \c select_sql key giving the SQL of the select, or, for a recursive query (issue #6495),
+        the parts of its SQL as getRecursiveSelectSqlPartsIntern() gives them
+    */
+    private hash<auto> getSetOperationSelectSqlParts(AbstractTable source, *hash<auto> select_hash,
             reference<list<auto>> args, *hash<auto> opt, string operation) {
         validateSetOperationDatasource(source, operation);
 
         source.validateOptionsIntern("OPTION-ERROR", source.getSelectOptions(), \select_hash);
-        # issue #3544: not yet supported; see issue #6495
+        args = ();
         if (exists select_hash.recursive) {
-            throw "RECURSIVE-QUERY-ERROR", sprintf("%s: the \"recursive\" select option is not supported by "
-                "%s", getDesc(), operation);
+            return source.getRecursiveSelectSqlParts(select_hash, \args, opt);
+        }
+        return {"select_sql": source.getSelectSqlStringIntern(select_hash, \args, opt)};
+    }
+
+    #! Returns the parts of the SQL of a recursive query, after retrieving the table's column information
+    private hash<auto> getRecursiveSelectSqlParts(hash<auto> qh, reference<list<auto>> args, *hash<auto> opt) {
+        if (!columns) {
+            l.lock();
+            on_exit l.unlock();
+            getColumnsUnlocked();
+        }
+        return getRecursiveSelectSqlPartsIntern(qh, \args, opt);
+    }
+
+    #! Returns @ref True if the database binds values in a create-as-select statement
+    /** A driver whose database refuses bind values in a create-as-select, which is a DDL statement, returns
+        @ref False and implements getCreateAsSelectInlineValueImpl(): the values are then given in the SQL of the
+        statement, so they appear in its text (in the SQL that the create-as-select methods return, in callbacks,
+        in logs and in the database's statement cache)
+
+        @since %SqlUtil 3.11.0
+    */
+    private bool createAsSelectBindsValuesImpl() {
+        return True;
+    }
+
+    #! Returns the SQL literal of a value of a create-as-select of a database that does not bind values in it
+    /** Called only when createAsSelectBindsValuesImpl() returns @ref False; a driver that returns @ref False gives a
+        literal that cannot change the statement for any value (as \c OracleTable::getInlineSqlValue() in the
+        \c OracleSqlUtilBase module does), and raises \c VALUE-ERROR for a value that it cannot give exactly
+
+        @param v the value
+
+        @return the SQL literal of the value
+
+        @throw VALUE-ERROR the value cannot be given in the SQL
+
+        @since %SqlUtil 3.11.0
+    */
+    private string getCreateAsSelectInlineValueImpl(auto v) {
+        throw "VALUE-ERROR", sprintf("%s: the %s driver cannot give the values of a create-as-select in its SQL",
+            getDesc(), ds.getDriverName());
+    }
+
+    #! Replaces the \c %v bind placeholders of an SQL statement with the literals of the values
+    /** The placeholders in quoted strings and identifiers and in comments (such as the text of the \c "comment" and
+        \c "hint" select options) are not replaced; SQL with an unterminated quoted string, identifier or comment, or
+        with an Oracle alternative quoting literal (<tt>q'[...]'</tt>), which SqlUtil does not give, is refused
+
+        @param sql the SQL with \c %v placeholders
+        @param args the bind values, in the order of the placeholders; empty on return
+
+        @return the SQL with the literals of the values (see getCreateAsSelectInlineValueImpl())
+
+        @throw VALUE-ERROR a value cannot be given in SQL, the SQL cannot be read, or the placeholders and the values
+        do not match
+    */
+    private string inlineBindValues(string sql, reference<list<auto>> args) {
+        # the SQL as tokens: quoted strings and identifiers (a doubled quote is part of them), comments,
+        # placeholders, and the text between them; the text stops before a character that can start another token
+        *list<string> tokens = regex_extract(sql, "('(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|/\\*(?:[^*]|\\*(?!/))*\\*/"
+            "|--[^\\r\\n]*|%v|[^'\"%/\\-]+|[%/\\-])", Qore::RE_Global);
+        if (!tokens || (foldl $1 + $2, tokens) != sql) {
+            throw "VALUE-ERROR", sprintf("%s: the values cannot be given in the SQL, which has an unterminated quoted "
+                "string, identifier or comment", getDesc());
+        }
+        string rv;
+        int arg = 0;
+        *string prev;
+        foreach string token in (tokens) {
+            # an Oracle alternative quoting literal (q'[...]'), whose text can have quotes
+            if (token[0] == "'" && prev =~ /(^|[^A-Za-z0-9_$#])[nN]?[qQ]$/) {
+                throw "VALUE-ERROR", sprintf("%s: the values cannot be given in SQL with an alternative quoting "
+                    "literal", getDesc());
+            }
+            # the start of a comment that does not end
+            if (prev == "/" && token[0] == "*") {
+                throw "VALUE-ERROR", sprintf("%s: the values cannot be given in the SQL, which has an unterminated "
+                    "comment", getDesc());
+            }
+            prev = token;
+            if (token == "%v") {
+                if (arg == args.size()) {
+                    throw "VALUE-ERROR", sprintf("%s: the SQL has more bind placeholders than the %d value(s) given",
+                        getDesc(), args.size());
+                }
+                rv += getCreateAsSelectInlineValueImpl(args[arg++]);
+            } else {
+                rv += token;
+            }
+        }
+        if (arg != args.size()) {
+            throw "VALUE-ERROR", sprintf("%s: the SQL has %d bind placeholder(s) for %d values", getDesc(), arg,
+                args.size());
         }
         args = ();
-        return source.getSelectSqlStringIntern(select_hash, \args, opt);
+        return rv;
     }
 
     private validateSetOperationDatasource(AbstractTable source, string operation) {

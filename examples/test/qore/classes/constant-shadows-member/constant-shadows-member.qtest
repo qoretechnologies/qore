@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A class constant and a member or static variable with the same name in the class hierarchy get the
+# language-traps warning: in the class, the unscoped name refers to only one of them (issue #3286).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ConstantShadowsMemberTest
+
+class ConstantShadowsMemberTest inherits QUnit::Test {
+    constructor() : Test("class constant with the name of a member", "1.0") {
+        addTestCase("an inherited member", \inheritedTest());
+        addTestCase("a member of the class", \ownMemberTest());
+        addTestCase("a static variable of a parent class", \staticVarTest());
+        addTestCase("a member or static variable with the name of a parent constant", \reverseTest());
+        addTestCase("multiple inheritance", \multipleInheritanceTest());
+        addTestCase("no warning for a declaration that the class does not reach", \notReachedTest());
+        addTestCase("one warning for a clash", \onceTest());
+        addTestCase("a private:internal parent", \internalPathTest());
+        addTestCase("the bare references option of the declaring file", \bareRefsFileTest());
+        addTestCase("no warning without a clash or with the warning off", \noWarningTest());
+        addTestCase("the behavior is unchanged", \behaviorTest());
+        set_return_value(main());
+    }
+
+    private list<hash<ParseDiagnosticInfo>> traps(string source, int warnings = WARN_LANGUAGE_TRAPS,
+            int options = PO_MODERN) {
+        Program p(options | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        p.parse(source, "<shadow>", warnings);
+        return select p.getParseDiagnostics(), $1.id == "CLASS-CONSTANT-SHADOWS-MEMBER";
+    }
+
+    private auto run(string source) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(source, "<run>");
+        return p.callFunction("f");
+    }
+
+    inheritedTest() {
+        string src = "class A { private { string test = \"asd\"; } } "
+            "class B inherits A { private { const test = \"123\"; } "
+            "list<string> get() { return (test, B::test); } } list<string> sub f() { B b(); return b.get(); }";
+        list<hash<ParseDiagnosticInfo>> l = traps(src);
+        assertEq(1, l.size());
+        assertEq("warning", l[0].severity);
+        assertEq(WARN_LANGUAGE_TRAPS, l[0].warningCode);
+        assertEq("in class 'B', the name 'test' refers to the member 'A::test'; it does not refer to the constant "
+            "'B::test' (reached as '::B::test')", l[0].message);
+        assertEq(("asd", "123"), run(src));
+    }
+
+    ownMemberTest() {
+        list<hash<ParseDiagnosticInfo>> l = traps("class C { public { int x = 1; } const x = 2; }");
+        assertEq(1, l.size());
+        assertRegex("the name 'x' refers to the member 'C::x'; it does not refer to the constant 'C::x'", l[0].message);
+    }
+
+    staticVarTest() {
+        # an unscoped name refers to a constant before a static variable; the static variable is reached with the
+        # scope of its class, which has no constant with the name
+        string src = "namespace N { class A { public { static int v = 1; } } } "
+            "namespace M { class B inherits N::A { const v = 2; static list<int> get() { return (v, N::A::v); } } } "
+            "list<int> sub f() { return M::B::get(); }";
+        list<hash<ParseDiagnosticInfo>> l = traps(src);
+        assertEq(1, l.size());
+        assertEq("in class 'M::B', the name 'v' refers to the constant 'M::B::v'; it does not refer to the static "
+            "variable 'N::A::v' (reached as '::N::A::v')", l[0].message);
+        assertEq((2, 1), run(src));
+    }
+
+    reverseTest() {
+        list<hash<ParseDiagnosticInfo>> l = traps("class A { const x = 2; } "
+            "class B inherits A { public { int x = 1; } }");
+        assertEq(1, l.size());
+        assertEq("in class 'B', the name 'x' refers to the member 'B::x'; it does not refer to the constant 'A::x' "
+            "(reached as '::A::x')", l[0].message);
+        # a class-scoped name finds the constant of the parent class too: the static variable is not reached
+        string src = "class A { const v = 2; } class B inherits A { public { static int v = 1; } "
+            "static list<int> get() { return (v, B::v); } } list<int> sub f() { return B::get(); }";
+        l = traps(src);
+        assertEq(1, l.size());
+        assertEq("in class 'B', the name 'v' refers to the constant 'A::v'; it does not refer to the static "
+            "variable 'B::v' (it is not reached by name: a constant with the name is visible in its class as well)",
+            l[0].message);
+        assertEq((2, 2), run(src));
+    }
+
+    multipleInheritanceTest() {
+        string src = "class A { public { int x = 1; } } class B { const x = 2; } "
+            "class C inherits A, B { list<int> get() { return (x, B::x); } } "
+            "list<int> sub f() { C c(); return c.get(); }";
+        list<hash<ParseDiagnosticInfo>> l = traps(src);
+        assertEq(1, l.size());
+        assertEq("in class 'C', the name 'x' refers to the member 'A::x'; it does not refer to the constant 'B::x' "
+            "(reached as '::B::x')", l[0].message);
+        assertEq((1, 2), run(src));
+        l = traps("class A { public { static int v = 1; } } class B { const v = 2; } class C inherits A, B {}");
+        assertEq(1, l.size());
+        assertRegex("^in class 'C', the name 'v' refers to the constant 'B::v'; it does not refer to the static "
+            "variable 'A::v' \\(reached as '::A::v'\\)$", l[0].message);
+    }
+
+    notReachedTest() {
+        # without bare references, an unscoped name is never a member
+        assertEq(0, traps("class A { public { $.x = 1; } } class C inherits A { const x = 2; }", WARN_LANGUAGE_TRAPS,
+            0).size());
+        # private:internal members, constants and static variables of a parent class, and the declarations of a
+        # class inherited private:internal from a parent, are not reached from the class
+        foreach string src in (
+                "class A { private:internal { int x = 1; } } class C inherits A { const x = 2; }",
+                "class A { private:internal { const x = 2; } } class B inherits A { public { int x = 1; } }",
+                "class A { private:internal { const v = 2; } } class B inherits A { public { static int v = 1; } }",
+                "class A { private:internal { static int v = 1; } } class B inherits A { const v = 2; }",
+                "class P { const v = 2; } class A inherits private:internal P {} "
+                    "class B inherits A { public { static int v = 1; } }",
+            ) {
+            assertEq(0, traps(src).size(), src);
+        }
+        # and the name refers to the declaration that the class reaches
+        assertEq(2, run("class A { private:internal { int x = 1; } } class C inherits A { const x = 2; "
+            "int get() { return x; } } int sub f() { C c(); return c.get(); }"));
+        assertEq(1, run("class A { private:internal { const v = 2; } } class B inherits A { "
+            "public { static int v = 1; } static int get() { return v; } } int sub f() { return B::get(); }"));
+    }
+
+    onceTest() {
+        # the clash is reported in the class that declares it, not again in each subclass
+        assertEq(1, traps("class C { public { int x = 1; } const x = 2; } class D inherits C {} "
+            "class E inherits D {}").size());
+        # nor through both sides of a diamond
+        assertEq(1, traps("class P { public { int x = 1; } const x = 2; } class L inherits P {} class R inherits P {} "
+            "class D inherits L, R {}").size());
+        # nor at a member of a subclass that the unscoped name does not reach (no bare references)
+        list<hash<ParseDiagnosticInfo>> l = traps("class G { const v = 2; } "
+            "class P inherits G { public { static int v = 1; } } class C inherits P { public { $.v = 3; } }",
+            WARN_LANGUAGE_TRAPS, 0);
+        assertEq(1, l.size());
+        assertRegex("^in class 'P'", l[0].message);
+        # a new clash in a subclass of a class with a clash is reported
+        l = traps("class A { public { int x = 1; } const x = 2; } class B { public { static int x = 5; } } "
+            "class C inherits A, B {}");
+        assertEq(2, l.size());
+        assertRegex("^in class 'C', .* and the static variable 'B::x' \\(reached as '::B::x'\\)$", l[1].message);
+    }
+
+    internalPathTest() {
+        # the static variable of C is hidden in C by the constant of its private:internal parent, but reached from a
+        # subclass, where that constant is not visible
+        string src = "class G { const v = 2; } class C inherits private:internal G { public { static int v = 1; } "
+            "static list<int> get() { return (v, C::v); } } "
+            "class D inherits C { const v = 3; static list<int> get2() { return (v, ::C::v); } } "
+            "list<int> sub f() { return C::get() + D::get2(); }";
+        list<hash<ParseDiagnosticInfo>> l = traps(src);
+        assertEq(2, l.size());
+        assertRegex("^in class 'C', .*static variable 'C::v' \\(it is not reached by name", l[0].message);
+        assertRegex("^in class 'D', .*static variable 'C::v' \\(reached as '::C::v'\\)$", l[1].message);
+        assertEq((2, 2, 3, 1), run(src));
+    }
+
+    bareRefsFileTest() {
+        # the bare references option of the file that declares the class decides whether a member is reached
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        p.parsePending("%push-parse-options\n%allow-bare-refs\nclass A { public { int x = 1; } } "
+            "class C inherits A { const x = 2; int g() { return x; } }", "f1", WARN_LANGUAGE_TRAPS);
+        p.parsePending("class E inherits A { const x = 3; }", "f2", WARN_LANGUAGE_TRAPS);
+        p.parseCommit(WARN_LANGUAGE_TRAPS);
+        list<hash<ParseDiagnosticInfo>> l = select p.getParseDiagnostics(), $1.id == "CLASS-CONSTANT-SHADOWS-MEMBER";
+        assertEq(1, l.size());
+        assertRegex("^in class 'C', the name 'x' refers to the member 'A::x'", l[0].message);
+
+        # a subclass with bare references of a class without them: the member hides the constant in the subclass
+        p = new Program(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        p.parsePending("class C { public { $.x = 1; } const x = 2; }", "f1", WARN_LANGUAGE_TRAPS);
+        p.parsePending("%new-style\nclass D inherits C { int g() { return x; } }", "f2", WARN_LANGUAGE_TRAPS);
+        p.parseCommit(WARN_LANGUAGE_TRAPS);
+        l = select p.getParseDiagnostics(), $1.id == "CLASS-CONSTANT-SHADOWS-MEMBER";
+        assertEq(1, l.size());
+        assertRegex("^in class 'D', the name 'x' refers to the member 'C::x'", l[0].message);
+    }
+
+    noWarningTest() {
+        assertEq(0, traps("class A { private { string test = \"asd\"; } } "
+            "class B inherits A { private { const other = \"123\"; } }").size());
+        # off unless language-traps is enabled
+        assertEq(0, traps("class C { public { int x = 1; } const x = 2; }", 0).size());
+        assertEq(0, traps("class C { public { int x = 1; } const x = 2; }", WARN_ALL).size());
+    }
+
+    behaviorTest() {
+        # the unscoped name is the member, the scoped name the constant, as before
+        assertEq(("asd", "123"), run("class A { private { string test = \"asd\"; } } "
+            "class B inherits A { private { const test = \"123\"; } "
+            "public { string m; string c; } constructor() { m = test; c = B::test; } } "
+            "list<string> sub f() { B b(); return (b.m, b.c); }"));
+    }
+}

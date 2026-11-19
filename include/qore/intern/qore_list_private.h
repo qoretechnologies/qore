@@ -241,8 +241,12 @@ struct qore_list_private {
     DLLLOCAL int checkValNativeImpl(ValueHolder& holder, const QoreTypeInfo* vtype, ExceptionSink* xsink) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            if (QoreTypeInfo::hasType(vti)
-                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
+            // the value's type is only needed for an element type; a value of the element type itself needs no
+            // conversion: tested inline, before the full comparison, which runs for every element assigned
+            // (qore#6628; superSetOf() itself is unchanged here, see qore#6575)
+            const QoreTypeInfo* src_ti;
+            if (QoreTypeInfo::hasType(vti) && vti != (src_ti = vtype ? vtype : holder->getTypeInfo())
+                    && !QoreTypeInfo::superSetOf(vti, src_ti)) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
@@ -272,8 +276,12 @@ struct qore_list_private {
             LexicalSemanticPolicy policy) const {
         if (complexTypeInfo) {
             const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-            if (QoreTypeInfo::hasType(vti)
-                    && !QoreTypeInfo::superSetOf(vti, vtype ? vtype : holder->getTypeInfo())) {
+            // the value's type is only needed for an element type; a value of the element type itself needs no
+            // conversion: tested inline, before the full comparison, which runs for every element assigned
+            // (qore#6628; superSetOf() itself is unchanged here, see qore#6575)
+            const QoreTypeInfo* src_ti;
+            if (QoreTypeInfo::hasType(vti) && vti != (src_ti = vtype ? vtype : holder->getTypeInfo())
+                    && !QoreTypeInfo::superSetOf(vti, src_ti)) {
                 QoreValue v(holder.release());
                 // the outcome must reflect only this conversion; see ScopedTypeCheckSink.  Without this, a caller
                 // with a long-lived sink silently drops elements after an unrelated error
@@ -736,6 +744,44 @@ struct qore_list_private {
 
     DLLLOCAL int getLValue(size_t ind, LValueHelper& lvh, bool for_remove, ExceptionSink* xsink);
 
+    //! raises RUNTIME-TYPE-ERROR for an assignment to element \a ind past the end of the list that would leave a gap
+    /** the elements between the end of the list and \a ind would have no value (NOTHING), which a declared element
+        type that does not take NOTHING refuses (ex: list<int>); an assignment at the end of the list leaves no gap,
+        and a list whose element type takes NOTHING (list<*int>, list<auto>, an untyped list) pads the gap
+        (qore#6435)
+
+        @return -1 if an exception was raised, 0 if not
+    */
+    DLLLOCAL int checkAssignmentGap(size_t ind, ExceptionSink* xsink) const {
+        return ind <= length || !elementTypeRejectsNothing() ? 0 : raiseAssignmentGapError(ind, xsink);
+    }
+
+    //! raises RUNTIME-TYPE-ERROR for delete or remove of element \a ind of a list whose element type does not take
+    //! NOTHING held by an lvalue whose declared type \a holder_type requires the element type (qore#6435)
+    DLLLOCAL void raiseElementRemovalError(size_t ind, bool for_del, const QoreTypeInfo* holder_type,
+            ExceptionSink* xsink) const;
+
+    //! makes the element type of the list its or-nothing type (list<*int> for a list<int>) if its element type does
+    //! not take NOTHING, as for delete or remove of an element of a list held by an lvalue that allows it (qore#6435)
+    //! and for the list that remove of a range past the end of a list gives (qore#6434)
+    DLLLOCAL void setOrNothingElementType() {
+        if (complexTypeInfo) {
+            complexTypeInfo = QoreTypeInfo::getOrNothingListType(complexTypeInfo);
+        }
+    }
+
+    //! returns true if the element type of the list does not take NOTHING
+    DLLLOCAL bool elementTypeRejectsNothing() const {
+        return complexTypeInfo && !QoreTypeInfo::listElementTakesNothing(complexTypeInfo);
+    }
+
+private:
+    //! raises the error of checkAssignmentGap() for a list whose element type does not take NOTHING
+    DLLLOCAL __attribute__((noinline, cold)) int raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const;
+
+
+public:
+
     // mergesort for controlled and interruptible sorts (stable)
     DLLLOCAL int mergesort(const ResolvedCallReferenceNode* fr, bool ascending, ExceptionSink* xsink);
 
@@ -850,8 +896,38 @@ struct qore_list_private {
     DLLLOCAL static QoreListNode* newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
             ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
+    //! returns a typed list made by its constructor from the list of its arguments, which are its elements
+    /** an argument that is not a valid element raises the error of getConstructorArgErrorDesc(), as at parse time
+        (issue #6172); the caller owns any reference in "args"
+    */
+    DLLLOCAL static QoreListNode* newComplexListFromArgs(const QoreTypeInfo* typeInfo, QoreValue args,
+            ExceptionSink* xsink);
+
+    DLLLOCAL static QoreListNode* newComplexListFromArgs(const QoreTypeInfo* typeInfo, QoreValue args,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy);
+
+    //! returns the description of the error of an argument of the constructor of a typed list that is not a valid
+    //! element of the list, the same at parse time and at run time (issue #6172)
+    /** @param vti the element type of the list
+        @param index the position of the argument (from 0)
+        @param arg_ti the type of the argument
+    */
+    DLLLOCAL static QoreStringNode* getConstructorArgErrorDesc(const QoreTypeInfo* vti, size_t index,
+            const QoreTypeInfo* arg_ti);
+
+    //! checks the arguments of the constructor of a typed list at parse time: they are the elements of the list
+    DLLLOCAL static int parseCheckConstructorArgs(const QoreProgramLocation* loc, const QoreTypeInfo* vti,
+            const QoreTypeInfo* args_type_info, const QoreValue args);
+
     template <bool Lexical>
     DLLLOCAL static QoreListNode* newComplexListFromValueImpl(const QoreTypeInfo* typeInfo, QoreValue init,
+            ExceptionSink* xsink, LexicalSemanticPolicy policy, bool ctor_args = false);
+
+    //! checks an argument of the constructor of a typed list at run time and converts it to the element type
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    template <bool Lexical>
+    DLLLOCAL static int acceptConstructorArg(const QoreTypeInfo* vti, size_t index, QoreValue& arg,
             ExceptionSink* xsink, LexicalSemanticPolicy policy);
 
     DLLLOCAL static const qore_list_private* get(const QoreListNode& l) {

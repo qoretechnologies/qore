@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class IsEncodingValidTest
+
+#! <string>::isEncodingValid() tests a string without raising an exception (qore#6554)
+class IsEncodingValidTest inherits QUnit::Test {
+    constructor() : Test("<string>::isEncodingValid()", "1.0", \ARGV) {
+        addTestCase("valid UTF-8", \validUtf8());
+        addTestCase("invalid UTF-8", \invalidUtf8());
+        addTestCase("agrees with regular expression matching", \agreesWithMatch());
+        addTestCase("other encodings", \otherEncodings());
+        addTestCase("large strings", \largeStrings());
+        set_return_value(main());
+    }
+
+    private static string utf8(string hex) {
+        return binary_to_string(parse_hex_string(hex), "UTF-8");
+    }
+
+    validUtf8() {
+        assertTrue("".isEncodingValid());
+        assertTrue("abc".isEncodingValid());
+        assertTrue("é€𝄞".isEncodingValid());
+        # the highest code point and the code points either side of the surrogates
+        assertTrue(utf8("f48fbfbf").isEncodingValid());
+        assertTrue(utf8("ed9fbf").isEncodingValid());
+        assertTrue(utf8("ee8080").isEncodingValid());
+        # an embedded NUL is a valid character
+        assertTrue(utf8("610062").isEncodingValid());
+    }
+
+    invalidUtf8() {
+        map assertFalse(utf8($1).isEncodingValid(), $1), (
+            "ff",           # a byte that never appears in UTF-8
+            "61ff27",       # an invalid byte between valid characters
+            "80",           # a continuation byte without a lead byte
+            "c3",           # a sequence truncated by the end of the string
+            "c3a9c3",       # a valid character followed by a truncated sequence
+            "c0af",         # an overlong form of '/'
+            "e080af",       # an overlong three-byte form
+            "eda080",       # a surrogate code point
+            "f4908080",     # a value above U+10FFFF
+            "f880808080",   # a five-byte form
+            "c1bf",         # an overlong two-byte form
+            "e0a0",         # a truncated three-byte sequence
+            "f09f98",       # a truncated four-byte sequence
+            "eda0",         # a truncated surrogate
+            "f48f",         # a truncated four-byte sequence at the highest code point
+            "f0808080",     # an overlong four-byte form
+            "f5",           # a lead byte above U+10FFFF
+            "edbfbf",       # the highest surrogate
+            "c2c2",         # a lead byte followed by a lead byte
+        );
+    }
+
+    #! a string is valid exactly when a regular expression can match it
+    agreesWithMatch() {
+        foreach string hex in ("", "61", "c3a9", "ff", "80", "c0af", "eda080", "f4908080", "c3", "61ff27") {
+            string s = utf8(hex);
+            bool matched;
+            try {
+                matched = (s =~ /^/);
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("INVALID-ENCODING", ex.err, hex);
+                matched = False;
+            }
+            assertEq(matched, s.isEncodingValid(), hex);
+        }
+    }
+
+    otherEncodings() {
+        # every byte sequence is valid in a single-byte encoding
+        assertTrue(binary_to_string(parse_hex_string("ff80c0"), "ISO-8859-1").isEncodingValid());
+        assertTrue(binary_to_string(parse_hex_string("e9"), "ISO-8859-1").isEncodingValid());
+        # Shift_JIS: a valid two-byte character, and a lead byte without a valid trail byte
+        assertTrue(binary_to_string(parse_hex_string("82a0"), "SHIFT_JIS").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("817f"), "SHIFT_JIS").isEncodingValid());
+        # UTF-16LE: an unpaired surrogate
+        assertTrue(binary_to_string(parse_hex_string("6100"), "UTF-16LE").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("00d8"), "UTF-16LE").isEncodingValid());
+        # UTF-16 with a byte order mark
+        assertTrue(binary_to_string(parse_hex_string("fffe6100"), "UTF-16").isEncodingValid());
+        # a byte that the encoding does not define
+        assertFalse(binary_to_string(parse_hex_string("41ff"), "US-ASCII").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("4181"), "WINDOWS-1252").isEncodingValid());
+        # a stateful encoding: a complete and a truncated two-byte character after the escape sequence
+        assertTrue(binary_to_string(parse_hex_string("1b244224221b2842"), "ISO-2022-JP").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("1b2442242261"), "ISO-2022-JP").isEncodingValid());
+        # an encoding that iconv cannot convert: ASCII text is valid, other text is not
+        assertTrue(force_encoding("abc", "X-QORE-UNKNOWN-6554").isEncodingValid());
+        assertFalse(binary_to_string(parse_hex_string("61e9"), "X-QORE-UNKNOWN-6554").isEncodingValid());
+    }
+
+    largeStrings() {
+        string s = strmul("é", 1000000);
+        assertTrue(s.isEncodingValid());
+        s = s + utf8("ff");
+        assertFalse(s.isEncodingValid());
+    }
+}

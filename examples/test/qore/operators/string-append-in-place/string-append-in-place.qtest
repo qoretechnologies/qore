@@ -27,6 +27,9 @@
     must give the results below, which are those of the AST interpreter.  A string that another variable holds and a
     string appended to itself must still be copied.
 
+    The auto-local checks use two loop sizes and verify that a unique string keeps its allocation at both sizes
+    (issue #6279). They also check the value observed by an earlier read and by another variable sharing the string.
+
     The "try-" checks append in a try block, where the append is an invoke with an exception edge, which was not
     paired with the local's load and store and so copied the string for every append (issue #6280), as did an append in
     a catch block; an append that raises an exception must leave the string as it was for the handler.
@@ -36,6 +39,16 @@ class StringAppendInPlaceTest inherits QUnit::Test {
         #! the result of every check the worker makes, which it makes twice (the "-again" checks)
         const Expected = {
             "variable": "in-place|5000:UTF-8:abababababab",
+            "auto-local": "in-place|5000:UTF-8:abababababab",
+            "auto-local-double": "in-place|9000:UTF-8:abababababab",
+            "auto-shared": "copied|5000:UTF-8:abababababab:1000",
+            "auto-try": "in-place|5000:UTF-8:abababababab",
+            "auto-handler": "in-place|5000:UTF-8:abababababab",
+            "auto-large-int": "in-place|39000:UTF-8:036854775807",
+            "auto-error": "ENCODING-CONVERSION-ERROR:1000",
+            "auto-number": "in-place|3000:UTF-8:333333333333",
+            "auto-arguments": "1000:1002",
+            "auto-change": "integer:7|integer:7|string:\"123\"|integer:140737488355328",
             "parameter": "in-place|5000:UTF-8:abababababab",
             "call": "in-place|5000:UTF-8:abababababab",
             "optional-call": "in-place|3666:UTF-8:cdcdcdcdcdcd",

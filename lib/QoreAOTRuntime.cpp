@@ -2324,7 +2324,8 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         if (*req_path) {
             // the parse lookup reads the parse options of the current Program, which is not set on a thread that
             // loads a compiled program, and can be another Program; the options of the target Program apply
-            // (qore#6026)
+            // (qore#6026); a lookup, which runs no code of the Program, so the Program is only made current, not
+            // entered (qore#6185)
             QoreProgramContextHelper pch(pgm);
             qc = qore_root_ns_private::parseFindClass(*pp->RootNS, &loc_builtin, req_path);
         }
@@ -5968,6 +5969,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
                 // order with another loader thread that already holds the Program parse lock and is waiting for AOT
                 // init.
+                // The record is only read and the closure constructed: no code of the Program runs, so the Program is
+                // only made current, not entered (qore#6185).
                 QoreProgramContextHelper closure_pch(pgm);
 
                 // Read flags
@@ -6407,7 +6410,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                // the Program resolves the hashdecls and types of typed container values (#5895)
+                // the Program resolves the hashdecls and types of typed container values (#5895); reading the value
+                // runs no code of the Program, so it is only made current, not entered (qore#6185)
                 QoreValue value;
                 {
                     QoreProgramContextHelper value_pch(pgm);
@@ -8186,9 +8190,16 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see serializeIRFunction())
         uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        const bool debug_flow_flags = reader.getHeader().version >= QORE_AOT_DEBUG_FLOW_VERSION;
+        uint8_t loop_cancel = static_cast<uint8_t>(debug_flow_flags ? (block_flags >> 1) & 0x7 : block_flags >> 1);
+        if (debug_flow_flags && (block_flags & ~0x1f)) {
+            error = "invalid flags " + std::to_string(block_flags) + " of block " + std::to_string(i)
+                + " of function " + func->name;
+            return nullptr;
+        }
         if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
             error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
                 + std::to_string(i) + " of function " + func->name;
@@ -8199,6 +8210,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks[i]->name = block_name ? block_name : "";
         func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
         func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
+        func->blocks[i]->debug_flow = debug_flow_flags && (block_flags & 0x10);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {
@@ -8272,6 +8284,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     // the interpreter indexes its frame with the value ids of the IR (qore#6451)
     if (!qore_aot_check_ir_value_ids(*func, error)) {
         error = "malformed IR function '" + func->name + "': " + error;
+        return nullptr;
+    }
+    // the control flow and the SSA form that the interpreter and the JIT take from the IR without a check (qore#6468)
+    if (!QoreIRVerifier::verifyModuleIR(*func, error)) {
+        error = "AOT IR verification failed in '" + func->name + "': " + error;
         return nullptr;
     }
     return func;
@@ -8564,7 +8581,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
         ir.ast_visible_body_locals = ir.all_body_locals;
     }
 
-    delete ir.cached_pre_instantiated;
+    // the set replaces the previous one (setCachedPreInstantiated())
     auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
     std::unordered_set<const void*> body_local_set;
     for (LocalVar* lv : ir.all_body_locals) {
@@ -8580,7 +8597,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
             cached_pre_inst->insert(lv);
         }
     }
-    ir.cached_pre_instantiated = cached_pre_inst;
+    ir.setCachedPreInstantiated(cached_pre_inst);
 }
 
 //! Re-lower a user function variant to IR and build an AOT context.
@@ -14509,10 +14526,10 @@ static int executeInitFunctions(
         return nullptr;
     };
 
-    // ProgramRuntimeParseContextHelper can set td->current_pgm without setting
-    // td->tlpd. Init functions that construct objects need td->tlpd for
-    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in
-    // initMembers), so keep the bridge for nested parse-context callers.
+    // A thread can have td->current_pgm without td->tlpd (a binary module's initialization, before any entry; a
+    // switch of the current Program to one where the thread has no data yet, which does not create it: qore#6537).
+    // Init functions that construct objects need td->tlpd for
+    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in initMembers), so keep the bridge.
     thread_ensure_local_program_data();
 
     // only the debug log reads it

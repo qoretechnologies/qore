@@ -32,6 +32,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -344,7 +345,7 @@ bool QoreSignalManager::stopForExit() {
 }
 
 void QoreSignalManager::wait_signal_thread_stopped() {
-    tcount.waitForZero();
+    qore_counter_ops(tcount).waitForZero();
 
     bool join = false;
     pthread_t join_ptid;
@@ -441,11 +442,11 @@ void QoreSignalManager::postFork(bool new_process, ExceptionSink *xsink) {
 
 void QoreSignalManager::forkPrepare() {
     mutex.lock();
-    tcount.lockForFork();
+    qore_counter_ops(tcount).lockForFork();
 }
 
 void QoreSignalManager::forkParent() {
-    tcount.unlockForFork();
+    qore_counter_ops(tcount).unlockForFork();
     mutex.unlock();
 }
 
@@ -479,8 +480,8 @@ void QoreSignalManager::forkChild(int fork_tid) {
             handlers[i].release_tid = -1;
         }
     }
-    tcount.reinitAfterFork(signal_threads);
-    cond.reinitAfterFork();
+    qore_counter_ops(tcount).reinitAfterFork(signal_threads);
+    qore_condition_ops(cond).reinitAfterFork();
     // held by this thread since forkPrepare()
     mutex.reinitAfterFork();
 }
@@ -751,7 +752,7 @@ void QoreSignalManager::signal_handler_thread() {
     // clean up thread-local storage before exiting (issue #5085)
     qore_thread_local_storage_cleanup();
 
-    tcount.dec();
+    qore_counter_ops(tcount).dec();
 
     //fprintf(stderr, "signal handler thread stopped (count: %d) &ptid: %p\n", tcount.getCount(), &ptid);
     //fflush(stderr);
@@ -774,7 +775,7 @@ int QoreSignalManager::start_signal_thread(ExceptionSink *xsink) {
 
     int rc = pthread_create(&ptid, ta_default.get_ptr(), sig_thread, 0);
     if (rc) {
-        tcount.dec();
+        qore_counter_ops(tcount).dec();
         deregister_signal_thread();
         tid = -1;
         xsink->raiseErrnoException("THREAD-CREATION-FAILURE", rc, "could not create signal handler thread");

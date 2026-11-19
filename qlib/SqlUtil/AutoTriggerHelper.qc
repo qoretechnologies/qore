@@ -180,9 +180,9 @@ public string sub get_physical_placement_trigger_guard(string driver_name, strin
     if (driver_name != "pgsql" || !table_name || table_name.size() > 128 || table_name.find("\0") >= 0) {
         throw "AUTO-TRIGGER-ERROR", "physical-placement guard requires pgsql and a bounded table name";
     }
-    string literal = table_name;
-    literal =~ s/\\/\\\\/g;
-    literal =~ s/'/''/g;
+    # issue #6586: the literal is escaped without regular expressions, and a name whose encoding is invalid is refused
+    AbstractSqlUtilBase::checkSqlStringValue(table_name);
+    string literal = replace(replace(table_name, "\\", "\\\\"), "'", "''");
     return "  if nullif(pg_catalog.current_setting('qore.physical_placement', true), '') is not null then\n"
         "    if (pg_catalog.current_setting('qore.physical_placement', true)::jsonb ->> 'schema') = TG_TABLE_SCHEMA\n"
         + sprintf("        and (pg_catalog.current_setting('qore.physical_placement', true)::jsonb ->> 'table') = E'%s' then\n", literal)

@@ -33,6 +33,7 @@
 
 #define _QORE_STATEMENT_BLOCK_H
 
+#include "qore/intern/ParseWarnOptions.h"
 #include "qore/intern/QoreNativeParseInfo.h"
 #include "qore/intern/AbstractStatement.h"
 #include <qore/safe_dslist>
@@ -333,6 +334,35 @@ public:
         parse_context.lvids = 0;
     }
 
+    //! Records the committed statements that no run has executed yet as executed, and returns their number
+    /** For Program::skipPendingStatements(); the caller holds the parse lock of the Program, so that no parse changes
+        the committed statements (issue #6511)
+    */
+    DLLLOCAL int64 skipUnexecuted() {
+        std::lock_guard<std::mutex> lg(ehwm_lock);
+        if (hwm == statement_list.end()) {
+            return 0;
+        }
+        statement_list_t::iterator i = ehwm;
+        if (i == statement_list.end()) {
+            i = statement_list.begin();
+        } else {
+            ++i;
+        }
+        int64 rv = 0;
+        statement_list_t::iterator stop = hwm;
+        ++stop;
+        for (; i != stop; ++i) {
+            ++rv;
+        }
+        if (rv) {
+            ehwm = hwm;
+            // the top-level code compiled ahead of time covers the statements skipped: it does not run either
+            aot_toplevel_ran = true;
+        }
+        return rv;
+    }
+
 protected:
     QoreNativeParseInfo committed_native_parse_info;
     // iterator to last commit element in statement list (for parsing)
@@ -498,6 +528,11 @@ protected:
     const QoreProgramLocation* loc;
     bool block_start;
     bool top_level;
+    //! the parse options and warning mask in effect where the variable is declared, under which the warnings raised
+    //! when it goes out of scope are checked (issue #6589)
+    ParseWarnOptions decl_opts;
+    //! true if decl_opts is set (a variable declared in a Program's code)
+    bool has_decl_opts = false;
 };
 
 class CatchExceptionHelper {

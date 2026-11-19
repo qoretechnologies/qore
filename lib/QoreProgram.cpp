@@ -71,6 +71,7 @@
 #include "qore/intern/QoreSerializable.h"
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <string>
 #include <set>
@@ -675,7 +676,7 @@ int qore_program_private::waitForParseLock(int tid, ExceptionSink* xsink) {
         ++thread_waiting;
         if (xsink) {
             // a cancellation point; see "Condition waits" in design/cooperative-cancellation.md
-            if (pcond.waitWithInterrupt(plock, xsink, "parse lock wait", entry.isAdded() ? +before_block : nullptr,
+            if (qore_condition_ops(pcond).waitWithInterrupt(plock, xsink, "parse lock wait", entry.isAdded() ? +before_block : nullptr,
                     &check) == QORE_COND_RESULT_INTERRUPTED) {
                 rc = -1;
             }
@@ -790,7 +791,7 @@ size_t qore_program_private::dbgGetLiveProgramCount() {
 
 void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     plock.reinitAfterFork(&ma_recursive);
-    pcond.reinitAfterFork();
+    qore_condition_ops(pcond).reinitAfterFork();
     // a thread of the parent that created or destroyed a variant of the Program's code can have held it; the list
     // that it protects is changed only at parse time and when code is freed, as the other data of the Program that
     // its locks protect, which fork() handles alike (see design/fork-handlers.md)
@@ -801,7 +802,7 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     // do not exist there
     ext_copy_count = getOwnExtDataCopies();
     ext_copy_waiting = 0;
-    ext_copy_cond.reinitAfterFork();
+    qore_condition_ops(ext_copy_cond).reinitAfterFork();
     // the thread counts keep only the forking thread; the containers of the Program's threads are consistent here, as
     // fork() waited for every change of them in progress (see qore_program_private_base::thread_container_shards),
     // and they are changed without the stripe lock, as only this thread exists
@@ -845,21 +846,21 @@ void qore_program_private::fixupAfterFork(int tid, ThreadProgramData* tpd) {
     // the threads that waited for the parse lock do not exist in the child (see fixupAllAfterFork())
     parse_lock_waiters = 0;
     tlock.reinitAfterFork();
-    tcond.reinitAfterFork();
+    qore_condition_ops(tcond).reinitAfterFork();
     twaiting = 0;
     if (tclear && tclear != tid) {
         tclear = 0;
     }
     tld_lock.reinitAfterFork();
     sm_lock.reinitAfterFork();
-    featureLock.reinitAfterFork();
+    qore_rwlock_ops(featureLock).reinitAfterFork();
     new (&runtime_metadata_lock) std::recursive_mutex();
     pwo.parse_options.reinitAfterFork();
     ir_fallback_lock.reinitAfterFork();
     plugin_fallback_lock.reinitAfterFork();
     // the debugger calls in progress of the parent's other threads do not exist in the child (issue #6404)
-    debug_program_counter.reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
-    lck_breakpoint.reinitAfterFork();
+    qore_counter_ops(debug_program_counter).reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
+    qore_rwlock_ops(lck_breakpoint).reinitAfterFork();
     // the thread data of the parent's other threads remains registered; its lock can be held by its thread
     for (ThreadProgramData* i : tld_registry) {
         if (i != tpd) {
@@ -933,7 +934,7 @@ public:
     void child() noexcept override {
         ThreadProgramData* tpd = get_thread_program_data_if_any();
         qore_program_private::fixupAllAfterFork(qore_fork_get_tid(), tpd);
-        qore_program_private::getProgramMapLock().reinitAfterFork();
+        qore_rwlock_ops(qore_program_private::getProgramMapLock()).reinitAfterFork();
     }
 };
 
@@ -988,6 +989,33 @@ ProgramThreadContainersForkHandler program_thread_containers_fork_handler;
 qore_program_private_base::ThreadContainerShard
     qore_program_private_base::thread_container_shards[1u << ThreadContainerShardBits];
 
+void qore_set_program_parse_diagnostics_accumulated(QoreProgram& pgm) {
+    qore_program_private::get(pgm)->setParseDiagnosticsAccumulated();
+}
+
+bool qore_get_exception_parse_diagnostic(const QoreException& e, QoreDiagnostic& diag) {
+    if (!e.diagnostic_pgm_id || e.diagnostic_index < 0) {
+        return false;
+    }
+    QoreProgram* pgm = qore_program_private::getReferencedProgram(e.diagnostic_pgm_id);
+    if (!pgm) {
+        return false;
+    }
+    bool rv = false;
+    {
+        qore_program_private* pp = qore_program_private::get(*pgm);
+        if (pp->accumulate_diagnostics && e.diagnostic_gen == pp->diagnostics_gen
+                && static_cast<size_t>(e.diagnostic_index) < pp->diagnostics.size()) {
+            diag = pp->diagnostics[e.diagnostic_index];
+            rv = true;
+        }
+    }
+    ExceptionSink xsink;
+    pgm->deref(&xsink);
+    xsink.clear();
+    return rv;
+}
+
 qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOptions& n_parse_options,
         QoreProgram* p_pgm, const QoreParseOptions* p_parse_options)
         : qore_program_private_base(n_pgm, n_parse_options, p_pgm, p_parse_options) {
@@ -995,6 +1023,23 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
     // every Program wherever it is created, and before the Program is registered and can be found
     if (qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
+        // the Program keeps the sandbox of the code that creates it, which governs its code wherever it runs, also
+        // when trusted code calls it without the Program object (see creator_sandbox_manager); before the Program is
+        // registered, so that nothing has to be undone if the lookup fails (std::bad_alloc: no Program is created)
+        QoreSandboxManager* all;
+        QoreSandboxManager* policy;
+        qore_caller_sandbox_refs(all, policy);
+        ReferenceHolder<QoreSandboxManager> creator_sm(all, nullptr);
+        ReferenceHolder<QoreSandboxManager> creator_policy(policy, nullptr);
+        if (creator_sm || creator_policy) {
+            try {
+                addCreatorSandbox(*creator_sm, *creator_policy);
+            } catch (...) {
+                // a manager that was attached before the failure is released: the destructor does not run
+                releaseSandboxManagers(nullptr);
+                throw;
+            }
+        }
     }
     registerProgram();
     // the Program's ID is known now
@@ -1017,7 +1062,8 @@ qore_program_private::qore_program_private(QoreProgram* n_pgm, const QoreParseOp
 }
 
 void qore_program_private::markSandboxedParse() {
-    // the flag is never cleared, so a Program that is sandboxed already needs no lookup
+    // the flag is never cleared, so a Program that is sandboxed already needs no lookup; the sandbox of the code that
+    // is parsed is attached when the code is committed (see getParseCreatorSandbox())
     if (!sandboxed.load(std::memory_order_acquire) && qore_caller_is_sandboxed()) {
         sandboxed.store(true, std::memory_order_release);
     }
@@ -1201,7 +1247,9 @@ qore_program_private::~qore_program_private() {
         dp->removeProgram(pgm);
     }
     // wait till all debug calls are finished, no new calls possible as dpgm->removeProgram() set dpmg to NULL
-    debug_program_counter.waitForZero();
+    qore_counter_ops(debug_program_counter).waitForZero();
+    // a Program destroyed without being cleared still holds its sandbox managers
+    releaseSandboxManagers(nullptr);
     deleteAllBreakpoints();
     // a hook that was not run (the Program was destroyed without being cleared) is never run
     qore_drop_exit_hooks(pgm);
@@ -1301,7 +1349,7 @@ void qore_program_private::collectModuleLoadErrors(const QoreProgramLocation& lo
         QoreStringValueHelper err(e->err);
         QoreStringValueHelper desc(e->desc);
         diagnostics.push_back(QoreDiagnostic(true, err->c_str(), -1, loc, desc->c_str()));
-        e->diagnostic_pgm_id = programId;
+        markDiagnostic(*e);
     }
 }
 
@@ -1318,8 +1366,23 @@ void qore_program_private::addExceptionDiagnostics(ExceptionSink* xsink) {
         // an exception without a source location (raised by builtin code) has no file
         diagnostics.emplace_back(err->c_str(), e->isBuiltin() ? std::string() : e->file, e->source, *e,
             desc->c_str());
-        e->diagnostic_pgm_id = programId;
+        markDiagnostic(*e);
     }
+}
+
+int64 qore_program_private::skipPendingStatements(QoreProgram& pgm, ExceptionSink* xsink) {
+    if (lockParsing(pgm, xsink)) {
+        return -1;
+    }
+    // the parse lock is released also if an exception leaves
+    ON_BLOCK_EXIT([&pgm, xsink] () {
+        qore_program_private::unlockParsing(pgm, xsink);
+    });
+    // without PO_ALLOW_REPARSE, a run executes all of the statements
+    if (!(pgm.priv->pwo.parse_options & PO_ALLOW_REPARSE)) {
+        return 0;
+    }
+    return pgm.priv->sb.skipUnexecuted();
 }
 
 void qore_add_parse_exception_diagnostics(QoreProgram& pgm, ExceptionSink& xsink) {
@@ -1486,9 +1549,13 @@ static void json_diagnostic_metadata_append(std::string& str, const QoreDiagnost
 }
 
 std::string qore_program_private::getParseDiagnosticsJSON() const {
+    return qore_diagnostics_json(diagnostics);
+}
+
+std::string qore_diagnostics_json(const std::vector<QoreDiagnostic>& diags) {
     std::string j = "[";
     bool first = true;
-    for (auto& d : diagnostics) {
+    for (auto& d : diags) {
         if (!first) {
             j += ",";
         }
@@ -1566,8 +1633,14 @@ unsigned qore_render_parse_diagnostic_frames(QoreProgram& pgm, const char* sourc
 }
 
 unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_text, FILE* os) const {
+    return qore_render_diagnostic_frames(diagnostics, [source_text] (const QoreDiagnostic&) { return source_text; },
+        os);
+}
+
+unsigned qore_render_diagnostic_frames(const std::vector<QoreDiagnostic>& diags,
+        const std::function<const char* (const QoreDiagnostic&)>& source_text, FILE* os) {
     unsigned errors = 0;
-    for (auto& d : diagnostics) {
+    for (auto& d : diags) {
         if (d.error) {
             ++errors;
         }
@@ -1581,7 +1654,7 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
 
         // code frame: the source line plus a caret line under the offending span
         std::string line;
-        if (extract_source_line(source_text, d.start_line, line)) {
+        if (extract_source_line(source_text(d), d.start_line, line)) {
             fprintf(os, "  %s\n", line.c_str());
             if (d.start_column >= 0) {
                 std::string caret("  ");
@@ -2153,6 +2226,8 @@ void qore_program_private_base::newProgram() {
         featureList.insert(i.c_str());
     }
 
+    // the namespaces are set up in the new Program, which is only made current: no code of the Program runs here
+    // (qore#6185)
     QoreProgramContextHelper pch(pgm);
 
     // setup namespaces
@@ -2439,6 +2514,8 @@ int qore_program_private::beginParse(ExceptionSink* xsink, ParseStartGuard& guar
 }
 
 void qore_program_private::internParseRollback(ExceptionSink* xsink) {
+    // the code that sandboxed code parsed is gone, and so is the reason to attach its sandbox
+    dropPendingCreatorSandbox();
     bool atomic_rollback = static_cast<bool>(pwo.parse_options & PO_ALLOW_REPARSE);
     // delete pending changes to namespaces: only what the failed parse added is removed, also without
     // PO_ALLOW_REPARSE, as the namespaces hold what the Program had before the parse, including the classes and
@@ -2709,16 +2786,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         exec_class_rv.discard(xsink);
         exec_class_rv = QoreValue();
 
-        // clear sandbox manager if set
+        // clear the sandbox managers if set
         {
-            QoreSandboxManager* sm;
-            {
-                AutoLocker al(sm_lock);
-                sm = sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
-            }
-            if (sm) {
-                sm->deref(xsink);
-            }
+            releaseSandboxManagers(xsink);
         }
 
         // delete code
@@ -2915,6 +2985,11 @@ int qore_program_private::internParseCommit(bool standard_parse) {
         }
 
         if (parseSink->isEvent()) {
+            internParseRollback(parseSink);
+            requires_exception = false;
+            rc = -1;
+        } else if (commitPendingCreatorSandbox(parseSink)) {
+            // the code that sandboxed code parsed is not committed without its sandbox
             internParseRollback(parseSink);
             requires_exception = false;
             rc = -1;
@@ -4428,8 +4503,8 @@ QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, 
     }
 }
 
-QoreThreadLock* QoreProgram::getParseLock() {
-    return &priv->plock;
+QoreThreadLock* qore_program_ops::getParseLockImpl(QoreProgram* b) {
+    return &b->priv->plock;
 }
 
 void QoreProgram::deref(ExceptionSink* xsink) {
@@ -4477,11 +4552,11 @@ bool qore_program_private::derefUnregister() {
     return true;
 }
 
-ExceptionSink* QoreProgram::getParseExceptionSink() {
-    if (priv->requires_exception)
+ExceptionSink* qore_program_ops::getParseExceptionSinkImpl(QoreProgram* b) {
+    if (b->priv->requires_exception)
         return nullptr;
 
-    return priv->parseSink;
+    return b->priv->parseSink;
 }
 
 int QoreProgram::setWarningMask(int wm) {
@@ -5492,12 +5567,12 @@ QoreListNode* QoreProgram::getFeatureList() const {
     return priv->getFeatureList();
 }
 
-QoreListNode* QoreProgram::getVarList() {
-    return priv->getVarList();
+QoreListNode* qore_program_ops::getVarListImpl(QoreProgram* b) {
+    return b->priv->getVarList();
 }
 
-const char* QoreProgram::parseGetScriptDir() const {
-    return priv->parseGetScriptDir();
+const char* qore_program_ops::parseGetScriptDirImpl(QoreProgram* b) {
+    return b->priv->parseGetScriptDir();
 }
 
 QoreStringNode* QoreProgram::getScriptDir() const {
@@ -5516,8 +5591,8 @@ void QoreProgram::setScriptPath(const char* path) {
     priv->setScriptPathExtern(path);
 }
 
-const LVList* QoreProgram::getTopLevelLVList() const {
-    return priv->sb.getLVList();
+const LVList* qore_program_ops::getTopLevelLVListImpl(QoreProgram* b) {
+    return b->priv->sb.getLVList();
 }
 
 QoreValue QoreProgram::getGlobalVariableVal(const char* var, bool& found) const {
@@ -5536,13 +5611,13 @@ QoreValue QoreProgram::getGlobalVariableValue(const char* var, bool& found) cons
 }
 
 // only called when parsing, therefore in the parse thread lock
-void QoreProgram::parseSetIncludePath(const char* path) {
-    priv->include_path = path;
+void qore_program_ops::parseSetIncludePathImpl(QoreProgram* b, const char* path) {
+    b->priv->include_path = path;
 }
 
 // only called when parsing, therefore in the parse thread lock
-const char* QoreProgram::parseGetIncludePath() const {
-    return priv->include_path.empty() ? nullptr : priv->include_path.c_str();
+const char* qore_program_ops::parseGetIncludePathImpl(QoreProgram* b) {
+    return b->priv->include_path.empty() ? nullptr : b->priv->include_path.c_str();
 }
 
 const AbstractQoreZoneInfo* QoreProgram::currentTZ() const {
@@ -5553,8 +5628,8 @@ void QoreProgram::setTZ(const AbstractQoreZoneInfo* n_TZ) {
     priv->setTZ(n_TZ);
 }
 
-bool QoreProgram::parseExceptionRaised() const {
-    return priv->parseExceptionRaised();
+bool qore_program_ops::parseExceptionRaisedImpl(QoreProgram* b) {
+    return b->priv->parseExceptionRaised();
 }
 
 void QoreProgram::parseSetTimeZone(const char* zone) {
@@ -5588,27 +5663,65 @@ QoreValue qore_parse_get_define_value(const QoreProgramLocation* loc, const char
     if (!strcasecmp(p, "false"))
         return false;
 
-    // see if there are non-numeric characters in the string
+    // an empty value is no value, as with %define without one (issue #6564)
+    if (!*p) {
+        return QoreValue();
+    }
+
+    // a number: an optional sign, decimal digits and an optional fraction; anything else, as text after the number
+    // (1-2), is an error (issue #6564)
+    const char* q = p;
+    if (*q == '-' || *q == '+') {
+        ++q;
+    }
+    bool digits = false;
+    while (isdigit(static_cast<unsigned char>(*q))) {
+        ++q;
+        digits = true;
+    }
     bool flt = false;
-    while (*p) {
-        if (*p == '.') {
-            if (flt) {
-                parse_error(*loc, "'%s' is defined with an invalid number: '%s'", str, arg.getBuffer());
+    if (*q == '.') {
+        flt = true;
+        ++q;
+        while (isdigit(static_cast<unsigned char>(*q))) {
+            ++q;
+            digits = true;
+        }
+    }
+    if (*q || !digits) {
+        for (const char* a = p; *a; ++a) {
+            if (isalpha(static_cast<unsigned char>(*a))) {
+                parse_error(*loc, "'%s' has unquoted alphabetic characters in the value; use quotes (\" or ') to "
+                    "define strings", str);
                 ok = false;
                 return QoreValue();
             }
-            flt = true;
         }
-        else if (isalpha(*p)) {
-            parse_error(*loc, "'%s' has unquoted alphabetic characters in the value; use quotes (\" or ') to define strings", str);
+        parse_error(*loc, "'%s' is defined with an invalid number: '%s'", str, arg.getBuffer());
+        ok = false;
+        return QoreValue();
+    }
+
+    // a number is decimal, also with a leading zero (issue #6530); an integer stays an integer: the two results are
+    // not given by one conditional expression, whose type would be double
+    if (flt) {
+        double d = q_strtod(p);
+        if (std::isinf(d)) {
+            parse_error(*loc, "'%s' is defined with a number that cannot be represented: '%s'", str, arg.getBuffer());
             ok = false;
             return QoreValue();
         }
-        ++p;
+        return d;
     }
-
-    p = arg.c_str();
-    return flt ? q_strtod(p) : strtoll(p, 0, 10);
+    errno = 0;
+    int64 i = strtoll(p, 0, 10);
+    if (errno == ERANGE) {
+        parse_error(*loc, "'%s' is defined with a number that cannot be represented: '%s'; integers must be in the "
+            "range " QLLD " (MININT) to " QLLD " (MAXINT)", str, arg.getBuffer(), -LLONG_MAX, LLONG_MAX);
+        ok = false;
+        return QoreValue();
+    }
+    return i;
 }
 
 void QoreProgram::parseDefine(const char* str, QoreValue val) {
@@ -6300,25 +6413,8 @@ bool QoreProgram::checkAllowDebugging(ExceptionSink* xsink) {
 }
 
 void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
-    QoreSandboxManager* old;
-    {
-        AutoLocker al(priv->sm_lock);
-        if (sm) {
-            // referenced before it is published: a lookup that finds it without the lock must find it alive
-            sm->ref();
-            // the Program's code is sandboxed from now on, also once the manager is removed or the Program deleted
-            priv->sandboxed.store(true, std::memory_order_release);
-        }
-        old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
-        // after the manager is published: a thread that finds the new generation finds the manager (see
-        // ProgramThreadCountContextHelper::sandboxChainClear())
-        if (sm) {
-            qore_sandbox_manager_generation.fetch_add(1, std::memory_order_seq_cst);
-        }
-    }
-    if (old) {
-        old->deref(nullptr);
-    }
+    // the C++ API sets a manager that governs the Program's code alone (see qore_program_private::own_manager_additive)
+    priv->setOwnSandboxManager(sm, false, false);
 }
 
 const AbstractQoreFunctionVariant* QoreProgram::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) const {
@@ -6492,11 +6588,11 @@ static QoreForkRWLock breakpoint_fork_handler(qore_program_private::getBreakpoin
 bkp_list_t QoreBreakpoint::breakpointList;
 unsigned QoreBreakpoint::breakpointIdCounter = 1;
 
-void QoreBreakpoint::unassignAllStatements() {
-    for (std::list<AbstractStatement*>::iterator it = statementList.begin(); it != statementList.end(); ++it) {
-        (*it)->unassignBreakpoint(this);
+void qore_breakpoint_ops::unassignAllStatementsImpl(QoreBreakpoint* b) {
+    for (std::list<AbstractStatement*>::iterator it = b->statementList.begin(); it != b->statementList.end(); ++it) {
+        (*it)->unassignBreakpoint(b);
     }
-    statementList.clear();
+    b->statementList.clear();
 }
 
 QoreBreakpoint& QoreBreakpoint::operator=(const QoreBreakpoint& other) {
@@ -6555,15 +6651,15 @@ QoreBreakpoint::~QoreBreakpoint() {
     if (qore_program_private* p = getPgm()) {
         QoreAutoRWWriteLocker al(&p->lck_breakpoint);
         p->breakpointList.remove(this);
-        unassignAllStatements();
+        qore_breakpoint_ops(this).unassignAllStatements();
     } else {
-        unassignAllStatements();
+        qore_breakpoint_ops(this).unassignAllStatements();
     }
 }
 
 // lck_breakpoint lock should be acquired
-bool QoreBreakpoint::isStatementAssigned(const AbstractStatement *statement) const {
-    return std::find(statementList.begin(), statementList.end(), statement) != statementList.end();
+bool qore_breakpoint_ops::isStatementAssignedImpl(QoreBreakpoint* b, const AbstractStatement *statement) {
+    return std::find(b->statementList.begin(), b->statementList.end(), statement) != b->statementList.end();
 }
 
 bool QoreBreakpoint::checkBreak() const {
@@ -6581,8 +6677,8 @@ bool QoreBreakpoint::checkBreak() const {
     }
 }
 
-bool QoreBreakpoint::checkPgm(ExceptionSink* xsink) const {
-    if (getPgm()) {
+bool qore_breakpoint_ops::checkPgmImpl(QoreBreakpoint* b, ExceptionSink* xsink) {
+    if (b->getPgm()) {
         return true;
     } else {
         if (xsink) {
@@ -6599,7 +6695,7 @@ void QoreBreakpoint::assignProgram(QoreProgram *new_pgm, ExceptionSink* xsink) {
         if (qore_program_private* p = getPgm()) {
             QoreAutoRWWriteLocker al(&p->lck_breakpoint);
             p->breakpointList.remove(this);
-            unassignAllStatements();
+            qore_breakpoint_ops(this).unassignAllStatements();
             pgm = nullptr;
             deref();
         }
@@ -6611,13 +6707,13 @@ QoreProgram* QoreBreakpoint::getProgram() const {
     return p ? p->pgm : nullptr;
 }
 
-QoreProgram* QoreBreakpoint::getReferencedProgram() const {
+QoreProgram* qore_breakpoint_ops::getReferencedProgramImpl(QoreBreakpoint* b) {
     // the Program of the breakpoint is read with the registry lock held: a Program unassigns its breakpoints when its
     // last reference is released and when it is destroyed, before it takes the registry lock to leave the set of
     // instances, so a Program read here exists until the lock is released, and it has references if it is still
     // registered
     QoreAutoRWReadLocker al(&qore_program_private::lck_programMap);
-    qore_program_private* p = getPgm();
+    qore_program_private* p = b->getPgm();
     if (!p || !qore_program_private::isRegisteredIntern(p->pgm)) {
         return nullptr;
     }
@@ -6626,10 +6722,10 @@ QoreProgram* QoreBreakpoint::getReferencedProgram() const {
 }
 
 void QoreBreakpoint::assignStatement(AbstractStatement* statement, ExceptionSink* xsink) {
-    if (checkPgm(xsink)) {
+    if (qore_breakpoint_ops(this).checkPgm(xsink)) {
         QoreAutoRWWriteLocker al(&getPgm()->lck_breakpoint);
         if (getPgm()->isBreakpointRegistered(this)) {
-            if (statement && !isStatementAssigned(statement)) {
+            if (statement && !qore_breakpoint_ops(this).isStatementAssigned(statement)) {
                 statementList.push_back(statement);
                 statement->assignBreakpoint(this);
             }
@@ -6638,10 +6734,10 @@ void QoreBreakpoint::assignStatement(AbstractStatement* statement, ExceptionSink
 }
 
 void QoreBreakpoint::unassignStatement(AbstractStatement* statement, ExceptionSink* xsink) {
-    if (checkPgm(xsink)) {
+    if (qore_breakpoint_ops(this).checkPgm(xsink)) {
         QoreAutoRWWriteLocker al(&getPgm()->lck_breakpoint);
         if (getPgm()->isBreakpointRegistered(this)) {
-            if (statement && isStatementAssigned(statement)) {
+            if (statement && qore_breakpoint_ops(this).isStatementAssigned(statement)) {
                 statementList.remove(statement);
                 statement->unassignBreakpoint(this);
             }
@@ -6668,7 +6764,7 @@ QoreListNode* QoreBreakpoint::getStatementIds(ExceptionSink* xsink) {
 
 AbstractStatement* QoreBreakpoint::resolveStatementId(unsigned long statementId, ExceptionSink* xsink) const {
     AbstractStatement *s = nullptr;
-    if (checkPgm(xsink)) {
+    if (qore_breakpoint_ops(this).checkPgm(xsink)) {
         s = getPgm()->resolveStatementId(statementId);
         if (!s) {
             if (xsink) {
@@ -6785,7 +6881,7 @@ unsigned QoreBreakpoint::getBreakpointId() const {
     return breakpointId;
 }
 
-QoreBreakpoint* QoreBreakpoint::getReferencedBreakpoint(unsigned breakpointId) {
+QoreBreakpoint* qore_breakpoint_ops::getReferencedBreakpoint(unsigned breakpointId) {
     QoreAutoRWReadLocker al(&QoreBreakpoint::lck_breakpoint);
     for (QoreBreakpoint* b : QoreBreakpoint::breakpointList) {
         if (b->breakpointId == breakpointId) {

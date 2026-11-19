@@ -2830,7 +2830,8 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
             pending_class_path += 2;
         }
         // the parse lookup reads the parse options of the current Program, which is not set on a thread that loads a
-        // compiled program; the options of the target Program apply (qore#6026)
+        // compiled program; the options of the target Program apply (qore#6026); a lookup, which runs no code of the
+        // Program, so the Program is only made current, not entered (qore#6185)
         QoreProgramContextHelper pch(pgm);
         qc = qore_root_ns_private::parseFindClass(
             *pp->RootNS, &loc_builtin, pending_class_path);
@@ -3581,6 +3582,7 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
     // the namespace write lock or for an initializer that waits for this call.
     // Every caller already keeps pgm alive: lazy context materialization holds
     // Program access, and module registration runs in the owning loader.
+    // A lookup, which runs no code of the Program, so the Program is only made current, not entered (qore#6185).
     QoreProgramContextHelper pch(pgm);
     QoreTypeParamInstantiation parse_type_param_instantiation;
     variant = func->parseFindVariantNoDiagnostics(arg_types, class_ctx, receiver_type_info,
@@ -3784,7 +3786,8 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     if (!pgm) {
         return true;
     }
-    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs
+    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs; a
+    // lookup, which runs no code of the Program, so the Program is only made current, not entered (qore#6185)
     QoreProgramContextHelper pch(pgm);
     // the type that the reader finds must be the value's own: a hashdecl or class of the same name that the Program
     // has is another type, and a type that the Program does not have resolves to a deferred type that is not the
@@ -14866,6 +14869,13 @@ static bool serializeCallRelocations(QoreAOTBinaryWriter& writer,
     return true;
 }
 
+//! Returns true if QORE_AOT_DEBUG_IR_DIGEST is set: the compiler prints the digest of the debug IR of each function
+static bool aotDebugIRDigestRequested() {
+    static const bool requested = q_env_is_set("QORE_AOT_DEBUG_IR_DIGEST");
+    return requested;
+}
+
+
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const AOTConstantReverseMap* const_reverse_map, std::string& error, QoreProgram* pgm) {
     struct ValueTypeProgramScope {
@@ -15260,6 +15270,19 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
             uint32_t payload_offset = writer.position() - debug_section_start;
             uint32_t payload_start = writer.position();
+            // the positions of the string references of the payload for its digest (see aotDebugIRDigestRequested())
+            std::vector<uint32_t> payload_string_refs;
+            std::vector<uint32_t>* string_refs = aotDebugIRDigestRequested() ? &payload_string_refs : nullptr;
+            struct StringRefTracking {
+                QoreAOTBinaryWriter& writer;
+                DLLLOCAL StringRefTracking(QoreAOTBinaryWriter& writer, std::vector<uint32_t>* positions)
+                        : writer(writer) {
+                    writer.string_ref_positions = positions;
+                }
+                DLLLOCAL ~StringRefTracking() {
+                    writer.string_ref_positions = nullptr;
+                }
+            } string_ref_tracking(writer, string_refs);
             const auto& parent_locals = func.slot_ids.locals;
             const auto& parent_globals = func.slot_ids.globals;
             auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
@@ -15270,6 +15293,18 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             // debug IR is serialized against the function's own complete slot table
             QoreAOTIRLocalBindingSourceHelper binding_source_helper(writer, nullptr);
             qoreAOTClearExprSerializationError();
+#ifndef NDEBUG
+            // the debug IR is that of the function as it was before it was outlined (AOTFunctionOutliner::undo()): it
+            // has no call of an outlined helper and no return of one, and its paths of the debugger's flow requests
+            // are those of the function (#6201)
+            for (const auto& block : func.debug_ir->blocks) {
+                for (const auto& inst : block->instructions) {
+                    assert(inst->opcode != QoreIROpcode::CallAOTHelper);
+                    assert(!qore_ir_inst_cast<const QoreIRReturnInstruction*>(inst.get())
+                        || !static_cast<const QoreIRReturnInstruction*>(inst.get())->outline_signal);
+                }
+            }
+#endif
             bool debug_ir_ok = serializeIRFunction(writer, *func.debug_ir, writeExpr);
             std::string expr_error;
             bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
@@ -15287,6 +15322,35 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     error += ": serializeIRFunction returned false without a nested expression diagnostic";
                 }
                 return false;
+            }
+            // the digest of the serialized debug IR of each function, for the tests that compare it (#6201): of its
+            // bytes, with the strings of its string references for their offsets in the pool, which depend on the
+            // strings written before
+            if (string_refs) {
+                const std::vector<uint8_t>& buf = writer.getBuffer();
+                uint64_t digest = 14695981039346656037ull;
+                auto add = [&digest](uint8_t b) {
+                    digest = (digest ^ b) * 1099511628211ull;
+                };
+                size_t ref = 0;
+                for (uint32_t b = payload_start; b < writer.position(); ++b) {
+                    if (ref < string_refs->size() && (*string_refs)[ref] == b && b + 4 <= writer.position()) {
+                        uint32_t offset = buf[b] | (buf[b + 1] << 8) | (buf[b + 2] << 16)
+                            | (static_cast<uint32_t>(buf[b + 3]) << 24);
+                        const char* str = writer.getPoolString(offset);
+                        for (const char* p = str ? str : ""; *p; ++p) {
+                            add(static_cast<uint8_t>(*p));
+                        }
+                        add(0);
+                        ++ref;
+                        b += 3;
+                        continue;
+                    }
+                    add(buf[b]);
+                }
+                fprintf(stderr, "AOT-DEBUG-IR: %s %u %016llx\n", func.name.c_str(), writer.position() - payload_start,
+                    static_cast<unsigned long long>(digest));
+                string_refs->clear();
             }
             writer.patchU32(debug_ir_patches[i].offset_pos, payload_offset);
             writer.patchU32(debug_ir_patches[i].size_pos, writer.position() - payload_start);
@@ -15928,6 +15992,23 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         return false;
     }
 
+    // the IR that qcc writes passes the verification of the reader, which would refuse the module (qore#6468): in a
+    // debug build always, otherwise with QORE_AOT_VERIFY_WRITTEN_IR set; the tests of the verification write
+    // malformed IR with QORE_AOT_TEST_NO_WRITE_VERIFY set
+#ifdef DEBUG
+    bool verify_written = !getenv("QORE_AOT_TEST_NO_WRITE_VERIFY");
+#else
+    bool verify_written = getenv("QORE_AOT_VERIFY_WRITTEN_IR");
+#endif
+    if (verify_written) {
+        std::string verify_error;
+        if (!QoreIRVerifier::verifyModuleIR(func, verify_error)) {
+            qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' fails the verification of IR "
+                "read from an AOT module: " + verify_error);
+            return false;
+        }
+    }
+
     // The counts of the IR have fixed widths in the AOT format; a count that does not fit would wrap and make the
     // reader decode a different function than was written, so the function is refused instead (qore#6127)
     {
@@ -16126,9 +16207,10 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     // 5. Serialize blocks
     for (auto& block : func.blocks) {
         writer.writeStringRef(block->name.c_str());
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see deserializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see deserializeIRFunction())
         writer.writeU8(static_cast<uint8_t>((block->is_loop_header ? 1 : 0)
-            | (static_cast<uint8_t>(block->loop_cancel) << 1)));
+            | (static_cast<uint8_t>(block->loop_cancel) << 1) | (block->debug_flow ? 0x10 : 0)));
         // a PushTempMarkPair is written as the two PushTempMark instructions that it stands for (qore#6444)
         size_t inst_count = block->instructions.size();
         for (const auto& inst_ptr : block->instructions) {
@@ -21302,38 +21384,9 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         if (!priv->scl || priv->ahm.empty()) {
             continue;
         }
-        std::unordered_set<std::string> existing_methods;
-        existing_methods.reserve(priv->hm.size());
-        size_t method_count = 0;
-        for (auto& mi : priv->hm) {
-            if (++method_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
-                error = "operation cancelled during AOT abstract method inheritance restore";
-                return false;
-            }
-            existing_methods.insert(mi.first);
-        }
-
+        // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
+        // the inherited overload list that source parsing attaches during initializeHierarchy() (issue #6161)
         priv->ahm.parseInit(*priv, priv->scl);
-
-        // Abstract resolution can synthesize a local method on this class
-        // after commitClassesPrepare() has already run parseAddAncestors().
-        // Give those synthesized methods the same inherited overload list
-        // source parsing would attach during initializeHierarchy().
-        method_count = 0;
-        for (auto& mi : priv->hm) {
-            if (++method_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
-                error = "operation cancelled during AOT abstract method inheritance restore";
-                return false;
-            }
-            if (existing_methods.find(mi.first) == existing_methods.end()
-                    && strcmp(mi.second->getName(), "constructor")
-                    && strcmp(mi.second->getName(), "destructor")
-                    && strcmp(mi.second->getName(), "copy")) {
-                priv->parseAddAncestors(mi.second);
-            }
-        }
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't
         // redundantly walk the same classes.

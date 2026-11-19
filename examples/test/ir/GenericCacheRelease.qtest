@@ -22,7 +22,9 @@
 class GenericCacheReleaseTest inherits QUnit::Test {
     constructor() : QUnit::Test("generic cache release", "1.0", \ARGV) {
         foreach string mode in (("ast", "ir", "jit", "tiered")) {
-            addTestCase(mode, sub () { modeTest(mode); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase(mode, sub () { modeTest(mode_value); });
         }
         set_return_value(main());
     }

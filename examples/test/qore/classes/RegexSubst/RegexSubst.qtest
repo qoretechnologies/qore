@@ -244,26 +244,26 @@ public class RegexSubstTest inherits QUnit::Test {
     private subjectValidationTest() {
         RegexSubst r("x", "y", RE_Global);
         assertEq("yéy", r.subst("xéx"));
-        # Invalid bytes at either end must prevent even an otherwise valid prefix from matching.
+        # Invalid bytes at either end must prevent even an otherwise valid prefix from matching: a subject that is not
+        # valid UTF-8 is refused, not given back unchanged (qore#6553)
         foreach binary invalid in ((<80>, <ff>, <c3>, <eda080>, <f4908080>)) {
             foreach string subject in ((binary_to_string(invalid) + "xxx", "xxx" + binary_to_string(invalid))) {
-                assertEq(subject, r.subst(subject), "validation is not cached on a reused RegexSubst");
-                assertEq(subject, regex_subst(subject, "x", "y", RE_Global));
+                assertThrows("INVALID-ENCODING", \r.subst(), (subject,),
+                    "validation is not cached on a reused RegexSubst");
+                assertThrows("INVALID-ENCODING", \regex_subst(), (subject, "x", "y", RE_Global));
                 string changed = subject;
-                changed =~ s/x/y/g;
-                assertEq(subject, changed);
+                assertThrows("INVALID-ENCODING", sub () { changed =~ s/x/y/g; });
+                assertEq(subject, changed, "the lvalue is not changed");
             }
         }
         assertEq("yéy", r.subst("xéx"), "invalid input does not poison the next call");
     }
 
+    #! \\C matches one byte, which can be part of a character: it is refused when the pattern is compiled (qore#6554)
     private utf8OffsetTest() {
         foreach string prefix in (("", "(*NO_JIT)")) {
-            RegexSubst r(prefix + "\\C", "X", RE_Global);
-            assertThrows("REGEX-ERROR", "bad offset into UTF string", \r.subst(), ("éé",));
-            assertThrows("REGEX-ERROR", "bad offset into UTF string", \regex_subst(),
-                ("中🙂", prefix + "\\C", "X", RE_Global));
-            assertEq("XXX", r.subst("abc"), "byte matches at character boundaries remain valid");
+            assertThrows("REGEX-COMPILATION-ERROR", sub () { RegexSubst r(prefix + "\\C", "X", RE_Global); });
+            assertThrows("REGEX-COMPILATION-ERROR", \regex_subst(), ("中🙂", prefix + "\\C", "X", RE_Global));
         }
     }
 

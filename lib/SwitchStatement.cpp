@@ -45,6 +45,7 @@
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 CaseNode::~CaseNode() {
     val.discard(nullptr);
@@ -373,7 +374,7 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
 
         // evaluate case expression if necessary and no parse expressions have been raised
         if (!w->val.isValue()) {
-            if (err || parse_context.pgm->parseExceptionRaised()) {
+            if (err || qore_program_ops(parse_context.pgm).parseExceptionRaised()) {
                 w = w->next;
                 continue;
             }
@@ -475,7 +476,7 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
 
     // warn if the switch is over an enum value, has no default case, and does not handle all
     // enum members (only when the switch parsed cleanly, to avoid noise on broken code)
-    if (!err && !deflt && !parse_context.pgm->parseExceptionRaised()) {
+    if (!err && !deflt && !qore_program_ops(parse_context.pgm).parseExceptionRaised()) {
         warnNonExhaustiveSwitch(parse_context.pgm, loc, switch_type_info, head);
     }
 

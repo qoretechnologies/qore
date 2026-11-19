@@ -1237,13 +1237,13 @@ static LocalVar* qoreIrGetHoistableListSizeLocal(const QoreValue& expr) {
 }
 
 static bool qoreIrIsHoistableStringNoArgMethodName(const char* name) {
-    return name && (!strcmp(name, "size") || !strcmp(name, "strlen") || !strcmp(name, "length")
+    return name && (!strcmp(name, "size") || !strcmp(name, "strlen")
         || !strcmp(name, "empty") || !strcmp(name, "val") || !strcmp(name, "sizep")
         || !strcmp(name, "strp") || !strcmp(name, "intp"));
 }
 
 static bool qoreIrIsGlobalStringLengthName(const char* name) {
-    return name && (!strcmp(name, "strlen") || !strcmp(name, "length"));
+    return name && !strcmp(name, "strlen");
 }
 
 static LocalVar* qoreIrGetHoistableStringNoArgLocal(const QoreValue& expr) {
@@ -2100,25 +2100,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             if (handler_body) {
                 emitHandlerReturn(QoreIRValue(), stmt->loc);
             }
-            // Emit block cleanups for all active scopes before returning.
-            // Include lvar cleanup here so object destructors run before the
-            // source-level caller resumes.  The function wrapper still pops
-            // pre-instantiated local slots later; UninstantiateLocal clears the
-            // value without corrupting that stack ownership contract.
-            // Also handles RefForeach cleanup: record the current element, then write the
-            // referenced list back with its unvisited elements unchanged, as break does.
-            // the catch blocks that the return leaves are closed in their places among the cleanups (qore#6017)
-            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES)) {
-                return false;
-            }
-            // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a
-            // return): the code after it is unreachable and is not lowered, as its values would have no definitions
-            // (#6030)
-            if (blockHasTerminator(builder.getBlock())) {
-                return true;
-            }
-            builder.createReturnNothing();
-            return true;
+            return lowerReturnWithoutValue(error);
         }
         // Evaluate the return expression BEFORE firing on_exit handlers.
         // In AST mode, ReturnStatement::execImpl evaluates the expression first,
@@ -2444,19 +2426,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         pushFlowTarget({exit_block, cond_block, false, cleanup_stack.size(), QoreIRValue()});
-        // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
-        QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
-        current_loop_exit = exit_block;
-        body_block->enclosing_loop_exit = exit_block;
         ++loop_depth;
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
             --loop_depth;
-            current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
             return false;
         }
         --loop_depth;
-        current_loop_exit = prev_loop_exit;
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
@@ -2586,21 +2562,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         pushFlowTarget({exit_block, cond_block, false, cleanup_stack.size(), QoreIRValue()});
-        // Mark this loop's exit as the active enclosing-loop exit for blocks lowered in
-        // the body (body_block itself was created before this point, so stamp it too).
-        QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
-        current_loop_exit = exit_block;
-        body_block->enclosing_loop_exit = exit_block;
         ++loop_depth;
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
             --loop_depth;
-            current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
             pop_invariant_hoists();
             return false;
         }
         --loop_depth;
-        current_loop_exit = prev_loop_exit;
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
@@ -2779,15 +2748,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         pushFlowTarget({exit_block, iter_block, false, cleanup_stack.size(), QoreIRValue()});
-        // Active enclosing-loop exit for debugger DebugFlowBreak resolution (see while case).
-        QoreIRBasicBlock* prev_loop_exit = current_loop_exit;
-        current_loop_exit = exit_block;
-        body_block->enclosing_loop_exit = exit_block;
-        iter_block->enclosing_loop_exit = exit_block;
         ++loop_depth;
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
             --loop_depth;
-            current_loop_exit = prev_loop_exit;
             flow_stack.pop_back();
             pop_invariant_hoists();
             return false;
@@ -2811,7 +2774,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 if (iter_scope) {
                     builder.abandonTempScope();
                 }
-                current_loop_exit = prev_loop_exit;
                 pop_invariant_hoists();
                 return false;
             }
@@ -2823,7 +2785,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 }
             }
         }
-        current_loop_exit = prev_loop_exit;
         if (!blockHasTerminator(builder.getBlock())) {
             auto* br = builder.createBranch(cond_block);
             setLoopCheckpointExceptionTarget(br, cond_block);
@@ -4001,91 +3962,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (dynamic_cast<const BreakStatement*>(stmt)) {
-        QoreIRBasicBlock* target = nullptr;
-        size_t target_cleanup_depth = 0;
-        size_t target_temp_depth = 0;
-        QoreIRBasicBlock* target_exception_target = nullptr;
-        QoreIRValue old_elem;
-        for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
-            if (it->break_target) {
-                target = it->break_target;
-                target_cleanup_depth = it->cleanup_stack_depth;
-                target_temp_depth = it->temp_scope_depth;
-                target_exception_target = it->loop_exception_target;
-                old_elem = it->old_implicit_element;
-                break;
-            }
-        }
-        if (!target) {
+        LoopJumpTarget jt = findLoopJumpTarget(true);
+        if (!jt.target) {
             error = "break statement has no active target for IR lowering";
             return false;
         }
-        // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
-        // since the loop started (matches AST mode's destruction ordering),
-        // releasing the temp scopes left on the way, and closing the catch blocks entered since the loop started
-        // in their places among them (qore#6017)
-        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_CATCH_SCOPES, target_temp_depth, stmt->loc)) {
-            return false;
-        }
-        // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
-        // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
-        if (blockHasTerminator(builder.getBlock())) {
-            return true;
-        }
-        // Restore $# for foreach loops before breaking out
-        if (old_elem.isValid()) {
-            builder.createPopImplicitElement(old_elem, stmt->loc);
-        }
-        {
-            auto* br = builder.createBranch(target);
-            // a cancellation raised on entering the next iteration is raised in the scope of the loop
-            if (target->loop_cancel != QoreIRLoopCancel::None) {
-                br->exception_target = target_exception_target;
-            }
-        }
-        return true;
+        return lowerLoopJump(true, jt, stmt->loc, error);
     }
     if (dynamic_cast<const ContinueStatement*>(stmt)) {
-        QoreIRBasicBlock* target = nullptr;
-        size_t target_cleanup_depth = 0;
-        size_t target_temp_depth = 0;
-        QoreIRBasicBlock* target_exception_target = nullptr;
-        for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
-            if (it->continue_target) {
-                target = it->continue_target;
-                target_cleanup_depth = it->cleanup_stack_depth;
-                target_temp_depth = it->temp_scope_depth;
-                target_exception_target = it->loop_exception_target;
-                break;
-            }
-        }
-        if (!target) {
+        LoopJumpTarget jt = findLoopJumpTarget(false);
+        if (!jt.target) {
             error = "continue statement has no active target for IR lowering";
             return false;
         }
-        // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
-        // since the loop started (matches AST mode's destruction ordering),
-        // releasing the temp scopes left on the way, and closing the catch blocks entered since the loop started
-        // in their places among them (qore#6017)
-        if (!emitBlockCleanups(target_cleanup_depth, error, false, CF_CATCH_SCOPES, target_temp_depth, stmt->loc)) {
-            return false;
-        }
-        // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
-        // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
-        if (blockHasTerminator(builder.getBlock())) {
-            return true;
-        }
-        // Note: no need to pop $# here for foreach loops — the continue target
-        // (latch_block) already calls PopImplicitElement before incrementing the
-        // index and branching back to the header.
-        {
-            auto* br = builder.createBranch(target);
-            // a cancellation raised on entering the next iteration is raised in the scope of the loop
-            if (target->loop_cancel != QoreIRLoopCancel::None) {
-                br->exception_target = target_exception_target;
-            }
-        }
-        return true;
+        return lowerLoopJump(false, jt, stmt->loc, error);
     }
     if (auto* switch_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
         QoreValue switch_expr = switch_stmt->getSwitchExp();
@@ -4819,6 +4709,9 @@ static constexpr size_t QORE_IR_INLINE_HANDLER_BUDGET = 64;
 //! The nesting of handler bodies lowered inline in the exits of other handler bodies past which their handlers run out
 //! of line (see above)
 static constexpr int QORE_IR_INLINE_HANDLER_MAX_NESTING = 16;
+//! The handler bodies that the paths of the debugger's requests of a function can lower inline, past which they run
+//! out of line (see lowerHandlersAtExit(), #6201)
+static constexpr size_t QORE_IR_PATH_INLINE_HANDLER_BUDGET = QORE_IR_INLINE_HANDLER_BUDGET;
 
 //! Counts the nesting of the exits being lowered: the outermost one starts the count of the handler bodies lowered
 //! inline (see QORE_IR_INLINE_HANDLER_BUDGET)
@@ -4835,6 +4728,45 @@ public:
 
 private:
     QoreIRLowering& l;
+};
+
+//! The lowering of the code of a path of a debugger's flow request (#6201)
+/** The outermost path is an exit of its own: the handlers lowered inline in it do not count toward the budget of an
+    exit that is being lowered around it (a step event in the body of a handler lowered inline), so that the code
+    lowers its handlers as it does without step events.  The paths of the step events in the code of a path (in the
+    body of a handler that it lowers inline) take from the budget of the outermost path, so that the size of the paths
+    is bounded as that of an exit (QORE_IR_INLINE_HANDLER_BUDGET)
+*/
+class QoreIRLowering::DebugFlowPathLowering {
+public:
+    DLLLOCAL DebugFlowPathLowering(QoreIRLowering& l) : l(l), saved_exit_lowering_nesting(l.exit_lowering_nesting),
+            saved_inline_handlers_lowered(l.inline_handlers_lowered), saved_try_replaced_return(l.try_replaced_return),
+            saved_try_replaced_return_base(l.try_replaced_return_base),
+            saved_try_replaced_depth(l.try_replaced_depth) {
+        if (!l.debug_flow_path_depth++) {
+            l.exit_lowering_nesting = 0;
+        }
+    }
+    DLLLOCAL ~DebugFlowPathLowering() {
+        // the cleanups of a path that leave the outermost try statement of a handler release the value that a
+        // return in it replaces there (emitBlockCleanups()), which the code after the path, whose own cleanups leave
+        // that try statement later, still releases
+        l.try_replaced_return = saved_try_replaced_return;
+        l.try_replaced_return_base = saved_try_replaced_return_base;
+        l.try_replaced_depth = saved_try_replaced_depth;
+        if (!--l.debug_flow_path_depth) {
+            l.exit_lowering_nesting = saved_exit_lowering_nesting;
+            l.inline_handlers_lowered = saved_inline_handlers_lowered;
+        }
+    }
+
+private:
+    QoreIRLowering& l;
+    const int saved_exit_lowering_nesting;
+    const size_t saved_inline_handlers_lowered;
+    const QoreIRValue saved_try_replaced_return;
+    const QoreIRValue saved_try_replaced_return_base;
+    const int saved_try_replaced_depth;
 };
 
 static bool qore_ir_block_may_return(const StatementBlock* block);
@@ -5074,6 +5006,23 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         cleanup_stack[scope_entry_index].handler_exception_target = getCurrentExceptionTarget();
     }
 
+    // the lowering state that this block pushed, which a failure drops
+    auto abandon_block = [&]() {
+        if (pushed_lvar_exception_target) {
+            exception_stack.pop_back();
+            anchor_catch_stack.pop_back();
+        }
+        if (has_on_block_exit) {
+            scope_stack.pop_back();
+            cleanup_stack.pop_back();
+        }
+        if (lvars) {
+            cleanup_stack.pop_back();
+        }
+    };
+    // the paths of a debugger's flow requests at the step events of the statements of the block (#6201)
+    DebugFlowSegment debug_flow_segment;
+
     if (!root_statement_block) {
         // the event is for this block, which a step of a debugger can stop at, also when it is empty; it records the
         // locals of the block, which an exception that leaves the block releases before the debugger's exception event
@@ -5091,6 +5040,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 dbg_block->nest_depth = static_cast<uint16_t>(debug_nest_depth - 1);
                 dbg_block->nest_flags = QORE_IR_DEBUG_NEST_VALID;
             }
+        }
+        // a flow request at the event of the block leaves the block before its first statement, with its locals and
+        // its scope already entered, as with the AST interpreter (StatementBlock::execIntern())
+        if (builder.getFunction()->hasDebugFlowPaths()
+                && !setDebugFlowTargets(dbg_block, debug_flow_segment, block->loc, error)) {
+            abandon_block();
+            return false;
         }
     } else if (handler_body && (builder.getFunction()->source_dpgm_addr
             || builder.getFunction()->emit_debug_statements)) {
@@ -5147,6 +5103,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             dbg->nest_flags = QORE_IR_DEBUG_NEST_VALID
                 | (dynamic_cast<const TryStatement*>(*it) ? QORE_IR_DEBUG_NEST_TRY : 0)
                 | (static_cast<int>(statement_depth) == debug_catch_child_depth ? QORE_IR_DEBUG_NEST_IN_CATCH : 0);
+            // a break or a continue that the debugger requests at the event is a break or a continue statement placed
+            // before the statement, as with the AST interpreter, in code with the paths of the requests (#6201)
+            if (builder.getFunction()->hasDebugFlowPaths()
+                    && !setDebugFlowTargets(dbg, debug_flow_segment, (*it)->loc, error)) {
+                abandon_block();
+                return false;
+            }
         }
         // the statements of the blocks of the statement are one level deeper
         struct DebugNestDepthHelper {
@@ -5264,6 +5227,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             } else {
                 // Phase 2a: Emit ScopeExit to execute runtime handlers.
                 auto* se_inst = builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/false);
+                // a debugger's request that its last handler run ends with is that of the block (#6201)
+                if (!setScopeExitFlowTargets(se_inst, scope_entry_index, error)) {
+                    return false;
+                }
                 // When handlers execute at runtime, they may throw.  Set
                 // exception_target so the interpreter routes to the try/catch
                 // landing pad.
@@ -5395,10 +5362,454 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
 void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.temp_scope_depth = builder.getTempScopeDepth();
     entry.outer_exception_target = getCurrentExceptionTarget();
+    entry.exception_depth = exception_stack.size();
     entry.open_scopes = scope_stack.size();
     entry.open_catch_depth = catch_cleanup_depth;
     entry.open_try_depth = try_catch_cleanup_depth_stack.size();
     cleanup_stack.push_back(entry);
+}
+
+bool QoreIRLowering::lowerReturnWithoutValue(std::string& error, bool debug_flow) {
+    // Emit block cleanups for all active scopes before returning.
+    // Include lvar cleanup here so object destructors run before the
+    // source-level caller resumes.  The function wrapper still pops
+    // pre-instantiated local slots later; UninstantiateLocal clears the
+    // value without corrupting that stack ownership contract.
+    // Also handles RefForeach cleanup: record the current element, then write the
+    // referenced list back with its unvisited elements unchanged, as break does.
+    // the catch blocks that the return leaves are closed in their places among the cleanups (qore#6017)
+    // the path of a debugger's request shares the release of the locals of the bottom blocks and the return with the
+    // other paths (debug_flow_return_tails, #6201)
+    size_t shared = 0;
+    if (debug_flow) {
+        while (shared < cleanup_stack.size() && (cleanup_stack[shared].type == BlockCleanupEntry::Lvars
+                || cleanup_stack[shared].type == BlockCleanupEntry::CatchVar)) {
+            ++shared;
+        }
+    }
+    if (!emitBlockCleanups(shared, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES
+            | (debug_flow ? CF_HANDLERS_OUT_OF_LINE : 0))) {
+        return false;
+    }
+    if (shared) {
+        if (blockHasTerminator(builder.getBlock())) {
+            return true;
+        }
+        std::vector<const void*> locals;
+        locals.reserve(shared);
+        for (size_t i = 0; i < shared; ++i) {
+            const BlockCleanupEntry& entry = cleanup_stack[i];
+            locals.push_back(entry.type == BlockCleanupEntry::Lvars ? static_cast<const void*>(entry.lvars)
+                : static_cast<const void*>(entry.catch_var));
+        }
+        QoreIRBasicBlock*& tail = debug_flow_return_tails[{builder.getFunction(), std::move(locals)}];
+        if (!tail) {
+            QoreIRBasicBlock* path_block = builder.getBlock();
+            QoreIRBasicBlock* new_tail = createBlock("debug.flow.return.tail");
+            if (!new_tail) {
+                error = "IR builder failed to create the shared end of the return paths of a debugger";
+                return false;
+            }
+            new_tail->debug_flow_return_tail = true;
+            // the tail is lowered with the entries above the shared ones left, which are restored afterwards, also
+            // on an exception
+            struct TailLowering {
+                QoreIRLowering& l;
+                QoreIRBasicBlock* path_block;
+                std::vector<BlockCleanupEntry> left;
+                DLLLOCAL TailLowering(QoreIRLowering& l, QoreIRBasicBlock* path_block, size_t shared)
+                        : l(l), path_block(path_block),
+                        left(l.cleanup_stack.begin() + shared, l.cleanup_stack.end()) {
+                    l.cleanup_stack.resize(shared);
+                }
+                DLLLOCAL ~TailLowering() {
+                    // the capacity of the stack holds the entries again
+                    l.cleanup_stack.insert(l.cleanup_stack.end(), std::make_move_iterator(left.begin()),
+                        std::make_move_iterator(left.end()));
+                    l.builder.setBlock(path_block);
+                }
+            } tail_lowering(*this, path_block, shared);
+            builder.setBlock(new_tail);
+            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING | CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE)) {
+                return false;
+            }
+            assert(!blockHasTerminator(builder.getBlock()));
+            builder.createReturnNothing();
+            tail = new_tail;
+        }
+        builder.createBranch(tail);
+        return true;
+    }
+    // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
+    // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
+    if (blockHasTerminator(builder.getBlock())) {
+        return true;
+    }
+    builder.createReturnNothing();
+    return true;
+}
+
+QoreIRLowering::LoopJumpTarget QoreIRLowering::findLoopJumpTarget(bool is_break, size_t max_cleanup_depth) const {
+    LoopJumpTarget jt;
+    for (auto it = flow_stack.rbegin(); it != flow_stack.rend(); ++it) {
+        if (it->cleanup_stack_depth > max_cleanup_depth) {
+            continue;
+        }
+        QoreIRBasicBlock* target = is_break ? it->break_target : it->continue_target;
+        if (target) {
+            jt.target = target;
+            jt.cleanup_depth = it->cleanup_stack_depth;
+            jt.temp_depth = it->temp_scope_depth;
+            jt.exception_target = it->loop_exception_target;
+            if (is_break) {
+                jt.old_elem = it->old_implicit_element;
+            }
+            break;
+        }
+    }
+    return jt;
+}
+
+bool QoreIRLowering::lowerLoopJump(bool is_break, const LoopJumpTarget& jt, const QoreProgramLocation* loc,
+        std::string& error, bool debug_flow) {
+    assert(jt.target);
+    // Emit interleaved ScopeExit and UninstantiateLocal for blocks entered
+    // since the loop started (matches AST mode's destruction ordering),
+    // releasing the temp scopes left on the way, and closing the catch blocks entered since the loop started
+    // in their places among them (qore#6017)
+    if (!emitBlockCleanups(jt.cleanup_depth, error, false, CF_CATCH_SCOPES | (debug_flow ? CF_HANDLERS_OUT_OF_LINE : 0),
+            jt.temp_depth, loc)) {
+        return false;
+    }
+    // a handler that the cleanups lowered inline ended the block (a throw or a thread_exit in it, or a return): the
+    // code after it is unreachable and is not lowered, as its values would have no definitions (#6030)
+    if (blockHasTerminator(builder.getBlock())) {
+        return true;
+    }
+    // Restore $# for foreach loops before breaking out; a continue needs no restore here: the continue target
+    // (latch_block) already calls PopImplicitElement before incrementing the index and branching back to the header
+    if (is_break && jt.old_elem.isValid()) {
+        builder.createPopImplicitElement(jt.old_elem, loc);
+    }
+    auto* br = builder.createBranch(jt.target);
+    // a cancellation raised on entering the next iteration is raised in the scope of the loop
+    if (jt.target->loop_cancel != QoreIRLoopCancel::None) {
+        br->exception_target = jt.exception_target;
+    }
+    return true;
+}
+
+QoreIRBasicBlock* QoreIRLowering::lowerDebugFlowPath(int rc, const LoopJumpTarget& jt,
+        const QoreProgramLocation* loc, std::string& error) {
+    assert(rc == RC_RETURN || jt.target);
+    QoreIRFunction* func = builder.getFunction();
+    QoreIRBasicBlock* saved_block = builder.getBlock();
+    const size_t first_block = func->blocks.size();
+    QoreIRBasicBlock* path = createBlock(rc == RC_RETURN ? "debug.flow.return"
+        : (rc == RC_BREAK ? "debug.flow.break" : "debug.flow.continue"));
+    if (!path) {
+        error = "IR builder failed to create the block of a debugger flow path";
+        return nullptr;
+    }
+    // the jump ends the temp scopes that the code after the step event still has, which the lowering of the code
+    // after it needs again; the rest of the lowering state is restored by the code of the jump itself, as for a
+    // break or a continue statement, which can be followed by unreachable code of its block
+    QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
+    bool ok;
+    {
+        DebugFlowPathLowering path_lowering(*this);
+        builder.setBlock(path);
+        ok = rc == RC_RETURN ? lowerReturnWithoutValue(error, true)
+            : lowerLoopJump(rc == RC_BREAK, jt, loc, error, true);
+    }
+    builder.restoreTempScopeState(std::move(temp_state));
+    builder.setBlock(saved_block);
+    if (!ok) {
+        return nullptr;
+    }
+    // the code of the path, also the blocks that the inline handlers in it created, runs only on a request
+    for (size_t i = first_block; i < func->blocks.size(); ++i) {
+        func->blocks[i]->debug_flow = true;
+    }
+    return path;
+}
+
+bool QoreIRLowering::setDebugFlowTargets(QoreIRDebugStatementInstruction* dbg, DebugFlowSegment& segment,
+        const QoreProgramLocation* loc, std::string& error) {
+    assert(dbg && !dbg->flow);
+    assert(builder.getFunction()->hasDebugFlowPaths());
+    // the events of the statements of a handler lowered inline in the code of an exit: a request that the body does
+    // not take ends the handler (see InlineHandlerFlow)
+    if (inline_handler_body_depth) {
+        if (inline_handler_flow_stack.empty()) {
+            return true;
+        }
+        return setInlineHandlerFlowTargets(dbg, loc, error);
+    }
+    // the segment of the event: the cleanups of a jump depend only on this state
+    const size_t cleanup_depth = cleanup_stack.size();
+    const size_t handlers = block_handlers.size();
+    const size_t temp_depth = builder.getTempScopeDepth();
+    const size_t flow_depth = flow_stack.size();
+    const size_t scopes = scope_stack.size();
+    QoreIRBasicBlock* exception_target = getCurrentExceptionTarget();
+    if (segment.cleanup_depth != cleanup_depth || segment.handlers != handlers || segment.temp_depth != temp_depth
+            || segment.catch_depth != catch_cleanup_depth || segment.flow_depth != flow_depth
+            || segment.scopes != scopes || segment.exception_target != exception_target) {
+        segment = DebugFlowSegment();
+        segment.cleanup_depth = cleanup_depth;
+        segment.handlers = handlers;
+        segment.temp_depth = temp_depth;
+        segment.catch_depth = catch_cleanup_depth;
+        segment.flow_depth = flow_depth;
+        segment.scopes = scopes;
+        segment.exception_target = exception_target;
+    }
+    // the shared code of a request: a break or a continue that no loop (or for a break, no switch statement) takes
+    // returns, as with the AST interpreter, where the code of the request reaches the function's block
+    if (!segment.return_path && !(segment.return_path = lowerDebugFlowPath(RC_RETURN, LoopJumpTarget(), loc, error))) {
+        return false;
+    }
+    auto get_path = [&](int rc, QoreIRBasicBlock*& path) -> bool {
+        if (path) {
+            return true;
+        }
+        LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK);
+        path = jt.target ? lowerDebugFlowPath(rc, jt, loc, error) : segment.return_path;
+        return path != nullptr;
+    };
+    if (!get_path(RC_BREAK, segment.break_path) || !get_path(RC_CONTINUE, segment.continue_path)) {
+        return false;
+    }
+    // the block of the event for each path: the edge from the event has the state of the function at the event as its
+    // input in the analyses of the IR, and a Phi at the shared path tells the events apart
+    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    if (!makeDebugFlowEntries(*flow, segment.break_path, segment.continue_path, segment.return_path,
+            "debug.flow.break.entry", "debug.flow.continue.entry", "debug.flow.return.entry", loc)) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return false;
+    }
+    dbg->flow = std::move(flow);
+    return true;
+}
+
+bool QoreIRLowering::makeDebugFlowEntries(QoreIRDebugFlowTargets& flow, QoreIRBasicBlock* break_path,
+        QoreIRBasicBlock* continue_path, QoreIRBasicBlock* return_path, const char* break_name,
+        const char* continue_name, const char* return_name, const QoreProgramLocation* loc) {
+    assert(break_path && continue_path && return_path);
+    auto make_entry = [&](QoreIRBasicBlock* path, const char* name) -> QoreIRBasicBlock* {
+        QoreIRBasicBlock* entry = createBlock(name);
+        if (!entry) {
+            return nullptr;
+        }
+        entry->debug_flow = true;
+        auto br = std::make_unique<QoreIRBranchInstruction>();
+        br->target = path;
+        br->loc = loc;
+        entry->instructions.push_back(std::move(br));
+        return entry;
+    };
+    // the requests whose code is the same share the entry block: a break or a continue that no loop or switch
+    // statement takes is a return
+    flow.break_target = make_entry(break_path, break_name);
+    flow.continue_target = continue_path == break_path ? flow.break_target : make_entry(continue_path, continue_name);
+    flow.return_target = return_path == break_path ? flow.break_target
+        : (return_path == continue_path ? flow.continue_target : make_entry(return_path, return_name));
+    return flow.break_target && flow.continue_target && flow.return_target;
+}
+
+bool QoreIRLowering::setInlineHandlerFlowTargets(QoreIRDebugStatementInstruction* dbg,
+        const QoreProgramLocation* loc, std::string& error) {
+    const InlineHandlerFlow hf = inline_handler_flow_stack.back();
+    // the index of the handler's entry: lowering a path can lower handlers inline, which pushes on
+    // inline_handler_flow_stack and can reallocate it
+    const size_t hf_index = inline_handler_flow_stack.size() - 1;
+    QoreIRFunction* func = builder.getFunction();
+    // the index of the request in DebugFlowSegment::handler_end
+    auto end_index = [](int rc) -> size_t {
+        return rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2);
+    };
+    auto make_path = [&](int rc, QoreIRBasicBlock*& path_end) -> QoreIRBasicBlock* {
+        path_end = nullptr;
+        // a loop or a switch statement of the body
+        if (rc != RC_RETURN) {
+            LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK);
+            bool in_body = false;
+            for (size_t f = hf.flow_depth; jt.target && f < flow_stack.size(); ++f) {
+                if ((rc == RC_BREAK ? flow_stack[f].break_target : flow_stack[f].continue_target) == jt.target) {
+                    in_body = true;
+                    break;
+                }
+            }
+            if (in_body) {
+                return lowerDebugFlowPath(rc, jt, loc, error);
+            }
+        }
+        // the end of the handler: the cleanups of the blocks of the body, and the code after the handler
+        QoreIRBasicBlock* end = getInlineHandlerFlowEnd(rc, error);
+        if (!end) {
+            return nullptr;
+        }
+        path_end = end;
+        // the requests that end at the same block share the code: the requests of a handler that is not the last of
+        // its exit, and those whose paths after the handler are the same (getInlineHandlerFlowEnd())
+        {
+            const DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+            for (int other : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
+                QoreIRBasicBlock* other_path = other == RC_RETURN ? segment.return_path
+                    : (other == RC_BREAK ? segment.break_path : segment.continue_path);
+                if (other != rc && other_path && segment.handler_end[end_index(other)] == end) {
+                    return other_path;
+                }
+            }
+        }
+        QoreIRBasicBlock* saved_block = builder.getBlock();
+        const size_t first_block = func->blocks.size();
+        QoreIRBasicBlock* path = createBlock("debug.flow.handler");
+        if (!path) {
+            error = "IR builder failed to create the block of a debugger flow path";
+            return nullptr;
+        }
+        QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
+        bool ok;
+        {
+            DebugFlowPathLowering path_lowering(*this);
+            builder.setBlock(path);
+            ok = emitBlockCleanups(hf.cleanup_depth, error, false, CF_CATCH_SCOPES | CF_HANDLERS_OUT_OF_LINE,
+                hf.temp_depth, loc);
+            if (ok && !blockHasTerminator(builder.getBlock())) {
+                builder.createBranch(end, loc);
+            }
+        }
+        builder.restoreTempScopeState(std::move(temp_state));
+        builder.setBlock(saved_block);
+        if (!ok) {
+            return nullptr;
+        }
+        for (size_t i = first_block; i < func->blocks.size(); ++i) {
+            func->blocks[i]->debug_flow = true;
+        }
+        return path;
+    };
+    // the segment of the event in the body: the cleanups of a path depend only on this state
+    {
+        DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+        const size_t cleanup_depth = cleanup_stack.size();
+        const size_t handlers = block_handlers.size();
+        const size_t temp_depth = builder.getTempScopeDepth();
+        const size_t flow_depth = flow_stack.size();
+        const size_t scopes = scope_stack.size();
+        QoreIRBasicBlock* exception_target = getCurrentExceptionTarget();
+        if (segment.cleanup_depth != cleanup_depth || segment.handlers != handlers || segment.temp_depth != temp_depth
+                || segment.catch_depth != catch_cleanup_depth || segment.flow_depth != flow_depth
+                || segment.scopes != scopes || segment.exception_target != exception_target) {
+            segment = DebugFlowSegment();
+            segment.cleanup_depth = cleanup_depth;
+            segment.handlers = handlers;
+            segment.temp_depth = temp_depth;
+            segment.catch_depth = catch_cleanup_depth;
+            segment.flow_depth = flow_depth;
+            segment.scopes = scopes;
+            segment.exception_target = exception_target;
+        }
+    }
+    QoreIRBasicBlock* paths[3] = {};
+    for (int rc : {RC_RETURN, RC_BREAK, RC_CONTINUE}) {
+        // lowering a path can lower handlers inline, which pushes on inline_handler_flow_stack: the cache is read
+        // and written by its index
+        auto cached = [&]() -> QoreIRBasicBlock*& {
+            DebugFlowSegment& segment = inline_handler_flow_stack[hf_index].segment;
+            return rc == RC_RETURN ? segment.return_path
+                : (rc == RC_BREAK ? segment.break_path : segment.continue_path);
+        };
+        QoreIRBasicBlock* path = cached();
+        if (!path) {
+            QoreIRBasicBlock* path_end = nullptr;
+            if ((path = make_path(rc, path_end))) {
+                cached() = path;
+                inline_handler_flow_stack[hf_index].segment.handler_end[end_index(rc)] = path_end;
+            }
+        }
+        if (!path) {
+            if (error.empty()) {
+                error = "IR builder failed to create the block of a debugger flow request";
+            }
+            return false;
+        }
+        paths[end_index(rc)] = path;
+    }
+    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    if (!makeDebugFlowEntries(*flow, paths[1], paths[2], paths[0], "debug.flow.handler.entry",
+            "debug.flow.handler.entry", "debug.flow.handler.entry", loc)) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return false;
+    }
+    dbg->flow = std::move(flow);
+    return true;
+}
+
+bool QoreIRLowering::setScopeExitFlowTargets(QoreIRScopeExitInstruction* se, size_t scope_entry, std::string& error) {
+    assert(se && !se->flow && scope_entry < cleanup_stack.size());
+    QoreIRFunction* func = builder.getFunction();
+    if (!func->hasDebugFlowPaths() || inline_handler_body_depth || se->is_error) {
+        return true;
+    }
+    const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error);
+    if (!paths) {
+        return false;
+    }
+    const QoreProgramLocation* loc = cleanup_stack[scope_entry].loc;
+    auto flow = std::make_unique<QoreIRDebugFlowTargets>();
+    if (!makeDebugFlowEntries(*flow, paths->break_path, paths->continue_path, paths->return_path,
+            "debug.flow.scope.break.entry", "debug.flow.scope.continue.entry", "debug.flow.scope.return.entry", loc)) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return false;
+    }
+    se->flow = std::move(flow);
+    return true;
+}
+
+const QoreIRLowering::DebugFlowSegment* QoreIRLowering::getScopeFlowPaths(size_t scope_entry, std::string& error) {
+    const BlockCleanupEntry& entry = cleanup_stack[scope_entry];
+    assert(entry.type == BlockCleanupEntry::Scope);
+    const QoreProgramLocation* loc = entry.loc;
+    const uint32_t scope_id = entry.scope_id;
+    auto [cache, inserted] = scope_exit_flow_paths.try_emplace(scope_id);
+    // the element, not the iterator: the lowering of the paths below can add the paths of other scopes, which can
+    // rehash the map
+    DebugFlowSegment& paths = cache->second;
+    if (inserted) {
+        // the code after the block: the entries of the block and of the blocks in it are left, and so are the temp
+        // scopes opened since the scope's
+        std::vector<BlockCleanupEntry> saved_entries(cleanup_stack.begin() + scope_entry, cleanup_stack.end());
+        const size_t temp_depth = entry.temp_scope_depth;
+        QoreIRBuilder::TempScopeState temp_state = builder.saveTempScopeState();
+        cleanup_stack.resize(scope_entry);
+        builder.truncateTempScopes(temp_depth);
+        auto restore = [&]() {
+            cleanup_stack.insert(cleanup_stack.end(), saved_entries.begin(), saved_entries.end());
+            builder.restoreTempScopeState(std::move(temp_state));
+        };
+        paths.return_path = lowerDebugFlowPath(RC_RETURN, LoopJumpTarget(), loc, error);
+        for (int rc : {RC_BREAK, RC_CONTINUE}) {
+            if (!paths.return_path) {
+                break;
+            }
+            LoopJumpTarget jt = findLoopJumpTarget(rc == RC_BREAK, scope_entry);
+            QoreIRBasicBlock* path = jt.target ? lowerDebugFlowPath(rc, jt, loc, error) : paths.return_path;
+            if (!path) {
+                paths.return_path = nullptr;
+                break;
+            }
+            (rc == RC_BREAK ? paths.break_path : paths.continue_path) = path;
+        }
+        restore();
+        if (!paths.return_path) {
+            scope_exit_flow_paths.erase(scope_id);
+            return nullptr;
+        }
+    }
+    return &paths;
 }
 
 void QoreIRLowering::pushFlowTarget(FlowTarget target) {
@@ -5471,6 +5882,33 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // is the same after each entry.  See design/ir-loop-jump-temp-scope.md.
     assert(unwind_temp_depth == SIZE_MAX || unwind_temp_depth <= builder.getTempScopeDepth());
     size_t unwound_temp_depth = builder.getTempScopeDepth();
+    // The code lowered after an entry's cleanup has left it: its exceptions go to the handlers outside the entry, not
+    // to those of the blocks, implicit elements and loops that the exit has already closed, whose handlers would
+    // close them again (qore#6643).  The exception stack is cut back to its size when the entry was pushed, if it
+    // still holds the same targets there (a walk from the code of a handler lowered inline has a stack of its own,
+    // see lowerHandlersAtExit()), and restored once the walk ends, for the code that follows it in the lowering.
+    struct ExceptionStackRestore {
+        std::vector<QoreIRBasicBlock*>& stack;
+        std::vector<QoreIRBasicBlock*> saved;
+        bool cut = false;
+        DLLLOCAL ~ExceptionStackRestore() {
+            if (cut) {
+                stack.swap(saved);
+            }
+        }
+        DLLLOCAL void cutTo(const BlockCleanupEntry& entry) {
+            if (entry.exception_depth >= stack.size()
+                    || (entry.exception_depth ? stack[entry.exception_depth - 1] : nullptr)
+                        != entry.outer_exception_target) {
+                return;
+            }
+            if (!cut) {
+                saved = stack;
+                cut = true;
+            }
+            stack.resize(entry.exception_depth);
+        }
+    } exception_stack_restore{exception_stack, {}};
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
         // a handler lowered inline for an entry ended the block (a throw, a thread_exit or a return in it): the
         // cleanups of the remaining entries are unreachable here; the exception path of the block runs them (#6030)
@@ -5527,6 +5965,43 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
                             /*inline_lowered=*/false);
                         se_inst->exception_target = getCurrentExceptionTarget();
+                        break;
+                    }
+                }
+
+                // the paths of a debugger's flow requests run the handlers out of line, unless one of them can
+                // return (see CF_HANDLERS_OUT_OF_LINE); a scope none of whose handlers runs here (none is registered
+                // at this position, as its on_exit statements come later in the block, or none runs on this exit) is
+                // left as a return statement here leaves it, with no handler to run and so no request to take
+                if (!protected_scope && (flags & CF_HANDLERS_OUT_OF_LINE)) {
+                    size_t out_of_line_end = block_handlers.size();
+                    for (size_t j = i; j < cleanup_stack.size(); ++j) {
+                        if (cleanup_stack[j].type == BlockCleanupEntry::Scope) {
+                            out_of_line_end = cleanup_stack[j].handler_start;
+                            break;
+                        }
+                    }
+                    bool runs = false;
+                    bool may_return = false;
+                    for (size_t h = entry.handler_start; h < out_of_line_end && !may_return; ++h) {
+                        if (shouldRunHandler(block_handlers[h], is_error)) {
+                            runs = true;
+                            may_return = qore_ir_block_may_return(block_handlers[h].code);
+                        }
+                    }
+                    if (!runs) {
+                        // what lowerHandlersAtExit() lowers for a scope none of whose handlers runs: the scope is
+                        // left and its registrations dropped
+                        builder.createScopeExit(entry.scope_id, is_error, entry.loc, /*inline_lowered=*/true);
+                        break;
+                    }
+                    if (!may_return) {
+                        auto* se_inst = builder.createScopeExit(entry.scope_id, is_error, entry.loc,
+                            /*inline_lowered=*/false);
+                        se_inst->exception_target = getCurrentExceptionTarget();
+                        if (!setScopeExitFlowTargets(se_inst, i - 1, error)) {
+                            return false;
+                        }
                         break;
                     }
                 }
@@ -5662,6 +6137,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             case BlockCleanupEntry::RefForeachRecord: {
                 // Pop implicit element ($#) and record modified loop variable value
                 builder.createPopImplicitElement(entry.old_implicit_element, entry.loc);
+                // the element is restored: the load of the variable has the handler outside the element (qore#6643)
+                exception_stack_restore.cutTo(entry);
                 std::string err;
                 QoreIRValue modified = lowerExpression(entry.var_expr, err);
                 if (modified.isValid()) {
@@ -5737,6 +6214,7 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
             builder.createCheckException(entry.loc)->exception_target = entry.try_outer_target;
             handover_try_active = false;
         }
+        exception_stack_restore.cutTo(entry);
     }
     if (unwind_temp_depth != SIZE_MAX && unwind_temp_depth < unwound_temp_depth) {
         builder.createUnwindTemps(unwound_temp_depth, unwind_temp_depth, unwind_loc);
@@ -5899,6 +6377,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_func->static_call_context = parent_func->static_call_context;
         handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
+        handler_func->handler_body = true;
 
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
@@ -6053,6 +6532,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         handler_func->static_call_context = parent_func->static_call_context;
         handler_func->static_class_ctx = parent_func->static_class_ctx;
         handler_func->emit_debug_statements = parent_func->emit_debug_statements;
+        handler_func->handler_body = true;
 
         // Phase B1: Pre-seed handler's local_var_slots with parent's entries
         // This allows handler code to reference parent-scope variables by their parent slot IDs
@@ -6207,16 +6687,32 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
             // budget, in an exit lowered inside the body of another handler, the handlers still registered in the
             // scope run out of line, as before #5992: their returns do not replace the value of the function's
             // return then
-            if (have_scope && inline_handler_body_depth && (inline_handlers_lowered >= QORE_IR_INLINE_HANDLER_BUDGET
-                    || inline_handler_body_depth >= QORE_IR_INLINE_HANDLER_MAX_NESTING)) {
+            // The paths of the debugger's requests, which every step event has, lower the handlers of the blocks
+            // that they leave: with each handler body lowered inline in them having step events with paths of their
+            // own, the code of the paths of nested handlers that return grows exponentially with their nesting, so
+            // the handler bodies lowered inline in the paths of a function have a budget of their own, past which
+            // they run out of line (#6201)
+            if (have_scope && ((inline_handler_body_depth && (inline_handlers_lowered >= QORE_IR_INLINE_HANDLER_BUDGET
+                    || inline_handler_body_depth >= QORE_IR_INLINE_HANDLER_MAX_NESTING))
+                    || (debug_flow_path_depth && path_handlers_lowered >= QORE_IR_PATH_INLINE_HANDLER_BUDGET))) {
                 auto* se_inst = builder.createScopeExit(scope_id, is_error, scope_loc, /*inline_lowered=*/false);
                 se_inst->exception_target = set_exception_target ? handler_exception_target
                     : getCurrentExceptionTarget();
                 return true;
             }
             ++inline_handlers_lowered;
+            if (debug_flow_path_depth) {
+                ++path_handlers_lowered;
+            }
+            // the last handler of the exit that runs: a debugger's request in it becomes that of the block (#6201)
+            bool last_run = !is_error;
+            for (int j = i - 1; last_run && j >= static_cast<int>(start_index); --j) {
+                if (shouldRunHandler(block_handlers[j], is_error)) {
+                    last_run = false;
+                }
+            }
             if (!lowerHandlerAtExit(handler, i - start_index, error, barrier_depth, scope_id, scope_loc,
-                    set_exception_target, handler_exception_target)) {
+                    set_exception_target, handler_exception_target, last_run)) {
                 return false;
             }
             // the handler ended the block (a throw, a thread_exit or a return in it): the handlers after it and the
@@ -6237,7 +6733,7 @@ bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size
 
 bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t keep_handlers, std::string& error,
         size_t barrier_depth, uint32_t scope_id, const QoreProgramLocation* scope_loc, bool set_exception_target,
-        QoreIRBasicBlock* handler_exception_target) {
+        QoreIRBasicBlock* handler_exception_target, bool last_run) {
     if (scope_id) {
         // The handler and the handlers registered after it are dropped from the scope at runtime: the
         // handler's code follows inline, so a non-local exit in it cannot fire it again, and the later ones
@@ -6276,6 +6772,38 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
 
     // Lower the handler code block inline using the current parse context
     // This gives the handler natural access to parent block's scope
+    // where a debugger's request in the body that the body does not take goes, in code with the paths of the
+    // requests (#6201)
+    const bool handler_flow_paths = builder.getFunction()->hasDebugFlowPaths();
+    if (handler_flow_paths) {
+        InlineHandlerFlow hf;
+        hf.cleanup_depth = cleanup_stack.size();
+        hf.temp_depth = builder.getTempScopeDepth();
+        hf.flow_depth = flow_stack.size();
+        hf.scope_id = scope_id;
+        hf.last = last_run && scope_id;
+        if (hf.last) {
+            for (size_t j = cleanup_stack.size(); j > 0; --j) {
+                if (cleanup_stack[j - 1].type == BlockCleanupEntry::Scope
+                        && cleanup_stack[j - 1].scope_id == scope_id) {
+                    hf.scope_entry = j - 1;
+                    break;
+                }
+            }
+            hf.last = hf.scope_entry != SIZE_MAX;
+        }
+        inline_handler_flow_stack.push_back(hf);
+    }
+    struct InlineHandlerFlowPop {
+        std::vector<InlineHandlerFlow>& stack;
+        bool pushed;
+        ~InlineHandlerFlowPop() {
+            if (pushed) {
+                stack.pop_back();
+            }
+        }
+    } inline_handler_flow_pop{inline_handler_flow_stack, handler_flow_paths};
+
     bool ok;
     // the statements of the handler have the debugger's nesting of the statement that declares it, in its place, not
     // of the exit where it is lowered, as with the AST interpreter, which runs it in the block that declares it and
@@ -6367,7 +6895,69 @@ bool QoreIRLowering::lowerHandlerAtExit(const InlineHandler& handler, size_t kee
     if (!ok) {
         return false;
     }
+    // a debugger's request that ended the handler: the exit goes on after it (#6201)
+    if (QoreIRBasicBlock* join = handler_flow_paths ? inline_handler_flow_stack.back().join : nullptr) {
+        if (!blockHasTerminator(builder.getBlock())) {
+            builder.createBranch(join, scope_loc);
+        }
+        builder.setBlock(join);
+    }
     return true;
+}
+
+QoreIRBasicBlock* QoreIRLowering::getInlineHandlerFlowEnd(int rc, std::string& error) {
+    assert(!inline_handler_flow_stack.empty());
+    // the entry is read and written by its index: the lowering of the scope's paths below lowers handlers inline,
+    // which pushes entries on inline_handler_flow_stack and can reallocate it
+    const size_t hf_index = inline_handler_flow_stack.size() - 1;
+    if (!inline_handler_flow_stack[hf_index].last) {
+        // the exit goes on with the next handler: the code after the handler, which the lowering of the handler
+        // continues in (lowerHandlerAtExit()); a block of the normal code
+        QoreIRBasicBlock*& join = inline_handler_flow_stack[hf_index].join;
+        if (!join && !(join = createBlock("handler.inline.join"))) {
+            error = "IR builder failed to create the join block of a handler";
+        }
+        return join;
+    }
+    // the last handler of the exit: the request becomes that of the block, whose scope is left with its handlers run
+    const size_t end_index = rc == RC_RETURN ? 0 : (rc == RC_BREAK ? 1 : 2);
+    if (QoreIRBasicBlock* end = inline_handler_flow_stack[hf_index].request_end[end_index]) {
+        return end;
+    }
+    const size_t scope_entry = inline_handler_flow_stack[hf_index].scope_entry;
+    const uint32_t scope_id = inline_handler_flow_stack[hf_index].scope_id;
+    // the paths of the scope (getScopeFlowPaths())
+    const DebugFlowSegment* paths = getScopeFlowPaths(scope_entry, error);
+    if (!paths) {
+        return nullptr;
+    }
+    QoreIRBasicBlock* scope_path = rc == RC_RETURN ? paths->return_path
+        : (rc == RC_BREAK ? paths->break_path : paths->continue_path);
+    // the requests whose paths after the handler are the same (a break or a continue that no loop or switch
+    // statement takes is a return) share the end
+    for (QoreIRBasicBlock* other : inline_handler_flow_stack[hf_index].request_end) {
+        if (other && !other->instructions.empty()) {
+            const auto* br = qore_ir_inst_cast<const QoreIRBranchInstruction*>(other->instructions.back().get());
+            if (br && br->target == scope_path) {
+                inline_handler_flow_stack[hf_index].request_end[end_index] = other;
+                return other;
+            }
+        }
+    }
+    QoreIRBasicBlock* end = createBlock("debug.flow.handler.end");
+    if (!end) {
+        error = "IR builder failed to create the block of a debugger flow request";
+        return nullptr;
+    }
+    end->debug_flow = true;
+    QoreIRBasicBlock* saved_block = builder.getBlock();
+    builder.setBlock(end);
+    // the handlers still registered in the scope do not run: the last one ran
+    builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
+    builder.createBranch(scope_path, nullptr);
+    builder.setBlock(saved_block);
+    inline_handler_flow_stack[hf_index].request_end[end_index] = end;
+    return end;
 }
 
 static bool isIntConstant(const QoreValue& value) {
@@ -8069,13 +8659,7 @@ QoreIRBasicBlock* QoreIRLowering::createBlock(const std::string& prefix) {
         return nullptr;
     }
     std::string name = prefix + "." + std::to_string(block_counter++);
-    QoreIRBasicBlock* b = func->createBlock(name);
-    // Stamp the innermost enclosing loop's exit so a debugger DebugFlowBreak firing
-    // in this block can be resolved to the correct loop exit by the IR interpreter.
-    if (b) {
-        b->enclosing_loop_exit = current_loop_exit;
-    }
-    return b;
+    return func->createBlock(name);
 }
 
 //! Largest container a constant is still rebuilt from its entries rather than referenced
@@ -9808,7 +10392,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 || get_or_nothing_base_type(ti) != ti
                 || QoreTypeInfo::equal(ti, timeoutTypeInfo)
                 // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
-                || qore_ir_is_enum_lvalue_type(ti)) {
+                || qore_ir_is_enum_lvalue_type(ti)
+                // a union lvalue that holds an int is assigned the result of the arithmetic operator for a float or a
+                // number operand, which the union accepts (doPlusEqualsOnLValue(), qore#6407)
+                || QoreTypeInfo::getUnionType(ti)) {
             left_var = nullptr;  // Force lvalue path
         }
     }
@@ -10076,6 +10663,9 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 || QoreTypeInfo::equal(ti, timeoutTypeInfo)
                 // an enum lvalue refuses the result (see qore_ir_is_enum_lvalue_type())
                 || qore_ir_is_enum_lvalue_type(ti)
+                // a union lvalue that holds an int is assigned the result of the arithmetic operator for a float or a
+                // number operand, which the union accepts (doPlusEqualsOnLValue(), qore#6407)
+                || QoreTypeInfo::getUnionType(ti)
                 // an lvalue of a soft type that converts the difference that it is assigned (ex: softstring,
                 // softbool, softlist) holds the converted value, while the operator gives the difference that it
                 // computes (doMinusEqualsOnLValue()), also for a NOTHING operand: the AST operator on its lvalue path
@@ -17048,7 +17638,7 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
         }
     }
     // only a call of the Qore builtin, never a user or module function with the same name
-    if (func_name && (!strcmp(func_name, "length") || !strcmp(func_name, "strlen"))
+    if (func_name && !strcmp(func_name, "strlen")
             && !call->hasExplicitTypeArgs() && qore_rt_is_qore_builtin_function(call->getFunctionEntry())) {
         const QoreParseListNode* parse_args = call->getParseArgs();
         const QoreListNode* args = call->getArgs();
@@ -18215,6 +18805,11 @@ void QoreIRLowering::releaseStoredOperatorValue(QoreIRValue value, const QoreTyp
             || qore_ir_type_is_immediate_scalar(builder.getFunction(), ti)) {
         return;
     }
+    // the index of the loop ($# in the virtual implicit context) is a native int that holds no reference, which the
+    // loop increments after the value is stored: it is never released (qore#6641)
+    if (virtual_implicit.active && virtual_implicit.element.isValid() && value.id == virtual_implicit.element.id) {
+        return;
+    }
     QoreIRBasicBlock* block = builder.getBlock();
     if (!block || (!block->instructions.empty() && isTerminator(block->instructions.back()->opcode))) {
         return;
@@ -18853,7 +19448,9 @@ public:
             if (iterator.isValid()) {
                 builder.createIteratorRelease(iterator, loc);
             }
-            builder.createReleaseOwnedTemp(source, loc);
+            if (source.isValid()) {
+                builder.createReleaseOwnedTemp(source, loc);
+            }
             if (partial_result.isValid()) {
                 builder.createReleaseOwnedTemp(partial_result, loc);
             }
@@ -23295,6 +23892,20 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         return QoreIRValue();
     }
 
+    // The iterator takes its own reference before running any stage. Borrow a plain local directly. A load
+    // through a reference owns the value it read, which stays in the statement's cleanup (qore#6638).
+    QoreIRValue owned_source = source;
+    if (root_streaming && op->getKind() == QoreStreamingOperatorNode::First
+            && dynamic_cast<const VarRefNode*>(base_source.getInternalNode())) {
+        auto& instructions = builder.getBlock()->instructions;
+        QoreIRInstruction* def = instructions.empty() ? nullptr : instructions.back().get();
+        if (def && def->opcode == QoreIROpcode::LoadLocal && def->result.id == source.id) {
+            static_cast<QoreIRLocalInstruction*>(def)->auto_ref = false;
+        }
+        owned_source = QoreIRValue();
+        functional_source_captures.back().value = QoreIRValue();
+    }
+
     bool source_uses_iterate = !stages.empty()
         && (stages.front().kind == LazyPipelineStage::StreamTake
             || stages.front().kind == LazyPipelineStage::StreamDrop
@@ -23445,7 +24056,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // the iterator and the base source are released before the exception leaves the pipeline, as in
         // lowerStreamingNative()
         builder.createIteratorRelease(iter_val, stage_loc);
-        builder.createReleaseOwnedTemp(source, stage_loc);
+        if (owned_source.isValid()) {
+            builder.createReleaseOwnedTemp(owned_source, stage_loc);
+        }
         QoreIRBasicBlock* handler = exception_stack.empty() ? nullptr : exception_stack.back();
         builder.createThrow(throw_list, handler, stage_loc);
     };
@@ -23540,6 +24153,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
 
     QoreIRValue fold_initial_accum;
     QoreIRValue fold_initial_has_accum;
+    QoreIRValue fold_true;
     QoreIRValue fold_initial_join_started;
 
     builder.setBlock(preheader_block);
@@ -23570,6 +24184,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     if (root_accumulator) {
         fold_initial_accum = builder.createConstNothing(loc)->result;
         fold_initial_has_accum = builder.createConstBool(false, loc)->result;
+        // Both the first element and subsequent elements leave an accumulator. Define the flag
+        // once, where it dominates the backedges of both paths, including string join continuations.
+        fold_true = builder.createConstBool(true, loc)->result;
         if (root_string_join) {
             fold_initial_join_started = builder.createConstBool(false, loc)->result;
         }
@@ -24006,7 +24623,6 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.createBranchIf(state.fold_has_accum, fold_block, init_accum_block, loc);
 
         builder.setBlock(init_accum_block);
-        QoreIRValue true_val = builder.createConstBool(true, loc)->result;
         QoreIRValue false_val = root_string_join
             ? builder.createConstBool(false, loc)->result : QoreIRValue();
         QoreIRValue init_accum_val;
@@ -24097,14 +24713,12 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         builder.setBlock(fold_cont_block);
         auto* next_accum_phi = builder.createPhi(
             {{init_accum_val, init_accum_exit_block}, {fold_result, fold_exit_block}}, loc);
-        auto* next_has_phi = builder.createPhi({{true_val, init_accum_exit_block}, {true_val, fold_exit_block}},
-            loc);
         FusedLoopState next_state = state;
         next_state.fold_accum = next_accum_phi->result;
-        next_state.fold_has_accum = next_has_phi->result;
+        next_state.fold_has_accum = fold_true;
         if (root_string_join) {
             auto* next_join_started_phi = builder.createPhi(
-                {{false_val, init_accum_exit_block}, {true_val, fold_exit_block}}, loc);
+                {{false_val, init_accum_exit_block}, {fold_true, fold_exit_block}}, loc);
             next_state.fold_join_started = next_join_started_phi->result;
         }
         if (count_joined_values) {
@@ -24472,7 +25086,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             builder.setBlock(after_block);
         }
     }
-    pipeline_cleanup.finish(iter_val, source, cleanup_element, result_list, loc, cleanup_values, partial_values);
+    pipeline_cleanup.finish(iter_val, owned_source, cleanup_element, result_list, loc, cleanup_values, partial_values);
     builder.setBlock(final_block);
     auto* result_phi = builder.createPhi(final_incoming, loc);
     // a pipeline that stops before its iterator is exhausted (a take, takewhile or takeuntil stage, or first, any and
@@ -24509,7 +25123,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 builder.createReleaseOwnedTemp(v, loc);
             }
             builder.createIteratorRelease(iter_val, loc);
-            builder.createReleaseOwnedTemp(source, loc);
+            if (owned_source.isValid()) {
+                builder.createReleaseOwnedTemp(owned_source, loc);
+            }
             if (outer_target) {
                 auto* check_inst = builder.createCheckException(loc);
                 check_inst->exception_target = outer_target;
@@ -24525,7 +25141,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // replaces the previous one (the source's temporary is released again after the operator, see
         // lowerWithSourceRelease(), which finds nothing then); the element and the stage values hold the value's
         // reference until it gets its own
-        builder.createReleaseOwnedTemp(source, loc);
+        if (owned_source.isValid()) {
+            builder.createReleaseOwnedTemp(owned_source, loc);
+        }
         QoreIRValue owned = builder.createRefSelf(result, loc)->result;
         builder.createReleaseOwnedTemp(iter_element, loc);
         for (const QoreIRValue& v : stage_values) {

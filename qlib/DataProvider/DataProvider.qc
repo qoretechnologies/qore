@@ -307,6 +307,7 @@ public class DataProvider {
             "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
+            "convertapi": "ConvertApiDataProvider",
             "segment": "SegmentDataProvider",
             "imap": "ImapClientDataProvider",
             "pop3": "Pop3ClientDataProvider",

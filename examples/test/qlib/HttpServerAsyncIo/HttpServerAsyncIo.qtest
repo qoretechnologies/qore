@@ -244,6 +244,43 @@ class QoreMemoryInputStream inherits Qore::InputStream {
     }
 }
 
+#! Reports entry into the pool's wait while the second task is held behind a gate.
+class HandlerWaitCounter inherits Counter {
+    public {
+        Queue events();
+    }
+
+    waitForZero() {
+        events.push(("waiting", getCount()));
+        Counter::waitForZero();
+    }
+}
+
+#! The worker drops the last reference to this target while cleaning up the handoff.
+class StopOnReleaseTarget inherits TestTarget {
+    private {
+        HttpAsyncSocketIoController ctrl;
+        Queue events;
+    }
+
+    constructor(HttpAsyncSocketIoController ctrl, Queue events) {
+        self.ctrl = ctrl;
+        self.events = events;
+    }
+
+    destructor() {
+        ctrl.stop();
+        events.push("stop returned");
+    }
+}
+
+class HandlerWaitController inherits HttpAsyncSocketIoController {
+    constructor(AsyncSocketIoController io, HandlerWaitCounter count)
+            : HttpAsyncSocketIoController(io, NOTHING, {"max_handler_threads": 2}) {
+        handler_pool.active = count;
+    }
+}
+
 #! Target whose handler returns a blocking InputStream body together with response_delay
 /** The delay must be ignored: a non-I/O-thread-safe stream is sent inline while blocking,
     so it can never be paced on the callback-dispatcher pool. */
@@ -342,6 +379,8 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
         addTestCase("accept replenish contention", \acceptReplenishContentionTest());
         addTestCase("thread pool dispatch", \threadPoolDispatchTest());
         addTestCase("external controller", \externalControllerTest());
+        addTestCase("stop in a handler waits for another running handler", \stopFromPoolWaitsTest());
+        addTestCase("queued handlers keep their pool after restart", \queuedHandlerRestartTest());
         addTestCase("stop with in-flight handlers", \stopWithInFlightHandlersTest());
         addTestCase("stop during SSL handshake", \stopDuringSslHandshakeTest());
         addTestCase("POST Content-Length body pre-read", \postBodyReadTest());
@@ -1744,6 +1783,83 @@ public class HttpServerAsyncIoTest inherits QUnit::Test {
             io_ctrl.stop();
         }
         assertTrue(True, "stop during SSL handshake completed cleanly");
+    }
+
+    #! Stops from a worker while its peer is held at a gate, including a stop in a target destructor.
+    stopFromPoolWaitsTest() {
+        checkHandlerWait(False);
+        checkHandlerWait(True);
+    }
+
+    private checkHandlerWait(bool in_destructor) {
+        AsyncSocketIoController io();
+        HandlerWaitCounter count();
+        HandlerWaitController ctrl(io, count);
+        TestTarget target();
+        Counter entered(1);
+        Counter release(1);
+        on_exit if (release.getCount()) {
+            release.dec();
+        }
+
+        ctrl.submitToHandlerPool(target, sub () {
+            entered.dec();
+            release.waitForZero();
+            count.events.push("peer finished");
+        });
+        assertEq(0, entered.waitForZero(30s), "the peer is running");
+        if (in_destructor) {
+            Counter submitted(1);
+            ctrl.submitToHandlerPool(new StopOnReleaseTarget(ctrl, count.events), sub () {
+                submitted.waitForZero();
+            });
+            # The caller has released the argument temporary. The worker now owns the last target reference.
+            submitted.dec();
+        } else {
+            ctrl.submitToHandlerPool(target, sub () {
+                ctrl.stop();
+                count.events.push("stop returned");
+            });
+        }
+        assertEq(("waiting", 1), count.events.get(30s), "the stop waits with its peer still running");
+        release.dec();
+        assertEq("peer finished", count.events.get(30s));
+        assertEq("stop returned", count.events.get(30s));
+    }
+
+    #! The old pool's only worker is held after restarting the controller. Only the new pool can dispatch work.
+    queuedHandlerRestartTest() {
+        AsyncSocketIoController io();
+        HttpAsyncSocketIoController ctrl(io, NOTHING, {"max_handler_threads": 1});
+        TestTarget target();
+        Counter entered(1);
+        Counter queued(1);
+        Counter release(1);
+        Queue events();
+        on_exit {
+            if (queued.getCount()) {
+                queued.dec();
+            }
+            if (release.getCount()) {
+                release.dec();
+            }
+        }
+
+        ctrl.submitToHandlerPool(target, sub () {
+            entered.dec();
+            queued.waitForZero();
+            ctrl.stop();
+            ctrl.start();
+            ctrl.submitToHandlerPool(target, sub () { events.push("new pool"); });
+            release.waitForZero();
+        });
+        assertEq(0, entered.waitForZero(30s));
+        ctrl.submitToHandlerPool(target, sub () { events.push("old pool"); });
+        queued.dec();
+        assertEq("new pool", events.get(30s));
+        release.dec();
+        assertEq("old pool", events.get(30s));
+        ctrl.stop();
     }
 
     #! Tests that stop() with in-flight handler tasks doesn't leak operations

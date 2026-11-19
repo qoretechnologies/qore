@@ -27,6 +27,16 @@
     - @anchor protobufexamples @subpage protobufexamplesguide
     - @anchor protobufrelnotes @subpage protobufreleasehistory
 
+    @section protobufnesting Nested Messages
+
+    A message field that is not set has no value in a hash (@ref nothing), so a message type that contains a field of
+    its own type, directly or through other message types, has a finite default message.  Messages are converted to
+    and from hashes to 100 levels of messages below the top-level message (an entry of a map field is a level, as in
+    protobuf), the default recursion limit of protobuf's binary and JSON parsers: deeper data raises
+    \c PROTOBUF-DEPTH-ERROR (data from outside the program nested deeper than the parsers allow raises
+    \c PROTOBUF-DECODE-ERROR or \c PROTOBUF-JSON-ERROR), and the conversion also stops with
+    \c STACK-LIMIT-EXCEEDED if the thread's stack would be exhausted.
+
     @section protobufclasses protobuf Module Classes
 
     - @ref Qore::Protobuf::ProtobufSchema "ProtobufSchema" — the core class for

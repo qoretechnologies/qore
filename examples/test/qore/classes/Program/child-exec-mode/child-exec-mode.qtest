@@ -68,7 +68,9 @@ class ChildExecModeTest inherits QUnit::Test {
         env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
         path = get_script_dir() + "/child-exec-mode.q";
         foreach string mode in (ExecModeHarness::ExecModes) {
-            addTestCase("--exec-mode=" + mode, sub () { modeTest(mode); });
+            # a local of the loop's body: each closure keeps its own value (qore#6636)
+            string mode_value = mode;
+            addTestCase("--exec-mode=" + mode, sub () { modeTest(mode_value); });
         }
         set_return_value(main());
     }

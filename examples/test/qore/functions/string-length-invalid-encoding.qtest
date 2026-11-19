@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - character counts validate text with the platform iconv
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%exec-class StringLengthInvalidEncodingTest
+
+#! Language character counts validate the string in its declared encoding.
+class StringLengthInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("checked character counts", "1.0", \ARGV) {
+        addTestCase("invalid text", \invalidText());
+        addTestCase("expression paths", \expressionPaths());
+        addTestCase("stateful encoding", \statefulEncoding());
+        addTestCase("valid text", \validText());
+        set_return_value(main());
+    }
+
+    private static int sumLengths(string a, string b) {
+        return a.length() + b.length();
+    }
+
+    invalidText() {
+        foreach string s in (("a\xffé", "a long UTF-8 string\xff", binary_to_string(<82a0822741>, "SHIFT_JIS"),
+                binary_to_string(<80>, "SHIFT_JIS"), binary_to_string(<a0>, "SHIFT_JIS"),
+                binary_to_string(<fd>, "SHIFT_JIS"), binary_to_string(<f040>, "SHIFT_JIS"),
+                binary_to_string(<f040>, "SHIFT-JIS"), binary_to_string(<827f>, "SHIFT_JIS"), binary_to_string(<82>, "SHIFT_JIS"),
+                binary_to_string(<4180>, "US-ASCII"), binary_to_string(<00dc>, "UTF-16LE"),
+                binary_to_string(<d8000041>, "UTF-16BE"),
+                binary_to_string(<00110000>, "UTF-32BE"))) {
+            assertThrows("INVALID-ENCODING", auto sub () { return length(s); });
+            assertThrows("INVALID-ENCODING", auto sub () { return s.length(); });
+            assertThrows("INVALID-ENCODING", auto sub () { return elements s; });
+            assertTrue(s.size() > 0);
+            assertEq(s.size(), strlen(s));
+        }
+    }
+
+    expressionPaths() {
+        string s = "a\xffé";
+        hash<auto> h = {"k": s};
+        buffer<string> buf = new buffer<string>((s, s));
+        code<int(string)> f = int sub (string a) { return a.length() + 1; };
+        assertThrows("INVALID-ENCODING", auto sub () { return h.k.length(); });
+        assertThrows("INVALID-ENCODING", auto sub () { return length(buf[0]); });
+        assertThrows("INVALID-ENCODING", auto sub () { return elements buf[1]; });
+        assertThrows("INVALID-ENCODING", auto sub () { return elements "\xff"; });
+        assertThrows("INVALID-ENCODING", auto sub () { return f(s); });
+        assertThrows("INVALID-ENCODING", auto sub () { return sumLengths(s, s); });
+        assertThrows("INVALID-ENCODING", auto sub () { return (s + "z").length(); });
+        assertThrows("INVALID-ENCODING", auto sub () { return length("z" + s); });
+        assertThrows("INVALID-ENCODING", sub () { length(s); });
+        assertThrows("INVALID-ENCODING", sub () { s.length(); });
+        assertThrows("INVALID-ENCODING", sub () { int unused = elements s; });
+        bool evaluated = False;
+        code<int()> later = int sub () { evaluated = True; return 1; };
+        assertThrows("INVALID-ENCODING", int sub () { return s.length() + later(); });
+        assertFalse(evaluated);
+        int sum = 0;
+        for (int i = 0; i < sum; ++i) {
+            sum += s.length() + length(s);
+        }
+        assertEq(0, sum);
+    }
+
+    statefulEncoding() {
+        try {
+            @discard(convert_encoding("a", "ISO-2022-JP"));
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ENCODING-CONVERSION-ERROR") {
+                rethrow;
+            }
+            testSkip("ISO-2022-JP is unavailable");
+        }
+        string s = binary_to_string(<1b244224>, "ISO-2022-JP");
+        assertThrows("INVALID-ENCODING", \length(), (s,));
+        assertEq(3, length(convert_encoding("日本!", "ISO-2022-JP")));
+    }
+
+    validText() {
+        # Roman/control bytes (including NUL), kana, and two-byte characters with low and high trail bytes.
+        assertEq(7, length(binary_to_string(<007f41a1df814082a0>, "SHIFT_JIS")));
+        assertEq(2, length(binary_to_string(<80fa40>, "CP932")));
+        assertEq(0, "".length());
+        assertEq(3, length("abc"));
+        assertEq(4, elements "aébü");
+        assertEq(3, length(binary_to_string(<e9ff41>, "ISO-8859-1")));
+        assertEq(3, length(binary_to_string(<610062>, "US-ASCII")));
+        assertEq(2, length(binary_to_string(<41003dd800de>, "UTF-16LE")));
+        string lead = binary_to_string(<61e2>, "UTF-8");
+        string tail = binary_to_string(<82ac>, "UTF-8");
+        assertEq(2, length(lead + tail));
+        assertEq(2, (lead + tail).length());
+    }
+}

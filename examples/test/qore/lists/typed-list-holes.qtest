@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - every check runs the script in a child process that sets its own --exec-mode, or AOT
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class TypedListHolesTest
+
+#! qore#6435, qore#6437: a list whose element type does not take NOTHING never holds NOTHING
+/** An assignment past the end of a list whose element type does not take NOTHING (list<int> l = (1,); l[3] = 4;)
+    filled the gap with NOTHING, and delete and remove of an element assigned NOTHING to it, which left a list<int>
+    holding NOTHING: a range over it failed an assertion in a debug build, select gave 0 for each hole in the compiled
+    tiers and raised RUNTIME-TYPE-ERROR in the AST interpreter (qore#6437), and map raised RUNTIME-TYPE-ERROR.  The
+    gap now raises RUNTIME-TYPE-ERROR and leaves the list as it was, by the type of the list at run time (also for a
+    list held by auto or list<auto>), with every assignment operator and in nested typed containers.  Delete and remove
+    of an element make the list a list<*int> on the holder's own copy when the declared type of the lvalue holding it
+    allows it (auto, list<auto>, an untyped list, list<*int>, an auto or untyped container, retyping the typed
+    containers between them), and raise RUNTIME-TYPE-ERROR when it requires the element type (a list<int> local,
+    global, member or parameter, a hashdecl member, a typed container, a reference<list<int>> parameter (also when it
+    names an auto variable), or a list in a container reached through a weak reference (which is not retyped) when
+    the type of its own slot requires it).  An assignment at the end of the list, a range or a list of indices given
+    to delete or remove, splice and extract remain valid, and a list whose element type takes NOTHING still gets
+    holes.  A read through a reference past the end of a list gives NOTHING and does not extend the list.
+
+    The script next to the test (typed-list-holes/holes.q) runs in every execution mode, on the IR tier and as AOT
+    executables (qcc -O0 and -O3), and its output must be the expected one.
+*/
+class TypedListHolesTest inherits QUnit::Test {
+    public {
+        const Expected = "gap: RUNTIME-TYPE-ERROR
+gap leaves the list: [1] list<int>
+append: [1, 4] list<int>
+append to an empty list: [4] list<int>
+gap in an empty list: RUNTIME-TYPE-ERROR
+gap in a new list: RUNTIME-TYPE-ERROR
+append to a new list: [4] list<int>
+gap +=: RUNTIME-TYPE-ERROR
+gap += leaves the list: [1] list<int>
+gap *=: RUNTIME-TYPE-ERROR
+gap ++: RUNTIME-TYPE-ERROR
+gap -=: RUNTIME-TYPE-ERROR
+gap string: RUNTIME-TYPE-ERROR
+gap float: RUNTIME-TYPE-ERROR
+gap hash member: RUNTIME-TYPE-ERROR
+gap nested list: RUNTIME-TYPE-ERROR
+gap inner list: RUNTIME-TYPE-ERROR
+gap new key leaves the hash: {a: [1]} hash<string, list<int>>
+gap auto: RUNTIME-TYPE-ERROR
+gap list<auto>: RUNTIME-TYPE-ERROR
+reference read past the end: [null, [1]] list<*list<int>>
+reference read past the end untyped: [null, [1]] list<*list>
+reference write at the end: [1, 2] list<int>
+gap or-nothing: [1, null, null, 4] list<*int>
+gap untyped: [1, null, null, 4] list
+gap untyped +=: [1, null, null, 4] list
+gap mixed auto: [1, \"a\", null, 4] list<auto>
+delete declared list<int>: RUNTIME-TYPE-ERROR
+delete leaves the list: [10, 11, 12] list<int>
+remove declared list<int>: RUNTIME-TYPE-ERROR
+delete declared list<float>: RUNTIME-TYPE-ERROR
+delete declared list<string>: RUNTIME-TYPE-ERROR
+delete declared softlist<int>: RUNTIME-TYPE-ERROR
+delete declared *list<int>: RUNTIME-TYPE-ERROR
+delete auto: [10, null, 12] list<*int>
+remove auto: [11, [10, null, 12]] list<auto>
+delete list<auto>: [null, 2.5] list<*float>
+delete list: [null, 2] list
+delete declared list<*int>: [null, 2] list<*int>
+delete auto keeps a copy: [[10, 11, 12], [10, null, 12]] list<list<auto>>
+delete auto to list<int>: RUNTIME-TYPE-ERROR
+delete auto then assign: [10, 5, 12] list<*int>
+delete auto then gap: [10, null, null, 5] list<*int>
+delete last auto: [10, 11, null] list<*int>
+delete auto objects: \"list<*object<Mutex>>\" string
+delete hash<auto> value: [null, 2] list<*int>
+delete declared hash value: RUNTIME-TYPE-ERROR
+delete nested declared: RUNTIME-TYPE-ERROR
+delete nested auto: [[1, null]] list<list<*int>>
+delete outer declared: RUNTIME-TYPE-ERROR
+delete outer auto: [null, [2]] list<*list<int>>
+delete through a reference: [null, 2] list<*int>
+delete through a reference to list<int>: RUNTIME-TYPE-ERROR
+delete in a function: [1, null, 3] list<*int>
+delete in a function list<int> param: RUNTIME-TYPE-ERROR
+delete in a function list<int> param of auto: RUNTIME-TYPE-ERROR
+delete outer then inner: [[null, [null]], \"list<*list<*int>>\", [null, [null]]] list<auto>
+delete hash with [] auto: [{a: [null, 2]}, \"hash<string, list<*int>>\"] list<auto>
+delete hash with [] declared: RUNTIME-TYPE-ERROR
+delete hashdecl member with []: RUNTIME-TYPE-ERROR
+delete hashdecl member: RUNTIME-TYPE-ERROR
+delete in a hash<string, list<auto>> of auto: [{a: [null, 2], b: [\"x\"]}, \"hash<string, list<auto>>\", \"list<*int>\", \"list<string>\"] list<auto>
+delete in a list<list<auto>> of auto: [[[null, 2], [\"x\"]], \"list<list<auto>>\", \"list<*int>\", \"list<string>\"] list<auto>
+  l: [[1, 2]] list<softlist<int>> list<int>
+delete in a list<softlist<int>> of auto: RUNTIME-TYPE-ERROR
+delete in a list<list> in a list of auto: [[[[null, 2]]], \"list<list<list>>\", \"list<list>\", \"list\"] list<auto>
+  h: {a: [1, 2]} hash<string, list<int>>
+delete through a weak reference: RUNTIME-TYPE-ERROR
+  h: {a: [1, 2]} hash<string, list<int>>
+delete in a hash through a reference<hash<string, list<int>>> of auto: RUNTIME-TYPE-ERROR
+  l: [[1, 2]] list<list<int>>
+delete in a nested list through a reference<list<list<int>>> of auto: RUNTIME-TYPE-ERROR
+delete in an object member through a reference<Holder>: [null, 2] list<*int>
+  l: [1, 2] list<int>
+delete through nested references reference<auto> of reference<list<int>>: RUNTIME-TYPE-ERROR
+delete in a hash through a reference<hash<auto>> of auto: [{a: [null, 2]}, \"hash<string, list<*int>>\"] list<auto>
+typed reference passed on: [1, 2, 3] list<int>
+remove in a function: [2, [1, null, 3]] list<auto>
+delete member auto: [null, 2] list<*int>
+delete member declared: RUNTIME-TYPE-ERROR
+delete global auto: [null, 2] list<*int>
+delete global declared: RUNTIME-TYPE-ERROR
+delete closure local: [null, 2] list<*int>
+delete closure declared local: RUNTIME-TYPE-ERROR
+select after delete: [10, null, 12] list<*int>
+select after delete in a function: [10, null, 12] list<*int>
+select int after delete: [12] list<int>
+map after delete: [10, null, 12] list<*int>
+range after delete: [10, null, 12] list<*int>
+foreach after delete: [10, null, 12] list<auto>
+foreach int after delete: RUNTIME-TYPE-ERROR
+fold after delete: 22 integer
+index after delete: null nothing
+remove past the end: [null, [10]] list<*list<int>>
+delete past the end: [10] list<int>
+nested delete past the end: [[1]] list<list<int>>
+delete range: [10, 13] list<int>
+remove range: [[11, 12], [10, 13]] list<list<int>>
+delete indices: [11, 13] list<int>
+remove indices: [[10, 12], [11, 13]] list<list<int>>
+splice: [10, 12] list<int>
+extract: [[11], [10, 12]] list<list<int>>
+delete mixed auto: [null, \"a\"] list<auto>
+range or-nothing: [10, null, 12] list<*int>
+map or-nothing: [10, null, 12] list<*int>
+select or-nothing: [10, null, 12] list<*int>
+select or-nothing holes: [null] list<nothing>
+foreach or-nothing: [10, null, 12] list<auto>
+select int: [11, 12] list<int>
+select int again: [13] list<int>
+select float: [2.5, 3.5] list<float>
+select string: [\"a\", \"c\"] list<string>
+select all: [1, 2, 3] list<int>
+qore#6437 gap: RUNTIME-TYPE-ERROR
+qore#6437 delete: RUNTIME-TYPE-ERROR
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("typed list holes", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir,
+            libqore_dir);
+
+        addTestCase("execution modes", \modesTest());
+        addTestCase("AOT executables", \aotTest());
+        set_return_value(main());
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest() {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(Expected, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s", env, qore_bin, mode,
+                scriptPath())), mode);
+        }
+        assertEq(Expected, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s", env, qore_bin,
+            scriptPath())), ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc -O0 and -O3 and checks the output of the executables
+    private aotTest() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir dir("typed-list-holes-aot-");
+        foreach string opt in ("-O0", "-O3") {
+            string exe = sprintf("%s/holes%s", dir.path, opt);
+            string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s", env, qcc_bin, opt, exe, scriptPath()));
+            assertTrue(is_file(exe), sprintf("%s: qcc compiles the script: %s", opt, out));
+            assertEq(Expected, ExecModeHarness::run_any(sprintf("%s %s", env, exe)), "AOT " + opt);
+        }
+    }
+
+    private string scriptPath() {
+        return get_script_dir() + "/typed-list-holes/holes.q";
+    }
+}

@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - libprotobuf nested message conversion and its limits as built on macOS
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Message types that contain fields of their own type, directly or through other types: unset message fields have no
+# value, nested data is converted to the nesting limit (ProtobufHelper::MaxNesting, 100 levels below the top-level
+# message, a map entry being a level), and deeper data raises an exception (issue #6678).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires protobuf
+
+%exec-class ProtobufNestingTest
+
+class ProtobufNestingTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message Node {\n"
+            "  string name = 1;\n"
+            "  Node child = 2;\n"
+            "  repeated Node children = 3;\n"
+            "  map<string, Node> named = 4;\n"
+            "}\n"
+            "message A {\n"
+            "  string name = 1;\n"
+            "  B b = 2;\n"
+            "}\n"
+            "message B {\n"
+            "  A a = 1;\n"
+            "}\n";
+
+        #! the nesting limit: message levels below the top-level message
+        const MaxNesting = 100;
+    }
+
+    constructor() : QUnit::Test("ProtobufNestingTest", "1.0", \ARGV) {
+        addTestCase("unset message fields", \testUnset());
+        addTestCase("nested data", \testNested());
+        addTestCase("the nesting limit", \testLimit());
+        addTestCase("nesting through repeated and map fields", \testRepeatedAndMap());
+        addTestCase("data nested deeper than the parsers allow", \testParsers());
+        set_return_value(main());
+    }
+
+    #! returns a Node nested in \a levels levels of the \c child field
+    private hash<auto> chain(int levels) {
+        hash<auto> h = {};
+        h.name = "leaf";
+        for (int i = 0; i < levels; ++i) {
+            hash<auto> parent = {};
+            parent.name = sprintf("n%d", i);
+            parent.child = h;
+            h = parent;
+        }
+        return h;
+    }
+
+    #! returns the number of levels of the \c child field below \a h
+    private int depth(hash<auto> h) {
+        int rv = 0;
+        while (h.child) {
+            h = h.child;
+            ++rv;
+        }
+        return rv;
+    }
+
+    testUnset() {
+        ProtobufSchema schema(Proto);
+        # depth 0: no message field is set
+        hash<auto> h = schema.defaultMessage("test.Node");
+        assertEq(NOTHING, h.child);
+        assertEq((), h.children);
+        assertEq({}, h.named);
+        assertEq(NOTHING, schema.defaultMessage("test.A").b);
+        assertEq(NOTHING, schema.defaultMessage("test.B").a);
+
+        binary data = schema.encode("test.Node", {"name": "a"});
+        h = schema.decode("test.Node", data);
+        assertEq("a", h.name);
+        assertEq(NOTHING, h.child);
+        assertTrue(h.hasKey("child"));
+        # the decoded hash encodes to the same data
+        assertEq(data, schema.encode("test.Node", h));
+
+        h = schema.fromJson("test.Node", "{\"name\": \"a\"}");
+        assertEq(NOTHING, h.child);
+        assertEq(NOTHING, schema.decode("test.A", schema.encode("test.A", {"name": "a"})).b);
+    }
+
+    testNested() {
+        ProtobufSchema schema(Proto);
+        # depth 1
+        hash<auto> h = schema.decode("test.Node", schema.encode("test.Node", {"name": "a", "child": {"name": "b"}}));
+        assertEq("b", h.child.name);
+        assertEq(NOTHING, h.child.child);
+
+        # depth N
+        foreach int n in ((2, 10, 50)) {
+            binary data = schema.encode("test.Node", chain(n));
+            h = schema.decode("test.Node", data);
+            assertEq(n, depth(h), sprintf("decode() depth %d", n));
+            assertEq(data, schema.encode("test.Node", h), sprintf("encode() depth %d", n));
+            string json = schema.toJson("test.Node", h);
+            assertEq(n, depth(schema.fromJson("test.Node", json)), sprintf("fromJson() depth %d", n));
+        }
+
+        # through other types
+        h = {"name": "a0", "b": {"a": {"name": "a1", "b": {"a": {"name": "a2"}}}}};
+        hash<auto> d = schema.decode("test.A", schema.encode("test.A", h));
+        assertEq("a2", d.b.a.b.a.name);
+        assertEq(NOTHING, d.b.a.b.a.b);
+    }
+
+    testLimit() {
+        ProtobufSchema schema(Proto);
+        # the limit
+        binary data = schema.encode("test.Node", chain(MaxNesting));
+        hash<auto> h = schema.decode("test.Node", data);
+        assertEq(MaxNesting, depth(h));
+        assertEq(data, schema.encode("test.Node", h));
+
+        # deeper data
+        foreach int n in ((MaxNesting + 1, MaxNesting + 50, 5000)) {
+            hash<auto> deep = chain(n);
+            assertThrows("PROTOBUF-DEPTH-ERROR", \schema.encode(), ("test.Node", deep), sprintf("encode() %d", n));
+            assertThrows("PROTOBUF-DEPTH-ERROR", \schema.toJson(), ("test.Node", deep), sprintf("toJson() %d", n));
+        }
+        # the exception can be caught and the schema used again
+        assertEq(data, schema.encode("test.Node", chain(MaxNesting)));
+    }
+
+    testRepeatedAndMap() {
+        ProtobufSchema schema(Proto);
+        # a map entry is a message level, as in protobuf: a value in a map field is two levels below its message
+        hash<auto> h = {};
+        h.name = "leaf";
+        int levels = 0;
+        int maps = 0;
+        while (levels < MaxNesting) {
+            hash<auto> parent = {};
+            if (levels + 2 <= MaxNesting && (maps < levels / 2)) {
+                parent.named = {"x": h};
+                levels += 2;
+                ++maps;
+            } else {
+                parent.children = (h,);
+                ++levels;
+            }
+            h = parent;
+        }
+        assertTrue(maps > 10);
+        binary data = schema.encode("test.Node", h);
+        hash<auto> d = schema.decode("test.Node", data);
+        assertEq(data, schema.encode("test.Node", d));
+        int n = 0;
+        while (True) {
+            if (d.children) {
+                d = d.children[0];
+                ++n;
+            } else if (d.named) {
+                d = d.named.x;
+                n += 2;
+            } else {
+                break;
+            }
+        }
+        assertEq(MaxNesting, n);
+        assertEq("leaf", d.name);
+
+        assertThrows("PROTOBUF-DEPTH-ERROR", \schema.encode(), ("test.Node", {"children": (h,)}));
+        assertThrows("PROTOBUF-DEPTH-ERROR", \schema.encode(), ("test.Node", {"named": {"x": h}}));
+    }
+
+    #! data from outside nested deeper than protobuf's parsers allow raises an exception
+    testParsers() {
+        ProtobufSchema schema(Proto);
+        # wire data: Node.child (field 2, length-delimited) nested 1000 levels
+        binary data = <0a0178>;
+        for (int i = 0; i < 1000; ++i) {
+            data = <12> + varint(data.size()) + data;
+        }
+        assertThrows("PROTOBUF-DECODE-ERROR", \schema.decode(), ("test.Node", data));
+
+        string json = strmul("{\"child\": ", 1000) + "{}" + strmul("}", 1000);
+        assertThrows("PROTOBUF-JSON-ERROR", \schema.fromJson(), ("test.Node", json));
+    }
+
+    #! returns the protobuf varint encoding of a non-negative integer
+    private binary varint(int v) {
+        string hex;
+        while (v >= 0x80) {
+            hex += sprintf("%02x", (v & 0x7f) | 0x80);
+            v >>= 7;
+        }
+        hex += sprintf("%02x", v);
+        return parse_hex_string(hex);
+    }
+}

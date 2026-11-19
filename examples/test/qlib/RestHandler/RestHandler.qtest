@@ -368,6 +368,7 @@ public class RestHandlerTest inherits QUnit::Test {
         addTestCase("pre-encoded-URLs test", \preEncodedUrlsTest());
         addTestCase("test bad request", \badRequestTest());
         addTestCase("query parameter name with a NUL character", \queryNulTest());
+        addTestCase("Accept header not valid in its encoding", \invalidAcceptTest());
         addTestCase("Test direct interface", \directTest());
         addTestCase("Test external serialization", \serializationTest());
         addTestCase("Raw response test", \rawResponseTest());
@@ -502,6 +503,32 @@ public class RestHandlerTest inherits QUnit::Test {
         on_exit socket.close();
         socket.send(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n", target));
         return socket.readHTTPHeader(30s).status_code;
+    }
+
+    # sends a GET request with the Accept header given as bytes over a socket and returns the response's status code
+    private static int rawGetStatusWithAccept(int port, string target, *binary accept) {
+        Socket socket();
+        socket.connect("localhost:" + port, 30s);
+        on_exit socket.close();
+        binary req = binary(sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n", target));
+        if (accept) {
+            req += binary("Accept: ") + accept + binary("\r\n");
+        }
+        req += binary("\r\n");
+        socket.send(req);
+        # the timeout is a guard only: the server answered at once, or never (it looped forever on such a header)
+        return socket.readHTTPHeader(30s).status_code;
+    }
+
+    #! an Accept header value with a byte that is not valid UTF-8, with a parameter, left the handler looping
+    #! forever (qore#6553); such a value is obs-text, given to the handler in ISO-8859-1 (qore#6554): it names a media
+    #! type that the handler cannot give, as an unknown type does
+    invalidAcceptTest() {
+        assertEq(200, rawGetStatusWithAccept(port, "/test?action=action"));
+        int unknown = rawGetStatusWithAccept(port, "/test?action=action", binary("x/y;q=1"));
+        assertEq(406, unknown);
+        assertEq(unknown, rawGetStatusWithAccept(port, "/test?action=action", parse_hex_string("ff3b713d31")),
+            "the request with the Latin-1 Accept value is answered as one with an unknown type");
     }
 
     badRequestTest() {

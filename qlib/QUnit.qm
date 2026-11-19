@@ -209,6 +209,9 @@ Ran 4 test cases, 1 succeeded, 1 failed, 1 error, 1 skipped (2 assertions, 1 suc
 
 
     @section qunit_v0_5_2 Version 0.5.2
+    - a skip or an exception in @ref QUnit::Test::globalSetUp() "Test::globalSetUp()" stops the test cases: they are
+      reported as skipped with its reason instead of running without what it prepares
+      (<a href="https://github.com/qoretechnologies/qore/issues/6659">issue 6659</a>)
     - a @ref Qore::Program "Program" restricted with @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" can
       load the module (it declares the \c PROCESS domain); a test created there raises \c TEST-OPTION-ERROR
       instead of exiting the process for a usage error, and does not install the \c SIGUSR1 handler
@@ -1333,6 +1336,10 @@ public class TestReporter {
 
     #! returns the string without the characters that XML 1.0 does not allow
     private:internal static string xmlText(string str) {
+        # a string that is not valid in its encoding cannot be processed or written to XML (qore#6553)
+        if (!str.isEncodingValid()) {
+            return sprintf("<string of %d bytes not valid in its encoding>", str.size());
+        }
         str =~ s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g;
         return str;
     }
@@ -1448,6 +1455,9 @@ public class Test inherits QUnit::TestReporter {
     }
 
     #! global setup; will be called once before tests are run
+    /** If it skips the test (@ref testSkip()) or raises an exception, its result is reported, and the test cases are
+        not run: each is reported as skipped with its reason; @ref globalTearDown() is still called
+    */
     globalSetUp() {}
 
     #! global tear down; will be called once after all tests are run
@@ -1599,6 +1609,11 @@ addTestCase(obj);
     }
 
     private bool diffInSpecialCharsOnly(string a, string b) {
+        # a string that is not valid in its encoding cannot be processed by the substitutions below (qore#6553); the
+        # report of a failed assertion does not raise an exception for it
+        if (!a.isEncodingValid() || !b.isEncodingValid()) {
+            return False;
+        }
         a =~ s/[[:space:]]//;
         a =~ s/[[:cntrl:]]//;
         b =~ s/[[:space:]]//;
@@ -1749,7 +1764,8 @@ addTestCase(obj);
 
     private string shorten(auto value) {
         # issue #2680: convert special whitespace in strings to escaped chars
-        if (value.typeCode() == NT_STRING) {
+        # a string that is not valid in its encoding cannot be processed by the substitutions (qore#6553)
+        if (value.typeCode() == NT_STRING && value.isEncodingValid()) {
             value =~ s/\n/\n/g;
             value =~ s/\r/\r/g;
             value =~ s/\t/\t/g;
@@ -2850,10 +2866,20 @@ fail("Unexpected code executed");
         gtc.setupThread();
         on_exit gtc.restoreThread();
 
+        # a skip or an exception in the global setup leaves the test cases without what it prepares: they are reported
+        # as skipped with its reason and not run (qore#6659); its own result is reported as before
+        *hash<ExceptionInfo> setup_ex;
         try {
             globalSetUp();
         } catch (hash<ExceptionInfo> ex) {
             gtc.checkException(self, ex);
+            setup_ex = ex;
+        }
+        *string setup_skip_reason;
+        if (setup_ex) {
+            setup_skip_reason = setup_ex.err == "TEST-SKIPPED-EXCEPTION"
+                ? sprintf("globalSetUp skipped the test: %s", setup_ex.desc)
+                : sprintf("not run: globalSetUp raised %s: %s", setup_ex.err, setup_ex.desc);
         }
 
         # when sharding, restrict this process to its assigned test cases
@@ -2873,6 +2899,13 @@ fail("Unexpected code executed");
             if (!shouldRunTest(tcname)) {
                 # Add skipped result for filtered tests
                 addTestResult(tc, TEST_SKIPPED, NOTHING, NOTHING, "Excluded by filter");
+                result_by_name{tcname} = TEST_SKIPPED;
+                continue;
+            }
+
+            # the global setup did not complete: the test case is not run without it
+            if (setup_skip_reason) {
+                addTestResult(tc, TEST_SKIPPED, NOTHING, NOTHING, setup_skip_reason);
                 result_by_name{tcname} = TEST_SKIPPED;
                 continue;
             }

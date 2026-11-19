@@ -1,0 +1,196 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class UnionExactMatchTest
+
+#! Tests that a union accepts a value of one of its member types as it is, whatever the order of its members (qore#6407)
+/** A member type that comes before the value's own type could accept the value by converting it (an enum value by
+    its base type, also of an enum of a module, an int by float, a float by number, a string by softint, an int by
+    softstring, a date by softstring, a hash by softlist, a list<int> by list<float>); the union keeps the value as it
+    is, as a variable, a list or hash element, a hashdecl member, a parameter, a return value and the result of a
+    cast, and += and -= give a union lvalue the result of the arithmetic operator.  The checks are in
+    union-exact-match-worker.qr, which is run in each execution mode, on the IR tier and as a program compiled with qcc
+    at -O0 and -O3, with the module UnionExactModule.qm as source and compiled with qcc; every run must give the
+    results below.
+*/
+class UnionExactMatchTest inherits QUnit::Test {
+    public {
+        #! the type of the value stored by every check the worker makes
+        const Expected = {
+            "hashdecl-string-float-enum": "enum<EI>",
+            "var-enum-int-int": "integer",
+            "var-float-int": "integer",
+            "var-int-float": "integer",
+            "var-string-float-int": "integer",
+            "list-float-int": "integer",
+            "hashdecl-float-int": "integer",
+            "hashdecl-int-float": "integer",
+            "return-float-int": "integer",
+            "param-float-int": "integer",
+            "var-float-string-int": "float",
+            "var-number-float": "float",
+            "var-float-number": "float",
+            "param-number-float": "float",
+            "var-softint-string": "string",
+            "var-string-softint": "string",
+            "var-softstring-int": "integer",
+            "var-int-softstring": "integer",
+            "module-enum-var-int-enum": "enum<MI>",
+            "module-return-int-enum": "enum<MI>",
+            "module-return-enum-int": "enum<MI>",
+            "module-param-int-enum": "enum<MI>",
+            "module-local-int-enum": "enum<MI>",
+            "module-hashdecl-int-enum": "enum<MI>",
+            "module-hashdecl-enum-int": "enum<MI>",
+            "var-softstring-date": "date",
+            "var-softint-date": "date",
+            "var-softlist-hash": "hash<string, int>",
+            "var-list-float-list-int": "list<int>",
+            "var-list-float-list-number": "list<float>",
+            "cast-float-int-int": "integer",
+            "cast-int-float-float": "float",
+            "cast-int-enum-enum": "enum<EI>",
+            "cast-float-string-int": "float",
+            "plus-equals-float": "float",
+            "minus-equals-float": "float",
+            "plus-equals-number": "number",
+            "plus-equals-int": "integer",
+            "multiply-equals-float": "float",
+            "increment-int": "integer",
+            "param-plus-equals-float": "float",
+            "int-first-plus-equals-float": "float",
+            "int-first-minus-equals-float": "float",
+            "no-float-member-plus-equals-float": "integer",
+            "hashdecl-member-plus-equals-float": "float",
+            "nested-float-union": "integer",
+            "nested-union-float": "integer",
+            "cast-nested-float-union": "integer",
+            "nested-float-or-nothing-union": "integer",
+            "nested-or-nothing-union-float": "integer",
+            "var-float-softint": "integer",
+            "var-softint-float": "integer",
+            "var-number-softfloat": "float",
+            "var-float-timeout": "integer",
+            "var-timeout-float": "integer",
+            "softstring-member-plus-equals-float": "integer",
+            "softfloat-member-plus-equals-float": "float",
+            "no-number-member-plus-equals-number": "integer",
+            "number-member-minus-equals-number": "number",
+            "var-base-sub": "object<D>",
+            "var-sub-base": "object<D>",
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("UnionExactMatchTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("IR tier", \testIrTier());
+        addTestCase("compiled program", \testCompiledProgram());
+        addTestCase("module compiled with qcc", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        checkModes("", getEnv(get_script_dir()));
+    }
+
+    #! every function runs on the IR tier, which the tiered run of ExecModes hardly runs
+    testIrTier() {
+        checkWorkerOutput("ir-tier", ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug "
+            "--exec-mode=tiered %s", getEnv(get_script_dir()), qore_bin, getWorker())));
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-union-exact-match-");
+        checkCompiledProgram("", tmp.path, getEnv(get_script_dir()));
+    }
+
+    #! the module that declares an enum is compiled with qcc, and the script uses its unions in every mode
+    testCompiledModule() {
+        TmpDir tmp("qore-union-exact-match-module-");
+        string qmod = tmp.path + DirSep + "UnionExactModule.qmod";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -m -O3 -o %s %s 2>&1", libqore_dir, qcc_bin,
+            qmod, get_script_dir() + DirSep + "UnionExactModule.qm"));
+        assertTrue(is_file(qmod), "qcc -m: " + compile_out);
+        string env = getEnv(tmp.path);
+        checkModes("qmod ", env);
+        checkCompiledProgram("qmod ", tmp.path, env);
+    }
+
+    private checkModes(string prefix, string env) {
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            string out = ExecModeHarness::run(sprintf("%s %s -b --enable-debug --exec-mode=%s %s", env, qore_bin,
+                mode, getWorker()));
+            checkWorkerOutput(prefix + mode, out);
+        }
+    }
+
+    private checkCompiledProgram(string prefix, string dir, string env) {
+        foreach int opt in (0, 3) {
+            string label = sprintf("%saot -O%d", prefix, opt);
+            string exe = dir + DirSep + sprintf("union-exact-match-O%d", opt);
+            string compile_out = backquote(sprintf("%s %s -O%d --strip-source -o %s %s 2>&1", env, qcc_bin, opt,
+                exe, getWorker()));
+            assertTrue(is_file(exe), label + ": " + compile_out);
+            checkWorkerOutput(label, backquote(sprintf("%s %s 2>&1", env, exe)));
+        }
+    }
+
+    #! returns the environment of a run: the library path, and the module path with the module's directory first
+    private string getEnv(string module_dir) {
+        string module_path = module_dir;
+        if (ENV.QORE_MODULE_DIR) {
+            module_path += ":" + ENV.QORE_MODULE_DIR;
+        }
+        return sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s", libqore_dir, module_path);
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "union-exact-match-worker.qr";
+    }
+
+    #! parses the "name=result" lines printed by the worker and checks them; any other output fails
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

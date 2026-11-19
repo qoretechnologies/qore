@@ -35,6 +35,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/WeakListReferenceNode.h"
 #include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 namespace {
 class StrictBooleanLogicalEqualsOperatorNode : public QoreLogicalEqualsOperatorNode {
@@ -124,7 +125,7 @@ static int try_plugin_binary_parse_eq(QoreParseContext& parse_context, const Qor
         const QoreTypeInfo* rti, const char* operation_name, const QoreParseAnalysis& left_analysis,
         const QoreParseAnalysis& right_analysis, const QoreTypeInfo*& typeInfo) {
     QorePluginResolvedOperationInfo plugin_op;
-    ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+    ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
     int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, rti, operation_name,
         QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
     if (plugin_rc) {

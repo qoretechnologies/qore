@@ -35,6 +35,7 @@
 
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreSandboxProvenance.h"
 
 #include <map>
 
@@ -346,6 +347,8 @@ public:
             const qore_class_private* class_ctx = nullptr) : QoreClosureBase(n_closure, cv, class_ctx),
             pgm(::getProgram()) {
         pgm->depRef();
+        // a closure of library module code records the restrictions of the code that creates it (qore#6520)
+        qore_capture_call_reference_origin(this, qore_closure_code_program(this));
     }
 
     DLLLOCAL virtual ~QoreClosureNode() {
@@ -403,6 +406,8 @@ public:
         if (closure->needsTypeContext()) {
             captureObjectReceiver(obj);
         }
+        // a closure of library module code records the restrictions of the code that creates it (qore#6520)
+        qore_capture_call_reference_origin(this, qore_closure_code_program(this));
     }
 
     DLLLOCAL ~QoreObjectClosureNode() {

@@ -13,6 +13,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/QoreColumnarResultPrivate.h"
 
 #include <algorithm>
 #include <cctype>
@@ -4681,13 +4682,13 @@ QoreColumnarResult::QoreColumnarResult() {
 QoreColumnarResult::~QoreColumnarResult() {
 }
 
-int QoreColumnarResult::setRowCount(size_t n_rows, ExceptionSink* xsink) {
-    if (!columns.empty() && row_count != n_rows) {
+int qore_columnar_result_private::setRowCount(size_t n_rows, ExceptionSink* xsink) {
+    if (!b->columns.empty() && b->row_count != n_rows) {
         xsink->raiseException("COLUMNAR-RESULT-ERROR",
-            "column has " QLLD " rows, expected " QLLD, (int64)n_rows, (int64)row_count);
+            "column has " QLLD " rows, expected " QLLD, (int64)n_rows, (int64)b->row_count);
         return -1;
     }
-    row_count = n_rows;
+    b->row_count = n_rows;
     return 0;
 }
 
@@ -4700,11 +4701,11 @@ int QoreColumnarResult::addColumn(const char* name, QoreValue data, QoreColumnar
 
 int QoreColumnarResult::addColumn(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         ExceptionSink* xsink) {
-    return addColumnIntern(name, data, schema, COLUMNAR_ADD_CONVERT | COLUMNAR_ADD_CHECK, "COLUMNAR-SCHEMA-ERROR",
+    return qore_columnar_result_private(this).addColumnIntern(name, data, schema, COLUMNAR_ADD_CONVERT | COLUMNAR_ADD_CHECK, "COLUMNAR-SCHEMA-ERROR",
         xsink);
 }
 
-int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
+int qore_columnar_result_private::addColumnIntern(const char* name, QoreValue data, const QoreColumnarTypeDescriptor& schema,
         int flags, const char* err, ExceptionSink* xsink) {
     bool script_values = flags & COLUMNAR_ADD_SCRIPT_VALUES;
     ValueHolder data_holder(data, xsink);
@@ -4742,7 +4743,7 @@ int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const 
                 return -1;
             }
 
-            columns.emplace_back(name, column_schema, column_value.release());
+            b->columns.emplace_back(name, column_schema, column_value.release());
             return 0;
         }
     }
@@ -4752,11 +4753,11 @@ int QoreColumnarResult::addColumnIntern(const char* name, QoreValue data, const 
         if (columnar_check_column(name, column_schema, data, flags & COLUMNAR_ADD_STRICT, err, xsink)) {
             return -1;
         }
-        columns.emplace_back(name, column_schema, data_holder.release());
+        b->columns.emplace_back(name, column_schema, data_holder.release());
         return 0;
     }
 
-    columns.emplace_back(name, schema, data_holder.release());
+    b->columns.emplace_back(name, schema, data_holder.release());
     return 0;
 }
 
@@ -4849,15 +4850,15 @@ static int columnar_shape_from_explicit_schema(const char* name, QoreColumnarTyp
 
 QoreColumnarResult* QoreColumnarResult::fromColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
         ExceptionSink* xsink) {
-    return fromColumnHashIntern(columns, desc, false, xsink);
+    return qore_columnar_result_private::fromColumnHashIntern(columns, desc, false, xsink);
 }
 
-QoreColumnarResult* QoreColumnarResult::fromScriptColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
+QoreColumnarResult* qore_columnar_result_private::fromScriptColumnHash(const QoreHashNode* columns, const QoreHashNode* desc,
         ExceptionSink* xsink) {
     return fromColumnHashIntern(columns, desc, true, xsink);
 }
 
-QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc,
+QoreColumnarResult* qore_columnar_result_private::fromColumnHashIntern(const QoreHashNode* columns, const QoreHashNode* desc,
         bool script_values, ExceptionSink* xsink) {
     assert(xsink);
     if (!columns) {
@@ -4909,7 +4910,7 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
                 schema.scale = buffer->getDecimalScale();
             }
             // the buffer is the column data as given, so the schema is checked against it strictly
-            if (rv->addColumnIntern(i.getKey(), value.refSelf(), schema, COLUMNAR_ADD_CHECK | COLUMNAR_ADD_STRICT
+            if (qore_columnar_result_private(rv).addColumnIntern(i.getKey(), value.refSelf(), schema, COLUMNAR_ADD_CHECK | COLUMNAR_ADD_STRICT
                 | (script_values ? COLUMNAR_ADD_SCRIPT_VALUES : 0),
                     "COLUMNAR-SCHEMA-ERROR", xsink)) {
                 return nullptr;
@@ -4957,7 +4958,7 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
         // the schema can come from a "schema" sub-hash of the description, whose native type can make a list column
         // that the shape left as a list a dense column, so its values are converted and checked there; the schema
         // is then checked against the storage strictly
-        if (rv->addColumnIntern(i.getKey(), column_value.release(), schema, COLUMNAR_ADD_CONVERT | COLUMNAR_ADD_CHECK
+        if (qore_columnar_result_private(rv).addColumnIntern(i.getKey(), column_value.release(), schema, COLUMNAR_ADD_CONVERT | COLUMNAR_ADD_CHECK
                 | COLUMNAR_ADD_STRICT | (script_values ? COLUMNAR_ADD_SCRIPT_VALUES : 0),
                 "COLUMNAR-SCHEMA-ERROR", xsink)) {
             return nullptr;
@@ -4969,15 +4970,15 @@ QoreColumnarResult* QoreColumnarResult::fromColumnHashIntern(const QoreHashNode*
 
 QoreColumnarResult* QoreColumnarResult::fromRows(const QoreListNode* rows, const QoreHashNode* desc,
         ExceptionSink* xsink) {
-    return fromRowsIntern(rows, desc, false, xsink);
+    return qore_columnar_result_private::fromRowsIntern(rows, desc, false, xsink);
 }
 
-QoreColumnarResult* QoreColumnarResult::fromScriptRows(const QoreListNode* rows, const QoreHashNode* desc,
+QoreColumnarResult* qore_columnar_result_private::fromScriptRows(const QoreListNode* rows, const QoreHashNode* desc,
         ExceptionSink* xsink) {
     return fromRowsIntern(rows, desc, true, xsink);
 }
 
-QoreColumnarResult* QoreColumnarResult::fromRowsIntern(const QoreListNode* rows, const QoreHashNode* desc,
+QoreColumnarResult* qore_columnar_result_private::fromRowsIntern(const QoreListNode* rows, const QoreHashNode* desc,
         bool script_values, ExceptionSink* xsink) {
     assert(xsink);
     if (!rows) {
@@ -5174,7 +5175,7 @@ QoreColumnarResult* QoreColumnarResult::deserialize(const QoreHashNode* sdata, E
         }
         // serialized data can come from an untrusted source: its schema is checked strictly against the data, which
         // is not converted (qore#6214)
-        if (rv->addColumnIntern(name.c_str(), data.release(), schema, COLUMNAR_ADD_CHECK | COLUMNAR_ADD_STRICT
+        if (qore_columnar_result_private(rv).addColumnIntern(name.c_str(), data.release(), schema, COLUMNAR_ADD_CHECK | COLUMNAR_ADD_STRICT
                 | COLUMNAR_ADD_SCRIPT_VALUES,
                 "DESERIALIZATION-ERROR", xsink)) {
             return nullptr;
@@ -5417,7 +5418,7 @@ QoreColumnarResult* QoreColumnarResult::filter(QoreValue mask, ExceptionSink* xs
             return nullptr;
         }
         // the data is made from the data of a column whose schema was checked when it was added
-        if (rv->addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
+        if (qore_columnar_result_private(rv).addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
             return nullptr;
         }
     }
@@ -5442,7 +5443,7 @@ QoreColumnarResult* QoreColumnarResult::take(const QoreListNode* row_indices, Ex
             return nullptr;
         }
         // the data is made from the data of a column whose schema was checked when it was added
-        if (rv->addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
+        if (qore_columnar_result_private(rv).addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
             return nullptr;
         }
     }
@@ -5469,7 +5470,7 @@ QoreColumnarResult* QoreColumnarResult::slice(size_t offset, size_t count, Excep
             return nullptr;
         }
         // the data is made from the data of a column whose schema was checked when it was added
-        if (rv->addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
+        if (qore_columnar_result_private(rv).addColumnIntern(column.name.c_str(), data.release(), column.schema, 0, nullptr, xsink)) {
             return nullptr;
         }
     }
@@ -5599,9 +5600,9 @@ QoreValue QoreColumnarResult::getColumnValue(const char* name, ExceptionSink* xs
     return column->data.refSelf();
 }
 
-void QoreColumnarResult::attach(QoreObject& self) const {
+void qore_columnar_result_private::attach(QoreObject& self) const {
     bool registered = false;
-    for (const Column& column : columns) {
+    for (const QoreColumnarResult::Column& column : b->columns) {
         if (!needs_scan(column.data)) {
             continue;
         }
@@ -5635,7 +5636,7 @@ QoreObject* qore_columnar_result_to_object(QoreColumnarResult* result, Exception
     ReferenceHolder<QoreColumnarResult> result_holder(result, xsink);
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_COLUMNARRESULT, nullptr), xsink);
     obj->setPrivate(CID_COLUMNARRESULT, result_holder.release());
-    result->attach(**obj);
+    qore_columnar_result_private(result).attach(**obj);
     return obj.release();
 }
 
