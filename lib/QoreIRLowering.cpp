@@ -7845,16 +7845,43 @@ void QoreIRLowering::recordFoldAccumulator(const QoreIRPhiInstruction* accumulat
         return;
     }
     FunctionalSourceCapture& capture = functional_source_captures.back();
-    capture.accumulator = accumulator->result;
+    capture.accumulator = QoreIRValue();
     capture.accumulator_values.clear();
     // the values of the back edges: not the Phi itself (a path that keeps the accumulator) or its initial value
+    std::vector<QoreIRValue> values;
     for (const QoreIRPhiIncoming& inc : accumulator->incoming) {
         if (!inc.value.isValid() || inc.value.id == accumulator->result.id || inc.value.id == initial.id
-                || std::any_of(capture.accumulator_values.begin(), capture.accumulator_values.end(),
+                || std::any_of(values.begin(), values.end(),
                     [&inc](const QoreIRValue& v) { return v.id == inc.value.id; })) {
             continue;
         }
-        capture.accumulator_values.push_back(inc.value);
+        values.push_back(inc.value);
+    }
+    // only a back-edge value that is a Phi (a conditional expression of the fold's arguments, the value of a fused
+    // pipeline's fold) or the value that the discarded temporaries of the fold's expression keep can leave the
+    // accumulator's Phi with a reference of its own: a call's value, an element or the result of an operator (foldl
+    // $1 + $2, l) is taken over by the Phi, and the Phi after the loop takes the accumulator over, so nothing is
+    // emitted for them
+    bool needed = false;
+    for (const auto& block : builder.getFunction()->blocks) {
+        for (const auto& inst : block->instructions) {
+            if ((inst->opcode != QoreIROpcode::Phi && inst->opcode != QoreIROpcode::DiscardTempsKeep)
+                    || !inst->result.isValid()) {
+                continue;
+            }
+            if (std::any_of(values.begin(), values.end(),
+                    [&inst](const QoreIRValue& v) { return v.id == inst->result.id; })) {
+                needed = true;
+                break;
+            }
+        }
+        if (needed) {
+            break;
+        }
+    }
+    if (needed) {
+        capture.accumulator = accumulator->result;
+        capture.accumulator_values = std::move(values);
     }
 }
 
