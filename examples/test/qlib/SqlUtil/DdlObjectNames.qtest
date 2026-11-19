@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# The names of types and their attributes, functions, procedures, packages and materialized views in the DDL of the
+# PostgreSQL, Oracle, MySQL and SQL Server drivers are quoted as identifiers, as the names of tables and columns are
+# (qore#6579); the example of AbstractTable::addCustomCopOperator() is safe.
+
+%modern
+
+%try-module sqlite3
+%define NoSqlite
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires OracleSqlUtilBase
+%requires MysqlSqlUtil
+%requires MssqlSqlUtilBase
+
+%exec-class DdlObjectNamesTest
+
+class DdlObjectNamesTest inherits QUnit::Test {
+    constructor() : Test("DDL object names", "1.0") {
+        addTestCase("PostgreSQL types", \pgsqlTypeTest());
+        addTestCase("PostgreSQL functions", \pgsqlFunctionTest());
+        addTestCase("Oracle code objects", \oracleTest());
+        addTestCase("MySQL functions", \mysqlTest());
+        addTestCase("SQL Server functions", \mssqlTest());
+        addTestCase("the custom column operator example", \customCopTest());
+        set_return_value(main());
+    }
+
+    pgsqlTypeTest() {
+        PgsqlType t("my type", "a int, b text");
+        assertEq("create type \"my type\" as (a int, b text)", t.getCreateSql());
+        assertEq("drop type \"my type\" cascade", t.getDropSql({"force": True}));
+        assertEq("alter type \"my type\" rename to \"x; drop table t\"", t.getRenameSql("x; drop table t"));
+        # a new name given as a quoted identifier is kept
+        assertEq("alter type \"my type\" rename to \"X\"", t.getRenameSql("\"X\""));
+        # a plain name is as before
+        PgsqlType plain("s.t_x", "a int");
+        assertEq("create type s.t_x as (a int)", plain.getCreateSql());
+        # attribute names are identifiers: "user" is a reserved word
+        PgsqlType old("t_x", "a int, b text");
+        PgsqlType new_t("t_x", "a bigint, user text, c int");
+        assertEq(("alter type t_x alter attribute a type bigint", "alter type t_x rename attribute b to \"user\"",
+            "alter type t_x add attribute c int"), new_t.getModifySql(old));
+    }
+
+    pgsqlFunctionTest() {
+        PgsqlFunction f("my func(int)", "returns int as $$ select 1 $$ language sql");
+        assertEq("create function \"my func\"(int) returns int as $$ select 1 $$ language sql", f.getCreateSql()[0]);
+        assertEq("drop function \"my func\"(int)", f.getDropSql());
+        assertEq("alter function \"my func\"(int) rename to f2", f.getRenameSql("f2")[0]);
+        # a schema and a quoted name are kept
+        assertEq("drop function s.\"F(x)\"(a integer, b text)",
+            new PgsqlFunction("s.\"F(x)\"(a integer, b text)", "x").getDropSql());
+        assertEq("drop function f()", new PgsqlFunction("f()", "x").getDropSql());
+        # the argument list as the server gives it, with defaults and quoted identifiers
+        assertEq("create function f(a text DEFAULT 'x;y'::text, \"b)\" numeric(10,2)) x",
+            new PgsqlFunction("f(a text DEFAULT 'x;y'::text, \"b)\" numeric(10,2))", "x").getCreateSql()[0]);
+        # an argument list that is not one list of types
+        foreach string sig in ("f(int); drop table t; --", "f(int) cascade; drop table t", "f(int /* x */)",
+                "f(int -- x\n)", "f1(int), victim_fn(int)", "f(int) returns int security definer as (x)",
+                "f2(a int) returns text language sql as $q$select $x$\"$x$$q$; drop table victim; --\")",
+                "f(a text default E'\\' ); drop table t; --')", "f(a text default 'unterminated)", "f((int)") {
+            assertThrows("FUNCTION-NAME-ERROR", \new PgsqlFunction(sig, "x").getDropSql(), NOTHING, sig);
+        }
+    }
+
+    oracleTest() {
+        OracleFunction f("my func", "my func return number is begin return 1; end;");
+        assertEq("drop function \"MY FUNC\"", f.getDropSql());
+        assertEq("rename \"MY FUNC\" to \"X; DROP TABLE T\"", f.getRenameSql("x; drop table t")[0]);
+        assertEq("drop function s.f", new OracleFunction("s.f", "f return number").getDropSql());
+        assertEq("drop package \"P X\"", new OraclePackage("p x", "p x as end;").getDropSql());
+        assertEq("drop type \"T X\" force", new OracleType("t x", "t x as object (a number)").getDropSql({
+            "force": True}));
+        OracleMaterializedView mv("mv x", "select 1 from dual");
+        assertRegex("^create materialized view \"MV X\"", mv.getCreateSql()[0]);
+        assertEq("drop materialized view \"MV X\"", mv.getDropSql());
+        # a reserved word that Oracle takes unquoted is quoted in upper case, as Oracle stores it
+        assertEq("drop package \"NOTFOUND\"", new OraclePackage("notfound", "notfound as end;").getDropSql());
+        # a name with a double quote, which Oracle does not allow
+        assertThrows("IDENTIFIER-ERROR", \new OracleFunction("a\"b", "x").getDropSql());
+    }
+
+    mysqlTest() {
+        MysqlFunction f("my func", "x");
+        assertEq("drop function `my func`", f.getDropSql());
+        assertEq("alter function `my func` rename to `x; drop table t`", f.getRenameSql("x; drop table t")[0]);
+        assertEq("drop function f_x", new MysqlFunction("f_x", "x").getDropSql());
+    }
+
+    mssqlTest() {
+        MssqlFunction f("my func", "() returns int as begin return 1 end");
+        assertEq("create function [my func] () returns int as begin return 1 end", f.getCreateSql()[0]);
+        assertEq("drop function [my func]", f.getDropSql());
+        assertEq("drop function dbo.f_x", new MssqlFunction("dbo.f_x", "x").getDropSql());
+        # the new name of a rename must be an identifier
+        assertRegex("sp_rename 'my func', 'f2'", f.getRenameSql("f2")[0]);
+        # a name with a quote or a comment marker, which drivers read as SQL also in brackets
+        assertThrows("IDENTIFIER-ERROR", \f.getRenameSql(), ("a'b",));
+        assertThrows("IDENTIFIER-ERROR", \f.getRenameSql(), ("a--b",));
+    }
+
+    customCopTest() {
+%ifdef NoSqlite
+        testSkip("the sqlite3 module is not available");
+%else
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        ds.exec("create table cop_t (s varchar(20))");
+        ds.exec("insert into cop_t values ('x')");
+        Table t(ds, "cop_t");
+        # as in the documentation of addCustomCopOperator(): the argument is given to the code as an SQL literal
+        hash<auto> concat_op = {
+            "arg": Type::String,
+            "sqlvalue": True,
+            "code": string sub (string cve, string arg) {
+                return sprintf("(%s || %s)", cve, arg);
+            },
+        };
+        t.addCustomCopOperator("concat_lit", concat_op);
+        string sql;
+        list<auto> rows = t.selectRows({"columns": cop_as(make_cop("concat_lit", "s", "a') or (1=1"), "v")}, \sql);
+        assertEq(("xa') or (1=1",), map $1.v, rows);
+        assertRegex("'a''\\) or \\(1=1'", sql);
+%endif
+    }
+}

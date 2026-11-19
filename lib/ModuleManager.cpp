@@ -65,6 +65,7 @@
 #include <glob.h>
 #else
 #include "qore/intern/qore_glob.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 #endif
 
 #include <algorithm>
@@ -180,7 +181,7 @@ void QoreModuleManager::forkChild(int tid) {
     for (auto& i : map) {
         i.second->reinitParseOptionMaskLockAfterFork();
     }
-    module_load_cond.reinitAfterFork();
+    qore_condition_ops(module_load_cond).reinitAfterFork();
     mutex.reinitAfterFork(qore_module_manager_mutex_attr());
 }
 
@@ -1884,6 +1885,8 @@ void QoreModuleManager::trySetUserBinaryModuleDependency(const char* name) {
     // a binary module that an AOT module requires is recorded as for a user module, so it is deleted after it
     if (old_name && strcmp(old_name, name) && isUserModuleContext(old_name, true)) {
         binary_user_dep_map.addDep(name, old_name);
+        // required while the requiring module is parsed: not only at run time (qore#6251)
+        runtime_dep_map.removeDep(name, old_name);
     }
 }
 
@@ -1907,10 +1910,16 @@ void QoreModuleManager::trySetModuleProgramUserDependencyLocked(const QoreProgra
             // a user module that the loaded module requires is not recorded as requiring it: it would make a cycle,
             // which delUser() breaks at one of its modules anyway
             if (!hasUserModuleDependencyPath(requirer, name)) {
+                // a requirement that is new is a requirement at run time only, and one that was marked so stays one
+                // (qore#6251)
+                const bool run_time_only = !rmd_map.hasDep(requirer, name) || runtime_dep_map.hasDep(name, requirer);
                 setUserModuleDependency(name, requirer);
+                if (run_time_only) {
+                    runtime_dep_map.addDep(name, requirer);
+                }
             }
-        } else if (strcmp(i->first, name)) {
-            aot_user_dep_map.addDep(name, i->first);
+        } else if (strcmp(i->first, name) && !aot_user_dep_map.addDep(name, i->first)) {
+            runtime_dep_map.addDep(name, i->first);
         }
         return;
     }
@@ -2051,6 +2060,9 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     // A call-only context is not enough when a child Program loads a module from
     // a thread already running in its parent Program; getProgram() prefers
     // current_pgm over call_program_context.
+    // The module's namespace is merged into the Program, which is only made current, not entered: the Program is
+    // usually being parsed, and a module whose namespace initialization runs code of the Program enters it itself
+    // (qore#6185; an AOT module does, see qore_aot_module_ns_init_impl())
     QoreProgramContextHelper pcch(tpgm);
 
     RootQoreNamespace* rns = tpgm->getRootNS();
@@ -3382,7 +3394,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
             if (p) {
                 modulePath = raw_path;
-                q_normalize_path(modulePath, p->parseGetScriptDir());
+                q_normalize_path(modulePath, qore_program_ops(p).parseGetScriptDir());
                 raw_path = modulePath.c_str();
             }
         }
@@ -3491,7 +3503,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
             if (p) {
                 modulePath = raw_path;
-                q_normalize_path(modulePath, p->parseGetScriptDir());
+                q_normalize_path(modulePath, qore_program_ops(p).parseGetScriptDir());
                 raw_path = modulePath.c_str();
             }
         }
@@ -3511,7 +3523,7 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
         if (p) {
             modulePath = raw_path;
-            q_normalize_path(modulePath, p->parseGetScriptDir());
+            q_normalize_path(modulePath, qore_program_ops(p).parseGetScriptDir());
             raw_path = modulePath.c_str();
         }
 
@@ -4145,7 +4157,11 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     if (trusted || !parent_pgm || &module_pgm == parent_pgm) {
         return;
     }
-    QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getSandboxManagerRef();
+    // the loading Program's own manager, not the sandbox that it keeps of the code that created it (see
+    // qore_program_private::creator_sandbox_manager), which governs the module's callers through the walk of their
+    // call stack; a module that sandboxed code, or code acting for it, loads gets the sandbox of that code below (all
+    // purposes, as before: also in a Program that trusted code created in a system-policy capability)
+    QoreSandboxManager* sm = qore_program_private::get(*parent_pgm)->getOwnSandboxManagerRef();
     // loaded by library code for code that is not trusted: governed by the sandbox of that code
     if (!sm) {
         sm = qore_module_init_lift_manager_ref();
@@ -4455,7 +4471,7 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     modulePath += feature;
     modulePath += ".qm";
 
-    const char* td = p ? p->parseGetScriptDir() : nullptr;
+    const char* td = p ? qore_program_ops(p).parseGetScriptDir() : nullptr;
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, parseOptions);
@@ -4682,6 +4698,177 @@ bool QoreModuleManager::findAvailableOptionalModule(ExceptionSink& xsink, const 
         tmp.clear();
     }
     return false;
+}
+
+bool QoreModuleManager::checkAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+        std::string& available) {
+    // the locks of a module load, in its order (see runTimeLoadModule())
+    QoreModuleLoadLockHelper aot_init_al;
+    OptLocker ol(&mutex);
+    return findAvailableOptionalModule(xsink, specs, nullptr, available);
+}
+
+//! The checks of the loader for the optional modules of a module of a build tree (see qore_aot_check_module_sources())
+/** @param deps the files of the module's dependency file
+*/
+static QoreAOTModuleCheck qore_aot_check_module_optional_modules(const char* qmod, const std::set<std::string>& deps,
+        std::string& reason, std::string& dependency, std::string& error) {
+    QoreAOTModuleFileInfo info;
+    switch (qoreAOTReadModuleInfo(qmod, info, error)) {
+        case QoreAOTModuleInfoStatus::NONE:
+            // a module without metadata records no failed %try-module directive
+            return QoreAOTModuleCheck::CURRENT;
+        case QoreAOTModuleInfoStatus::INVALID:
+            error = "cannot read its module metadata: " + error;
+            return QoreAOTModuleCheck::ERROR;
+        case QoreAOTModuleInfoStatus::FOUND:
+            break;
+    }
+    if (info.unavailable_optional_modules.empty()) {
+        return QoreAOTModuleCheck::CURRENT;
+    }
+
+    // the dependencies are found as the loader finds them for the module: with its own module path directories
+    // around those of the process (see loadBinaryModuleFromPath())
+    std::unique_ptr<QoreModulePathScope> path_scope;
+    if (!info.prepended_module_paths.empty() || !info.appended_module_paths.empty()) {
+        path_scope = std::make_unique<QoreModulePathScope>(nullptr, info.prepended_module_paths,
+            info.appended_module_paths);
+    }
+
+    // a candidate file of a module that the compile did not see (the dependency file lists those it saw, whose
+    // contents the caller has compared): the module may be available now
+    for (const std::string& spec : info.unavailable_optional_modules) {
+        size_t end = spec.find_first_of(" \t<>=!");
+        std::string name = spec.substr(0, end);
+        if (name.empty()) {
+            continue;
+        }
+        std::vector<std::string> files;
+        QMM.getModuleCandidateFiles(name.c_str(), nullptr, files);
+        for (const std::string& file : files) {
+            if (deps.find(file) == deps.end()) {
+                reason = "a file of optional module '" + spec + "' was not there when it was compiled";
+                dependency = file;
+                return QoreAOTModuleCheck::STALE;
+            }
+        }
+    }
+
+    // the module loader's own check: a module that can be loaded now
+    ExceptionSink xsink;
+    std::string available;
+    if (QMM.checkAvailableOptionalModule(xsink, info.unavailable_optional_modules, available)) {
+        reason = "optional module '" + available + "' was not available when it was compiled, but it is available "
+            "now";
+        return QoreAOTModuleCheck::STALE;
+    }
+    if (xsink) {
+        error = "its optional modules cannot be checked in this thread";
+        xsink.clear();
+        return QoreAOTModuleCheck::ERROR;
+    }
+    return QoreAOTModuleCheck::CURRENT;
+}
+
+QoreAOTModuleCheck qore_aot_check_module_sources(const char* qmod, std::string& reason, std::string& dependency,
+        std::string& error) {
+#ifdef _Q_WINDOWS
+    // a module of a build tree is not checked on Windows (see qore_build_aot_module_is_stale())
+    return QoreAOTModuleCheck::CURRENT;
+#else
+    struct stat sb;
+    if (stat(qmod, &sb) || !S_ISREG(sb.st_mode)) {
+        error = "it is not a regular file";
+        return QoreAOTModuleCheck::ERROR;
+    }
+    const int64 qmod_mtime = qore_module_stat_mtime_ns(sb);
+
+    std::string depfile = std::string(qmod) + ".d";
+    std::map<std::string, QoreAOTModuleSourceFingerprint> fingerprints;
+    std::string fingerprint_file = depfile + QORE_AOT_MODULE_FINGERPRINT_SUFFIX;
+    if (!qore_aot_read_module_source_fingerprints(fingerprint_file, fingerprints)) {
+        error = "cannot read its source fingerprints";
+        dependency = fingerprint_file;
+        return QoreAOTModuleCheck::ERROR;
+    }
+    std::vector<std::string> deps;
+    struct stat dsb;
+    if (stat(depfile.c_str(), &dsb) && errno == ENOENT) {
+        // Ninja reads the dependency file of a rule into its log and removes it: the fingerprints, which qcc writes
+        // with it, list the same files (but one that qcc could not read)
+        for (const auto& i : fingerprints) {
+            deps.push_back(i.first);
+        }
+    } else {
+        std::string depfile_target;
+        if (!qore_read_module_depfile(depfile, depfile_target, deps)) {
+            error = "cannot read its dependency file";
+            dependency = depfile;
+            return QoreAOTModuleCheck::ERROR;
+        }
+        if (!qore_module_depfile_names_module(depfile, depfile_target, qmod)) {
+            error = "its dependency file describes another module ('" + depfile_target + "')";
+            dependency = depfile;
+            return QoreAOTModuleCheck::ERROR;
+        }
+    }
+
+    // the comparison of the loader (qore_module_source_changed()), except that a file that cannot be read fails
+    ExceptionSink xsink;
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT module source check")) {
+            error = "cancelled";
+            return QoreAOTModuleCheck::ERROR;
+        }
+        const std::string& dep = deps[i];
+        QoreAOTSourceStatFingerprint st;
+        if (!getAOTSourceStatFingerprint(dep.c_str(), st)) {
+            reason = "a dependency no longer exists";
+            dependency = dep;
+            return QoreAOTModuleCheck::STALE;
+        }
+        auto fi = fingerprints.find(dep);
+        if (fi == fingerprints.end()) {
+            // as without a fingerprint: a newer file has changed
+            if (static_cast<int64>(st.mtime_ns) > qmod_mtime) {
+                reason = "a dependency is newer than the module";
+                dependency = dep;
+                return QoreAOTModuleCheck::STALE;
+            }
+            continue;
+        }
+        if (st.size == fi->second.size && st.mtime_ns == fi->second.mtime_ns) {
+            continue;
+        }
+        if (st.size != fi->second.size) {
+            reason = "a dependency has changed since it was compiled";
+            dependency = dep;
+            return QoreAOTModuleCheck::STALE;
+        }
+        uint64_t hash;
+        if (!qore_module_source_hash(dep, st, hash, xsink)) {
+            xsink.clear();
+            error = "cannot read a dependency";
+            dependency = dep;
+            return QoreAOTModuleCheck::ERROR;
+        }
+        if (hash != fi->second.hash) {
+            reason = "a dependency has changed since it was compiled";
+            dependency = dep;
+            return QoreAOTModuleCheck::STALE;
+        }
+    }
+
+    // a module with failed %try-module directives (qcc lists the paths where their modules are not)
+    struct stat osb;
+    std::string optional = depfile + ".optional";
+    if (stat(optional.c_str(), &osb) || !osb.st_size) {
+        return QoreAOTModuleCheck::CURRENT;
+    }
+    std::set<std::string> dep_set(deps.begin(), deps.end());
+    return qore_aot_check_module_optional_modules(qmod, dep_set, reason, dependency, error);
+#endif
 }
 
 void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* pgm,
@@ -5475,8 +5662,8 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     UnlockedModuleProgramRelease<ReferenceHolder<QoreProgram>> pholder_release(pholder);
     assert(feature);
     printd(5, "QoreModuleManager::loadUserModuleFromPath() path: '%s' feature: '%s' tpgm: %p ('%s') path_pgm: %p "
-        "('%s')\n", path, feature, tpgm, tpgm && tpgm->parseGetScriptDir() ? tpgm->parseGetScriptDir() : "n/a",
-        path_pgm, path_pgm && path_pgm->parseGetScriptDir() ? path_pgm->parseGetScriptDir() : "n/a");
+        "('%s')\n", path, feature, tpgm, tpgm && qore_program_ops(tpgm).parseGetScriptDir() ? qore_program_ops(tpgm).parseGetScriptDir() : "n/a",
+        path_pgm, path_pgm && qore_program_ops(path_pgm).parseGetScriptDir() ? qore_program_ops(path_pgm).parseGetScriptDir() : "n/a");
 
     if (checkBlacklist(xsink, feature)) {
         return nullptr;
@@ -5532,7 +5719,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         | get_masked_module_parse_options(p, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS, load_mask, &mask_added, mpgm);
     mask_added &= ~QoreParseOptions(USER_MOD_PO);
 
-    const char* td = p ? p->parseGetScriptDir() : nullptr;
+    const char* td = p ? qore_program_ops(p).parseGetScriptDir() : nullptr;
 
     if (mpgm) {
         qore_program_private::forceReplaceParseOptions(*mpgm, po);
@@ -6780,17 +6967,18 @@ void QoreModuleManager::deleteUserModule(module_map_t::iterator i) {
 }
 
 //! The deletion rank of a module that cleanup() can delete: the module with the lowest rank is deleted first
+/** The rank is given by the role of the module in the dependency graph, never by whether it was loaded from its source
+    or from its AOT module (qore#6251): a stale AOT module that falls back to its source (\c AOT-MODULE-STALE,
+    \c BINARY-MODULE-SOURCE-FALLBACK) is the same module, with the same requirements, and must be deleted in the same
+    order
+*/
 enum class CleanupRank {
     //! a native binary module: it can own Programs holding objects of the classes of any module loaded
     NATIVE = 0,
-    //! a user module that a native binary module left needs deleted first: it requires one, maybe indirectly
-    NATIVE_DEPENDENT_USER = 1,
-    //! an AOT module that a native binary module left needs deleted first
-    NATIVE_DEPENDENT_AOT = 2,
-    //! another user module
-    USER = 3,
-    //! another AOT module
-    AOT = 4,
+    //! a module that a native binary module left needs deleted first: it requires one, maybe indirectly
+    NATIVE_DEPENDENT = 1,
+    //! another module
+    OTHER = 2,
 };
 
 void QoreModuleManager::cleanup() {
@@ -6811,14 +6999,22 @@ void QoreModuleManager::cleanup() {
     //   Program, for example), which can hold objects of the classes of any module imported into them, user and AOT
     //   modules that no recorded dependency links to the native module; then the modules that a native binary module
     //   left requires (directly or indirectly), as they must be deleted before it; then the other modules
-    // - user modules are deleted before AOT user modules of the same rank, and modules of the same rank in the order
-    //   of their names
+    // - modules of the same rank are deleted in the order of their names; whether a module is a user module or an AOT
+    //   module does not matter (qore#6251): a module whose stale AOT module fell back to its source is a user module,
+    //   and the order must not depend on how a module was loaded
     // The data of the user and AOT module Programs has been cleared in delUser() and above, while all module Programs
     // existed, and the native binary modules that no module required have been deleted in delUser(); a native binary
-    // module left here is required by an AOT module or by a user module left.  A dependency cycle is broken at the
-    // module of the lowest rank.
+    // module left here is required by an AOT module or by a user module left.  A dependency cycle cannot be ordered:
+    // one of its modules is deleted before a module that requires it.  It is broken at the module of the lowest rank,
+    // and of those, at a module that the modules left require only because it was applied to their Programs at run
+    // time (load_module() called from their code, see runtime_dep_map): a module requiring another one with
+    // %requires can hold objects of its classes in the constants of its Program, initialized when it is parsed, which
+    // a module loaded later from its code cannot have given it.  So a cycle made by a run-time load is broken at the
+    // module loaded, and every module required with %requires is still deleted after the modules that require it.
     // module -> the modules left that it requires
     std::map<std::string, std::vector<std::string>> required_mods;
+    // requiring module -> the modules left that it requires only because they were applied to its Program at run time
+    std::map<std::string, strset_t> runtime_required_mods;
     // the native binary modules left
     strset_t native_mods;
     for (module_map_t::iterator i = map.begin(), e = map.end(); i != e; ++i) {
@@ -6828,10 +7024,18 @@ void QoreModuleManager::cleanup() {
             if (deps) {
                 req.assign(deps->begin(), deps->end());
             }
-            continue;
-        }
-        if (getBinaryModuleDependencies(i, req)) {
+        } else if (getBinaryModuleDependencies(i, req)) {
             native_mods.insert(i->first);
+        }
+        // the requirements recorded at run time only; a user module's are in rmd_map too, while those of a binary
+        // module listed in its own dependencies (those an AOT module was compiled with) are not run time ones, even
+        // if they were also recorded at run time
+        const bool user = i->second->isUser();
+        for (const auto& ri : runtime_dep_map) {
+            if (ri.second.find(i->first) != ri.second.end()
+                    && (user || std::find(req.begin(), req.end(), ri.first) == req.end())) {
+                runtime_required_mods[i->first].insert(ri.first);
+            }
         }
     }
     // a user module requiring a binary module
@@ -6894,11 +7098,23 @@ void QoreModuleManager::cleanup() {
             if (native_mods.find(j->first) != native_mods.end()) {
                 return CleanupRank::NATIVE;
             }
-            bool user = j->second->isUser();
             if (native_reach.find(j->first) != native_reach.end()) {
-                return user ? CleanupRank::NATIVE_DEPENDENT_USER : CleanupRank::NATIVE_DEPENDENT_AOT;
+                return CleanupRank::NATIVE_DEPENDENT;
             }
-            return user ? CleanupRank::USER : CleanupRank::AOT;
+            return CleanupRank::OTHER;
+        };
+        // true if the modules left require the module only because it was applied to their Programs at run time
+        auto required_at_run_time_only = [&](const std::string& name) {
+            for (const auto& ri : required_mods) {
+                if (ri.first == name || std::find(ri.second.begin(), ri.second.end(), name) == ri.second.end()) {
+                    continue;
+                }
+                auto rri = runtime_required_mods.find(ri.first);
+                if (rri == runtime_required_mods.end() || rri->second.find(name) == rri->second.end()) {
+                    return false;
+                }
+            }
+            return true;
         };
         // true if the module requires itself, directly or indirectly
         auto on_cycle = [&](const std::string& start) {
@@ -6926,9 +7142,11 @@ void QoreModuleManager::cleanup() {
         // the module of the lowest rank that no module left requires; if every module left is required by another
         // one, the modules left are in a cycle, which is broken at the module of the lowest rank among the modules
         // that are in a cycle (not one that the modules of a cycle require, like a native module that two modules
-        // that load each other at run time require, which must outlive them)
+        // that load each other at run time require, which must outlive them), and of those, at one that the modules
+        // left require only at run time if there is one
         module_map_t::iterator i = map.end();
-        CleanupRank rank = CleanupRank::AOT;
+        CleanupRank rank = CleanupRank::OTHER;
+        bool run_time_only = false;
         for (int pass = 0; pass < 2 && i == map.end(); ++pass) {
             strset_t cycle_mods;
             if (pass) {
@@ -6948,14 +7166,24 @@ void QoreModuleManager::cleanup() {
                     continue;
                 }
                 CleanupRank r = get_rank(j);
-                if (i == map.end() || r < rank) {
+                if (!pass) {
+                    if (i == map.end() || r < rank) {
+                        i = j;
+                        rank = r;
+                    }
+                    continue;
+                }
+                bool rto = required_at_run_time_only(j->first);
+                if (i == map.end() || r < rank || (r == rank && rto && !run_time_only)) {
                     i = j;
                     rank = r;
+                    run_time_only = rto;
                 }
             }
         }
         assert(i != map.end());
-        printd(5, "QoreModuleManager::cleanup() deleting '%s' (rank %d)\n", i->first, static_cast<int>(rank));
+        printd(5, "QoreModuleManager::cleanup() deleting '%s' (rank %d%s)\n", i->first, static_cast<int>(rank),
+            run_time_only ? ", required at run time only" : "");
         // the modules left that require the module (when it is deleted to break a cycle) require the native modules
         // that it requires in its place: their Programs hold the declarations that they imported from it, which can
         // name the classes of those modules, so such a native module is not deleted before them (issue #6501); the
@@ -7058,7 +7286,7 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     }
     QoreModuleCommandContext ctx(QoreModuleCommandContext::MC_PARSE, pgm, pgm, po, sandboxed);
     QoreModuleCommandScope scope(ctx);
-    mi->issueModuleCmd(loc, cmd, pgm->getParseExceptionSink());
+    mi->issueModuleCmd(loc, cmd, qore_program_ops(pgm).getParseExceptionSink());
     // a compiled program replays the command with the restrictions that were in force at the directive
     qore_program_private::get(*pgm)->addModuleParseCommand(mname, cmd, ctx.getParseOptions());
 }
@@ -7145,7 +7373,9 @@ int QoreModuleManager::issueRuntimeCmd(const char* mname, QoreProgram* pgm, cons
         assert(mi);
     }
 
-    // ensure the program is in context
+    // the handler runs with the target Program current; the switch keeps the thread's local data consistent with it
+    // (qore#6185, qore#6537).  It is not an entry: the command is judged by the caller sandbox above, and a replayed
+    // command as the directive of its source
     QoreProgramContextHelper pch(pgm);
 
     // the handler gets the restrictions of the issuing code, not those of the target Program it runs in (issue #5699)

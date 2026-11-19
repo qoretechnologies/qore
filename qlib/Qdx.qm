@@ -299,6 +299,15 @@ while (!tok.atEnd()) {
             return chr(b);
         }
 
+        #! Returns a character of the input for a test of an ASCII character class
+        /** The input is read byte by byte; a byte of a multi-byte character is not text on its own, and a regular
+            expression raises an exception for it (qore#6554).  It is given as an empty string, which, as the byte did
+            before, matches no class, negated or not (ex: \c [^a-z]), so the result of every test is unchanged
+        */
+        private:internal static *string asc(*string c) {
+            return (exists c && !c.isDataAscii()) ? "" : c;
+        }
+
         #! Returns the byte at offset from current position as a 1-byte string, or NOTHING.
         private:internal *string peekChar(int offset = 1) {
             *int b = input.getByte(pos + offset);
@@ -497,7 +506,7 @@ while (!tok.atEnd()) {
             }
 
             # Identifier (starts with letter or underscore)
-            if (c =~ /[a-zA-Z_]/) {
+            if (asc(c) =~ /[a-zA-Z_]/) {
                 return scanIdentifier();
             }
 
@@ -519,7 +528,7 @@ while (!tok.atEnd()) {
 
             while (pos < len) {
                 *string c = currentChar();
-                if (c =~ /[a-zA-Z0-9_]/) {
+                if (asc(c) =~ /[a-zA-Z0-9_]/) {
                     value += c;
                     advance();
                 } else if (c == ":" && peekChar() == ":") {
@@ -683,11 +692,11 @@ while (!tok.atEnd()) {
             *string c = currentChar();
 
             # Check for s (substitution), tr or y (transliteration)
-            if (c == "s" && peekChar() =~ /[^a-zA-Z0-9_]/) {
+            if (c == "s" && asc(peekChar()) =~ /[^a-zA-Z0-9_]/) {
                 return scanSubstitution(start_line, start_column);
             }
-            if ((c == "t" && peekChar() == "r" && peekChar(2) =~ /[^a-zA-Z0-9_]/) ||
-                (c == "y" && peekChar() =~ /[^a-zA-Z0-9_]/)) {
+            if ((c == "t" && peekChar() == "r" && asc(peekChar(2)) =~ /[^a-zA-Z0-9_]/) ||
+                (c == "y" && asc(peekChar()) =~ /[^a-zA-Z0-9_]/)) {
                 return scanTransliteration(start_line, start_column);
             }
 
@@ -716,7 +725,7 @@ while (!tok.atEnd()) {
                     value += c;
                     advance();
                     # Scan flags
-                    while (pos < len && currentChar() =~ /[gimsxn]/) {
+                    while (pos < len && asc(currentChar()) =~ /[gimsxn]/) {
                         value += currentChar();
                         advance();
                     }
@@ -781,7 +790,7 @@ while (!tok.atEnd()) {
                     ++pattern_count;
                     if (pattern_count >= 2) {
                         # Scan flags
-                        while (pos < len && currentChar() =~ /[gimsxn]/) {
+                        while (pos < len && asc(currentChar()) =~ /[gimsxn]/) {
                             value += currentChar();
                             advance();
                         }
@@ -870,7 +879,7 @@ while (!tok.atEnd()) {
             string marker = "";
             while (pos < len) {
                 *string c = currentChar();
-                if (c =~ /[a-zA-Z0-9_]/) {
+                if (asc(c) =~ /[a-zA-Z0-9_]/) {
                     marker += c;
                     value += c;
                     advance();

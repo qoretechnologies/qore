@@ -457,7 +457,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& valu
     inst->loc = loc;
     inst->result = func->createValue();
     inst->constant.kind = QoreIRConstant::Kind::String;
-    inst->constant.string_value = value;
+    inst->constant.setStringValue(value);
     QoreIRValueFacts facts;
     facts.type_info = stringTypeInfo;
     facts.assigned_state = QoreIRAssignedState::Assigned;

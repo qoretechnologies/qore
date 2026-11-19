@@ -293,11 +293,11 @@ string disabled_compile = compile(disabled,
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_AOT_STRING_PRODUCER_CONSUMER_FUSION=1");
 foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains",
         "fusedFalseStartsWith", "fusedFind", "fusedFindOffset", "fusedRFind",
-        "fusedSubstr", "fusedSize", "fusedLength",
+        "fusedSubstr", "fusedSize",
         "unrelatedPattern", "dynamicFindOffset", "dynamicSubstr",
         "localStartsWith", "localEndsWith", "localContains", "localFind",
         "localRFind", "localSubstr",
-        "staticContains", "instanceFind", "staticSubstr", "instanceLength")) {
+        "staticContains", "instanceFind", "staticSubstr")) {
     if (!enabled_compile.regex(sprintf(
             "IR-OPT-AOT-EFFECTS: [^\\n]*%s[^\\n]*:.*string-consumers=1",
             function))) {
@@ -307,7 +307,7 @@ foreach string function in (("fusedStartsWith", "fusedEndsWith", "fusedContains"
     }
 }
 if (enabled_compile
-            =~ /IR-OPT-AOT-EFFECTS: (intStringSubstr|sideEffectPattern|phiFind|phiSubstr)[^\n]*:.*string-consumers=[1-9]/
+            =~ /IR-OPT-AOT-EFFECTS: [^:\n]*(fusedLength|instanceLength|intStringSubstr|sideEffectPattern|phiFind|phiSubstr)[^\n]*:.*string-consumers=[1-9]/
         || disabled_compile =~ /string-consumers=[1-9]/) {
     printf("unsafe or disabled string consumer fusion:\n%s",
         enabled_compile + disabled_compile);

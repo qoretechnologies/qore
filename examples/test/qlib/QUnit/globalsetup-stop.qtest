@@ -1,0 +1,114 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the tests whose setup stops run in child processes of its own binary in the default mode
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class GlobalSetUpStopTest
+
+#! A skip or an exception in Test::globalSetUp() stops the test cases (issue #6659)
+/** Each child test has two test cases, which write a marker file when they run; its global setup skips the test or
+    raises an exception, or completes.  The test cases of a setup that did not complete are reported as skipped with
+    its reason and do not run; the global teardown still runs.
+*/
+class GlobalSetUpStopTest inherits QUnit::Test {
+    private {
+        const Script = "%modern
+%requires QUNIT_PATH
+%exec-class StoppedTest
+class StoppedTest inherits QUnit::Test {
+    constructor() : Test(\"StoppedTest\", \"1.0\", \\ARGV) {
+        addTestCase(\"first\", \\mark(), \"first\");
+        addTestCase(\"second\", \\mark(), \"second\");
+        set_return_value(main());
+    }
+    globalSetUp() {
+        switch (ENV.SETUP_MODE) {
+            case \"skip\": testSkip(\"the prerequisite is missing\");
+            case \"raise\": throw \"SETUP-ERROR\", \"the setup failed\";
+        }
+    }
+    globalTearDown() {
+        mark(\"teardown\");
+    }
+    mark(string name) {
+        File f();
+        f.open2(ENV.MARKER_DIR + \"/\" + name, O_CREAT | O_TRUNC | O_WRONLY);
+        assertTrue(True);
+    }
+}
+";
+        FsUtil::TmpDir tmp_dir("qunit-globalsetup-stop-");
+        string path;
+    }
+
+    constructor() : Test("globalSetUp stop", "1.0", \ARGV) {
+        path = tmp_dir.path + "/stopped.qtest";
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(replace(Script, "QUNIT_PATH", get_module_hash().QUnit.filename));
+        f.close();
+        addTestCase("a setup that skips", \skipTest());
+        addTestCase("a setup that raises an exception", \raiseTest());
+        addTestCase("a setup that completes", \completeTest());
+        set_return_value(main());
+    }
+
+    skipTest() {
+        hash<auto> res = runTest("skip");
+        # nothing failed: the test is skipped
+        assertEq(0, res.rc, res.out);
+        assertEq(("teardown",), res.marks, "the test cases did not run");
+        assertEq(3, countMatches("^Skipped: ", res.out), res.out);
+        assertEq(2, countMatches("^Skipped: (first|second): .*globalSetUp skipped the test: the prerequisite is "
+            "missing", res.out), res.out);
+    }
+
+    raiseTest() {
+        hash<auto> res = runTest("raise");
+        # the setup's error fails the test
+        assertEq(1, res.rc, res.out);
+        assertEq(("teardown",), res.marks, "the test cases did not run");
+        assertEq(1, countMatches("^ERROR: globalSetUp", res.out), res.out);
+        assertEq(2, countMatches("^Skipped: (first|second): .*not run: globalSetUp raised SETUP-ERROR: the setup "
+            "failed", res.out), res.out);
+    }
+
+    completeTest() {
+        hash<auto> res = runTest("none");
+        assertEq(0, res.rc, res.out);
+        assertEq(("first", "second", "teardown"), res.marks, "the test cases ran");
+        assertEq(2, countMatches("^Success: ", res.out), res.out);
+    }
+
+    #! runs the child test with the setup mode; returns its output, its exit status and the marker files it wrote
+    private hash<auto> runTest(string mode) {
+        string dir = tmp_dir.path + "/" + mode;
+        mkdir(dir);
+        string cmd;
+        # the library path is set again because a shell can remove it from its environment (macOS)
+        foreach string var in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH") {
+            if (ENV{var}) {
+                cmd += sprintf("%s='%s' ", var, ENV{var});
+            }
+        }
+        cmd += sprintf("SETUP_MODE=%s MARKER_DIR='%s' '%s' '%s' -v 2>&1", mode, dir,
+            TestInterpreter::qore_interpreter(), path);
+        int rc;
+        string out = backquote(cmd, \rc);
+        Dir d();
+        d.chdir(dir);
+        return {"out": out, "rc": rc, "marks": sort(d.listFiles() ?? ())};
+    }
+
+    #! returns the number of lines of the output that match the pattern
+    private static int countMatches(string pattern, string out) {
+        return (select out.split("\n"), regex($1, pattern)).size();
+    }
+}

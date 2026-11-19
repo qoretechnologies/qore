@@ -144,6 +144,13 @@ RestHandler handler(NOTHING, swagger);
 
 
     @section swagger_2_6 Swagger v2.6
+    - a path template with a parameter is checked and its pattern compiled when the schema is loaded: one that is not
+      valid (such as \c "/c/{a}/{b") raises \c INVALID-PATH-COMPONENT then (or the path is left out with
+      @ref Swagger::LM_IGNORE_INVALID_PATHS "LM_IGNORE_INVALID_PATHS"), instead of failing each request to it; the
+      \c pattern of a parameter or schema is compiled when the schema is loaded, which raises
+      \c REGEX-COMPILATION-ERROR for one that is not valid; and only the \c "*" of a content type that a request
+      accepts is a wildcard, so one such as \c "a/(*" is not acceptable instead of failing the request with
+      \c REGEX-COMPILATION-ERROR (issue #6603)
     - can be loaded first by code without terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO"): a debug print
       of a list content type was removed (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)
     - a value that a schema type refuses is reported with \c TYPE-VALUE-ERROR instead of \c RUNTIME-TYPE-ERROR, as by
@@ -507,6 +514,8 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
         optional_field(objType, oh, "maxLength", NT_INT, \maxLength);
         optional_field(objType, oh, "minLength", NT_INT, \minLength);
         optional_field(objType, oh, "pattern", NT_STRING, \pattern);
+        # a pattern that is not valid is an error of the schema, not of each request (qore#6603)
+        checkPattern();
         optional_field(objType, oh, "maxItems", NT_INT, \maxItems);
         optional_field(objType, oh, "minItems", NT_INT, \minItems);
         optional_field(objType, oh, "uniqueItems", NT_BOOLEAN, \uniqueItems);
@@ -543,6 +552,24 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
 }
 
 #! Used for loading the %Swagger definitions.
+
+#! returns True if a MIME type matches a media range of an \c Accept header (qore#6603)
+/** Only \c "*" for the whole type (<tt>*\/\*</tt>) or for the subtype (<tt>type/\*</tt>) is a wildcard (RFC 9110
+    section 12.5.1); the comparison ignores case.  The media range comes from the request, so it is matched as a
+    media range and never made into a regular expression that the server would compile for each request.
+*/
+bool sub qore_mime_range_matches(string range, string mime_type) {
+    list<string> r = range.lwr().split("/");
+    list<string> m = mime_type.lwr().split("/");
+    if (r.size() != 2 || m.size() != 2) {
+        return False;
+    }
+    if (r[0] == "*") {
+        return r[1] == "*";
+    }
+    return r[0] == m[0] && (r[1] == "*" || r[1] == m[1]);
+}
+
 public class SwaggerLoader {
     #! Load %Swagger definition from a string.
     /**
@@ -2002,13 +2029,13 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                         return rv;
                 }
 
-                # test if the content type contains asterisk and generate regex for it
+                # a content type with an asterisk is a media range: it comes from the request and is matched as a
+                # media range (qore_mime_range_matches()), never as a regular expression (qore#6603)
                 bool asteriskCt = (content.find("*") != -1);
-                *string ctRegex = replace(content, "*", ".*");
 
                 # check that the content type is valid for the response
                 if (asteriskCt) {
-                    *list<auto> mt = map $1, mimeTypeKeys, $1.regex(ctRegex);
+                    *list<auto> mt = select mimeTypeKeys, qore_mime_range_matches(content, $1);
                     if (!mt) {
                         continue;
                     }
@@ -2038,7 +2065,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
                 # check the default set of mime types
                 if (asteriskCt) {
-                    *list mt = map $1, MimeContentTypes, $1.regex(ctRegex);
+                    *list mt = select MimeContentTypes, qore_mime_range_matches(content, $1);
                     if (mt && mt.size()) {
                         string mimeType = mt[0];
                         return rv += (
@@ -2714,6 +2741,20 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
         list<hash<string, list<string>>> security;
     }
 
+    private {
+        #! the compiled pattern of the path template, which captures the value of each parameter (qore#6603)
+        transient *Regex path_template_re;
+    }
+
+
+    #! Returns the compiled pattern of the path template of the operation (qore#6603)
+    /** The pattern is compiled when the operation is created; it is not serialized, so a deserialized operation
+        compiles it on first use
+    */
+    private Regex getPathTemplateRegex() {
+        return path_template_re ?? (path_template_re = new Regex(PathComponent::getTemplatePattern(path)));
+    }
+
     #! Constructor.
     /** @param path the path for the operation
         @param method the HTTP method for the operation
@@ -2727,6 +2768,12 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
     public constructor(string path, string method, hash<auto> oh, SwaggerSchema swagger) : ParameterGroup(oh) {
         self.path = path;
         self.method = method.upr();
+        # the path template is checked and its pattern compiled here, so that a template that is not valid is an error
+        # of the schema, not of each request (qore#6603)
+        # only a path with a parameter uses the pattern (see the check of the path parameters of a request)
+        if (path =~ /\{[^}]+\}/) {
+            getPathTemplateRegex();
+        }
         string objType = "Operation";
         *list<auto> tagsObj;
         if (optional_field(objType, oh, "tags", NT_LIST, \tagsObj)) {
@@ -3030,7 +3077,7 @@ public class OperationObject inherits ParameterGroup, RestSchemaValidator::Abstr
                 actual_path += "/";
             }
             # every template is replaced in the pattern, so each value is that of its own parameter
-            path_values = regex_extract(actual_path, PathComponent::getTemplatePattern(path));
+            path_values = getPathTemplateRegex().extractGroups(actual_path);
             if (path_values.size() != path_names.size()) {
                 error("SCHEMA-VALIDATION-ERROR", "Request path %y does not match path template %y for %s",
                     actual_path, path, method.upr());

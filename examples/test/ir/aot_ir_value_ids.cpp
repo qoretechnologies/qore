@@ -21,6 +21,7 @@
 #include <qore/intern/QoreJITIncludes.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
@@ -275,25 +276,26 @@ static void lvaluePath(QoreIRFunction& fn, QoreIRBuilder& b) {
     b.createReturnNothing();
 }
 
-//! a chain of phis, each with the previous one twice as its incoming values, that merges an iterator
+//! a chain of phis, each with the previous one twice as its incoming values, that merges an iterator; each phi is in
+//! the block that joins the two branches of the block of the previous one, so that the IR is in SSA form (qore#6468)
 static void phiChain(QoreIRFunction& fn, QoreIRBuilder& b) {
     QoreIRValue list = b.createConstNothing()->result;
-    QoreIRBasicBlock* a = fn.createBlock("a");
-    QoreIRBasicBlock* c = fn.createBlock("c");
-    QoreIRBasicBlock* join = fn.createBlock("join");
-    QoreIRBasicBlock* body = fn.createBlock("body");
-    QoreIRBasicBlock* done = fn.createBlock("done");
     QoreIRValue cond = b.createConstBool(true)->result;
-    b.createBranchIf(cond, a, c);
-    b.setBlock(a);
     QoreIRValue it = b.createIteratorCreate(list)->result;
-    b.createBranch(join);
-    b.setBlock(c);
-    b.createBranch(join);
-    b.setBlock(join);
     for (unsigned i = 0; i < 200; ++i) {
+        QoreIRBasicBlock* a = fn.createBlock("a");
+        QoreIRBasicBlock* c = fn.createBlock("c");
+        QoreIRBasicBlock* join = fn.createBlock("join");
+        b.createBranchIf(cond, a, c);
+        b.setBlock(a);
+        b.createBranch(join);
+        b.setBlock(c);
+        b.createBranch(join);
+        b.setBlock(join);
         it = b.createPhi({{it, a}, {it, c}})->result;
     }
+    QoreIRBasicBlock* body = fn.createBlock("body");
+    QoreIRBasicBlock* done = fn.createBlock("done");
     b.createIteratorNext(it, done, body);
     b.setBlock(body);
     b.createBranch(done);
@@ -375,6 +377,8 @@ static bool runtimeChecks(QoreProgram* pgm) {
 }
 
 int main() {
+    // the fixtures write malformed IR, which the writer refuses in a debug build otherwise (qore#6468)
+    setenv("QORE_AOT_TEST_NO_WRITE_VERIFY", "1", 1);
     // the signal thread must stay disabled for valgrind, just as for qore -b
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
     QoreProgram* pgm = qore_create_program(PO_NEW_STYLE);

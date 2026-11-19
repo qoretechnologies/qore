@@ -18,6 +18,7 @@
 public class ReparseRollbackMetadataTest inherits QUnit::Test {
     constructor() : QUnit::Test("ReparseRollbackMetadataTest", "1.0", \ARGV) {
         addTestCase("expression after the commit", \expressionTest());
+        addTestCase("an expression refused for its definitions", \expressionDefinitionTest());
         addTestCase("rollback of the parse's own data", \ownDataTest());
         addTestCase("runtime data while parsing", \runtimeDataTest());
         set_return_value(main());
@@ -65,6 +66,37 @@ public class ReparseRollbackMetadataTest inherits QUnit::Test {
     }
 
     #! a failed reparse still deletes what it added
+    #! an expression refused because it declares code frees none of the data of an expression created before it,
+    #! which keeps its label and locations (the refused expression's declarations are rolled back, its strings and
+    #! locations are kept with the Program's)
+    expressionDefinitionTest() {
+        Program p = getProgram();
+        string label = "expression-label-" + get_random_string(20);
+        Expression e(p, "1 / (g() - 2)", label);
+        hash<auto> m0;
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            m0 = call_function("dbg_program_metadata", p);
+        }
+        assertThrows("PARSE-EXCEPTION", "cannot be declared in the code of an expression", sub () {
+            Expression bad(p, "1); sub evil() {} #", "bad-" + get_random_string(20));
+        });
+        if (m0) {
+            hash<auto> m1 = call_function("dbg_program_metadata", p);
+            assertGe(m0.strings, m1.strings);
+            assertGe(m0.locations, m1.locations);
+        }
+        try {
+            e.eval();
+            fail("the expression did not raise an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DIVISION-BY-ZERO", ex.err);
+            assertEq(label, ex.file);
+            assertEq(1, ex.line);
+        }
+        # the refused definition was not committed
+        assertThrows("NO-FUNCTION", \p.callFunction(), "evil");
+    }
+
     ownDataTest() {
         skipWithoutDebug();
         Program p = getProgram();

@@ -1,0 +1,98 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-exec-mode: children - the scripts run in child processes that set their own --exec-mode, or as AOT executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../ExecModeHarness.qm
+
+%exec-class HashMapIndexReleaseTest
+
+#! the loop index of a hash map is never released (qore#6641)
+/** A hash map whose value is the implicit index (map {key: $#}, ...) released the value after it stored it, but in the
+    virtual implicit context the value is the loop's index, a native int that the loop increments after the release:
+    the IR used a value after its release, which the verification of IR read from an AOT module refuses.
+
+    The IR of the script next to the test must release no native-int value that a loop's phi defines, and its output
+    must be that of the AST interpreter (its .expected file) in every execution mode, on the IR tier and as AOT
+    executables.
+*/
+class HashMapIndexReleaseTest inherits QUnit::Test {
+    public {
+        #! the scripts
+        const Scripts = ("hashmap-index",);
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string env;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("hash map index release", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir, libqore_dir);
+        dir = get_script_dir();
+        # the script's code is top-level code, which runs once: too few times for tiered execution to compile it, so
+        # native code is only required with JIT execution
+        ExecModeHarness::set_default_check(ExecModeHarness::NativeCheck::Jit);
+        foreach string script in (Scripts) {
+            addTestCase(script + ": no release of a loop index", \irTest(), script);
+            addTestCase(script + ": execution modes", \modesTest(), script);
+            addTestCase(script + ": AOT executable -O0", \aotTest(), (script, "-O0"));
+            addTestCase(script + ": AOT executable -O3", \aotTest(), (script, "-O3"));
+        }
+        set_return_value(main());
+    }
+
+    #! checks that the script's IR releases no loop index
+    private irTest(string script) {
+        string dump = ExecModeHarness::run_any(sprintf("%s %s -b --exec-mode=ir --ir-dump %s/%s.q", env, qore_bin, dir,
+            script));
+        assertRegex("^func ", dump, script + ": the IR is dumped");
+        # the native-int values that the phis of the loop headers define
+        hash<string, bool> indexes = map {$1: True}, (dump =~ x/phi -> (%[0-9]+)<native-int>/g);
+        assertTrue(indexes.size() >= 4, script + ": the loops of the hash maps are lowered natively");
+        list<string> released = select (dump =~ x/release\.owned\.temp (%[0-9]+)/g), indexes{$1};
+        assertEq((), released, script + ": released loop indexes");
+    }
+
+    #! returns the output of the AST interpreter for the script
+    private string astOutput(string script) {
+        return ExecModeHarness::run(sprintf("%s %s --exec-mode=ast %s/%s.q", env, qore_bin, dir, script));
+    }
+
+    #! runs the script in every execution mode and on the IR tier
+    private modesTest(string script) {
+        string exp = astOutput(script);
+        assertEq(ReadOnlyFile::readTextFile(sprintf("%s/%s.expected", dir, script)), exp,
+            script + ": the output of the AST interpreter");
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            assertEq(exp, ExecModeHarness::run(sprintf("%s %s --exec-mode=%s %s/%s.q", env, qore_bin, mode, dir,
+                script)), script + ": " + mode);
+        }
+        assertEq(exp, ExecModeHarness::run_ir_tier(sprintf("%s %s --exec-mode=tiered %s/%s.q", env, qore_bin, dir,
+            script)), script + ": " + ExecModeHarness::IRTierName);
+    }
+
+    #! compiles the script with qcc and checks that the executable gives the output of the AST interpreter
+    private aotTest(string script, string opt) {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("hashmap-index-release-aot-");
+        string exe = tmp.path + "/" + script;
+        string out = ExecModeHarness::run_any(sprintf("%s %s %s -o %s %s/%s.q", env, qcc_bin, opt, exe, dir, script));
+        assertTrue(is_file(exe), opt + ": qcc compiles the script: " + out);
+        assertEq(astOutput(script), ExecModeHarness::run_any(sprintf("%s %s", env, exe)), script + ": AOT " + opt);
+    }
+}

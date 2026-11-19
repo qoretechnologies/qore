@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - HTTP/2 over TLS WebSocket connections and the permessage-deflate extension
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# A WebSocket text message that is not valid UTF-8 closes the connection with 1007 (RFC 6455 section 8.1) before the
+# connection's code sees it, over HTTP/1.1 (plain and compressed with permessage-deflate) and HTTP/2 (qore#6554).
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketInvalidUtf8Test
+
+class EchoConnection inherits WebSocketConnection {
+    public {
+        # the messages that reached the connection
+        Queue got();
+    }
+
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        got.push(msg);
+        send("ECHO:" + msg);
+    }
+}
+
+class EchoHandler inherits WebSocketHandler {
+    public {
+        Queue errs();
+        *EchoConnection last;
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return last = new EchoConnection(self);
+    }
+
+    logError(string fmt) {
+        errs.push(vsprintf(fmt, argv));
+    }
+}
+
+class WebSocketInvalidUtf8Test inherits QUnit::Test {
+    private {
+        HttpServer server;
+        EchoHandler plain;
+        EchoHandler deflate;
+        int port;
+        int tls_port;
+    }
+
+    constructor() : Test("WebSocket text messages that are not valid UTF-8", "1.0") {
+        addTestCase("HTTP/1.1", \http1Test());
+        addTestCase("HTTP/1.1 with permessage-deflate", \http1DeflateTest());
+        addTestCase("HTTP/2", \http2Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        plain = new EchoHandler();
+        deflate = new EchoHandler({"extensions": ("permessage-deflate",)});
+        server.setHandler("plain", "/plain", NOTHING, plain);
+        server.setHandler("deflate", "/deflate", NOTHING, deflate);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "localhost", "service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "localhost",
+            "service": 0,
+            "cert": new SSLCertificate(TestCertificates::CertPem),
+            "key": new SSLPrivateKey(TestCertificates::KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private openRaw(Socket s, string path, *string extensions) {
+        s.connect("localhost:" + port);
+        hash<auto> hdr = {
+            "Host": "localhost:" + port,
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+        };
+        if (extensions) {
+            hdr."Sec-WebSocket-Extensions" = extensions;
+        }
+        hash<auto> info;
+        s.sendHTTPMessage("GET", path, "1.1", hdr, NOTHING, \info);
+        assertEq(101, s.readHTTPHeader(10s).status_code, "the WebSocket handshake succeeds");
+    }
+
+    # asserts that the server closes the connection with 1007 (Invalid Frame Payload Data)
+    private assertInvalid(Socket s, EchoHandler handler) {
+        hash<WsMsgInfo> h = ws_read_message(s, 30s);
+        assertEq(WSOP_Close, h.op, "the server closes the connection");
+        assertEq(WSCC_InvalidData, h.close, "with 1007");
+        assertRegex("not valid UTF-8", handler.errs.get(30s));
+    }
+
+    http1Test() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/plain");
+        # a valid message is echoed
+        s.send(ws_encode_message("café", WSOP_Text, True, True));
+        # the raw socket gives the message in its own encoding; the bytes are UTF-8
+        assertEq(binary("ECHO:café"), binary(ws_read_message(s, 30s).msg));
+        # a message that is not valid UTF-8 is not given to the connection
+        s.send(ws_encode_message(<61ff62>, WSOP_Text, True, True));
+        assertInvalid(s, plain);
+        assertEq("café", plain.last.got.get(1s));
+        assertEq(0, plain.last.got.size());
+    }
+
+    http1DeflateTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/deflate", "permessage-deflate");
+        # the bytes are checked after they are decompressed
+        binary payload = deflate_raw(binary_to_string(<61ff62>, "UTF-8"));
+        s.send(ws_encode_message(payload, WSOP_Text, True, True, WS_RSV1));
+        assertInvalid(s, deflate);
+        assertEq(0, deflate.last.got.size());
+    }
+
+    http2Test() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) {
+            msgs.push(msg);
+        }, {
+            "url": sprintf("wss://localhost:%d/plain", tls_port),
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "timeout": 30000,
+        });
+        on_exit delete wsc;
+        wsc.connect();
+        if (!wsc.isHttp2()) {
+            testSkip("HTTP/2 was not negotiated");
+        }
+        wsc.send("ok");
+        assertEq("ECHO:ok", msgs.get(30s));
+        wsc.send(binary_to_string(<61ff62>, "UTF-8"));
+        assertRegex("not valid UTF-8", plain.errs.get(30s));
+        assertNothing(msgs.get(30s), "the connection is closed");
+    }
+}

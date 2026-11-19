@@ -315,7 +315,8 @@ list<string> ProtobufSchema::messageTypes() {
 
 //! Returns a default (zero-valued) message as a Qore hash
 /** @param type the fully-qualified message type name
-    @return a hash with all fields set to their default values
+    @return a hash with all fields set to their default values; message fields have no value (see
+    @ref protobufnesting)
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
 
@@ -343,6 +344,8 @@ hash<auto> ProtobufSchema::defaultMessage(string type) {
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-FIELD-ERROR if a hash key doesn't match a field
     @throw PROTOBUF-ENCODE-ERROR if serialization fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
 
     @since %protobuf 1.0
 */
@@ -362,6 +365,8 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-DECODE-ERROR if parsing fails, or a string map key in the message contains a NUL character,
     which a hash key cannot hold
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
 
     @since %protobuf 1.0
 */
@@ -380,6 +385,8 @@ hash<auto> ProtobufSchema::decode(string type, binary data) {
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON conversion fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
 
     @since %protobuf 1.0
 */
@@ -398,6 +405,8 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
 
     @throw PROTOBUF-TYPE-ERROR if the message type is not found, or if \a type contains a NUL character
     @throw PROTOBUF-JSON-ERROR if JSON parsing fails
+    @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
+    @ref protobufnesting)
     @throw PROTOBUF-DECODE-ERROR if a string map key in the message contains a NUL character, which a hash key cannot
     hold, so the message cannot be decoded to a hash
 

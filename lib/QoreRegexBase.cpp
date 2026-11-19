@@ -32,6 +32,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreRegexBase.h"
+#include "qore/intern/IconvHelper.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -170,7 +171,7 @@ void qore_pcre2_raise_invalid_subject(int rc, pcre2_match_data* md, const char* 
         "byte offset %zu (PCRE2 error %d: %s)", op, static_cast<size_t>(pcre2_get_startchar(md)), rc, msg);
 }
 
-int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink) {
+int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink, const char* subject, size_t len) {
     assert(rc < 1);
     if (qore_pcre2_expected_match_error(rc)) {
         return 0;
@@ -181,6 +182,19 @@ int qore_pcre2_check_match_error(int rc, ExceptionSink* xsink) {
         const char* msg = pcre2_get_error_message(rc, buffer, sizeof(buffer)) < 0
             ? "unknown error"
             : reinterpret_cast<const char*>(buffer);
+        if (qore_pcre2_invalid_utf_error(rc)) {
+            // a match cannot tell whether such a subject matches (qore#6554)
+            if (subject) {
+                bool incomplete = false;
+                size_t offset = IconvHelper::validUtf8Prefix(subject, len, incomplete);
+                xsink->raiseException("INVALID-ENCODING", "regular expression match: the subject string is not valid "
+                    "UTF-8: invalid byte sequence at byte offset %zu (PCRE2 error %d: %s)", offset, rc, msg);
+            } else {
+                xsink->raiseException("INVALID-ENCODING", "regular expression match: the subject string is not valid "
+                    "UTF-8 (PCRE2 error %d: %s)", rc, msg);
+            }
+            return -1;
+        }
         switch (rc) {
             case PCRE2_ERROR_MATCHLIMIT:
             case PCRE2_ERROR_DEPTHLIMIT:

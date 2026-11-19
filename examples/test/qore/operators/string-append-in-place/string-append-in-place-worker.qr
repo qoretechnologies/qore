@@ -90,6 +90,72 @@ string sub check_variable() {
     return sb.result(s);
 }
 
+# Changing the number of appends must preserve the sandbox allocation of the auto local's string (#6279).
+string sub check_auto_local(int count) {
+    Sandbox sb();
+    auto s = sb.makeString();
+    for (int i = 0; i < count; ++i) {
+        s += "ab";
+    }
+    return sb.result(s);
+}
+
+# A reference held by another variable must still force a copy, even with a dynamically typed operand.
+string sub check_auto_shared(auto piece) {
+    Sandbox sb();
+    auto s = sb.makeString();
+    auto original = s;
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s) + sprintf(":%d", original.size());
+}
+
+string sub check_auto_try_append(auto piece) {
+    Sandbox sb();
+    auto s = sb.makeString();
+    try {
+        for (int i = 0; i < Appends; ++i) {
+            s += piece;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return sb.result(s);
+}
+
+# The registered handler reads the runtime local, so a compiler cache can also hold its string.
+string sub check_auto_handler(auto piece) {
+    Sandbox sb();
+    auto s = sb.makeString();
+    on_exit {
+        if (s.size() != Start + 2 * Appends) {
+            throw "WRONG-LENGTH";
+        }
+    }
+    for (int i = 0; i < Appends; ++i) {
+        s += piece;
+    }
+    return sb.result(s);
+}
+
+# The same += site accepts numeric values and NOTHING as well as strings. In a try block it has an exception edge.
+string sub check_auto_try(auto s, auto piece) {
+    try {
+        s += piece;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + ":" + sprintf("%d", s.size());
+    }
+    return sprintf("%s:%y", s.type(), s);
+}
+
+# A read before the update can still be used after it in the same statement.
+string sub check_auto_arguments() {
+    Sandbox sb();
+    auto s = sb.makeString();
+    return sprintf("%d:%d", (s, (s += "ab"))[0].size(), s.size());
+}
+
 string sub check_parameter(string piece) {
     Sandbox sb();
     string s = sb.makeString();
@@ -495,6 +561,22 @@ string sub check_try_after(string piece) {
 # code (the harness compiles a function synchronously after its first call)
 hash<string, code<string()>> checks = {
     "variable": \check_variable(),
+    "auto-local": string sub () { return check_auto_local(Appends); },
+    "auto-local-double": string sub () { return check_auto_local(Appends * 2); },
+    "auto-shared": string sub () { return check_auto_shared("ab"); },
+    "auto-try": string sub () { return check_auto_try_append("ab"); },
+    "auto-handler": string sub () { return check_auto_handler("ab"); },
+    "auto-arguments": \check_auto_arguments(),
+    "auto-large-int": string sub () { return check_auto_try_append(9223372036854775807); },
+    "auto-error": string sub () {
+        Sandbox sb();
+        return check_auto_try(sb.makeLatin1(), "\u20ac");
+    },
+    "auto-number": string sub () { return check_auto_try_append(3n); },
+    "auto-change": string sub () {
+        return check_auto_try(3, 4) + "|" + check_auto_try(NOTHING, 7) + "|" + check_auto_try("12", 3)
+            + "|" + check_auto_try(140737488355327, 1);
+    },
     "parameter": string sub () { return check_parameter("ab"); },
     "call": \check_call(),
     "optional-call": \check_optional_call(),

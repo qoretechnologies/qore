@@ -10,6 +10,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../QoreBuildTree.qm
 %requires FsUtil
 %requires Util
 %requires ../TestBuildTools.qm
@@ -261,9 +262,10 @@ int main(int argc, char** argv) {
         set_return_value(main());
     }
 
-    private static list<string> libqoreTargetFlags() {
+    private static list<string> libqoreTargetFlags(string lib_dir) {
         *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
-        return m ? (m[0],) : ();
+        # a sanitizer build of libqore needs the same sanitizer in what links with it (qore#6682)
+        return (m ? (m[0],) : ()) + QoreBuildTree::sanitizer_flags(lib_dir);
     }
 
     #! Returns the smallest stack size in KB for the runs of ThreadHostCode with the given step: MinStackKb, or the
@@ -314,7 +316,7 @@ int main(int argc, char** argv) {
         int status;
         list<string> args = cxx + ("-std=c++17", "-pthread", "-I" + source_root + "/include",
             "-I" + libqore_dir + "/include", host, obj, "-L" + libqore_dir, "-Wl,-rpath," + libqore_dir, "-lqore",
-            "-o", exe) + libqoreTargetFlags();
+            "-o", exe) + libqoreTargetFlags(libqore_dir);
         string out = backquote((map TestBuildTools::shell_quote($1), args).join(" ") + " 2>&1", \status);
         assertEq(0, status, "linked the C++ host: " + out);
         assertTrue(is_file(exe), "linked the C++ host: " + out);
