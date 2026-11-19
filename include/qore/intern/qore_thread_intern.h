@@ -2946,6 +2946,25 @@ private:
         address is taken (and so no stack protector code)
     */
     DLLLOCAL void enterSandboxBudgets(ThreadData* td, qore_program_private* pp);
+
+public:
+    //! Leaves the call budgets that the entry of the Program started, before the helper is destroyed
+    /** The frames of a thread's budgets are left in the reverse order of their entry: a class that derives from this
+        helper and holds a QoreSandboxProvenanceHelper that it applies before it enters the Program
+        (CodeEvaluationHelper) calls it in its destructor, as the member is destroyed before this base; in a trusted
+        build every entry pushes frames (see QoreSandboxBudgetStack::enterInBuild())
+    */
+    DLLLOCAL void leaveSandboxBudgets() {
+        if (budgets_entered) {
+            leaveSandboxBudgetsIntern();
+        }
+    }
+
+private:
+    //! true if enterSandboxBudgets() was called and the budgets have not been left yet
+    bool budgets_entered = false;
+
+    DLLLOCAL void leaveSandboxBudgetsIntern();
 };
 
 class ProgramRuntimeParseContextHelper {

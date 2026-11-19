@@ -2846,6 +2846,11 @@ int64 qore_sandbox_dbg_cpu_used() {
     const QoreSandboxCallBudget* budget = td ? td->sandbox_budgets.findCPUBudget() : nullptr;
     return budget ? qore_sandbox_dbg_measure_cpu(budget) : -1;
 }
+
+int64 qore_sandbox_dbg_budget_frames() {
+    ThreadData* td = thread_data.get();
+    return td ? static_cast<int64>(td->sandbox_budgets.frameCount()) : 0;
+}
 #endif
 
 void qore_sandbox_restore_stack(size_t saved) {
@@ -5271,6 +5276,7 @@ QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::enterSandboxBudgets(T
     pp->getSandboxManagerRefs(own_ptr, creator_ptr);
     ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
     ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+    budgets_entered = own || creator;
     // the sandbox of the code that created the Program has call budgets in it as well: a call into the Program by
     // trusted code is a call of that sandbox (a call made inside a budget of the manager starts none)
     if (own) {
@@ -5279,6 +5285,12 @@ QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::enterSandboxBudgets(T
     if (creator) {
         td->sandbox_budgets.enter(td->tid, *creator, this);
     }
+}
+
+QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::leaveSandboxBudgetsIntern() {
+    budgets_entered = false;
+    ThreadData* td = thread_data.get();
+    td->sandbox_budgets.leave(td->tid, this);
 }
 
 void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,

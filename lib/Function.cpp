@@ -1608,6 +1608,9 @@ static void qore_report_flag_violation(const AbstractQoreFunctionVariant* varian
 #endif
 
 CodeEvaluationHelper::~CodeEvaluationHelper() {
+    // the budgets that the entry of the Program started are left before sandbox_provenance, which was applied before
+    // the entry and is destroyed before this helper's base
+    leaveSandboxBudgets();
 #ifdef DEBUG
     // Verify a QCF_NO_DOMAIN_THROW claim: dbg_variant is only set once init() committed to running
     // the call, so an exception present now appeared during the call itself and escaped a frame
