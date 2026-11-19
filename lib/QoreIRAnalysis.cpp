@@ -20020,6 +20020,7 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
     }
     auto takes_value = [](const QoreIRInstruction* use) -> bool {
         switch (use->opcode) {
+            case QoreIROpcode::ToBool:
             case QoreIROpcode::MakeList:
             case QoreIROpcode::MakeHash:
             case QoreIROpcode::MakeHashConstKeys:

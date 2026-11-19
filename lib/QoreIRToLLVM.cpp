@@ -21049,6 +21049,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     clear_cleanup_alloca(consumed_cleanup);
                     clear_consumed_operand_cleanup(inst->operands[0].id);
                 }
+            } else if (is_ir_only) {
+                // The local cache owns the assigned value. Keeping the coercion's extra reference until frame
+                // exit would keep a replaced object alive after the local releases it (#6657).
+                clear_cleanup_alloca(consumed_cleanup);
             }
             return true;
         }
