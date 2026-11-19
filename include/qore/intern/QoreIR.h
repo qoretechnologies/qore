@@ -2391,6 +2391,9 @@ public:
     bool foreach_assignment = false;
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
+    //! Prepared by interpreter analysis. A paired mutation or iterator can borrow a cached plain source.
+    enum class Borrow : uint8_t { None, Mutation, Iterator };
+    Borrow interpreter_borrow = Borrow::None;
     bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
     uint32_t slot_id = UINT32_MAX; // Pre-computed slot index into locals_slot_cache
 };
@@ -4042,6 +4045,8 @@ public:
 
     QoreIRValue iterable;               //!< List value or iterable expression result
     FunctionalOperator* iterator_func;  //!< Optional functional operator for lazy evaluation
+    //! Interpreter-only: a plain source borrow ends here, at the adjacent ReleasePlainLocalRead.
+    bool interpreter_ends_source_borrow = false;
 };
 
 //! Advances iterator and branches based on done status

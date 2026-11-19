@@ -19144,8 +19144,9 @@ static void qore_ir_move_loop_exit_blocks(QoreIRFunction* func, size_t body_bloc
     }
 }
 
-//! Returns true if the body of map, or of a map stage of a fused pipeline, needs the element as the implicit argument
-//! at run time
+enum class QoreIRImplicitContextQuery { RuntimeContext, ElementIndex, AstEvaluation };
+
+//! Checks the implicit context required by a map, fold or fused pipeline stage.
 /** The IR lowers <tt>$1</tt>, <tt>$#</tt> and <tt>$argv</tt> in such a body to the element and its index (the
     virtual implicit context), so a body that reads the implicit arguments only so runs without setting them.  The
     implicit argument list of the body is the operator's arguments alone (the element for map), so the arguments
@@ -19164,10 +19165,10 @@ static void qore_ir_move_loop_exit_blocks(QoreIRFunction* func, size_t body_bloc
     @param bound_args the number of implicit arguments that the operator gives the body (1 for map, whose argument is
     the element; 2 for a fold, whose arguments are the accumulator and the element), which the virtual implicit
     context holds
-    @param ast_evaluated true if the AST interpreter evaluates \a val at run time, which reads every implicit argument
-    and the implicit element from the thread
+    @param mode whether to check for a runtime context, for any use of the element index, or for an AST-evaluated body
 */
-static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_args, bool ast_evaluated = false) {
+static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_args,
+        QoreIRImplicitContextQuery mode = QoreIRImplicitContextQuery::RuntimeContext) {
     const AbstractQoreNode* node = val.getInternalNode();
     if (!node || !val.needsEval()) {
         return false;
@@ -19177,14 +19178,14 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
         return true;
     }
 
-    auto args_need_context = [bound_args, ast_evaluated](const QoreParseListNode* parse_args, const QoreListNode* args) {
+    auto args_need_context = [bound_args, mode](const QoreParseListNode* parse_args, const QoreListNode* args) {
         if (parse_args) {
             for (size_t i = 0, e = parse_args->size(); i < e; ++i) {
                 // cancelled: the conservative answer
                 if (i && !(i % 100) && qore_check_cancel(nullptr, "IR implicit context analysis")) {
                     return true;
                 }
-                if (qore_ir_body_needs_implicit_context(parse_args->get(i), bound_args, ast_evaluated)) {
+                if (qore_ir_body_needs_implicit_context(parse_args->get(i), bound_args, mode)) {
                     return true;
                 }
             }
@@ -19195,7 +19196,7 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
                 if (li.index() && !(li.index() % 100) && qore_check_cancel(nullptr, "IR implicit context analysis")) {
                     return true;
                 }
-                if (qore_ir_body_needs_implicit_context(li.getValue(), bound_args, ast_evaluated)) {
+                if (qore_ir_body_needs_implicit_context(li.getValue(), bound_args, mode)) {
                     return true;
                 }
             }
@@ -19209,7 +19210,8 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
             if (i && !(i % 100) && qore_check_cancel(nullptr, "IR implicit context analysis")) {
                 return true;
             }
-            if (qore_ir_body_needs_implicit_context(parse_args->get(i), bound_args, true)) {
+            if (qore_ir_body_needs_implicit_context(parse_args->get(i), bound_args,
+                    QoreIRImplicitContextQuery::AstEvaluation)) {
                 return true;
             }
         }
@@ -19221,10 +19223,10 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
         // need the implicit argument list, of which they are not part; the AST interpreter reads them all from the
         // thread
         int offset = arg->getOffset();
-        return ast_evaluated || offset >= bound_args;
+        return mode == QoreIRImplicitContextQuery::AstEvaluation || offset >= bound_args;
     }
     if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
-        return ast_evaluated;
+        return mode != QoreIRImplicitContextQuery::RuntimeContext;
     }
     // a declaration with a constructor call: its arguments (it is a variable reference too, so it is matched first)
     if (auto* decl = dynamic_cast<const VarRefNewObjectNode*>(node)) {
@@ -19241,7 +19243,7 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
     }
     if (auto* mref = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
         // the object is evaluated by the code that creates the reference (see QoreIRLowering::lowerExpression())
-        return qore_ir_body_needs_implicit_context(mref->getExp(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(mref->getExp(), bound_args, mode);
     }
     if (dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node)
             || dynamic_cast<const AbstractCallReferenceNode*>(node)) {
@@ -19253,29 +19255,29 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
     // evaluated once, with the implicit arguments of the body, are checked; these are binary and n-ary operators, so
     // they are matched before them
     if (auto* op = dynamic_cast<const QoreMapOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->getIteratorExpr(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->getIteratorExpr(), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreSelectOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->getSourceExpression(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->getSourceExpression(), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->getIteratorExpr(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->getIteratorExpr(), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreMapSelectOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->getIteratorExpr(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->getIteratorExpr(), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreHashMapOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->get(2), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->get(2), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreHashMapSelectOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->get(2), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->get(2), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreStreamingOperatorNode*>(node)) {
         // the count of take and drop is evaluated once
         QoreStreamingOperatorNode::Kind kind = op->getKind();
-        return qore_ir_body_needs_implicit_context(op->getSource(), bound_args, ast_evaluated)
+        return qore_ir_body_needs_implicit_context(op->getSource(), bound_args, mode)
             || ((kind == QoreStreamingOperatorNode::Take || kind == QoreStreamingOperatorNode::Drop)
-                && qore_ir_body_needs_implicit_context(op->getPredicate(), bound_args, ast_evaluated));
+                && qore_ir_body_needs_implicit_context(op->getPredicate(), bound_args, mode));
     }
 
     // calls: the arguments are evaluated with the implicit arguments of the body
@@ -19284,11 +19286,11 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
     }
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         const MethodCallNode* method = dot->getMethodCall();
-        return !method || qore_ir_body_needs_implicit_context(dot->getExpression(), bound_args, ast_evaluated)
+        return !method || qore_ir_body_needs_implicit_context(dot->getExpression(), bound_args, mode)
             || args_need_context(method->getParseArgs(), method->getArgs());
     }
     if (auto* call = dynamic_cast<const CallReferenceCallNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(call->getExp(), bound_args, ast_evaluated)
+        return qore_ir_body_needs_implicit_context(call->getExp(), bound_args, mode)
             || args_need_context(call->getParseArgs(), call->getArgs());
     }
 
@@ -19300,26 +19302,26 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
 
     // operators
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
-        return qore_ir_body_needs_implicit_context(binop->getLeft(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(binop->getRight(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(binop->getLeft(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(binop->getRight(), bound_args, mode);
     }
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<LValueOperatorNode>*>(node)) {
-        return qore_ir_body_needs_implicit_context(binop->getLeft(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(binop->getRight(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(binop->getLeft(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(binop->getRight(), bound_args, mode);
     }
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
-        return qore_ir_body_needs_implicit_context(unop->getExp(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(unop->getExp(), bound_args, mode);
     }
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
-        return qore_ir_body_needs_implicit_context(unop->getExp(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(unop->getExp(), bound_args, mode);
     }
     if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
-        return qore_ir_body_needs_implicit_context(unop->getExp(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(unop->getExp(), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreNOperatorNodeBase<3>*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->get(0), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->get(1), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->get(2), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->get(0), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->get(1), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->get(2), bound_args, mode);
     }
 
     // list and hash literals
@@ -19328,7 +19330,7 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
             if (i && !(i % 100) && qore_check_cancel(nullptr, "IR implicit context analysis")) {
                 return true;
             }
-            if (qore_ir_body_needs_implicit_context(list->get(i), bound_args, ast_evaluated)) {
+            if (qore_ir_body_needs_implicit_context(list->get(i), bound_args, mode)) {
                 return true;
             }
         }
@@ -19341,8 +19343,8 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
             if (i && !(i % 100) && qore_check_cancel(nullptr, "IR implicit context analysis")) {
                 return true;
             }
-            if (qore_ir_body_needs_implicit_context(keys[i], bound_args, ast_evaluated)
-                    || (i < values.size() && qore_ir_body_needs_implicit_context(values[i], bound_args, ast_evaluated))) {
+            if (qore_ir_body_needs_implicit_context(keys[i], bound_args, mode)
+                    || (i < values.size() && qore_ir_body_needs_implicit_context(values[i], bound_args, mode))) {
                 return true;
             }
         }
@@ -19355,40 +19357,40 @@ static bool qore_ir_body_needs_implicit_context(const QoreValue& val, int bound_
         return nch->args && args_ast_need_context(nch->args);
     }
     if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(ncl->args, bound_args, true);
+        return qore_ir_body_needs_implicit_context(ncl->args, bound_args, QoreIRImplicitContextQuery::AstEvaluation);
     }
     if (auto* ncb = dynamic_cast<const NewComplexBufferNode*>(node)) {
         // the arguments of a constructor are lowered (see QoreIRLowering::lowerExpression()); those of a factory are
         // evaluated by the AST interpreter
         return qore_ir_body_needs_implicit_context(ncb->args, bound_args,
-            ast_evaluated || ncb->shouldEvaluateWithNode());
+            ncb->shouldEvaluateWithNode() ? QoreIRImplicitContextQuery::AstEvaluation : mode);
     }
     if (auto* find = dynamic_cast<const FindNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(find->exp, bound_args, true)
-            || qore_ir_body_needs_implicit_context(find->find_exp, bound_args, true)
-            || qore_ir_body_needs_implicit_context(find->where, bound_args, true);
+        return qore_ir_body_needs_implicit_context(find->exp, bound_args, QoreIRImplicitContextQuery::AstEvaluation)
+            || qore_ir_body_needs_implicit_context(find->find_exp, bound_args, QoreIRImplicitContextQuery::AstEvaluation)
+            || qore_ir_body_needs_implicit_context(find->where, bound_args, QoreIRImplicitContextQuery::AstEvaluation);
     }
     if (auto* ref = dynamic_cast<const ParseReferenceNode*>(node)) {
         // the selectors after the first are evaluated by the AST interpreter (see ParseReferenceNode::doPartialEval())
-        return qore_ir_body_needs_implicit_context(ref->getLVExp(), bound_args, true);
+        return qore_ir_body_needs_implicit_context(ref->getLVExp(), bound_args, QoreIRImplicitContextQuery::AstEvaluation);
     }
     // extract and splice are lowered with their operands (see QoreIRLowering::lowerExtract() and lowerSplice())
     if (auto* op = dynamic_cast<const QoreExtractOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->getLValue(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->getOffset(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->getLength(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->getNewValue(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->getLValue(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->getOffset(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->getLength(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->getNewValue(), bound_args, mode);
     }
     if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
-        return qore_ir_body_needs_implicit_context(op->getLValue(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->getOffset(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->getLength(), bound_args, ast_evaluated)
-            || qore_ir_body_needs_implicit_context(op->getNewValue(), bound_args, ast_evaluated);
+        return qore_ir_body_needs_implicit_context(op->getLValue(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->getOffset(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->getLength(), bound_args, mode)
+            || qore_ir_body_needs_implicit_context(op->getNewValue(), bound_args, mode);
     }
 
     // any other expression needs the implicit argument.  These kinds are known to have operands that the AST
     // interpreter evaluates at run time, which read the implicit arguments of the thread; they are matched above,
-    // with their operands checked in that mode (ast_evaluated), and a new kind of the sort must be too:
+    // with their operands checked in AST evaluation mode, and a new kind of the sort must be too:
     // - NewComplexHashNode, NewComplexListNode, NewComplexBufferNode (a factory): new hash<K, V>(...),
     //   new list<T>(...) and the buffer<T> factories (QoreIROpcode::NewComplexHash, NewComplexList, NewComplexBuffer)
     // - FindNode: find (QoreIROpcode::Find)
@@ -21069,6 +21071,11 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         size_t body_block_count = builder.getFunction()->blocks.size();
 
         // Load element at current index
+        // An identity map stores the element directly into its new list. The input list lives through the
+        // store, which takes its own reference before the next element is read.
+        const auto* arg = dynamic_cast<const QoreImplicitArgumentNode*>(map->getLeft().getInternalNode());
+        bool borrow_element = need_result && !needs_context && arg && !arg->getOffset()
+            && !q_env_is_set("QORE_DISABLE_IR_BORROWED_LIST_READS");
         QoreIRValue element_val;
         if (elem_is_int) {
             element_val = builder.createListGetInt(input_list, index_val, map->loc)->result;
@@ -21076,6 +21083,8 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         } else if (elem_is_float) {
             element_val = builder.createListGetFloat(input_list, index_val, map->loc)->result;
             never_nothing_values.insert(element_val.id);
+        } else if (borrow_element) {
+            element_val = builder.createListGetValueNoRef(input_list, index_val, map->loc)->result;
         } else {
             element_val = builder.createListGetValue(input_list, index_val, map->loc)->result;
         }
@@ -21173,7 +21182,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
         // The indexed load owns its element until the result has taken its copy. An empty list never executes
         // the load, so release it here, where its slot is defined on every path.
-        if (qore_ir_type_may_hold_object(elem_type)) {
+        if (!borrow_element && qore_ir_type_may_hold_object(elem_type)) {
             builder.createReleaseOwnedTemp(element_val, map->loc);
             // A weak list entry may leave this as the last strong reference.
             builder.createCheckException(map->loc)->exception_target = getCurrentExceptionTarget();
@@ -24526,6 +24535,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     builder.setBlock(header_block);
     std::vector<QoreIRPhiInstruction*> stage_phis;
     std::vector<QoreIRValue> stage_indices;
+    bool has_stage_index = false;
     stage_phis.reserve(stages.size());
     stage_indices.reserve(stages.size());
     for (size_t i = 0; i < stages.size(); ++i) {
@@ -24533,6 +24543,16 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
             error = "fused streaming PHI lowering cancelled";
             return QoreIRValue();
         }
+        // A map has no cancellation count of its own. Its index is needed only by the expression or its
+        // runtime implicit context. Other stages use their counts to filter, stop or check cancellation.
+        if (stages[i].kind == LazyPipelineStage::Map && !q_env_is_set("QORE_DISABLE_IR_FUSED_VIRTUAL_IMPLICIT")
+                && !qore_ir_body_needs_implicit_context(*stages[i].primary, 1,
+                    QoreIRImplicitContextQuery::ElementIndex)) {
+            stage_phis.push_back(nullptr);
+            stage_indices.push_back(zero);
+            continue;
+        }
+        has_stage_index = true;
         auto* phi = builder.createPhi({}, stages[i].loc, QoreIRPhiValueKind::NativeInt);
         stage_phis.push_back(phi);
         stage_indices.push_back(phi->result);
@@ -24545,7 +24565,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRPhiInstruction* fold_join_started_phi = nullptr;
     QoreIRValue root_index;
     QoreIRValue count_value;
-    if (root_terminal || use_typed_list_sink) {
+    bool first_value = root_terminal && op->getKind() == QoreStreamingOperatorNode::First && !op->hasPredicate();
+    if ((root_terminal && !first_value) || use_typed_list_sink) {
         root_index_phi = builder.createPhi({}, loc, QoreIRPhiValueKind::NativeInt);
         root_index = root_index_phi->result;
         if (root_terminal && op->getKind() == QoreStreamingOperatorNode::Count) {
@@ -24696,7 +24717,7 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     FusedLoopState state{
         stage_indices, root_index, count_value, fold_accum, fold_has_accum, fold_join_started,
         type_state_phi ? type_state_phi->result : QoreIRValue()};
-    QoreIRValue one = builder.createConstInt(1, loc)->result;
+    QoreIRValue one = has_stage_index || root_index_phi ? builder.createConstInt(1, loc)->result : QoreIRValue();
 
     // the AST interpreter checks for cancellation in some operators of a pipeline every 100 elements, after it has
     // counted an element and before it takes the next one: the streaming operator at the root
@@ -24822,8 +24843,10 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
                 release_stage_input(element_val, map_result, element_value_type, stage.loc);
                 element_val = map_result;
                 element_value_type = getExprTypeInfo(*stage.primary);
-                state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
-                    one, stage.loc)->result;
+                if (stage_phis[i]) {
+                    state.stage_indices[i] = builder.createBinaryOp(QoreIROpcode::AddInt, state.stage_indices[i],
+                        one, stage.loc)->result;
+                }
                 break;
             }
             case LazyPipelineStage::MapSelect: {
@@ -25038,6 +25061,8 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         // the root index counts the elements that reached the operator
         check_cancel_every(next_state.root_index, QoreIRCancelPoint::Count, loc);
         add_continue(next_state, loc);
+    } else if (first_value) {
+        add_final(element_val, loc);
     } else {
         QoreIRValue pred_bool = lower_predicate(op->hasPredicate() ? &op->getPredicate() : nullptr, loc,
             element_val, state.root_index);
@@ -25110,6 +25135,9 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         if (i && !(i % 100) && qore_check_cancel(nullptr, "fused streaming incoming lowering")) {
             error = "fused streaming incoming lowering cancelled";
             return QoreIRValue();
+        }
+        if (!stage_phis[i]) {
+            continue;
         }
         stage_phis[i]->incoming.push_back({zero, preheader_block});
         stage_phis[i]->operands.push_back(zero);

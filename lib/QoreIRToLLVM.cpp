@@ -2826,7 +2826,29 @@ bool QoreIRToLLVM::lowerSelectorSegmentNext(const QoreIRIteratorNextInstruction*
     return true;
 }
 
+void QoreIRToLLVM::takeOrRefCleanupSlot(llvm::Value* boxed, llvm::Value* slot, llvm::Module& module,
+        llvm::Function* llvm_func) {
+    auto& ctx = module.getContext();
+    llvm::Value* owner = builder->CreateLoad(i64_type, slot);
+    auto* take = llvm::BasicBlock::Create(ctx, "take_temp", llvm_func);
+    auto* ref = llvm::BasicBlock::Create(ctx, "ref_value", llvm_func);
+    auto* owned = llvm::BasicBlock::Create(ctx, "value_owned", llvm_func);
+    builder->CreateCondBr(builder->CreateICmpEQ(owner, boxed), take, ref);
+    builder->SetInsertPoint(take);
+    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), slot);
+    builder->CreateBr(owned);
+    builder->SetInsertPoint(ref);
+    auto incref = module.getOrInsertFunction("qore_rt_incref", llvm::FunctionType::get(void_type, {i64_type}, false));
+    builder->CreateCall(incref, {boxed});
+    builder->CreateBr(owned);
+    builder->SetInsertPoint(owned);
+}
+
 llvm::Value* QoreIRToLLVM::emitHelperRef(llvm::Module& module, llvm::Value* val) {
+    // An empty fold's value and the initial accumulator are NOTHING. Their phi edges own no reference.
+    if (auto* constant = llvm::dyn_cast<llvm::ConstantInt>(val); constant && constant->getZExtValue() == VAL_NOTHING) {
+        return val;
+    }
     // Check if value has a node (inline check using NaN-boxing)
     llvm::Value* has_node = hasNodeInline(val);
 
@@ -17955,7 +17977,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (call_site) {
                 emitCallSiteSet(inst, module);
             }
-            if (!lowerInstruction(inst, llvm_func, module, error)) {
+            const auto* next = inst_index + 1 < block->instructions.size()
+                ? block->instructions[inst_index + 1].get() : nullptr;
+            if (!lowerInstruction(inst, llvm_func, module, error, next)) {
                 appendQoreIRInstructionDiagnostic(error, inst);
                 if (q_env_is_set("QORE_LLVM_DEBUG")) {
                     fprintf(stderr, "LLVM-FAIL: opcode=%d result=%%%u operands=[",
@@ -18786,7 +18810,7 @@ llvm::Value* QoreIRToLLVM::emitStringAppendCow(const QoreIRInstruction* inst, ll
 }
 
 bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Function* llvm_func,
-        llvm::Module& module, std::string& error) {
+        llvm::Module& module, std::string& error, const QoreIRInstruction* next) {
     // the slots of the call array buffer that the instruction's code uses are free again once it is lowered: its
     // arrays are used only by its own code (qore#6415)
     struct CallArrayScope {
@@ -21223,20 +21247,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     }
                 }
                 if (steal_cleanup) {
-                    llvm::Value* owner = builder->CreateLoad(i64_type, steal_cleanup);
-                    llvm::BasicBlock* steal_bb = llvm::BasicBlock::Create(ctx, "store_take_temp", llvm_func);
-                    llvm::BasicBlock* ref_bb = llvm::BasicBlock::Create(ctx, "store_ref_value", llvm_func);
-                    llvm::BasicBlock* taken_bb = llvm::BasicBlock::Create(ctx, "store_value_owned", llvm_func);
-                    builder->CreateCondBr(builder->CreateICmpEQ(owner, boxed), steal_bb, ref_bb);
-                    builder->SetInsertPoint(steal_bb);
-                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), steal_cleanup);
-                    builder->CreateBr(taken_bb);
-                    builder->SetInsertPoint(ref_bb);
-                    auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
-                            llvm::FunctionType::get(void_type, {i64_type}, false));
-                    builder->CreateCall(incref_fn, {boxed});
-                    builder->CreateBr(taken_bb);
-                    builder->SetInsertPoint(taken_bb);
+                    takeOrRefCleanupSlot(boxed, steal_cleanup, module, llvm_func);
                     owned_boxed = boxed;
                 } else {
                     owned_boxed = emitHelperRef(module, boxed);
@@ -22050,7 +22061,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 nanboxed_values.insert(inst->result.id);
                 return true;
             }
-            llvm::Value* retained = emitHelperRef(module, boxed);
+            const uint32_t id = inst->operands.front().id;
+            auto slot = invoke_alloca_map.find(id);
+            llvm::Value* retained = boxed;
+            // A fold takes an independent result before releasing its source. If this phi still owns it,
+            // move the reference that the following release would drop. A borrowed incoming value still
+            // needs a reference of its own. Each slot keeps its original cleanup order (#5959).
+            if (next && next->opcode == QoreIROpcode::ReleaseOwnedTemp && next->operands.size() == 1
+                    && next->operands.front().id == id && consumable_phis.count(id)
+                    && slot != invoke_alloca_map.end() && slot->second) {
+                takeOrRefCleanupSlot(boxed, slot->second, module, llvm_func);
+            } else {
+                retained = emitHelperRef(module, boxed);
+            }
             values[inst->result.id] = retained;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(retained, inst->result.id, llvm_func);
