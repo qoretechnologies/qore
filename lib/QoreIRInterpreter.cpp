@@ -5327,8 +5327,9 @@ static bool getSimpleClosureStringLeaf(const QoreIRFunction* callee_ir,
             || ret->value.id != operation->result.id) {
         return false;
     }
+    // the intrinsic of a method known when the instruction was made is final (#6709)
     QoreIRIntrinsic intrinsic = operation->intrinsic;
-    if (intrinsic == QoreIRIntrinsic::None) {
+    if (intrinsic == QoreIRIntrinsic::None && !operation->method) {
         intrinsic = qore_ir_resolve_pseudo_intrinsic(
             operation->method, operation->qc, operation->fallback_method_name);
     }
@@ -5639,8 +5640,9 @@ static QORE_INTERN_NOINLINE bool computeInterpreterNativeLeafState(QoreIRCallDir
                 || ret->value.id != operation->result.id || inst->cached_return_type != bigIntTypeInfo) {
             return reject();
         }
+        // the intrinsic of a method known when the instruction was made is final (#6709)
         QoreIRIntrinsic intrinsic = operation->intrinsic;
-        if (intrinsic == QoreIRIntrinsic::None) {
+        if (intrinsic == QoreIRIntrinsic::None && !operation->method) {
             intrinsic = qore_ir_resolve_pseudo_intrinsic(
                 operation->method, operation->qc, operation->fallback_method_name);
         }
@@ -9640,8 +9642,10 @@ static QORE_IR_INLINE_SITE void irDotEvalMethodDirect(Given& given, QoreIRDotEva
                 pseudo_qc = resolved_qc;
             }
         }
+        // the intrinsic of a method known when the instruction was made is final: None is the answer then, not a
+        // reason to compare the names again on every call; only a method resolved here by name needs it (#6709)
         QoreIRIntrinsic intrinsic = direct_inst->intrinsic;
-        if (intrinsic == QoreIRIntrinsic::None) {
+        if (intrinsic == QoreIRIntrinsic::None && !direct_inst->method) [[unlikely]] {
             intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
         }
 
@@ -9773,8 +9777,9 @@ static QORE_IR_INLINE_SITE void irInvokeDotEvalMethodDirect(Given& given,
                 pseudo_qc = resolved_qc;
             }
         }
+        // see the DotEvalMethodDirect case (#6709)
         QoreIRIntrinsic intrinsic = de_invoke_inst->intrinsic;
-        if (intrinsic == QoreIRIntrinsic::None) {
+        if (intrinsic == QoreIRIntrinsic::None && !de_invoke_inst->method) [[unlikely]] {
             intrinsic = qore_ir_resolve_pseudo_intrinsic(pseudo_method, pseudo_qc, method_name);
         }
 
