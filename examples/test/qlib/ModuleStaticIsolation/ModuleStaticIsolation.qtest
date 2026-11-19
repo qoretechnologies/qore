@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ValueMask
+
+%exec-class ModuleStaticIsolationTest
+
+#! the shared static state of the public classes of the standard modules is not readable by subclasses (qore#6748)
+/** The process-wide state that a public class of a standard module keeps for all of its callers (cached objects with
+    their connections, the callbacks and loggers of the host, the state of other tenants' calls) is private:internal,
+    so a class that sandboxed code derives from the public class cannot read it: the subclass cannot be parsed.  A
+    sandboxed Program parses a subclass that reads one of the class's statics for each class; before the change the
+    subclass is parsed and returns the shared state.
+*/
+class ModuleStaticIsolationTest inherits QUnit::Test {
+    public {
+        #! module, class, a static member of the class that holds shared state
+        const Cases = (
+            ("SqlUtil", "SqlUtil::TableCache", "cache"),
+            ("FileLocationHandler", "FileLocationHandler::FileLocationHandler", "cache"),
+            ("FileLocationHandler", "FileLocationHandler::FileLocationHandler", "connection_filter"),
+            ("DbDataProvider", "DbDataProvider::DbDataProviderBase", "datasource_lookup"),
+            ("DataProvider", "DataProvider::AbstractDataProvider", "cb_resolve_value"),
+            ("DataProvider", "DataProvider::DataProvider", "factory_cache"),
+            ("DataProvider", "DataProvider::DataProvider", "logger"),
+            ("ValueMask", "ValueMask::ValueMask", "masks"),
+            ("HttpServer", "HttpServer::HttpServer", "controller_loggers"),
+            ("HttpServer", "HttpServer::HttpListener", "dbg_stopping_hook"),
+            ("WebSocketClient", "WebSocketClient::WscActionCall", "states"),
+            ("ProviderIndex", "ProviderIndex::ProviderIndex", "worker_processes"),
+            ("ProviderIndexUtil", "ProviderIndexUtil::ProviderIndexUtil", "logger"),
+            ("ConvertApiDataProvider", "ConvertApiDataProvider::ConvertApiDataProviderBase", "converter_cache"),
+            ("ConnectionProvider", "ConnectionProvider::ConnectionSchemeCache", "initmap"),
+            ("RestSchemaActions", "RestSchemaActions::RestSchemaActionCodecs", "codecmap"),
+        );
+    }
+
+    constructor() : QUnit::Test("module static isolation", "1.0", \ARGV) {
+        # the host loads the modules, as the host of tenants does
+        map load_module($1), (map {$1[0]: True}, Cases).keys();
+        foreach list<string> c in (Cases) {
+            addTestCase(sprintf("%s::%s", c[1], c[2]), \readTest(), c);
+        }
+        addTestCase("state populated by other code", \populatedTest());
+        set_return_value(main());
+    }
+
+    #! a sandboxed subclass that reads the static cannot be parsed
+    readTest(string mod, string cls, string member) {
+        *hash<ExceptionInfo> ex;
+        Program p = getProgram();
+        try {
+            p.parse(getSource(mod, cls, member), "subclass");
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        if (!ex) {
+            # the subclass was parsed: it reads the shared state
+            auto v = p.callFunction("get");
+            fail(sprintf("a sandboxed subclass of %s read %s: %s", cls, member, v.fullType()));
+        }
+        assertEq("PARSE-EXCEPTION", ex.err, sprintf("%s: %s", ex.err, ex.desc));
+        assertRegex(member, ex.desc);
+    }
+
+    #! state that the host's code put in a cache is not read by a sandboxed subclass
+    populatedTest() {
+        # the host parses a mask, which the class caches
+        ValueMask::ValueMask::parseDate("2026-11-19", "YYYY-MM-DD");
+        Program p = getProgram();
+        try {
+            p.parse(getSource("ValueMask", "ValueMask::ValueMask", "masks"), "subclass");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("PARSE-EXCEPTION", ex.err);
+            return;
+        }
+        auto v = p.callFunction("get");
+        fail(sprintf("a sandboxed subclass read the masks that the host cached: %y", v));
+    }
+
+    #! returns a Program with a sandbox
+    private Program getProgram() {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! returns the source of a subclass with a static method that returns the static member and a function that
+    #! calls it
+    private static string getSource(string mod, string cls, string member) {
+        return sprintf("%%modern\n%%requires %s\nclass Sub inherits %s {\n    static auto get() { return %s; }\n}\n"
+            "auto sub get() { return Sub::get(); }\n", mod, cls, member);
+    }
+}

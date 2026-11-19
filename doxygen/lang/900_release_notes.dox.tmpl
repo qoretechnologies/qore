@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par The Shared State of Standard Module Classes Is Not Visible to Subclasses
+    The static members in which public classes of the standard modules keep state shared by all of their callers
+    (caches of objects and connections, the host's callbacks and loggers) are \c private:internal, so no subclass can
+    read them (see @ref sandbox_module_state; <a href="https://github.com/qoretechnologies/qore/issues/6748">issue
+    6748</a>).
+
     @par Sandboxed Code Cannot Change the Process-Wide Registries of Standard Modules
     The registries of schemes, location handlers, lookups, resolvers, serializers, codecs, schemas, types and YAML tag
     handlers of the standard modules refuse registrations, replacements and removals from sandboxed code, also when it

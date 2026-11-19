@@ -672,7 +672,7 @@ string path = AbstractFileLocationHandler::getPathFromFileUri("file:///var/data/
 
 #! The main class
 public class FileLocationHandler {
-    private {
+    private:internal {
         #! The location handler cache; scheme -> handler;
         /**
         */

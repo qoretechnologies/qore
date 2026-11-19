@@ -65,7 +65,9 @@ public class DbDataProviderBase inherits AbstractDataProvider {
                 "returns_type": "int",
             },
         };
+    }
 
+    private:internal {
         #! Lookup to get an abstract datasource from a name
         static *code datasource_lookup;
 
@@ -279,14 +281,14 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     static setDatasourceLookup(code datasource_lookup) [dom=PROCESS_CONTROL] {
         # the lookup is process-wide and gives every caller's datasources (qore#6747)
         DataProvider::checkSharedRegistration("DbDataProvider configuration", "datasource lookup", "");
-        DbDataProvider::datasource_lookup = datasource_lookup;
+        DbDataProviderBase::datasource_lookup = datasource_lookup;
     }
 
     #! Sets the table lookup
     static setTableLookup(code table_lookup) [dom=PROCESS_CONTROL] {
         # the lookup is process-wide and gives every caller's tables (qore#6747)
         DataProvider::checkSharedRegistration("DbDataProvider configuration", "table lookup", "");
-        DbDataProvider::table_lookup = table_lookup;
+        DbDataProviderBase::table_lookup = table_lookup;
     }
 
     #! Returns the given AbstractDatasource object
@@ -303,7 +305,7 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     */
     static AbstractDatasource getDatasource(string ds_string) {
         if (datasource_lookup && (ds_string !~ /:/)) {
-            return DbDataProvider::datasource_lookup(ds_string);
+            return DbDataProviderBase::datasource_lookup(ds_string);
         }
         # a connection string opens a connection of its own: code restricted from the DATABASE domain uses only the
         # datasources that the host provides, also through other module code, a closure or a callback (qorus#856,
@@ -318,7 +320,7 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     #! Returns an AbstractTable object from the given datasource and table strings
     static AbstractTable getTable(string ds_string, string table_string) {
         if (table_lookup && (ds_string !~ /:/)) {
-            return DbDataProvider::table_lookup(ds_string, table_string);
+            return DbDataProviderBase::table_lookup(ds_string, table_string);
         }
         AbstractDatasource ds = DbDataProvider::getDatasource(ds_string);
         return AbstractTable::getTable(ds, table_string);
@@ -327,7 +329,7 @@ public class DbDataProviderBase inherits AbstractDataProvider {
     #! Returns an AbstractTable object from the given datasource and table arguments
     static AbstractTable getTable(AbstractDatasource ds, string table_string) {
         if (table_lookup) {
-            return DbDataProvider::table_lookup(ds, table_string);
+            return DbDataProviderBase::table_lookup(ds, table_string);
         }
         return AbstractTable::getTable(ds, table_string);
     }

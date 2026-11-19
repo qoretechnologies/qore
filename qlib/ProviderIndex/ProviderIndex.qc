@@ -347,17 +347,19 @@ class ProviderIndexAppTypes {
 public class ProviderIndex inherits ProviderIndexUtil {
     public {}
 
-    private {
+    private:internal {
         #! The batch of this process, if it is an index worker
         static *hash<auto> worker_batch;
 
         #! Protects the running worker processes and the cancellation generation
         static Mutex worker_lock();
+
         #! Incremented by cancelWorkers(); a build started in an earlier generation has been cancelled
         static int cancel_generation = 0;
 
         #! Protects @ref unique_key_counts
         static Mutex unique_key_lock();
+
         #! What the replacement of the unique keys of type descriptions did in this process; see
         #! getUniqueKeyReplacementCounts()
         static hash<string, int> unique_key_counts = {
@@ -367,6 +369,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
             "most_walks": 0,
         };
 %ifndef NoProcess
+
         #! The worker processes of the builds in progress, by batch file
         static hash<string, Process> worker_processes = {};
 %endif

@@ -421,9 +421,6 @@ public class ProviderIndexUtil {
     public {}
 
     private {
-        #! Global logger
-        static *LoggerInterface logger;
-
         #! Global mutex
         static Mutex m();
 
@@ -552,6 +549,9 @@ public class ProviderIndexUtil {
     }
 
     private:internal {
+        #! Global logger
+        static *LoggerInterface logger;
+
         #! The capability that reads the files of the configured index for code that a sandbox governs, or
         #! @ref NOTHING
         /** Created when the module is loaded; see initIndexFileReader().  Kept where no subclass can read it.

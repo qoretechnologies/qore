@@ -8429,7 +8429,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         @since %SqlUtil 3.2.0
     */
     public class TableCache {
-        private {
+        private:internal {
             #! resolved tables keyed by connection description, then by table name
             static hash<string, hash<string, AbstractTable>> cache = {};
 
