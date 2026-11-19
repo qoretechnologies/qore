@@ -2413,6 +2413,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a call by name of a \c constructor() or \c destructor() method that only a parent class declares, and a call
+      reference by name to a \c constructor(), \c destructor() or \c copy() method, are refused with an exception, where
+      they crashed (see @ref class_special_methods "special methods"; issue #6783)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)
