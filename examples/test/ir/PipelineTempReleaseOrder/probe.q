@@ -205,8 +205,8 @@ for (int i = 0; i < 2; ++i) {
     firstLocal();
 }
 
-auto top = (new P("top-plain"),);
-string topResult = string(first (map 1, top)) + ((top = NOTHING) ?? "") + marker("top-plain");
+auto topSource = (new P("top-plain"),);
+string topResult = string(first (map 1, topSource)) + ((topSource = NOTHING) ?? "") + marker("top-plain");
 auto topTarget = (new P("top-reference"),);
 auto topRef = \topTarget;
 topResult = string(first (map 1, topRef)) + ((topTarget = NOTHING) ?? "") + marker("top-reference");
