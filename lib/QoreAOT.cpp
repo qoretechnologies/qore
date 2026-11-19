@@ -4205,6 +4205,18 @@ public:
                     case QoreIROpcode::ScopeExit:
                         scope_exit_ids.emplace_back(
                             static_cast<const QoreIRScopeExitInstruction*>(inst)->scope_id, i);
+                        if (static_cast<const QoreIRScopeExitInstruction*>(inst)->hand_over_return) {
+                            hand_over_exit_blocks.insert(i);
+                        }
+                        break;
+                    case QoreIROpcode::TakeHandedOverReturn:
+                        hand_over_take_blocks.insert(i);
+                        break;
+                    case QoreIROpcode::ReleaseHandedOverReturn:
+                        // the form with an operand only clears the result of a ScopeExit for the IR interpreter
+                        if (inst->operands.empty()) {
+                            hand_over_take_blocks.insert(i);
+                        }
                         break;
                     case QoreIROpcode::PushTempMark:
                         if (inst->temp_scope_id) {
@@ -4263,6 +4275,10 @@ public:
         std::vector<size_t> block_insts(n);
         for (size_t i = 0; i < n; ++i) {
             block_insts[i] = fn.blocks[i]->instructions.size();
+        }
+        if (!hand_over_exit_blocks.empty() || !hand_over_take_blocks.empty()) {
+            succ_edges = out_edges;
+            pred_edges = in_edges;
         }
         std::unordered_set<const void*> body_local_set;
         for (const LocalVar* lv : fn.all_body_locals) {
@@ -4424,6 +4440,55 @@ private:
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
     //! the blocks that an exception edge targets
     std::unordered_set<const QoreIRBasicBlock*> exception_targets;
+    //! the blocks with a ScopeExit whose handlers hand the values of their returns over to a return (#6137)
+    std::unordered_set<size_t> hand_over_exit_blocks;
+    //! the blocks with an instruction that takes or releases a value handed over to a return (#6137)
+    std::unordered_set<size_t> hand_over_take_blocks;
+    //! the successors and predecessors of the blocks, kept for handOverCrossesRegion() when the function has a
+    //! handed-over return
+    std::vector<std::vector<size_t>> succ_edges;
+    std::vector<std::vector<size_t>> pred_edges;
+
+    //! Returns true if a ScopeExit that hands a return's value over and an instruction that takes or releases the
+    //! value can be on one path with one of them in the region [\a first..\a last] and the other outside it
+    /** Conservative: a path from a ScopeExit of the region to a take outside it, or from a ScopeExit outside the
+        region to a take in it.
+    */
+    bool handOverCrossesRegion(size_t first, size_t last) const {
+        if (hand_over_exit_blocks.empty() || hand_over_take_blocks.empty()) {
+            return false;
+        }
+        auto in_region = [&](size_t i) { return i >= first && i <= last; };
+        // true if a block of \a targets outside the region is reachable from a block of \a starts in the region
+        // along \a edges
+        auto reaches_outside = [&](const std::unordered_set<size_t>& starts,
+                const std::vector<std::vector<size_t>>& edges, const std::unordered_set<size_t>& targets) {
+            std::vector<bool> seen(edges.size());
+            std::vector<size_t> work;
+            for (size_t i : starts) {
+                if (in_region(i)) {
+                    seen[i] = true;
+                    work.push_back(i);
+                }
+            }
+            while (!work.empty()) {
+                size_t b = work.back();
+                work.pop_back();
+                if (!in_region(b) && targets.count(b)) {
+                    return true;
+                }
+                for (size_t j : edges[b]) {
+                    if (!seen[j]) {
+                        seen[j] = true;
+                        work.push_back(j);
+                    }
+                }
+            }
+            return false;
+        };
+        return reaches_outside(hand_over_exit_blocks, succ_edges, hand_over_take_blocks)
+            || reaches_outside(hand_over_take_blocks, pred_edges, hand_over_exit_blocks);
+    }
     //! catch_depth_in: no path into the block seen yet
     static constexpr int CatchDepthUnknown = -2;
     //! catch_depth_in: the paths into the block disagree
@@ -4857,6 +4922,14 @@ private:
             if (why) {
                 return fail(why);
             }
+        }
+        // The value that handlers run out of line past the inline cap in the block cleanups of a return hand over
+        // (a ScopeExit with hand_over_return) is kept in a cell of the function that runs them, which the return takes
+        // or releases (TakeHandedOverReturn, ReleaseHandedOverReturn): the helper and the coordinator have cells of
+        // their own, so the ScopeExit and the instructions that take or release its value must be in the same one
+        // (#6137, qore#6650)
+        if (handOverCrossesRegion(first, last)) {
+            return fail("handed-over return crosses region boundary");
         }
         // A closure created in the region that captures both a local of the region (instantiated in the helper)
         // and a local that the coordinator shares with it cannot find the coordinator's local when it runs ("local

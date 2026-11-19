@@ -16147,7 +16147,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // value of an interrupted return, or the value of a handler's return that replaced it, over to its
         // coordinator (see outline_held_return)
         if (aot_mode && !func.aot_symbol_owner.empty()) {
-            bool signaled = has_on_block_exit_handlers && qore_ir_handlers_return_value(func);
+            // also the value that handlers run out of line past the inline cap hand over to a return (#6137)
+            bool signaled = (has_on_block_exit_handlers && qore_ir_handlers_return_value(func))
+                || qore_ir_has_handed_over_return(func);
             for (const auto& block : func.blocks) {
                 for (const auto& binst : block->instructions) {
                     if (signaled) {
