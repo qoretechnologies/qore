@@ -83,6 +83,7 @@ auto sub open_pool(string host) {
         addTestCase("a local-only driver checks its files itself", \testLocalOnly());
         addTestCase("the policy is that of the code that chose the connection", \testChooser());
         addTestCase("each open is checked with the current policy", \testReopen());
+        addTestCase("a driver checks an address that its connection reached", \testConnectAddress());
         set_return_value(main());
     }
 
@@ -291,5 +292,42 @@ auto sub open_pool(string host) {
         # the policy changes: the next open is checked with it
         sm.addNetworkDeniedIPRange("127.0.0.0/8");
         assertThrows("NETWORK-ACCESS-DENIED", \ds.open());
+    }
+
+    #! qore#6649: qore_dbi_check_connect_address() checks an address that a connection reached (a redirect of the
+    #! server, for example) against the same policies as the destinations before the connection
+    testConnectAddress() {
+        Program p = sandboxed(denyTestNet());
+        # a datasource that the sandboxed code created
+        Datasource ds = p.callFunction("make", "dbitargetprobe", "127.0.0.1");
+        ds.open();
+        on_exit ds.close();
+        assertThrows("NETWORK-ACCESS-DENIED", \ds.select(), "address 203.0.113.7", "a denied address");
+        assertThrows("NETWORK-ACCESS-DENIED", \ds.select(), "address ::ffff:203.0.113.7",
+            "a denied address, mapped to IPv6");
+        assertEq(True, ds.select("address 127.0.0.1"), "an allowed address");
+        assertEq(True, ds.select("address ::1"), "an allowed IPv6 address");
+        assertEq(True, ds.select("address localhost 127.0.0.1"), "with a host name");
+
+        # a copy of it, which trusted code made and opened: checked with the same policy as its destinations
+        Datasource copy = ds.copy();
+        copy.open();
+        on_exit copy.close();
+        assertEq("127.0.0.1", copy.select("checked")[0].host, "the copy's destinations were checked");
+        assertThrows("NETWORK-ACCESS-DENIED", \copy.select(), "address 203.0.113.7", "the copy: a denied address");
+        assertEq(True, copy.select("address 127.0.0.1"), "the copy: an allowed address");
+
+        # a datasource that no sandbox chose: nothing is checked
+        Datasource trusted({"type": "dbitargetprobe", "db": "db", "host": "127.0.0.1"});
+        trusted.open();
+        on_exit trusted.close();
+        assertEq(True, trusted.select("address 203.0.113.7"), "not restricted");
+
+        # the policy of the code that set a value of a trusted datasource applies (the record of the values in use)
+        Datasource configured({"type": "dbitargetprobe", "db": "db", "host": "127.0.0.2"});
+        call(p, "set_host", configured, "127.0.0.1");
+        configured.open();
+        on_exit configured.close();
+        assertThrows("NETWORK-ACCESS-DENIED", \configured.select(), "address 203.0.113.7", "the setter's sandbox");
     }
 }

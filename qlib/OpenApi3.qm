@@ -536,6 +536,24 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
 }
 
 #! Used for loading the %OpenApi3 definitions
+
+#! returns True if a MIME type matches a media range of an \c Accept header (qore#6603)
+/** Only \c "*" for the whole type (<tt>*\/\*</tt>) or for the subtype (<tt>type/\*</tt>) is a wildcard (RFC 9110
+    section 12.5.1); the comparison ignores case.  The media range comes from the request, so it is matched as a
+    media range and never made into a regular expression that the server would compile for each request.
+*/
+bool sub qore_mime_range_matches(string range, string mime_type) {
+    list<string> r = range.lwr().split("/");
+    list<string> m = mime_type.lwr().split("/");
+    if (r.size() != 2 || m.size() != 2) {
+        return False;
+    }
+    if (r[0] == "*") {
+        return r[1] == "*";
+    }
+    return r[0] == m[0] && (r[1] == "*" || r[1] == m[1]);
+}
+
 public class OpenApi3Loader {
     #! Load %OpenApi3 definition from a string
     /**
@@ -2293,15 +2311,13 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
                         return rv;
                 }
 
-                # test if the content type contains asterisk and generate regex for it
+                # a content type with an asterisk is a media range: it comes from the request and is matched as a
+                # media range (qore_mime_range_matches()), never as a regular expression (qore#6603)
                 bool asteriskCt = (content.find("*") != -1);
-                # the content type comes from the request: only its "*" is a wildcard, so that it cannot be a pattern
-                # that fails or that matches more than it says (qore#6603)
-                *string ctRegex = replace(Util::regex_escape(content), "\\*", ".*");
 
                 # check that the content type is valid for the response
                 if (asteriskCt) {
-                    *list<auto> mt = map $1, mimeTypeKeys, $1.regex(ctRegex);
+                    *list<auto> mt = select mimeTypeKeys, qore_mime_range_matches(content, $1);
                     if (!mt) {
                         continue;
                     }
@@ -2331,7 +2347,7 @@ SchemaObject op = schema.getSchemaObjectAt("#/components/schemas/FilterCondition
 
                 # check the default set of mime types
                 if (asteriskCt) {
-                    *list mt = map $1, MimeContentTypes, $1.regex(ctRegex);
+                    *list mt = select MimeContentTypes, qore_mime_range_matches(content, $1);
                     if (mt && mt.size()) {
                         string mimeType = mt[0];
                         return rv += (

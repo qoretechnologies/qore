@@ -1,0 +1,48 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes of its own binary with a default encoding of their own
+
+/*  A text message that WebSocketClient receives is a UTF-8 string, whatever the default encoding of the process
+    (qore#6619): the helper receives messages with non-ASCII characters in a process whose default encoding is
+    ISO-8859-1 and in one whose default encoding is UTF-8.
+*/
+
+%modern
+
+%requires QUnit
+%requires ../../TestInterpreter.qm
+
+%exec-class WebSocketAsyncTextEncodingTest
+
+class WebSocketAsyncTextEncodingTest inherits QUnit::Test {
+    private {
+        # the type, encoding and UTF-8 bytes of each message the helper receives
+        const Expected = (
+            "string UTF-8 6772c3b6c39f6520e282ac",
+            "string UTF-8 4153434949",
+            "string UTF-8 e697a5e69cace8aa9e",
+        );
+    }
+
+    constructor() : Test("WebSocketAsyncTextEncodingTest", "1.0") {
+        foreach string charset in (("ISO-8859-1", "UTF-8")) {
+            addTestCase("text messages are UTF-8 with the default encoding " + charset, \charsetTest(), charset);
+        }
+        set_return_value(main());
+    }
+
+    charsetTest(string charset) {
+        string helper = get_script_dir() + "async-text-encoding" + DirSep + "ws-async-text-encoding.q";
+        string cmd = sprintf("%s --charset=%s %s 2>&1", TestInterpreter::qore_interpreter(), charset, helper);
+        int rc;
+        string output = backquote(cmd, \rc);
+        if (m_options.verbose > 1) {
+            printf("%s", output);
+        }
+        assertEq(0, rc, output);
+        list<string> lines = output.split("\n");
+        assertEq(Expected, lines[0..2], charset);
+        assertEq("default " + charset, lines[3], "the helper's default encoding");
+    }
+}

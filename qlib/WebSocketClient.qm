@@ -47,7 +47,7 @@
 
 module WebSocketClient {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "2.5";
     desc = "user module for providing client support for the WebSocket protocol";
     author = "David Nichols <david@qore.org>";
@@ -354,6 +354,16 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
 
 
     @section wsc_v2_5 v2.5
+    - a text message is given to the callback as a UTF-8 string (RFC 6455), not one in the default encoding of the
+      process; with a default encoding other than UTF-8, messages with non-ASCII text were lost
+      (<a href="https://github.com/qoretechnologies/qore/issues/6619">issue 6619</a>)
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - without the \c "start_thread" and \c "call_wrapper" options, the \c start_thread and \c call_wrapper
+      capabilities of the thread that creates the client are used, as a host sets them for the code it runs with
+      @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors no longer contain the values of options or credentials, which can be passwords or tokens
       (<a href="https://github.com/qoretechnologies/qore/issues/6467">issue 6467</a>)
     - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
@@ -3003,11 +3013,20 @@ ws.connect();
             op = c.op;
         }
         if (op instanceof WebSocketClientHcioPollOp) {
+            bool drained;
             try {
-                cast<WebSocketClientHcioPollOp>(op).initialDrain();
+                drained = cast<WebSocketClientHcioPollOp>(op).initialDrain();
             } catch (hash<ExceptionInfo> ex) {
                 # an exception of the raw frame callback, logged as in notifyIo(); the frames drained are delivered
                 logError("exception delivering the frames received with the handshake: %s: %s", ex.err, ex.desc);
+                drained = True;
+            }
+            # nothing received with the handshake: there is nothing to deliver; a delivery task would hold the client
+            # on a callback worker for no reason, so that a client whose owner drops it meanwhile would be destroyed
+            # there instead of in the owner's thread (issue #6154); frames that arrive later are delivered through
+            # notifyIo()
+            if (!drained) {
+                return;
             }
         }
         scheduleDelivery(c);
@@ -3525,12 +3544,15 @@ ws.setEventQueue();
         }
 %endif
 
-        if (http_opts.hasKey("start_thread")) {
+        if (exists http_opts.start_thread) {
             if (!http_opts.start_thread.callp()) {
                 raiseError("option hash to WebSocketClient::constructor() has an invalid 'start_thread' key with type %y; "
                     "must be a callable value", opts.start_thread.fullType());
             }
             start_thread = remove http_opts.start_thread;
+        } else if (*code cap = get_thread_capability("start_thread")) {
+            # the capability of the code that the host runs (qorus#867)
+            start_thread = cap;
         }
 %ifdef PO_NO_THREAD_CONTROL
         else {
@@ -3555,14 +3577,19 @@ ws.setEventQueue();
             pong_callback = http_opts.pong_callback;
         }
 
-        if (http_opts.hasKey("call_wrapper")) {
+        if (exists http_opts.call_wrapper) {
             if (!http_opts.call_wrapper.callp()) {
                 raiseError("option hash to WebSocketClient::constructor() has an invalid 'call_wrapper' key with "
                     "type %y; must be a callable value", opts.call_wrapper.type());
             }
             # not an HTTPClient option; remove so it is not forwarded to the HTTP layer
             call_wrapper = remove http_opts.call_wrapper;
+        } else {
+            # the capability of the code that the host runs, if any (qorus#867)
+            call_wrapper = get_thread_capability("call_wrapper");
         }
+        # neither is an HTTPClient option, also when given as NOTHING
+        remove http_opts{"start_thread", "call_wrapper"};
 
         hash<UrlInfo> uh = parse_url(http_opts.url);
         if (uh.protocol) {
@@ -4425,7 +4452,8 @@ ws.setEventQueue();
             HttpClientIo::HttpClientConnection conn = hcio_stream.getConnection();
             async_wake_socket = conn.getPollOperation().getSocket();
             # Mark as started — enables on_poll_complete delivery from notifyIo.
-            # Then drain any data already in the Channel and trigger delivery.
+            # The data already in the Channel is drained by runInitialDrain(),
+            # which schedules a delivery only when it drained something.
             poll_op.setHeartbeat(async_heartbeat_ms);
             if (async_idle_timeout_ms > 0) {
                 poll_op.setIdleTimeout(async_idle_timeout_ms);
@@ -4914,8 +4942,15 @@ ws.setEventQueue();
     private int processAsyncMessage(hash<auto> msg) {
         switch (msg.type) {
             case "text": {
-                # raw_callback is handled per-frame in the poll operation
-                return handleEvent(msg.data.toString());
+                # raw_callback is handled per-frame in the poll operation; a text message is UTF-8 (RFC 6455
+                # section 5.6), whatever the default encoding of the process (qore#6619)
+                auto text = msg.data;
+                if (text.typeCode() == NT_BINARY) {
+                    text = text.toString("UTF-8");
+                } else if (text.encoding() != "UTF-8") {
+                    text = convert_encoding(text, "UTF-8");
+                }
+                return handleEvent(text);
             }
             case "binary": {
                 # raw_callback is handled per-frame in the poll operation
@@ -8315,8 +8350,9 @@ public class WebSocketClientHcioPollOp {
 
         # Only trigger delivery after start() — before that, poll_op isn't
         # assigned in the WebSocketClient so scheduleDelivery() would fail.
-        # Data drained before start() stays in recv_channel and is picked
-        # up by the initial scheduleDelivery() call in startAsyncIo().
+        # Frames that arrive before start() stay in msg_queue; initialDrain()
+        # drains them, and the client schedules their delivery when it drained
+        # something (runInitialDrain(), issue #6154).
         if (have_frames && started && on_poll_complete) {
             on_poll_complete();
         }
@@ -8342,6 +8378,9 @@ public class WebSocketClientHcioPollOp {
     #! Drains any frames already dispatched before the adapter was fully wired up
     /** Must be called after registration to pick up data dispatched before the
         adapter was created. Safe to call from the user thread.
+
+        @return @ref True if anything was processed (frames, a close, an error or the end of the stream), so that
+        there is something to deliver
     */
     bool initialDrain() {
         AutoLock al(process_mutex);

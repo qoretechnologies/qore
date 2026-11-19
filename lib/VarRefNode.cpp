@@ -41,6 +41,7 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 static std::string qore_aot_deferred_object_type_class_path(const QoreTypeInfo* typeInfo) {
     if (!qore_type_info_is_aot_deferred(typeInfo)
@@ -980,7 +981,7 @@ int qore_parse_check_unassigned_read(QoreProgram* pgm, const QoreProgramLocation
             || !QoreTypeInfo::hasType(target_type)
             || QoreTypeInfo::parseAcceptsReturns(target_type, NT_NOTHING)
             || !parse_check_parse_option(QoreParseOptions::STRICT_PARSE_ERRORS)
-            || pgm->parseExceptionRaised()) {
+            || qore_program_ops(pgm).parseExceptionRaised()) {
         return 0;
     }
     QoreStringMaker hint("assign '%s' before this use, or give %s an optional type if the absent value is "

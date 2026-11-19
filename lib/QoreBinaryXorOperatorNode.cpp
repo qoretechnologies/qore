@@ -32,6 +32,7 @@
 #include <qore/intern/QorePluginRegistry.h>
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreStatementTemps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreBinaryXorOperatorNode::op_str("^ (binary xor) operator expression");
 
@@ -94,7 +95,7 @@ int QoreBinaryXorOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     if (!err) {
         QorePluginResolvedOperationInfo plugin_op;
-        ExceptionSink* parse_xsink = parse_context.pgm ? parse_context.pgm->getParseExceptionSink() : nullptr;
+        ExceptionSink* parse_xsink = parse_context.pgm ? qore_program_ops(parse_context.pgm).getParseExceptionSink() : nullptr;
         int plugin_rc = qore_plugin_resolve_program_operation_info(parse_context.pgm, lti, parse_context.typeInfo,
             "bit_xor", QorePluginHelperAbi::BinaryValue, plugin_op, parse_xsink);
         if (plugin_rc < 0) {

@@ -3762,6 +3762,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     every local (qore#6004)
 */
 struct QoreIRUnrecordedWrites {
+    //! Handler bodies entered by this collection (reported by QORE_IR_OPT_STATS).
+    size_t handler_scans = 0;
     //! the locals written
     std::unordered_set<const void*> locals;
     //! true if any local can be written
@@ -3769,6 +3771,18 @@ struct QoreIRUnrecordedWrites {
 
     DLLLOCAL bool writes(const void* key) const {
         return any || locals.count(key);
+    }
+
+    //! Collects root references and the writes of reachable handlers.
+    DLLLOCAL void collect(const QoreIRFunction& ir_func) {
+        addReferences(ir_func);
+        if (!any) {
+            std::unordered_set<const QoreIRFunction*> visited;
+            addHandlerWrites(ir_func, false, visited);
+        }
+        if (handler_scans && q_env_is_set("QORE_IR_OPT_STATS")) {
+            fprintf(stderr, "IR-OPT-HANDLER-WRITES: %s: scans=%zu\n", ir_func.getDisplayName().c_str(), handler_scans);
+        }
     }
 
     //! adds the locals that \a ir_func creates a reference to
@@ -3796,8 +3810,10 @@ struct QoreIRUnrecordedWrites {
     }
 
     //! adds the writes of the handlers of \a ir_func and of their handlers; \a handler is true if \a ir_func is one
-    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler) {
+    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler,
+            std::unordered_set<const QoreIRFunction*>& visited) {
         if (handler) {
+            ++handler_scans;
             addReferences(ir_func);
         }
         for (const auto& block : ir_func.blocks) {
@@ -3826,7 +3842,10 @@ struct QoreIRUnrecordedWrites {
                     any = true;
                     return;
                 }
-                addHandlerWrites(*handler_ir, true);
+                // Inline and out-of-line registrations share handler_ir. Its writes enter the union once (#6647).
+                if (visited.insert(handler_ir).second) {
+                    addHandlerWrites(*handler_ir, true, visited);
+                }
             }
         }
     }
@@ -3869,10 +3888,7 @@ bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const Local
         if (!writes) {
             if (!unrecorded) {
                 unrecorded.emplace();
-                unrecorded->addReferences(ir_func);
-                if (!unrecorded->any) {
-                    unrecorded->addHandlerWrites(ir_func, false);
-                }
+                unrecorded->collect(ir_func);
             }
             writes = unrecorded->writes(key);
         }
@@ -3968,10 +3984,7 @@ static bool qore_ir_add_handler_ast_locals(const QoreIRFunction& ir_func, std::u
 bool qore_ir_collect_handler_written_locals(const QoreIRFunction& ir_func, std::unordered_set<const void*>& written) {
     QoreIRUnrecordedWrites w;
     // a handler can write a local through a reference that this function created
-    w.addReferences(ir_func);
-    if (!w.any) {
-        w.addHandlerWrites(ir_func, false);
-    }
+    w.collect(ir_func);
     if (w.any) {
         return false;
     }

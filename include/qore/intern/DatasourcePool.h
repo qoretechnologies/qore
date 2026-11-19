@@ -44,6 +44,7 @@
 #include "qore/intern/SqlMutationContext.h"
 #include "qore/intern/DbiForkRegistry.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <map>
 #include <deque>
@@ -324,7 +325,7 @@ public:
     DLLLOCAL virtual void forkChild() noexcept {
         // the waiters are threads of the parent; the connections they held are given up when the pool is next used
         // (see forkCheckUnlocked())
-        QoreCondition::reinitAfterFork();
+        qore_condition_ops(static_cast<QoreCondition*>(this)).reinitAfterFork();
         QoreThreadLock::reinitAfterFork();
         wait_count = 0;
     }

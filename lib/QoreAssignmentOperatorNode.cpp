@@ -41,6 +41,7 @@
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
@@ -578,7 +579,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                 qore_type_result_e declared_res = QoreTypeInfo::parseAccepts(check_declared_ti,
                     check_declared_rhs_ti, may_not_match, may_need_filter, max_result);
                 // Only raise error if incompatible with declared type and parse exception sink is enabled
-                if (!declared_res && parse_context.pgm->getParseExceptionSink()) {
+                if (!declared_res && qore_program_ops(parse_context.pgm).getParseExceptionSink()) {
                     raise_exception = true;
                     error_ti = declared_ti;
                     error_rhs_ti = parse_context.typeInfo;
@@ -596,7 +597,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                     raise_exception = true;
                 }
             } else {
-                raise_exception = (bool)parse_context.pgm->getParseExceptionSink();
+                raise_exception = (bool)qore_program_ops(parse_context.pgm).getParseExceptionSink();
             }
         }
     }

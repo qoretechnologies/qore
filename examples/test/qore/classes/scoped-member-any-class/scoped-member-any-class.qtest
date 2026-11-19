@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# "Class::name" resolves a constant or static variable of any class with that name: a class with the name in another
+# namespace that does not provide the member does not hide one that does (issue #1527).
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ScopedMemberAnyClassTest
+
+# Qore::Channel is a class of the Qore namespace: the name resolves to it first
+namespace A {
+    class Channel {
+        public {
+            static int other = 2;
+        }
+        const SHARED = "a";
+    }
+    class Chan2 {
+        const SHARED = "a";
+    }
+    class Chan3 {
+        const OWN = "a";
+    }
+    string sub own() {
+        # the class of the current namespace wins over the one of the root namespace
+        return Chan3::OWN;
+    }
+}
+
+class Chan3 {
+    const OWN = "root";
+}
+
+namespace B {
+    class Chan2 {
+        const SHARED = "b";
+    }
+    class Channel {
+        const META_SUBSCRIBE = "sub";
+        const SHARED = "b";
+        public {
+            static int svar = 3;
+        }
+    }
+}
+
+class ScopedMemberAnyClassTest inherits QUnit::Test {
+    constructor() : Test("scoped member of any class with the name", "1.0") {
+        addTestCase("the class with the member", \memberTest());
+        addTestCase("the first class wins", \priorityTest());
+        addTestCase("the class of the current namespace", \currentNamespaceTest());
+        addTestCase("static methods", \staticMethodTest());
+        addTestCase("the order of the other classes", \orderTest());
+        addTestCase("a parent class with the name", \parentTest());
+        addTestCase("call references", \callRefTest());
+        addTestCase("access", \accessTest());
+        addTestCase("no class has the member", \missingTest());
+        set_return_value(main());
+    }
+
+    memberTest() {
+        # a constant and a static variable of the second class named Channel
+        assertEq("sub", Channel::META_SUBSCRIBE);
+        assertEq(3, Channel::svar);
+        # and of the first
+        assertEq(2, Channel::other);
+        # a qualified name is as before
+        assertEq("sub", B::Channel::META_SUBSCRIBE);
+    }
+
+    priorityTest() {
+        # both classes provide the member: the one that the name resolves to, the first one declared at the lowest
+        # depth, is used, as before
+        assertEq("a", Chan2::SHARED);
+        assertEq("a", A::own());
+        # after a class of the Qore namespace without the member, the same order applies: the result does not
+        # depend on where the namespaces are in memory
+        assertEq("a", Channel::SHARED);
+    }
+
+    private auto run(string src) {
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(src, "<case>");
+        return p.callFunction("f");
+    }
+
+    currentNamespaceTest() {
+        # the Qore class Channel has no SHARED: the class of the current namespace comes before the others
+        assertEq("b", run("namespace A { class Channel { const SHARED = \"a\"; } } "
+            "namespace B { class Channel { const SHARED = \"b\"; } string sub inB() { return Channel::SHARED; } } "
+            "string sub f() { return B::inB(); }"));
+    }
+
+    staticMethodTest() {
+        # a static method of a class with the name that has it, as a constant
+        assertEq("bm", run("namespace A { class Channel {} } "
+            "namespace B { class Channel { static string m() { return \"bm\"; } } } "
+            "string sub f() { return Channel::m(); }"));
+        # a function of a namespace with the name comes first, as before
+        assertEq("fn", run("namespace Channel { string sub open() { return \"fn\"; } } "
+            "namespace B { class Channel { static string open() { return \"bm\"; } } } "
+            "string sub f() { return Channel::open(); }"));
+        # and so does a closure constant of the first class
+        assertEq("const", run("class K5 { const m = string sub () { return \"const\"; }; } "
+            "namespace B { class K5 { static string m() { return \"bm\"; } } } string sub f() { return K5::m(); }"));
+        # a private static method of an unrelated class is not reached: the namespace function is called
+        assertEq("fn", run("namespace A { class Channel {} } "
+            "namespace B { class Channel { private static string m() { return \"priv\"; } } } "
+            "namespace Channel { string sub m() { return \"fn\"; } } "
+            "class Q { static string t() { return Channel::m(); } } string sub f() { return Q::t(); }"));
+    }
+
+    orderTest() {
+        # the class that the name resolves to (A::K3, declared first) has no X: the others are tried by the depth
+        # and then the path of their namespace, so the result does not depend on where they are in memory
+        assertEq("b", run("namespace A { class K3 {} } namespace C { class K3 { const X = \"c\"; } } "
+            "namespace B { class K3 { const X = \"b\"; } } string sub f() { return K3::X; }"));
+        # the depth comes before the path: Z::K4 (depth 1) before A::Inner::K4 (depth 2)
+        assertEq("z", run("namespace A { class K4 {} } namespace Z { class K4 { const X = \"z\"; } } "
+            "namespace A { namespace Inner { class K4 { const X = \"inner\"; } } } "
+            "string sub f() { return K4::X; }"));
+    }
+
+    parentTest() {
+        # a parent class with the name of the class that is parsed comes before unrelated classes with the name
+        assertEq("parent parent", run("namespace A { class Base {} } "
+            "namespace B { class Base { const X = \"unrelated\"; static string sm() { return \"unrelated\"; } } } "
+            "namespace Z { class Base { const X = \"parent\"; static string sm() { return \"parent\"; } } } "
+            "namespace C { class D inherits Z::Base { string t() { return Base::sm() + \" \" + Base::X; } } } "
+            "string sub f() { C::D d(); return d.t(); }"));
+        # and a non-static method of a parent class with the name is called as a base class method
+        assertEq("parent", run("namespace A { class Base {} } "
+            "namespace B { class Base { static string foo() { return \"unrelated\"; } } } "
+            "namespace Y { class Base { string foo() { return \"parent\"; } } } "
+            "class D inherits Y::Base { string t() { return Base::foo(); } } string sub f() { D d(); return d.t(); }"));
+    }
+
+    callRefTest() {
+        assertEq("bm", run("namespace A { class Channel {} } "
+            "namespace B { class Channel { static string m() { return \"bm\"; } } } "
+            "string sub f() { code c = \\Channel::m(); return c(); }"));
+        # in a method of a class that inherits a class with the name
+        assertEq("parent", run("namespace A { class Base {} } "
+            "namespace Z { class Base { static string sm() { return \"parent\"; } } } "
+            "class D inherits Z::Base { string t() { code c = \\Base::sm(); return c(); } } "
+            "string sub f() { D d(); return d.t(); }"));
+        # a non-static method of a parent class with the name, in a method
+        assertEq("parent", run("namespace A { class Base {} } "
+            "namespace Y { class Base { string foo() { return \"parent\"; } } } "
+            "class D inherits Y::Base { string t() { code c = \\Base::foo(); return c(); } } "
+            "string sub f() { D d(); return d.t(); }"));
+        # a call and a reference with the same name have the same target: the function of the namespace
+        assertEq("fn fn", run("namespace A { class X {} } namespace N { class X { string pub() { return \"m\"; } } } "
+            "namespace X { string sub pub() { return \"fn\"; } } "
+            "class C inherits N::X { string t() { code c = \\X::pub(); return X::pub() + \" \" + c(); } } "
+            "string sub f() { C c(); return c.t(); }"));
+        # where a call would call a closure constant of a class with the name, the reference is an error, not a
+        # static method of another class
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("INVALID-METHOD", "has no accessible static method .m.", \p.parse(), ("namespace A { class K8 {} } "
+            "namespace B { class K8 { const m = string sub () { return \"const\"; }; } } "
+            "namespace C { class K8 { static string m() { return \"cm\"; } } } "
+            "string sub f() { code c = \\K8::m(); return c(); }", "const-ref"));
+        assertEq("const", run("namespace A { class K8 {} } "
+            "namespace B { class K8 { const m = string sub () { return \"const\"; }; } } "
+            "namespace C { class K8 { static string m() { return \"cm\"; } } } string sub f() { return K8::m(); }"));
+        # a function of a namespace with the name comes first, as for calls
+        assertEq("fn", run("namespace Kx { string sub open() { return \"fn\"; } } namespace A { class Kx {} } "
+            "namespace B { class Kx { static string open() { return \"bm\"; } } } "
+            "string sub f() { code c = \\Kx::open(); return c(); }"));
+    }
+
+    accessTest() {
+        # an instance method of a class inherited private:internal is not reached from a subclass
+        Program p(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", "X::pub", \p.parse(), ("namespace N { class X { pub() {} } } "
+            "class B inherits private:internal N::X {} class C inherits B { t() { X::pub(); } }", "internal"));
+        # a method of the class itself when its name resolves first to another class
+        assertEq("own", run("namespace A { class Channel2 {} } namespace N { class Channel2 { "
+            "string m() { return \"own\"; } string t() { return Channel2::m(); } } } "
+            "string sub f() { N::Channel2 c(); return c.t(); }"));
+    }
+
+    missingTest() {
+        # a private static method of an unrelated class does not hide a public one of another class
+        assertEq("pub", run("namespace A { class Channel {} } "
+            "namespace B { class Channel { private static string m() { return \"priv\"; } } } "
+            "namespace C { class Channel { static string m() { return \"pub\"; } } } "
+            "class Q { static string t() { return Channel::m(); } } string sub f() { return Q::t(); }"));
+        # a private constant of another class is not reached
+        Program p0(PO_MODERN | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", "Channel::P", \p0.parse(), ("namespace A { class Channel {} } "
+            "namespace B { class Channel { private { const P = 1; } } } auto sub f() { return Channel::P; }",
+            "private"));
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "cannot find any namespace or class 'Channel' in 'Channel::NONE'",
+            \p.parse(), ("namespace A { class Channel {} } namespace B { class Channel {} } "
+                "auto sub f() { return Channel::NONE; }", "missing"));
+    }
+}
