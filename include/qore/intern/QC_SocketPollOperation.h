@@ -1093,7 +1093,8 @@ private:
 
         @return 0 if the request was not answered, 1 if it was (return \a info), -1 if an error occurred
     */
-    DLLLOCAL int serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info, ExceptionSink* xsink);
+    DLLLOCAL int serveFastRoute(const QoreHashNode* hdr, const QoreHashNode* hdr_info, QoreHashNode*& info,
+        ExceptionSink* xsink);
 
     //! Answers the request with a fast route of the socket from the raw header bytes, before any hash is built
     /** The strict parser of the core (HttpFastRequestParser) reads the bytes; a request that it rejects is left to

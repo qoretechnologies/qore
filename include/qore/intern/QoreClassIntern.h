@@ -1566,6 +1566,31 @@ public:
     // issue #6393: copies the context entries of the given member, which shares the storage of this member
     DLLLOCAL void addContextMap(const QoreMemberInfo& mi);
 
+    //! merges the same declaration reached through another path of the hierarchy of the class (qore#6523)
+    /** A member declared in a class that the hierarchy reaches through several paths is one member of the object
+        with the least restrictive access of the paths: if it is accessible through one of them, its value is in the
+        standard object data for every class context; otherwise it is in the storage of the first path, for the
+        class contexts of every path
+
+        @param mi the member as it is in the base class of the other path
+        @param mi_access the access that the member has in this class through the other path; if this member is not
+        accessible, neither is \a mi
+    */
+    DLLLOCAL void mergeDeclarationPath(const QoreMemberInfo& mi, ClassAccess mi_access);
+
+    //! adds the class contexts that access this declaration of the member to \a ctx (qore#6523)
+    DLLLOCAL void getDeclarationContexts(std::set<const qore_class_private*>& ctx) const;
+
+    //! copies the context entries of the given member (qore#6523)
+    /** The entries of a declaration that this member has already (reached through another path of the hierarchy) get
+        the storage that this member gives it; the entries of this declaration are not copied if this member is
+        accessible (its value is in the standard object data)
+    */
+    DLLLOCAL void mergeContextMap(const QoreMemberInfo& mi);
+
+    //! removes the context entries of the class contexts of this declaration of an accessible member (qore#6523)
+    DLLLOCAL void dropDeclarationContexts();
+
     DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
             const qore_class_private* member_class_ctx);
 

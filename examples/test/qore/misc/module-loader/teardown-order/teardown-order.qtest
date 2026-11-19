@@ -1,0 +1,252 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The order in which the modules are deleted at process exit depends on their dependencies only, not on whether a
+# module was loaded from its AOT module (.qmod) or from its source (issue #6251).  Each module group makes a dependency
+# cycle through a run-time load; the modules marked (opt) have an optional module (TdoOptional):
+# - cyc: TdoCycC (opt) requires TdoCycA (opt), which loads TdoCycD at run time, which requires TdoCycC
+# - run: TdoRunC (opt) requires TdoRunB (opt), which loads TdoRunA at run time, which requires TdoRunC
+# - src: as run, all three modules (opt)
+# - aot: as run, only TdoAotA (opt): an AOT module loads a module that falls back to its source
+# - dup: TdoDupB (opt) requires TdoDupA, which requires TdoDupC (opt), which loads TdoDupB at run time; TdoDupB also
+#   loads TdoDupA at run time: TdoDupA, whose name sorts first, must still be deleted after TdoDupB.  A module
+#   already in a Program is not applied to it again, so that load records nothing; the group guards against a change
+#   that would record the requirement as one at run time only, which would break the cycle at TdoDupA
+# The modules are compiled to AOT modules with qcc while TdoOptional is not on the module path.  Each group then runs
+# in a qore subprocess (in the execution mode of this test) without TdoOptional, when every module is loaded from its
+# AOT module, and with it, when the AOT modules of the modules with the optional module are stale and those modules are
+# loaded from their sources (user modules), while the others are still loaded from their AOT modules.  Each module
+# prints a line when it is deleted (a constant's destructor).  The cycle is broken at the module required only through
+# the run-time load, so every module required with %requires is deleted after the modules requiring it, in both runs:
+# - without the fix, the cycle was broken at the module of the lowest rank, and a user module ranked below an AOT
+#   module: a stale AOT module changed which module was deleted first
+# - before #6129, deleting a user module after a user module that it requires had been deleted asserted in
+#   QoreModuleManager::removeUserModuleDependency() in debug builds (exit status 134)
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../../qlib"
+%requires FsUtil
+%requires QUnit
+%requires ../../../../TestInterpreter.qm
+
+%exec-class TeardownOrderTest
+
+#! the result of a qore subprocess
+hashdecl TeardownOrderResult {
+    #! the exit status
+    int rc;
+    #! the output on stdout
+    string out;
+    #! the output on stderr
+    string err;
+}
+
+#! a module group of the test
+hashdecl TeardownOrderGroup {
+    #! the modules, in the order in which they are compiled (a required module first)
+    list<string> modules;
+    #! the modules with the optional module, loaded from their sources when it is available
+    list<string> stale;
+    #! the order in which the modules must be deleted
+    list<string> order;
+}
+
+class TeardownOrderTest inherits QUnit::Test {
+    public {
+        #! the module groups: group name -> group
+        const Groups = {
+            "cyc": <TeardownOrderGroup>{
+                "modules": ("TdoCycA", "TdoCycC", "TdoCycD"),
+                "stale": ("TdoCycA", "TdoCycC"),
+                # TdoCycD is required by TdoCycA only through the run-time load
+                "order": ("TdoCycD", "TdoCycC", "TdoCycA"),
+            },
+            "run": <TeardownOrderGroup>{
+                "modules": ("TdoRunB", "TdoRunC", "TdoRunA"),
+                "stale": ("TdoRunB", "TdoRunC"),
+                # TdoRunA is required by TdoRunB only through the run-time load
+                "order": ("TdoRunA", "TdoRunC", "TdoRunB"),
+            },
+            "src": <TeardownOrderGroup>{
+                "modules": ("TdoSrcB", "TdoSrcC", "TdoSrcA"),
+                "stale": ("TdoSrcB", "TdoSrcC", "TdoSrcA"),
+                "order": ("TdoSrcA", "TdoSrcC", "TdoSrcB"),
+            },
+            "aot": <TeardownOrderGroup>{
+                "modules": ("TdoAotB", "TdoAotC", "TdoAotA"),
+                "stale": ("TdoAotA",),
+                "order": ("TdoAotA", "TdoAotC", "TdoAotB"),
+            },
+            "dup": <TeardownOrderGroup>{
+                "modules": ("TdoDupC", "TdoDupA", "TdoDupB"),
+                "stale": ("TdoDupC", "TdoDupB"),
+                # TdoDupB is required by TdoDupC only through the run-time load; TdoDupB requires TdoDupA with
+                # %requires, although it also loads it at run time
+                "order": ("TdoDupB", "TdoDupA", "TdoDupC"),
+            },
+        };
+    }
+
+    private {
+        string qore_bin;
+        *string qcc_bin;
+        string libqore_dir;
+        *string exec_mode;
+        TmpDir tmp("qore-teardown-order-");
+        #! the directory with the compiled modules and their sources
+        string module_dir;
+        #! the error compiling the modules, if any
+        *string compile_error;
+        #! True once the modules have been compiled
+        bool compiled;
+        #! the number of subprocesses run
+        int runs;
+        #! the results of the runs: group -> "aot" or "optional" -> result
+        hash<string, hash<string, hash<TeardownOrderResult>>> results;
+    }
+
+    constructor() : Test("TeardownOrderTest", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler();
+        exec_mode = TestInterpreter::exec_mode(get_script_path());
+        module_dir = tmp.path + DirSep + "modules";
+        foreach string group in (keys Groups) {
+            foreach bool optional in ((False, True)) {
+                string name = sprintf("%s modules, %s", group, optional
+                    ? "stale AOT modules loaded from their sources"
+                    : "AOT modules");
+                addTestCase(name, makeTestCase(group, optional));
+            }
+        }
+        addTestCase("same deletion order with and without stale AOT modules", \testSameOrder());
+        set_return_value(main());
+    }
+
+    #! returns the code of a test case; each case has its own copy of the arguments
+    private code makeTestCase(string group, bool optional) {
+        return sub () { testGroup(group, optional); };
+    }
+
+    #! checks the exit status, the output, and the order in which the modules of a group are deleted
+    private testGroup(string group, bool optional) {
+        hash<TeardownOrderGroup> g = Groups{group};
+        hash<TeardownOrderResult> r = getResult(group, optional);
+        assertEq(0, r.rc, "exit status; stderr: " + r.err);
+        assertEq(("main done",) + (map $1 + " deleted", g.order), getLines(r.out),
+            "deletion order; stderr: " + r.err);
+        if (!optional) {
+            assertEq("", r.err, "stderr");
+            return;
+        }
+        # the modules with the optional module are loaded from their sources, and the others from their AOT modules
+        foreach string mod in (g.modules) {
+            bool stale = inlist(mod, g.stale);
+            assertEq(stale, regex(r.err, sprintf("AOT-MODULE-STALE: AOT module '[^']*/%s\\.qmod' was compiled when "
+                "optional module 'TdoOptional' was not available", mod)),
+                sprintf("%s: stale AOT module; stderr: %s", mod, r.err));
+            assertEq(stale, regex(r.err, sprintf("binary module '[^']*/%s\\.qmod' for feature '%s' failed to load; "
+                "loading source module '[^']*/%s\\.qm' instead", mod, mod, mod)),
+                sprintf("%s: loaded from its source; stderr: %s", mod, r.err));
+        }
+        assertNRegex("Assertion", r.err, "stderr");
+    }
+
+    #! a module group is deleted in the same order whether its modules are loaded from AOT modules or from sources
+    private testSameOrder() {
+        foreach string group in (keys Groups) {
+            assertEq(getLines(getResult(group, False).out), getLines(getResult(group, True).out), group);
+        }
+    }
+
+    #! returns the result of the run for a module group, running it if it has not run yet
+    private hash<TeardownOrderResult> getResult(string group, bool optional) {
+        string key = optional ? "optional" : "aot";
+        if (!results{group}{key}) {
+            results{group}{key} = run(group, optional);
+        }
+        return results{group}{key};
+    }
+
+    #! returns the non-empty lines of the given output
+    private static list<string> getLines(string out) {
+        return map $1, out.split("\n"), $1.val();
+    }
+
+    #! compiles the modules once, without the optional module on the module path
+    private compileModules() {
+        if (!compiled) {
+            compiled = True;
+            if (!qcc_bin) {
+                compile_error = "no qcc found";
+            } else {
+                mkdir(module_dir, 0700);
+                foreach hash<TeardownOrderGroup> g in (Groups.iterator()) {
+                    foreach string mod in (g.modules) {
+                        string src = module_dir + DirSep + mod + ".qm";
+                        TeardownOrderTest::copyFile(get_script_dir() + mod + ".qm", src);
+                        string qmod = module_dir + DirSep + mod + ".qmod";
+                        string out = backquote(sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s "
+                            "QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1",
+                            TeardownOrderTest::shellQuote(libqore_dir), TeardownOrderTest::shellQuote(libqore_dir),
+                            TeardownOrderTest::shellQuote(libqore_dir), TeardownOrderTest::shellQuote(module_dir),
+                            TeardownOrderTest::shellQuote(qcc_bin), TeardownOrderTest::shellQuote(qmod),
+                            TeardownOrderTest::shellQuote(src)));
+                        if (!is_file(qmod)) {
+                            compile_error = sprintf("qcc could not compile %s: %s", mod, out);
+                            break;
+                        }
+                    }
+                    if (compile_error) {
+                        break;
+                    }
+                }
+            }
+        }
+        if (compile_error) {
+            testSkip(compile_error);
+        }
+    }
+
+    #! copies a file
+    private static copyFile(string from, string to) {
+        File f();
+        f.open2(to, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        f.write(ReadOnlyFile::readTextFile(from));
+    }
+
+    #! runs the child program for a module group, with or without the optional module on the module path
+    private hash<TeardownOrderResult> run(string group, bool optional) {
+        compileModules();
+        string path = module_dir;
+        if (optional) {
+            path += ":" + get_script_dir() + "optional";
+        }
+        string err_file = tmp.path + DirSep + sprintf("run-%d.err", ++runs);
+        on_exit if (is_file(err_file)) {
+            unlink(err_file);
+        }
+        string cmd = sprintf("env LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s%s %s 2>%s; "
+            "echo \"rc=$?\"", TeardownOrderTest::shellQuote(libqore_dir),
+            TeardownOrderTest::shellQuote(libqore_dir), TeardownOrderTest::shellQuote(path),
+            TeardownOrderTest::shellQuote(qore_bin), exec_mode ? "--exec-mode=" + exec_mode + " " : "",
+            TeardownOrderTest::shellQuote(get_script_dir() + "teardown-order.q"), group,
+            TeardownOrderTest::shellQuote(err_file));
+        string out = backquote(cmd);
+        *list<*string> m = (out =~ x/^(.*)rc=([0-9]+)\n$/s);
+        assertTrue(exists m, "exit status: " + out);
+        return <TeardownOrderResult>{
+            "rc": int(m[1]),
+            "out": m[0] ?? "",
+            "err": is_file(err_file) ? ReadOnlyFile::readTextFile(err_file) : "",
+        };
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

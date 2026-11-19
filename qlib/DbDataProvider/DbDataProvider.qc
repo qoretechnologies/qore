@@ -229,6 +229,7 @@ public class DbDataProvider inherits DbDataProviderBase {
             }
         }
 
+        DbDataProviderBase::checkRawSqlAllowed("the \"sql\" search option");
         AbstractSQLStatement stmt = ds.getSQLStatement();
         stmt.prepare(search_options.sql);
         if (search_options.args) {

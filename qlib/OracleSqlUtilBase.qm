@@ -954,6 +954,9 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
     }
 
     #! creates the object from the arguments
+    /** @note the method and the domain index parameters are written into the DDL as they are given here; the
+        indexes of a table description are checked by OracleTable::checkIndexOptions() (qore#6577)
+    */
     constructor(string n, bool u, hash c, string nt, *string t, *string n_method, *hash<auto> n_with,
             *string n_partition_scope = NOTHING, bool n_compute_statistics = False,
             *softlist<string> n_partition_columns = NOTHING)
@@ -996,7 +999,10 @@ public class OracleIndex inherits SqlUtil::AbstractIndex, OraclePartitionScopeSu
                 while (wi.next()) {
                     parts += sprintf("%s=%s", wi.getKey(), wi.getValue());
                 }
-                sql += sprintf(" parameters('%s')", parts.join(" "));
+                # the parameters are a string literal (qore#6577)
+                string params = parts.join(" ");
+                params =~ s/'/''/g;
+                sql += sprintf(" parameters('%s')", params);
             }
         }
 
@@ -5218,6 +5224,37 @@ group by p.index_name", schema.upr(), name.upr());
         return pk;
     }
 
+    #! Checks the index options that are written into the DDL (qore#6577)
+    /** Called for each index of a table description
+
+        @param iname the name of the index
+        @param opt the index options
+
+        @throw INDEX-OPTION-ERROR the method is not bitmap, btree, normal or the name of a domain indextype, a domain
+        index parameter name is not a name, or its value is not a scalar value
+    */
+    static checkIndexOptions(string iname, *hash<auto> opt) {
+        # the method (bitmap, btree, normal or the name of a domain indextype) and the parameter names are written
+        # into the DDL as they are (qore#6577)
+        if (exists opt.method && (opt.method.typeCode() != NT_STRING
+                || !regex(opt.method, "\\A[A-Za-z_][A-Za-z0-9_$#]*(?:\\.[A-Za-z_][A-Za-z0-9_$#]*)?\\z"))) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the index method %y is not bitmap, btree, normal or the "
+                "name of a domain indextype", iname, opt.method);
+        }
+        foreach hash<auto> i in (opt.with.pairIterator()) {
+            if (!regex(i.key, "\\A[A-Za-z_][A-Za-z0-9_]*\\z")) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the domain index parameter %y is not a name", iname,
+                    i.key);
+            }
+            # a value is one word: one with a space would add other parameters to the parameters string
+            if (!exists i.value || i.value.typeCode() == NT_HASH || i.value.typeCode() == NT_LIST
+                    || i.value.typeCode() == NT_OBJECT || !regex(i.value.toString(), "\\A[A-Za-z0-9_.$#]+\\z")) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the value %y of the domain index parameter %y is not "
+                    "one word", iname, i.value, i.key);
+            }
+        }
+    }
+
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
         # Oracle has no per-column operator class concept (domain indexes bind operators differently);
         # reject the generic opclass option with a clear message
@@ -5230,6 +5267,7 @@ group by p.index_name", schema.upr(), name.upr());
             throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'with' option on Oracle requires "
                 "the 'method' option to name a domain indextype", iname);
         }
+        OracleTable::checkIndexOptions(iname, opt);
         return new OracleIndex(iname, enabled, ch, "normal", opt.index_tablespace, opt.method, opt.with,
             opt.partition_scope, opt.compute_statistics, getPartitionKeyColumns());
     }

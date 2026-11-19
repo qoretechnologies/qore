@@ -1034,6 +1034,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         @param options additional options: where, include, nulls_not_distinct, order, and nulls
         @throw INDEX-OPTION-ERROR for invalid key modifiers or incompatible options
         @note INCLUDE columns are stored separately from the uniqueness keys.
+        @note the access method, storage parameter names and operator classes are written into the DDL as they are
+        given here; the indexes of a table description are checked by PgsqlTable::checkIndexOptions() (qore#6577)
         @see pgsql_index_options for a fulfillment index example
     */
     constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace,
@@ -1142,7 +1144,25 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
             list<string> parts = ();
             HashIterator wi(with_options);
             while (wi.next()) {
-                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+                # a storage parameter value is a number, a boolean or a string literal (qore#6577)
+                auto v = wi.getValue();
+                string vs;
+                switch (v.typeCode()) {
+                    case NT_INT:
+                    case NT_FLOAT:
+                    case NT_NUMBER:
+                        vs = v.toString();
+                        break;
+                    case NT_BOOLEAN:
+                        # as 1 or 0, as the server gives a storage parameter that was set with a number, so that
+                        # the declared index compares equal to the index read from the server
+                        vs = v ? "1" : "0";
+                        break;
+                    default:
+                        vs = pgsql_get_string_literal(v.toString());
+                        break;
+                }
+                parts += sprintf("%s = %s", wi.getKey(), vs);
             }
             sql += sprintf(" with (%s)", parts.join(", "));
         }
@@ -2506,12 +2526,18 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     #! Compares the query of a view with the query of a view of a schema description as PostgreSQL normalizes them
     /** PostgreSQL keeps the query of a view in a form of its own (ex: with qualified column names and casts), which
         it gives for the query of the view of the description as well, made as a temporary view in a savepoint that
-        is rolled back
+        is rolled back; only a query that AbstractDatabase::viewProbeSourceSafe() accepts is given to it, also when
+        the SQL is only returned (ex: \c qschema \c diff or \c --dry-run)
     */
     private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
         string live_src = AbstractDatabase::normalizeViewSource(live.src);
         if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
             return True;
+        }
+        # only a query that can be nothing but one select statement is given to the probe (qore#6578); another is
+        # compared as text, so the view is created again by the alignment
+        if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src)) {
+            return False;
         }
         return live_src == AbstractDatabase::normalizeViewSource(getServerViewSource(tmpl.src));
     }
@@ -4412,13 +4438,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 if (cmd.immediate) {
                     # only an identifier is given to the operator's code, as the SQL that it returns is inserted
                     # directly into the query, as for AbstractTable::insert(); the value must match the allowed
-                    # characters as a whole, so that a string that cannot be matched (one that is not valid UTF-8) is
-                    # refused
-                    if (arg !~ /\A[A-Za-z\._0-9]*\z/) {
+                    # characters as a whole; a string that is not valid in its encoding, which cannot be matched, is
+                    # refused first
+                    if ((arg.typeCode() == NT_STRING && !arg.isEncodingValid()) || arg !~ /\A[A-Za-z\._0-9]*\z/) {
                         # a value that is not valid in its encoding is not given in the message (qore#6553)
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s "
                             "which contains illegal characters", getDesc(), iop,
-                            arg.typeCode() == NT_STRING && !(arg =~ /^/)
+                            arg.typeCode() == NT_STRING && !arg.isEncodingValid()
                                 ? sprintf("a string of %d bytes not valid in its encoding", arg.size())
                                 : sprintf("%y", arg));
                     }
@@ -5905,7 +5931,68 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return new PgsqlPrimaryKey(cname, ch, opt.index_tablespace);
     }
 
+    #! the regular expression of a name in index options: an access method or a storage parameter
+    const PgsqlIndexOptionNameRegex = "\\A[A-Za-z_][A-Za-z0-9_]*\\z";
+
+    #! a name in an operator class: a plain or quoted identifier
+    const PgsqlOpclassIdent = "(?:[A-Za-z_][A-Za-z0-9_$]*|\"(?:[^\"\\x00]|\"\")+\")";
+
+    #! a name with an optional schema in an operator class
+    const PgsqlOpclassQName = PgsqlOpclassIdent + "(?:\\." + PgsqlOpclassIdent + ")?";
+
+    #! a value of an operator class parameter: a number, a name or a string literal without a backslash
+    const PgsqlOpclassValue = "(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]*|'(?:[^'\\\\\\x00]|'')*')";
+
+    #! the optional parameters of an operator class
+    const PgsqlOpclassParams = "(?:\\s*\\(\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue
+        + "(?:\\s*,\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + ")*\\s*\\))?";
+
+    #! the regular expression of an operator class, also in the form that the server gives (see parsePgIndexDef()):
+    #! a name with an optional schema and optional parameters, after an optional collation (\c "COLLATE name"),
+    #! or a collation alone; a parameter value with a backslash is not accepted, also in the form of the server
+    const PgsqlOpclassRegex = "\\A(?:(?i:collate)\\s+" + PgsqlOpclassQName + "(?:\\s+" + PgsqlOpclassQName
+        + PgsqlOpclassParams + ")?|" + PgsqlOpclassQName + PgsqlOpclassParams + ")\\z";
+
+    #! Checks the index options that are written into the DDL (qore#6577)
+    /** Called for each index of a table description
+
+        @param iname the name of the index
+        @param opt the index options
+
+        @throw INDEX-OPTION-ERROR the access method or a storage parameter name is not a name, a storage parameter
+        value is not a number, a boolean or a string, or an operator class is not an operator class name
+    */
+    static checkIndexOptions(string iname, *hash<auto> opt) {
+        if (exists opt.method && (opt.method.typeCode() != NT_STRING || !regex(opt.method, PgsqlIndexOptionNameRegex))) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the access method %y is not a name", iname, opt.method);
+        }
+        foreach hash<auto> i in (opt.with.pairIterator()) {
+            if (!regex(i.key, PgsqlIndexOptionNameRegex)) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the storage parameter %y is not a name", iname,
+                    i.key);
+            }
+            switch (i.value.typeCode()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_STRING:
+                    break;
+                default:
+                    throw "INDEX-OPTION-ERROR", sprintf("index %y: the value of the storage parameter %y is not a "
+                        "number, a boolean or a string (got type %y)", iname, i.key, i.value.type());
+            }
+        }
+        foreach hash<auto> i in (opt.opclass.pairIterator()) {
+            if (i.value.typeCode() != NT_STRING || !regex(i.value, PgsqlOpclassRegex)) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the operator class %y of %y is not an operator class "
+                    "name", iname, i.value, i.key);
+            }
+        }
+    }
+
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
+        PgsqlTable::checkIndexOptions(iname, opt);
         foreach auto col in (opt.include) {
             if (col.typeCode() != NT_STRING || !columns.hasKey(col)) {
                 throw "INDEX-OPTION-ERROR", sprintf("Unknown INCLUDE column %y", col);

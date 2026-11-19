@@ -613,6 +613,14 @@ public:
         return i != map.end() && i->second.find(r) != i->second.end();
     }
 
+    //! removes \a r as a direct dependent of \a l, if it is one, and \a l when it has no dependents left
+    DLLLOCAL void removeDep(const std::string& l, const std::string& r) {
+        md_map_t::iterator i = map.find(l);
+        if (i != map.end() && i->second.erase(r) && i->second.empty()) {
+            map.erase(i);
+        }
+    }
+
     //! returns the dependents of \a l, or nullptr if there are none
     DLLLOCAL const strset_t* getDeps(const std::string& l) const {
         md_map_t::const_iterator i = map.find(l);
@@ -1043,8 +1051,8 @@ public:
         AutoLocker al(mutex);
         for (module_map_t::const_iterator i = map.begin(), e = map.end(); i != e; ++i) {
             if (i->second->getModuleProgram() == pgm) {
-                if (strcmp(i->first, name)) {
-                    binary_user_dep_map.addDep(name, i->first);
+                if (strcmp(i->first, name) && !binary_user_dep_map.addDep(name, i->first)) {
+                    runtime_dep_map.addDep(name, i->first);
                 }
                 return;
             }
@@ -1083,8 +1091,14 @@ public:
 #endif
     }
 
+    //! Records that the user module \a dep requires the user module \a name
+    /** The requirement is recorded as a static one (see runtime_dep_map): a caller recording a requirement at run
+        time only marks it in runtime_dep_map after calling this
+    */
     DLLLOCAL void setUserModuleDependency(const char* name, const char* dep) {
         //printd(5, "QoreModuleManager::setUserModuleDependency('%s' -> '%s')\n", name, dep);
+        // a requirement recorded statically is not one at run time only (qore#6251)
+        runtime_dep_map.removeDep(name, dep);
         if (md_map.addDep(name, dep))
             return;
         rmd_map.addDep(dep, name);
@@ -1187,6 +1201,22 @@ public:
             i = md_map.find(orig_name);
             if (i != md_map.end())
                 md_map.erase(i);
+        }
+        removeRuntimeDependencies(name);
+        if (orig_name) {
+            removeRuntimeDependencies(orig_name);
+        }
+    }
+
+    //! Removes the run-time requirements recorded of and by \a name (runtime_dep_map)
+    DLLLOCAL void removeRuntimeDependencies(const std::string& name) {
+        for (md_map_t::iterator i = runtime_dep_map.begin(); i != runtime_dep_map.end();) {
+            i->second.erase(name);
+            if (i->first == name || i->second.empty()) {
+                runtime_dep_map.erase(i++);
+            } else {
+                ++i;
+            }
         }
     }
 
@@ -1360,6 +1390,16 @@ protected:
     ModMap binary_user_dep_map;
     // user module -> the AOT modules whose Programs it was applied to at run time, which require it (issue #6501)
     ModMap aot_user_dep_map;
+    //! module -> the modules that require it only because it was applied to their Programs at run time (qore#6251)
+    /** Recorded by trySetModuleProgramBinaryDependencyLocked() and trySetModuleProgramUserDependencyLocked() when the
+        requirement is new, and removed when the module is recorded as required while the requiring module is parsed
+        (setUserModuleDependency(), trySetUserBinaryModuleDependency()); cleanup() breaks a dependency cycle at a
+        module that the modules left require only this way.  The entries of a user module are removed when it is
+        deleted (removeUserModuleDependency()); an entry left for a module that is not loaded any more (after a failed
+        load, for example) is harmless: cleanup() reads only the entries of requirements that it finds in the other
+        records, and a static requirement recorded later removes the entry
+    */
+    ModMap runtime_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper

@@ -7912,7 +7912,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
             }
         }
 
-        delete ir->cached_pre_instantiated;
+        // the set replaces the previous one (setCachedPreInstantiated())
         auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
         for (unsigned i = 0; i < signature.numParams(); ++i) {
             if (signature.lv[i]) {
@@ -7936,7 +7936,7 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
                 cached_pre_inst->insert(lv);
             }
         }
-        ir->cached_pre_instantiated = cached_pre_inst;
+        ir->setCachedPreInstantiated(cached_pre_inst);
     }
     // Publish only fully initialized IR, and publish it exactly once.  The release
     // store in the CAS is what orders every mutation above against the acquire load in
@@ -8691,7 +8691,7 @@ QoreIRFunction* UserVariantBase::lowerIRFunction(const char* name, const std::st
             cached_pre_inst->insert(lv);
         }
     }
-    func->cached_pre_instantiated = cached_pre_inst;
+    func->setCachedPreInstantiated(cached_pre_inst);
 
     // Build param_slot_ids: maps param index → slot_id for direct param passing.
     // Also build param_local_vars for type information access during direct param processing.
