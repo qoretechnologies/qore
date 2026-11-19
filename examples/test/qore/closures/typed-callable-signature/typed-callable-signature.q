@@ -23,6 +23,25 @@ class C {
     string s() { return "s"; }
 }
 
+# typed callable members of different signatures (qore#6660: values of a literal must not be folded to the
+# narrower signature)
+hashdecl Callbacks {
+    code<nothing(string)> sql;
+    code<nothing(string, int, string, *string, *string)> info;
+}
+
+int sub take_opts(hash<auto> opts) {
+    opts.sql("s");
+    opts.info("s", 1, "t");
+    return opts.size();
+}
+
+int sub take_callbacks(hash<Callbacks> cbs) {
+    cbs.sql("s");
+    cbs.info("s", 1, "t");
+    return 2;
+}
+
 sub pf(code<int(int)> c) {}
 sub pfn(*code<int(int)> c) {}
 code<int(int)> sub rf(auto c) { return c; }
@@ -82,3 +101,27 @@ t("ok call ref", string sub () { auto c = \fi(); code<int(int)> d = c; return st
 t("ok overloaded call ref", string sub () { auto c = \fov(); code<int(int)> d = c; return string(d(4)); });
 t("ok method ref", string sub () { C o(); auto c = \o.m(); code<int(int)> d = c; return string(d(4)); });
 t("ok builtin ref", string sub () { auto c = \strlen(); code<int(string)> d = c; return string(d("abc")); });
+
+# literals with callables of different signatures, run often enough for tiered execution to compile the code
+t("ok mixed signatures", string sub () {
+    int n = 0;
+    for (int i = 0; i < 30; ++i) {
+        list<string> l = ();
+        n += take_opts({
+            "sql": sub (string str) { l += str; },
+            "info": sub (string str, int ac, string type, *string name, *string info) { l += type; },
+        });
+        n += take_callbacks(<Callbacks>{
+            "sql": sub (string str) { l += str; },
+            "info": sub (string str, int ac, string type, *string name, *string info) { l += type; },
+        });
+        hash<Callbacks> h = <Callbacks>{
+            "sql": sub (string str) { l += str; },
+            "info": sub (string str, int ac, string type, *string name, *string info) { l += type; },
+        };
+        n += take_callbacks(h);
+        list<code> cl = (sub (string str) {}, sub (string str, int ac) {});
+        n += cl.size();
+    }
+    return string(n);
+});
