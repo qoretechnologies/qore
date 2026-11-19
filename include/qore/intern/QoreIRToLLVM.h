@@ -835,6 +835,14 @@ private:
         handlers.
     */
     llvm::Value* handler_return_hold = nullptr;
+    //! an i8 slot set to 1 when a handler run out of line past the inline cap in the block cleanups of a return
+    //! statement hands a value over to handler_return_hold, which the return takes (#6137)
+    /** See QoreIRScopeExitInstruction::hand_over_return, qore_rt_exec_on_block_exit_return_hold(),
+        qore_rt_take_handed_over_return() and qore_rt_release_handed_over_return(); cleared with
+        handler_return_hold at the catch block of a try statement of the function.  Created at the entry of a function
+        that has such a ScopeExit, which has handler_return_hold too.
+    */
+    llvm::Value* handler_return_handed = nullptr;
     //! true if the function is the body of a handler compiled as a function of its own: the handlers of its blocks
     //! run out of line with qore_rt_exec_on_block_exit_forward() (#6074)
     bool handler_function = false;
@@ -847,6 +855,15 @@ private:
         //! the values of the returns of the try block of the try statement that catches the exception
         //! (QoreIRFunction::catch_interrupted_returns), or nullptr for those of the function (return_value_ids)
         const std::vector<uint32_t>* try_returns;
+        //! true if the first hand-over replaces the values of \a values instead: the call runs the handlers in the
+        //! block cleanups of a return past the inline cap (qore_rt_exec_on_block_exit_return_hold(), #6137)
+        bool own_values = false;
+        //! the value of the return that the first hand-over of the call replaces and the value that it took a
+        //! reference of its own to, if own_values (the operands of QoreIRScopeExitInstruction::hand_over_return)
+        std::vector<uint32_t> values;
+        //! the index of the argument of the call that takes the array of the values that the first hand-over
+        //! releases, followed by the argument that takes their number
+        unsigned replace_arg = 3;
     };
     //! the calls that run handlers out of line with handler_return_hold whose handlers replace the value of an
     //! interrupted return
@@ -941,6 +958,9 @@ private:
     // discard.temps must not clear them while the local alloca still borrows
     // their owned reference.
     std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
+    //! Constructor-result slots cleared by ReleaseOwnedTemp. A later statement cleanup on a path that
+    //! skipped the release still owns the object until that cleanup (#6657).
+    std::unordered_set<llvm::Value*> released_constructor_slots;
     //! Cleanup allocas that the call that uses their value clears when it returns (the slots of the reads of foreach
     //! variables that keep the object of a weak reference for a call, qore#6594): they hold a value only between the
     //! read and the call, so only an exception edge or an exit releases them, not the end of the statement
@@ -1760,7 +1780,8 @@ private:
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
     llvm::Value* call_site_cache_ptr = nullptr;
-    int last_runtime_line = -1;             //!< Last source line emitted for location tracking
+    //! the runtime location (QoreIRInstruction::stmt_loc) that the code of the block being lowered stored last
+    const QoreProgramLocation* last_runtime_loc = nullptr;
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
     //! module, or nullptr if `loc` has no line
@@ -2480,6 +2501,15 @@ private:
             const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host = nullptr);
     //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
     void emitRuntimeLocationStore(const QoreProgramLocation* loc);
+
+    //! Removes the stores of the runtime location that store the location that the thread has already
+    /** The code of each block stores the runtime location of its first instruction (emitRuntimeLocationUpdate()),
+        as the block can be entered in any location; a store of the location that every path to it has stored last
+        is removed, such as the store of a loop's location in its condition after the code of its next iteration
+        stored it (qore#6646).  The entry block and the landing pads start in an unknown location; a call restores
+        the location of its caller when it returns.
+    */
+    void removeRedundantRuntimeLocationStores(llvm::Function* llvm_func);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag

@@ -42,6 +42,7 @@ DLLLOCAL QoreClass *initDebugProgramClass(QoreNamespace& ns);
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <optional>
 
@@ -219,7 +220,7 @@ public:
       if (!params[0]->getAsInt())
          printd(5, "QoreDebugProgramWithCoreObject::onException::statement:%s:%d-%d:%s\n", statement->loc.getFile(), statement->loc.start_line, statement->loc.end_line, typeid(statement).name());
       */
-      QoreException* except = xsink->getException();
+      QoreException* except = qore_exception_sink_ops(xsink).getException();
       {
          QoreHashNode* h = except->makeExceptionObject();
          // the ID of the exception, which is the same in each event of the exception, also after a rethrow (#5906)

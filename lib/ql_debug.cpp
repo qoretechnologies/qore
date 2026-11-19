@@ -107,6 +107,7 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreSandboxProvenance.h"
 #include "qore/intern/QoreSocketObjectPrivate.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <llvm/MC/TargetRegistry.h>
@@ -11619,7 +11620,7 @@ public:
             }
             xsink->raiseException("DEBUGGER-ERROR", "raised by the debugger at line %d", line);
             LineColumn ex;
-            if (const QoreException* e = xsink->getException()) {
+            if (const QoreException* e = qore_exception_sink_ops(xsink).getException()) {
                 ex = {e->start_line, e->start_column};
             }
             std::lock_guard<std::mutex> lg(m);

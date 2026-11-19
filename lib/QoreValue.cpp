@@ -47,6 +47,7 @@
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include <qore/QoreBufferNode.h>
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
@@ -298,29 +299,29 @@ QoreStringNode* QoreValue::makeCharString(unsigned codepoint, const QoreEncoding
 // Opaque references
 // ============================================================================
 
-QoreValue QoreValue::makeOpaqueIntern(AbstractQoreNode* n, uint64_t opaque_tag) {
+QoreValue qore_value_ops::makeOpaqueIntern(AbstractQoreNode* n, uint64_t opaque_tag) {
     assert(n);
     uint64_t p = reinterpret_cast<uint64_t>(n);
     // the 48-bit payload must hold the whole pointer; this is the same assumption TAG_POINTER makes
-    assert((p & ~PAYLOAD_MASK) == 0);
+    assert((p & ~QoreValue::PAYLOAD_MASK) == 0);
     n->ref();
     QoreValue rv;
-    rv.bits = opaque_tag | (p & PAYLOAD_MASK);
+    rv.bits = opaque_tag | (p & QoreValue::PAYLOAD_MASK);
     return rv;
 }
 
-void QoreValue::opaqueRegister() const {
+void qore_value_ops::opaqueRegisterImpl(QoreValue* b) {
     // Registration is balanced against the strong references held THROUGH opaque values, not
     // against the number of assignments: every copy of an opaque value takes its own reference, so
     // every copy must take its own registration, or the first release would untrack a target that
     // other copies still hold.
-    if (!isOpaque()) {
+    if (!b->isOpaque()) {
         return;
     }
-    AbstractQoreNode* n = reinterpret_cast<AbstractQoreNode*>(payload());
+    AbstractQoreNode* n = reinterpret_cast<AbstractQoreNode*>(b->payload());
     // an object knows its own Program; a hash or a list does not, so the Program responsible for
     // breaking a cycle through it is the one that created the reference
-    QoreProgram* pgm = isOpaqueObject()
+    QoreProgram* pgm = b->isOpaqueObject()
         ? static_cast<QoreObject*>(n)->getProgram()
         : getProgram();
     if (pgm) {
@@ -328,34 +329,34 @@ void QoreValue::opaqueRegister() const {
     }
 }
 
-void QoreValue::opaqueDeregister() const {
-    if (!isOpaque()) {
+void qore_value_ops::opaqueDeregisterImpl(QoreValue* b) {
+    if (!b->isOpaque()) {
         return;
     }
     // the registry records the owning Program, so the release path needs only the target
-    qore_program_private::deregisterOpaqueTarget(reinterpret_cast<AbstractQoreNode*>(payload()));
+    qore_program_private::deregisterOpaqueTarget(reinterpret_cast<AbstractQoreNode*>(b->payload()));
 }
 
 QoreValue QoreValue::makeOpaqueObject(QoreObject* o) {
     assert(o);
-    QoreValue rv = makeOpaqueIntern(o, TAG_OPAQUE_OBJECT);
+    QoreValue rv = qore_value_ops::makeOpaqueIntern(o, TAG_OPAQUE_OBJECT);
     // register with the owning Program so teardown can break any cycle this edge holds up; the
     // target is the key, so the matching release finds the same Program
-    rv.opaqueRegister();
+    qore_value_ops(rv).opaqueRegister();
     return rv;
 }
 
 QoreValue QoreValue::makeOpaqueHash(QoreHashNode* h) {
     assert(h);
-    QoreValue rv = makeOpaqueIntern(h, TAG_OPAQUE_HASH);
-    rv.opaqueRegister();
+    QoreValue rv = qore_value_ops::makeOpaqueIntern(h, TAG_OPAQUE_HASH);
+    qore_value_ops(rv).opaqueRegister();
     return rv;
 }
 
 QoreValue QoreValue::makeOpaqueList(QoreListNode* l) {
     assert(l);
-    QoreValue rv = makeOpaqueIntern(l, TAG_OPAQUE_LIST);
-    rv.opaqueRegister();
+    QoreValue rv = qore_value_ops::makeOpaqueIntern(l, TAG_OPAQUE_LIST);
+    qore_value_ops(rv).opaqueRegister();
     return rv;
 }
 
@@ -741,64 +742,64 @@ QoreValue QoreValue::getEnumBaseValue() const {
 // ============================================================================
 
 bool QoreValue::isEqualHard(const QoreValue& other) const {
-    return isEqualHardIntern(other, nullptr);
+    return qore_value_ops(this).isEqualHardIntern(other, nullptr);
 }
 
 bool QoreValue::isEqualHard(const QoreValue& other, ExceptionSink* xsink) const {
     assert(xsink);
-    return isEqualHardIntern(other, xsink);
+    return qore_value_ops(this).isEqualHardIntern(other, xsink);
 }
 
 // xsink is null when an exception raised while comparing nodes is to be discarded
-bool QoreValue::isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) const {
+bool qore_value_ops::isEqualHardInternImpl(QoreValue* b, const QoreValue& other, ExceptionSink* xsink) {
     // Fast path: identical bits (but not for floats due to NaN != NaN)
-    if (bits == other.bits) {
+    if (b->bits == other.bits) {
         // Must check for NaN - two identical NaN values are not equal per IEEE 754
-        if (isFloat()) {
-            double v = getAsFloat();
+        if (b->isFloat()) {
+            double v = b->getAsFloat();
             return v == v;  // NaN != NaN, so this returns false for NaN
         }
         return true;
     }
 
     // TAG_ENUM hard comparison: enums are only === to the same enum member
-    if (isEnum() || other.isEnum()) {
-        if (isEnum() && other.isEnum()) {
-            return getEnumMember() == other.getEnumMember();
+    if (b->isEnum() || other.isEnum()) {
+        if (b->isEnum() && other.isEnum()) {
+            return b->getEnumMember() == other.getEnumMember();
         }
         // enum !== non-enum (strict type safety)
         return false;
     }
 
     // Get types
-    qore_type_t t = getType();
+    qore_type_t t = b->getType();
     if (t != other.getType()) {
         return false;
     }
 
     switch (t) {
         case NT_INT:
-            return getAsBigInt() == other.getAsBigInt();
+            return b->getAsBigInt() == other.getAsBigInt();
         case NT_BOOLEAN:
-            return getAsBool() == other.getAsBool();
+            return b->getAsBool() == other.getAsBool();
         case NT_FLOAT: {
             // Handle -0.0 == 0.0 and NaN != NaN
-            double a = getAsFloat();
+            double a = b->getAsFloat();
             double b = other.getAsFloat();
             return a == b;
         }
         case NT_CHAR:
-            return getChar() == other.getChar();
+            return b->getChar() == other.getChar();
         case NT_STRING: {
             // Short strings have identical bits when equal.  If only one side
             // is inline, compare string contents instead of falling through to
             // pointer-only node comparison.
-            if (isShortString() && other.isShortString()) {
+            if (b->isShortString() && other.isShortString()) {
                 return false;
             }
             // an encoding conversion error means that the strings are not equal
             ExceptionSink str_xsink;
-            QoreStringNodeValueHelper lhs(*this);
+            QoreStringNodeValueHelper lhs(*b);
             QoreStringNodeValueHelper rhs(other);
             const QoreStringNode* lstr = *lhs;
             const QoreStringNode* rstr = *rhs;
@@ -814,18 +815,18 @@ bool QoreValue::isEqualHardIntern(const QoreValue& other, ExceptionSink* xsink) 
     }
 
     // Node comparison
-    if (isPointer() && other.isPointer()) {
+    if (b->isPointer() && other.isPointer()) {
         if (!xsink) {
             // the values are not equal if an exception is raised
             ExceptionSink local_xsink;
-            bool rv = !compareHard(getPointerUnsafe(), other.getPointerUnsafe(), &local_xsink);
+            bool rv = !compareHard(b->getPointerUnsafe(), other.getPointerUnsafe(), &local_xsink);
             if (local_xsink) {
                 local_xsink.clear();
                 return false;
             }
             return rv;
         }
-        bool rv = !compareHard(getPointerUnsafe(), other.getPointerUnsafe(), xsink);
+        bool rv = !compareHard(b->getPointerUnsafe(), other.getPointerUnsafe(), xsink);
         return rv && !*xsink;
     }
 
@@ -893,7 +894,7 @@ void QoreValue::discard(ExceptionSink* xsink) {
     // an opaque reference owns its payload exactly like a pointer value does
     AbstractQoreNode* n = getOwnedNodeIntern();
     if (n) {
-        opaqueDeregister();
+        qore_value_ops(this).opaqueDeregister();
         n->deref(xsink);
     }
     bits = VAL_NOTHING;
@@ -1018,7 +1019,7 @@ void QoreValue::ref() const {
     AbstractQoreNode* n = getOwnedNodeIntern();
     if (n) {
         n->ref();
-        opaqueRegister();
+        qore_value_ops(this).opaqueRegister();
     }
 }
 
@@ -1046,7 +1047,7 @@ AbstractQoreNode* QoreValue::takeNodeIntern() {
     AbstractQoreNode* rv = getPointerUnsafe();
     // the reference is leaving the opaque representation, so it is no longer an edge the collector
     // must be told about
-    opaqueDeregister();
+    qore_value_ops(this).opaqueDeregister();
     bits = VAL_NOTHING;
     return rv;
 }
@@ -1227,16 +1228,16 @@ QoreValue QoreValue::eval(bool& needs_deref, ExceptionSink* xsink) const {
     return n->eval(needs_deref, xsink);
 }
 
-QoreValue QoreValue::eval(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+QoreValue qore_value_ops::evalImpl(QoreValue* b, RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) {
     assert(needs_deref == true);
-    if (!isPointer()) {
+    if (!b->isPointer()) {
         needs_deref = false;
-        return *this;
+        return *b;
     }
-    AbstractQoreNode* n = getPointerUnsafe();
+    AbstractQoreNode* n = b->getPointerUnsafe();
     if (!n) {
         needs_deref = false;
-        return *this;
+        return *b;
     }
     return n->eval(rc, needs_deref, xsink);
 }
@@ -1480,64 +1481,64 @@ ValueEvalRefHolder::ValueEvalRefHolder(ExceptionSink* xs)
 ValueEvalRefHolder::ValueEvalRefHolder(const AbstractQoreNode* exp, ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
     RuntimeConfig& rc = rc_get_current_ref();
-    evalIntern(rc, exp);
+    qore_value_eval_ref_holder_ops(this).evalIntern(rc, exp);
 }
 
 // Backwards-compatible constructor that gets RuntimeConfig from TLS
 ValueEvalRefHolder::ValueEvalRefHolder(const QoreValue exp, ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
     RuntimeConfig& rc = rc_get_current_ref();
-    evalIntern(rc, exp);
+    qore_value_eval_ref_holder_ops(this).evalIntern(rc, exp);
 }
 
 ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const AbstractQoreNode* exp, ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
-    evalIntern(rc, exp);
+    qore_value_eval_ref_holder_ops(this).evalIntern(rc, exp);
 }
 
 ValueEvalRefHolder::ValueEvalRefHolder(RuntimeConfig& rc, const QoreValue exp, ExceptionSink* xs)
     : ValueOptionalRefHolder(xs) {
-    evalIntern(rc, exp);
+    qore_value_eval_ref_holder_ops(this).evalIntern(rc, exp);
 }
 
-int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const AbstractQoreNode* exp) {
+int qore_value_eval_ref_holder_ops::evalInternImpl(ValueEvalRefHolder* b, RuntimeConfig& rc, const AbstractQoreNode* exp) {
     if (!exp) {
-        needs_deref = false;
+        b->needs_deref = false;
         return 0;
     }
-    needs_deref = true;
-    v = exp->eval(rc, needs_deref, xsink);
-    return xsink && *xsink ? -1 : 0;
+    b->needs_deref = true;
+    b->v = exp->eval(rc, b->needs_deref, b->xsink);
+    return b->xsink && *b->xsink ? -1 : 0;
 }
 
-int ValueEvalRefHolder::evalIntern(RuntimeConfig& rc, const QoreValue& exp) {
-    needs_deref = true;
-    v = exp.eval(rc, needs_deref, xsink);
-    return xsink && *xsink ? -1 : 0;
+int qore_value_eval_ref_holder_ops::evalInternImpl(ValueEvalRefHolder* b, RuntimeConfig& rc, const QoreValue& exp) {
+    b->needs_deref = true;
+    b->v = qore_value_ops(exp).eval(rc, b->needs_deref, b->xsink);
+    return b->xsink && *b->xsink ? -1 : 0;
 }
 
 // Backwards-compatible eval that gets RuntimeConfig from TLS
 int ValueEvalRefHolder::eval(const AbstractQoreNode* exp) {
     v.discard(xsink);
     RuntimeConfig& rc = rc_get_current_ref();
-    return evalIntern(rc, exp);
+    return qore_value_eval_ref_holder_ops(this).evalIntern(rc, exp);
 }
 
 // Backwards-compatible eval that gets RuntimeConfig from TLS
 int ValueEvalRefHolder::eval(const QoreValue exp) {
     v.discard(xsink);
     RuntimeConfig& rc = rc_get_current_ref();
-    return evalIntern(rc, exp);
+    return qore_value_eval_ref_holder_ops(this).evalIntern(rc, exp);
 }
 
-int ValueEvalRefHolder::eval(RuntimeConfig& rc, const AbstractQoreNode* exp) {
-    v.discard(xsink);
-    return evalIntern(rc, exp);
+int qore_value_eval_ref_holder_ops::evalImpl(ValueEvalRefHolder* b, RuntimeConfig& rc, const AbstractQoreNode* exp) {
+    b->v.discard(b->xsink);
+    return qore_value_eval_ref_holder_ops(b).evalIntern(rc, exp);
 }
 
-int ValueEvalRefHolder::eval(RuntimeConfig& rc, const QoreValue exp) {
-    v.discard(xsink);
-    return evalIntern(rc, exp);
+int qore_value_eval_ref_holder_ops::evalImpl(ValueEvalRefHolder* b, RuntimeConfig& rc, const QoreValue exp) {
+    b->v.discard(b->xsink);
+    return qore_value_eval_ref_holder_ops(b).evalIntern(rc, exp);
 }
 
 ValueEvalOptimizedRefHolder::ValueEvalOptimizedRefHolder(const QoreValue& exp, ExceptionSink* xs)
