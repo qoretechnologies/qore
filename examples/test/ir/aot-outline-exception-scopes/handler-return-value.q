@@ -3,8 +3,6 @@
 # the value of a handler's return while an exception leaves an outlined helper with no return of a value of its
 # own is released after the locals of the function, as the function releases it (qore#6650); see
 # AOTOutlineExceptionScopes.qtest
-# smaller regions end in the scope of the handler, which qore#6652 fixes
-# outline-targets: 8 16 32
 
 %modern
 our list<string> log = ();
