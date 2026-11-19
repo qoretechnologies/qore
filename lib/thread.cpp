@@ -8482,6 +8482,30 @@ static void q_finish_counted_thread() {
     }
 }
 
+//! Leaves the Program that a background thread has run in since its start, before the thread releases it
+/** The thread's Program context (td->current_pgm, td->tlpd and the thread's RuntimeConfig) was set to the Program
+    when the thread was registered and is valid only while the thread holds the Program's thread count, which
+    BGThreadParams::del() releases: the Program can be deleted from then on, by another thread or by this one (a
+    deletion deferred while the thread ran the Program's code runs in decThreadCount()), while the thread still runs
+    code at its end, as the destructors of its thread-local data.  That code runs in no Program of the thread's own,
+    as at the end of a thread started with q_run_thread(), which never had one (qore#6629); as
+    ProgramThreadCountContextHelper::restoreContext() does, the context is left before the thread count is released.
+    The thread's runtime location, which the call stack frames of that code take, is the location of the background
+    expression in the Program, which the Program frees with its code: it is reset as well.
+*/
+static void leave_background_thread_program(ThreadData* td) {
+    // the thread is at the bottom of its stack of Program contexts and Program entries
+    assert(!td->current_pgm_ctx);
+    assert(!td->entry_pgm);
+    assert(!td->callback_caller_pgm);
+    set_thread_current_pgm(td, nullptr);
+    td->tlpd = nullptr;
+    sync_runtime_config_program(td);
+    td->runtime_loc = &loc_builtin;
+    td->call_site_loc = nullptr;
+    td->runtime_statement = nullptr;
+}
+
 static void set_tid_thread_name(int tid) {
 #ifdef QORE_HAVE_THREAD_NAME
     QoreStringMaker name("qore/%d", tid);
@@ -8783,6 +8807,9 @@ namespace {
                 if (sandbox) {
                     sandbox->releaseSlot();
                 }
+                // the thread leaves its Program, and the location of its code there, before it releases it: the
+                // Program can be deleted from then on, and the thread's teardown below runs in no Program of its own
+                leave_background_thread_program(td);
                 // dereference current Program object
                 btp->del();
 

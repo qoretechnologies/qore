@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+#! the teardown of a background thread runs after the thread has left the Program it was started in; the code that the
+#! teardown runs (the destructors of its thread-local data) must not use that Program, which can be deleted by then
+#! (qore#6629); memory errors are found with valgrind, the order and outcome of the destructors in every build
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadExitProgramContextTest
+
+#! blocks in its destructor until it is released: it holds the destructors that follow it at a known point
+class Blocker {
+    private {
+        Counter entered;
+        Queue release;
+        Counter done;
+    }
+
+    constructor(Counter entered, Queue release, Counter done) {
+        self.entered = entered;
+        self.release = release;
+        self.done = done;
+    }
+
+    destructor() {
+        entered.dec();
+        release.get();
+        done.dec();
+    }
+}
+
+#! counts its destruction, and whether it was destroyed after the Blocker whose Counter is given
+class Tracked {
+    private {
+        Counter destroyed;
+        *Counter blocker_done;
+        *Counter after_blocker;
+    }
+
+    constructor(Counter destroyed, *Counter blocker_done, *Counter after_blocker) {
+        self.destroyed = destroyed;
+        self.blocker_done = blocker_done;
+        self.after_blocker = after_blocker;
+    }
+
+    destructor() {
+        if (blocker_done && !blocker_done.getCount()) {
+            after_blocker.dec();
+        }
+        # the frame of a destructor is located where the code that runs it is: an exception and the call stack use
+        # that location
+        list<hash<CallStackInfo>> stack = get_thread_call_stack();
+        try {
+            throw "TRACKED-DESTRUCTOR";
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "TRACKED-DESTRUCTOR" && stack) {
+                destroyed.dec();
+            }
+        }
+    }
+}
+
+#! the parse options of the Programs the tests create
+const ProgramOptions = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES;
+
+#! the code of the Programs the tests create
+const ProgramCode = "
+#! starts a background thread in this Program that waits for a value on the Queue given, then saves the values given
+#! in its thread-local data, in this Program's family, in the order given, and ends
+sub save_in_thread(hash<auto> values, Queue gate) {
+    background sub () {
+        gate.get();
+        foreach hash<auto> i in (values.pairIterator()) {
+            save_thread_data(i.key, i.value);
+        }
+    }();
+}
+
+#! starts a background thread in this Program that calls the closures given, in the order given, and ends
+sub call_in_thread(list<code> calls) {
+    background sub () {
+        foreach code call in (calls) {
+            call();
+        }
+    }();
+}
+";
+
+public class ThreadExitProgramContextTest inherits QUnit::Test {
+    constructor() : Test("ThreadExitProgramContextTest", "1.0", \ARGV) {
+        addTestCase("the destructors of a thread's data run after its Program was deleted",
+            \destructorsAfterProgramDeleted());
+        addTestCase("the destructors of a thread's data run after the thread's deferred Program teardown",
+            \destructorsAfterDeferredTeardown());
+        set_return_value(main());
+    }
+
+    #! the thread's data in its Program's family is freed at the thread's end; the first destructor holds the rest
+    #! while the Program is deleted, and the next one then runs in a thread that is in no Program
+    destructorsAfterProgramDeleted() {
+        Counter entered(1);
+        Queue release();
+        Counter blocker_done(1);
+        Counter destroyed(1);
+        Counter after_blocker(1);
+        # a failed assertion does not leave the thread blocked
+        on_error release.push(True);
+        Queue gate();
+        Program root(ProgramOptions, True);
+        root.parse(ProgramCode, "root");
+        # the thread data hash frees its values in the order in which they were saved; the order is checked below
+        root.callFunction("save_in_thread", {
+            "a_blocker": new Blocker(entered, release, blocker_done),
+            "b_tracked": new Tracked(destroyed, blocker_done, after_blocker),
+        }, gate);
+        # this thread has released the values of the call: the background thread holds the only references to them
+        gate.push(True);
+        # the thread is at its end, in the destructor of the Blocker: it has left the root, and its data is no longer
+        # the root's to free
+        assertEq(0, entered.waitForZero(30s), "the thread's end runs the first destructor");
+        # the root is torn down and freed while the thread frees its data
+        delete root;
+        release.push(True);
+        assertEq(0, destroyed.waitForZero(30s), "the thread's end runs the second destructor");
+        assertEq(0, blocker_done.getCount(), "the first destructor completed");
+        assertEq(0, after_blocker.getCount(), "the second destructor ran after the root was deleted");
+    }
+
+    #! a thread deletes its Program while it runs its code: the Program's teardown runs when the thread leaves it at
+    #! its end, and the destructors of the thread's data run after that
+    destructorsAfterDeferredTeardown() {
+        Counter destroyed(1);
+        *Program holder = new Program(ProgramOptions, True);
+        holder.parse(ProgramCode, "root");
+        list<code> calls = (
+            # saves an object in the thread's data in this Program's family, which is freed at the thread's end
+            sub () { save_thread_data("tracked", new Tracked(destroyed)); },
+            # deletes the root, whose teardown runs when the thread leaves it at its end
+            sub () { delete holder; },
+        );
+        holder.callFunction("call_in_thread", calls);
+        assertEq(0, destroyed.waitForZero(30s), "the thread's end runs the destructor");
+        assertNothing(holder, "the thread deleted the root");
+    }
+}
