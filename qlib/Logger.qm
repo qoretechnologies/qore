@@ -1203,6 +1203,12 @@ public class LoggerSearchUtil {
     }
 
     private static bool matchesRenderedLine(string line, hash<auto> req) {
+        # a line of a log file that is not valid in its encoding (ex: a Latin-1 byte, or binary data that was logged)
+        # is searched as ISO-8859-1, where every byte is a character, so that one such line does not end the search
+        # (a regular expression raises an exception for it: qore#6554)
+        if (!line.isEncodingValid()) {
+            line = force_encoding(line, "ISO-8859-1");
+        }
         if (!matchesRenderedLineLevel(line, req)) {
             return False;
         }

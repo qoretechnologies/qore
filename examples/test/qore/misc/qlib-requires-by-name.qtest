@@ -153,7 +153,8 @@ class QlibRequiresByNameTest inherits QUnit::Test {
     private static bool isQoreScript(string path) {
         ReadOnlyFile f(path);
         *string first = f.readLine();
-        return exists first && first =~ /^#!.*\bq(ore|r)\b/;
+        # a file that is not text (ex: an image) is not a script
+        return exists first && first.isEncodingValid() && first =~ /^#!.*\bq(ore|r)\b/;
     }
 
     #! Returns the module spec of a directive that loads a module, or @ref NOTHING if the line has none

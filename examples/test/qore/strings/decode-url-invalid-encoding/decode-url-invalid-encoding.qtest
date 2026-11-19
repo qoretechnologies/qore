@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%exec-class DecodeUrlInvalidEncodingTest
+
+#! decode_url() and decode_uri_request() refuse a result that is not valid in its encoding (qore#6554)
+/** Percent encoding can give byte sequences that are not valid UTF-8; a decoded path, query or form field is text
+    from outside the program, so it is refused where it is decoded, before any code processes it.
+*/
+class DecodeUrlInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("decode_url() with invalid results", "1.0", \ARGV) {
+        addTestCase("invalid percent-encoded sequences", \invalidSequences());
+        addTestCase("raw invalid bytes", \rawBytes());
+        addTestCase("decode_uri_request()", \uriRequest());
+        addTestCase("valid strings are unaffected", \validStrings());
+        set_return_value(main());
+    }
+
+    invalidSequences() {
+        map assertThrows("URL-ENCODING-ERROR", \decode_url(), ($1,), $1), (
+            "%C0%AF",           # an overlong '/'
+            "/a%C0%AFb",        # in a path
+            "%80",              # a lone continuation byte
+            "a%BFb",
+            "%ED%A0%80",        # a surrogate
+            "%F4%90%80%80",     # above U+10FFFF
+            "%C1%BF",           # an overlong two-byte form
+            "%E0%80%AF",        # an overlong three-byte form
+        );
+        # the message gives the offset of the invalid sequence in the decoded string, not the string
+        assertThrows("URL-ENCODING-ERROR", "byte offset 2", \decode_url(), ("ab%80",));
+    }
+
+    rawBytes() {
+        string s = binary_to_string(<2f61ff62>, "UTF-8");
+        assertThrows("URL-ENCODING-ERROR", \decode_url(), (s,));
+    }
+
+    uriRequest() {
+        assertThrows("URL-ENCODING-ERROR", \decode_uri_request(), ("/a?x=%C0%AF",));
+        assertThrows("URL-ENCODING-ERROR", \decode_uri_request(), ("/a%80?x=1",));
+        assertEq("/a b?x=é y", decode_uri_request("/a%20b?x=%C3%A9+y"));
+    }
+
+    validStrings() {
+        assertEq("a b", decode_url("a%20b"));
+        assertEq("é€𝄞", decode_url("%C3%A9%E2%82%AC%F0%9D%84%9E"));
+        assertEq("\u{10ffff}", decode_url("%F4%8F%BF%BF"));
+        assertEq("", decode_url(""));
+        # a source in another encoding
+        assertEq("café", decode_url(convert_encoding("caf%C3%A9", "ISO-8859-1")));
+    }
+}

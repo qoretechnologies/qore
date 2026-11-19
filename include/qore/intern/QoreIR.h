@@ -1406,6 +1406,11 @@ struct QoreIRConstant {
     double float_value = 0.0;
     bool bool_value = false;
     std::string string_value;
+    //! true if \c string_value is ASCII text (no byte >= 0x80); set by setStringValue()
+    /** A string made from the value has its ASCII prefix known (see qore_string_private::setOwnedAsciiText()), so
+        that the operations on a literal do not scan it again at each evaluation (qore#6625)
+    */
+    bool string_ascii = false;
     int64_t date_microseconds = 0;
     bool date_is_relative = false;
     const AbstractQoreZoneInfo* date_zone = nullptr;  // Original timezone for absolute dates
@@ -1419,6 +1424,22 @@ struct QoreIRConstant {
     int rel_seconds = 0;
     int rel_us = 0;
     const QoreEnumMember* enum_member = nullptr;
+
+    //! returns true if the text has no byte >= 0x80
+    static bool isAsciiText(const std::string& str) {
+        return std::all_of(str.begin(), str.end(), [](char c) { return static_cast<unsigned char>(c) < 0x80; });
+    }
+
+    //! sets \c string_value and \c string_ascii
+    void setStringValue(const char* str, size_t len) {
+        string_value.assign(str, len);
+        string_ascii = isAsciiText(string_value);
+    }
+
+    //! sets \c string_value and \c string_ascii
+    void setStringValue(const std::string& str) {
+        setStringValue(str.data(), str.size());
+    }
 };
 
 //! The loop statement whose iterations a block starts, for cancellation checks (see QoreIRBasicBlock::loop_cancel)
@@ -1497,6 +1518,11 @@ static constexpr uint8_t QORE_IR_GIVES_CALL_TEMPS = 2;
 //! directly after it, which takes the reference of a return value; the IR interpreter gives that RefSelf the kept
 //! reference and steps over it (qore#6444)
 static constexpr uint8_t QORE_IR_KEEP_GIVES_REFSELF = 4;
+//! QoreIRInstruction::interpreter_gives_call_args of an UninstantiateLocal: a CheckException with no operands follows
+//! it in its block, which the IR interpreter steps over when the release leaves no exception pending, so that the check
+//! after the release of the locals of a block costs no dispatch of its own on the normal path; the check runs as before
+//! when an exception is pending (qore#6371)
+static constexpr uint8_t QORE_IR_STEPS_OVER_CHECK = 8;
 
 //! The check of a call's target made by the load of the target (QoreIRInstruction::fused_call_target_check)
 enum class QoreIRFusedCallTargetCheck : uint8_t {
@@ -1645,6 +1671,7 @@ public:
     bool list_push_in_place = false;  // Transient: assigned local list can be mutated without a store-back
     bool list_push_local_cow = false;  // Transient: paired local push can run CoW after compiler refs are cleared
     bool string_append_in_place = false;  // Transient: uniquely owned local string can be mutated without store-back
+    bool auto_local_string_append = false;  // Transient: paired auto-local load or generic +=, guarded by runtime type
     bool string_append_local_cow = false;  // Transient: instruction belongs to a paired local append with alias guard
     // Transient: AppendStringCow whose right operand the lowering proved to be a string with a value; only such an
     // append can be marked in place, as qore_rt_string_append_in_place() requires a string (issue #6266)
@@ -1682,7 +1709,7 @@ public:
     // issue #5958, see design/param-take-over.md); 0 for a call that gives nothing; set with the interpreter's analysis
     // of the function, before the function runs.  A byte with bits, not two bools: the next member follows it without
     // padding, so a second bool would change the layout of every instruction.  For a DiscardTempsKeep:
-    // QORE_IR_KEEP_GIVES_REFSELF
+    // QORE_IR_KEEP_GIVES_REFSELF; for an UninstantiateLocal: QORE_IR_STEPS_OVER_CHECK
     uint8_t interpreter_gives_call_args = 0;
     AOTStringCaseComparisonKind aot_string_case_comparison =
         AOTStringCaseComparisonKind::None;
@@ -4608,6 +4635,60 @@ struct IRTakeOverParam {
     const LocalVar* var;
 };
 
+
+//! An immutable set of locals in an open-addressing table with linear probing, for lookups on the hot path of the IR
+//! interpreter (qore#6627): a lookup is an inlined probe, without the node chase and the out-of-line call of a
+//! std::unordered_set
+class QoreIRLocalProbeSet {
+public:
+    //! builds the table from \a set, replacing what it held
+    DLLLOCAL void build(const std::unordered_set<const LocalVar*>& set) {
+        size_t size = 8;
+        // at most half full, so that a probe is short
+        while (size < set.size() * 2) {
+            size *= 2;
+        }
+        table.assign(size, nullptr);
+        for (const LocalVar* lv : set) {
+            if (!lv) {
+                continue;
+            }
+            size_t i = hash(lv) & (size - 1);
+            while (table[i] && table[i] != lv) {
+                i = (i + 1) & (size - 1);
+            }
+            table[i] = lv;
+        }
+    }
+
+    //! empties the table
+    DLLLOCAL void clear() {
+        table.clear();
+    }
+
+    //! returns true if \a lv is in the set
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE bool contains(const LocalVar* lv) const {
+        if (table.empty() || !lv) {
+            return false;
+        }
+        size_t mask = table.size() - 1;
+        for (size_t i = hash(lv) & mask; table[i]; i = (i + 1) & mask) {
+            if (table[i] == lv) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+private:
+    std::vector<const LocalVar*> table;
+
+    DLLLOCAL static size_t hash(const LocalVar* lv) {
+        uintptr_t a = reinterpret_cast<uintptr_t>(lv);
+        return static_cast<size_t>((a >> 4) ^ (a >> 13));
+    }
+};
+
 class QoreIRFunction {
 public:
     explicit QoreIRFunction(std::string n_name, std::string n_display_name = {})
@@ -4831,6 +4912,7 @@ public:
     //! checks to it, which prunes them with the facts that it refines (qore#6072, qore_ir_prune_release_checks());
     //! the pruning gives handlers and converts checks, which a later run cannot undo
     bool defer_release_check_prune = false;
+    bool has_generic_add_assign = false;  //!< Collected during slot setup for the final local append analysis.
     //! Owning program of this lowered IR function. Used by the per-Program background
     //! JIT-compile drain (QoreJIT::waitForBgCompileQueue(QoreProgram*)) to cancel/await
     //! only the compiles referencing a Program being torn down. Set unconditionally at
@@ -4963,7 +5045,26 @@ public:
     // Cached pre-instantiated set (params + argvid + ast_visible_body_locals)
     // This is built once during IR lowering and reused on every call.
     // selfid is handled separately since it's conditional on (self && selfid).
-    mutable std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
+    // Set only with setCachedPreInstantiated(), which builds cached_pre_instantiated_probe from it (qore#6627); the
+    // set is not changed afterwards, only replaced
+    const std::unordered_set<const LocalVar*>* cached_pre_instantiated = nullptr;
+
+    //! The locals of cached_pre_instantiated in an open-addressing table, which the IR interpreter probes for each
+    //! local of a call instead of hashing into the std::unordered_set (qore#6627); built with the set, by
+    //! setCachedPreInstantiated(), and so always holding the same locals
+    QoreIRLocalProbeSet cached_pre_instantiated_probe;
+
+    //! Replaces cached_pre_instantiated (which is deleted) with \a set, owned by the function from now on, and builds
+    //! cached_pre_instantiated_probe from it
+    DLLLOCAL void setCachedPreInstantiated(std::unordered_set<const LocalVar*>* set) {
+        delete cached_pre_instantiated;
+        cached_pre_instantiated = set;
+        if (set) {
+            cached_pre_instantiated_probe.build(*set);
+        } else {
+            cached_pre_instantiated_probe.clear();
+        }
+    }
 
     //! The locals whose values the native code of the AOT-compiled function keeps in native storage, with their
     //! QORE_AOT_LOCAL_SLOT_NATIVE_* flags (see QoreAOTBinary.h)

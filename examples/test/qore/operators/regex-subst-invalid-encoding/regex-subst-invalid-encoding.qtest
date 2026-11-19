@@ -72,11 +72,13 @@ class RegexSubstInvalidEncodingTest inherits QUnit::Test {
         assertThrows("ENCODING-CONVERSION-ERROR", sub () { sj =~ s/'/''/g; });
     }
 
-    #! a byte-matching pattern that ends inside a character keeps PCRE2's offset check in the callback form, as in
-    #! the replacement form
+    #! a byte-matching pattern, which can match a part of a character and give a string that is not valid UTF-8, is
+    #! refused when it is compiled (qore#6554), in every form
     byteMatch() {
-        assertThrows("REGEX-ERROR", \regex_subst(), ("éa", "\\C", "Z", RE_Global));
-        assertThrows("REGEX-ERROR", sub () {
+        assertThrows("REGEX-COMPILATION-ERROR", \regex_subst(), ("éa", "\\C", "Z"));
+        assertThrows("REGEX-COMPILATION-ERROR", \regex_subst(), ("éa", "\\C", "Z", RE_Global));
+        assertThrows("REGEX-COMPILATION-ERROR", \regex(), ("éa", "\\C"));
+        assertThrows("REGEX-COMPILATION-ERROR", sub () {
             string r = regex_subst("éa", "\\C", string sub (hash<RegexMatchInfo> m) { return "Z"; }, RE_Global);
         });
     }

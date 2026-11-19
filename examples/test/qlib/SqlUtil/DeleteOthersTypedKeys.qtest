@@ -1,0 +1,283 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class DeleteOthersTypedKeysTest
+
+#! the delete_others upsert option keeps the rows of the input's keys, however the database stores them (issue #6607)
+/** the key values of the input were compared as text with those read from the database, so that a value that the
+    database stores in another form (a date in another time zone, a float for an integer column, a string with
+    trailing spaces) deleted the row that the upsert had just written; an empty input deleted nothing.  The rows that
+    are kept must be those that the database finds for the keys of the input, as the drivers store dates differently
+    (the instant or the wall-clock time); runs on SQLite, on PostgreSQL when \\c QORE_DB_CONNSTR_PGSQL is set, and on
+    SQL Server when \\c QORE_DB_CONNSTR_FREETDS is set
+*/
+class DeleteOthersTypedKeysTest inherits QUnit::Test {
+    private {
+        *Datasource pgsql;
+        *Datasource mssql;
+        string mssql_skip = "QORE_DB_CONNSTR_FREETDS is not set";
+    }
+
+    constructor() : Test("DeleteOthersTypedKeys", "1.0", \ARGV) {
+        addTestCase("SQLite: delete_others with typed keys", \sqliteTest());
+        addTestCase("PostgreSQL: delete_others with typed keys", \pgsqlTest());
+        addTestCase("SQL Server: delete_others with typed keys", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "DeleteOthersTypedKeys");
+            pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            try {
+                Datasource d(MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                    "DeleteOthersTypedKeys"));
+                d.open();
+                mssql = d;
+            } catch (hash<ExceptionInfo> ex) {
+                mssql_skip = sprintf("cannot connect to SQL Server: %s: %s", ex.err, ex.desc);
+            }
+        }
+%else
+        mssql_skip = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        if (pgsql) {
+            pgsql.rollback();
+            delete pgsql;
+            PgsqlRunSchema::teardown();
+        }
+        if (mssql) {
+            mssql.rollback();
+            delete mssql;
+        }
+        MssqlRunDatabase::teardown();
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        check(ds, ("timestamp",));
+    }
+
+    pgsqlTest() {
+        if (!pgsql) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set or no pgsql module");
+        }
+        on_exit pgsql.rollback();
+        check(pgsql, ("timestamp", "timestamptz"));
+    }
+
+    mssqlTest() {
+        if (!mssql) {
+            testSkip(mssql_skip);
+        }
+        on_exit mssql.rollback();
+        check(mssql, ("datetime2",));
+    }
+
+    private check(Datasource ds, list<string> date_types) {
+        int n = 0;
+        foreach string date_type in (date_types) {
+            ++n;
+            # a date key: the input gives the dates in another time zone than they are read in
+            AbstractTable t = createTable(ds, "dok_date" + n, "d " + date_type + " not null, v integer, "
+                "primary key (d)");
+            date d1 = 2024-01-01T10:00:00;
+            date d2 = 2024-01-02T10:00:00;
+            map t.insert({"d": $1, "v": 1}), (d1, d2, 2024-01-03T10:00:00);
+            list<hash<auto>> input = map ("d": toUtc($1), "v": 2), (d1, d2);
+            checkUpsert(t, input, date_type + " in another time zone");
+            # the dates as they were read are the same keys: nothing more is deleted
+            list<hash<auto>> back = map ("d": $1.d, "v": 3), t.selectRows();
+            *hash<string, int> rh = t.upsertFromIterator(back.iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(NOTHING, rh.deleted, date_type + ": the rows read back");
+            assertEq(back.size(), t.rowCount());
+        }
+
+        # an integer key given as a float and as a number
+        {
+            AbstractTable t = createTable(ds, "dok_int", "id integer not null, v integer, primary key (id)");
+            map t.insert({"id": $1, "v": 1}), (1, 2, 3, 4);
+            checkUpsert(t, ({"id": 1.0, "v": 2}, {"id": 2n, "v": 2}, {"id": 3, "v": 2}), "a float and a number");
+            assertEq((1, 2, 3), sort(t.select({"columns": "id"}).id));
+        }
+
+        # a string key with a trailing space, which some databases store or compare without it
+        {
+            AbstractTable t = createTable(ds, "dok_str", "k varchar(10) not null, v integer, primary key (k)");
+            map t.insert({"k": $1, "v": 1}), ("a", "b", "c");
+            checkUpsert(t, ({"k": "a ", "v": 2}, {"k": "b", "v": 2}), "a trailing space");
+            assertEq(2, t.rowCount());
+        }
+
+        # a composite key of a date and a number
+        {
+            AbstractTable t = createTable(ds, "dok_comp", "d " + date_types[0] + " not null, n numeric(10,2) not "
+                "null, v integer, primary key (d, n)");
+            date d1 = 2024-02-01T08:30:00;
+            map t.insert({"d": d1, "n": $1, "v": 1}), (1.5n, 2.25n, 3n);
+            checkUpsert(t, ({"d": toUtc(d1), "n": 1.5, "v": 2}, {"d": d1, "n": 3, "v": 2}), "a date and a number");
+            assertEq(2, t.rowCount());
+        }
+
+        # many integer keys given as floats: the keys that match no row exactly are looked up in blocks; the rows that are
+        # not in the input are deleted in commit blocks and given to the info callback
+        {
+            AbstractTable t = createTable(ds, "dok_many", "id integer not null, v integer, primary key (id)");
+            # ids 1 to 1210; range() does not include its end
+            map t.insert({"id": $1, "v": 1}), range(1, 1211);
+            list<hash<auto>> input = map ("id": float($1), "v": 2), range(1, 1201);
+            list<auto> deleted = ();
+            list<auto> deleted_v = ();
+            code cb = sub (string table_name, hash<auto> row, int result) {
+                if (result == AbstractTable::UR_Deleted) {
+                    deleted += row.id;
+                    deleted_v += row.v;
+                }
+            };
+            *hash<string, int> rh = t.upsertFromIterator(input.iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True, "info_callback": cb, "commit_block": 7});
+            assertEq(10, rh.deleted);
+            assertEq(range(1201, 1211), sort(deleted));
+            assertEq(1200, t.rowCount());
+            # the deleted rows are given whole to the callback
+            assertEq((map 1, range(10)), deleted_v);
+            assertEq(0, t.selectRows({"where": {"id": op_gt(1200)}}).size());
+        }
+
+        # a key of 25 columns: a lookup binds at most 2000 values (SQL Server binds at most 2100)
+        {
+            list<string> cols = map sprintf("k%02d", $1), range(25);
+            AbstractTable t = createTable(ds, "dok_wide", (foldl $1 + ", " + $2, (map $1 + " integer not null", cols))
+                + ", v integer, primary key (" + cols.join(", ") + ")");
+            foreach int i in (range(1, 102)) {
+                t.insert((map {$1: i}, cols) + {"v": 1});
+            }
+            # the keys given as floats match no row exactly, so all are looked up
+            list<hash<auto>> input = ();
+            foreach int i in (range(1, 101)) {
+                input += (map {$1: float(i)}, cols) + {"v": 2};
+            }
+            *hash<string, int> rh = t.upsertFromIterator(input.iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(1, rh.deleted);
+            assertEq(100, t.rowCount());
+        }
+
+        # an input row without a value of the primary key: the row that it gives cannot be known
+        {
+            AbstractTable t = createTable(ds, "dok_nokey", "id integer not null, code varchar(10) not null, v integer, "
+                "primary key (id), unique (code)");
+            map t.insert({"id": $1, "code": "c" + $1, "v": 1}), (1, 2, 3);
+            assertThrows("UPSERT-ERROR", "column \"id\" has no value", \t.upsertFromIterator(),
+                ((("code": "c1", "v": 2),).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True, "upsert_columns": "code"}));
+            # a NULL value, which the database could generate
+            assertThrows("UPSERT-ERROR", "column \"id\" has no value", \t.upsertFromIterator(),
+                ((("id": NULL, "code": "c4", "v": 2),).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True, "upsert_columns": "code"}));
+            # an operator as the value
+            assertThrows("UPSERT-ERROR", "column \"id\" is an operator", \t.upsertFromIterator(),
+                ((("id": op_gt(1), "code": "c5", "v": 2),).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True, "upsert_columns": "code"}));
+            # nothing was changed
+            assertEq(3, t.rowCount());
+            assertEq((1, 1, 1), t.select({"columns": "v", "orderby": "id"}).v);
+            # a later row without a value: the rows before it have been upserted
+            assertThrows("UPSERT-ERROR", "column \"id\" has no value", \t.upsertFromIterator(),
+                ((("id": 2, "code": "c2", "v": 5), ("code": "c3", "v": 5)).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True}));
+            assertEq((1, 5, 1), t.select({"columns": "v", "orderby": "id"}).v);
+        }
+
+        # an empty input deletes every row
+        {
+            AbstractTable t = createTable(ds, "dok_empty", "id integer not null, primary key (id)");
+            map t.insert({"id": $1}), (1, 2, 3);
+            list<auto> deleted = ();
+            code cb = sub (string table_name, hash<auto> row, int result) {
+                if (result == AbstractTable::UR_Deleted) {
+                    deleted += row.id;
+                }
+            };
+            *hash<string, int> rh = t.upsertFromIterator(().iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True, "info_callback": cb});
+            assertEq(3, rh.deleted);
+            assertEq((1, 2, 3), sort(deleted));
+            assertEq(0, t.rowCount());
+            # without delete_others, an empty input changes nothing
+            t.insert({"id": 4});
+            assertEq(NOTHING, t.upsertFromIterator(().iterator()));
+            assertEq(1, t.rowCount());
+        }
+    }
+
+    #! upserts the input with delete_others and checks that the rows that remain are those that the database finds
+    #! for the keys of the input, and that the others were deleted
+    private checkUpsert(AbstractTable t, list<hash<auto>> input, string desc) {
+        list<string> pkl = t.getPrimaryKey().keys();
+        # the keys of the rows before the upsert, as the database gives them
+        list<string> before = map sprintf("%y", $1{pkl}), t.selectRows();
+        *hash<string, int> rh = t.upsertFromIterator(input.iterator(), AbstractTable::UpsertAuto,
+            {"delete_others": True});
+        # each input row has a row in the table
+        hash<string, bool> found;
+        foreach hash<auto> row in (input) {
+            *hash<auto> r = t.selectRow({"where": row{pkl}});
+            assertNeq(NOTHING, r, desc + ": " + sprintf("%y", row{pkl}));
+            if (r) {
+                assertEq(row.v, r.v, desc + ": the row was upserted");
+                found{sprintf("%y", r{pkl})} = True;
+            }
+        }
+        # and no other row remains
+        assertEq(found.size(), t.rowCount(), desc + ": the rows that remain");
+        # the rows deleted are those of before whose keys are not those of the rows of the input
+        int gone = (foldl $1 + $2, (map 1, before, !found{$1})) ?? 0;
+        assertEq(gone, rh.deleted ?? 0, desc + ": the rows deleted");
+    }
+
+    #! returns the date at the same instant in UTC, so that it is not in the time zone in which dates are read
+    private static date toUtc(date d) {
+        return (new TimeZone("UTC")).date(d);
+    }
+
+    private AbstractTable createTable(Datasource ds, string name, string cols) {
+        ds.exec(sprintf("create table %s (%s)", name, cols));
+        return new Table(ds, name).getTable();
+    }
+}
