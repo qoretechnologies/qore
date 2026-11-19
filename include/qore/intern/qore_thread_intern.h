@@ -769,6 +769,19 @@ DLLLOCAL QoreSandboxManager* qore_module_init_lift_manager_ref();
 //! (see QoreSandboxBudgetStack::isIsolationRefused()), else returns 0 (qore#6536)
 DLLLOCAL int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation);
 
+//! Returns the isolation domain of the caller of the innermost trusted build of the thread, or nullptr (qore#6536)
+DLLLOCAL const std::string* qore_sandbox_build_caller_domain();
+
+//! Raises \c SANDBOX-ISOLATION-ERROR and returns -1 if the isolation of the thread's trusted build refuses the
+//! sandboxes of \a pgm, else returns 0 (qore#6536)
+DLLLOCAL int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink, const char* operation);
+
+//! Returns true if the thread entered the code of another tenant in a trusted build: a fast path that would run code
+//! inline declines, so that the regular call path raises the error (qore#6536)
+DLLLOCAL inline bool qore_sandbox_isolation_refused() {
+    return qore_sandbox_refused_threads.load(std::memory_order_relaxed) && qore_sandbox_check_isolation(nullptr, "");
+}
+
 class QoreTrustedBuildChargeHelper {
 public:
     //! Starts it; established() is false if it could not be recorded for lack of memory

@@ -246,8 +246,9 @@ DLLLOCAL void qore_sandbox_budgets_deref(QoreSandboxBudgetList& budgets);
 */
 class QoreSandboxIsolation : public QoreReferenceCounter {
 public:
-    //! Creates the isolation of a build that \a callers (referenced here) entered
-    DLLLOCAL QoreSandboxIsolation(QoreSandboxManager* callers);
+    //! Creates the isolation of a build that \a callers (referenced here; nullptr for a build that the outer build's
+    //! own code entered) entered, inside the isolation \a outer (referenced here) of the outer build, or nullptr
+    DLLLOCAL QoreSandboxIsolation(QoreSandboxManager* callers, QoreSandboxIsolation* outer);
 
     DLLLOCAL QoreSandboxIsolation(const QoreSandboxIsolation&) = delete;
     DLLLOCAL QoreSandboxIsolation& operator=(const QoreSandboxIsolation&) = delete;
@@ -265,23 +266,37 @@ public:
     //! Adds the sandbox of a Program that created a build (referenced here); may throw std::bad_alloc
     DLLLOCAL void addCreator(QoreSandboxManager* sm);
 
-    //! Returns a copy of \a outer for a nested build whose own code the outer build runs; may throw std::bad_alloc
-    DLLLOCAL static QoreSandboxIsolation* nested(const QoreSandboxIsolation& outer);
-
     //! Returns nullptr if the code of \a member (a plain manager) may run, else the domain that it has
+    /** The code must be allowed by this build and by every outer build: a nested build never widens what may run
+    */
     DLLLOCAL const std::string* refuses(const QoreSandboxManager* member) const;
 
-    //! Returns the isolation domain of the caller (the first one of its sandboxes that has one), or nullptr
+    //! Returns the isolation domain of the innermost caller that has one, or nullptr
     DLLLOCAL const std::string* callerDomain() const;
 
+    //! Returns the isolation of the outer build, or nullptr
+    DLLLOCAL const QoreSandboxIsolation* getOuter() const {
+        return outer;
+    }
+
 private:
-    //! the sandboxes that governed the caller (referenced)
+    //! the sandboxes that governed the caller (referenced), or nullptr for a build that the outer build's own code
+    //! entered
     QoreSandboxManager* callers;
+    //! the isolation of the outer build (referenced), or nullptr
+    QoreSandboxIsolation* outer;
+
+    //! Returns nullptr if this build allows the code of \a member, else its domain
+    DLLLOCAL const std::string* levelRefuses(const QoreSandboxManager* member) const;
     //! the sandboxes of the Programs that created the builds (referenced)
     std::vector<QoreSandboxManager*> creators;
 
     DLLLOCAL ~QoreSandboxIsolation();
 };
+
+//! The number of threads with a refused entry (see QoreSandboxBudgetStack::isIsolationRefused()), so that the fast
+//! paths that run code inline check the thread only while one exists
+DLLLOCAL extern std::atomic<int> qore_sandbox_refused_threads;
 
 class QoreSandboxBudgetStack {
 public:
@@ -463,6 +478,16 @@ private:
     //! Refuses the entry of \a owner (see isIsolationRefused())
     DLLLOCAL void refuseIsolation(int tid, const void* owner, const std::string& domain,
             const std::string* caller_domain);
+
+    //! Refuses the entry of \a owner and returns true if the isolation of the innermost build refuses \a sm; the
+    //! build's own code (\a build_own) is checked against the outer builds only
+    DLLLOCAL bool checkIsolation(int tid, QoreSandboxManager* sm, const void* owner, bool build_own);
+
+public:
+    //! Returns the isolation domain that the innermost build refuses for \a sm, or nullptr if it may run there
+    DLLLOCAL const std::string* isolationRefuses(const QoreSandboxManager* sm, bool build_own = false) const;
+
+private:
     //! the limits of the lost call (@ref QSB_LIMIT_WALL_TIME, @ref QSB_LIMIT_CPU_TIME, @ref QSB_LIMIT_STACK)
     unsigned lost_kinds = 0;
     //! the wall-time limit of the lost call, or 0 if it is not known (a continuation of a lost call)

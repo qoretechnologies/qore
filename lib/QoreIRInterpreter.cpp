@@ -5464,6 +5464,10 @@ bool qore_ir_get_aot_scalar_leaf(const QoreIRFunction* ir, const UserVariantBase
 
 bool qore_ir_try_execute_native_leaf(QoreIRCallDirectInstruction* inst,
         uint64_t* args, int nargs, QoreValue& result, const QoreClosureBase* closure) {
+    // no code runs in an entry refused for the isolation of a trusted build (qore#6536)
+    if (qore_sandbox_isolation_refused()) {
+        return false;
+    }
     if (irFunctionDebuggerAttached(inst->cached_callee_ir) || !ensureInterpreterNativeLeafState(inst, nargs)) {
         return false;
     }
@@ -6188,6 +6192,11 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         uint64_t* args, int nargs, QoreValue& result, ExceptionSink* xsink,
         bool* may_invalidate_external_caches = nullptr, uint64_t** arg_cleanups = nullptr) {
     QoreSandboxProvenanceHelper provenance(self);
+    // no code runs in an entry refused for the isolation of a trusted build: the regular call path raises it
+    // (qore#6536)
+    if (qore_sandbox_isolation_refused()) {
+        return false;
+    }
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
         inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
@@ -6724,6 +6733,11 @@ static bool tryExecuteInterpreterInlineIRClosure(QoreValue ref_val, QoreProgram*
 
     auto* cb = static_cast<const QoreClosureBase*>(node);
     QoreSandboxProvenanceHelper provenance(cb);
+    // no code runs in an entry refused for the isolation of a trusted build: the regular call path raises it
+    // (qore#6536)
+    if (qore_sandbox_isolation_refused()) {
+        return false;
+    }
     auto* uf = static_cast<UserClosureFunction*>(cb->getFunction());
     if (!uf || !uf->numVariants()) {
         return false;

@@ -40,6 +40,13 @@ auto sub call(code c, *softlist<auto> args) {
 code sub returning(code c) {
     return code sub () { return c; };
 }
+hash<auto> sub mk_counter() {
+    int n = 0;
+    return {
+        \"inc\": sub () { n += 1; },
+        \"get\": int sub () { return n; },
+    };
+}
 *string sub caller_domain() {
     return Qore::SandboxManager::getCallerIsolationDomain();
 }
@@ -100,6 +107,18 @@ auto sub build_nested(code cap, code c, softlist<auto> args) {
     return cap(c, args);
 }
 
+#! trusted code that a build runs: calls the code that the caller gives it directly, in a loop
+nothing sub build_call_loop(code c, int n) {
+    for (int i = 0; i < n; ++i) {
+        c();
+    }
+}
+
+#! trusted code that a build runs: parses code in a Program that the caller gives it
+nothing sub build_parse(Program p, string src) {
+    p.parse(src, "build-parse");
+}
+
 #! trusted code that a build runs: calls a function of a Program that the caller gives it
 auto sub build_call_pgm(Program p, string f, softlist<auto> args) {
     return p.callFunctionArgs(f, args);
@@ -126,6 +145,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         code BuildThreadCall;
         code BuildNested;
         code BuildCallPgm;
+        code BuildCallLoop;
+        code BuildParse;
 
         #! tenant A's interface, its second interface (same domain), tenant B's interface
         Program a;
@@ -141,6 +162,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         addTestCase("the code of the Program that created the build runs in it, whatever its domain",
             \creatorCode());
         addTestCase("sandboxes without a domain refuse nothing", \noDomain());
+        addTestCase("the code of another tenant has no effect: direct calls, nested and lost calls, parsing",
+            \noEffect());
         set_return_value(main());
     }
 
@@ -152,6 +175,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         BuildThreadCall = SandboxManager::createTrustedBuildCall(\build_thread_call());
         BuildNested = SandboxManager::createTrustedBuildCall(\build_nested());
         BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
+        BuildCallLoop = SandboxManager::createTrustedBuildCall(\build_call_loop());
+        BuildParse = SandboxManager::createTrustedBuildCall(\build_parse());
 
         a = tenant("a", "tenant-a");
         a2 = tenant("a", "tenant-a2");
@@ -290,6 +315,63 @@ code sub mk() {
         assertEq(10, x.callFunction("call", BuildCallArgs, (b.getCallReference("make"), 10)).size());
         # the code of a sandbox without a domain runs for a tenant
         assertEq(10, a.callFunction("call", BuildCallArgs, (y.getCallReference("make"), 10)).size());
+    }
+
+    noEffect() {
+        # tenant B's counter, warmed up by calls of the host (which may call any tenant's code), so that the calls run
+        # on the fast paths of each execution mode
+        hash<auto> counter = b.callFunction("mk_counter");
+        for (int i = 0; i < 20; ++i) {
+            counter.inc();
+        }
+        assertEq(20, counter.get());
+
+        # a direct call of the closure by the build's code, in a loop: the host's build (which may run any tenant's
+        # code) warms up the build's call site first, so that the tenant's call takes its fast paths
+        BuildCallLoop(counter.inc, 50);
+        assertEq(70, counter.get());
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallLoop, (counter.inc, 50)));
+        assertEq(70, counter.get());
+
+        # a nested build that a sandbox without a domain enters inside the tenant's build: the tenant's isolation
+        # still holds
+        Program y = tenant(NOTHING, "nested-no-domain");
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildCallArgs,
+            (y.getCallReference("call"), (BuildCallArgs, (counter.inc,)))));
+        assertEq(70, counter.get());
+
+        # parsing code in the other tenant's Program
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildParse,
+            (b, "our int build_parse_x = make(1).size();")));
+        assertNothing(b.getGlobalVariable("build_parse_x"));
+
+        # a call whose limits cannot be enforced (its budget could not be recorded) keeps the isolation
+        try {
+            call_function("dbg_sandbox_fail_next_budgets", 0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                return;
+            }
+            rethrow;
+        }
+        SandboxManager mw();
+        mw.setUncontrolledApiPolicy(True);
+        mw.setWallTimeLimit(600000);
+        mw.setIsolationDomain("a");
+        Program aw(PO_MODERN);
+        aw.setSandboxManager(mw);
+        aw.parse(TenantSource, "tenant-a-limited");
+        code aw_call = aw.getCallReference("call");
+        call_function("dbg_sandbox_fail_next_budgets", 1);
+        on_exit call_function("dbg_sandbox_fail_next_budgets", 0);
+        try {
+            a.callFunction("call", BuildCallArgs, (aw_call, (counter.inc,)));
+            assertTrue(False, "the call was not refused");
+        } catch (hash<ExceptionInfo> ex) {
+            # the isolation error, or the error of the call whose limits cannot be enforced; the counter is unchanged
+            assertTrue(ex.err == "SANDBOX-ISOLATION-ERROR" || ex.err == "SANDBOX-ERROR", ex.err);
+        }
+        assertEq(70, counter.get());
     }
 
     #! the number of call budget frames of the thread, or -1 in a release build

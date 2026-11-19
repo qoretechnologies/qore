@@ -2803,6 +2803,10 @@ int check_stack_reserve(ExceptionSink* xsink, size_t reserve) {
         return 0;
     }
     // the frame does not fit: raised as check_stack_intern() raises it for the limit
+    if (td->sandbox_budgets.isIsolationRefused()) {
+        td->sandbox_budgets.raiseIsolation(xsink, "call");
+        return -1;
+    }
     if (td->sandbox_budgets.isStackLost()) {
         td->sandbox_budgets.raiseLost(xsink, "call");
         return -1;
@@ -6479,6 +6483,37 @@ QoreSandboxManager* qore_module_init_lift_manager_ref() {
     return mib.loader_manager;
 }
 
+int qore_sandbox_check_program_isolation(QoreProgram* pgm, ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = thread_data.get();
+    if (!td || !td->sandbox_budgets.currentIsolation()) {
+        return 0;
+    }
+    QoreSandboxManager* own_ptr;
+    QoreSandboxManager* creator_ptr;
+    qore_program_private::get(*pgm)->getSandboxManagerRefs(own_ptr, creator_ptr);
+    ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
+    ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
+    for (const QoreSandboxManager* sm : {*own, *creator}) {
+        if (!sm) {
+            continue;
+        }
+        if (const std::string* domain = td->sandbox_budgets.isolationRefuses(sm)) {
+            const std::string* caller = td->sandbox_budgets.currentIsolation()->callerDomain();
+            xsink->raiseException("SANDBOX-ISOLATION-ERROR", "%s: a Program of isolation domain '%s' cannot be "
+                "parsed or committed in a trusted build that sandboxed code of isolation domain '%s' called",
+                operation, domain->c_str(), caller ? caller->c_str() : "");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+const std::string* qore_sandbox_build_caller_domain() {
+    ThreadData* td = thread_data.get();
+    const QoreSandboxIsolation* iso = td ? td->sandbox_budgets.currentIsolation() : nullptr;
+    return iso ? iso->callerDomain() : nullptr;
+}
+
 int qore_sandbox_check_isolation(ExceptionSink* xsink, const char* operation) {
     ThreadData* td = thread_data.get();
     if (!td || !td->sandbox_budgets.isIsolationRefused()) {
@@ -7146,6 +7181,10 @@ ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper(E
     printd(5, "ProgramRuntimeParseCommitContextHelper::ProgramRuntimeParseCommitContextHelper() current_pgm: %p " \
         "new_pgm: %p\n", td->current_pgm, pgm);
     if (pgm != td->current_pgm) {
+        // the commit runs code of the Program, which may not be another tenant's in a trusted build (qore#6536)
+        if (qore_sandbox_check_program_isolation(pgm, xsink, "committing code")) {
+            return;
+        }
         // try to increment thread count
         if (qore_program_private::lockParsing(*pgm, xsink))
             return;
@@ -7219,6 +7258,11 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
     if (!pgm)
         return;
 
+    // the code of another tenant is not parsed in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(pgm, xsink, "parsing code")) {
+        return;
+    }
+
     // attach to and lock program for parsing
     if (qore_program_private::lockParsing(*pgm, xsink))
         return;
@@ -7234,6 +7278,11 @@ ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink
 ProgramRuntimeParseContextHelper::ProgramRuntimeParseContextHelper(ExceptionSink* xsink, QoreProgram* pgm,
         bool no_wait) : restore(false) {
     if (!pgm) {
+        return;
+    }
+
+    // the code of another tenant is not parsed in a trusted build that a tenant called (qore#6536)
+    if (qore_sandbox_check_program_isolation(pgm, xsink, "parsing code")) {
         return;
     }
 

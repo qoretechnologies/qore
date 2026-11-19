@@ -605,6 +605,8 @@ public:
 
     //! Marks the manager as governing code: its isolation domain is fixed from then on
     DLLLOCAL void setGoverns() {
+        // after a concurrent setIsolationDomain() has written the domain
+        std::lock_guard<std::mutex> lck(domain_lock);
         governs.store(true, std::memory_order_release);
     }
 

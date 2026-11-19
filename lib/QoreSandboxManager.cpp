@@ -1264,7 +1264,18 @@ int QoreSandboxManager::setIsolationDomain(const char* domain, ExceptionSink* xs
 
 std::string qore_caller_isolation_domain() {
     QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
-    return governing ? governing->getIsolationDomain() : std::string();
+    if (governing) {
+        std::string domain = governing->getIsolationDomain();
+        if (!domain.empty()) {
+            return domain;
+        }
+    }
+    // code in a trusted build that a tenant entered works for that tenant, whose sandbox the build's barrier hides
+    // (qore#6536)
+    if (const std::string* domain = qore_sandbox_build_caller_domain()) {
+        return *domain;
+    }
+    return std::string();
 }
 
 std::string QoreSandboxManager::getIsolationDomain() const {
