@@ -8,6 +8,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires ../../EncodingCapability.qm
 
 %exec-class EncodingConversionInvalidTest
 
@@ -98,11 +99,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         decodes a lead byte followed by a byte that is not a trail byte without an error
     */
     static *string sjisIconvAccepts() {
-        try {
-            binary b = binary(convert_encoding(binary_to_string(<41812042>, "Shift_JIS"), "UTF-8"));
-            return sprintf("the iconv of the platform decodes the invalid Shift_JIS bytes 41812042 to %s", b.toHex());
-        } catch (hash<ExceptionInfo> ex) {
-        }
+        return encoding_decodes_invalid("Shift_JIS", <41812042>);
     }
 
     constructor() : QUnit::Test("EncodingConversionInvalid", "1.0", \ARGV) {
@@ -116,10 +113,12 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         addTestCase("peek and close name their methods", \methodNameTest());
         addTestCase("latin1 mode", \latin1Test());
         addTestCase("latin1 mode with stateful encodings", \latin1StatefulTest());
+        addTestCase("latin1 mode with UTF-7", \latin1Utf7Test());
         addTestCase("latin1 mode output stream", \latin1OutputTest());
         addTestCase("keep mode", \keepTest());
         addTestCase("encoding_errors values", \optionTest());
         addTestCase("convert_encoding() to the same encoding", \convertSameEncodingTest());
+        addTestCase("convert_encoding() to the same encoding with UTF-7", \convertSameUtf7Test());
         addTestCase("the first error in stateful input", \statefulOrderTest());
         addTestCase("latin1 mode with many invalid bytes", \latin1ManyTest());
         addTestCase("bytes not defined in the source encoding", \undefinedTest());
@@ -403,7 +402,43 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         # a stateful source encoding
         assertEq(binary("A\u{80}AB"), readAll(<41804142>, "ISO-2022-JP", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
         assertEq(binary("A\u{80}AB"), readAll(<41804142>, "ISO-2022-JP", "UTF-8", 4096, ENCODING_ERRORS_LATIN1));
-        # a stateful target encoding: the substituted characters are converted on their own
+    }
+
+    #! converts valid text to each of the encodings and the result to the same encoding, which gives it unchanged
+    sameEncodingValid(list<string> encs) {
+        foreach string text in ("", "abc", "aé日本😀", strmul("Grüße 日本語 ", 1000), strmul("a", 5000)) {
+            foreach string enc in (encs) {
+                string s;
+                try {
+                    s = convert_encoding(text, enc);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the encoding cannot hold the text
+                    assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+                    continue;
+                }
+                string r = convert_encoding(s, enc);
+                assertEq(binary(s), binary(r), enc);
+                assertEq(get_encoding(s), get_encoding(r), enc);
+            }
+        }
+    }
+
+    #! UTF-7, which the iconv of some platforms (musl's) does not have
+    convertSameUtf7Test() {
+        *string reason = encoding_cannot_convert("UTF-7", "aé日本😀");
+        if (reason) {
+            testSkip(reason);
+        }
+        sameEncodingValid(("UTF-7",));
+    }
+
+    #! a stateful target encoding, UTF-7, which the iconv of some platforms (musl's) does not have
+    latin1Utf7Test() {
+        *string reason = encoding_cannot_convert("UTF-7", "日ÿ本");
+        if (reason) {
+            testSkip(reason);
+        }
+        # the substituted characters are converted on their own
         list<hash<auto>> cases = (
             {"data": <61ff62>, "text": "aÿb"},
             {"data": <e697a5ffe69cac>, "text": "日ÿ本"},
@@ -420,6 +455,12 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
                     sprintf("UTF-7 output %s in %d", c.data.toHex(), block));
             }
         }
+        # 100 KB of ISO-8859-1 text read as UTF-8: each substituted character is converted on its own, so the text is
+        # compared
+        string text = strmul("Grüße aus Zürich, café crème, ÿ¿ ", 3500);
+        binary data = binary(convert_encoding(text, "ISO-8859-1"));
+        binary out = readAll(data, "UTF-8", "UTF-7", 4096, ENCODING_ERRORS_LATIN1);
+        assertEq(text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"), "UTF-7");
     }
 
     latin1OutputTest() {
@@ -515,9 +556,6 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             }
             assertEq(expected, writeAll(data, "UTF-8", to, 10000, ENCODING_ERRORS_LATIN1), "output to " + to);
         }
-        # a stateful target: each substituted character is converted on its own, so the text is compared
-        binary out = readAll(data, "UTF-8", "UTF-7", 4096, ENCODING_ERRORS_LATIN1);
-        assertEq(text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"), "UTF-7");
         # all 128 bytes above 0x7f, each substituted
         binary high = binary();
         for (int i = 0x80; i < 0x100; ++i) {
@@ -560,21 +598,7 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
                 "%d", c.enc, c.offset), ex.desc, c.enc + " " + c.data.toHex());
         }
         # valid text is returned unchanged
-        foreach string text in ("", "abc", "aé日本😀", strmul("Grüße 日本語 ", 1000), strmul("a", 5000)) {
-            foreach string enc in ("UTF-8", "UTF-16LE", "UTF-16BE", "Shift_JIS", "UTF-7", "ISO-2022-JP") {
-                string s;
-                try {
-                    s = convert_encoding(text, enc);
-                } catch (hash<ExceptionInfo> ex) {
-                    # the encoding cannot hold the text
-                    assertEq("ENCODING-CONVERSION-ERROR", ex.err);
-                    continue;
-                }
-                string r = convert_encoding(s, enc);
-                assertEq(binary(s), binary(r), enc);
-                assertEq(get_encoding(s), get_encoding(r), enc);
-            }
-        }
+        sameEncodingValid(("UTF-8", "UTF-16LE", "UTF-16BE", "Shift_JIS", "ISO-2022-JP"));
         # a single-byte encoding has no invalid bytes
         string s = binary_to_string(<80ff41>, "ISO-8859-1");
         assertEq(<80ff41>, binary(convert_encoding(s, "ISO-8859-1")));

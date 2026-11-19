@@ -7,6 +7,7 @@
 %requires qore >= 2.0
 %requires json
 %requires QUnit
+%requires ../../EncodingCapability.qm
 
 %exec-class JsonInvalidEncodingTest
 
@@ -19,6 +20,13 @@ public class JsonInvalidEncodingTest inherits QUnit::Test {
         addTestCase("parse_json() of invalid UTF-8", \parseJsonInvalid());
         addTestCase("parse_json() of valid text", \parseJsonValid());
         addTestCase("parse_json() of multi-byte encodings", \parseJsonMultiByte());
+        # characters whose second byte is "\\" (5c) in Big5 ("功" a5 5c) and "@" (40) in GBK ("丂" 81 40); the text is
+        # given by its bytes, as parse_json() only decodes it, and the iconv of some platforms (musl's) cannot encode
+        # these encodings
+        addTestCase("parse_json() of Big5", \parseJsonDecodeOnly(), ("Big5", "功",
+            <7b22a55c223a205b22a55c222c20315d7d>));
+        addTestCase("parse_json() of GBK", \parseJsonDecodeOnly(), ("GBK", "丂",
+            <7b228140223a205b228140222c20315d7d>));
         addTestCase("jwt_decode()", \jwtDecode());
         addTestCase("JsonSaxParser", \sax());
         addTestCase("parse_toon()", \parseToon());
@@ -82,15 +90,24 @@ public class JsonInvalidEncodingTest inherits QUnit::Test {
         assertEq("ISO-8859-1", l[0].encoding());
     }
 
+    #! parse_json() of text in an encoding that the iconv of some platforms can only decode, given by its bytes
+    parseJsonDecodeOnly(string enc, string c, binary bytes) {
+        *string reason = encoding_cannot_decode(enc, bytes, "{\"" + c + "\": [\"" + c + "\", 1]}")
+            ?? encoding_characters_unknown(enc, c);
+        if (reason) {
+            testSkip(reason);
+        }
+        hash<auto> h = parse_json(binary_to_string(bytes, enc));
+        assertEq({c: (c, 1)}, h);
+        assertEq("UTF-8", h.firstKey().encoding());
+        assertEq("UTF-8", h.firstValue()[0].encoding());
+    }
+
     parseJsonMultiByte() {
-        # characters whose second byte is "\\" (5c) in Shift_JIS ("ソ" 83 5c) and Big5 ("功" a5 5c); the Big5 text
-        # is given by its bytes, as parse_json() only decodes it, and the iconv of some platforms (musl's) cannot
-        # encode Big5
-        foreach list<auto> c in ((("Shift_JIS", "ソ"), ("Big5", "功", <7b22a55c223a205b22a55c222c20315d7d>),
-                ("GBK", "丂"), ("EUC-JP", "日本"), ("UTF-16LE", "é€😀"), ("UTF-16BE", "é€😀"), ("UTF-16", "é€"))) {
-            string text = c[2]
-                ? binary_to_string(c[2], c[0])
-                : convert_encoding("{\"" + c[1] + "\": [\"" + c[1] + "\", 1]}", c[0]);
+        # a character whose second byte is "\\" (5c) in Shift_JIS ("ソ" 83 5c)
+        foreach list<auto> c in ((("Shift_JIS", "ソ"), ("EUC-JP", "日本"), ("UTF-16LE", "é€😀"), ("UTF-16BE", "é€😀"),
+                ("UTF-16", "é€"))) {
+            string text = convert_encoding("{\"" + c[1] + "\": [\"" + c[1] + "\", 1]}", c[0]);
             hash<auto> h = parse_json(text);
             assertEq({c[1]: (c[1], 1)}, h, c[0]);
             assertEq("UTF-8", h.firstKey().encoding(), c[0]);
