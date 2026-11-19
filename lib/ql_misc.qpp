@@ -1847,8 +1847,20 @@ data decode_http_body(*string content_type, binary body, string assumed_encoding
         if (!qore_string_encoding_valid(*str)) {
             QoreStringNode* desc = new QoreStringNodeMaker("decode_http_body(): the HTTP message body is not valid %s",
                 str->getEncoding()->getCode());
-            // the offset of the first invalid byte, where the structure of the encoding locates it
-            qore_offset_t offset = q_get_invalid_text_offset(str->getEncoding(), str->c_str(), str->size());
+            // the offset of the first invalid byte: in UTF-8 that of the validator of qore_string_encoding_valid(); in
+            // another encoding the one that the conversion to UTF-8 (which qore_string_encoding_valid() makes)
+            // reports, also for a byte that is not a character of a single-byte encoding
+            qore_offset_t offset = -1;
+            if (str->getEncoding() == QCS_UTF8) {
+                offset = q_get_invalid_text_offset(QCS_UTF8, str->c_str(), str->size());
+            } else {
+                QoreString utf8(QCS_UTF8);
+                size_t err_offset = static_cast<size_t>(-1);
+                if (qore_string_private::convert_encoding_intern(str->c_str(), str->size(), str->getEncoding(), utf8,
+                    QCS_UTF8, nullptr, true, true, &err_offset) && err_offset != static_cast<size_t>(-1)) {
+                    offset = static_cast<qore_offset_t>(err_offset);
+                }
+            }
             if (offset >= 0) {
                 desc->sprintf(": invalid byte sequence at byte offset " QLLD, static_cast<int64>(offset));
             }

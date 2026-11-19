@@ -237,7 +237,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         string assumed = info.assume_encoding;
         # a body with a content coding that was not decoded (the encoding_passthru option) is not text
         bool content_encoded = info.encoding_passthru && resp.body.typeCode() == NT_BINARY
-            && resp.headers."content-encoding" && resp.headers."content-encoding" != "identity";
+            && HttpIoSupport::getContentCoding(resp.headers."content-encoding");
         if (!content_encoded) {
             # the HttpClientIo module is loaded when the request is made
             resp = call_static_method("HttpClientIo::HttpClientStreamHandle", "decodeResponseText", resp, assumed,

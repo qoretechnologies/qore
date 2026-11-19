@@ -569,7 +569,6 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         }
     }
 
-    # the text decoding of a response whose body has been received as octets
     #! decodeResponseText() gives a body that is not valid in its encoding as HTTPClient does (qore#6604)
     decodeResponseTextInvalidTest() {
         int n = 0;
@@ -599,6 +598,7 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         assertGt(0, n, "there are bodies that are not valid");
     }
 
+    # the text decoding of a response whose body has been received as octets
     decodeResponseTextTest() {
         # a character encoding sent as the content encoding of the body is its charset, as with HTTPClient
         hash<auto> resp = HttpClientStreamHandle::decodeResponseText({
