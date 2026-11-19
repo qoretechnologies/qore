@@ -3645,7 +3645,8 @@
       (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>); see @ref sqlutilv3_11_0
     - fixed the upsert of a row of list values (bulk DML) with @ref sqlutilintro "SqlUtil" by
       \c upsertFromIterator() or an upsert closure made from such a row, which failed with a bind error with every
-      driver but Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>);
+      driver but Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>), and with the
+      select-first strategy on Oracle (<a href="https://github.com/qoretechnologies/qore/issues/6688">issue 6688</a>);
       see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)

@@ -6449,9 +6449,10 @@ group by p.index_name", schema.upr(), name.upr());
         if (isBulkUpsertRow(example_row)) {
             return c;
         }
-        # a closure made from a hash row takes rows of list values (bulk DML), whose lists are checked first; hash
-        # rows take it directly (issue #6691)
-        code rows = getBulkUpsertRowsClosure(c, True);
+        # a closure made from a hash row takes rows of list values (bulk DML), whose lists are checked first, and which
+        # are upserted row by row with the select-first strategy (issue #6688); hash rows take it directly (issue
+        # #6691)
+        code rows = getBulkUpsertRowsClosure(c, upsert_strategy != UpsertSelectFirst);
         return int sub (hash<auto> h) {
             if (h.firstValue().typeCode() == NT_LIST && isBulkUpsertRow(h)) {
                 return rows(h);
@@ -6466,7 +6467,12 @@ group by p.index_name", schema.upr(), name.upr());
     */
     code getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # the statements bind the lists of a row of list values (bulk DML) as arrays; the lists are checked first
-        # (issue #6691)
+        # (issue #6691); a select-first upsert cannot bind arrays in its select: a closure made from a row of list
+        # values upserts its rows one by one, with a closure made from its first row (issue #6688)
+        if (upsert_strategy == UpsertSelectFirst) {
+            return getUpsertRowsClosure(row, getOracleUpsertClosure(getBulkUpsertExampleRow(row), upsert_strategy,
+                opt));
+        }
         return getUpsertRowsClosure(row, getOracleUpsertClosure(row, upsert_strategy, opt), True);
     }
 
