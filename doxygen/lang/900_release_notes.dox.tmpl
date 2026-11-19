@@ -3258,6 +3258,11 @@
     - fixed an exception raised by the default value expression of an omitted argument being reported as unhandled
       instead of being raised to the caller
     - fixed a crash when a thread exited while another thread deleted a @ref Qore::Program "Program" it had run code in
+    - <b>security</b>: fixed a use of freed @ref Qore::Program "Program" data at the end of a thread started with the
+      @ref background "background operator": the destructors of the thread's thread-local data, which run after the
+      thread has released the Program that started it, used that Program and the location of the thread's code in
+      it, which could already have been deleted
+      (<a href="https://github.com/qoretechnologies/qore/issues/6629">issue 6629</a>)
     - fixed an unqualified call reference to a private static method (<tt>\\check()</tt>) raising
       \c RUNTIME-OVERLOAD-ERROR when called from outside the class
     - <b>security</b>: fixed @ref Qore::create_object() "create_object()",
