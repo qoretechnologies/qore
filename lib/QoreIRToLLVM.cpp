@@ -15231,6 +15231,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (ret->has_value) {
                         returned.push_back(ret->value.id);
                     }
+                } else if (inst->opcode == QoreIROpcode::TakeHandedOverReturn && !inst->operands.empty()
+                        && inst->operands.front().isValid()) {
+                    // the value of a return whose cleanups run handlers out of line past the inline cap, which the
+                    // Return gives through the TakeHandedOverReturn after them: an exception in the cleanups
+                    // interrupts the return of that value, which is kept as the value of a Return is (#6762); a family
+                    // of its own, as the value taken can be another one
+                    returned.push_back(inst->operands.front().id);
                 } else if (aot_mode && inst->opcode == QoreIROpcode::CallAOTHelper && inst->result.isValid()
                         && static_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())->function_body) {
                     // the result of an outlined helper's call on an exception is the value of an interrupted return

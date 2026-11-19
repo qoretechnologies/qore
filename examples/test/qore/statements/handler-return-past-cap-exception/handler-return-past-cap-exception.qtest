@@ -1,0 +1,122 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT and AOT code generation of the exception paths of returns whose handlers run past the inline cap
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires ../../../TestInterpreter.qm
+%requires FsUtil
+%requires ../../../ExecModeHarness.qm
+
+%exec-class HandlerReturnPastCapExceptionTest
+
+#! The value of a return whose cleanups run handlers past the inline cap is kept when an exception interrupts it (#6762)
+/** A return statement whose cleanups run handlers out of line past the inline cap of the lowering (#5992) gives its
+    value through a TakeHandedOverReturn after the cleanups, which takes the value that one of those handlers handed
+    over, if any (#6137).  The value of the return before it, its own or the value of a handler's return lowered inline
+    that replaced it, was not recorded as the value of the return: an exception that a handler of an enclosing block
+    raised in the cleanups released it with the temporaries of the statement, before the locals of the function, where
+    the AST interpreter keeps it until the function ends, or releases it at the try statement that catches the
+    exception.  HandlerReturnPastCapException.q gives the output of the AST interpreter in every execution mode, on the
+    IR tier and compiled with qcc.
+*/
+class HandlerReturnPastCapExceptionTest inherits QUnit::Test {
+    public {
+        #! the output of HandlerReturnPastCapException.q with the AST interpreter
+        const Expected = "inl62(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+inl62(True): ex:E [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+tinl62(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+tinl62(True): T [\"~ret\", \"~w\", \"~handed\", \"caught-in E\", \"~z\", \"~after\"]
+inl63(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+inl63(True): ex:E [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+tinl63(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+tinl63(True): T [\"~ret\", \"~w\", \"~handed\", \"caught-in E\", \"~z\", \"~after\"]
+inl80(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+inl80(True): ex:E [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+tinl80(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+tinl80(True): T [\"~ret\", \"~w\", \"~handed\", \"caught-in E\", \"~z\", \"~after\"]
+plain(False): T [\"~w\", \"~z\", \"~ret\"]
+plain(True): ex:E [\"~w\", \"~z\", \"~ret\"]
+ool(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+ool(True): ex:E [\"~ret\", \"~w\", \"~z\", \"~handed\"]
+blk(False): T [\"~w\", \"~z\", \"~handed\"]
+blk(True): ex:E [\"~w\", \"~z\", \"~handed\"]
+";
+
+        #! the optimization levels of the AOT compiles
+        const OptLevels = (0, 3);
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string script;
+    }
+
+    constructor() : QUnit::Test("HandlerReturnPastCapExceptionTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = get_script_dir() + "/HandlerReturnPastCapException.q";
+        foreach string mode in (ExecModeHarness::ExecModes) {
+            addTestCase(mode + ": the value of an interrupted return is kept", \modeTest(), (mode,));
+        }
+        addTestCase(ExecModeHarness::IRTierName + ": the value of an interrupted return is kept", \irTierTest());
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the value of an interrupted return is kept", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    modeTest(string mode) {
+        string output = ExecModeHarness::run(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=%s %s",
+            libqore_dir, libqore_dir, qore_bin, mode, script));
+        checkOutput(mode, output);
+    }
+
+    irTierTest() {
+        string output = ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
+            "--exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, script));
+        checkOutput(ExecModeHarness::IRTierName, output);
+    }
+
+    aotTest(int opt) {
+        TmpDir tmp("qore-handler-return-past-cap-exception-");
+        string exe = tmp.path + DirSep + "handler-return-past-cap-exception";
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        string output = ExecModeHarness::run_any(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s",
+            libqore_dir, libqore_dir, exe));
+        checkOutput(sprintf("qcc -O%d", opt), output);
+    }
+
+    #! Checks the output of a run against the AST interpreter's, line by line
+    private checkOutput(string mode, string output) {
+        hash<string, string> expected = parseOutput(Expected);
+        hash<string, string> actual = parseOutput(output);
+        assertEq(keys expected, keys actual, mode + ": the cases of the output");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, actual{i.key}, sprintf("%s: %s as with the AST interpreter", mode, i.key));
+        }
+    }
+
+    #! Returns the lines of an output by their \c "<case>(<arg>)" label
+    private static hash<string, string> parseOutput(string output) {
+        hash<string, string> rv();
+        foreach string line in (output.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            int i = line.find(": ");
+            rv{i > 0 ? line.substr(0, i) : line} = i > 0 ? line.substr(i + 2) : "";
+        }
+        return rv;
+    }
+}

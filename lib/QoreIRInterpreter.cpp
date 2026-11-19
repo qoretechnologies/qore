@@ -3775,6 +3775,16 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     && inst_ptr->result.id < return_protected_slots.size()) {
                 return_protected_slots[inst_ptr->result.id] = 1;
                 return_preserve_slot_ids.push_back(inst_ptr->result.id);
+            } else if (inst_ptr->opcode == QoreIROpcode::TakeHandedOverReturn && !inst_ptr->operands.empty()
+                    && inst_ptr->operands.front().isValid()
+                    && inst_ptr->operands.front().id < return_protected_slots.size()) {
+                // the value of a return whose cleanups run handlers out of line past the inline cap, which the Return
+                // gives through the TakeHandedOverReturn after them: an exception in the cleanups interrupts the
+                // return of that value, which is kept until the locals of the frame are released, as the value of a
+                // Return is (#6762)
+                uint32_t id = inst_ptr->operands.front().id;
+                return_protected_slots[id] = 1;
+                return_value_slot_ids.push_back(id);
             }
             if (inst_ptr->opcode == QoreIROpcode::CallDirect) {
                 auto* direct_inst = static_cast<const QoreIRCallDirectInstruction*>(inst_ptr.get());
