@@ -3962,13 +3962,14 @@ size_t qore_string_private::characterCount(const QoreString& str, ExceptionSink*
         return p->len;
     }
 
-    if (ep->fcharlen == q_UTF16BE_get_char_len || ep->fcharlen == q_UTF16LE_get_char_len) {
-        // The width of a leading surrogate is four bytes even if the next unit is not a trailing
-        // surrogate. The decoder returns the surrogate itself when it cannot form a scalar.
+    if (ep->fcharlen && !p->isStateful()) {
+        // Qore defines the byte sequences in these encodings. In particular musl iconv accepts a Shift_JIS
+        // lead followed by an apostrophe, which the Qore scanner rejects.
+        bool utf16 = ep->fcharlen == q_UTF16BE_get_char_len || ep->fcharlen == q_UTF16LE_get_char_len;
         const char* b = p->effective_buf();
         size_t count = 0;
         for (size_t i = 0; i < p->len; ++count) {
-            if (!(count % 1024) && qore_check_cancel(xsink, "counting UTF-16 characters")) {
+            if (!(count % 1024) && qore_check_cancel(xsink, "counting string characters")) {
                 return 0;
             }
             qore_offset_t width = ep->fcharlen(b + i, p->len - i);
@@ -3976,18 +3977,22 @@ size_t qore_string_private::characterCount(const QoreString& str, ExceptionSink*
                 p->raiseInvalidEncoding(xsink);
                 return 0;
             }
-            unsigned cp = ep->getUnicode(b + i);
-            if (cp >= 0xd800 && cp <= 0xdfff) {
-                p->raiseInvalidEncoding(xsink);
-                return 0;
+            if (utf16) {
+                // The width alone does not verify the trailing surrogate. The decoder returns the leading
+                // surrogate itself if it cannot form a scalar.
+                unsigned cp = ep->getUnicode(b + i);
+                if (cp >= 0xd800 && cp <= 0xdfff) {
+                    p->raiseInvalidEncoding(xsink);
+                    return 0;
+                }
             }
             i += width;
         }
         return count;
     }
 
-    // The character-width callbacks of some encodings only determine boundaries. Decode the text to
-    // verify its repertoire and shift state. Only an illegal input sequence is a domain error.
+    // Decode stateful text and encodings without a character scanner (including single-byte encodings
+    // with undefined bytes). Only an illegal input sequence is a domain error.
     QoreString utf8(QCS_UTF8);
     size_t bad_offset = SIZE_MAX;
     if (convert_encoding_intern(p->effective_buf(), p->len, enc, utf8, QCS_UTF8, xsink, false, false,

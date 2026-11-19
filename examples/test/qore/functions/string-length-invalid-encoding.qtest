@@ -25,6 +25,9 @@ class StringLengthInvalidEncodingTest inherits QUnit::Test {
 
     invalidText() {
         foreach string s in (("a\xffé", "a long UTF-8 string\xff", binary_to_string(<82a0822741>, "SHIFT_JIS"),
+                binary_to_string(<80>, "SHIFT_JIS"), binary_to_string(<a0>, "SHIFT_JIS"),
+                binary_to_string(<fd>, "SHIFT_JIS"), binary_to_string(<f040>, "SHIFT_JIS"),
+                binary_to_string(<f040>, "SHIFT-JIS"), binary_to_string(<827f>, "SHIFT_JIS"), binary_to_string(<82>, "SHIFT_JIS"),
                 binary_to_string(<4180>, "US-ASCII"), binary_to_string(<00dc>, "UTF-16LE"),
                 binary_to_string(<d8000041>, "UTF-16BE"),
                 binary_to_string(<00110000>, "UTF-32BE"))) {
@@ -78,6 +81,9 @@ class StringLengthInvalidEncodingTest inherits QUnit::Test {
     }
 
     validText() {
+        # Roman/control bytes (including NUL), kana, and two-byte characters with low and high trail bytes.
+        assertEq(7, length(binary_to_string(<007f41a1df814082a0>, "SHIFT_JIS")));
+        assertEq(2, length(binary_to_string(<80fa40>, "CP932")));
         assertEq(0, "".length());
         assertEq(3, length("abc"));
         assertEq(4, elements "aébü");
