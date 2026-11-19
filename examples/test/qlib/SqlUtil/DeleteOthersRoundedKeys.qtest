@@ -61,6 +61,7 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
         addTestCase("Oracle: rounded keys", \oracleTest());
         addTestCase("SQL Server: rounded keys", \mssqlTest());
         addTestCase("CHAR keys", \charKeysTest());
+        addTestCase("mixed-case key columns", \mixedCaseKeyTest());
         set_return_value(main());
     }
 
@@ -250,6 +251,53 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
         }
         if (!dbs.oracle && !dbs.pgsql) {
             testSkip("no Oracle or PostgreSQL connection");
+        }
+    }
+
+    #! a key column with a mixed-case name: the rows read are matched by the column, whatever the case of the names
+    #! that the driver gives (issue #6674)
+    mixedCaseKeyTest() {
+        Datasource sqlite("sqlite3:x@:memory:");
+        hash<string, Datasource> h = {"sqlite": sqlite} + dbs;
+        foreach string db in (keys h) {
+            # PostgreSQL folds an unquoted name to lower case: there is no mixed-case name to test
+            if (db == "pgsql") {
+                continue;
+            }
+            Datasource ds = h{db};
+            on_exit ds.rollback();
+            ds.exec("create table dork_mk (MixK int not null, v int, primary key (MixK))");
+            ds.commit();
+            on_exit dropTable(ds, "dork_mk");
+            AbstractTable t = new Table(ds, "dork_mk").getTable();
+            string col = t.getPrimaryKey().keys()[0];
+            map t.insert({col: $1, "v": 1}), (1, 5);
+            *hash<string, int> rh = t.upsertFromIterator(({col: 1, "v": 2},).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, db + ": the other row is deleted");
+            assertEq((1,), (map $1.toInt(), t.select({"columns": col}).firstValue()), db + ": the input's row remains");
+
+            # a composite key with names in different cases, a key given as a string (found by the lookup), and the
+            # rows given to the info callback
+            ds.exec("create table dork_mk2 (MixK int not null, lowk int not null, UPK varchar(10) not null, v int, "
+                "primary key (MixK, lowk, UPK))");
+            ds.commit();
+            on_exit dropTable(ds, "dork_mk2");
+            t = new Table(ds, "dork_mk2").getTable();
+            list<string> kl = t.getPrimaryKey().keys();
+            map t.insert({kl[0]: $1, kl[1]: $1, kl[2]: "a", "v": 1}), (1, 2, 5);
+            list<auto> cb_deleted = ();
+            code cb = sub (string table_name, hash<auto> row, int result) {
+                if (result == AbstractTable::UR_Deleted) {
+                    cb_deleted += row.size();
+                }
+            };
+            rh = t.upsertFromIterator(({kl[0]: 1, kl[1]: 1, kl[2]: "a", "v": 2}, {kl[0]: "2", kl[1]: 2, kl[2]: "a",
+                "v": 2}).iterator(), AbstractTable::UpsertAuto, {"delete_others": True, "info_callback": cb});
+            assertEq(1, rh.deleted, db + ": composite key: the other row is deleted");
+            assertEq(2, t.rowCount(), db + ": composite key: the input's rows remain");
+            # the callback is given the whole row
+            assertEq((4,), cb_deleted, db + ": the info callback");
         }
     }
 

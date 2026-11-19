@@ -571,6 +571,9 @@ module SqlUtil {
     - fixed the \c delete_others upsert option, which deleted the row of an input key of a \c CHAR(n) or \c NCHAR(n)
       primary key on Oracle, which stores it padded, or of a key given with trailing spaces on PostgreSQL: the values
       are compared padded, without being truncated (<a href="https://github.com/qoretechnologies/qore/issues/6675">issue 6675</a>)
+    - fixed the \c delete_others upsert option with a primary key column whose name the driver gives in another case
+      in the rows read (ex: a mixed-case name on MySQL): the key values are taken by the column's name in any case
+      (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
