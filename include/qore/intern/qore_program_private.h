@@ -156,6 +156,7 @@ public:
 
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/ThreadClosureVariableStack.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 struct ThreadLocalProgramData {
 public:
@@ -1957,7 +1958,7 @@ public:
                     break;
                 }
             }
-            cnt->dec();
+            qore_counter_ops(cnt).dec();
         }
     }
 
@@ -6485,7 +6486,7 @@ public:
     DLLLOCAL void deleteAllBreakpoints() {
         QoreAutoRWWriteLocker al(&lck_breakpoint);
         for (QoreBreakpointList_t::iterator it = breakpointList.begin(); it != breakpointList.end(); ++it) {
-            (*it)->unassignAllStatements();
+            qore_breakpoint_ops((*it)).unassignAllStatements();
             (*it)->pgm = nullptr;
             (*it)->deref();
         }
@@ -6952,6 +6953,7 @@ private:
         return std::find(breakpointList.begin(), breakpointList.end(), bkpt) != breakpointList.end();
     }
     friend class QoreBreakpoint;
+    friend class qore_breakpoint_ops;
 
     //! all Program instances, from their construction to their destruction, for fixupAllAfterFork() only
     /** No reference is taken from this set: a Program without references stays in it until it is destroyed
@@ -7277,7 +7279,7 @@ public:
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink) {
         removeAllPrograms();
         // wait till all debug calls finished, avoid deadlock as it might be handled in current thread
-        debug_program_counter.waitForZero();
+        qore_counter_ops(debug_program_counter).waitForZero();
     }
 
     DLLLOCAL int getInterruptedCount() {
@@ -7289,8 +7291,8 @@ public:
         exist in the child: only the forking thread's share of the count is kept
     */
     DLLLOCAL void fixupAfterFork() {
-        tlock.reinitAfterFork();
-        debug_program_counter.reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
+        qore_rwlock_ops(tlock).reinitAfterFork();
+        qore_counter_ops(debug_program_counter).reinitAfterFork(qore_thread_debug_counter_share(&debug_program_counter));
     }
 
 private:

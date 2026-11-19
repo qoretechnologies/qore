@@ -463,6 +463,7 @@ static bool guardPredicate(QoreIROpcode opcode, const QoreValue& value, const Qo
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/qore_list_private.h>
 #include <qore/intern/qore_date_private.h>
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #ifndef QORE_IR_INTERPRETER_GIVEN_ARGS_UNIT
 // the trace switches, which the interpreter reads on every return of a function, read from the environment once
@@ -7617,7 +7618,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     if (lt == NT_OBJECT) {
                         QoreObject* o = const_cast<QoreObject*>(lhs_val.get<const QoreObject>());
                         if (rhs_val.getType() == NT_LIST) {
-                            return o->getSlice(rhs_val.get<const QoreListNode>(), xsink);
+                            return qore_object_ops(o).getSlice(rhs_val.get<const QoreListNode>(), xsink);
                         }
                         QoreStringNodeValueHelper key(rhs_val);
                         return o->evalMember(*key, xsink);
@@ -20354,7 +20355,7 @@ load_local_done:
                         } else if (lt == NT_OBJECT) {
                             QoreObject* o = const_cast<QoreObject*>(lhs_val.get<const QoreObject>());
                             if (rhs_val.getType() == NT_LIST) {
-                                res = o->getSlice(rhs_val.get<const QoreListNode>(), xsink);
+                                res = qore_object_ops(o).getSlice(rhs_val.get<const QoreListNode>(), xsink);
                             } else {
                                 QoreStringNodeValueHelper key(rhs_val);
                                 res = o->evalMember(*key, xsink);
@@ -23168,7 +23169,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             if (bt == NT_OBJECT) {
                 QoreObject* o = const_cast<QoreObject*>(left.get<const QoreObject>());
                 if (right.getType() == NT_LIST) {
-                    return o->getSlice(right.get<const QoreListNode>(), xsink);
+                    return qore_object_ops(o).getSlice(right.get<const QoreListNode>(), xsink);
                 }
                 QoreHashKeyHelper key(right, xsink);
                 if (*xsink) {

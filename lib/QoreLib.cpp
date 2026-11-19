@@ -52,6 +52,7 @@
 #include "qore/intern/QoreQuestionMarkOperatorNode.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -4163,7 +4164,7 @@ int check_lvalue_int(const QoreProgramLocation* loc, const QoreTypeInfo*& typeIn
     // (qore_lvalue_converts_result())
     // raise a parse exception only if parse exceptions are not suppressed
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_INT) && !qore_lvalue_converts_result(typeInfo, NT_INT)) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it an integer value", QoreTypeInfo::getName(typeInfo), name);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
@@ -4177,7 +4178,7 @@ int check_lvalue_string(const QoreProgramLocation* loc, const QoreTypeInfo*& typ
     // make sure the lvalue can be assigned a string value (a softchar lvalue converts a one-character string)
     // raise a parse exception only if parse exceptions are not suppressed
     if (!QoreTypeInfo::parseAccepts(typeInfo, stringTypeInfo)) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a string value", QoreTypeInfo::getName(typeInfo), name);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
@@ -4291,7 +4292,7 @@ int check_lvalue_number(const QoreProgramLocation* loc, const QoreTypeInfo*& typ
     // raise a parse exception only if parse exceptions are not suppressed
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_NUMBER)
             && !qore_lvalue_converts_result(typeInfo, NT_NUMBER)) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a number value", QoreTypeInfo::getName(typeInfo), name);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
@@ -4306,7 +4307,7 @@ int check_lvalue_float(const QoreProgramLocation* loc, const QoreTypeInfo*& type
     // raise a parse exception only if parse exceptions are not suppressed
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_FLOAT)
             && !qore_lvalue_converts_result(typeInfo, NT_FLOAT)) {
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will "
                 "assign it a float value", QoreTypeInfo::getName(typeInfo), name);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
@@ -4326,7 +4327,7 @@ int check_lvalue_accepts_result(const QoreProgramLocation* loc, const QoreTypeIn
         }
     }
     // raise a parse exception only if parse exceptions are not suppressed
-    if (getProgram()->getParseExceptionSink()) {
+    if (qore_program_ops(getProgram()).getParseExceptionSink()) {
         QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator will assign it "
             "%s", QoreTypeInfo::getName(typeInfo), name, value_desc);
         qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);
@@ -4347,7 +4348,7 @@ int check_lvalue_int_float_number(const QoreProgramLocation* loc, const QoreType
             typeInfo = nullptr;
             return 0;
         }
-        if (getProgram()->getParseExceptionSink()) {
+        if (qore_program_ops(getProgram()).getParseExceptionSink()) {
             QoreStringNode* desc = new QoreStringNodeMaker("lvalue has type '%s', but the %s operator only works "
                 "with integer, floating-point, or numeric lvalues", QoreTypeInfo::getName(typeInfo), name);
             qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", desc);

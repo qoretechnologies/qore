@@ -40,6 +40,7 @@
 #include "qore/intern/FunctionList.h"
 #include "qore/intern/GlobalVariableList.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 #include "qore/vector_map"
 #include "qore/QoreRWLock.h"
 
@@ -1951,7 +1952,7 @@ protected:
             qore_ns_private::parseCommit();
         }
         // exceptions can be thrown when performing runtime initialization
-        qore_ns_private::parseCommitRuntimeInit(getProgram()->getParseExceptionSink());
+        qore_ns_private::parseCommitRuntimeInit(qore_program_ops(getProgram()).getParseExceptionSink());
     }
 
     DLLLOCAL ConstantEntry* parseFindOnlyConstantEntryIntern(const char* cname, qore_ns_private*& ns) {

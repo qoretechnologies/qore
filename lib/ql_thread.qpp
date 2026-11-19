@@ -47,6 +47,7 @@
 #include "qore/intern/FastRouteGuard.h"
 #include "qore/intern/HttpFastRoutes.h"
 #include "qore/intern/QoreThreadScratch.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <pthread.h>
 #include <thread>
@@ -1689,7 +1690,7 @@ static void parallel_wait_for_workers(ParallelExecState& state, ExceptionSink* x
         // waiting — if we got here due to thread cancellation, the flag is still set,
         // causing immediate return and a tight CPU loop.  The void overload uses plain
         // cond.wait(), blocking until workers call dec() and the count reaches zero.
-        state.counter.waitForZero();
+        qore_counter_ops(state.counter).waitForZero();
     }
 }
 

@@ -33,6 +33,7 @@
 #include <qore/intern/QoreLibIntern.h>
 #ifdef DEBUG
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 #endif
 
 #include <cassert>
@@ -134,7 +135,7 @@ AutoVLock::~AutoVLock() {
         for (qore_notify_list_t::iterator i = priv->notify_list->begin(), e = priv->notify_list->end(); i != e; ++i) {
             // run member notifications regardless of exception status
             //printd(5, "posting notification to object %p, member %s\n", i->obj, i->member.c_str());
-            i->obj->execMemberNotification(i->member.c_str(), &xsink2);
+            qore_object_ops(i->obj).execMemberNotification(i->member.c_str(), &xsink2);
         }
         // Keep a detached parent alive through its notification, even if the native callback erased it.
         if (priv->pinned) {
@@ -194,7 +195,7 @@ QoreObject* AutoVLock::getObject() const {
 
 void AutoVLock::addMemberNotification(QoreObject* obj, const char* member) {
     // ignore member notifications for updates made within the class
-    if (obj == runtime_get_stack_object() || !obj->hasMemberNotification()) {
+    if (obj == runtime_get_stack_object() || !qore_object_ops(obj).hasMemberNotification()) {
         return;
     }
 

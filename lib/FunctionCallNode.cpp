@@ -42,6 +42,7 @@
 #include "qore/intern/qore_aot_deps.h"
 #include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QorePseudoMethods.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <string>
 #include <vector>
@@ -1963,7 +1964,7 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args,
     variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr,
         object_type_info);
 
-    ExceptionSink* pxs = pgm->getParseExceptionSink();
+    ExceptionSink* pxs = qore_program_ops(pgm).getParseExceptionSink();
     if (pxs) {
         pxs->assimilate(xsink);
     } else {
