@@ -2413,6 +2413,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - a call reference obtained by name for a method (\c getCallReference(), @ref Qore::get_call_reference()
+      "get_call_reference()") applies the access rules of a method call from the same context, where it could give
+      a parent class's private method to code outside the class hierarchy
+      (<a href="https://github.com/qoretechnologies/qore/issues/6782">issue 6782</a>)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)

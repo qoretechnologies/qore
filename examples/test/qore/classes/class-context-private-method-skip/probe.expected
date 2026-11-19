@@ -43,7 +43,10 @@ XH B2 self.m(): "B2::m"
 XH B2 m(): "B2::m"
 X11 B5 self.m(): RUNTIME-OVERLOAD-ERROR
 X11 B5 hasCallableMethod(): False
+X11 B5 getCallReference(): CALL-REFERENCE-ERROR
+X11 B5 getCallReference() scoped: CALL-REFERENCE-ERROR
 X12 B6 self.m(): "B2::m"
+X12 B6 getCallReference(): "B2::m"
 X12 B2 self.m(): "B2::m"
 PB pa(): "PI::pa"
 PB self.pa(): "PI::pa"

@@ -151,6 +151,9 @@ class B5 {
     auto methodGate(string n) { return "B5::methodGate " + n; }
     string b5Self() { return self.m(); }
     bool b5HasCallable() { return self.hasCallableMethod("m"); }
+    # a call reference by name to the method that a call of the name makes, which is refused as the call is
+    any b5Ref() { code c = self.getCallReference("m"); return c(); }
+    any b5ScopedRef() { code c = self.getCallReference("X11::m"); return c(); }
 }
 
 class X11 inherits A, B5 {
@@ -159,6 +162,7 @@ class X11 inherits A, B5 {
 # the method of the name that the class context can call is in a later parent class
 class B6 {
     string b6Self() { return self.m(); }
+    any b6Ref() { code c = self.getCallReference("m"); return c(); }
 }
 
 class X12 inherits A, B6, B2 {
@@ -264,9 +268,12 @@ check("XH B2 m()", any sub () { return xh.selfCall(); });
 X11 x11();
 check("X11 B5 self.m()", any sub () { return x11.b5Self(); });
 check("X11 B5 hasCallableMethod()", any sub () { return x11.b5HasCallable(); });
+check("X11 B5 getCallReference()", any sub () { return x11.b5Ref(); });
+check("X11 B5 getCallReference() scoped", any sub () { return x11.b5ScopedRef(); });
 
 X12 x12();
 check("X12 B6 self.m()", any sub () { return x12.b6Self(); });
+check("X12 B6 getCallReference()", any sub () { return x12.b6Ref(); });
 check("X12 B2 self.m()", any sub () { return x12.selfDot(); });
 
 PI pi();
