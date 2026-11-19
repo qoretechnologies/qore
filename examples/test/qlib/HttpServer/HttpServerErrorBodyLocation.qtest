@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The error responses that a request handler's exception gives a client: with debugging off, the error and its
+    description only, without the location of the exception in the server's code (qore#6780)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestHandler
+%requires json
+
+%exec-class HttpServerErrorBodyLocationTest
+
+#! the file name of this test, which the location of an exception raised here names
+const ThisFile = "HttpServerErrorBodyLocation.qtest";
+
+#! Raises the exception that the request's path names
+class ThrowHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch (hdr.path) {
+            case "plain/user": throw "TEST-ERROR", "the description", {"internal": "value"};
+            case "plain/encoding": throw "HTTP-BODY-ENCODING-ERROR", "the body is not valid";
+            case "plain/large": throw "HTTP-BODY-TOO-LARGE", "the body is too large";
+        }
+        return makeResponse(200, "ok");
+    }
+}
+
+#! Raises a user exception with an argument, a system exception, and a chained exception
+class ThrowRestClass inherits AbstractRestClass {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    string name() {
+        return n;
+    }
+
+    hash<HttpHandlerResponseInfo> getUser(hash<auto> cx, *hash<auto> ah) {
+        throw "REST-ERROR", "the description", {"internal": "value"};
+    }
+
+    hash<HttpHandlerResponseInfo> getSystem(hash<auto> cx, *hash<auto> ah) {
+        # a system exception: its argument, if any, is set by the library
+        int i = 0;
+        return RestHandler::makeResponse(200, 1 / i);
+    }
+
+    hash<HttpHandlerResponseInfo> getChained(hash<auto> cx, *hash<auto> ah) {
+        # an exception raised in an on_exit block while another one is raised is chained to it
+        on_exit throw "INNER-ERROR", "the inner error";
+        throw "OUTER-ERROR", "the outer error";
+    }
+}
+
+class OverrideRestHandler inherits RestHandler {
+    private hash<HttpHandlerResponseInfo> returnRestException(hash<ExceptionInfo> ex) {
+        return <HttpHandlerResponseInfo>{
+            "code": 418,
+            "body": sprintf("override: %s: %s", ex.err, ex.desc),
+        };
+    }
+}
+
+class HttpServerErrorBodyLocationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("HttpServerErrorBodyLocation", "1.0") {
+        addTestCase("handler exceptions", \handlerTest());
+        addTestCase("RestHandler exceptions", \restTest());
+        addTestCase("RestHandler::returnRestException() override", \restOverrideTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("plain", "^plain/", NOTHING, new ThrowHandler());
+        RestHandler rest();
+        rest.addClass(new ThrowRestClass("throw"));
+        server.setHandler("rest", "^throw", NOTHING, rest);
+        OverrideRestHandler over();
+        over.addClass(new ThrowRestClass("othrow"));
+        server.setHandler("over", "^othrow", NOTHING, over);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    private hash<auto> get(string path) {
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", port), "error_passthru": True});
+        on_exit hc.disconnect();
+        hash<auto> info;
+        hash<auto> response = hc.send(NOTHING, "GET", path, {"Accept": "application/json"}, False, \info);
+        return response;
+    }
+
+    handlerTest() {
+        foreach bool debug in ((False, True)) {
+            server.setDebug(debug);
+            foreach list<auto> l in (("plain/user", 500, "TEST-ERROR: the description"),
+                    ("plain/encoding", 400, "HTTP-BODY-ENCODING-ERROR: the body is not valid"),
+                    ("plain/large", 413, "HTTP-BODY-TOO-LARGE: the body is too large")) {
+                string label = sprintf("%s debug: %y", l[0], debug);
+                hash<auto> response = get(l[0]);
+                assertEq(l[1], response.status_code, label);
+                string body = response.body ?? "";
+                if (!debug) {
+                    # only the error and its description
+                    assertEq(l[2], body, label);
+                } else {
+                    # the whole exception, with its location
+                    assertRegex(l[2], body, label);
+                    assertRegex(ThisFile, body, label);
+                }
+            }
+        }
+        server.setDebug(False);
+    }
+
+    restTest() {
+        foreach bool debug in ((False, True)) {
+            server.setDebug(debug);
+            string label = sprintf("debug: %y", debug);
+
+            hash<auto> response = get("throw?action=user");
+            assertEq(409, response.status_code, label);
+            hash<auto> ex = parse_json(response.body);
+            assertEq("REST-ERROR", ex.err, label);
+            assertEq("the description", ex.desc, label);
+            assertEq({"internal": "value"}, ex.arg, label + ": the argument of a user exception is given");
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc", "arg")), sort(ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.file, label);
+                assertGt(0, ex.line, label);
+                assertGt(0, ex.callstack.size(), label);
+            }
+
+            response = get("throw?action=system");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("DIVISION-BY-ZERO", ex.err, label);
+            assertEq("System", ex.type, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.file, label);
+            }
+
+            response = get("throw?action=chained");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("OUTER-ERROR", ex.err, label);
+            assertEq("INNER-ERROR", ex.next.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc", "next")), sort(ex.keys()), label);
+                assertEq(sort(("type", "err", "desc")), sort(ex.next.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.next.file, label);
+            }
+        }
+        server.setDebug(False);
+    }
+
+    restOverrideTest() {
+        # a subclass's returnRestException() makes the response
+        hash<auto> response = get("othrow?action=user");
+        assertEq(418, response.status_code);
+        # the subclass gets the exception as before, and its response is serialized
+        assertEq("override: REST-ERROR: the description", parse_json(response.body));
+    }
+}

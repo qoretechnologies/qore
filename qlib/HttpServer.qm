@@ -270,6 +270,9 @@ log("started listener on %s", lh.desc);
 
 
     @section http1_7 HttpServer 1.7
+    - the error response for an exception of a request handler (400, 413 or 500) gives the error and its description
+      only, without the location of the exception in the server's code, unless debugging is enabled
+      (@ref HttpServer::HttpServer::setDebug() "HttpServer::setDebug()"; issue #6780)
     - a request whose target (the path or the query, which must be and decode to valid UTF-8 text) or whose method or
       HTTP version is not valid text, whose HTTP/1.x header names have a byte above 0x7f, or whose body (with a
       \c Content-Length, buffered over HTTP/2 or HTTP/3, chunked, or compressed) is not valid text in its encoding, is
@@ -5196,13 +5199,16 @@ printf("/ready answered %d requests; %d took the normal path because a cell was 
                 case "HTTP-BODY-ENCODING-ERROR": err_code = 400; break;
                 default: err_code = 500; break;
             }
+            # the response gives the client the error and its description; the location of the exception in the
+            # server's code and its call stack only with debugging enabled; the log message has them (qore#6780)
+            string body = debug ? str : sprintf("%s: %s", ex.err, ex.desc);
             if (async_response_out) {
                 # Capture the error response for the async I/O controller to send
                 # Sending synchronously from the handler thread races with the
                 # I/O controller on multiplexed (HTTP/2, HTTP/3) connections
-                async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_multiplexed);
+                async_response_out = buildAsyncErrorResponse(err_code, body, cx, listener, s, !is_multiplexed);
             } else {
-                sendRequestError(listener, \cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
+                sendRequestError(listener, \cx, s, err_code, body, NOTHING, NOTHING, cx."response-encoding", head);
             }
             logError("%s", str);
         }

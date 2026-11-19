@@ -256,6 +256,9 @@ public namespace WebSocketUtil {
 
         @return the encoded WebSocket frame as binary data
 
+        @note the payload of a close frame (@ref WSOP_Close) is cut to 125 bytes (RFC 6455 section 5.5), at the start
+        of a UTF-8 character, as the reason of a close frame is UTF-8
+
         @since WebSocketUtil 1.5 added the \c rsv_bits parameter
     */
     public binary sub ws_encode_message(data msg, int op = -1, *bool masked, bool fin = True, int rsv_bits = 0) {

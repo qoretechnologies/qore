@@ -153,6 +153,9 @@ module HttpServerUtil {
 
 
     @section httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::http_get_client_exception_info() "http_get_client_exception_info()", the information of
+      an exception without its location or call stack, for the error responses of a server with debugging off
+      (issue #6780)
     - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
       reads a chunked request body as bytes and decodes it once, after any decompression, as a body with a
       \c Content-Length is (with the server's default text encoding as the assumed encoding), and raises
@@ -1093,6 +1096,36 @@ public *int sub http_parse_content_length(auto value) {
         return;
     }
     return int(v);
+}
+
+#! Returns the information of an exception that may be given to a client when debugging is off
+/** The information of an exception tells where it was raised in the server's code; an error response for a client
+    has it only when debugging is enabled (qore#6780).  This returns the type, error code and description of the
+    exception, its argument for a user exception (a system exception's argument is set by the library and can have
+    internal information), and the same information of a chained exception (\c next); not its location (\c file,
+    \c line, \c endline, \c source, \c offset, \c lang) or its call stack.
+
+    @param ex the exception
+
+    @return the exception's information without its location or call stack
+
+    @since %HttpServerUtil 1.6
+*/
+public hash<ExceptionInfo> sub http_get_client_exception_info(hash<ExceptionInfo> ex) {
+    hash<ExceptionInfo> rv = <ExceptionInfo>{
+        "err": ex.err,
+        "desc": ex.desc,
+    };
+    if (ex.type) {
+        rv.type = ex.type;
+    }
+    if (ex.type == "User" && exists ex.arg) {
+        rv.arg = ex.arg;
+    }
+    if (ex.next) {
+        rv.next = http_get_client_exception_info(ex.next);
+    }
+    return rv;
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)
