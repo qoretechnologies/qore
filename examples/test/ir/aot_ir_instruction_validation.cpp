@@ -116,6 +116,10 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU8(0); // no value
         });
     }
+    if (version >= QORE_AOT_CATCH_TABLES_VERSION) {
+        writer.writeU32(0); // catch-exit depths (qore#6733)
+        writer.writeU32(0); // catch-cleanup results
+    }
     writer.endSection(section);
     QoreAOTBinaryHeader header{};
     header.magic = QORE_AOT_BINARY_MAGIC;

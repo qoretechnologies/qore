@@ -7707,6 +7707,40 @@ static bool qore_aot_check_ir_value_ids(const QoreIRFunction& func, std::string&
     return true;
 }
 
+// documented in QoreAOTBinary.h
+bool qore_aot_read_ir_catch_tables(const uint8_t*& ptr, const uint8_t* end, QoreIRFunction& func,
+        std::string& error) {
+    // the instruction at each written position: a PushTempMarkPair is written as two instructions, the first of which
+    // stands for it (the reader makes two PushTempMarks of them)
+    size_t total = 0;
+    for (const auto& block : func.blocks) {
+        total += block->instructions.size();
+    }
+    auto readTable = [&](std::unordered_map<const QoreIRInstruction*, uint32_t>& table, const char* what) -> bool {
+        uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+        if (count > total) {
+            error = std::string("the ") + what + " table has more entries than the function has instructions";
+            return false;
+        }
+        for (uint32_t i = 0; i < count; ++i) {
+            uint16_t block = QoreAOTBinaryReader::readU16(ptr);
+            uint16_t inst = QoreAOTBinaryReader::readU16(ptr);
+            uint32_t value = QoreAOTBinaryReader::readU32(ptr);
+            if (block >= func.blocks.size() || inst >= func.blocks[block]->instructions.size()) {
+                error = std::string("an entry of the ") + what + " table is beyond the instructions of the function";
+                return false;
+            }
+            if (!table.emplace(func.blocks[block]->instructions[inst].get(), value).second) {
+                error = std::string("the ") + what + " table gives an instruction twice";
+                return false;
+            }
+        }
+        return true;
+    };
+    return readTable(func.catch_exit_depths, "catch-exit depth")
+        && readTable(func.catch_cleanup_results, "catch-cleanup result");
+}
+
 //! Sets the runtime locations of the instructions of IR deserialized from an image of a format before
 //! QORE_AOT_STATEMENT_LOCATIONS_VERSION (QoreIRInstruction::stmt_loc)
 /** The IR of such an image does not record the statements of its instructions: each instruction takes its own
@@ -8387,6 +8421,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             }
             func->blocks[i]->instructions.push_back(std::move(inst));
         }
+    }
+
+    // the catch-exit depths and catch-cleanup results of the function (qore#6733); a module of an earlier format has
+    // none
+    if (reader.getHeader().version >= QORE_AOT_CATCH_TABLES_VERSION
+            && !qore_aot_read_ir_catch_tables(ptr, end, *func, error)) {
+        error = "malformed IR function '" + func->name + "': " + error;
+        return nullptr;
     }
 
     // a read past the end of the IR gave 0: the function is not used (qore#6265)

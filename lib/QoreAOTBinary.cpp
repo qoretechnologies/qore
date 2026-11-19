@@ -16308,7 +16308,57 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         }
     }
 
+    // the catch-exit depths and the catch-cleanup results of the function, by the position of their instruction in the
+    // written IR (qore#6733)
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_CATCH_TABLES_VERSION) {
+        if (!qore_aot_write_ir_catch_tables(writer, func)) {
+            return false;
+        }
+    }
+
     return true;
+}
+
+// documented in QoreAOTBinary.h
+bool qore_aot_write_ir_catch_tables(QoreAOTBinaryWriter& writer, const QoreIRFunction& func) {
+    // the written position of each instruction that a table refers to
+    std::unordered_map<const QoreIRInstruction*, std::pair<uint16_t, uint16_t>> pos;
+    for (size_t b = 0; b < func.blocks.size(); ++b) {
+        uint32_t written = 0;
+        for (const auto& inst : func.blocks[b]->instructions) {
+            if (func.catch_exit_depths.count(inst.get()) || func.catch_cleanup_results.count(inst.get())) {
+                if (written > UINT16_MAX) {
+                    qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' has a catch cleanup "
+                        "beyond the instructions that a block can have in the AOT format");
+                    return false;
+                }
+                pos[inst.get()] = {static_cast<uint16_t>(b), static_cast<uint16_t>(written)};
+            }
+            written += inst->opcode == QoreIROpcode::PushTempMarkPair ? 2 : 1;
+        }
+    }
+    // sorted by position, so that the module does not depend on the order of the maps
+    auto writeTable = [&](const std::unordered_map<const QoreIRInstruction*, uint32_t>& table) -> bool {
+        std::vector<std::tuple<uint16_t, uint16_t, uint32_t>> entries;
+        entries.reserve(table.size());
+        for (const auto& i : table) {
+            auto p = pos.find(i.first);
+            // the entry of an instruction that a pass removed from the blocks, which never runs
+            if (p == pos.end()) {
+                continue;
+            }
+            entries.emplace_back(p->second.first, p->second.second, i.second);
+        }
+        std::sort(entries.begin(), entries.end());
+        writer.writeU32(static_cast<uint32_t>(entries.size()));
+        for (const auto& [block, inst, value] : entries) {
+            writer.writeU16(block);
+            writer.writeU16(inst);
+            writer.writeU32(value);
+        }
+        return true;
+    };
+    return writeTable(func.catch_exit_depths) && writeTable(func.catch_cleanup_results);
 }
 
 // ---- Namespace Deserialization (Phase 4) ----
