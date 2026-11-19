@@ -3032,6 +3032,9 @@ public:
     */
     qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
+    //! true if the class was declared with PO_ALLOW_BARE_REFS, so that a member is reached by its unscoped name in
+    //! the class (issue #3286)
+    bool parse_abr = false;
     qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
 
     mutable VRMutex gate;           // for synchronized static methods
@@ -3411,6 +3414,37 @@ public:
 
     // Find a constant entry by name
     DLLLOCAL const ConstantEntry* findConstantEntry(const char* name) const;
+
+    //! the declarations with a name visible in the class (issue #3286)
+    struct name_kinds_t {
+        const qore_class_private* member = nullptr;
+        const qore_class_private* constant = nullptr;
+        const qore_class_private* var = nullptr;
+
+        DLLLOCAL unsigned count() const {
+            return (member ? 1 : 0) + (constant ? 1 : 0) + (var ? 1 : 0);
+        }
+
+        DLLLOCAL bool operator==(const name_kinds_t& o) const {
+            return member == o.member && constant == o.constant && var == o.var;
+        }
+    };
+
+    //! returns the class with an accessible constant with the name in the hierarchy, without initializing it; \a top
+    //! is true when the lookup is made from the class itself
+    DLLLOCAL const qore_class_private* parseFindConstantOwnerNoInit(const char* cname, bool top) const;
+    DLLLOCAL const qore_class_private* parseFindConstantOwnerNoInit(const char* cname, bool top,
+            std::vector<const qore_class_private*>& seen) const;
+
+    //! returns the declarations with the name visible in the class
+    DLLLOCAL name_kinds_t parseGetNameKinds(const char* n) const;
+
+    //! adds the names of the constants, members and static variables of the hierarchy
+    DLLLOCAL void parseGetHierarchyNames(std::set<std::string>& names,
+            std::vector<const qore_class_private*>& seen) const;
+
+    //! raises the language-traps warning for names that are a constant and a member or static variable (issue #3286)
+    DLLLOCAL void parseCheckNameKindClashes(QoreProgram* pgm);
 
     // add a base class to this class
     DLLLOCAL void addBaseClass(QoreClass* qc, bool virt);
