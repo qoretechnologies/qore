@@ -5263,6 +5263,8 @@ private:
                 }
             }
         }
+        // the catch blocks without an exit block that an exception leaving the helper leaves are closed before the
+        // locals that the helper releases, as the function closes them before its locals (qore#6650)
         helper->catch_exit_unwind = fn->catch_exit_unwind;
 
         UndoRecord rec;
