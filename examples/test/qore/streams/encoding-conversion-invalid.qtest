@@ -107,6 +107,9 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         addTestCase("keep mode", \keepTest());
         addTestCase("encoding_errors values", \optionTest());
         addTestCase("convert_encoding() to the same encoding", \convertSameEncodingTest());
+        addTestCase("the first error in stateful input", \statefulOrderTest());
+        addTestCase("latin1 mode with many invalid bytes", \latin1ManyTest());
+        addTestCase("bytes not defined in the source encoding", \undefinedTest());
         set_return_value(main());
     }
 
@@ -438,6 +441,68 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         assertEq(<61c3bf>, b);
         # the default
         assertEq(<61>, readAll(<61>, "UTF-8", "UTF-8", 1, ENCODING_ERRORS_RAISE));
+    }
+
+    statefulOrderTest() {
+        # ISO-2022-JP "ESC $ B 日" and then the invalid byte 0x80: ISO-8859-1 cannot hold "日", which is before the
+        # invalid byte, so its error is raised whatever the size of the reads and writes
+        list<binary> inputs = (<1b2442467c80>, <1b2442467c>, binary(strmul("a", 5000)) + <1b2442467c80>);
+        list<int> offsets = (0, 0, 5000);
+        *hash<ExceptionInfo> ex;
+        for (int i = 0; i < inputs.size(); ++i) {
+            foreach int block in (1, 2, 4096, 10000) {
+                foreach int limit in (1, 4096) {
+                    string label = sprintf("%s in %d, read %d", inputs[i].toHex().substr(0, 20), block, limit);
+                    ex = getError(sub () { readAll(inputs[i], "ISO-2022-JP", "ISO-8859-1", block,
+                        NOTHING, limit); });
+                    assertEq("ENCODING-CONVERSION-ERROR", ex.err, label);
+                    assertRegex(sprintf("byte offset %d ", offsets[i]), ex.desc, label);
+                }
+                ex = getError(sub () { writeAll(inputs[i], "ISO-2022-JP", "ISO-8859-1", block); });
+                assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("output in %d", block));
+                assertRegex(sprintf("byte offset %d ", offsets[i]), ex.desc, sprintf("output in %d", block));
+            }
+        }
+        # the invalid byte first: INVALID-ENCODING
+        foreach int block in (1, 4096) {
+            checkInvalid(sub () { readAll(<41801b2442467c>, "ISO-2022-JP", "ISO-8859-1", block); },
+                inputDesc("ISO-2022-JP", 1), sprintf("invalid first in %d", block));
+        }
+    }
+
+    latin1ManyTest() {
+        # 100 KB of ISO-8859-1 text read as UTF-8: every byte above 0x7f is substituted
+        string text = strmul("Grüße aus Zürich, café crème, ÿ¿ ", 3500);
+        binary data = binary(convert_encoding(text, "ISO-8859-1"));
+        assertGt(100000, data.size());
+        foreach string to in ("UTF-8", "UTF-16LE", "UTF-32", "ISO-8859-1") {
+            binary expected = binary(convert_encoding(text, to));
+            foreach int block in (1000, 4096, 65536) {
+                assertEq(expected, readAll(data, "UTF-8", to, block, ENCODING_ERRORS_LATIN1, 65536),
+                    sprintf("to %s in %d", to, block));
+            }
+            assertEq(expected, writeAll(data, "UTF-8", to, 10000, ENCODING_ERRORS_LATIN1), "output to " + to);
+        }
+        # a stateful target: each substituted character is converted on its own, so the text is compared
+        binary out = readAll(data, "UTF-8", "UTF-7", 4096, ENCODING_ERRORS_LATIN1);
+        assertEq(text, binary_to_string(readAll(out, "UTF-7", "UTF-8", 4096), "UTF-8"), "UTF-7");
+        # all 128 bytes above 0x7f, each substituted, also in UTF-16LE code units
+        binary high = binary();
+        for (int i = 0x80; i < 0x100; ++i) {
+            high += chr(i, "ISO-8859-1").toBinary();
+        }
+        string high_text = binary_to_string(high, "ISO-8859-1");
+        assertEq(binary(convert_encoding(high_text, "UTF-8")), readAll(high, "UTF-8", "UTF-8", 7,
+            ENCODING_ERRORS_LATIN1));
+    }
+
+    undefinedTest() {
+        # a byte that has the form of a character but is not defined in the encoding is not invalid input
+        foreach *string ee in (NOTHING, ENCODING_ERRORS_LATIN1) {
+            *hash<ExceptionInfo> ex = getError(sub () { readAll(<418142>, "CP1252", "UTF-8", 1, ee); });
+            assertEq("ENCODING-CONVERSION-ERROR", ex.err, ee ?? "raise");
+            assertRegex("byte offset 1 ", ex.desc, ee ?? "raise");
+        }
     }
 
     convertSameEncodingTest() {

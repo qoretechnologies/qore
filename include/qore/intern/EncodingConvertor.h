@@ -202,6 +202,18 @@ private:
    //! before a substitution; see substituteLatin1()
    static constexpr size_t ShiftResetRoom = 32;
 
+   //! the bytes of an ISO-8859-1 character in a target encoding that is not stateful; see substituteLatin1()
+   struct Latin1Char {
+      //! the bytes of the character in the target encoding, if valid
+      std::string bytes;
+      //! true once the character has been converted
+      bool known = false;
+      //! true if the target encoding can hold the character
+      bool valid = false;
+   };
+   //! the ISO-8859-1 characters converted to the target encoding, by byte; allocated when one is first substituted
+   std::unique_ptr<Latin1Char[]> latin1Chars;
+
    //! passes the input through without a check (qore_encoding_errors_t::KEEP)
    DLLLOCAL std::pair<int64, int64> applyKeep(const void *src, int64 srcLen, void *dst, int64 dstLen) {
       if (!src) {
@@ -260,20 +272,60 @@ private:
    DLLLOCAL int substituteLatin1(size_t pos, char*& outbuf, size_t& outavail, ExceptionSink *xsink) {
       size_t n = substitutionSize(pos);
       assert(n);
+      if (qore_encoding_private::isStateful(dstEncoding)) {
+         return substituteLatin1Stateful(pos, n, outbuf, outavail, xsink);
+      }
+      // in an encoding that is not stateful, a character has the same bytes wherever it is, so the bytes of each
+      // ISO-8859-1 character are found once
+      if (!latin1Chars) {
+         latin1Chars.reset(new Latin1Char[256]);
+      }
+      size_t total = 0;
+      for (size_t i = 0; i < n; ++i) {
+         Latin1Char& c = latin1Chars[static_cast<unsigned char>(inBuf[pos + i])];
+         if (!c.known) {
+            QoreString str(dstEncoding);
+            c.valid = !qore_string_private::convert_encoding_intern(inBuf + pos + i, 1, QCS_ISO_8859_1, str,
+               dstEncoding, nullptr);
+            if (c.valid) {
+               c.bytes.assign(str.c_str(), str.size());
+            }
+            c.known = true;
+         }
+         if (!c.valid) {
+            reportIllegalSequence(inTotal + static_cast<int64>(pos), xsink);
+            return -1;
+         }
+         total += c.bytes.size();
+      }
+      if (outavail < total) {
+         return 0;
+      }
+      for (size_t i = 0; i < n; ++i) {
+         const std::string& b = latin1Chars[static_cast<unsigned char>(inBuf[pos + i])].bytes;
+         memcpy(outbuf, b.data(), b.size());
+         outbuf += b.size();
+         outavail -= b.size();
+      }
+      return static_cast<int>(n);
+   }
+
+   //! substitutes the bytes for a stateful target encoding; see substituteLatin1()
+   DLLLOCAL int substituteLatin1Stateful(size_t pos, size_t n, char*& outbuf, size_t& outavail,
+         ExceptionSink *xsink) {
       QoreString c(dstEncoding);
       if (qore_string_private::convert_encoding_intern(inBuf + pos, n, QCS_ISO_8859_1, c, dstEncoding, nullptr)) {
          reportIllegalSequence(inTotal + static_cast<int64>(pos), xsink);
          return -1;
       }
-      bool stateful = qore_encoding_private::isStateful(dstEncoding);
-      if (stateful && (wroteOutput || outbuf != outBuf + outCount)) {
+      if (wroteOutput || outbuf != outBuf + outCount) {
          // the bytes that start text in the encoding (ex: the header of ISO-2022-KR) are already in the output
          qore_string_private::get(c)->removeStatefulPrefix();
       }
-      if (outavail < c.size() + (stateful ? ShiftResetRoom : 0)) {
+      if (outavail < c.size() + ShiftResetRoom) {
          return 0;
       }
-      if (stateful && conv->iconv(nullptr, nullptr, &outbuf, &outavail) == static_cast<size_t>(-1)) {
+      if (conv->iconv(nullptr, nullptr, &outbuf, &outavail) == static_cast<size_t>(-1)) {
          conv->reportUnknownError(xsink);
          return -1;
       }
@@ -315,23 +367,31 @@ private:
             return std::make_pair(0, 0);
          }
 
-         char *inbuf = inBuf;
-         size_t inavail = inCount;
          char *outbuf = outBuf + outCount;
          size_t outavail = BUFSIZE - outCount;
-         size_t rc = conv->iconv(&inbuf, &inavail, &outbuf, &outavail, xsink);
-         int err = errno;
-         if (rc == static_cast<size_t>(-1) && err == ECANCELED) {
-            // the exception has been raised
-            return std::make_pair(0, 0);
-         }
-         // the input converted is checked for characters that the target encoding cannot hold before any error
-         // after it is reported, so that the first problem in the input is reported
-         size_t used = inCount - inavail;
-         if (used && checkLoss(used, rc, xsink)) {
-            return std::make_pair(0, 0);
-         }
-         if (rc == static_cast<size_t>(-1)) {
+         // the number of bytes at the start of inBuf that have been consumed; the input buffer is moved once for
+         // all of them, also when input that is not valid is substituted (qore_encoding_errors_t::LATIN1) and the
+         // conversion goes on after it
+         size_t used = 0;
+         while (true) {
+            char *inbuf = inBuf + used;
+            size_t inavail = inCount - used;
+            size_t rc = conv->iconv(&inbuf, &inavail, &outbuf, &outavail, xsink);
+            int err = errno;
+            if (rc == static_cast<size_t>(-1) && err == ECANCELED) {
+               // the exception has been raised
+               return std::make_pair(0, 0);
+            }
+            // the input converted is checked for characters that the target encoding cannot hold before any error
+            // after it is reported, so that the first problem in the input is reported
+            size_t converted = inCount - used - inavail;
+            if (converted && checkLoss(used, converted, rc, xsink)) {
+               return std::make_pair(0, 0);
+            }
+            used += converted;
+            if (rc != static_cast<size_t>(-1)) {
+               break;
+            }
             // true if the input at the first byte not converted is not valid in the source encoding
             bool invalid = false;
             switch (err) {
@@ -357,14 +417,19 @@ private:
                   conv->reportUnknownError(xsink);
                   return std::make_pair(0, 0);
             }
-            if (invalid) {
-               int hrc = handleInvalid(used, outbuf, outavail, xsink);
-               if (hrc < 0) {
-                  return std::make_pair(0, 0);
-               }
-               // the bytes substituted, if any, are consumed
-               used += static_cast<size_t>(hrc);
+            if (!invalid) {
+               break;
             }
+            int hrc = handleInvalid(used, outbuf, outavail, xsink);
+            if (hrc < 0) {
+               return std::make_pair(0, 0);
+            }
+            if (!hrc) {
+               // the output buffer is full; the substitution is made when it has been read
+               break;
+            }
+            // the bytes substituted are consumed, and the conversion goes on after them
+            used += static_cast<size_t>(hrc);
          }
          if (used) {
             inCount -= used;
@@ -420,8 +485,11 @@ private:
                return std::make_pair(0, 0);
             }
             if (rc == -1) {
-               // decoding to UTF-8 fails only for input that is not valid in the source encoding
-               reportInvalid(decoder->errorOffset(), xsink);
+               // decoding to UTF-8 fails only for input that is not valid in the source encoding; a character
+               // before it that the target encoding cannot hold is reported first
+               if (!checkDecodedLoss(xsink)) {
+                  reportInvalid(decoder->errorOffset(), xsink);
+               }
                return std::make_pair(0, 0);
             }
          }
@@ -434,7 +502,10 @@ private:
       // no more input: a character or shift sequence cut off by the end of the input is invalid input
       while (decoder->hasPending()) {
          if (mode != qore_encoding_errors_t::LATIN1) {
-            reportInvalid(decoder->pendingOffset(), xsink);
+            // a character before it that the target encoding cannot hold is reported first
+            if (!checkDecodedLoss(xsink)) {
+               reportInvalid(decoder->pendingOffset(), xsink);
+            }
             return std::make_pair(0, 0);
          }
          // the first byte is taken as an ISO-8859-1 character, and the bytes after it are decoded again
@@ -503,31 +574,59 @@ private:
    }
 
    //! checks the input converted for a character that the target encoding cannot hold
-   /** @param used the number of bytes at the start of inBuf that have been converted
+   /** @param start the position in inBuf of the first byte converted
+       @param used the number of bytes in inBuf from \a start that have been converted
        @param rc the return value of the conversion
        @param xsink the exception is raised here
 
        @return 0 if nothing was lost, -1 if an exception was raised
    */
-   DLLLOCAL int checkLoss(size_t used, size_t rc, ExceptionSink *xsink) {
+   DLLLOCAL int checkLoss(size_t start, size_t used, size_t rc, ExceptionSink *xsink) {
+      const char* p = inBuf + start;
       size_t offset;
       if (rc != static_cast<size_t>(-1) && rc > 0) {
          // a character was replaced and counted (musl); its position is not given
-         offset = qore_string_private::find_unconvertible_char(inBuf, used, curSrcEncoding, dstEncoding, 0);
+         offset = qore_string_private::find_unconvertible_char(p, used, curSrcEncoding, dstEncoding, 0);
       } else if (!IconvHelper::rejectsUnrepresentable()
-            && qore_string_private::conversion_needs_roundtrip_check(curSrcEncoding, dstEncoding, inBuf, used)) {
+            && qore_string_private::conversion_needs_roundtrip_check(curSrcEncoding, dstEncoding, p, used)) {
          // a character can have been replaced without being reported (Apple's libiconv): the input converted is
          // converted on its own and back
          QoreString check(dstEncoding);
          offset = 0;
-         if (!qore_string_private::convert_encoding_intern(inBuf, used, curSrcEncoding, check, dstEncoding, nullptr,
+         if (!qore_string_private::convert_encoding_intern(p, used, curSrcEncoding, check, dstEncoding, nullptr,
                true, true, &offset)) {
             return 0;
          }
       } else {
          return 0;
       }
-      reportIllegalSequence(inTotal + static_cast<int64>(offset), xsink);
+      reportIllegalSequence(inTotal + static_cast<int64>(start + offset), xsink);
+      return -1;
+   }
+
+   //! before input that is not valid in a stateful source encoding is reported, checks the UTF-8 text decoded
+   //! before it for a character that the target encoding cannot hold, so that the first problem in the input is
+   //! reported whatever the size of the blocks of input
+   /** The text decoded is the text that the inner conversion has not converted yet (in its input buffer) and the
+       text not yet given to it; it is converted on its own, and the output is not used, as an exception is raised in
+       any case.
+
+       @return 0 if every character can be converted, -1 if \c ENCODING-CONVERSION-ERROR was raised
+   */
+   DLLLOCAL int checkDecodedLoss(ExceptionSink *xsink) {
+      std::string text(inner->inBuf, inner->inCount);
+      text += utf8;
+      if (text.empty()) {
+         return 0;
+      }
+      QoreString check(dstEncoding);
+      size_t offset = 0;
+      if (!qore_string_private::convert_encoding_intern(text.data(), text.size(), QCS_UTF8, check, dstEncoding,
+            nullptr, true, true, &offset)) {
+         return 0;
+      }
+      // the offset of the character in the decoded text, which the inner conversion maps to the input
+      inner->reportIllegalSequence(inner->inTotal + static_cast<int64>(offset), xsink);
       return -1;
    }
 

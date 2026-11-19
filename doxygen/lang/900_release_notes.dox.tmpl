@@ -236,11 +236,9 @@
     where they raised \c STREAM-ENCODING-ERROR and \c FILE-GETCHAR-ERROR (see @ref encoding_errors; issue #6604).
 
     @par Encoding Conversion Streams Raise INVALID-ENCODING for Invalid Input
-    @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
-    @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise \c INVALID-ENCODING for every
-    input not valid in the source encoding, where they raised \c ENCODING-CONVERSION-ERROR or passed it through (UTF-8
-    above U+10FFFF), and @ref Qore::convert_encoding() "convert_encoding()" checks a string already in the target
-    encoding (see @ref encoding_errors; issue #6730).
+    The encoding conversion streams raise \c INVALID-ENCODING for input not valid in the source encoding, where they
+    raised \c ENCODING-CONVERSION-ERROR or passed it through, and @ref Qore::convert_encoding() "convert_encoding()"
+    checks a string already in the target encoding (see @ref encoding_conversion_streams; issue #6730).
 
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also

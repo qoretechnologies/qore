@@ -1820,11 +1820,12 @@ nothing get_encoding() [flags=RUNTIME_NOOP] {
 
     @return a string corresponding to the string argument converted to the encoding given
 
-    When the string is already in the encoding given, it is returned unchanged if it is valid in the encoding, and
-    \c INVALID-ENCODING is raised otherwise, as for any other conversion: the text is checked as the text readers
-    check it (see @ref encoding_errors) in US-ASCII, in the multi-byte encodings such as UTF-8 or Shift_JIS, in the
-    Unicode encodings such as UTF-16LE, and in the stateful encodings such as UTF-7; in a single-byte encoding, every
-    byte is a character
+    When the string is already in the encoding given, it is not converted: it is returned unchanged if it is valid in
+    the encoding, and \c INVALID-ENCODING is raised otherwise (a conversion to another encoding raises
+    \c ENCODING-CONVERSION-ERROR for text that is not valid).  The text is checked as the text readers check it (see
+    @ref encoding_errors) in US-ASCII, in the multi-byte encodings such as UTF-8 or Shift_JIS, in the Unicode
+    encodings such as UTF-16LE, and in the stateful encodings such as UTF-7; in a single-byte encoding, every byte is
+    a character
 
     @par Example:
     @code{.py}

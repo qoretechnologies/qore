@@ -45,7 +45,9 @@
 
     Input that is not valid in the source encoding raises \c INVALID-ENCODING when it is read, unless the
     \c encoding_errors option of the constructor is \c "latin1" or \c "keep"; a character that the target encoding
-    cannot hold raises \c ENCODING-CONVERSION-ERROR; see @ref encoding_errors.
+    cannot hold raises \c ENCODING-CONVERSION-ERROR, as does a byte sequence that has the form of a character but
+    is not defined in the source encoding (ex: \c 0x81 in \c CP1252), also with \c "latin1"; \c "keep" also keeps a
+    byte order mark that the other values remove; see @ref encoding_conversion_streams.
 
     @note stream classes are not designed to be accessed from multiple threads; they have been implemented without
     locking for fast and efficient use when used from a single thread.  For methods that would be unsafe to use in
