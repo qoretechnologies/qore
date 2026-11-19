@@ -1360,6 +1360,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 #include "qore/intern/QoreIRFrameCheck.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -29570,7 +29571,7 @@ static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preload
     if (!preloaded || !xsink.isException()) {
         return false;
     }
-    for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+    for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
         if (ex->err.getType() != NT_STRING) {
             continue;
         }

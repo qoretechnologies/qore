@@ -40,6 +40,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -117,7 +118,7 @@ bool qore_is_deferred_runtime_init_exception(ExceptionSink* xsink) {
         return false;
     }
 
-    for (QoreException* ex = xsink->getException(); ex; ex = ex->next) {
+    for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
         if (qore_is_deferred_runtime_init_err(ex->err)) {
             return true;
         }
@@ -775,7 +776,7 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
             // an exception raised outside of user code (ex: by an operator of the initializer, which runs without a
             // location) is located at the constant, so that it can be reported at its source (issue #6516)
             if (loc) {
-                for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+                for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
                     if (ex->start_line < 0) {
                         ex->set(*loc);
                         ex->start_column = loc->start_column;

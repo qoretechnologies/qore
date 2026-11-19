@@ -29,6 +29,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <memory>
 
@@ -101,7 +102,7 @@ void QoreRegex::parse(q_get_loc_t get_loc) {
     str = nullptr;
     if (xsink.isEvent()) {
         // override the exception location with the real parse location in case of an error
-        xsink.overrideLocation(*get_loc());
+        qore_exception_sink_ops(xsink).overrideLocation(*get_loc());
         qore_program_private::addParseException(getProgram(), xsink);
     }
 }
