@@ -2372,7 +2372,8 @@
     - an object of a builtin class of a Program with code pending, or whose parse was rolled back without
       @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", such as the argument of the exception of a failed module-python
       command, can be destroyed and its pseudo-methods called: its C++ destructor and the method lookup no longer
-      raise \c PROGRAM-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6752">issue 6752</a>)
+      raise \c PROGRAM-ERROR; its methods still do
+      (<a href="https://github.com/qoretechnologies/qore/issues/6752">issue 6752</a>)
     - fixed @ref Qore::SQL::SQLStatement::describe() "SQLStatement::describe()" before the first execution of a statement
       with a driver that describes it without executing it (ex: oracle), which lost the values given to
       @ref Qore::SQL::SQLStatement::bind() "SQLStatement::bind()": the next fetch returned \c NULL for them

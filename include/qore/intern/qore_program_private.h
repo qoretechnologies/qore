@@ -2587,8 +2587,9 @@ public:
         made under one lock, so a parse that starts meanwhile cannot refuse the entry.
 
         @param tid the current thread's TID
-        @param with_context set to true if the thread can switch to the Program's context, as incThreadCount() would
-        let it enter, false if it entered the Program without its context (see enterWithoutContext())
+        @param with_context set to true if incThreadCount() would let the thread enter the Program, so that it can
+        switch to its context, false if it entered the Program without its context (see enterWithoutContext()); also
+        false for the thread that holds the parse lock while code is parsed, which incThreadCount() refuses as well
         @param xsink for the exception if the Program has been deleted
 
         @return 0 if the thread entered the Program, -1 if not (the Program's teardown has marked it)

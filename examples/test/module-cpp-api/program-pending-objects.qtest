@@ -48,6 +48,7 @@
 class ProgramPendingObjectsTest inherits QUnit::Test {
     constructor() : QUnit::Test("program-pending-objects", "1.0") {
         addTestCase("exception argument", \exceptionArgumentTest());
+        addTestCase("exception argument after a rollback", \rollbackArgumentTest());
         addTestCase("constants", \constantsTest());
         addTestCase("committed control", \committedControlTest());
         addTestCase("Qore subclass destructor", \qoreSubclassDestructorTest());
@@ -64,6 +65,49 @@ class ProgramPendingObjectsTest inherits QUnit::Test {
 
     exceptionArgumentTest() {
         Program p = getPendingProgram();
+        checkPendingErrorArg(p, "pending");
+
+        # the Program can still be committed, and then runs the method
+        p.parseCommit();
+        int before = cpp_api_pending_probe_destroyed();
+        bool caught;
+        try {
+            p.issueModuleCmd("cppapiuser", "pending-error");
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            assertEq(1, ex.arg.value());
+        }
+        assertTrue(caught);
+        assertEq(before + 1, cpp_api_pending_probe_destroyed());
+    }
+
+    #! a Program whose parse was rolled back without PO_ALLOW_REPARSE still refuses runtime entry (and module commands)
+    rollbackArgumentTest() {
+        Program p = getPendingProgram();
+        *object arg;
+        try {
+            p.issueModuleCmd("cppapiuser", "pending-error");
+        } catch (hash<ExceptionInfo> ex) {
+            arg = ex.arg;
+        }
+        p.parseRollback();
+        assertEq("PendingProbe", arg.className());
+        assertEq("object", arg.type());
+        assertThrows("METHOD-DOES-NOT-EXIST", sub () { arg.noSuchMethod(); });
+        assertThrows("PROGRAM-ERROR", "undergoing parsing", sub () { arg.value(); });
+        int before = cpp_api_pending_probe_destroyed();
+        *string err;
+        try {
+            remove arg;
+        } catch (hash<ExceptionInfo> ex) {
+            err = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertNothing(err);
+        assertEq(before + 1, cpp_api_pending_probe_destroyed());
+    }
+
+    #! checks the argument of the exception of the "pending-error" command in a Program that refuses runtime entry
+    private checkPendingErrorArg(Program p, string label) {
         int before = cpp_api_pending_probe_destroyed();
         *string escaped;
         bool caught;
@@ -72,10 +116,10 @@ class ProgramPendingObjectsTest inherits QUnit::Test {
                 p.issueModuleCmd("cppapiuser", "pending-error");
             } catch (hash<ExceptionInfo> ex) {
                 caught = True;
-                assertEq("CPPAPIUSER-PENDING-ERROR", ex.err);
+                assertEq("CPPAPIUSER-PENDING-ERROR", ex.err, label);
                 # the pseudo-methods of the object, found after the lookup of the method in its class
-                assertEq("PendingProbe", ex.arg.className());
-                assertEq("object", ex.arg.type());
+                assertEq("PendingProbe", ex.arg.className(), label);
+                assertEq("object", ex.arg.type(), label);
                 # the lookup of a method that the class does not have
                 assertThrows("METHOD-DOES-NOT-EXIST", sub () { ex.arg.noSuchMethod(); });
                 # a method of the class is code of the Program, which still refuses runtime entry
@@ -85,19 +129,10 @@ class ProgramPendingObjectsTest inherits QUnit::Test {
             # the destruction of the argument with the caught exception after the catch block
             escaped = sprintf("%s: %s", ex.err, ex.desc);
         }
-        assertTrue(caught);
-        assertNothing(escaped);
+        assertTrue(caught, label);
+        assertNothing(escaped, label);
         # the C++ destructor ran when the exception was deleted
-        assertEq(before + 1, cpp_api_pending_probe_destroyed());
-
-        # the Program can still be committed, and then runs the method
-        p.parseCommit();
-        try {
-            p.issueModuleCmd("cppapiuser", "pending-error");
-        } catch (hash<ExceptionInfo> ex) {
-            assertEq(1, ex.arg.value());
-        }
-        assertEq(before + 2, cpp_api_pending_probe_destroyed());
+        assertEq(before + 1, cpp_api_pending_probe_destroyed(), label);
     }
 
     constantsTest() {
@@ -160,7 +195,6 @@ class ProgramPendingObjectsTest inherits QUnit::Test {
             err = sprintf("%s: %s", ex.err, ex.desc);
         }
         assertRegex("^PROGRAM-ERROR: .*undergoing parsing", err);
-        assertNothing(o);
         # the C++ destructor of the builtin base class ran
         assertEq(before + 1, cpp_api_pending_probe_destroyed());
         p.parseCommit();

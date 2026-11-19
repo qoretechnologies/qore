@@ -240,7 +240,9 @@ static bool cppapiuser_pending_probe_cmd(const QoreString& cmd, ExceptionSink* x
         const char* name = cmd.c_str() + strlen(const_prefix);
         QoreClass* qc = pending_probe_get_class();
         QoreNamespace* ns = getProgram()->getRootNS()->findCreateNamespacePathAll(PENDING_PROBE_NS);
-        ns->addConstant(name, pending_probe_new_object(), qc->getTypeInfo());
+        // the object is held until the namespace takes it
+        ReferenceHolder<QoreObject> obj(pending_probe_new_object(), xsink);
+        ns->addConstant(name, obj.release(), qc->getTypeInfo());
         return true;
     }
     return false;
@@ -276,6 +278,8 @@ static void cppapiuser_parse_cmd(const QoreString& cmd, ExceptionSink* xsink) {
         module_cmds.push_back(std::move(rec));
     } catch (const std::bad_alloc&) {
         xsink->outOfMemory();
+    } catch (const std::exception& e) {
+        xsink->raiseException("CPPAPIUSER-COMMAND-ERROR", "the command failed: %s", e.what());
     }
 }
 

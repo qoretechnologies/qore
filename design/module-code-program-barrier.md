@@ -76,12 +76,15 @@ on such an object run none of the Program's code, and do not need runtime entry 
   instead, as the destructor of a builtin class without a source Program runs, while the thread holds the Program's
   thread count without its context (`QoreNativeDestructorProgramEntry`,
   `qore_program_private::enterWithoutContextIfParseRefused()`); the thread that deletes the Program needs no entry,
-  as for a reference (`qore_reference_program_needs_entry()`).  This covers the constants that the deletion of a
+  as `qore_reference_program_needs_entry()` decides for a reference.  This covers the constants that the deletion of a
   Program whose parse was rolled back without `PO_ALLOW_REPARSE` clears while it still refuses runtime entry
 
-A method of such a class, and a destructor in Qore code (of the class or of a Qore subclass), are code of the Program:
-they still enter it and are refused; the C++ destructors of the builtin classes in the hierarchy run all the same.  A
-parse that another thread starts between the check and the normal entry of a destructor still refuses that entry
+The exemption covers the lookup and destructors only, not C++ code in general: a method of such a class, also one
+implemented in C++, and a destructor in Qore code (of the class or of a Qore subclass) are code of the Program; they
+still enter it and are refused, while the C++ destructors of the builtin classes in the hierarchy run all the same.  A
+parse that another thread starts between the check and the normal entry of a destructor still refuses that entry.  As
+for `enterWithoutContext()`, a thread counted by these entries makes a parse of a Program with `PO_ALLOW_REPARSE`
+that another thread starts meanwhile fail ("threads are active in the Program")
 (`examples/test/module-cpp-api/program-pending-objects.qtest`).
 
 ## Restrictions of module code
