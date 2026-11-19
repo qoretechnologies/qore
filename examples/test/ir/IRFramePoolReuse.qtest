@@ -20,6 +20,8 @@
 public class IRFramePoolReuseTest inherits QUnit::Test {
     constructor() : QUnit::Test("IR frame pool reuse", "1.0", \ARGV) {
         addTestCase("a call does not see the values of a previous call of the same function", \sameFunction());
+        # before the other sizes, which leave frames of their own at the depth
+        addTestCase("two functions that alternate at one depth do not see each other's values", \alternating());
         addTestCase("frames of other sizes and depths are reused in turn", \mixedSizes());
         addTestCase("a value borrowed from a freed container is not seen again", \borrowedValues());
         addTestCase("the same checks in child processes in the ir and tiered modes", \childModes());
@@ -44,6 +46,24 @@ public class IRFramePoolReuseTest inherits QUnit::Test {
             assertEq(NOTHING, IRFramePoolReuse::recurse(i % 7 + 1, False));
             assertEq(i % 7 + 1, IRFramePoolReuse::recurse(i % 7 + 1, True));
             assertEq(NOTHING, IRFramePoolReuse::optionalLocal(False));
+        }
+    }
+
+    #! two functions of other sizes called in turn from one frame each take a frame of the pool at the same depth: each
+    #! keeps a frame of its own (the frame of the depth and its spare, qore#6627 follow-up), which is reset in place
+    #! for its next call and must not keep the value that the previous call set
+    alternating() {
+        for (int i = 0; i < 200; ++i) {
+            # the results are checked after the four calls: a call of a check between them would take the frame of
+            # the depth too
+            auto set = IRFramePoolReuse::large(True, i);
+            auto small1 = IRFramePoolReuse::small(i);
+            auto unset = IRFramePoolReuse::large(False, i);
+            auto small2 = IRFramePoolReuse::small(i);
+            assertEq(i + 45, set);
+            assertEq(i * 3, small1);
+            assertEq(NOTHING, unset, "large after small");
+            assertEq(i * 3, small2);
         }
     }
 
@@ -91,6 +111,12 @@ sub check(auto expected, auto actual, string what) {
     }
 }
 for (int i = 0; i < 300; ++i) {
+    auto alt_set = IRFramePoolReuse::large(True, i);
+    auto alt_small = IRFramePoolReuse::small(i);
+    auto alt_unset = IRFramePoolReuse::large(False, i);
+    check(i + 45, alt_set, \"alternating large\");
+    check(i * 3, alt_small, \"alternating small\");
+    check(NOTHING, alt_unset, \"alternating large after small\");
     check(\"set \" + i, IRFramePoolReuse::optionalLocal(True, i), \"set\");
     check(NOTHING, IRFramePoolReuse::optionalLocal(False), \"not set\");
     check(i * 3, IRFramePoolReuse::small(i), \"small\");

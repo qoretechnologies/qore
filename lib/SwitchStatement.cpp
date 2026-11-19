@@ -45,6 +45,7 @@
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_encoding_private.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 CaseNode::~CaseNode() {
@@ -231,7 +232,7 @@ int SwitchStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
     ValueEvalRefHolder se(xsink);
     {
         QoreStatementTempScope temps(xsink);
-        se.eval(rc, sexp);
+        qore_value_eval_ref_holder_ops(se).eval(rc, sexp);
     }
 
     if (!*xsink) {

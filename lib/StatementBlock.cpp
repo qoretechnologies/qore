@@ -61,6 +61,7 @@
 #include <optional>
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -395,7 +396,7 @@ int StatementBlock::execIntern(RuntimeConfig& rc, QoreValue& return_value, Excep
                         std::unique_ptr<SingleArgvContextHelper> argv_helper;
                         std::unique_ptr<CatchExceptionHelper> ex_helper;
                         if (type == OBE_Error) {
-                            QoreException* except = xsink->getException();
+                            QoreException* except = qore_exception_sink_ops(xsink).getException();
                             assert(except);
                             ex_helper.reset(new CatchExceptionHelper(except));
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));

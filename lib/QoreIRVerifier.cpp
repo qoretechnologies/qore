@@ -3588,7 +3588,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         block->has_phi_nodes = false;
         for (const auto& inst : block->instructions) {
             // Cache line number: -1 if no location, otherwise store start_line
-            // This avoids two pointer dereferences per instruction in the line-change gate
+            // This avoids two pointer dereferences per instruction in the debugger's line tests
             inst->cached_start_line = inst->loc ? static_cast<int32_t>(inst->loc->start_line) : -1;
 
             if (inst->opcode == QoreIROpcode::Phi) {

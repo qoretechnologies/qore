@@ -85,6 +85,7 @@
 #include <unordered_set>
 
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
@@ -9682,7 +9683,7 @@ QORE_INTERN_NOINLINE QoreValue UserVariantBase::evalSpecializedIR(const char* na
             if (val.isNothing()) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*signature.getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {
@@ -9996,7 +9997,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                     if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
+                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
                         xsink->appendLastDescription(": block missing return statement");
                     }
                 } else {
@@ -10151,7 +10152,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                     if (*xsink) {
-                        xsink->overrideLocation(*signature.getParseLocation());
+                        qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
                         xsink->appendLastDescription(": block missing return statement");
                     }
                 } else {
@@ -10253,7 +10254,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
             : signature.getReturnTypeInfo();
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         if (*xsink) {
-            xsink->overrideLocation(*signature.getParseLocation());
+            qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
             xsink->appendLastDescription(": block missing return statement");
         }
     }
@@ -10401,7 +10402,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         // issue #3255: make sure any exception reflects the signature location
         if (*xsink) {
-            xsink->overrideLocation(*signature.getParseLocation());
+            qore_exception_sink_ops(xsink).overrideLocation(*signature.getParseLocation());
             xsink->appendLastDescription(": block missing return statement");
         }
     }

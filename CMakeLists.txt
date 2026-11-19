@@ -2937,6 +2937,10 @@ add_executable(qore-aot-ir-value-ids-test examples/test/ir/aot_ir_value_ids.cpp)
 target_include_directories(qore-aot-ir-value-ids-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(qore-aot-ir-value-ids-test PRIVATE libqore)
+add_executable(qore-aot-ir-statement-locations-test examples/test/ir/aot_ir_statement_locations.cpp)
+target_include_directories(qore-aot-ir-statement-locations-test PRIVATE
+    ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(qore-aot-ir-statement-locations-test PRIVATE libqore)
 add_executable(qore-aot-lvalue-path-ref-rv-test examples/test/ir/aot_lvalue_path_ref_rv.cpp)
 target_include_directories(qore-aot-lvalue-path-ref-rv-test PRIVATE
     ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR}/include)
