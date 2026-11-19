@@ -524,6 +524,16 @@ public:
     */
     DLLLOCAL bool dbgWaitIdleWaiter(int timeout_ms);
 
+    //! Debug-only: waits until the given number of onComplete() items have been queued for the workers
+    /** Counted once the item is in the queue (or discarded by enqueue()), so a flush of the callbacks made after the
+        wait covers it; for tests that must wait for the completion of an operation that no Qore code of theirs can
+        see, such as one whose callbacks are skipped (qore#6685); an onComplete() run after the operation's abort()
+        (AbortThenDeliverTask) is not counted
+
+        @return true if the count was reached, false if it was not when \a timeout_ms elapsed
+    */
+    DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
+
     //! Debug-only: the number of onComplete() calls dispatched so far
     DLLLOCAL int64_t dbgOnCompleteDispatched() const {
         return dbg_on_complete_dispatched.load(std::memory_order_acquire);
@@ -642,6 +652,10 @@ private:
     int dbg_idle_waiters = 0;
     //! Debug-only: signaled when a thread blocks in waitForIdle()
     QoreCondition dbg_idle_waiter_cond;
+    //! Debug-only: the number of onComplete() items queued (see dbgWaitOnCompleteQueued()); protected by m
+    int64_t dbg_on_complete_queued = 0;
+    //! Debug-only: signaled when an onComplete() item has been queued
+    QoreCondition dbg_on_complete_queued_cond;
 #endif
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
@@ -939,6 +953,10 @@ public:
 
     //! Debug-only: waits until a thread waits in a flush of the callbacks (see QoreCallDispatcher::dbgWaitIdleWaiter())
     DLLLOCAL bool dbgWaitFlushBlocked(int timeout_ms);
+
+    //! Debug-only: waits until the given number of onComplete() items have been queued since the dispatcher was
+    //! created (see QoreCallDispatcher::dbgWaitOnCompleteQueued())
+    DLLLOCAL bool dbgWaitOnCompleteQueued(int64_t count, int timeout_ms);
 #endif
 
     //! Wakes a socket operation by QoreObject identity

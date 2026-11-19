@@ -1791,6 +1791,14 @@ DLLLOCAL void qore_close_module_programs();
 */
 DLLLOCAL bool qore_module_cleanup_delegation();
 
+//! Returns true if the calling thread would be refused entry into the given Program: it is the Program of a module,
+//! and the Programs of the modules are closed to the thread (see qore_close_module_programs(); qore#6685)
+/** Asynchronous work that the thread would run in the Program (the callbacks of an asynchronous I/O operation that a
+    thread other than the module cleanup submitted, which completes while the modules are deleted) is then skipped, as
+    the work of a Program that is being deleted is
+*/
+DLLLOCAL bool qore_module_program_entry_refused(const QoreProgram* pgm);
+
 //! Keeps the Programs of the modules open to the calling thread while it runs work that the module cleanup handed
 //! over, if \a delegate (the result of qore_module_cleanup_delegation() in the handing thread) is true
 /** See qore_close_module_programs(); the helpers of a thread nest

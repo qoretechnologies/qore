@@ -1982,6 +1982,14 @@ void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashN
     item.owner = owner;
     item.sandbox_ctx = std::move(sandbox_ctx);
     enqueue(std::move(item));
+#ifdef DEBUG
+    // counted once queued: a flush made after dbgWaitOnCompleteQueued() covers the item
+    {
+        AutoLocker al(m);
+        ++dbg_on_complete_queued;
+        dbg_on_complete_queued_cond.broadcast();
+    }
+#endif
 }
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args,
@@ -2357,6 +2365,19 @@ bool QoreCallDispatcher::dbgWaitAllIdle(int timeout_ms) {
             return false;
         }
         idle_cond.wait(m, static_cast<int>(remaining_ms));
+    }
+    return true;
+}
+
+bool QoreCallDispatcher::dbgWaitOnCompleteQueued(int64_t count, int timeout_ms) {
+    int64 deadline_us = q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000;
+    AutoLocker al(m);
+    while (dbg_on_complete_queued < count) {
+        int64 remaining_ms = (deadline_us - q_get_monotonic_us()) / 1000;
+        if (remaining_ms <= 0) {
+            return false;
+        }
+        dbg_on_complete_queued_cond.wait(m, static_cast<int>(remaining_ms));
     }
     return true;
 }
@@ -2758,6 +2779,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 owner_shutting_down = shutting_down_owners.count(async_item.owner) > 0;
             }
         }
+        // the Program of a module that the worker could not enter above because the module cleanup at the end of the
+        // process has closed the Programs of the modules to the threads that do not run work that it handed over: the
+        // operation was submitted by another thread and completes while the modules are deleted; its callbacks would
+        // be refused entry (PROGRAM-ERROR), so they are skipped, as those of a Program that is being deleted are.  The
+        // Programs stay closed once closed, so a failed entry seen with them closed was refused or would be; an entry
+        // made before they closed is waited for by the cleanup (qore#6685).  Only the operation's callbacks are
+        // skipped: the operation is still live (the cleanup has not canceled it yet), so a step that cannot run gives
+        // the refusal as the operation's error, whose onComplete() is then skipped, and a native task (which carries no
+        // delegation of the cleanup's work) runs as it did
+        if (!pgm_shutting_down && pgm_guard && !pgm_guard->entered()
+                && (async_item.type == DT_ABORT || async_item.type == DT_ON_COMPLETE
+                    || async_item.type == DT_STREAM_DATA_NOTIFY || async_item.type == DT_STREAM_SEND_RESULT_NOTIFY
+                    || async_item.type == DT_POLL_COMPLETE_NOTIFY)
+                && qore_module_program_entry_refused(async_item.pgm)) {
+            pgm_shutting_down = true;
+        }
 
         // Mark this thread as a dispatcher callback worker for the WHOLE
         // iteration (dispatch + the deref/cleanup section below), so that a
@@ -2848,8 +2885,26 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 case DT_CALLBACK: {
                     method_name = "callback";
                     if (async_item.callback) {
-                        ValueHolder rv(async_item.callback->invoke(async_item.args, &work_xsink),
-                            &work_xsink);
+                        // a callback of a module's code (a timer of the module) that the worker cannot enter because
+                        // the module cleanup at the end of the process has closed the Programs of the modules to it is
+                        // skipped, as the callbacks of the module's operations are (see above); the callback's Program
+                        // is entered first, as the item's Program is above, so that the check has no window
+                        // (qore#6685)
+                        QoreProgram* cb_pgm = async_item.callback->getProgram();
+                        ExceptionSink cb_guard_xsink;
+                        std::unique_ptr<ProgramThreadCountContextHelper> cb_guard;
+                        bool refused = false;
+                        if (cb_pgm && qore_program_has_module_lifetime(cb_pgm)) {
+                            cb_guard.reset(new ProgramThreadCountContextHelper);
+                            cb_guard->set(&cb_guard_xsink, cb_pgm, true);
+                            refused = !cb_guard->entered() && qore_module_program_entry_refused(cb_pgm);
+                            // another failure is the callback's own exception, raised when it enters the Program
+                            cb_guard_xsink.clear();
+                        }
+                        if (!refused) {
+                            ValueHolder rv(async_item.callback->invoke(async_item.args, &work_xsink),
+                                &work_xsink);
+                        }
                     }
                     break;
                 }
@@ -9801,6 +9856,17 @@ bool AsyncIoControllerPriv::dbgWaitFlushBlocked(int timeout_ms) {
         cd = call_dispatcher;
     }
     return cd ? cd->dbgWaitIdleWaiter(timeout_ms) : false;
+}
+
+bool AsyncIoControllerPriv::dbgWaitOnCompleteQueued(int64_t count, int timeout_ms) {
+    ensureCallDispatcher();
+    // as in flushCallbacks(): the dispatcher's lock is not taken with the controller's held
+    QoreCallDispatcher* cd;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    return cd ? cd->dbgWaitOnCompleteQueued(count, timeout_ms) : false;
 }
 #endif
 

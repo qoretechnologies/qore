@@ -1,0 +1,11 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# submits an operation that completes while the modules are deleted at the end of the process (qore#6685); needs a
+# debug build of the library
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%requires ModuleExitCompletion
+%requires ModuleExitCleaner
+
+printf("held: %y\n", Holder::held);
+printf("timer held: %y\n", Holder::timer_held);

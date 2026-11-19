@@ -4996,6 +4996,15 @@ void qore_close_module_programs() {
     module_programs_closed_tid.store(q_gettid(), std::memory_order_seq_cst);
 }
 
+bool qore_module_program_entry_refused(const QoreProgram* pgm) {
+    if (!pgm || module_programs_closed_tid.load(std::memory_order_seq_cst) < 0) {
+        return false;
+    }
+    ThreadData* td = thread_data.get();
+    const qore_program_private* pp = qore_program_private::get(*const_cast<QoreProgram*>(pgm));
+    return td && pp->module_lifetime.load(std::memory_order_acquire) && qore_module_programs_closed(td);
+}
+
 bool qore_module_cleanup_delegation() {
     // the load pairs with the store of qore_close_module_programs(): the thread that runs the cleanup made it, and a
     // thread running work that it handed over was started or given the work after it
