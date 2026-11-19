@@ -1348,13 +1348,16 @@ public:
 
     //! Releases the values that holdReturn() keeps, after the locals of the frame, with the handed-over return
     /** The handed-over return (see handOverReturn()) is one of them: the value of the return that an exception
-        interrupts, or that the try statement that catches it releases.  Nothing is tested but the size of the values,
-        as before the handed-over return (#6137)
+        interrupts, or that the try statement that catches it releases.  The loop is the one of the held returns before
+        the handed-over return: the index is reset in it, only when there is a value (#6137)
     */
     DLLLOCAL void releaseHeldReturns(ExceptionSink* xsink) {
-        if (!held_returns.empty()) [[unlikely]] {
-            releaseHeldReturnsIntern(xsink);
+        for (QoreValue& v : held_returns) {
+            // the handed-over return is one of them: it goes with them
+            handed_over_index = NoHandedOver;
+            v.discard(xsink);
         }
+        held_returns.clear();
     }
 
     //! Replaces the handed-over return with \a v, whose reference it takes, releasing the value before (#6137)
@@ -1451,14 +1454,6 @@ private:
         return rv;
     }
 
-    //! Releases the values that holdReturn() keeps, the handed-over return among them (see releaseHeldReturns())
-    DLLLOCAL __attribute__((noinline, cold)) void releaseHeldReturnsIntern(ExceptionSink* xsink) {
-        handed_over_index = NoHandedOver;
-        for (QoreValue& v : held_returns) {
-            v.discard(xsink);
-        }
-        held_returns.clear();
-    }
 
     //! Releases the references that holdReturn() keeps to \a v, if any (see releaseHeldReturn())
     /** A value can be held more than once: each slot of a return that holds it (the Return's, a RefSelf's, a
