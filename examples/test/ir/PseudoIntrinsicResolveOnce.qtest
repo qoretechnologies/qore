@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class PseudoIntrinsicResolveOnceTest
+
+#! A pseudo-method call resolves the intrinsic of its method once, not on every call (#6709)
+/** The IR interpreter resolved the intrinsic of a pseudo-method call (qore_ir_resolve_pseudo_intrinsic(), a chain of
+    string comparisons of the class and method names) again on every call when the method has none, as
+    QoreIRIntrinsic::None also stood for "not resolved".  The intrinsic of a method known when the instruction is made
+    is final now, and only a method resolved by name when it runs is resolved then.  With QORE_IR_OPT_STATS, the
+    library reports the resolutions at exit: their number must not depend on the number of calls.  The results are
+    checked against the AST interpreter's in every mode and compiled with qcc.
+*/
+class PseudoIntrinsicResolveOnceTest inherits QUnit::Test {
+    public {
+        const Modes = ("ast", "ir", "jit", "tiered");
+        const OptLevels = (0, 3);
+        const Script = "%modern
+int sub calls(int n) {
+    string s = \"abc\";
+    auto v = 1;
+    auto a = \"xyz\";
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        t += s.isEncodingValid() ? 1 : 0;
+        t += s.length();
+        t += v.typeCode();
+        t += a.size();
+        t += a.isEncodingValid() ? 1 : 0;
+    }
+    return t;
+}
+printf(\"%d\\n\", calls((ENV.N ?? \"10\").toInt()));
+";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        TmpDir tmp("qore-pseudo-intrinsic-");
+        string script;
+    }
+
+    constructor() : QUnit::Test("PseudoIntrinsicResolveOnceTest", "1.0") {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        script = tmp.path + DirSep + "calls.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+        foreach string mode in (Modes) {
+            addTestCase(mode + ": the intrinsic is resolved once", \modeTest(), (mode,));
+        }
+        foreach int opt in (OptLevels) {
+            addTestCase(sprintf("qcc -O%d: the intrinsic is resolved once", opt), \aotTest(), (opt,));
+        }
+        set_return_value(main());
+    }
+
+    #! Runs a command with N calls and returns its output and the number of resolutions that it reported
+    private hash<auto> run(string command, int n) {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s", libqore_dir, libqore_dir, command), NOTHING,
+            sprintf("N=%d QORE_IR_OPT_STATS=1 %s", n, ExecModeHarness::TraceEnv));
+        *list<*string> m = (r.stderr =~ x/IR-OPT: pseudo-intrinsic-resolutions=([0-9]+)/);
+        return {"out": r.stdout, "resolutions": m ? m[0].toInt() : -1};
+    }
+
+    #! Checks the output against the AST interpreter's, and that the resolutions do not depend on the calls
+    private check(string label, string command) {
+        foreach int n in ((10, 1000)) {
+            hash<auto> r = run(command, n);
+            hash<auto> ast = run(sprintf("%s --exec-mode=ast %s", qore_bin, script), n);
+            assertEq(ast.out, r.out, sprintf("%s: the result of %d calls", label, n));
+        }
+        int few = run(command, 10).resolutions;
+        int many = run(command, 1000).resolutions;
+        assertGe(0, few, label + ": the resolutions are reported");
+        assertEq(few, many, label + ": the resolutions with 10 and 1000 calls");
+    }
+
+    modeTest(string mode) {
+        check(mode, sprintf("%s --exec-mode=%s %s", qore_bin, mode, script));
+    }
+
+    aotTest(int opt) {
+        string exe = tmp.path + DirSep + sprintf("calls-O%d", opt);
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -O%d -o %s %s 2>&1", libqore_dir, qcc_bin, opt, exe,
+            script));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        check(sprintf("qcc -O%d", opt), exe);
+    }
+}
