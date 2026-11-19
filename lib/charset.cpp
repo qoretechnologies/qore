@@ -1359,6 +1359,32 @@ private:
     ProbeConverter& operator=(const ProbeConverter&) = delete;
 };
 
+// returns true if iconv converts text in an encoding with the characters of the given Unicode form from the given
+// name to UTF-8 although the text has a code unit sequence that is not a character of the form: a value above
+// U+10FFFF or a surrogate in UTF-32 (glibc's "UCS-4" converts values up to 0x7fffffff), an unpaired surrogate in
+// UTF-16, or a surrogate in UCS-2; also if the conversion cannot be opened, so that the text is validated then
+static bool iconv_accepts_invalid_form(const char* source, UnicodeForm form, bool utf32, bool non_bmp) {
+    static const std::vector<unsigned> utf32_samples[] = {{0x110000}, {0xd800}, {0xdc00}};
+    static const std::vector<unsigned> utf16_samples[] = {{0xdc00, 0x41}, {0xd800, 0x41}};
+    static const std::vector<unsigned> ucs2_samples[] = {{0xd800}, {0xdc00}};
+    const std::vector<unsigned>* samples = utf32 ? utf32_samples : (non_bmp ? utf16_samples : ucs2_samples);
+    size_t num = utf32 ? 3 : 2;
+    for (size_t i = 0; i < num; ++i) {
+        // the byte order mark gives the byte order to an encoding that takes it from the text
+        std::string in = encode_unicode(form, 0xfeff) + encode_unicode(form, 0x61);
+        for (unsigned unit : samples[i]) {
+            in += encode_unicode(form, unit);
+        }
+        in += encode_unicode(form, 0x62);
+        ProbeConverter dec("UTF-8", source);
+        std::string out;
+        if (!dec.valid() || dec.convert(in, out)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // a character converted to the encoding being probed
 struct probe_char {
     // the Unicode code point
@@ -1590,14 +1616,25 @@ void qore_encoding_private::setCharFunctions(const form_functions& f) {
       not as found above; text in an encoding that is not ASCII-compatible is converted to UTF-8 by every function
       that parses or splits it.
 
+    A name with iconv conversion flags after "//" (ex: "UTF-16LE//") that iconv does not know is probed and converted
+    without the flags if iconv knows that name (musl does not take the flags off, and macOS takes them off only in a
+    target name), so that the encoding has the same
+    properties on every platform; see qore_encoding_private::iconvCodeWithoutFlags().
+
     If iconv does not know the encoding, the properties are not changed: no text can be converted to or from the
     encoding, so its strings are handled as single-byte, ASCII-compatible text, as before, rather than raising an
     error when the encoding is named (ex: in a string tagged with an encoding only for information).
 */
 void qore_encoding_private::probe() {
-    ProbeConverter to(code.c_str(), "UTF-8");
+    // a name with conversion flags that iconv does not accept is given to iconv without them (musl, macOS)
+    iconv_code = iconvCodeWithoutFlags(code, [](const std::string& name) -> bool {
+        ProbeConverter to(name.c_str(), "UTF-8");
+        ProbeConverter from("UTF-8", name.c_str());
+        return to.valid() && from.valid();
+    });
+    ProbeConverter to(getIconvCode(), "UTF-8");
     bool no_encoder = !to.valid() && errno == EINVAL;
-    ProbeConverter from("UTF-8", code.c_str());
+    ProbeConverter from("UTF-8", getIconvCode());
     if (!to.valid() || !from.valid()) {
         // Resource errors do not make an encoding an opaque tag.
         opaque_single_byte = no_encoder && !from.valid() && errno == EINVAL;
@@ -1651,8 +1688,8 @@ void qore_encoding_private::probe() {
 bool qore_encoding_private::probeAsciiIdentical() const {
     bool identical = false;
     if (ascii_compat && !stateful) {
-        ProbeConverter to(code.c_str(), "UTF-8");
-        ProbeConverter from("UTF-8", code.c_str());
+        ProbeConverter to(getIconvCode(), "UTF-8");
+        ProbeConverter from("UTF-8", getIconvCode());
         if (to.valid() && from.valid()) {
             identical = true;
             std::string in, out, back;
@@ -1802,7 +1839,7 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
         // each sample character is decoded on its own after the byte order mark, as ProbeConverter converts short
         // texts only, and with a new conversion each time: glibc keeps the byte order of the first byte order mark
         // that a conversion reads, even after it is reset
-        const std::string& enc_code = code;
+        const std::string enc_code = getIconvCode();
         auto decodes_with_bom = [&enc_code, &units, &units_utf8](UnicodeForm f) -> bool {
             for (size_t i = 0; i < units.size(); ++i) {
                 ProbeConverter dec("UTF-8", enc_code.c_str());
@@ -1881,6 +1918,9 @@ void qore_encoding_private::probeProperties(const probe_convert_t& convert) {
             setCharFunctions(be ? form_functions::get<UCS2_get_char_len<UCS2BE_getUnicode>, UCS2BE_getUnicode>(2, 2)
                 : form_functions::get<UCS2_get_char_len<UCS2LE_getUnicode>, UCS2LE_getUnicode>(2, 2));
         }
+        // text that the character functions reject must not be converted: where iconv accepts it, text is
+        // validated with the character functions before it is converted (see IconvHelper)
+        iconv_accepts_invalid = iconv_accepts_invalid_form(getIconvSourceCode(), form, utf32, non_bmp);
         return;
     }
     set_multibyte();

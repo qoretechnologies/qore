@@ -53,7 +53,8 @@ public:
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink,
          bool validate_utf8 = false) : to(to), from(from),
          validateUtf8(from == QCS_UTF8 && (validate_utf8 || !rejectsMalformedUtf8())),
-         validateForm(isUnicodeForm(from) && !rejectsInvalidUnicodeForms()),
+         validateForm(isUnicodeForm(from)
+            && (!rejectsInvalidUnicodeForms() || qore_encoding_private::get(*from)->iconv_accepts_invalid)),
          splitFinalDash(qore_encoding_private::get(*from)->utf7_final_dash_literal) {
       // conversions are opened without "//TRANSLIT": with it, glibc and GNU libiconv replace a character the target
       // cannot hold with an approximation and report it only in the count of non-reversible conversions, while
@@ -82,7 +83,8 @@ public:
        here, and the conversion stops at the first malformed sequence with \c EILSEQ, or at a sequence truncated by
        the end of the input with \c EINVAL, exactly as a strict iconv does.  Input in a Unicode encoding form (UTF-16,
        UTF-32, UCS-2, UCS-4) is validated the same way where the platform's iconv accepts values above U+10FFFF or
-       unpaired surrogates in it (see rejectsInvalidUnicodeForms()).
+       unpaired surrogates in it (see rejectsInvalidUnicodeForms()), or where the conversion of an encoding created on
+       the fly accepts them (qore_encoding_private::iconv_accepts_invalid, ex: glibc's \c "UCS-4").
 
        @param xsink if given, the validation is a cancellation point; when it is cancelled, the exception is raised
        here, and -1 is returned with \c errno set to \c ECANCELED
@@ -607,7 +609,8 @@ private:
    const QoreEncoding *from;
    //! true if UTF-8 input is validated here because the platform's iconv accepts malformed UTF-8
    bool validateUtf8;
-   //! true if input in a Unicode encoding form is validated here; see rejectsInvalidUnicodeForms()
+   //! true if input in a Unicode encoding form is validated here; see rejectsInvalidUnicodeForms() and
+   //! qore_encoding_private::iconv_accepts_invalid
    bool validateForm;
    //! true if a "-" ending a UTF-7 base64 run at the end of the input is converted on its own; see iconvUtf7()
    bool splitFinalDash;
