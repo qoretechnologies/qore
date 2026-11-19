@@ -107,6 +107,11 @@ static int get_json_string_token(QoreString& str, const char*& buf, int& line_nu
         }
         if (*buf == '\\') {
             buf++;
+            // an escape sequence at the end of the text is a premature end of the string; the terminating null
+            // character is not passed
+            if (!*buf) {
+                break;
+            }
             if (*buf == '"' || *buf == '/' || *buf == '\\') {
                 str.concat(*buf);
                 ++buf;
@@ -172,7 +177,10 @@ static int get_json_string_token(QoreString& str, const char*& buf, int& line_nu
                         break;
                     }
                 } else {
+                    // a \u that is not followed by four hexadecimal digits is kept as it is, and the text after it
+                    // (where buf is) is parsed: it can be the end of the text, the closing quote or any character
                     str.concat("\\u");
+                    continue;
                 }
             } else { // otherwise just concatenate the characters
                 str.concat('\\');
