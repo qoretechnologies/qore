@@ -101,6 +101,12 @@
     @endparblock
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
+    @par Code That Is Not Trusted Loads Native Code Only From the Module Path
+    A binary module (also a module compiled with \c qcc) from outside the process-wide module path is not loaded for
+    sandboxed or restricted code that may not use uncontrolled APIs; a compiled module whose source is next to it is
+    loaded as source (see @ref sandbox_native_code; <a href="https://github.com/qoretechnologies/qore/issues/6776">issue
+    6776</a>).
+
     @par An Encoding That Is Not Predefined Has One Canonical Name
     The name of an encoding that is not predefined is the standard spelling of a standard character set (ex:
     \c "Shift_JIS") or the name in upper case (ex: \c "CP1047"), not the spelling with which the program first used

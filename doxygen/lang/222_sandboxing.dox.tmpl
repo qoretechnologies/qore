@@ -530,7 +530,8 @@ authenticate();
 
     A module that a caller loads by path, or finds through a module path that a %Program added with
     \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
-    the code that loads it, and a source module's %Program keeps that sandbox.  Neither is a library module that code
+    the code that loads it, and a source module's %Program keeps that sandbox.  A binary module is native code, which no
+    sandbox governs: code that is not trusted loads one only from the module path (see @ref sandbox_native_code).  Neither is a library module that code
     that is not trusted loads into a %Program container of its own (for example with
     @ref Qore::Program::loadApplyToPrivateUserModule() "Program::loadApplyToPrivateUserModule()"): it is parsed and
     initialized with the container's code and parse defines, under the sandbox of the code that loads it.
@@ -549,6 +550,28 @@ authenticate();
       that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
       a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
       naming the module and its file
+
+    @subsection sandbox_native_code The Trust Model of Native Code
+    Native code (a binary module, and the native code of a module compiled with \c qcc) runs with the privileges of
+    the process: no sandbox governs it, as it does not run through the checks of the library.  It is therefore trusted
+    code, and the module loader maps it only when trusted code decided the load:
+    - the module file is in a directory of the process-wide module path, which the host controls; or
+    - the code that loads it is trusted (no sandbox governs it and its functional domains are not restricted); or
+    - the code that loads it may use uncontrolled APIs: neither its parse options
+      (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS") nor any sandbox that governs it
+      (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()") forbid them.
+
+    Otherwise the load is refused with \c LOAD-MODULE-ERROR, whether the module is loaded by its path, found through a
+    module path of the loading code, or loaded into a %Program that the loading code created; a compiled module whose
+    source module is next to it is loaded as the source module, which runs under the sandbox of the loading code.  A
+    module statically linked into a program built with \c qcc is part of that program's own native code and needs no
+    such decision.
+
+    What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
+    the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the
+    verification of the IR that a compiled module carries (the IR that the IR interpreter and the debugger run)
+    detects IR damaged by accident; neither is a security boundary, as the module's native code could do anything that
+    its IR could (qore#6776).
 
     @subsection sandbox_static_modules Statically Linked Modules
 

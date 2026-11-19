@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - loading compiled native modules (dlopen) from module paths and by path
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../../TestInterpreter.qm
+
+%exec-class NativeModuleTrustTest
+
+#! native code that code which is not trusted chose is not loaded (qore#6776)
+/** Native code runs with the privileges of the process and no sandbox governs it.  A binary module (here, a module
+    compiled with qcc) from outside the module path is therefore loaded only for trusted code, or for code that may
+    use uncontrolled APIs; for other code the load is refused, on every route by which it can load a module, and a
+    compiled module whose source is next to it is loaded as a source module instead.  Before the change, sandboxed
+    code loaded the native code of a module of its own choosing.
+*/
+class NativeModuleTrustTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-native-module-trust-");
+        string qore_bin;
+        string qcc_bin;
+        string env;
+    }
+
+    constructor() : QUnit::Test("native module trust", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+        addTestCase("load_module() by path from a sandbox", \loadByPathTest());
+        addTestCase("%requires through the sandboxed code's own module path", \requiresTest());
+        addTestCase("Program::loadModule() into a child of sandboxed code", \childLoadTest());
+        addTestCase("a compiled module with its source is loaded as source", \sourceFallbackTest());
+        addTestCase("a sandbox that trusts uncontrolled APIs loads native code", \uncontrolledTest());
+        addTestCase("trusted code loads native code", \trustedTest());
+        addTestCase("restricted code without a sandbox", \restrictedTest());
+        set_return_value(main());
+    }
+
+    loadByPathTest() {
+        string path = compile("NativeTrustByPath");
+        assertEq("LOAD-MODULE-ERROR", getTenant().callFunction("loadPath", path));
+    }
+
+    requiresTest() {
+        string path = compile("NativeTrustRequires");
+        Program p = getTenant(NOTHING, False);
+        try {
+            p.parse(sprintf("%%modern\n%%prepend-module-path %s\n%%requires NativeTrustRequires\n", dirname(path)),
+                "requires");
+            fail("the module was loaded");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("LOAD-MODULE-ERROR", ex.err);
+            assertRegex("native code only from the module path", ex.desc);
+        }
+    }
+
+    childLoadTest() {
+        string path = compile("NativeTrustChild");
+        assertEq("LOAD-MODULE-ERROR", getTenant().callFunction("childLoad", path));
+    }
+
+    sourceFallbackTest() {
+        string path = compile("NativeTrustSource", True);
+        assertEq("source", getTenant().callFunction("loadPathKind", path, "NativeTrustSource"));
+    }
+
+    uncontrolledTest() {
+        string path = compile("NativeTrustUncontrolled");
+        assertEq("native", getTenant(True).callFunction("loadPathKind", path, "NativeTrustUncontrolled"));
+    }
+
+    trustedTest() {
+        string path = compile("NativeTrustHost");
+        load_module(path);
+        assertRegex("\\.qmod$", get_module_hash().NativeTrustHost.filename);
+    }
+
+    restrictedTest() {
+        string denied = compile("NativeTrustRestricted");
+        Program p(PO_NO_UNCONTROLLED_APIS | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "restricted");
+        assertEq("LOAD-MODULE-ERROR", p.callFunction("loadPath", denied));
+
+        string allowed = compile("NativeTrustAllowed");
+        Program a(PO_NO_EXTERNAL_PROCESS | PO_NO_CHILD_PO_RESTRICTIONS);
+        a.parse(TenantSource, "restricted-allowed");
+        assertEq("native", a.callFunction("loadPathKind", allowed, "NativeTrustAllowed"));
+    }
+
+    const TenantSource = "%modern
+string sub loadPath(string path) {
+    try {
+        load_module(path);
+        return \"loaded\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub loadPathKind(string path, string name) {
+    try {
+        load_module(path);
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
+    }
+    return get_module_hash(){name}.filename =~ /\\.qmod$/ ? \"native\" : \"source\";
+}
+string sub childLoad(string path) {
+    try {
+        Program p();
+        p.loadModule(path);
+        return \"loaded\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    #! compiles a module of its own name in a directory of its own; returns the path of the .qmod
+    private string compile(string name, *bool keep_source) {
+        string dir = tmp.path + DirSep + name;
+        mkdir(dir);
+        string src = dir + DirSep + name + ".qm";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\nmodule %s {\n    version = \"1.0\";\n    desc = \"test\";\n    author = \"test\";\n"
+            "    url = \"test\";\n}\npublic namespace %s {\npublic string sub hello() { return \"hello\"; }\n}\n",
+            name, name));
+        f.close();
+        string qmod = dir + DirSep + name + ".qmod";
+        string out = backquote(sprintf("%s %s -m %s -o %s 2>&1", env, qcc_bin, src, qmod));
+        if (!is_file(qmod)) {
+            throw "TEST-ERROR", sprintf("qcc failed: %s", out);
+        }
+        if (!keep_source) {
+            unlink(src);
+        }
+        return qmod;
+    }
+
+    #! Returns a sandboxed Program; \a uncontrolled: its sandbox trusts its code with uncontrolled APIs
+    private Program getTenant(*bool uncontrolled, *bool parse) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        if (parse ?? True) {
+            p.parse(TenantSource, "tenant");
+        }
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        if (uncontrolled) {
+            sm.setUncontrolledApiPolicy(True);
+        }
+        p.setSandboxManager(sm);
+        return p;
+    }
+}
