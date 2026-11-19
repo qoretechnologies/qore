@@ -211,10 +211,15 @@ void require(const char* step, const char* name) {
 }
 
 //! creates a sandbox that restricts nothing that the scenarios do
-QoreSandboxManager* make_sandbox() {
+/** @param native whether the code that the sandbox governs may load native code from outside the module path, as
+    the scenarios do in the \c file mode: it may if the sandbox allows uncontrolled APIs (see the trust model of
+    native code in the sandboxing documentation; issue #6776)
+*/
+QoreSandboxManager* make_sandbox(bool native = true) {
     QoreSandboxManager* sm = new QoreSandboxManager;
     sm->filesystem().setDefaultPolicy(true);
     sm->network().setDefaultPolicy(true);
+    sm->setUncontrolledApiPolicy(native);
     return sm;
 }
 }
@@ -241,6 +246,8 @@ int main(int argc, char** argv) {
     {
         QoreSandboxManager* sm1 = make_sandbox();
         QoreSandboxManager* sm2 = make_sandbox();
+        // a sandbox with the default policy for uncontrolled APIs, which refuses them
+        QoreSandboxManager* sm3 = make_sandbox(false);
         // the code of a Program whose parse options restrict a functional domain is not trusted
         QoreProgram* restricted = make_program(QoreParseOptions(PO_NEW_STYLE) | PO_NO_NETWORK);
         QoreProgram* trusted = make_program(QoreParseOptions(PO_NEW_STYLE));
@@ -250,10 +257,12 @@ int main(int argc, char** argv) {
         QoreProgram* sb1 = make_program(QoreParseOptions(PO_NEW_STYLE), sm1);
         QoreProgram* sb1b = make_program(QoreParseOptions(PO_NEW_STYLE), sm1);
         QoreProgram* sb2 = make_program(QoreParseOptions(PO_NEW_STYLE), sm2);
+        QoreProgram* sb3 = make_program(QoreParseOptions(PO_NEW_STYLE), sm3);
         sm1->deref(nullptr);
         sm2->deref(nullptr);
+        sm3->deref(nullptr);
         other_target = other;
-        if (!restricted || !trusted || !other || !sb1 || !sb1b || !sb2) {
+        if (!restricted || !trusted || !other || !sb1 || !sb1b || !sb2 || !sb3) {
             fprintf(stderr, "cannot create the Programs\n");
             rc = 1;
         } else if (scenario == "shadow-restricted") {
@@ -347,11 +356,17 @@ int main(int argc, char** argv) {
                 use("use", "LiftMod", sb1);
             }
             load("other-sandbox-register", "LiftMod", sb2);
+        } else if (scenario == "native-sandboxed") {
+            // code whose sandbox refuses uncontrolled APIs cannot have the process load native code from outside the
+            // module path (issue #6776); the statically linked module is no such load
+            if (load("register", "TenantMod", sb3)) {
+                use("use", "TenantMod", sb3);
+            }
         } else {
             fprintf(stderr, "unknown scenario '%s'\n", scenario.c_str());
             rc = 2;
         }
-        for (QoreProgram* pgm : {restricted, trusted, other, sb1, sb1b, sb2}) {
+        for (QoreProgram* pgm : {restricted, trusted, other, sb1, sb1b, sb2, sb3}) {
             if (pgm) {
                 release(pgm);
             }
