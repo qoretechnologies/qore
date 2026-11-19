@@ -576,6 +576,10 @@ module SqlUtil {
       (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
     - fixed a select-first upsert, which updated an unchanged row when the driver gives a column's name in another case
       (ex: a mixed-case name on MySQL) (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
+    - fixed the upserts, which did not find the row of a key that the column rounds or pads when it stores it (ex: a
+      date with fractional seconds in a column with whole seconds, Oracle \c CHAR): the key values are compared and,
+      in a \c MERGE, selected converted to the column's type, as the \c delete_others option compares them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6676">issue 6676</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index

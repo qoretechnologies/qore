@@ -795,6 +795,8 @@ table.create();
         @note it's generally not safe to call this method while SQL operations are in progress in other threads on the same table
     */
     setDatasource(AbstractDatasource nds) {
+        # the types of the key columns are read from the new datasource (issue #6676)
+        remove upsert_key_casts;
         l.lock();
         on_exit l.unlock();
 
@@ -4736,6 +4738,34 @@ map upsert($1), row_list;
 
         Columns cols = checkUpsertRow(upsert_row, \upsert_strategy);
 
+        code<int(hash<auto>)> c = getUpsertStrategyClosure(cols, row, upsert_strategy, opt);
+        # the SQL converts the key values by the types of the values of the example row (ex: MySQL converts a number
+        # bound as a string to an integer column otherwise than a float): a row whose key values need other
+        # conversions uses a closure of its own, made from it (issue #6676)
+        *hash<string, string> casts = getUpsertKeyCastTypes(cols);
+        if (!casts) {
+            return c;
+        }
+        # the conversions are taken once, so that a row costs only the signature of its values
+        hash<string, code> by_sig = {getUpsertCastSignatureIntern(casts, row): c};
+        int strategy = upsert_strategy;
+        return int sub (hash<auto> r) {
+            # rows of list values (bulk DML) use the closure of the example row
+            if (r.firstValue().typeCode() == NT_LIST) {
+                return c(r);
+            }
+            string sig = getUpsertCastSignatureIntern(casts, r);
+            *code rc = by_sig{sig};
+            if (!rc) {
+                rc = by_sig{sig} = getUpsertStrategyClosure(cols, r, strategy, opt);
+            }
+            return rc(r);
+        };
+    }
+
+    #! returns the closure of an upsert strategy for the given key columns and example row
+    private code<int(hash<auto>)> getUpsertStrategyClosure(Columns cols, hash<auto> row, int upsert_strategy,
+            *hash<auto> opt) {
         switch (upsert_strategy) {
             case UpsertInsertFirst:
                 return getUpsertInsertFirst(cols, row, opt);
@@ -5201,6 +5231,9 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         const DeleteOthersLookupBlockSize = 100;
         #! the largest number of values that a lookup of doDeleteOthersIntern() binds (SQL Server binds at most 2100)
         const DeleteOthersLookupMaxArgs = 2000;
+
+        #! the types that upserts convert the bound values of key columns to, by the key columns (issue #6676)
+        hash<string, *hash<string, string>> upsert_key_casts;
     }
 
     #! returns the SQL types that the "delete_others" upsert option converts the values of key columns to when it looks them up
@@ -5211,12 +5244,24 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         it (ex: \c "numeric(10,2)",
         \c "timestamp(0) without time zone"), or @ref nothing if the values are compared as they are bound
 
-        doDeleteOthersIntern() compares a bound input value converted to this type with the stored value, so that a
+        doDeleteOthersIntern() and the upserts (issue #6676) compare a bound input value converted to this type with
+        the stored value, so that a
         value that the column rounds (ex: \c 10:00:00.7 in a \c timestamp(0) column, \c 1.005 in a
         \c numeric(10,2) column, \c 1.4 in an integer column) is found; the base class returns @ref nothing; a driver
         whose database rounds values when it stores them returns the types from its catalog (issue #6635)
     */
     private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+    }
+
+    #! returns the SQL expression that converts a key value to the type of its column for a comparison with the stored value (issues #6635, #6676)
+    /** @param expr the expression of the value (ex: \c "%v" for a bound value)
+        @param type the type from getDeleteOthersKeyCastType()
+
+        @return \c "cast(<expr> as <type>)"; a driver whose cast of a longer value truncates it returns an expression
+        that gives \c NULL for such a value, so that it matches no row
+    */
+    private string getKeyCastExpr(string expr, string type) {
+        return sprintf("cast(%s as %s)", expr, type);
     }
 
     #! returns the SQL type that the "delete_others" upsert option converts a bound key value to for its lookup
@@ -5253,7 +5298,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
                     continue;
                 }
                 *string ct = casts{col} ? getDeleteOthersKeyCastType(casts{col}, v) : NOTHING;
-                cond += cn + " = " + (ct ? "cast(%v as " + ct + ")" : "%v");
+                cond += cn + " = " + (ct ? getKeyCastExpr("%v", ct) : "%v");
                 args += v;
             }
             conds += "(" + cond.join(" and ") + ")";
@@ -9066,7 +9111,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         list updc = ();
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
         # a row with only key columns (or with all other columns omitted from the update) has nothing to update
-        *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols);
+        *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols, example_row);
 
         return int sub (hash<auto> row) {
             if (tryInsertImpl(insert_sql, row)) {
@@ -9139,7 +9184,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     */
     private code<int(hash<auto>)> getUpsertInsertOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
-        string key_sql = getUpsertKeySelectSql(cols);
+        string key_sql = getUpsertKeySelectSql(cols, example_row);
 
         return int sub (hash<auto> row) {
             if (tryInsertImpl(insert_sql, row)) {
@@ -9155,12 +9200,78 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         };
     }
 
+    #! returns the conditions of an upsert's SQL that compare the key columns with their bound values
+    /** @param cols the key columns
+        @param example_row a row of the input, whose value types select the conversion of the bound values
+
+        @return the conditions joined with \c "and"; a key column whose values the database rounds or pads when it
+        stores them (getDeleteOthersKeyCastTypes()) is compared with its bound value converted as the database stores
+        it, so that the row of a key given in another form than it is stored in is found (issue #6676)
+    */
+    private string getUpsertKeyConditions(Columns cols, hash<auto> example_row) {
+        return (map getColumnSqlName($1) + " = " + getUpsertValuePlaceholder(cols, example_row, $1), cols.keys())
+            .join(" and ");
+    }
+
+    #! returns the placeholder of a value of an upsert: a value of a key column that the database rounds or pads when it stores it is converted as the database stores it (issue #6676)
+    /** @param cols the key columns
+        @param example_row a row of the input, whose value types select the conversion of the bound values
+        @param col the column of the value
+
+        @return \c "cast(%v as <type>)" for a key column with a type from getDeleteOthersKeyCastTypes(), otherwise
+        \c "%v"; a driver's upsert that compares or selects key values in SQL of its own (ex: a \c MERGE statement)
+        uses it for the key values, so that the row stored for a key is found
+    */
+    private string getUpsertValuePlaceholder(Columns cols, hash<auto> example_row, string col) {
+        *string ct = getUpsertKeyCastType(cols, example_row, col);
+        return ct ? getKeyCastExpr("%v", ct) : "%v";
+    }
+
+    #! returns the type that an upsert converts the bound value of a key column to, or @ref nothing (issue #6676)
+    private *string getUpsertKeyCastType(Columns cols, hash<auto> example_row, string col) {
+        if (!cols.hasKey(col)) {
+            return;
+        }
+        *string type = getUpsertKeyCastTypes(cols){col};
+        return type ? getDeleteOthersKeyCastType(type, example_row{col}) : NOTHING;
+    }
+
+    #! returns the types of the key columns that upserts convert bound values to, read from the catalog once for each set of key columns and cached until clear() (issue #6676)
+    private *hash<string, string> getUpsertKeyCastTypes(Columns cols) {
+        list<string> kl = cols.keys();
+        string ck = kl.join("\x01");
+        # upsert() makes a closure for each row: the catalog is not read each time
+        if (!upsert_key_casts.hasKey(ck)) {
+            upsert_key_casts{ck} = getDeleteOthersKeyCastTypes(kl);
+        }
+        return upsert_key_casts{ck};
+    }
+
+    #! returns the conditions of the \c ON clause of a \c MERGE upsert that compare the key columns of the target \c t with the values of \c source (issue #6676)
+    /** a value is converted as the column stores it for the comparison only, so that the value inserted is the value
+        as bound, as with a plain insert
+    */
+    private string getUpsertMergeKeyConditions(Columns cols, hash<auto> example_row, string eq = " = ") {
+        list<string> conds = ();
+        foreach string col in (cols.keyIterator()) {
+            string cn = getColumnSqlName(col);
+            *string ct = getUpsertKeyCastType(cols, example_row, col);
+            conds += sprintf("t.%s%s%s", cn, eq, ct ? getKeyCastExpr("source." + cn, ct) : "source." + cn);
+        }
+        return conds.join(" and ");
+    }
+
+    #! returns the signature of the conversions of the key values of a row by an upsert: rows with the same signature use the same SQL (issue #6676)
+    private string getUpsertCastSignatureIntern(hash<string, string> casts, hash<auto> row) {
+        return (map getDeleteOthersKeyCastType($1.value, row{$1.key}) ?? "-", casts.pairIterator()).join("\x01");
+    }
+
     #! Returns SQL that selects the row with the upsert key given by the bind values of the key columns in order
-    private string getUpsertKeySelectSql(Columns cols) {
+    private string getUpsertKeySelectSql(Columns cols, hash<auto> example_row) {
         return sprintf("select %s from %s where %s",
             (foldl $1 + ", " + $2, getColumnSqlNames(cols.keys())),
             getSqlName(),
-            (foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator())));
+            getUpsertKeyConditions(cols, example_row));
     }
 
     private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
@@ -9257,7 +9368,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         return sprintf("select %s from %s where %s",
                         (foldl $1 + ", " + $2, getColumnSqlNames(updc)),
                         getSqlName(),
-                        (foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator()))
+                        getUpsertKeyConditions(cols, row)
             );
     }
 
@@ -9282,7 +9393,7 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string sql = sprintf("update %s set ", getSqlName());
         sql += foldl $1 + ", " + $2, (map getColumnSqlName($1) + " = " + getColumnValuePlaceholder($1), updc);
         sql += " where ";
-        sql += foldl $1 + " and " + $2, (map sprintf("%s = %v", getColumnSqlName($1)), cols.keyIterator());
+        sql += getUpsertKeyConditions(cols, row);
 
         return sql;
     }
@@ -9402,6 +9513,8 @@ table.clear();
         @endcode
     */
     clear() {
+        # the types of the key columns are read again (issue #6676)
+        remove upsert_key_casts;
         l.lock();
         on_exit l.unlock();
 

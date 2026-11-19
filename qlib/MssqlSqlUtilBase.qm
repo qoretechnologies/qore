@@ -2801,7 +2801,9 @@ public class MssqlTable inherits SqlUtil::AbstractTable {
         sql += ") as source (";
         sql += foldl $1 + "," + $2, getColumnSqlNames(row.keys());
         sql += ") on (";
-        sql += foldl $1 + " and " + $2, (map sprintf("t.%s=source.%s", $1, $1), getColumnSqlNames(cols.keys()));
+        # the stored key is compared with the bound value converted as the column stores it; the value inserted is the
+        # value as bound, as with a plain insert (issue #6676)
+        sql += getUpsertMergeKeyConditions(cols, row, "=");
         sql += ")";
         if (upsert_strategy != UpsertInsertOnly) {
             sql += sprintf(" when matched then update set ");
