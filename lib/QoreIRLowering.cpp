@@ -163,6 +163,7 @@
 #include <qore/intern/qore_list_private.h>
 
 #include <atomic>
+#include <optional>
 
 // Forward declaration from Function.cpp - collects all locals from a statement tree
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -181,17 +182,15 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
     pre-instantiated; the InstantiateLocal makes it a local of the handler (see QoreIRInterpreter's own locals).
 */
 //! Reserves slots in the function an on_block_exit handler belongs to for the locals that the handler declares
-static void qore_ir_reserve_handler_local_slots(QoreIRFunction& parent_func, const StatementBlock* handler_code) {
-    std::vector<LocalVar*> handler_locals;
-    collectAllStatementLocals(handler_code, handler_locals);
+static void qore_ir_reserve_handler_local_slots(QoreIRFunction& parent_func,
+        const std::vector<LocalVar*>& handler_locals) {
     for (LocalVar* lv : handler_locals) {
         parent_func.reserveLocalSlot(lv);
     }
 }
 
-static void qore_ir_scope_handler_own_locals(QoreIRFunction& handler_func, const StatementBlock* handler_code) {
-    std::vector<LocalVar*> handler_locals;
-    collectAllStatementLocals(handler_code, handler_locals);
+static void qore_ir_scope_handler_own_locals(QoreIRFunction& handler_func,
+        const std::vector<LocalVar*>& handler_locals) {
     for (LocalVar* lv : handler_locals) {
         if (lv) {
             handler_func.pre_instantiated_locals.erase(reinterpret_cast<const void*>(lv));
@@ -6247,8 +6246,8 @@ static std::string qore_ir_next_handler_name(QoreIRFunction* parent) {
 */
 struct QoreIRLowering::HandlerIRCache {
     struct Entry {
-        //! the parent's local slots that the function was compiled with
-        std::unordered_map<const LocalVar*, uint32_t> parent_slots;
+        //! Bindings inherited by the handler, before it assigns slots to any private locals.
+        std::vector<std::pair<const LocalVar*, uint32_t>> parent_slots;
         const StatementBlock* source_statement_block;
         void* source_dpgm_addr;
         QoreProgram* pgm;
@@ -6256,17 +6255,66 @@ struct QoreIRLowering::HandlerIRCache {
         bool emit_debug_statements;
         LocalVar* self_local;
         std::shared_ptr<QoreIRFunction> func;
+        std::optional<bool> uses_only_parent_slots = std::nullopt;
 
-        bool matches(const QoreIRFunction& parent, LocalVar* n_self_local) const {
-            return self_local == n_self_local && source_statement_block == parent.source_statement_block
-                && source_dpgm_addr == parent.source_dpgm_addr && pgm == parent.pgm && pgm_id == parent.pgm_id
-                && emit_debug_statements == parent.emit_debug_statements && parent_slots == parent.local_var_slots;
+        bool matches(const QoreIRFunction& parent, LocalVar* n_self_local, const StatementBlock* code) {
+            if (self_local != n_self_local || source_statement_block != parent.source_statement_block
+                    || source_dpgm_addr != parent.source_dpgm_addr || pgm != parent.pgm || pgm_id != parent.pgm_id
+                    || emit_debug_statements != parent.emit_debug_statements) {
+                return false;
+            }
+            const auto& slots = parent.local_var_slots;
+            if (slots.size() < parent_slots.size()) {
+                return false;
+            }
+            for (const auto& [lv, slot] : parent_slots) {
+                auto i = slots.find(lv);
+                if (i == slots.end() || i->second != slot) {
+                    return false;
+                }
+            }
+            if (slots.size() == parent_slots.size()) {
+                return true;
+            }
+            // Every inherited binding still exists at the same position. A wider parent can use this
+            // frame only if it omits no dependency and none of the extra slots can extend an object's lifetime.
+            if (func->local_var_slots.size() != parent_slots.size()
+                    || (!parent_slots.empty() && func->max_local_slot_id >= func->parent_slot_count)) {
+                return false;
+            }
+            for (const auto& [lv, slot] : slots) {
+                if (func->local_var_slots.count(lv)) {
+                    continue;
+                }
+                const QoreTypeInfo* ti = lv->getTypeInfo();
+                if (slot < func->parent_slot_count || lv->closureUse()
+                        || (ti != boolTypeInfo && ti != bigIntTypeInfo && ti != floatTypeInfo)) {
+                    return false;
+                }
+            }
+            // An embedded expression or a handler nested in this one can depend on a local without a slot
+            // instruction in this function. An opaque dependency still requires the original layout.
+            if (!uses_only_parent_slots.has_value()) {
+                std::unordered_set<const void*> used;
+                uses_only_parent_slots = func->collectHandlerBodyLocals(code, used)
+                    && std::all_of(used.begin(), used.end(), [&](const void* lv) {
+                        return func->local_var_slots.count(static_cast<const LocalVar*>(lv));
+                    });
+            }
+            return *uses_only_parent_slots;
         }
+    };
+    struct Body {
+        explicit Body(const StatementBlock* code) {
+            collectAllStatementLocals(code, locals);
+        }
+        std::vector<LocalVar*> locals;
+        std::vector<Entry> entries;
     };
     //! the function whose lowering created the cache
     const QoreIRFunction* root = nullptr;
     //! the functions compiled for each handler body
-    std::unordered_map<const StatementBlock*, std::vector<Entry>> handlers;
+    std::unordered_map<const StatementBlock*, Body> handlers;
 };
 
 int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
@@ -6315,24 +6363,23 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // locals then had slots only in the handler's IR, so the expression trees of the handler that use them (a
         // reference, \var) could not be serialized against the slot table of the function (qcc failed for a
         // closure; qore#5657); a local that has a slot keeps it
-        qore_ir_reserve_handler_local_slots(*parent_func, handler.code);
-
-        // the same handler compiled before with the same parent slots has the same function (see HandlerIRCache)
-        // a lowering that lowers another function starts a cache of its own
+        // A lowering that lowers another function starts a cache of its own. All registrations of this
+        // statement share its declarations, including when their frame layouts require different bodies.
         if (!handler_ir_cache || (!handler_body && handler_ir_cache->root != parent_func)) {
             handler_ir_cache = std::make_shared<HandlerIRCache>();
             handler_ir_cache->root = parent_func;
         }
-        {
-            const std::vector<HandlerIRCache::Entry>& cached = handler_ir_cache->handlers[handler.code];
-            auto i = std::find_if(cached.begin(), cached.end(), [&](const HandlerIRCache::Entry& e) {
-                return e.matches(*parent_func, self_local);
-            });
-            if (i != cached.end()) {
-                handler.obe_inst->handler_ir = i->func;
-                compiled_count++;
-                continue;
+        auto& body = handler_ir_cache->handlers.try_emplace(handler.code, handler.code).first->second;
+        qore_ir_reserve_handler_local_slots(*parent_func, body.locals);
+        for (auto& entry : body.entries) {
+            if (entry.matches(*parent_func, self_local, handler.code)) {
+                handler.obe_inst->handler_ir = entry.func;
+                break;
             }
+        }
+        if (handler.obe_inst->handler_ir) {
+            ++compiled_count;
+            continue;
         }
 
         auto handler_func = std::make_unique<QoreIRFunction>(std::move(handler_name));
@@ -6359,7 +6406,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
-        qore_ir_scope_handler_own_locals(*handler_func, handler.code);
+        qore_ir_scope_handler_own_locals(*handler_func, body.locals);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
@@ -6387,7 +6434,8 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // the handlers nested in the handler share the functions compiled for the function
         handler_lowering.handler_ir_cache = handler_ir_cache;
         // what the function is compiled with, for the cache
-        HandlerIRCache::Entry cache_entry{parent_func->local_var_slots, parent_func->source_statement_block,
+        HandlerIRCache::Entry cache_entry{{parent_func->local_var_slots.begin(), parent_func->local_var_slots.end()},
+            parent_func->source_statement_block,
             parent_func->source_dpgm_addr, parent_func->pgm, parent_func->pgm_id,
             parent_func->emit_debug_statements, self_local, nullptr};
         const unsigned bg_helpers_before = *bg_helper_count;
@@ -6413,9 +6461,12 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
             continue;
         }
 
-        // Recursively compile any nested handlers inside this handler body
+        // Block lowering has already compiled its nested handlers. The final slot pass below supplies
+        // their containing frame; running compileAllHandlerIRs with an empty list would rebuild it twice.
         std::string nested_error;
-        handler_lowering.compileAllHandlerIRs(nested_error);
+        if (!handler_lowering.saved_top_level_handlers.empty()) {
+            handler_lowering.compileAllHandlerIRs(nested_error);
+        }
         if (!nested_error.empty()) {
             if (!error.empty()) {
                 error += "; ";
@@ -6444,7 +6495,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         // a function with background helpers is not shared: the names of their parameters are unique in the function
         if (nested_error.empty() && *bg_helper_count == bg_helpers_before) {
             cache_entry.func = handler.obe_inst->handler_ir;
-            handler_ir_cache->handlers[handler.code].push_back(std::move(cache_entry));
+            body.entries.push_back(std::move(cache_entry));
         }
     }
 
@@ -6510,7 +6561,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // locals then had slots only in the handler's IR, so the expression trees of the handler that use them (a
         // reference, \var) could not be serialized against the slot table of the function (qcc failed for a
         // closure; qore#5657); a local that has a slot keeps it
-        qore_ir_reserve_handler_local_slots(*parent_func, handler.code);
+        std::vector<LocalVar*> handler_locals;
+        collectAllStatementLocals(handler.code, handler_locals);
+        qore_ir_reserve_handler_local_slots(*parent_func, handler_locals);
         uint32_t parent_slot_count = parent_func->local_var_slots.size();
         handler_func->local_var_slots = parent_func->local_var_slots;
         handler_func->parent_slot_count = parent_slot_count;
@@ -6522,7 +6575,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
                 handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
-        qore_ir_scope_handler_own_locals(*handler_func, handler.code);
+        qore_ir_scope_handler_own_locals(*handler_func, handler_locals);
 
         // Create entry block for handler
         QoreIRBasicBlock* entry = handler_func->createBlock("entry");
