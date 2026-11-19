@@ -5207,7 +5207,8 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
     /** @param pkl the columns of the primary key
 
         @return the SQL type of each key column whose values the database rounds or converts when it stores them (a
-        numeric, date or time type), as the database declares it (ex: \c "numeric(10,2)",
+        numeric, date or time type, or a fixed-length character type that the database pads), as the database declares
+        it (ex: \c "numeric(10,2)",
         \c "timestamp(0) without time zone"), or @ref nothing if the values are compared as they are bound
 
         doDeleteOthersIntern() compares a bound input value converted to this type with the stored value, so that a
@@ -5222,11 +5223,12 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
     /** @param type the type of the column given by getDeleteOthersKeyCastTypes()
         @param val the value of the key that is bound
 
-        @return the type to convert the value to; the base class returns \a type; a driver whose database converts
-        values of different types differently when it stores them (ex: MySQL rounds a string but a cast to an integer
-        type truncates it) returns the type that converts the value as the database stores it (issue #6635)
+        @return the type to convert the value to, or @ref nothing to compare the value as it is bound; the base class
+        returns \a type; a driver whose database converts values of different types differently when it stores them
+        (ex: MySQL rounds a string but a cast to an integer type truncates it) returns the type that converts the value
+        as the database stores it (issues #6635, #6675)
     */
-    private string getDeleteOthersKeyCastType(string type, auto val) {
+    private *string getDeleteOthersKeyCastType(string type, auto val) {
         return type;
     }
 
@@ -5250,8 +5252,8 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
                     cond += cn + " is null";
                     continue;
                 }
-                cond += cn + " = " + (casts{col} ? "cast(%v as " + getDeleteOthersKeyCastType(casts{col}, v) + ")"
-                    : "%v");
+                *string ct = casts{col} ? getDeleteOthersKeyCastType(casts{col}, v) : NOTHING;
+                cond += cn + " = " + (ct ? "cast(%v as " + ct + ")" : "%v");
                 args += v;
             }
             conds += "(" + cond.join(" and ") + ")";

@@ -5068,12 +5068,15 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         \c "numeric(10,2)"), so that a bound value is rounded as the column rounds it when it stores it
     */
     private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
-        *hash<auto> qh = ds.select("select a.attname, format_type(a.atttypid, a.atttypmod) as type "
+        # a bpchar key is compared as a bpchar without its length, which ignores the padding of the stored value and of
+        # the input and, unlike a cast to the column's length, never truncates it (issue #6675)
+        *hash<auto> qh = ds.select("select a.attname, case when t.typname = 'bpchar' then 'bpchar' "
+            "else format_type(a.atttypid, a.atttypmod) end as type "
             "from pg_catalog.pg_attribute a join pg_catalog.pg_class c on (c.oid = a.attrelid) "
             "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) "
             "join pg_catalog.pg_type t on (t.oid = a.atttypid) "
             "where n.nspname = %v and c.relname = %v and a.attnum > 0 and not a.attisdropped "
-            "and t.typcategory in ('N', 'D', 'T')", schema, getRelationName());
+            "and (t.typcategory in ('N', 'D', 'T') or t.typname = 'bpchar')", schema, getRelationName());
         hash<string, string> rv;
         context (qh) {
             if (inlist(%attname, pkl)) {

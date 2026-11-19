@@ -2849,7 +2849,7 @@ end";
             decimals, which rounds it in the same way; a float is converted to the integer type, which rounds it as the
             database does
         */
-        private string getDeleteOthersKeyCastType(string type, auto val) {
+        private *string getDeleteOthersKeyCastType(string type, auto val) {
             if ((type == "signed" || type == "unsigned") && val.typeCode() != NT_FLOAT && val.typeCode() != NT_INT) {
                 return "decimal(65,0)";
             }
