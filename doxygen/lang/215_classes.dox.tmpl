@@ -405,12 +405,13 @@ softstring MyNamespace::MyClass::myMethod(softint i) {
     later parent class a public method of the same name, a call from outside the class hierarchy calls the public
     method, also when the method is looked up at run time (on an object whose class is not known when parsing, such as
     a value of type \c object, through @ref Qore::call_object_method() "call_object_method()", or through a
-    @ref call_reference "call reference" created from such a value); a call from inside the class hierarchy calls the
-    private method.  A private method overrides the methods of the same name of the parent classes of its class: a
-    call from outside the class hierarchy through a variable of a parent class, or resolved at run time, on an object
-    of the class raises \c METHOD-IS-PRIVATE instead of calling them, as it does when no method of the name can be
-    called (\c BASE-CLASS-IS-PRIVATE when the method is reached
-    only through private inheritance).\n\n
+    @ref call_reference "call reference" created from such a value); a call from the class of the private method, one
+    of its parent classes or one of its subclasses calls the private method.  Code of another parent class of the
+    object cannot call the private method, so a call there skips it as well and calls the first method of the name
+    that it can call, such as its own.  A private method overrides the methods of the same name of the parent classes
+    of its class: a call from outside the class hierarchy through a variable of a parent class, or resolved at run
+    time, on an object of the class raises \c METHOD-IS-PRIVATE instead of calling them, as it does when no method of
+    the name can be called (\c BASE-CLASS-IS-PRIVATE when the method is reached only through private inheritance).\n\n
     The body and the default argument values of a @ref qore_functions "function" are always outside every class and resolved in the function's namespace, also when the function is called from a method of the class, so they cannot call the class's private methods, rely on its private inheritance or see the method's local variables; a @ref closure "closure" declared in a method is inside the method's class.
 
     @subsection synchronized_methods Synchronized Methods

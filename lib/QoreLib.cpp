@@ -1648,6 +1648,16 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
         LocalStaticMethodCallReferenceNode::getRuntimeReceiverTypeInfo(*meth, pcls->cls, runtime_get_class())));
 }
 
+//! gives a private method of the class itself found by qore_class_private::runtimeFindCommittedMethodForEval() with a
+//! class context the access that the other run-time lookups give it, which do_method_intern() checks (qore#6759)
+static void runtime_raise_own_private_access(const qore_class_private* pcls, const QoreMethod* meth,
+        ClassAccess& access, const qore_class_private* class_ctx) {
+    if (class_ctx && class_ctx != pcls && access < Private && meth->getAccess() == Private
+            && qore_class_private::get(*meth->getClass()) == pcls) {
+        access = Private;
+    }
+}
+
 QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* identifier, ExceptionSink* xsink) {
     // the identifier is resolved as a C string, which would be cut at a NUL character and name another function or
     // method
@@ -1670,6 +1680,12 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
             const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(ns.getIdentifier(), access, class_ctx);
             if (!meth) {
                 meth = pcls->runtimeFindCommittedStaticMethod(ns.getIdentifier(), access, class_ctx);
+            } else {
+                runtime_raise_own_private_access(pcls, meth, access, class_ctx);
+            }
+            // the method that a call of the method makes from here (qore#6704, qore#6759)
+            if (meth && access > Public) {
+                meth = pcls->runtimeFindCallableCommittedMethod(ns.getIdentifier(), meth, access, class_ctx);
             }
             //printd(5, "get_call_reference_intern() '%s' -> cls: '%s' ctx: '%s' meth: %p\n", name->c_str(), cls->getName(), class_ctx ? class_ctx->name.c_str() : "n/a", meth);
             if (meth) {
@@ -1682,6 +1698,12 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
         const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name->c_str(), access, class_ctx);
         if (!meth) {
             meth = pcls->runtimeFindCommittedStaticMethod(name->c_str(), access, class_ctx);
+        } else {
+            runtime_raise_own_private_access(pcls, meth, access, class_ctx);
+        }
+        // the method that a call of the method makes from here (qore#6704, qore#6759)
+        if (meth && access > Public) {
+            meth = pcls->runtimeFindCallableCommittedMethod(name->c_str(), meth, access, class_ctx);
         }
         if (meth) {
             return do_method_intern(self, meth, access, name->c_str(), pcls, xsink);
