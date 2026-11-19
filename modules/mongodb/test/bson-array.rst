@@ -25,7 +25,11 @@ through 1,005 elements, BSON type validation and round trips, nulls at both
 ends, UTF-8 strings, nested arrays/documents, and invalid UTF-16 after both
 small and buffer-growing partial arrays.  Cancellation checks cover zero,
 one, 99, 100, 101 and 1,005 elements, cleanup deferral, preserved pending
-requests and recovery.  A sandbox control exercises program interruption.
+requests and recovery.  A sandbox control exercises program interruption.  Documents
+with strings, keys, code, symbols, regular expressions and their options and
+DBPointer collections that are not valid UTF-8 (built from raw bytes where
+libbson refuses to append them) raise INVALID-ENCODING, and valid text other
+than ASCII is converted tagged UTF-8 (qore#6604).
 
 ``bson_append_array_unsafe_begin`` is the supported name of the old array
 begin function starting with libbson 2.3.  Qore supplies every contiguous key

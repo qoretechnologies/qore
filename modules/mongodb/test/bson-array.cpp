@@ -241,6 +241,123 @@ void programInterruption() {
         "conversion did not recover after sandbox interruption");
 }
 
+// converts the document to a hash and returns the description of the INVALID-ENCODING exception raised, or an
+// empty string if none is raised
+std::string invalidEncodingDesc(const bson_t& doc) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(bson_to_qore_hash(&doc, &xsink), &xsink);
+    if (!xsink) {
+        return std::string();
+    }
+    QoreValue err = xsink.getExceptionErr();
+    QoreValue desc = xsink.getExceptionDesc();
+    std::string rv = err.getType() == NT_STRING && !std::strcmp(err.get<const QoreStringNode>()->c_str(),
+        "INVALID-ENCODING") && desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : "(other)";
+    xsink.clear();
+    return rv;
+}
+
+// a BSON string or key that is not valid UTF-8 raises INVALID-ENCODING where the document is converted (qore#6604);
+// libbson does not check the strings of a document it reads
+void invalidUtf8() {
+    const char invalid[] = "a\xe9b";
+    // a string value, also in a nested document and in an array
+    {
+        Document doc;
+        bson_append_utf8(&doc.value, "s", -1, invalid, 3);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON string is not valid UTF-8: invalid byte sequence "
+            "at byte offset 1", "an invalid BSON string was accepted");
+    }
+    {
+        Document sub;
+        bson_append_utf8(&sub.value, "t", -1, "\xed\xa0\x80", 3);
+        Document doc;
+        bson_append_document(&doc.value, "d", -1, &sub.value);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON string is not valid UTF-8: invalid byte sequence "
+            "at byte offset 0", "a surrogate in a nested BSON string was accepted");
+    }
+    {
+        Document arr;
+        bson_append_utf8(&arr.value, "0", -1, "ok", 2);
+        bson_append_utf8(&arr.value, "1", -1, "\xc0\xaf", 2);
+        Document doc;
+        bson_append_array(&doc.value, "a", -1, &arr.value);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON string is not valid UTF-8: invalid byte sequence "
+            "at byte offset 0", "an overlong form in a BSON array was accepted");
+    }
+    // a key
+    {
+        // libbson refuses to append a key that is not valid UTF-8, but a document read is not checked: the bytes of
+        // {"a\\xe9b": 1} (an int32 element)
+        static const uint8_t data[] = {14, 0, 0, 0, 0x10, 'a', 0xe9, 'b', 0, 1, 0, 0, 0, 0};
+        bson_t doc;
+        require(bson_init_static(&doc, data, sizeof data), "cannot read the BSON document with an invalid key");
+        require(invalidEncodingDesc(doc) == "MongoDB: the BSON key is not valid UTF-8: invalid byte sequence at "
+            "byte offset 1", "an invalid BSON key was accepted");
+    }
+    // code, symbol, code with scope, a regular expression and its options, a DBPointer collection
+    {
+        Document doc;
+        bson_append_code(&doc.value, "c", -1, invalid);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON code is not valid UTF-8: invalid byte sequence at "
+            "byte offset 1", "invalid BSON code was accepted");
+    }
+    {
+        Document doc;
+        bson_append_symbol(&doc.value, "y", -1, invalid, 3);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON symbol is not valid UTF-8: invalid byte sequence "
+            "at byte offset 1", "an invalid BSON symbol was accepted");
+    }
+    {
+        Document scope;
+        Document doc;
+        bson_append_code_with_scope(&doc.value, "w", -1, invalid, &scope.value);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON code is not valid UTF-8: invalid byte sequence at "
+            "byte offset 1", "invalid BSON code with scope was accepted");
+    }
+    {
+        Document doc;
+        bson_append_regex(&doc.value, "r", -1, invalid, "i");
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON regular expression is not valid UTF-8: invalid "
+            "byte sequence at byte offset 1", "an invalid BSON regular expression was accepted");
+    }
+    {
+        // libbson keeps only the option letters it knows on append: the bytes of {"r": /x/<ff>}
+        static const uint8_t data[] = {12, 0, 0, 0, 0x0b, 'r', 0, 'x', 0, 0xff, 0, 0};
+        bson_t doc;
+        require(bson_init_static(&doc, data, sizeof data), "cannot read the BSON document with invalid options");
+        require(invalidEncodingDesc(doc) == "MongoDB: the BSON regular expression options is not valid UTF-8: "
+            "invalid byte sequence at byte offset 0", "invalid BSON regular expression options were accepted");
+    }
+    {
+        Document doc;
+        bson_oid_t oid;
+        bson_oid_init_from_string(&oid, "0123456789abcdef01234567");
+        bson_append_dbpointer(&doc.value, "p", -1, invalid, &oid);
+        require(invalidEncodingDesc(doc.value) == "MongoDB: the BSON DBPointer collection is not valid UTF-8: invalid "
+            "byte sequence at byte offset 1", "an invalid BSON DBPointer collection was accepted");
+    }
+    // valid text other than ASCII is converted, tagged UTF-8
+    {
+        Document doc;
+        bson_append_utf8(&doc.value, "k\xc3\xa9", -1, "\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80", -1);
+        bson_append_regex(&doc.value, "r", -1, "^\xc3\xa9", "i");
+        ExceptionSink xsink;
+        ReferenceHolder<QoreHashNode> h(bson_to_qore_hash(&doc.value, &xsink), &xsink);
+        require(h && !xsink, "valid BSON text was refused");
+        QoreValue v = h->getKeyValue("k\xc3\xa9");
+        require(v.getType() == NT_STRING && v.get<const QoreStringNode>()->getEncoding() == QCS_UTF8
+            && !std::strcmp(v.get<const QoreStringNode>()->c_str(), "\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80"),
+            "valid BSON string changed");
+        QoreValue r = h->getKeyValue("r");
+        require(r.getType() == NT_HASH, "BSON regular expression is not a hash");
+        QoreValue re = r.get<const QoreHashNode>()->getKeyValue("$regex");
+        require(re.getType() == NT_STRING && re.get<const QoreStringNode>()->getEncoding() == QCS_UTF8
+            && !std::strcmp(re.get<const QoreStringNode>()->c_str(), "^\xc3\xa9"),
+            "valid BSON regular expression changed or is not tagged UTF-8");
+    }
+}
+
 } // namespace
 
 int main() {
@@ -252,6 +369,7 @@ int main() {
         conversionFailures();
         cancellation();
         programInterruption();
+        invalidUtf8();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAIL after %u checks: %s\n", checks, error.what());
         status = 1;
