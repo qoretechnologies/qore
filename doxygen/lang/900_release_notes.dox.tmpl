@@ -157,9 +157,9 @@
     @ref websocketclientintro "WebSocketClient" over HTTP/1.1, HTTP/2 and HTTP/3 (issues #6554, #6604).
 
     @par Error Responses Give No Exception Location Unless Debugging Is Enabled
-    The error response of @ref httpserverintro "HttpServer" for a handler's exception and the \c 409 body of
-    @ref resthandlerintro "RestHandler" no longer give the location of the exception in the server's code or its call
-    stack unless debugging is enabled (@ref restexceptions; issue #6780).
+    The error responses for an exception of @ref httpserverintro "HttpServer", @ref resthandlerintro "RestHandler"
+    (its \c 409 body), \c DataStreamRequestHandler and \c YamlRpcHandler no longer give the location of the exception
+    in the server's code or its call stack unless debugging is enabled (@ref restexceptions; issue #6780).
 
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an

@@ -34,7 +34,11 @@
 %requires HttpServerUtil
 %requires HttpServer
 %requires RestHandler
+%requires DataStreamUtil
+%requires DataStreamRequestHandler
+%requires YamlRpcHandler
 %requires json
+%requires yaml
 
 %exec-class HttpServerErrorBodyLocationTest
 
@@ -77,6 +81,15 @@ class ThrowRestClass inherits AbstractRestClass {
         return RestHandler::makeResponse(200, 1 / i);
     }
 
+    hash<HttpHandlerResponseInfo> getWrapped(hash<auto> cx, *hash<auto> ah) {
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex) {
+            # as AbstractDataProvider::getWrappedExceptionArg() does
+            throw "WRAP-ERROR", "the wrapping error", {"key": "value", "ex": ex};
+        }
+    }
+
     hash<HttpHandlerResponseInfo> getChained(hash<auto> cx, *hash<auto> ah) {
         # an exception raised in an on_exit block while another one is raised is chained to it
         on_exit throw "INNER-ERROR", "the inner error";
@@ -88,10 +101,39 @@ class OverrideRestHandler inherits RestHandler {
     private hash<HttpHandlerResponseInfo> returnRestException(hash<ExceptionInfo> ex) {
         return <HttpHandlerResponseInfo>{
             "code": 418,
-            "body": sprintf("override: %s: %s", ex.err, ex.desc),
+            "body": sprintf("override: %s: %s: location: %y", ex.err, ex.desc, exists ex.file),
         };
     }
 }
+
+#! A DataStream handler whose callback raised the exception given
+class ErrorDataStreamHandler inherits AbstractDataStreamRequestHandler {
+    constructor(hash<auto> cx, hash<ExceptionInfo> ex) : AbstractDataStreamRequestHandler(cx) {
+        self.ex = ex;
+    }
+
+    private auto sendDataImpl() {
+    }
+
+    private nothing recvDataImpl(auto data) {
+    }
+}
+
+#! the YAML-RPC methods
+const YamlRpcMethods = (
+    {
+        "name": "^error$",
+        "text": "error",
+        "function": sub () {
+            try {
+                throw "INNER-ERROR", "the inner error";
+            } catch (hash<ExceptionInfo> ex) {
+                throw "YAMLRPC-ERROR", "the description", {"key": "value", "ex": ex};
+            }
+        },
+        "help": "raises an exception",
+    },
+);
 
 class HttpServerErrorBodyLocationTest inherits QUnit::Test {
     private {
@@ -103,6 +145,8 @@ class HttpServerErrorBodyLocationTest inherits QUnit::Test {
         addTestCase("handler exceptions", \handlerTest());
         addTestCase("RestHandler exceptions", \restTest());
         addTestCase("RestHandler::returnRestException() override", \restOverrideTest());
+        addTestCase("DataStreamRequestHandler exceptions", \dataStreamTest());
+        addTestCase("YamlRpcHandler exceptions", \yamlRpcTest());
         set_return_value(main());
     }
 
@@ -183,6 +227,20 @@ class HttpServerErrorBodyLocationTest inherits QUnit::Test {
                 assertRegex(ThisFile, ex.file, label);
             }
 
+            # an exception wrapped in the argument, as data providers wrap the exception they rethrow
+            response = get("throw?action=wrapped");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("WRAP-ERROR", ex.err, label);
+            assertEq("value", ex.arg.key, label);
+            assertEq("INNER-ERROR", ex.arg.ex.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.arg.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.arg.ex.file, label);
+                assertGt(0, ex.arg.ex.callstack.size(), label);
+            }
+
             response = get("throw?action=chained");
             assertEq(409, response.status_code, label);
             ex = parse_json(response.body);
@@ -199,10 +257,86 @@ class HttpServerErrorBodyLocationTest inherits QUnit::Test {
     }
 
     restOverrideTest() {
-        # a subclass's returnRestException() makes the response
-        hash<auto> response = get("othrow?action=user");
-        assertEq(418, response.status_code);
-        # the subclass gets the exception as before, and its response is serialized
-        assertEq("override: REST-ERROR: the description", parse_json(response.body));
+        # a subclass's returnRestException() makes the response; it gets the exception without its location unless
+        # debugging is enabled
+        foreach bool debug in ((False, True)) {
+            server.setDebug(debug);
+            hash<auto> response = get("othrow?action=user");
+            assertEq(418, response.status_code);
+            assertEq(sprintf("override: REST-ERROR: the description: location: %y", debug), parse_json(response.body),
+                sprintf("debug: %y", debug));
+        }
+        server.setDebug(False);
+    }
+
+    #! the 409 body of a DataStream v1 request
+    dataStreamTest() {
+        hash<ExceptionInfo> ex;
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex1) {
+            try {
+                throw "DS-ERROR", "the description", {"key": "value", "ex": ex1};
+            } catch (hash<ExceptionInfo> ex2) {
+                ex = ex2;
+            }
+        }
+        foreach bool debug in ((False, True)) {
+            string label = sprintf("debug: %y", debug);
+            ErrorDataStreamHandler handler({
+                "socketobject": new Socket(),
+                "hdr": {
+                    DataStreamAccept.lwr(): DataStreamMimeTypeYaml,
+                    "content-type": DataStreamMimeTypeYaml,
+                },
+                "debug": debug,
+            }, ex);
+            hash<auto> response = handler.getErrorResponse();
+            assertEq(409, response.code, label);
+            hash<auto> body = parse_yaml(response.body);
+            assertEq("DS-ERROR", body.err, label);
+            assertEq("the description", body.desc, label);
+            assertEq("value", body.arg.key, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc", "arg")), sort(body.keys()), label);
+                assertEq(sort(("type", "err", "desc")), sort(body.arg.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, body.file, label);
+                assertRegex(ThisFile, body.arg.ex.file, label);
+            }
+        }
+    }
+
+    #! the error of a YAML-RPC call and the 500 body for a request body that cannot be parsed
+    yamlRpcTest() {
+        foreach bool debug in ((False, True)) {
+            string label = sprintf("debug: %y", debug);
+            YamlRpcHandler handler(new PermissiveAuthenticator(), YamlRpcMethods, NOTHING, debug);
+            hash<auto> cx = {"peer-info": {"address_desc": "127.0.0.1"}};
+            hash<auto> hdr = {"method": "POST", "path": "/YAML"};
+            hash<auto> response = handler.handleRequest(cx, hdr, make_yaml({"method": "error", "params": ()}));
+            assertEq(200, response.code, label);
+            hash<auto> error = parse_yaml(response.body).error;
+            assertEq(104, error.code, label);
+            assertEq("value", error.error.key, label);
+            assertEq("INNER-ERROR", error.error.ex.err, label);
+            if (!debug) {
+                assertEq("YAMLRPC-ERROR: the description", error.message, label);
+                assertEq(sort(("type", "err", "desc")), sort(error.error.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, error.message, label);
+                assertRegex(ThisFile, error.error.ex.file, label);
+            }
+            # its log message has the location also with debugging off
+            assertRegex(ThisFile, response.errlog, label);
+
+            response = handler.handleRequest(cx, hdr, "method: [");
+            assertEq(500, response.code, label);
+            if (!debug) {
+                assertFalse(response.body =~ /\.q[mc]?:[0-9]/, label + ": no location");
+            } else {
+                assertRegex("YamlRpcHandler\\.qm:[0-9]", response.body, label);
+            }
+        }
     }
 }

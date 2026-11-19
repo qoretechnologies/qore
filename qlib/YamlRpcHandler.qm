@@ -98,6 +98,8 @@ http.waitStop();
     @section yamlrpchandler_relnotes YamlRpcHandler Release Notes
 
     @subsection yamlrpchandler_v1_5 YamlRpcHandler v1.5
+    - the error of a method call and the response for a request body that cannot be parsed give the location of the
+      exception in the server's code and its call stack only when the handler's debugging is enabled (issue #6780)
     - the \c "name" pattern of a method is compiled when the method is added, which raises
       \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each request (issue #6603)
     - added module-level compile-time requirements: \c %strict-args, \c %require-types, \c %enable-all-warnings
@@ -271,7 +273,7 @@ public namespace YamlRpcHandler {
             try {
                 return make_yaml({"error": h}, flags);
             } catch (hash<ExceptionInfo> ex) {
-                h.error = sprintf("%s: %s: %s: %y", get_ex_pos(ex), ex.err, ex.desc, h);
+                h.error = sprintf("%s: %s: %y", ex.err, ex.desc, h);
                 return make_yaml({"error": h}, flags);
             }
         }
@@ -326,7 +328,8 @@ public namespace YamlRpcHandler {
                     return {
                         "code": 500,
                         "errlog": estr,
-                        "body": estr,
+                        # the location of the exception in the server's code only with debugging enabled (qore#6780)
+                        "body": debug ? estr : sprintf("%s: %s", ex.err, ex.desc),
                     };
                 }
             }
@@ -346,11 +349,16 @@ public namespace YamlRpcHandler {
                 string str = !debug
                     ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                     : get_exception_string(ex);
+                # the client gets the location of the exception in the server's code and its call stack only with
+                # debugging enabled (qore#6780)
                 return {
                     "code"   : 200,
                     "errlog" : str,
                     "hdr"    : {"Content-Type": MimeTypeYamlRpc},
-                    "body"   : YamlRpcHandler::makeErrorResponse(104, str, ex.arg)
+                    "body"   : debug
+                        ? YamlRpcHandler::makeErrorResponse(104, str, ex.arg)
+                        : YamlRpcHandler::makeErrorResponse(104, sprintf("%s: %s", ex.err, ex.desc),
+                            http_get_client_exception_info(ex).arg),
                 };
             }
         }

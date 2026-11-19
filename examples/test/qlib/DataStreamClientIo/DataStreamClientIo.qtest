@@ -96,6 +96,20 @@ class RestDataStreamHandler inherits RestHandler::RestHandler {
     }
 }
 
+#! Gives the error response handling of the client to the test
+class ErrorMessageDataStreamClientIo inherits DataStreamClient::DataStreamClientIo {
+    constructor(hash<auto> opts) : DataStreamClient::DataStreamClientIo(opts) {
+    }
+
+    testErrorResponse(binary body) {
+        throwErrorResponse(500, "Internal Server Error", body);
+    }
+
+    testConnectHttpErrorResponse(binary body) {
+        throwConnectHttpErrorResponse(500, "Internal Server Error", body);
+    }
+}
+
 class DataStreamClientIoTest inherits QUnit::Test {
     private {
         HttpServer m_http;
@@ -161,6 +175,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("max message size", \testMaxMessageSize());
         addTestCase("non-streaming unary (Connect)", \testNonStreamingConnect());
         addTestCase("connection class", \testConnectionClass());
+        addTestCase("server-side error messages", \testServerErrorMessage());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -278,6 +293,22 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     # ---- Protocol mode accessor tests ----
+
+    #! the location of a server-side error is given only when the server gives it (with debugging enabled,
+    #! qore#6780)
+    testServerErrorMessage() {
+        ErrorMessageDataStreamClientIo client({"url": getHttpUrl()});
+        binary plain = binary(make_yaml({"err": "DS-ERROR", "desc": "simulated server error"}));
+        binary located = binary(make_yaml({"err": "DS-ERROR", "desc": "simulated server error", "file": "x.q",
+            "line": 10, "endline": 10, "lang": "Qore"}));
+        assertThrows("DS-ERROR", "^server-side error: simulated server error$", \client.testErrorResponse(), plain);
+        assertThrows("DS-ERROR", "^server-side error: x\\.q:10 \\(Qore\\): simulated server error$",
+            \client.testErrorResponse(), located);
+        assertThrows("DS-ERROR", "^server-side error: simulated server error$", \client.testConnectHttpErrorResponse(),
+            plain);
+        assertThrows("DS-ERROR", "^server-side error: x\\.q:10 \\(Qore\\): simulated server error$",
+            \client.testConnectHttpErrorResponse(), located);
+    }
 
     testProtocolModeAccessors() {
         DataStreamClient::DataStreamClientIo client({"url": getHttpUrl()});
