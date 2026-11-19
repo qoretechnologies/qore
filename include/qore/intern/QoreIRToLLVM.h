@@ -1709,6 +1709,9 @@ private:
             const QoreIRInstruction* inst, llvm::Value* boxed, const QoreTypeInfo* return_type);
     //! Converts a NaN-boxed return value to the fast-entry return ABI
     llvm::Value* getFastEntryReturnValue(llvm::Module& module, llvm::Value* boxed);
+
+    //! Emit the debugger fallback of a typed native AOT function with its original arguments.
+    bool emitAOTDebugFastEntry(llvm::Module& module, llvm::Function& function, const BatchCalleeInfo& callee);
     bool selfRecursiveFastEntryArgsNeedNothingGuard(
             const std::vector<uint32_t>& raw_arg_ids) const;
 

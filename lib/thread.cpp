@@ -33,6 +33,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/FastRouteGuard.h"
+#include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreStatementTemps.h"
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
@@ -4048,6 +4049,22 @@ RuntimeLocationCache get_runtime_location_cache() {
         &td->runtime_statement,
         td
     };
+}
+
+extern "C" DLLEXPORT int qore_rt_enter_aot_fast_function(ExceptionSink* xsink, QoreNativeEntrySlots* slots) {
+    ThreadData* td = thread_data.get();
+#ifdef QORE_MANAGE_STACK
+    if (check_stack_intern(xsink, td)) {
+        return -1;
+    }
+#endif
+    if (td->current_pgm && qore_program_private::get(*td->current_pgm)->hasDebuggerAttached()) {
+        return 1;
+    }
+    slots->thread_data = td;
+    slots->loc_ptr = &td->runtime_loc;
+    slots->stmt_ptr = &td->runtime_statement;
+    return 0;
 }
 
 void set_parse_file_info(QoreProgramLocation& loc) {
