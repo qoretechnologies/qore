@@ -4378,6 +4378,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             scope_entry.try_end_depth = try_depth;
             scope_entry.try_outer_target = try_outer_target;
             pushBlockCleanup(scope_entry);
+            // the code that an exit lowers after it has left the try scope runs outside the try statement, whose catch
+            // block is the handler pushed just before (qore#6643): its exceptions go to the handler outside
+            BlockCleanupEntry& pushed = cleanup_stack.back();
+            assert(exception_stack.size() >= 1 && exception_stack.back() == catch_block);
+            pushed.exception_depth = exception_stack.size() - 1;
+            pushed.outer_exception_target = try_outer_target;
         }
         builder.createScopeEnter(try_scope_id);
         // the catch blocks without exit blocks in the try block whose statements' exceptions go to its landing pad

@@ -329,10 +329,11 @@ int qore_ir_verify_released_operand(const QoreIRInstruction& inst, QoreIRVerifyR
         case QoreIROpcode::RefForeachCleanup:
         case QoreIROpcode::RefForeachFinalize:
         case QoreIROpcode::ExceptionResume:
-        // the restore of the implicit arguments that a push saved: the arguments that it replaced are released (the
-        // interpreter's PopImplicitArg, qore_rt_pop_implicit_arg()), so a second restore from the same value would
-        // release the arguments that the first restored, which the frame that set them owns
-        case QoreIROpcode::PopImplicitArg:
+        // PopImplicitArg is not a release of its operand: it releases the arguments that the thread holds (those that the
+        // push set) and makes the saved ones (its operand) current again without taking the reference of the operand's
+        // slot, which SetImplicitArgv gives the frame and a ReleaseOwnedTemp releases after the pop; a second restore
+        // from the same value, which would release the arguments that the first one restored, is refused by the stack
+        // of the implicit arguments (qore_ir_verify_stack_effect())
         case QoreIROpcode::Decref:
         case QoreIROpcode::DecrefNoThrow:
             kind = QoreIRVerifyRelease::Object;
@@ -790,6 +791,20 @@ bool QoreIRVerifyOwnership::applyStack(QoreIRVerifyState& s, const QoreIRInstruc
     std::vector<uint32_t>& st = s.stacks[e.stack];
     if (e.push) {
         st.push_back(e.id);
+        return true;
+    }
+    // an implicit element is a value of the thread that a push saves and a pop restores: a pop restores the value from
+    // before the push that it names, so it also closes the elements pushed after that one, as a return out of nested
+    // loops that restores only the element of the outer one does; a pop of an element that is not open (closed
+    // already, as by the handler of a loop on the path of a return out of it, qore#6643) restores an older value
+    if (e.stack == QORE_IR_VERIFY_ELEMENTS && !e.keep) {
+        auto i = std::find(st.rbegin(), st.rend(), e.id);
+        if (i == st.rend()) {
+            error = "malformed IR: " + qore_ir_verify_opcode_name(inst) + " restores an implicit element that is not "
+                "open on every path to it" + where(b, pos);
+            return false;
+        }
+        st.resize(st.size() - (i - st.rbegin()) - 1);
         return true;
     }
     if (st.empty() || st.back() != e.id) {

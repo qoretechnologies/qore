@@ -1137,7 +1137,8 @@ int main(int argc, char** argv) {
         again->operands = pop->operands;
         auto& insts = fn.blocks[1]->instructions;
         insts.insert(insts.begin(), std::move(again));
-    }, Freed);
+    // the first restore closed the entry of its push on the stack of the implicit arguments
+    }, NotInnermost);
     run("handler with a landing pad of more scopes than are open", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         scopeHandler(fn, b, true);
     }, [](QoreIRFunction& fn) {

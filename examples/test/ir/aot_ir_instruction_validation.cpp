@@ -332,9 +332,12 @@ int main() {
             }
         };
     };
+    // the function of a check has only the instruction: a ScopeExit that is decoded is then refused by the verification
+    // of the stacks, as no scope is open (qore#6468), which happens only once the instruction has been decoded
+    const char* no_scope = "ScopeExit closes an entry of the scopes that is not the innermost one";
     run("ScopeExit without paths before the flow version", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}),
-        nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
-    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), nullptr, false, false,
+        no_scope, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), no_scope, false, false,
         QORE_AOT_DEBUG_FLOW_VERSION, 0);
     run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
         "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
