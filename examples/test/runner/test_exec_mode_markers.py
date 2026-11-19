@@ -197,6 +197,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   --exec-mode and in a qcc executable
         # - callref-object-method-program and reflection-typed-hash-visibility (#5692): their probes run in child
         #   processes that set their own --exec-mode
+        # - member-access-private-internal (#6640): its probe runs in child processes that set their own --exec-mode
+        #   and in a qcc executable
         # - deleted-program-types (#5790): its probes, reflection.q and bounded.qr run in child processes that set
         #   their own --exec-mode
         # - method-reference-per-class (#6062): its probes run in child processes that set their own --exec-mode and
@@ -371,6 +373,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qore/classes/param-class-check-steps/param-class-check-steps.qtest",
                                  "examples/test/qore/classes/private-internal-redeclared-member.qtest",
                                  "examples/test/qore/misc/reflection-typed-hash-visibility.qtest",
+                                 "examples/test/qore/classes/member-access-private-internal.qtest",
                                  "examples/test/ir/AOTModuleDelClosure.qtest",
                                  "examples/test/ir/AOTNestedFind.qtest",
                                  "examples/test/ir/AOTNamedCallRefModules.qtest",

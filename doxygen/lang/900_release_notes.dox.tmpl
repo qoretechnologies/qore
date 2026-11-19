@@ -2286,6 +2286,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - the members of a class inherited with @ref private_inheritance "private:internal" are accessible on objects of
+      the inheriting class only in that class, the declaring class and the classes between them, and a member that a
+      class also reaches through a public base class is public there (issue #6640)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,

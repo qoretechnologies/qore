@@ -1888,6 +1888,15 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     return 0;
 }
 
+bool qore_class_private::checkInheritedInternalMemberContext(const qore_class_private* class_ctx,
+        const qore_class_private* decl) const {
+    if (class_ctx == this) {
+        return true;
+    }
+    ClassAccess ca;
+    return getClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getClass(*decl, ca));
+}
+
 int qore_class_private::initializeMembers() {
     // nothing is resolved again for a committed user class (see parseInitPartial())
     if (!parse_resolve_class_members && !(committed && !sys)) {
@@ -5871,6 +5880,17 @@ void qore_class_private::parseImportMembers(qore_class_private& qc, ClassAccess 
             // member apply to this class too: a private:internal member of an ancestor of the base class keeps its
             // own storage when this class initializes it
             mi->addContextMap(*i.second);
+            // issue #6640: the member is reached through more than one base class; its access in this class is the
+            // one of the most accessible path, as a call of a method resolves it (skipping the base classes that the
+            // caller cannot access): a member that one base class gives through a private or private:internal
+            // inheritance and another one publicly is public here (a member with access Internal in the base class
+            // is handled above)
+            {
+                ClassAccess path_access = QORE_MAX(i.second->access, access);
+                if (path_access < mi->access) {
+                    mi->access = path_access;
+                }
+            }
             continue;
         }
         i.second->parseInit(i.first, selfid);

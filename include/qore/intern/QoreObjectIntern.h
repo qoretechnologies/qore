@@ -475,7 +475,7 @@ public:
             return has_public_members ? QOA_PUB_ERROR : QOA_OK;
         }
         member_class_ctx = info->getClassContext(class_ctx);
-        return ((info->access > Public) && !class_ctx) ? QOA_PRIV_ERROR : QOA_OK;
+        return theclass_priv->runtimeCheckMemberAccess(info, class_ctx) ? QOA_OK : QOA_PRIV_ERROR;
     }
 
     // must be called in the object read lock
@@ -532,7 +532,7 @@ public:
         const qore_class_private* theclass_priv = qore_class_private::get(*theclass);
         const QoreMemberInfo* mi = theclass_priv->runtimeGetMemberInfo(mem, class_ctx);
         if (mi) {
-            if (mi->access > Public && !class_ctx) {
+            if (!theclass_priv->runtimeCheckMemberAccess(mi, class_ctx)) {
                 doPrivateException(mem, xsink);
                 return -1;
             }

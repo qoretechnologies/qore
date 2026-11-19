@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+# test-platform: macos - JIT code generation and a qcc executable compiled and linked from the driver
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ../../TestInterpreter.qm
+%requires FsUtil
+%exec-class MemberAccessPrivateInternalTest
+
+#! Member access through a class inherited with private:internal follows the rules of method calls (issue #6640)
+/** A member of class \c A used on an object of a class that inherits \c A privately (\c B, and its subclass \c C),
+    with \c private:internal (\c BI, and its subclass \c CI), or through a \c private:internal and a public base class
+    (\c D1, \c D2) or through a private and a public one (\c DP): a member that \c BI inherits through
+    \c private:internal is accessible only in \c BI and \c A's line (\c A's own methods use it on objects of \c BI), not
+    in a subclass of \c BI, another base class of the inheriting class (\c P for \c BIP) or another class, also not in
+    the member hash (\c keys), and a member that a class reaches through a public path as well is public there.  The
+    probe prints, for each class context and object, the results of a method call, a member read and write, a call of
+    a method of \c A that reads the member and the keys of the object, and the result of parsing typed member
+    accesses, in every execution mode and as a qcc-compiled executable.
+*/
+class MemberAccessPrivateInternalTest inherits QUnit::Test {
+    public {
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+        string probe = get_script_dir() + "/member-access-private-internal/probe.q";
+        string expected = ReadOnlyFile::readTextFile(get_script_dir()
+            + "/member-access-private-internal/expected.txt");
+    }
+
+    constructor() : QUnit::Test("member access private internal test", "1.0", \ARGV) {
+        qore_bin = TestInterpreter::qore_interpreter();
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = TestInterpreter::qcc_compiler() ?? "qcc";
+        addTestCase("member access through private:internal in every execution mode and in AOT", \testAccess());
+        set_return_value(main());
+    }
+
+    testAccess() {
+        # the member that BI inherits through private:internal is refused in a subclass of BI, and the member that D1
+        # reaches through a public path is public: the expected output tests what the issue is about
+        assertTrue(expected =~ /^CI BI: m=METHOD-DOES-NOT-EXIST pub=PRIVATE-MEMBER set=PRIVATE-MEMBER /m);
+        assertTrue(expected =~ /^outside D1: m=ok pub=ok set=ok /m);
+        assertTrue(expected =~ /^typed, subclass of the inheriting class: PARSE-EXCEPTION/m);
+        assertTrue(expected =~ /^typed, outside, through a public path: parses$/m);
+        string env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_JIT_SYNC_COMPILE=1", libqore_dir,
+            libqore_dir);
+        foreach string mode in (ExecModes) {
+            assertEq(expected, backquote(sprintf("%s %s --exec-mode=%s %s 2>&1", env, qore_bin, mode, probe)), mode);
+        }
+        TmpDir tmp("qore-member-access-private-internal-");
+        string exe = tmp.path + DirSep + "probe";
+        string out = backquote(sprintf("%s QORE_LIBDIR=%s %s -o %s %s 2>&1", env, libqore_dir, qcc_bin, exe, probe));
+        assertTrue(is_file(exe), "compiled the executable: " + out);
+        assertEq(expected, backquote(sprintf("%s %s 2>&1", env, exe)), "executable");
+    }
+}
