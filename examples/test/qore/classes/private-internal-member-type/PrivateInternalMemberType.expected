@@ -1,0 +1,24 @@
+C1:
+  G: v = "s": RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead
+  G: v = 5: ok
+  G: ++v: ok
+  G: o = new Y(): RUNTIME-TYPE-ERROR: <lvalue> expects type 'object<X>', but got an object of class 'Y' instead
+  G: o = new X(): ok
+  Q: v = 5: RUNTIME-TYPE-ERROR: <lvalue> expects type 'string', but got type 'integer' instead
+  Q: v = "x": ok
+  Q: o = new X(): RUNTIME-TYPE-ERROR: <lvalue> expects type 'object<Y>', but got an object of class 'X' instead
+  G: 6 (integer) X
+  Q: "x" (string) Y
+  o.v: "x"
+C2:
+  G: v = "s": RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got type 'string' instead
+  G: v = 5: ok
+  G: ++v: ok
+  G: o = new Y(): RUNTIME-TYPE-ERROR: <lvalue> expects type 'object<X>', but got an object of class 'Y' instead
+  G: o = new X(): ok
+  Q: v = 5: RUNTIME-TYPE-ERROR: <lvalue> expects type 'string', but got type 'integer' instead
+  Q: v = "x": ok
+  Q: o = new X(): RUNTIME-TYPE-ERROR: <lvalue> expects type 'object<Y>', but got an object of class 'X' instead
+  G: 6 (integer) X
+  Q: "x" (string) Y
+  o.v: "x"
