@@ -1427,6 +1427,12 @@ public:
         slots.resize(size);
     }
 
+    //! Forgets the slots of the object locals, for a frame whose slots releaseAll() has set to NOTHING and which keeps
+    //! its size (IRCallFrame::resetInPlace(), qore#6627)
+    DLLLOCAL void clearRealSlots() {
+        real_slots.clear();
+    }
+
     DLLLOCAL std::vector<QoreValue>::iterator begin() {
         return slots.begin();
     }
@@ -1809,7 +1815,30 @@ struct IRCallFrame {
         locals_slot_cache.releaseAll(xsink);
     }
 
-    void reset(size_t reserve_size, size_t local_slot_count) {
+    //! the sizes of the frame's last reset: a frame taken again for the same sizes is reset in place (qore#6627)
+    size_t pooled_reserve_size = SIZE_MAX;
+    size_t pooled_local_slot_count = SIZE_MAX;
+
+    //! returns true if the frame was last reset for these sizes, so that its vectors have them
+    DLLLOCAL bool hasSizes(size_t reserve_size, size_t local_slot_count) const {
+        return pooled_reserve_size == reserve_size && pooled_local_slot_count == local_slot_count;
+    }
+
+    //! makes the frame ready for a call with these sizes: every slot NOTHING, every per-local entry cleared
+    /** A frame last reset for the same sizes, as a pooled frame reused by the same function is, is overwritten in
+        place, inline; any other is reset as before the in-place reset (qore#6627), out of line, so that a frame of
+        another size costs no more than it did (qore#6627 follow-up: functions of different sizes that alternate at
+        one depth missed the in-place reset on every call and paid more than the plain reset)
+    */
+    QORE_INTERN_ALWAYS_INLINE void reset(size_t reserve_size, size_t local_slot_count) {
+        if (hasSizes(reserve_size, local_slot_count)) {
+            resetInPlace(reserve_size, local_slot_count);
+        } else {
+            resetResize(reserve_size, local_slot_count);
+        }
+    }
+
+    QORE_INTERN_ALWAYS_INLINE void resetInPlace(size_t reserve_size, size_t local_slot_count) {
         // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
         // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
         // are not added to `cleanup` because the caller doesn't own them; the container
@@ -1818,9 +1847,61 @@ struct IRCallFrame {
         // Owned references are tracked in `cleanup` and drained by cleanupValues() at
         // every execute() return path; by the time we reach reset(), all owned slots
         // are already NOTHING.
-        // every slot is NOTHING again, and the vector has exactly reserve_size slots, which the instructions check
-        // their ids against
-        qore_ir_reset_vector(values, reserve_size, QoreValue());
+        // every slot is NOTHING again; the vector has exactly reserve_size slots, which the instructions check their
+        // ids against
+        std::fill(values.begin(), values.end(), QoreValue());
+        cleanup.reset(reserve_size);
+        if (borrowed_temp_active) {
+            std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
+            borrowed_temp_active = 0;
+        }
+        if (borrowed_temp_remaining.size() < reserve_size) {
+            borrowed_temp_remaining.resize(reserve_size, 0);
+        }
+        if (local_slot_count > 0) {
+            // the slots are NOTHING after the release and keep their number
+            locals_slot_cache.releaseAll(nullptr);
+            locals_slot_cache.clearRealSlots();
+            std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
+            std::fill(locals_ir_only.begin(), locals_ir_only.end(), false);
+            std::fill(locals_instantiated.begin(), locals_instantiated.end(), false);
+            std::fill(local_init_slots.begin(), local_init_slots.end(), UINT32_MAX);
+            // the vectors kept keep their capacity, so a call reading a local does not allocate one; there is one for
+            // each local already
+            for (std::vector<uint32_t>& load_slots : local_load_slots) {
+                load_slots.clear();
+            }
+        } else {
+            locals_slot_cache.releaseAll(nullptr);
+            locals_slot_cache.clear();
+            locals_lvar_cache.clear();
+            locals_ir_only.clear();
+            locals_instantiated.clear();
+            local_init_slots.clear();
+            local_load_slots.clear();
+        }
+        load_slot_registered.assign(reserve_size, false);
+        instantiated_locals.clear();
+        instantiated_locals_ordered.clear();
+        locally_uninstantiated.clear();
+        ephemeral_weak_ref_slots.clear();
+        active_iterators.clear();
+        on_block_exit_handlers.clear();
+        local_owned_slots.assign(reserve_size, 0);
+        temp_cleanup_marks.clear();
+    }
+
+    QORE_INTERN_NOINLINE void resetResize(size_t reserve_size, size_t local_slot_count) {
+        // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
+        // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
+        // are not added to `cleanup` because the caller doesn't own them; the container
+        // (list/hash) owns them. Discarding borrowed references here UAFs when the
+        // container has been freed between function exit and pool reuse.
+        // Owned references are tracked in `cleanup` and drained by cleanupValues() at
+        // every execute() return path; by the time we reach reset(), all owned slots
+        // are already NOTHING.
+        values.clear();
+        values.resize(reserve_size);
         cleanup.reset(reserve_size);
         if (borrowed_temp_active) {
             std::fill(borrowed_temp_remaining.begin(), borrowed_temp_remaining.end(), 0);
@@ -1833,10 +1914,10 @@ struct IRCallFrame {
             locals_slot_cache.releaseAll(nullptr);
             locals_slot_cache.clear();
             locals_slot_cache.resize(local_slot_count);
-            qore_ir_reset_vector(locals_lvar_cache, local_slot_count, nullptr);
-            qore_ir_reset_vector(locals_ir_only, local_slot_count, false);
-            qore_ir_reset_vector(locals_instantiated, local_slot_count, false);
-            qore_ir_reset_vector(local_init_slots, local_slot_count, UINT32_MAX);
+            locals_lvar_cache.assign(local_slot_count, nullptr);
+            locals_ir_only.assign(local_slot_count, false);
+            locals_instantiated.assign(local_slot_count, false);
+            local_init_slots.assign(local_slot_count, UINT32_MAX);
             // the vectors kept keep their capacity, so a call reading a local does not allocate one
             if (local_load_slots.size() > local_slot_count) {
                 local_load_slots.resize(local_slot_count);
@@ -1863,6 +1944,8 @@ struct IRCallFrame {
         on_block_exit_handlers.clear();
         local_owned_slots.assign(reserve_size, 0);
         temp_cleanup_marks.clear();
+        pooled_reserve_size = reserve_size;
+        pooled_local_slot_count = local_slot_count;
     }
     //! the statements that the frame is in while a debugger is attached (#5816); reset when first used in a call; last,
     //! so that the members used in every call keep their offsets
@@ -1953,21 +2036,53 @@ static QORE_INTERN_NOINLINE void qore_ir_remove_released_temp(IRCleanupSlots& cl
 }
 
 struct IRCallFramePool {
+    //! the frame of each call depth; frames[top - 1] is the frame of the innermost running call
     std::vector<std::unique_ptr<IRCallFrame>> frames;
+    //! a second frame of each depth, made when calls of other sizes alternate at the depth (qore#6627 follow-up)
+    /** Calls of two functions at one depth (t += o.m(f(i)): f() and o.m() run in turn in the frame of that depth)
+        each keep a frame of their sizes: the frame of the depth and its spare are swapped when the spare has the
+        sizes of the call and the frame does not, so that the frame is reset in place (IRCallFrame::reset())
+    */
+    std::vector<std::unique_ptr<IRCallFrame>> spares;
     size_t top = 0;
 
     IRCallFrame& push(size_t reserve_size, size_t local_slot_count) {
-        if (top >= frames.size()) {
-            frames.push_back(std::make_unique<IRCallFrame>());
+        // the frame of the depth was last used by a call of these sizes, as when a function calls the same one in a
+        // loop: it is reset in place
+        if (top < frames.size() && frames[top]->hasSizes(reserve_size, local_slot_count)) {
+            IRCallFrame& frame = *frames[top++];
+            frame.resetInPlace(reserve_size, local_slot_count);
+            return frame;
         }
-        IRCallFrame& frame = *frames[top++];
-        frame.reset(reserve_size, local_slot_count);
-        return frame;
+        return pushOther(reserve_size, local_slot_count);
     }
 
     void pop() {
         assert(top > 0);
         --top;
+    }
+
+private:
+    //! the frame of the depth does not have the sizes of the call, or there is none yet
+    /** The spare of the depth is taken if it has the sizes, or made the first time (the frame then keeps the sizes of
+        the call that used it, for the next call of those); otherwise the frame of the depth is reset to the sizes
+    */
+    QORE_INTERN_NOINLINE IRCallFrame& pushOther(size_t reserve_size, size_t local_slot_count) {
+        if (top >= frames.size()) {
+            frames.push_back(std::make_unique<IRCallFrame>());
+            spares.emplace_back();
+        } else {
+            std::unique_ptr<IRCallFrame>& spare = spares[top];
+            if (!spare) {
+                spare = std::make_unique<IRCallFrame>();
+                frames[top].swap(spare);
+            } else if (spare->hasSizes(reserve_size, local_slot_count)) {
+                frames[top].swap(spare);
+            }
+        }
+        IRCallFrame& frame = *frames[top++];
+        frame.reset(reserve_size, local_slot_count);
+        return frame;
     }
 };
 
