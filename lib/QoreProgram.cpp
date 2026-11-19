@@ -2607,6 +2607,10 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     // qore_class_private::getSourceProgramForCall()); the Program stays allocated until this function returns
     QoreProgramTeardownScope teardown_scope(pgm);
 
+    // the exit hooks enter the Program: a parse state that keeps threads out of it is discarded first if no thread
+    // runs in it, otherwise once its threads have ended, below (qore#6795)
+    discardPendingParse(xsink, true);
+
     // the exit hooks that the Program registered can stop the threads waited for below
     qore_run_exit_hooks(pgm);
 
@@ -2696,6 +2700,9 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
     }
 
     if (clr) {
+        // the destructors run below enter the Program, which a parse state left until now would refuse (qore#6795)
+        discardPendingParse(xsink, false);
+
         // purge thread resources before clearing pgm
         purge_pgm_thread_resources(pgm, xsink);
 
@@ -2833,6 +2840,34 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // clear program location
         //update_runtime_location(&loc_builtin);
     }
+}
+
+void qore_program_private::discardPendingParse(ExceptionSink* xsink, bool idle_only) {
+    // the usual case: the Program is not in the parse state; nothing is left to discard once the Program has been
+    // cleared (RootNS is deleted then)
+    if (!parsing_in_progress || !RootNS) {
+        return;
+    }
+    // the code that the rollback runs, such as the destructors of pending values, runs under the parse lock, as for
+    // Program::parseRollback(); the lock is not waited for: a thread that holds it parses the Program
+    ExceptionSink lock_xsink;
+    ProgramRuntimeParseContextHelper pch(&lock_xsink, pgm, true);
+    if (lock_xsink) {
+        lock_xsink.clear();
+        return;
+    }
+    {
+        AutoLocker al(plock);
+        // a parse count above one: the current thread held the parse lock already, and parses the Program
+        if (!parsing_in_progress || parse_count > 1 || (idle_only && thread_count)) {
+            return;
+        }
+    }
+    internParseRollback(xsink);
+    // without PO_ALLOW_REPARSE, the rollback leaves the state set (the Program cannot be parsed again); the code run
+    // by the deletion of the Program can enter it now
+    AutoLocker al(plock);
+    parsing_in_progress = false;
 }
 
 // Helper function to eagerly compile all user-defined functions to IR/JIT when --exec-mode is specified.

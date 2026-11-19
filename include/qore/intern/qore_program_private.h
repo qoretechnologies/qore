@@ -2473,6 +2473,18 @@ public:
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink);
 
+    //! Discards the parse state of a Program that is deleted: its pending code is rolled back (qore#6795)
+    /** A Program with code pending (Program::parsePending() without a commit or a rollback), or whose parse was rolled
+        back without PO_ALLOW_REPARSE, refuses every thread to enter it (parsing_in_progress, see incThreadCount()).
+        The code that runs when it is deleted (its exit hooks, the destructors of its saved objects and of the values
+        of its variables) enters it, so the parse is rolled back and the state cleared before that code runs.
+
+        Nothing is done if the Program is not in the parse state or if a thread holds its parse lock (a parse goes
+        on); with \a idle_only, also if a thread is counted in the Program: the rollback deletes code that such a
+        thread could still run, so it is made once the threads of the Program have ended
+    */
+    DLLLOCAL void discardPendingParse(ExceptionSink* xsink, bool idle_only);
+
     // called when the program's ref count = 0 (but the dc count may not go to 0 yet)
     DLLLOCAL void clear(ExceptionSink* xsink);
 
