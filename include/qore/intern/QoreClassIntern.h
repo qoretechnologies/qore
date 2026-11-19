@@ -4040,6 +4040,15 @@ public:
             parse_error(*loc, "illegal access to private member '%s' of class '%s'", mem, name.c_str());
             return -1;
         }
+        // a member that this class reaches only through a base class that one of its base classes inherits with
+        // private:internal (access Inaccessible) cannot be used in this class, only by the classes of that path
+        // (issue #6669)
+        if (access == Inaccessible && !parseHasMemberGate() && parse_get_class_priv() == this) {
+            memberTypeInfo = nullptr;
+            parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
+                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+            return -1;
+        }
         return 0;
     }
 
@@ -4068,11 +4077,23 @@ public:
     DLLLOCAL int parseCheckInternalMemberAccess(const char* mem, const QoreTypeInfo*& memberTypeInfo,
             const QoreProgramLocation* loc, int pflag = 0) const {
         const_cast<qore_class_private*>(this)->parseInitPartial();
+        // the members of the base classes must be imported, so that a member that this class cannot access is found
+        // with its access in this class (issue #6669): parseInit() can initialize the class partially without them
+        const_cast<qore_class_private*>(this)->initializeMembers();
 
         // throws a parse exception if there are public members and the name is not valid
         const qore_class_private* qc = nullptr;
         ClassAccess access;
         const QoreMemberInfo* omi = parseFindMember(mem, qc, access);
+        // a member that the class cannot access, reached only through a base class inherited with private:internal
+        // by a base class (access Inaccessible in the merged member table), is refused as the name alone is (issue
+        // #6669; see parseResolveInternalMemberAccess())
+        if (omi && access == Inaccessible) {
+            parse_error(*loc, "illegal access to member '%s' of class '%s', which class '%s' inherits through a "
+                "class inherited with private:internal", mem, qc->name.c_str(), name.c_str());
+            memberTypeInfo = nullptr;
+            return -1;
+        }
         int rc = 0;
         if (omi) {
             // issue #3355: to handle out of order initialization properly, we need to ensure that the member is

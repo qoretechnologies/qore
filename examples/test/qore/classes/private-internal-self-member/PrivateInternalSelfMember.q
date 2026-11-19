@@ -7,8 +7,9 @@
 %no-child-restrictions
 
 # parses the code in a Program of its own and prints the result: the first exception, or the value of get()
-sub try_parse(string label, string code) {
-    Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION);
+sub try_parse(string label, string code,
+        int po = PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_STRONG_ENCAPSULATION) {
+    Program p(po);
     try {
         p.parse(code, label);
         printf("%s: parsed: %y\n", label, p.callFunction("get"));
@@ -28,3 +29,8 @@ try_parse("write", Hierarchy + "class C inherits P { auto get() { self.v = 2; re
     "auto sub get() { C c(); return c.get(); }\n");
 # the inheriting class itself can access the member
 try_parse("inheriting class", Hierarchy + "auto sub get() { P p(); return p.pv(); }\n");
+# the member read as $.<member> (without bare references) in a subclass of the inheriting class
+try_parse("read with $.", "class G { public { int $.v = 1; } }\n"
+    "class P inherits private:internal G {}\n"
+    "class C inherits P { auto get() { return $.v; } }\n"
+    "auto sub get() { C $c(); return $c.get(); }\n", PO_REQUIRE_TYPES | PO_STRICT_ARGS);
