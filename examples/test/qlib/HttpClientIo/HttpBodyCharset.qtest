@@ -55,6 +55,10 @@ hashdecl CharsetCase {
     *string encoding;
     #! the decoded text in UTF-8, for text bodies
     *string text;
+    #! the exception that a client raises for a body that is not valid in its encoding (qore#6554)
+    *string error;
+    #! a body that is not valid in its encoding (qore#6554); checked by HttpBodyCharsetTest::invalidBodyTest() only
+    bool invalid = False;
 }
 
 #! Returns the response body of the case named in the path: /<case>/<variant>, where the variant is:
@@ -108,12 +112,27 @@ class TestHandler inherits AbstractHttpRequestHandler {
             "image": <CharsetCase>{"content_type": "image/png", "body": <89504e47>},
             # no Content-Type: the data decides
             "none-text": <CharsetCase>{"body": <e4f6fc>, "encoding": "ISO-8859-1", "text": "äöü"},
+            # a body that is not valid in its declared encoding (qore#6554): HTML and other text are given in
+            # ISO-8859-1, with their bytes; a structured type is an error
+            "invalid-html": <CharsetCase>{"content_type": "text/html;charset=utf-8", "body": <3c703ee4>,
+                "encoding": "ISO-8859-1", "text": "<p>ä", "invalid": True},
+            "invalid-text": <CharsetCase>{"content_type": "text/plain;charset=utf-8", "body": <e4f6fc>,
+                "encoding": "ISO-8859-1", "text": "äöü", "invalid": True},
+            "invalid-json": <CharsetCase>{"content_type": "application/json", "body": <7b2261223a22e4227d>,
+                "error": "INVALID-ENCODING", "invalid": True},
+            "invalid-xml": <CharsetCase>{"content_type": "text/xml", "body": <3c613ee43c2f613e>,
+                "error": "INVALID-ENCODING", "invalid": True},
             "none-binary": <CharsetCase>{"body": <000102c3a4>},
         };
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         list<string> parts = hdr.path.split("/");
+        if (parts[0] == "obs-header") {
+            # a header value that is not valid UTF-8 (obs-text, RFC 9110 section 5.5; qore#6554)
+            return <HttpResponseInfo>{"code": 200, "hdr": {"Content-Type": MimeTypeText,
+                "X-Obs": binary_to_string(<61e462>, "UTF-8")}, "body": "ok"};
+        }
         *hash<CharsetCase> c = Cases{parts[0]};
         if (!c) {
             return <HttpResponseInfo>{"code": 404, "hdr": {"Content-Type": MimeTypeText}, "body": "not found"};
@@ -183,6 +202,13 @@ class RawServer {
     private serve(Socket s) {
         hash<auto> req = s.readHTTPHeader(30s);
         list<string> parts = req.path.substr(1).split("/");
+        if (parts[0] == "obs-header") {
+            # a reason phrase and a repeated header with obs-text (RFC 9112 section 4, RFC 9110 section 5.5;
+            # qore#6554)
+            s.send(binary("HTTP/1.1 200 Caf") + <e9> + binary("\r\nConnection: close\r\nX-Obs: a") + <e4>
+                + binary("b\r\nX-Obs: ok\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"));
+            return;
+        }
         hash<CharsetCase> c = TestHandler::Cases{parts[0]};
         string hdr = "HTTP/1.1 200 OK\r\nConnection: close\r\n";
         if (c.content_type) {
@@ -226,6 +252,8 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     constructor() : Test("HttpBodyCharsetTest", "1.0") {
         addTestCase("HTTPClient over HTTP/1.1", \httpClientHttp1Test());
         addTestCase("HTTPClient over HTTP/2", \httpClientHttp2Test());
+        addTestCase("HTTPClient bodies that are not valid in their encoding", \invalidBodyTest());
+        addTestCase("HTTPClient header values that are not valid UTF-8", \obsHeaderTest());
         addTestCase("HTTPClient receive callback", \httpClientRecvCallbackTest());
         addTestCase("HTTPClient poll operation", \httpClientPollTest());
         addTestCase("HttpClientIo over HTTP/1.1", \httpClientIoHttp1Test());
@@ -281,6 +309,9 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     private checkAll(code get_body, string label, bool raw = False) {
         foreach string name in (keys TestHandler::Cases) {
             hash<CharsetCase> c = TestHandler::Cases{name};
+            if (c.invalid) {
+                continue;
+            }
             if (!raw && !c.content_type) {
                 continue;
             }
@@ -309,6 +340,57 @@ class HttpBodyCharsetTest inherits QUnit::Test {
             "ssl_verify_cert": False,
             "timeout": 30s,
         } + opts);
+    }
+
+    #! a body that is not valid in its encoding, over HTTP/1.1 and HTTP/2 (qore#6554)
+    invalidBodyTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "opts": {"http_version": "1.1"}, "label": "h1"},
+                {"url": getTlsUrl(), "opts": {"http_version": "2.0"}, "label": "h2"}) {
+            HTTPClient hc = getHttpClient(i.url, i.opts);
+            hc.setHttp3Mode("disabled");
+            foreach string name in (keys TestHandler::Cases) {
+                hash<CharsetCase> ic = TestHandler::Cases{name};
+                if (!ic.invalid) {
+                    continue;
+                }
+                foreach string variant in (Variants) {
+                    string path = sprintf("/%s/%s", name, variant);
+                    string label = sprintf("%s %s", i.label, path);
+                    if (ic.error) {
+                        assertThrows(ic.error, \hc.send(), (NOTHING, "GET", path), label);
+                    } else {
+                        checkBody(hc.send(NOTHING, "GET", path).body, ic, label);
+                    }
+                }
+            }
+        }
+    }
+
+    obsHeaderTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "opts": {"http_version": "1.1"}, "label": "h1"},
+                {"url": getTlsUrl(), "opts": {"http_version": "2.0"}, "label": "h2"}) {
+            HTTPClient hc = getHttpClient(i.url, i.opts);
+            hc.setHttp3Mode("disabled");
+            hash<auto> info;
+            hash<auto> h = hc.send(NOTHING, "GET", "/obs-header", NOTHING, NOTHING, \info);
+            # the value is given in ISO-8859-1 with its bytes unchanged
+            assertEq("ISO-8859-1", h."x-obs".encoding(), i.label);
+            assertEq(<61e462>, binary(h."x-obs"), i.label);
+            assertTrue(h."x-obs".isEncodingValid(), i.label);
+            assertEq("aäb", h."x-obs", i.label);
+            # a valid value keeps the default encoding
+            assertEq("UTF-8", h."content-type".encoding(), i.label);
+        }
+        # a reason phrase and the values of a repeated header (HTTP/1.1)
+        HTTPClient hc = getHttpClient(getRawUrl(), {"http_version": "1.1"});
+        hash<auto> h = hc.send(NOTHING, "GET", "/obs-header");
+        assertEq("ISO-8859-1", h.status_message.encoding());
+        assertEq("Café", h.status_message);
+        assertEq(2, h."x-obs".size());
+        assertEq("ISO-8859-1", h."x-obs"[0].encoding());
+        assertEq("aäb", h."x-obs"[0]);
+        assertEq("UTF-8", h."x-obs"[1].encoding());
+        assertEq("ok", h."x-obs"[1]);
     }
 
     httpClientHttp1Test() {
@@ -435,6 +517,9 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     private checkOctets(code get_body, string label, bool raw = False) {
         foreach string name in (keys TestHandler::Cases) {
             hash<CharsetCase> c = TestHandler::Cases{name};
+            if (c.invalid) {
+                continue;
+            }
             if (!raw && !c.content_type) {
                 continue;
             }
@@ -534,6 +619,9 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     private checkRest(code get_body, string label) {
         foreach string name in (getRestCases()) {
             hash<CharsetCase> c = TestHandler::Cases{name};
+            if (c.invalid) {
+                continue;
+            }
             foreach string variant in (Variants) {
                 string path = sprintf("/%s/%s", name, variant);
                 checkBody(get_body(path), c, sprintf("%s %s", label, path));
@@ -582,6 +670,9 @@ class HttpBodyCharsetTest inherits QUnit::Test {
             names += ("yaml", "yaml-bom");
             foreach string name in (names) {
                 hash<CharsetCase> c = TestHandler::Cases{name};
+                if (c.invalid) {
+                    continue;
+                }
                 foreach string variant in (Variants) {
                     string path = sprintf("/%s/%s", name, variant);
                     string label = sprintf("RestClientIo %s %s", i.protocol, path);
@@ -608,6 +699,9 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         code check = sub (code get_body, string label) {
             foreach string name in (keys TestHandler::Cases) {
                 hash<CharsetCase> c = TestHandler::Cases{name};
+                if (c.invalid) {
+                    continue;
+                }
                 if (!c.content_type) {
                     continue;
                 }

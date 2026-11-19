@@ -471,7 +471,8 @@ int HttpFastRoutes::size() [flags=RET_VALUE_ONLY] {
 //! Returns the number of requests that each route has answered, and why the other requests took the normal path
 /** @return a hash with the keys \c routes (a hash of the path to the number of requests answered) and \c fallbacks
     (a hash of the reason to the number of requests that took the normal path for it: \c no_route, \c not_http_1_1,
-    \c body, \c expect, \c upgrade, \c connection, \c pipelined, \c stale and \c no_rule).  Requests are only counted
+    \c body, \c expect, \c upgrade, \c connection, \c pipelined, \c stale, \c no_rule and \c invalid_text: text
+    that the normal path answers with 400, such as a target that does not decode to valid UTF-8).  Requests are only counted
     as fallbacks while the routes are not empty.
 
     @par Example:

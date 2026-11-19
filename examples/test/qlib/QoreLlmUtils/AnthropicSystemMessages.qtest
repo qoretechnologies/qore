@@ -1,0 +1,99 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Anthropic system messages (qore#6588).  A request with more than one system message kept only the last: each one
+# replaced the system prompt, so the earlier instructions never reached the model.  Bedrock and Gemini keep them all.
+# The request body is built without a network call.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires AnthropicRestClient
+%exec-class AnthropicSystemMessagesTest
+
+#! builds request bodies with the provider's own builder
+class AnthropicSystemMessagesProbe inherits AnthropicRestClient::AnthropicLlmProvider {
+    constructor() : AnthropicLlmProvider(<QoreLlmUtils::LlmBackendConfig>{
+        "mode": "anthropic",
+        "url": "https://api.anthropic.com",
+        "model": "claude-haiku-5-5",
+    }) {
+    }
+
+    #! the body sent for @p messages
+    hash<auto> body(list<hash<QoreLlmUtils::ChatMessage>> messages) {
+        return buildAnthropicBody(messages, NOTHING,
+            <QoreLlmUtils::LlmRequestOptions>{"model": "claude-haiku-5-5"});
+    }
+}
+
+public class AnthropicSystemMessagesTest inherits QUnit::Test {
+    private {
+        AnthropicSystemMessagesProbe probe();
+    }
+
+    constructor() : Test("AnthropicSystemMessages", "1.0", \ARGV) {
+        addTestCase("every system message is sent, in order", \allSystemMessagesTest());
+        addTestCase("a system message's content parts keep their cache control", \contentPartsTest());
+        addTestCase("a system message after the dialogue is still sent as system content", \laterSystemTest());
+        addTestCase("a single system message keeps its form", \singleSystemTest());
+        addTestCase("no system message, no system field", \noSystemTest());
+        set_return_value(main());
+    }
+
+    private static hash<QoreLlmUtils::ChatMessage> msg(string role, string content) {
+        return <QoreLlmUtils::ChatMessage>{"role": role, "content": content};
+    }
+
+    allSystemMessagesTest() {
+        hash<auto> body = probe.body((msg("system", "policy"), msg("system", "documentation"),
+            msg("system", "protocol"), msg("user", "list services")));
+        assertEq((
+            {"type": "text", "text": "policy"},
+            {"type": "text", "text": "documentation"},
+            {"type": "text", "text": "protocol"},
+        ), body.system, "all three, in order");
+        assertEq((("role": "user", "content": "list services"),), map $1 - "cache_control", body.messages,
+            "system messages are not dialogue messages");
+        # an empty system message adds nothing
+        body = probe.body((msg("system", "policy"), msg("system", ""), msg("user", "go")));
+        assertEq(({"type": "text", "text": "policy"},), body.system);
+    }
+
+    contentPartsTest() {
+        hash<QoreLlmUtils::ChatMessage> cached = <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": (
+            <QoreLlmUtils::ContentPart>{"type": "text", "text": "stable policy",
+                "cache_control": {"type": "ephemeral"}},
+            <QoreLlmUtils::ContentPart>{"type": "image", "data": binary("x")},
+        )};
+        hash<auto> body = probe.body((cached, msg("system", "turn context"), msg("user", "go")));
+        assertEq((
+            {"type": "text", "text": "stable policy", "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": "turn context"},
+        ), body.system, "non-text parts are dropped, as for a single system message");
+    }
+
+    laterSystemTest() {
+        hash<auto> body = probe.body((msg("system", "policy"), msg("user", "first"),
+            msg("assistant", "answer"), msg("system", "protocol"), msg("user", "second")));
+        assertEq(({"type": "text", "text": "policy"}, {"type": "text", "text": "protocol"}), body.system);
+        assertEq(("user", "assistant", "user"), map $1.role, body.messages);
+    }
+
+    singleSystemTest() {
+        assertEq("policy", probe.body((msg("system", "policy"), msg("user", "go"))).system,
+            "a single string system message is sent as a string, as before");
+        hash<QoreLlmUtils::ChatMessage> parts = <QoreLlmUtils::ChatMessage>{"role": "system", "content_parts": (
+            <QoreLlmUtils::ContentPart>{"type": "text", "text": "policy", "cache_control": {"type": "ephemeral"}},
+        )};
+        assertEq(({"type": "text", "text": "policy", "cache_control": {"type": "ephemeral"}},),
+            probe.body((parts, msg("user", "go"))).system, "a single content-part system message, as before");
+    }
+
+    noSystemTest() {
+        assertFalse(probe.body((msg("user", "go"),)).hasKey("system"));
+    }
+}

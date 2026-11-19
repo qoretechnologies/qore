@@ -1,0 +1,123 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Code that a sandbox governs cannot give a database data provider SQL text: the exec-sql child, the "sql" search
+# option and index columns that are not fields are refused; trusted code can use them (qore#6578).
+
+%modern
+
+%try-module sqlite3
+%define NoSqlite
+%endtry
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires DbDataProvider
+
+%exec-class DbDataProviderSandboxTest
+
+class DbDataProviderSandboxTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        *string db_file;
+        *DbDataProvider dp;
+    }
+
+    constructor() : Test("DbDataProvider in a sandbox", "1.0") {
+        addTestCase("trusted code can give SQL text", \trustedTest());
+        addTestCase("sandboxed code cannot give SQL text", \sandboxedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoSqlite
+        db_file = tmp_location() + DirSep + sprintf("dbdp-sandbox-%d-%s.db", getpid(), get_random_string(8));
+        ds = new Datasource(sprintf("sqlite3:x/x@%s", db_file));
+        ds.exec("create table sbx_t (id integer, name varchar(20))");
+        ds.exec("insert into sbx_t values (1, 'a')");
+        ds.commit();
+        dp = new DbDataProvider(ds);
+%endif
+    }
+
+    globalTearDown() {
+        delete dp;
+        if (ds) {
+            ds.close();
+        }
+        if (db_file && is_file(db_file)) {
+            unlink(db_file);
+        }
+    }
+
+    private skipNoDb() {
+        if (!ds) {
+            testSkip("the sqlite3 module is not available");
+        }
+    }
+
+    #! the field description of a new table
+    private static hash<string, AbstractDataField> fields() {
+        return {
+            "id": new QoreDataField("id", NOTHING, IntType),
+            "name": new QoreDataField("name", NOTHING, StringOrNothingType),
+        };
+    }
+
+    trustedTest() {
+        skipNoDb();
+        assertEq(1, dp.getChildProviderEx("exec-sql").doRequest({"sql": "select count(1) as c from sbx_t"})
+            .result.c[0].toInt());
+        assertEq(("a",), map $1.name, dp.searchRecords(NOTHING, {"sql": "select name from sbx_t"}));
+        AbstractDataProvider t = dp.createChildProvider("sbx_t2", DbDataProviderSandboxTest::fields(),
+            {"indexes": {"sbx_t2_ix": {"columns": ("name",)}}});
+        assertEq("sbx_t2", t.getName());
+        ds.exec("drop table sbx_t2");
+        ds.commit();
+    }
+
+    sandboxedTest() {
+        skipNoDb();
+        Program tenant = DbDataProviderSandboxTest::tenant();
+        assertThrows("DB-SANDBOX-ERROR", "an SQL statement to execute", \tenant.callFunction(), ("exec_sql", dp));
+        assertThrows("DB-SANDBOX-ERROR", "\"sql\" search option", \tenant.callFunction(), ("search_sql", dp));
+        assertThrows("DB-SANDBOX-ERROR", "\"sql\" search option", \tenant.callFunction(), ("record_type_sql", dp));
+        assertThrows("DB-SANDBOX-ERROR", "\"sql\" search option", \tenant.callFunction(), ("search_bulk_sql", dp));
+        # createChildProvider() gives the error as CREATE-CHILD-PROVIDER-ERROR
+        assertThrows("CREATE-CHILD-PROVIDER-ERROR", "DB-SANDBOX-ERROR.*index expression", \tenant.callFunction(),
+            ("create_with_expression", dp, DbDataProviderSandboxTest::fields()));
+        # nothing was created
+        assertNothing(ds.selectRow("select name from sqlite_master where name = 'sbx_t3'"));
+        # data-driven requests are served, through the provider of a table
+        assertEq(("a",), tenant.callFunction("search", dp));
+        string name = tenant.callFunction("create_with_columns", dp, DbDataProviderSandboxTest::fields());
+        assertEq("sbx_t4", name);
+        ds.exec("drop table sbx_t4");
+        ds.commit();
+    }
+
+    #! Returns a sandboxed Program with a function for each call
+    private static Program tenant() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS, True);
+        p.parse("%requires DataProvider\n"
+            "auto sub exec_sql(object dp) { return dp.getChildProviderEx(\"exec-sql\").doRequest("
+                "{\"sql\": \"delete from sbx_t\"}); }\n"
+            "auto sub search_sql(object dp) { return dp.searchRecords(NOTHING, "
+                "{\"sql\": \"select name from sbx_t\"}).getValue(); }\n"
+            "auto sub search_bulk_sql(object dp) { return dp.searchRecordsBulk(1000, NOTHING, "
+                "{\"sql\": \"select name from sbx_t\"}).getValue(); }\n"
+            "auto sub record_type_sql(object dp) { return dp.getRecordType({\"sql\": \"select name from sbx_t\"}); }\n"
+            "auto sub create_with_expression(object dp, hash<auto> fields) { return dp.createChildProvider(\"sbx_t3\", "
+                "fields, {\"indexes\": {\"sbx_t3_ix\": {\"columns\": (\"lower(name)\",)}}}).getName(); }\n"
+            "auto sub create_with_columns(object dp, hash<auto> fields) { return dp.createChildProvider(\"sbx_t4\", "
+                "fields, {\"indexes\": {\"sbx_t4_ix\": {\"columns\": (\"name\",)}}}).getName(); }\n"
+            "auto sub search(object dp) { return map $1.name, dp.getChildProviderEx(\"sbx_t\").searchRecords("
+                "{\"id\": 1}); }\n", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        return p;
+    }
+}

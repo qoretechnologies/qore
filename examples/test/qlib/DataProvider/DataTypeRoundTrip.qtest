@@ -74,6 +74,7 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
         addTestCase("a class-backed named type keeps its options", \classBackedOptionsTest());
         addTestCase("an object type of a class that cannot be resolved keeps its class", \objectClassTest());
         addTestCase("an empty constraints hash is no constraints", \emptyConstraintsTest());
+        addTestCase("a pattern constraint is compiled with the type", \patternConstraintTest());
         addTestCase("a type graph description is restored with the same description", \graphRoundTripTest());
         addTestCase("a restored field gives the example that its description gives", \describedExampleTest());
         addTestCase("a union that its alternatives refer to is restored once", \recursiveUnionTest());
@@ -224,6 +225,26 @@ public class DataTypeRoundTripTest inherits QUnit::Test {
         AbstractDataProviderType unconstrained = t.copyWithConstraints(t.getConstraints() - "enum_values");
         assertNothing(unconstrained.getConstraints());
         checkRoundTrip("empty constraints", unconstrained);
+    }
+
+    # qore#6603: a pattern is compiled when the type is made, not for each value
+    patternConstraintTest() {
+        AbstractDataProviderType string_type = AbstractDataProviderType::get("string");
+        assertThrows("REGEX-COMPILATION-ERROR", \string_type.copyWithConstraints(),
+            (<DataTypeConstraintInfo>{"pattern": "(x"},));
+        AbstractDataProviderType t = string_type.copyWithConstraints(<DataTypeConstraintInfo>{"pattern": "^[a-z]+$"});
+        assertEq("abc", t.acceptsValue("abc"));
+        assertThrows("TYPE-VALUE-ERROR", "does not match the pattern", \t.acceptsValue(), ("ab1",));
+        # a copy and a restored type match with the same pattern
+        foreach AbstractDataProviderType c in (t.copy(), Serializable::deserialize(t.serialize())) {
+            assertEq("abc", c.acceptsValue("abc"));
+            assertThrows("TYPE-VALUE-ERROR", \c.acceptsValue(), ("ab1",));
+        }
+        # a type whose constraints are replaced matches with the new pattern
+        AbstractDataProviderType t2 = t.copyWithConstraints(<DataTypeConstraintInfo>{"pattern": "^[0-9]+$"});
+        assertEq("12", t2.acceptsValue("12"));
+        assertThrows("TYPE-VALUE-ERROR", \t2.acceptsValue(), ("abc",));
+        checkRoundTrip("pattern constraint", t);
     }
 
     graphRoundTripTest() {

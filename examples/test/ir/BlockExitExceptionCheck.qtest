@@ -1,0 +1,270 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%include exec-mode-output-test.qc
+
+%exec-class BlockExitExceptionCheckTest
+
+#! Test: the exception check after the release of the locals of a block, as the AST interpreter
+/** The IR interpreter steps over the CheckException instruction that follows the release of the locals of a block
+    (UninstantiateLocal) when the release leaves no exception pending (QORE_IR_STEPS_OVER_CHECK, qore#6371); when a
+    destructor of a local raises an exception, the check runs and takes it to its handler.  The script releases the
+    locals of loop bodies on the normal path in every iteration, and raises exceptions from destructors at the end of
+    a block in a try statement in the loop, in a loop in a try statement with the list of a foreach statement live
+    (released before the catch block), in the release of the first of two locals released (the second is released
+    before the handler runs), after a continue that releases a local that its iteration never instantiated, in a
+    function whose only handler is an on_error handler, in a function with no handler, and in top-level code, in every
+    execution mode and as a qcc executable (see ExecModeOutputTest); the output is that of the AST interpreter.
+*/
+class BlockExitExceptionCheckTest inherits ExecModeOutputTest {
+    public {
+        #! the script run in every execution mode
+        const Script = '%modern
+# the exception check after the release of the locals of a block: stepped over on the normal path by the IR interpreter
+class Obj {
+    public { string n; }
+    constructor(string n) { self.n = n; }
+    destructor() { printf("dtor %s\n", n); }
+}
+class Raiser {
+    private { string n; bool raise; }
+    constructor(string n, bool raise = True) { self.n = n; self.raise = raise; }
+    destructor() {
+        printf("dtor %s\n", n);
+        if (raise) {
+            throw "DTOR-ERR", n;
+        }
+    }
+}
+# the normal path: the locals of a loop body are released in every iteration
+int sub normal(int n) {
+    int t = 0;
+    for (int i = 0; i < n; ++i) {
+        Obj o("n" + i);
+        auto x = i;
+        t += x;
+    }
+    return t;
+}
+# the release of a local of a loop body raises, in a try statement in the loop; the foreach list temp is live
+sub in_try() {
+    foreach string s in (("a", "b", "c")) {
+        try {
+            {
+                Obj o("t" + s);
+                Raiser r("r" + s, s == "b");
+                printf("body %s\n", s);
+            }
+            printf("after block %s\n", s);
+        } catch (hash<ExceptionInfo> ex) {
+            printf("caught %s %s\n", ex.err, ex.desc);
+        }
+    }
+}
+# the release raises with a temp of an enclosing statement live: the list of objects of the foreach statement is
+# released before the catch block runs, as with the AST interpreter
+sub temp_live() {
+    try {
+        foreach Obj l in ((new Obj("l1"), new Obj("l2"))) {
+            Raiser r("r-" + l.n, l.n == "l1");
+            printf("body %s\n", l.n);
+        }
+        printf("not reached\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s %s\n", ex.err, ex.desc);
+    }
+}
+# two locals, the first released (the last declared) raises: the second is still released before the handler, and the
+# exception is checked after it
+sub two_locals() {
+    try {
+        for (int i = 0; i < 2; ++i) {
+            Raiser a("a" + i, False);
+            Raiser b("b" + i, i == 1);
+            printf("body %d\n", i);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s %s\n", ex.err, ex.desc);
+    }
+}
+# a continue before a local of the loop body is declared releases the local, which the iteration never instantiated,
+# and the exception check follows its release; a later iteration declares it and raises in its release
+sub cont() {
+    try {
+        for (int i = 0; i < 5; ++i) {
+            if (i % 2 == 0) {
+                printf("continue %d\n", i);
+                continue;
+            }
+            Raiser c("c" + i, i == 3);
+            printf("body %d\n", i);
+        }
+        printf("not reached\n");
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s %s\n", ex.err, ex.desc);
+    }
+}
+# no handler in the frame other than an on_error handler: the exception leaves the function
+sub leaves_frame() {
+    on_error printf("on_error %s\n", $1.err);
+    for (int i = 0; i < 2; ++i) {
+        Obj o("lf" + i);
+        Raiser r("lr" + i, i == 1);
+        printf("body %d\n", i);
+    }
+    printf("not reached\n");
+}
+# no handler in the frame at all
+sub no_handler() {
+    for (int i = 0; i < 2; ++i) {
+        Raiser r("nr" + i, i == 1);
+        printf("body %d\n", i);
+    }
+    printf("not reached\n");
+}
+for (int k = 0; k < 2; ++k) {
+    printf("normal %d\n", normal(3));
+    in_try();
+    temp_live();
+    two_locals();
+    cont();
+    try { leaves_frame(); } catch (hash<ExceptionInfo> ex) { printf("caught %s %s\n", ex.err, ex.desc); }
+    try { no_handler(); } catch (hash<ExceptionInfo> ex) { printf("caught %s %s\n", ex.err, ex.desc); }
+    # top-level code: a block with a local in a loop
+    for (int i = 0; i < 2; ++i) {
+        Obj o("top" + i);
+    }
+    try {
+        for (int i = 0; i < 2; ++i) {
+            Raiser r("topr" + i, i == 1);
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        printf("caught %s %s\n", ex.err, ex.desc);
+    }
+}';
+
+        #! the AST interpreter's output
+        const Expected = (
+            "dtor n0",
+            "dtor n1",
+            "dtor n2",
+            "normal 3",
+            "body a",
+            "dtor ra",
+            "dtor ta",
+            "after block a",
+            "body b",
+            "dtor rb",
+            "dtor tb",
+            "caught DTOR-ERR rb",
+            "body c",
+            "dtor rc",
+            "dtor tc",
+            "after block c",
+            "body l1",
+            "dtor r-l1",
+            "dtor l2",
+            "dtor l1",
+            "caught DTOR-ERR r-l1",
+            "body 0",
+            "dtor b0",
+            "dtor a0",
+            "body 1",
+            "dtor b1",
+            "dtor a1",
+            "caught DTOR-ERR b1",
+            "continue 0",
+            "body 1",
+            "dtor c1",
+            "continue 2",
+            "body 3",
+            "dtor c3",
+            "caught DTOR-ERR c3",
+            "body 0",
+            "dtor lr0",
+            "dtor lf0",
+            "body 1",
+            "dtor lr1",
+            "dtor lf1",
+            "on_error DTOR-ERR",
+            "caught DTOR-ERR lr1",
+            "body 0",
+            "dtor nr0",
+            "body 1",
+            "dtor nr1",
+            "caught DTOR-ERR nr1",
+            "dtor top0",
+            "dtor top1",
+            "dtor topr0",
+            "dtor topr1",
+            "caught DTOR-ERR topr1",
+            "dtor n0",
+            "dtor n1",
+            "dtor n2",
+            "normal 3",
+            "body a",
+            "dtor ra",
+            "dtor ta",
+            "after block a",
+            "body b",
+            "dtor rb",
+            "dtor tb",
+            "caught DTOR-ERR rb",
+            "body c",
+            "dtor rc",
+            "dtor tc",
+            "after block c",
+            "body l1",
+            "dtor r-l1",
+            "dtor l2",
+            "dtor l1",
+            "caught DTOR-ERR r-l1",
+            "body 0",
+            "dtor b0",
+            "dtor a0",
+            "body 1",
+            "dtor b1",
+            "dtor a1",
+            "caught DTOR-ERR b1",
+            "continue 0",
+            "body 1",
+            "dtor c1",
+            "continue 2",
+            "body 3",
+            "dtor c3",
+            "caught DTOR-ERR c3",
+            "body 0",
+            "dtor lr0",
+            "dtor lf0",
+            "body 1",
+            "dtor lr1",
+            "dtor lf1",
+            "on_error DTOR-ERR",
+            "caught DTOR-ERR lr1",
+            "body 0",
+            "dtor nr0",
+            "body 1",
+            "dtor nr1",
+            "caught DTOR-ERR nr1",
+            "dtor top0",
+            "dtor top1",
+            "dtor topr0",
+            "dtor topr1",
+            "caught DTOR-ERR topr1",
+        );
+    }
+
+    constructor() : ExecModeOutputTest("BlockExitExceptionCheck", Script, (map $1 + "\n", Expected).join(""),
+            "checks for an exception after the release of the locals of a block as the AST interpreter") {
+    }
+}

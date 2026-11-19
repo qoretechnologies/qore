@@ -372,6 +372,28 @@ qcc -o app build/aot/*.qo
 cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     @endcode
 
+    @subsection aot_module_trust Trust in AOT-Compiled Modules
+
+    An AOT-compiled module (<tt>.qmod</tt>) and an AOT-compiled executable are native code: loading a module runs
+    the native code of its shared object, with the rights of the process.  A module is therefore trusted as any
+    other native library is, and is installed and loaded only from a source that is trusted; a
+    @ref sandboxing "sandbox" does not govern the native code of a module, and the checks of %Qore cannot make a
+    module from an untrusted source safe.
+
+    Besides its native code, a module holds metadata, which includes the IR (the intermediate representation that
+    the IR interpreter and the JIT run) of code that has no native code of its own (closures and the code that a
+    debugger runs).  The metadata is checked before it is used:
+    - a checksum refuses metadata that was corrupted after it was written, such as in a damaged file; it does not
+      protect a module against deliberate changes, which are made to native code as easily
+    - the reader refuses metadata whose structure is invalid (a read beyond its end, an invalid value or reference)
+    - the reader checks that the objects that the IR uses are created by the IR, and the IR is verified before it
+      runs: its control flow, and that the values that it uses are defined on the paths that reach their use
+
+    IR that fails a check is not run: a module whose metadata fails a check when it is loaded is not loaded
+    (\c MODULE-LOAD-ERROR), and IR that is read when it is first needed (the IR of a closure, or the IR that a
+    debugger runs) raises an exception when it fails a check, without running.  These checks make corrupt or
+    malformed metadata fail safely; they do not make native code from an untrusted source safe.
+
     @subsection aot_source_visibility Source Visibility
 
     \c qcc defaults to stripped source. Use \c --include-source when

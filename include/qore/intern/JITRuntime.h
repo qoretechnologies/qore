@@ -120,6 +120,8 @@ uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 //! Add two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry, uint64_t* current, uint64_t* previous);
 
 //! Subtract two QoreValues with compound-assignment dynamic dispatch
 uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
@@ -128,6 +130,7 @@ uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xs
 uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
 uint64_t qore_rt_add_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_add_assign_local_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_sub_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 uint64_t qore_rt_mul_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
@@ -222,6 +225,8 @@ uint64_t qore_rt_make_string(const char* str);
 
 //! Create a QoreStringNode from string bytes and return as NaN-boxed QoreValue.
 uint64_t qore_rt_make_string_len(const char* str, uint64_t len);
+//! As qore_rt_make_string_len() for ASCII text: the string has its ASCII prefix known (qore#6625)
+uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len);
 
 //! Execute a backquote command and return stdout as a NaN-boxed string.
 uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink);
