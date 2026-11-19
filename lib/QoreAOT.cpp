@@ -4169,17 +4169,22 @@ public:
                 }
                 if (inst->exception_target) {
                     has_exception_paths = true;
+                    exception_targets.insert(inst->exception_target);
                 }
                 if (auto* thr = qore_ir_inst_cast<const QoreIRThrowInstruction*>(inst)) {
                     has_exception_paths |= thr->exception_target != nullptr;
+                    exception_targets.insert(thr->exception_target);
                 } else if (auto* inv = qore_ir_inst_cast<const QoreIRInvokeInstruction*>(inst)) {
                     has_exception_paths |= inv->exception_target != nullptr;
+                    exception_targets.insert(inv->exception_target);
                 } else if (auto* inv_md =
                         qore_ir_inst_cast<const QoreIRInvokeMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_md->exception_target != nullptr;
+                    exception_targets.insert(inv_md->exception_target);
                 } else if (auto* inv_de =
                         qore_ir_inst_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(inst)) {
                     has_exception_paths |= inv_de->exception_target != nullptr;
+                    exception_targets.insert(inv_de->exception_target);
                 }
                 switch (inst->opcode) {
                     case QoreIROpcode::CreateClosure:
@@ -4417,6 +4422,8 @@ private:
     std::unordered_set<const QoreIRInstruction*> unknown_handler_locals;
     std::unordered_map<uint32_t, size_t> scope_enter_idx;
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
+    //! the blocks that an exception edge targets
+    std::unordered_set<const QoreIRBasicBlock*> exception_targets;
     //! catch_depth_in: no path into the block seen yet
     static constexpr int CatchDepthUnknown = -2;
     //! catch_depth_in: the paths into the block disagree
@@ -4564,6 +4571,73 @@ private:
         return why;
     }
 
+    //! Returns true if a scope of \a scopes entered in the region [\a first..\a last] can be open on an edge to its
+    //! exit block
+    /** A forward dataflow over the region's blocks of the scopes entered and not yet exited (a trim leaves the scope
+        open); the region's entry has none of them open
+    */
+    static bool handlerScopeOpenAtExit(const QoreIRFunction& fn, size_t first, size_t last,
+            const std::unordered_set<uint32_t>& scopes) {
+        const size_t count = last - first + 1;
+        std::unordered_map<const QoreIRBasicBlock*, size_t> region_idx;
+        region_idx.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            region_idx[fn.blocks[first + i].get()] = i;
+        }
+        const QoreIRBasicBlock* exit = fn.blocks[last + 1].get();
+        std::vector<std::set<uint32_t>> open_in(count);
+        std::vector<bool> queued(count, false);
+        std::vector<bool> visited(count, false);
+        std::vector<size_t> work{0};
+        queued[0] = visited[0] = true;
+        bool open_at_exit = false;
+        while (!work.empty() && !open_at_exit) {
+            size_t bi = work.back();
+            work.pop_back();
+            queued[bi] = false;
+            std::set<uint32_t> open = open_in[bi];
+            for (const auto& inst_ptr : fn.blocks[first + bi]->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst || inst->opcode == QoreIROpcode::Phi) {
+                    continue;
+                }
+                if (inst->opcode == QoreIROpcode::ScopeEnter) {
+                    uint32_t id = static_cast<const QoreIRScopeEnterInstruction*>(inst)->scope_id;
+                    if (scopes.count(id)) {
+                        open.insert(id);
+                    }
+                } else if (inst->opcode == QoreIROpcode::ScopeExit) {
+                    const auto* sx = static_cast<const QoreIRScopeExitInstruction*>(inst);
+                    if (!sx->trim) {
+                        open.erase(sx->scope_id);
+                    }
+                }
+                aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& target) {
+                    if (!target || open_at_exit) {
+                        return;
+                    }
+                    if (target == exit) {
+                        open_at_exit = !open.empty();
+                        return;
+                    }
+                    auto it = region_idx.find(target);
+                    if (it == region_idx.end()) {
+                        return;
+                    }
+                    size_t ti = it->second;
+                    size_t before = open_in[ti].size();
+                    open_in[ti].insert(open.begin(), open.end());
+                    if ((open_in[ti].size() != before || !visited[ti]) && !queued[ti]) {
+                        visited[ti] = true;
+                        queued[ti] = true;
+                        work.push_back(ti);
+                    }
+                });
+            }
+        }
+        return open_at_exit;
+    }
+
     bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
             const std::unordered_set<const void*>& body_local_set, bool dbg) {
         const size_t first = region.first;
@@ -4602,7 +4676,15 @@ private:
                 }
             }
         }
+        // nor may the first block be the target of an exception edge (an exception path's cleanup block, which the
+        // exception enters with no landing pad): the helper would be entered with the exception pending, and the
+        // coordinator's call block is no exception path (qore#6651)
+        if (exception_targets.count(fn.blocks[first].get())) {
+            return fail("exception-path block at region boundary");
+        }
         std::unordered_set<const LocalVar*> region_locals;
+        // the scopes of the on_exit, on_error and on_success handlers registered in the region
+        std::unordered_set<uint32_t> handler_scopes;
         // true if the region opens or closes a catch block
         bool has_catch_ops = false;
         // the locals that an instruction of the region can write (qore#6314)
@@ -4638,6 +4720,7 @@ private:
                                 || !in_region(it->second)) {
                             return fail("on-block-exit owner scope crosses region boundary");
                         }
+                        handler_scopes.insert(obe->owner_scope_id);
                         if (unknown_handler_locals.count(inst)) {
                             return fail("on-block-exit handler references locals that cannot be collected");
                         }
@@ -4758,6 +4841,13 @@ private:
             if (in_region(i) != enter_in) {
                 return fail("scope enter/exit crosses region boundary");
             }
+        }
+        // A scope with handlers that is still open where the region exits would have its handlers run by the
+        // helper's return, which runs the handlers registered in the helper, and not where the scope ends in the
+        // coordinator, with the exception or the return that ends it.  Such a scope has no ScopeExit when all of its
+        // paths end in a return or an exception, after the block split that ends the region (qore#6652).
+        if (!handler_scopes.empty() && handlerScopeOpenAtExit(fn, first, last, handler_scopes)) {
+            return fail("handler scope open at region exit");
         }
         // The catch blocks of the region must be opened and closed in it: the exit block of a catch block closes the
         // catch blocks of the frame down to the depth of its try statement, which the helper counts from the catch

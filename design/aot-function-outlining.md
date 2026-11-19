@@ -172,6 +172,14 @@ This generalizes the existing Phase 1.5 init-expression outliner
      catch blocks' exit blocks); the helper counts the depths of its
      exit blocks (`catch_exit_depths`) from the catch blocks open when
      it is called (qore#6651);
+   - no scope with `on_exit`, `on_error` or `on_success` handlers
+     registered in the region is open on an edge to `F` (a dataflow of
+     the scopes entered and exited): the helper's return would run the
+     handlers there, and not where the scope ends in the coordinator
+     (such a scope has no `ScopeExit` when all of its paths end in a
+     return or an exception; qore#6652); the locals that the handlers
+     registered in the region reference count as written references of
+     the region (qore#6545, below);
    - the function entry block is never part of a region.
 
    Reference-promoted closure-use locals may cross the boundary when
