@@ -290,6 +290,9 @@ public:
     //! Sets a string value in context extra
     DLLEXPORT int addSetContextValue(const char* key, const char* value);
 
+    //! Sets a string in the context extra hash with its encoding and all of its bytes (a NUL character included)
+    DLLEXPORT int addSetContextValue(const char* key, const QoreString& value);
+
     //! Sets binary data in context extra (for SEND_FROM_CONTEXT)
     DLLEXPORT int addSetContextBinary(const char* key, BinaryNode* data);
 

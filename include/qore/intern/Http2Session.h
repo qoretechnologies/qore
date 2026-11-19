@@ -1494,6 +1494,10 @@ public:
 using Http2SessionPtr = std::shared_ptr<Http2Session>;
 
 //! Convert HTTP/2 or HTTP/3 multi-value headers map to a QoreHashNode
+// see qore_string_private.h
+DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
+
 /** Template to accept maps with any comparator (e.g. std::less or ltstrcase).
 
     Handles duplicate header names per RFC 7540 Section 8.1.2.5:
@@ -1527,7 +1531,8 @@ DLLLOCAL inline QoreHashNode* httpMultiHeadersToQoreHash(
         }
         if (vals.size() == 1) {
             // Single value: store as plain string
-            headers->setKeyValue(name.c_str(), new QoreStringNode(vals[0]), nullptr);
+            // a field value that is not valid UTF-8 is obs-text, given in ISO-8859-1 (qore#6554)
+            headers->setKeyValue(name.c_str(), qore_http_field_value_string(vals[0].data(), vals[0].size()), nullptr);
         } else if (strcasecmp(name.c_str(), "cookie") == 0) {
             // RFC 7540 Section 8.1.2.5: concatenate cookie values with "; "
             QoreStringNode* joined = new QoreStringNode;
@@ -1537,12 +1542,13 @@ DLLLOCAL inline QoreHashNode* httpMultiHeadersToQoreHash(
                 }
                 joined->concat(vals[i].c_str());
             }
+            qore_http_field_value_check(joined);
             headers->setKeyValue(name.c_str(), joined, nullptr);
         } else {
             // Multiple values: store as list (matches HTTP/1.1 duplicate header behavior)
             QoreListNode* l = new QoreListNode(autoTypeInfo);
             for (const auto& v : vals) {
-                l->push(new QoreStringNode(v), nullptr);
+                l->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             headers->setKeyValue(name.c_str(), l, nullptr);
         }

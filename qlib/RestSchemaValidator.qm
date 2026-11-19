@@ -101,6 +101,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - the \c pattern of a schema is compiled once, when the schema is created by a REST schema module, which raises
+      \c REGEX-COMPILATION-ERROR for one that is not valid; before, it was compiled for each value checked, and one
+      that is not valid failed each request (issue #6603)
     - fixed logging sensitive data: when a response body cannot be serialized, only its type is logged
     - fixed @ref RestSchemaValidator::AbstractRestSchemaValidator::processResponse() "processResponse()" to accept
       response headers whose values all have the same type, such as a literal \c {"X-Total-Count": 42}; adding
@@ -406,6 +409,11 @@ public namespace RestSchemaValidator {
         Swagger 2.0 and OpenAPI 3.0 schema definitions.
     */
     public class AbstractSchemaBase inherits Qore::Serializable {
+        private {
+            #! The compiled pattern (\c src: the pattern, \c re: its Regex), if any (qore#6603)
+            transient *hash<auto> pattern_cache;
+        }
+
         #! Keeps decimal schema bounds independent of binary floating point expansion
         /** Parsers validate member types before calling this helper. JSON decimal literals and Qore
             decimal values must compare identically at inclusive and exclusive boundaries.
@@ -690,6 +698,33 @@ public namespace RestSchemaValidator {
             }
         }
 
+        #! Returns the compiled regular expression of a pattern, compiled once for each pattern string (qore#6603)
+        /** The cache is not serialized; a deserialized object compiles the pattern on first use
+
+            @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
+        */
+        private Regex getPatternRegex(string pattern) {
+            *hash<auto> pc = pattern_cache;
+            if (pc.src === pattern) {
+                return pc.re;
+            }
+            Regex re(pattern);
+            pattern_cache = {"src": pattern, "re": re};
+            return re;
+        }
+
+        #! Checks the pattern of the schema, compiling it (qore#6603)
+        /** Called by a schema when it is created, so that a pattern that is not valid is an error of the schema and
+            not of each request
+
+            @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
+        */
+        private checkPattern() {
+            if (pattern.val()) {
+                getPatternRegex(pattern);
+            }
+        }
+
         private checkStringIntern(string path, string method, string name, string value) {
             string pl = getPathLabel();
             string ml = getMethodLabel();
@@ -702,7 +737,7 @@ public namespace RestSchemaValidator {
                 throw "SCHEMA-VALIDATION-ERROR",
                     sprintf("Parameter %y for %s %y and %s %y is too short (minLength: %d, actual: %d)",
                         name, pl, path, ml, method, minLength, value.length());
-            if (exists pattern && !value.regex(pattern))
+            if (exists pattern && !getPatternRegex(pattern).match(value))
                 throw "SCHEMA-VALIDATION-ERROR",
                     sprintf("Parameter %y for %s %y and %s %y does not fit the parameter string pattern "
                         "(pattern: %y, value: %y)", name, pl, path, ml, method, pattern, value);
