@@ -141,14 +141,60 @@ static Decoded decode(const unsigned char* p, size_t len, bool be) {
     return d;
 }
 
-//! the encodings checked: the explicit byte orders, and the generic "UTF-16", which is big-endian
+//! the encodings checked: the explicit byte orders, and the generic "UTF-16", which is big-endian, built in and
+//! created on the fly from a name with iconv conversion flags, which some iconv implementations do not accept (musl)
 struct Enc {
     const QoreEncoding* enc;
     bool be;
 };
 
 static std::vector<Enc> encodings() {
-    return {{QCS_UTF16LE, false}, {QCS_UTF16BE, true}, {QCS_UTF16, true}};
+    return {{QCS_UTF16LE, false}, {QCS_UTF16BE, true}, {QCS_UTF16, true},
+        {QoreEncodingManager::findCreate("UTF-16LE//"), false}, {QoreEncodingManager::findCreate("UTF-16BE//"), true},
+        {QoreEncodingManager::findCreate("UTF-16//"), true}};
+}
+
+//! the name of an encoding with iconv conversion flags that iconv does not know is given to iconv without them
+static void check_iconv_flags() {
+    // an iconv that does not know any name with conversion flags, as musl's
+    auto musl = [](const std::string& name) -> bool {
+        return name.find("//") == std::string::npos && (name == "UTF-16LE" || name == "UTF-32");
+    };
+    // an iconv that takes the flags off, as glibc and GNU libiconv
+    auto glibc = [](const std::string& name) -> bool {
+        std::string base = name.substr(0, name.find("//"));
+        return base == "UTF-16LE" || base == "UTF-32";
+    };
+    struct Case {
+        const char* code;
+        const char* musl;
+        const char* glibc;
+    };
+    static const Case cases[] = {
+        {"UTF-16LE//", "UTF-16LE", ""},
+        {"UTF-32//TRANSLIT", "UTF-32", ""},
+        {"UTF-16LE//TRANSLIT//IGNORE", "UTF-16LE", ""},
+        // without flags, the name is given to iconv as it is
+        {"UTF-16LE", "", ""},
+        // no name before the flags
+        {"//UTF-16LE", "", ""},
+        // iconv does not know the name without the flags either
+        {"UTF-15//", "", ""},
+    };
+    for (const Case& c : cases) {
+        std::string m = qore_encoding_private::iconvCodeWithoutFlags(c.code, musl);
+        require(m == c.musl, std::string("iconv name of ") + c.code + " without flags (musl): '" + m + "'");
+        std::string g = qore_encoding_private::iconvCodeWithoutFlags(c.code, glibc);
+        require(g == c.glibc, std::string("iconv name of ") + c.code + " without flags (glibc): '" + g + "'");
+    }
+    // the encodings created on the fly from names with flags are given to iconv by a name that it knows on this
+    // platform (the name, or the name without the flags), and are Unicode forms
+    for (const char* code : {"UTF-16LE//", "UTF-16BE//", "UTF-16//"}) {
+        const qore_encoding_private* ep = qore_encoding_private::get(*QoreEncodingManager::findCreate(code));
+        std::string name = ep->getIconvCode();
+        require(name == code || name + "//" == code, std::string("iconv name of ") + code + ": " + name);
+        require(!ep->opaque_single_byte && ep->unicode_complete, std::string(code) + " is a Unicode form");
+    }
 }
 
 //! checks the first character with QoreEncoding::getCharLen() and the definition itself
@@ -328,6 +374,7 @@ int main() {
     qore_init(QL_MIT, "UTF-8", false, QLO_DISABLE_SIGNAL_HANDLING);
     int status = 0;
     try {
+        check_iconv_flags();
         for (const Enc& e : encodings()) {
             check_all(e);
             check_runs(e);
