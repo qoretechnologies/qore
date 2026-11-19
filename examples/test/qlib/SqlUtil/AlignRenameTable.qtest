@@ -1,0 +1,283 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+%requires ./MysqlTestIsolation.qm
+%requires ./OracleTestIsolation.qm
+%requires ./MssqlTestIsolation.qm
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module freetds
+%define NoFreetds
+%endtry
+
+%exec-class AlignRenameTableTest
+
+#! getAlignSql() with a description of another table name gives the SQL that renames the table (issue #6721)
+/** getAlignSqlUnlocked(), which holds the lock of the table, called getRenameSql(), which takes it again: the
+    alignment raised LOCK-ERROR ("called Mutex::lock() twice"); the comment of the table was then read under the new
+    name (PostgreSQL: an error, MySQL and SQL Server: wrong comment SQL), a table renamed with
+    \c sql_callback_executed was not renamed in the table cache, and an AbstractDatabase alignment with \c table_map
+    and \c tables renamed the table twice; runs on SQLite, and on PostgreSQL, MySQL, Oracle and SQL Server when
+    \c QORE_DB_CONNSTR_PGSQL, \c QORE_DB_CONNSTR_MYSQL, \c QORE_DB_CONNSTR_ORACLE and \c QORE_DB_CONNSTR_FREETDS are
+    set
+*/
+class AlignRenameTableTest inherits QUnit::Test {
+    private {
+        hash<string, Datasource> dbs;
+        hash<string, string> skips = {
+            "pgsql": "QORE_DB_CONNSTR_PGSQL is not set",
+            "mysql": "QORE_DB_CONNSTR_MYSQL is not set",
+            "oracle": "QORE_DB_CONNSTR_ORACLE is not set",
+            "mssql": "QORE_DB_CONNSTR_FREETDS is not set",
+        };
+    }
+
+    constructor() : Test("AlignRenameTable", "1.0", \ARGV) {
+        addTestCase("SQLite", \sqliteTest());
+        addTestCase("PostgreSQL", \pgsqlTest());
+        addTestCase("MySQL", \mysqlTest());
+        addTestCase("Oracle", \oracleTest());
+        addTestCase("SQL Server", \mssqlTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "AlignRenameTable");
+            dbs.pgsql = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skips.pgsql = "no pgsql module";
+%endif
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            connect("mysql", *string sub () { return MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL,
+                "AlignRenameTable"); });
+        }
+%else
+        skips.mysql = "no mysql module";
+%endif
+%ifndef NoOracle
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            connect("oracle", *string sub () { return OracleRunSchema::getConnectionString(ENV.QORE_DB_CONNSTR_ORACLE,
+                "AlignRenameTable"); });
+        }
+%else
+        skips.oracle = "no oracle module";
+%endif
+%ifndef NoFreetds
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            connect("mssql", *string sub () { return MssqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_FREETDS,
+                "AlignRenameTable"); });
+        }
+%else
+        skips.mssql = "no freetds module";
+%endif
+    }
+
+    globalTearDown() {
+        foreach string k in (keys dbs) {
+            dbs{k}.rollback();
+        }
+        remove dbs;
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_ORACLE) {
+            OracleRunSchema::teardown();
+        }
+        if (ENV.QORE_DB_CONNSTR_FREETDS) {
+            MssqlRunDatabase::teardown();
+        }
+    }
+
+    private connect(string db, code get_connstr) {
+        try {
+            Datasource ds(get_connstr());
+            ds.open();
+            dbs{db} = ds;
+        } catch (hash<ExceptionInfo> ex) {
+            skips{db} = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    sqliteTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        check(new Datasource("sqlite3:x@:memory:"), "sqlite");
+    }
+
+    pgsqlTest() {
+        check(getDs("pgsql"), "pgsql");
+    }
+
+    mysqlTest() {
+        check(getDs("mysql"), "mysql");
+    }
+
+    oracleTest() {
+        check(getDs("oracle"), "oracle");
+    }
+
+    mssqlTest() {
+        check(getDs("mssql"), "mssql");
+    }
+
+    private Datasource getDs(string db) {
+        if (!dbs{db}) {
+            testSkip(skips{db});
+        }
+        return dbs{db};
+    }
+
+    #! returns a table object of the description of a table of another name
+    private AbstractTable getDescription(Datasource ds, string name, *string comment) {
+        AbstractTable want = (new Table(ds, name)).getTable();
+        hash<auto!> desc = {"columns": {"id": {"qore_type": Type::Int}}};
+        if (comment) {
+            desc += {"comment": comment};
+        }
+        want.setupTable(desc);
+        return want;
+    }
+
+    private dropTables(Datasource ds, list<string> names) {
+        ds.rollback();
+        foreach string n in (names) {
+            try {
+                ds.exec("drop table " + n);
+                ds.commit();
+            } catch (hash<ExceptionInfo> ex) {
+                ds.rollback();
+            }
+        }
+    }
+
+    private check(Datasource ds, string db) {
+        on_exit ds.rollback();
+        on_exit dropTables(ds, ("art_a", "art_b"));
+        dropTables(ds, ("art_a", "art_b"));
+        AbstractTable proto = getDescription(ds, "art_a");
+        bool comments = proto.supportsTableComments();
+        map ds.exec($1), proto.getCreateSql();
+        ds.commit();
+
+        # the rename, with the callbacks called once
+        AbstractTable t = new Table(ds, "art_a").getTable();
+        list<auto> sqls = ();
+        list<auto> infos = ();
+        list<auto> sql = t.getAlignSql(getDescription(ds, "art_b"), {
+            "sql_callback": sub (string str) { sqls += str; },
+            "info_callback": sub (string str, int ac, string type, string name, *string table, *string new_name,
+                    *string info) {
+                if (type == "table") {
+                    infos += {"name": name, "new_name": new_name};
+                }
+            },
+        });
+        assertEq(1, sql.size(), db + ": one statement: " + sprintf("%y", sql));
+        assertRegex("(\\bsp_|\\b)rename\\b", sql[0].lwr(), db);
+        assertEq(sql, sqls, db + ": the SQL callback is called once");
+        assertEq(({"name": "art_a", "new_name": "art_b"},), infos, db + ": the info callback is called once");
+
+        # a table with a comment: it is compared with the comment of the description as read under its old name
+        if (comments) {
+            map ds.exec($1), (new Table(ds, "art_a")).getTable().getAlignSql(getDescription(ds, "art_a",
+                "hello"));
+            ds.commit();
+            t = new Table(ds, "art_a").getTable();
+            assertEq(1, t.getAlignSql(getDescription(ds, "art_b", "hello")).size(),
+                db + ": the same comment is not set again");
+            t = new Table(ds, "art_a").getTable();
+            list<auto> l = t.getAlignSql(getDescription(ds, "art_b"));
+            assertEq(2, l.size(), db + ": the comment is removed: " + sprintf("%y", l));
+        }
+
+        # with sql_callback_executed, the table is renamed in the table cache
+        t = new Table(ds, "art_a").getTable();
+        Tables cache();
+        cache.add("art_a", t);
+        sql = t.getAlignSql(getDescription(ds, "art_b", comments ? "hello" : NOTHING), {
+            "sql_callback": sub (string str) { ds.exec(str); },
+            "sql_callback_executed": True,
+            "db_table_cache": cache,
+        });
+        ds.commit();
+        assertEq("art_b", t.getName(), db + ": the table is renamed");
+        assertFalse(cache.hasKey("art_a"), db + ": the cache has no table under the old name");
+        assertTrue(cache.hasKey("art_b"), db + ": the cache has the table under the new name");
+
+        # an AbstractDatabase alignment with table_map and the table renames it once
+        map ds.exec($1), (new Table(ds, "art_b")).getTable().getAlignSql(getDescription(ds, "art_a",
+            comments ? "hello" : NOTHING));
+        ds.commit();
+        AbstractDatabase adb = (new Database(ds)).getDatabase();
+        hash<auto!> desc = {"columns": {"id": {"qore_type": Type::Int}}};
+        if (comments) {
+            desc += {"comment": "hello"};
+        }
+        list<auto> dsql = adb.getAlignSql({"table_map": {"art_a": "art_b"}, "tables": {"art_b": desc}});
+        assertEq(1, (select dsql, $1.lwr() =~ /(\bsp_|\b)rename\b/).size(),
+            db + ": one rename: " + sprintf("%y", dsql));
+        assertEq((), (select dsql, $1.lwr() =~ /create table/), db + ": no create: " + sprintf("%y", dsql));
+
+        # the same with the SQL executed by the callback, and (where a constraint can be added to an existing table)
+        # a table aligned before the renamed one with a foreign constraint that references it
+        hash<auto!> schema = {"table_map": {"art_a": "art_b"}, "tables": {}};
+        bool fk = db != "sqlite";
+        on_exit dropTables(ds, ("art_c",));
+        if (fk) {
+            desc.columns = {"id": {"qore_type": Type::Int, "notnull": True}};
+            desc += {"primary_key": {"name": "pk_art_b", "columns": "id"}};
+            schema.tables.art_c = {
+                "columns": {"id": {"qore_type": Type::Int}, "b_id": {"qore_type": Type::Int}},
+                "foreign_constraints": {"fk_art_c_b": {"columns": "b_id", "table": "art_b", "target_columns": "id"}},
+            };
+        }
+        schema.tables.art_b = desc;
+        list<string> executed = ();
+        adb = (new Database(ds)).getDatabase();
+        adb.getAlignSql(schema, {"sql_callback": sub (string str) { ds.exec(str); executed += str; },
+            "sql_callback_executed": True});
+        ds.commit();
+        assertEq(1, (select executed, $1.lwr() =~ /(\bsp_|\b)rename\b/).size(),
+            db + ": one rename: " + sprintf("%y", executed));
+        assertFalse((new Table(ds, "art_a")).checkExistence(), db + ": the table has its old name no more");
+        assertTrue((new Table(ds, "art_b")).checkExistence(), db + ": the table has its new name");
+        if (fk) {
+            assertTrue((new Table(ds, "art_c")).getTable().getForeignConstraints().hasKey("fk_art_c_b"),
+                db + ": the foreign constraint references the renamed table");
+        }
+        # the schema is aligned
+        assertEq((), (new Database(ds)).getDatabase().getAlignSql(schema - "table_map"),
+            db + ": nothing is left to align");
+    }
+}

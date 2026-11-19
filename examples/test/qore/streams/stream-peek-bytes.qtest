@@ -104,15 +104,21 @@ class StreamPeekBytesTest inherits QUnit::Test {
             assertEq(NOTHING, r.readLine(), cls);
         }
 
-        # an end-of-line marker with bytes 0x80 - 0xff ("¶" in UTF-8 is <c2b6>)
+        # an end-of-line marker with bytes 0x80 - 0xff ("¶" in UTF-8 is <c2b6>), after a byte that is not valid
+        # UTF-8, which is read without a check with the encoding_errors option "keep"
         string data = "a\xffb¶é¶";
         foreach string cls in ("StreamReader", "BufferedStreamReader") {
             StreamReader r = create_object(cls, new StringInputStream(data), "UTF-8");
+            r.setEncodingErrors("keep");
             assertEq("a\xffb", r.readLine("¶"), cls + " non-ASCII eol");
             assertEq("é", r.readLine("¶"), cls + " non-ASCII eol");
             assertEq(NOTHING, r.readLine("¶"), cls + " non-ASCII eol");
             r = create_object(cls, new StringInputStream(data), "UTF-8");
+            r.setEncodingErrors("keep");
             assertEq("a\xffb¶", r.readLine("¶", False), cls + " untrimmed non-ASCII eol");
+            # with the default ("raise"), the line is not valid UTF-8
+            r = create_object(cls, new StringInputStream(data), "UTF-8");
+            assertThrows("INVALID-ENCODING", "byte offset 1$", \r.readLine(), "¶");
         }
     }
 

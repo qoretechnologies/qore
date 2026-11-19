@@ -92,6 +92,19 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
             },
         };
 
+        #! Valid connection location read options
+        /** \c encoding_errors is passed through to the resolved target, which gives its default (\c "raise") when
+            it is not set
+
+            @since FileLocationHandler 3.0
+        */
+        const ConnectionLocationReadOpts = ConnectionLocationOpts + {
+            "encoding_errors": <FileHandlerOptionInfo>{
+                "type": "string",
+                "desc": EncodingErrorsOption.desc,
+            },
+        };
+
         #! The module providing connection resolution
         const ConnectionProviderModule = "ConnectionProvider";
     }
@@ -224,7 +237,7 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return ConnectionLocationOpts;
+        return ConnectionLocationReadOpts;
     }
 
     #! Gets supported write options

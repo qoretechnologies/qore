@@ -109,7 +109,8 @@ public:
         }
         ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
         for (int i = 0; names[i]; i++) {
-            list->push(new QoreStringNode(names[i]), xsink);
+            // MongoDB names are UTF-8
+            list->push(new QoreStringNode(names[i], QCS_UTF8), xsink);
         }
         bson_strfreev(names);
         return list.release();
@@ -138,7 +139,7 @@ public:
         if (!uri) {
             return nullptr;
         }
-        return new QoreStringNode(mongoc_uri_get_string(uri));
+        return new QoreStringNode(mongoc_uri_get_string(uri), QCS_UTF8);
     }
 
     //! Reference self

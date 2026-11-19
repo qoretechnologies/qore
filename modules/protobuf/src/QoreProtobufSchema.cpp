@@ -541,7 +541,8 @@ QoreStringNode* QoreProtobufSchema::toJson(const char* type, const QoreHashNode*
         return nullptr;
     }
 
-    return new QoreStringNode(json);
+    // protobuf's JSON is UTF-8
+    return new QoreStringNode(json, QCS_UTF8);
 }
 
 QoreHashNode* QoreProtobufSchema::fromJson(const char* type, const QoreString& json,
@@ -558,11 +559,17 @@ QoreHashNode* QoreProtobufSchema::fromJson(const char* type, const QoreString& j
 
     std::unique_ptr<google::protobuf::Message> msg(proto->New());
 
+    // protobuf's JSON parser takes UTF-8
+    TempEncodingHelper utf8(json, QCS_UTF8, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     google::protobuf::util::JsonParseOptions opts;
     opts.ignore_unknown_fields = false;
 
     auto status = google::protobuf::util::JsonStringToMessage(
-        std::string(json.c_str(), json.size()), msg.get(), opts);
+        std::string(utf8->c_str(), utf8->size()), msg.get(), opts);
     if (!status.ok()) {
         xsink->raiseException("PROTOBUF-JSON-ERROR", "failed to parse JSON as message type '%s': %s",
             type, status.ToString().c_str());

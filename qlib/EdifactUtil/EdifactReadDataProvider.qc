@@ -65,6 +65,7 @@ public namespace EdifactUtil {
                     "default_value": EdifactEncoding::ISO_8859_1,
                     "allowed_values": AllowedEncodings,
                 },
+                "encoding_errors": EncodingErrorsOptionInfo,
                 "skip_service_segments": <DataProviderOptionInfo>{
                     "display_name": "Skip Service Segments",
                     "short_desc": "Skip envelope segments during iteration",
