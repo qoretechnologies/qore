@@ -40,7 +40,6 @@ public class GroqDataProvider inherits GroqDataProviderCommon {
     private {
         #! Dynamic child data providers
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
 
         #! Default child data providers
         const DefaultChildMap = {
@@ -49,6 +48,10 @@ public class GroqDataProvider inherits GroqDataProviderCommon {
             "list-models":
                 Class::forName("GroqDataProvider::GroqListModelsDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     #! Creates the object from a RestClientIo client

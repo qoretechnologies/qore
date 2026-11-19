@@ -245,7 +245,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! AsyncSocketIoController for async operations
         AsyncSocketIo::AsyncSocketIoController controller;
 
-
         #! Logger
         *LoggerInterface logger;
 
@@ -278,9 +277,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Process-local manager id counter used in @ref owner_id.
         static int next_manager_id = 0;
-
-        #! Lock for manager id allocation.
-        static Mutex manager_id_lock();
 
         #! Timestamp of the last idle-connection cleanup, used by @ref maybeCleanupIdle().
         /** Without periodic cleanup, idle connections accumulate in the pool indefinitely;
@@ -422,6 +418,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             is inside the manager when teardown completes.
         */
         Counter in_flight();
+    }
+
+    private:internal {
+        #! Lock for manager id allocation.
+        static Mutex manager_id_lock();
     }
 
     #! Creates a new connection manager with the given options

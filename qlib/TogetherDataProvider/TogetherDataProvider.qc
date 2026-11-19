@@ -37,7 +37,6 @@ public class TogetherDataProvider inherits TogetherDataProviderCommon {
 
     private {
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
 
         const DefaultChildMap = {
             "chat-completion":
@@ -47,6 +46,10 @@ public class TogetherDataProvider inherits TogetherDataProviderCommon {
             "generate-image":
                 Class::forName("TogetherDataProvider::TogetherImageGenerationDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     constructor(RestClientIo::RestClientIo rest) : TogetherDataProviderCommon(rest) {

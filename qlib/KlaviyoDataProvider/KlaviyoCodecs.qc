@@ -221,7 +221,9 @@ public class KlaviyoCodecs {
     private {
         #! Set once the codecs have been registered
         static bool registered = False;
+    }
 
+    private:internal {
         #! Serializes registration
         static Mutex lck();
     }

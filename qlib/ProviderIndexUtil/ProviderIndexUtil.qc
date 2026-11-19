@@ -421,9 +421,6 @@ public class ProviderIndexUtil {
     public {}
 
     private {
-        #! Global mutex
-        static Mutex m();
-
         #! Global data provider index
         static *hash<DataProviderIndexInfo> index;
 
@@ -436,9 +433,6 @@ public class ProviderIndexUtil {
         #! Thread currently initializing the data provider index
         static *int initializing_tid;
 
-        #! Condition for threads waiting for data provider index initialization
-        static Condition init_cond();
-
         #! Serialized metadata retained until the corresponding app is requested
         static hash<string, hash<auto>> raw_appinfomap = {};
         static hash<string, hash<string, hash<auto>>> raw_actioninfomap = {};
@@ -448,7 +442,6 @@ public class ProviderIndexUtil {
         static bool metadata_initialized;
         static bool metadata_initializing;
         static *int metadata_initializing_tid;
-        static Condition metadata_init_cond();
 
         #! Per-app metadata materialization state
         static hash<string, bool> app_metadata_initialized = {};
@@ -513,9 +506,6 @@ public class ProviderIndexUtil {
         #! The thread reloading the index
         static *int reload_tid;
 
-        #! Condition for threads waiting for a reload to finish
-        static Condition reload_cond();
-
         #! The last error reading the index while it is reloaded; only set by the reloading thread
         static *string reload_read_error;
 
@@ -549,6 +539,17 @@ public class ProviderIndexUtil {
     }
 
     private:internal {
+        #! Global mutex
+        static Mutex m();
+
+        #! Condition for threads waiting for data provider index initialization
+        static Condition init_cond();
+
+        static Condition metadata_init_cond();
+
+        #! Condition for threads waiting for a reload to finish
+        static Condition reload_cond();
+
         #! Global logger
         static *LoggerInterface logger;
 

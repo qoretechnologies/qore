@@ -2510,8 +2510,18 @@ int qore_test_local_var_stack_size() {
 
 //! Moves the clock that FastCell and FastResponseSlot ages are measured by forward, so that a test need not wait
 /** @param ms the time to move the clock forward by, in milliseconds
+
+    @throw PERMISSION-DENIED the calling code is sandboxed: the clock is process-wide, and moving it expires the cached
+    data of every caller (qore#6750)
 */
 nothing qore_test_advance_fast_clock(softint ms) {
+    {
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::All);
+        if (governing) {
+            xsink->raiseException("PERMISSION-DENIED", "sandboxed code cannot move the process-wide fast clock");
+            return QoreValue();
+        }
+    }
     if (ms < 0) {
         xsink->raiseException("FASTCELL-ERROR", "the clock cannot move backward (" QLLD " ms)", (int64)ms);
         return QoreValue();

@@ -36,7 +36,6 @@ public class CohereDataProvider inherits CohereDataProviderCommon {
 
     private {
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
 
         const DefaultChildMap = {
             "chat":
@@ -48,6 +47,10 @@ public class CohereDataProvider inherits CohereDataProviderCommon {
             "classify":
                 Class::forName("CohereDataProvider::CohereClassifyDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     constructor(RestClientIo::RestClientIo rest) : CohereDataProviderCommon(rest) {

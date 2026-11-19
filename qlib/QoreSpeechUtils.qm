@@ -290,6 +290,9 @@ public class SpeechProviderRegistry {
     private {
         static hash<string, AbstractTranscriberFactory> transcriber_cache = {};
         static hash<string, AbstractSpeechSynthesizerFactory> synthesizer_cache = {};
+    }
+
+    private:internal {
         static Mutex registry_lock();
     }
 

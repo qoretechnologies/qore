@@ -59,9 +59,6 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         #! Static counter for connection IDs (shared across protocols for globally unique IDs)
         static int next_connection_id = 0;
 
-        #! Static lock for connection ID counter
-        static Mutex connection_id_lock();
-
         #! Connect timeout
         timeout connect_timeout;
 
@@ -119,7 +116,11 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             (see @ref HttpClientConnectionManager::pinConnection()).  Used to keep a
             connection-scoped persistent transaction (HTTP/1.1) on exactly one socket. */
         bool leased = False;
+    }
 
+    private:internal {
+        #! Static lock for connection ID counter
+        static Mutex connection_id_lock();
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
