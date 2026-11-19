@@ -1,0 +1,23 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain and requires DdCfN after its
+# header (qore#6351)
+
+%modern
+
+module DdCfO {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%requires DdCfN
+
+public namespace DdCfO {
+    public string sub run() {
+        return DdCfN::run();
+    }
+}

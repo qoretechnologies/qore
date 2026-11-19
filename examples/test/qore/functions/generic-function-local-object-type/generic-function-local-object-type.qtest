@@ -27,6 +27,10 @@
     local-object.q constructs such objects in functions, methods, static methods and closures and prints their type
     arguments; its output must be the one in local-object.expected in every execution mode, on the IR tier and in
     programs compiled with qcc -O0 and -O3.
+
+    Both programs also cast to hashdecls with the type parameters of the code (cast<hash<H<U>>>, qore#6327), whose
+    hashdecl is resolved with the type arguments of the running call when the cast is evaluated; with a debugger
+    attached, a qcc program reads the cast from the AOT image, where it is written with the hashdecl's type path.
 */
 class GenericFunctionLocalObjectTypeTest inherits QUnit::Test {
     private {

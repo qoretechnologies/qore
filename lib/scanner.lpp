@@ -51,6 +51,7 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include "parser.hpp"
 
@@ -120,6 +121,14 @@ static ssize_t qore_scanner_read(QoreParseState* state, FILE* in, char* buf, siz
 
 // a token scanned again in the generic_rescan start condition is one token: the scanner goes back to INITIAL before
 // the rule's action runs (see QORE_GENERIC_STATIC_REF_CUT())
+//! flex's default rule copies text that no rule matches to the output; the scanner never writes the source, so such
+//! text is a parse error, once per line (issue #6512: the argument of %ifdef on a line that ended with CRLF was
+//! written to stdout)
+#define ECHO { if (yyextra->unexpected_text_line != yylloc->first_line) { \
+    yyextra->unexpected_text_line = yylloc->first_line; \
+    parse_error(*get_loc(yylloc), "unexpected text in the source: '%s'", \
+        (yytext[0] == '\r' ? "\\r" : (yytext[0] == '\n' ? "\\n" : yytext))); } }
+
 #define YY_USER_ACTION { yylloc->update(yylineno, yyleng, yytext); \
     set_native_token_info(yylloc, yyextra); \
     if (yyextra->line_start_directive_active && (YY_START == INITIAL || YY_START == generic_rescan) && yyleng == 1 \
@@ -403,7 +412,7 @@ static void scanner_process_path(QoreString& npath, char* ip) {
 
              if (tpath[0] == '.' && tpath[1] == '.') {
                 // substitue program path if available
-                const char* sp = getProgram()->parseGetScriptDir();
+                const char* sp = qore_program_ops(getProgram()).parseGetScriptDir();
                 if (sp) {
                    size_t l = strlen(sp);
                    if (tpath[0] != '/' && tpath[0] != '\\' && sp[l-1] != '/' && sp[l-1] != '\\')
@@ -448,6 +457,8 @@ static QoreString* get_include_file_name(char* file) {
 
     // if the filename begins with an environment variable, then try to do environment variable substitution
     if (file[0] == '$') {
+        // the file depends on the environment where the code is loaded (qore#6351)
+        qore_program_private::setLoadDependentParse(getProgram());
         QoreString* rv = new QoreString;
 
         QoreString var;
@@ -477,7 +488,7 @@ static QoreString* get_include_file_name(char* file) {
     QoreString *rv;
 
     // check in current directory of script first
-    const char* sp = getProgram()->parseGetScriptDir();
+    const char* sp = qore_program_ops(getProgram()).parseGetScriptDir();
     if (sp) {
         rv = findFileInPath(file, sp);
         if (rv) {
@@ -485,9 +496,11 @@ static QoreString* get_include_file_name(char* file) {
         }
     }
 
+    // found through a search path, the file depends on the environment where the code is loaded (qore#6351)
+    qore_program_private::setLoadDependentParse(getProgram());
     rv = findFileInEnvPath(file, "QORE_INCLUDE_DIR");
     if (!rv) {
-        const char* pp = getProgram()->parseGetIncludePath();
+        const char* pp = qore_program_ops(getProgram()).parseGetIncludePath();
         if (pp) {
             rv = findFileInPath(file, pp);
         }
@@ -527,7 +540,7 @@ static void set_include_path(const char* path) {
     scanner_process_path(npath, ip);
 
     //printd(5, "setting include path: '%s'\n", npath.c_str());
-    getProgram()->parseSetIncludePath(npath.c_str());
+    qore_program_ops(getProgram()).parseSetIncludePath(npath.c_str());
 }
 
 // the parse directives that access the filesystem record it in the functional domain of the Program (see
@@ -680,6 +693,18 @@ static int64 parse_get_octal(YYLTYPE* yylloc, const char* str) {
             LLONG_MAX);
     }
     return rv;
+}
+
+//! returns the offset of an implicit argument reference ($N): decimal, as leading zeros are ignored ($08 is $8, $010
+//! is $10); raises a parse exception if it cannot be represented (issue #6529)
+static int parse_get_implicit_arg_offset(YYLTYPE* yylloc, const char* str) {
+    errno = 0;
+    long rv = strtol(str + 1, 0, 10);
+    if (errno == ERANGE || rv > INT_MAX) {
+        parse_error(*get_loc(yylloc), "implicit argument offset '%s' is too large", str);
+        return 1;
+    }
+    return static_cast<int>(rv);
 }
 
 static inline int get_int_2(const char*& p) {
@@ -1583,6 +1608,12 @@ static bool scanner_match_ends_with(const char* text, size_t len, const char* kw
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
     if (yybs) { /* need to close file and switch to previous buffer */ \
         fclose(yyin); if (yybs) yy_switch_to_buffer(yybs, yyscanner); \
+        /* the including file resumes at the end of its last token (issue #6561) */ \
+        if (!yyextra->include_resume_loc.empty()) { \
+            yylloc->last_line = yyextra->include_resume_loc.back().first; \
+            yylloc->last_col = yyextra->include_resume_loc.back().second; \
+            yyextra->include_resume_loc.pop_back(); \
+        } \
         /* no token, literal or comment spans an include boundary: the including file resumes where it left */ \
         BEGIN(INITIAL); \
     } else { yyextra->ended = true; yyterminate(); } \
@@ -2152,6 +2183,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 #endif
                                         }
    \n                                   // ignore
+   .                                    // the rest of a line, as the CR of a CRLF line (issue #6512)
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }
@@ -2184,7 +2216,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                        qore_program_private::get(*pgm)->collectModuleLoadErrors(*loc,
                                                           xsink);
                                                     }
-                                                    pgm->getParseExceptionSink()->assimilate(xsink);
+                                                    qore_program_ops(pgm).getParseExceptionSink()->assimilate(xsink);
                                                  }
                                               }
                                            }
@@ -2242,7 +2274,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing argument to %%ifdef"); }
 ^%ifdef{WS}+                            { QORE_EXPR_DIRECTIVE(); BEGIN(p_ifdef); }
 <p_ifdef>{
-   [^\n\r]+$                            {
+   [^\n\r]+                               {
                                             parse_cond_push(true);
                                             if (parse_is_defined(yylloc, yytext)) {
                                                 //printd(5, "%%ifdef: '%s' is defined\n", yytext);
@@ -2261,7 +2293,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing argument to %%ifndef"); }
 ^%ifndef{WS}+                           { QORE_EXPR_DIRECTIVE(); BEGIN(p_ifndef); }
 <p_ifndef>{
-   [^\n\r]+$                            {
+   [^\n\r]+                               {
                                             parse_cond_push(true);
                                             if (!parse_is_defined(yylloc, yytext)) {
                                                 //printd(5, "ifndef: '%s' is not defined\n", yytext);
@@ -2280,7 +2312,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             parse_error(*get_loc(yylloc), "missing expression in %%if"); }
 ^%if{WS}+                               { QORE_EXPR_DIRECTIVE(); BEGIN(p_if); }
 <p_if>{
-   [^\n\r]+$                            {
+   [^\n\r]+                               {
                                             parse_cond_push(true);
                                             bool result;
                                             if (parse_evaluate_condition(yylloc, yytext, result)) {
@@ -2313,7 +2345,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%elif{WS}+[^\n\r]+$                    { QORE_EXPR_DIRECTIVE();
+^%elif{WS}+[^\n\r]+\r?$                    { QORE_EXPR_DIRECTIVE();
                                             // We're in a true branch, skip remaining elif/else to endif
                                             if (!parse_cond_else()) {
                                                 parse_error(*get_loc(yylloc), "%%elif found without %%if");
@@ -2324,7 +2356,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 BEGIN(p_skip_to_endif);
                                             }
                                         }
-^%else({WS}+[^\n\r]*)?$                              { QORE_EXPR_DIRECTIVE();
+^%else({WS}+[^\n\r]*)?\r?$                              { QORE_EXPR_DIRECTIVE();
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (!parse_cond_can_else(get_loc(yylloc))) {
                                                 if (!parse_cond_else()) {
@@ -2338,7 +2370,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             }
                                         }
 <p_skip_to_endif>{
-   ^%endif({WS}+[^\n\r]*)?$                          {
+   ^%endif({WS}+[^\n\r]*)?\r?$                          {
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 printd(5, "p_skip_to_endif: found %%endif (%s) (final)\n", yytext);
@@ -2349,7 +2381,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             //printd(5, "p_skip_to_endif: found %%endif (%s) (not final)\n", yytext);
 #endif
                                         }
-   ^%else({WS}+[^\n\r]*)?$                           {
+   ^%else({WS}+[^\n\r]*)?\r?$                           {
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             // Check for duplicate %else at the current level
                                             if (parse_cond_test(get_loc(yylloc))) {
@@ -2360,7 +2392,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             }
                                             // else: nested %else, just continue skipping
                                         }
-   ^%elif{WS}+[^\n\r]+$                 {
+   ^%elif{WS}+[^\n\r]+\r?$                 {
                                             // Check for %elif after %else at the current level
                                             if (parse_cond_test(get_loc(yylloc)) && parse_cond_has_else()) {
                                                 parse_error(*get_loc(yylloc), "%%elif after %%else in conditional block");
@@ -2382,12 +2414,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 #endif
                                         }
    \n                                   // ignore
+   .                                    // the rest of a line after a directive, as the CR of a CRLF line (issue #6512)
    <<EOF>>                              {
                                             QORE_FLEX_DO_EOF
                                         }
 }
 <p_skip_to_endif_or_else>{
-   ^%elif{WS}+[^\n\r]+$                 {
+   ^%elif{WS}+[^\n\r]+\r?$                 {
                                             // Only evaluate %elif if we're at the top level of the current conditional
                                             if (parse_cond_test(get_loc(yylloc))) {
                                                 // Check if %else was already seen
@@ -2416,7 +2449,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             }
                                             // If not at top level, just continue skipping (stay in current state)
                                         }
-   ^%else({WS}+[^\n\r]*)?$                           {
+   ^%else({WS}+[^\n\r]*)?\r?$                           {
                                             //printd(5, "p_skip_to_endif_or_else: found %else\n");
                                             check_cond_directive_tail(yylloc, yytext, "%else");
                                             if (parse_cond_test(get_loc(yylloc))) {
@@ -2430,7 +2463,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                 }
                                             }
                                         }
-   ^%endif({WS}+[^\n\r]*)?$                     {
+   ^%endif({WS}+[^\n\r]*)?\r?$                     {
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             if (parse_cond_pop(get_loc(yylloc))) {
                                                 //printd(5, "p_skip_to_endif_or_else: found %%endif (%s) (final)\n", yytext);
@@ -2456,6 +2489,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
 #endif
                                         }
    \n                                   // ignore
+   .                                    // the rest of a line after a directive, as the CR of a CRLF line (issue #6512)
    <<EOF>>                              {
                                             QORE_FLEX_DO_EOF
                                         }
@@ -2519,7 +2553,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                             QORE_FLEX_DO_EOF
                                         }
 }
-^%endif({WS}+[^\n\r]*)?$                             { QORE_EXPR_DIRECTIVE();
+^%endif({WS}+[^\n\r]*)?\r?$                             { QORE_EXPR_DIRECTIVE();
                                             check_cond_directive_tail(yylloc, yytext, "%endif");
                                             parse_cond_pop(get_loc(yylloc));
                                         }
@@ -2606,13 +2640,38 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[YMWDHSu])+
                                                        yyin = save_yyin;
                                                        BEGIN(INITIAL);
                                                     } else {
-                                                       // save file name string in QoreProgram's list
-                                                       const char* str = qore_program_private::get(*pgm)->addString(fname->c_str());
-                                                       // and record the file as a source of what is parsed, for the
-                                                       // depfile of an AOT module
-                                                       qore_program_private::get(*pgm)->addIncludedFile(fn);
-                                                       beginParsing(str, (void*)YY_CURRENT_BUFFER);
+                                                       // the included file starts at its first line and column; the
+                                                       // including file resumes at the end of its last token at the
+                                                       // end of it (issue #6561); the position is recorded and the
+                                                       // scan switches to the included file all or nothing: if a
+                                                       // step raises an exception (std::bad_alloc), the position is
+                                                       // removed again and the included file is closed, and the
+                                                       // exception leaves the scan of the including file as it was
+                                                       const char* str;
+                                                       try {
+                                                          // save file name string in QoreProgram's list
+                                                          str = qore_program_private::get(*pgm)->addString(fname->c_str());
+                                                          // and record the file as a source of what is parsed, for
+                                                          // the depfile of an AOT module
+                                                          qore_program_private::get(*pgm)->addIncludedFile(fn);
+                                                          yyextra->include_resume_loc.emplace_back(yylloc->last_line,
+                                                             yylloc->last_col);
+                                                          try {
+                                                             beginParsing(str, (void*)YY_CURRENT_BUFFER);
+                                                          } catch (...) {
+                                                             yyextra->include_resume_loc.pop_back();
+                                                             throw;
+                                                          }
+                                                       } catch (...) {
+                                                          fclose(yyin);
+                                                          yyin = save_yyin;
+                                                          throw;
+                                                       }
+                                                       // no exception after this: a failure of flex to allocate the
+                                                       // buffer is fatal (YY_FATAL_ERROR)
                                                        yy_switch_to_buffer(yy_create_buffer(yyin, YY_BUF_SIZE, yyscanner), yyscanner);
+                                                       yylloc->last_line = 1;
+                                                       yylloc->last_col = 0;
                                                        BEGIN(INITIAL);
                                                     }
                                                  }
@@ -3929,7 +3988,7 @@ hash\<{WORD}\>\{                        {
 \`[^`]*\`                               yylval->string = strdup(remove_quotes(yytext)); return BACKQUOTE;
 \'[^\']*\'                              yylval->String = new QoreStringNode(remove_quotes(yytext)); return QUOTED_WORD;
 \$\$                                    yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), -1); return IMPLICIT_ARG_REF;
-\$[0-9][0-9]*                           yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), strtol(yytext + 1, 0, 0)); return IMPLICIT_ARG_REF;
+\$[0-9][0-9]*                           yylval->implicit_arg = new QoreImplicitArgumentNode(get_loc(yylloc), parse_get_implicit_arg_offset(yylloc, yytext)); return IMPLICIT_ARG_REF;
 \$#                                     return IMPLICIT_ELEMENT;
 \?\?                                    return NULL_COALESCING;
 \?:                                     return VALUE_COALESCING;

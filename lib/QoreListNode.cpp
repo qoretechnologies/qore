@@ -70,6 +70,16 @@ QoreValue& QoreListNodeEvalOptionalRefHolder::getEntryReference(size_t index) {
 }
 
 // with this variant, we can edit and reuse references from "exp"
+void QoreListNodeEvalOptionalRefHolder::releaseTmpSourceValues(const QoreListNode* keep) {
+    if (!tmp_source || !val || val == keep) {
+        return;
+    }
+    qore_list_private* l = qore_list_private::get(*val);
+    for (size_t i = 0, e = l->length; i < e; ++i) {
+        ValueHolder v(l->takeExists(i), xsink);
+    }
+}
+
 void QoreListNodeEvalOptionalRefHolder::evalIntern(QoreListNode* exp) {
     assert(!exp || exp->reference_count() == 1);
     tmp_source = false;
@@ -152,12 +162,61 @@ void QoreListNodeEvalOptionalRefHolder::evalInternMapped(QoreListNode* exp) {
     }
 }
 
+void qore_list_private::raiseElementRemovalError(size_t ind, bool for_del, const QoreTypeInfo* holder_type,
+        ExceptionSink* xsink) const {
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot %s element " QLLD " of a list of type '%s' held by an "
+            "lvalue declared as '%s': the element would have no value (NOTHING), which the declared type does not "
+            "take; use splice or extract to remove elements from the list, or declare the lvalue with an element type "
+            "that takes NOTHING (ex: list<*int>)", for_del ? "delete" : "remove", (int64)ind,
+            QoreTypeInfo::getName(complexTypeInfo), QoreTypeInfo::getName(holder_type));
+    }
+}
+
+int qore_list_private::raiseAssignmentGapError(size_t ind, ExceptionSink* xsink) const {
+    assert(elementTypeRejectsNothing());
+    const QoreTypeInfo* vti = getValueTypeInfo();
+    if (xsink) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot assign element " QLLD " of a list with " QLLD " elements "
+            "of type '%s': the elements between the end of the list and the index would have no value (NOTHING), "
+            "which the element type '%s' does not take; push the elements in order, or declare the element type to "
+            "take NOTHING (ex: list<*int>)", (int64)ind, (int64)length, QoreTypeInfo::getName(complexTypeInfo),
+            QoreTypeInfo::getName(vti));
+    }
+    return -1;
+}
+
+bool QoreTypeInfo::listElementTakesNothingIntern(const QoreTypeInfo* lti) {
+    bool rv = runtimeTakesNothing(getComplexListValueType(lti));
+    lti->list_elem_takes_nothing_cache.store(rv ? 1 : 0, std::memory_order_relaxed);
+    return rv;
+}
+
+const QoreTypeInfo* QoreTypeInfo::getOrNothingListTypeIntern(const QoreTypeInfo* lti) {
+    const QoreTypeInfo* vti = getComplexListValueType(lti);
+    const QoreTypeInfo* rv = runtimeTakesNothing(vti)
+        ? lti
+        : qore_get_complex_list_type(get_or_nothing_type_check(vti));
+    lti->or_nothing_list_cache.store(rv, std::memory_order_release);
+    return rv;
+}
+
 int qore_list_private::getLValue(size_t ind, LValueHelper& lvh, bool for_remove, ExceptionSink* xsink) {
     if (checkValid(xsink)) {
         return -1;
     }
 
     if (ind >= length) {
+        // an element past the end of the list is not created for delete or remove, as a key of a hash is not
+        // (qore_hash_private::getLValue())
+        if (for_remove) {
+            return -1;
+        }
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap
+        // (qore#6435)
+        if (ind > length && elementTypeRejectsNothing() && raiseAssignmentGapError(ind, xsink)) {
+            return -1;
+        }
         // the elements are added for this assignment; a rejected assignment removes them again
         lvh.trackVivifiedListSize(this, length);
         resize(ind + 1);
@@ -178,12 +237,51 @@ int qore_list_private::parseInitComplexListInitialization(const QoreProgramLocat
     parse_context.typeInfo = nullptr;
     int err = 0;
     if (!parseInitListInitialization(loc, parse_context, args, new_args, err)) {
-        if (parseCheckComplexListInitialization(loc, vti, parse_context.typeInfo, new_args, "initialize", true)
-            && !err) {
+        if (parseCheckConstructorArgs(loc, vti, parse_context.typeInfo, new_args) && !err) {
             err = -1;
         }
     }
     return err;
+}
+
+QoreStringNode* qore_list_private::getConstructorArgErrorDesc(const QoreTypeInfo* vti, size_t index,
+        const QoreTypeInfo* arg_ti) {
+    return new QoreStringNodeMaker("cannot initialize 'list<%s>': argument %d of type '%s' is not a valid element of "
+        "type '%s'; the constructor's arguments are the list's elements", QoreTypeInfo::getName(vti), (int)index + 1,
+        QoreTypeInfo::getName(arg_ti), QoreTypeInfo::getName(vti));
+}
+
+int qore_list_private::parseCheckConstructorArgs(const QoreProgramLocation* loc, const QoreTypeInfo* vti,
+        const QoreTypeInfo* args_type_info, const QoreValue args) {
+    // the arguments are the elements of the list (issue #6172)
+    switch (args.getType()) {
+        case NT_PARSE_LIST: {
+            const type_vec_t& value_types = args.get<const QoreParseListNode>()->getValueTypes();
+            for (unsigned i = 0, e = value_types.size(); i < e; ++i) {
+                if (!QoreTypeInfo::parseAccepts(vti, value_types[i])) {
+                    SimpleRefHolder<QoreStringNode> desc(getConstructorArgErrorDesc(vti, i, value_types[i]));
+                    parse_error(*loc, "%s", desc->c_str());
+                    return -1;
+                }
+            }
+            return 0;
+        }
+        case NT_LIST: {
+            ConstListIterator i(args.get<const QoreListNode>());
+            while (i.next()) {
+                const QoreTypeInfo* eti = i.getValue().getFullTypeInfo();
+                if (!QoreTypeInfo::parseAccepts(vti, eti)) {
+                    SimpleRefHolder<QoreStringNode> desc(getConstructorArgErrorDesc(vti, i.index(), eti));
+                    parse_error(*loc, "%s", desc->c_str());
+                    return -1;
+                }
+            }
+            return 0;
+        }
+        default:
+            break;
+    }
+    return parseCheckComplexListInitialization(loc, vti, args_type_info, args, "initialize", true);
 }
 
 int qore_list_private::parseInitListInitialization(const QoreProgramLocation* loc, QoreParseContext& parse_context,
@@ -321,7 +419,7 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
         val = a.takeReferencedValue();
     }
 
-    return newComplexListFromValue(typeInfo, val, xsink);
+    return newComplexListFromArgs(typeInfo, val, xsink);
 }
 
 QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, const QoreValue args, ExceptionSink* xsink, LexicalSemanticPolicy policy) {
@@ -336,7 +434,42 @@ QoreListNode* qore_list_private::newComplexList(const QoreTypeInfo* typeInfo, co
         val = a.takeReferencedValue();
     }
 
-    return newComplexListFromValue(typeInfo, val, xsink, policy);
+    return newComplexListFromArgs(typeInfo, val, xsink, policy);
+}
+
+QoreListNode* qore_list_private::newComplexListFromArgs(const QoreTypeInfo* typeInfo, QoreValue args,
+        ExceptionSink* xsink) {
+    return newComplexListFromValueImpl<false>(typeInfo, args, xsink, {}, true);
+}
+
+QoreListNode* qore_list_private::newComplexListFromArgs(const QoreTypeInfo* typeInfo, QoreValue args,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    return newComplexListFromValueImpl<true>(typeInfo, args, xsink, policy, true);
+}
+
+template <bool Lexical>
+int qore_list_private::acceptConstructorArg(const QoreTypeInfo* vti, size_t index, QoreValue& arg,
+        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+    const QoreTypeInfo* arg_ti = arg.getFullTypeInfo();
+    ExceptionSink arg_xsink;
+    if constexpr (Lexical) {
+        QoreTypeInfo::acceptInputParam(vti, index, nullptr, arg, &arg_xsink, policy);
+    } else {
+        QoreTypeInfo::acceptInputParam(vti, index, nullptr, arg, &arg_xsink);
+    }
+    if (!arg_xsink) {
+        return 0;
+    }
+    // a value of a type that the element type does not accept raises the error that the parse raises for an argument
+    // of such a type (issue #6172); another error (of the conversion of an accepted value) is raised as it is
+    QoreValue err = arg_xsink.getExceptionErr();
+    if (err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), "RUNTIME-TYPE-ERROR")) {
+        arg_xsink.clear();
+        xsink->raiseException("RUNTIME-TYPE-ERROR", getConstructorArgErrorDesc(vti, index, arg_ti));
+        return -1;
+    }
+    xsink->assimilate(arg_xsink);
+    return -1;
 }
 
 QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typeInfo, QoreValue init,
@@ -351,7 +484,7 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
 
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromValueImpl(const QoreTypeInfo* typeInfo, QoreValue init,
-        ExceptionSink* xsink, LexicalSemanticPolicy policy) {
+        ExceptionSink* xsink, LexicalSemanticPolicy policy, bool ctor_args) {
     ValueHolder holder(init, xsink);
 
     QoreListNode* l;
@@ -385,6 +518,12 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
             }
 
             if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                if (ctor_args) {
+                    if (acceptConstructorArg<Lexical>(vti, i.index(), entry, xsink, policy)) {
+                        return nullptr;
+                    }
+                    continue;
+                }
                 if constexpr (Lexical) {
                     QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, entry, xsink, policy);
                 } else {
@@ -400,7 +539,12 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
         holder = init = l = new QoreListNode(autoTypeInfo);
     } else {
         const QoreTypeInfo* vti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
-        if constexpr (Lexical) {
+        if (ctor_args) {
+            // a single argument of the constructor, which is the element of the list
+            if (!QoreTypeInfo::superSetOf(vti, init.getTypeInfo())) {
+                acceptConstructorArg<Lexical>(vti, 0, init, xsink, policy);
+            }
+        } else if constexpr (Lexical) {
             QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink, policy);
         } else {
             QoreTypeInfo::acceptAssignment(vti, "<list assignment>", init, xsink);
@@ -547,8 +691,17 @@ int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
         return -1;
     }
     if (index >= priv->length) {
+        // an assignment past the end of a list whose element type does not take NOTHING would leave a gap: the
+        // compiled stores reach it here (qore#6435)
+        if (priv->checkAssignmentGap(index, xsink)) {
+            val.discard(xsink);
+            return -1;
+        }
         priv->resize(index + 1);
     }
+    // a list whose element type does not take NOTHING holds no NOTHING element (qore#6435): the callers check the
+    // value
+    assert(val || !priv->elementTypeRejectsNothing());
     if (needs_scan(priv->entry[index])) {
         priv->incScanCount(-1);
     }

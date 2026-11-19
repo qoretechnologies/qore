@@ -1,0 +1,17 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that requires nothing, which DdPos requires before its header
+# (qore#6351)
+
+%modern
+
+module DdUnrel {
+    version = "1.0";
+    desc = "a module that requires nothing";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace DdUnrel {
+}

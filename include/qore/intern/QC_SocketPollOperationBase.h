@@ -48,6 +48,12 @@ DLLLOCAL QoreClass* initSocketPollOperationBaseClass(QoreNamespace& qorens);
 */
 DLLLOCAL void qore_socket_poll_op_object_deleted(SocketPollOperationBase* op);
 
+//! Called by the destructor of the Qore object of a poll operation without a C++ poll operation (one implemented in
+//! %Qore): a submitted operation is canceled (qore#6531)
+/** Does not wait for the I/O threads and runs no Qore code; nothing is done for an operation that was not submitted
+*/
+DLLLOCAL void qore_poll_op_qore_object_deleted(const QoreObject* obj);
+
 //! Releases a reference to a C++ poll operation; the last one is released by a callback worker
 /** The release of the last reference runs the operation's cleanup(), which completes requests and releases objects,
     and so can run user code; a thread that holds a temporary reference in a method of the operation's connection

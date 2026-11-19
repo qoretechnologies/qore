@@ -1,0 +1,106 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IncludeLocationsTest
+
+#! The locations of the declarations of an included file start in it, and those after it in the including file (issue #6561)
+/** The location of a token starts at the end of the last one: the first declaration of a file included with %include
+    started at the %include directive of the including file, and the first one after it in the including file at the
+    end of the included file.  A redeclared constant is reported at its declaration, which shows its location.
+*/
+public class IncludeLocationsTest inherits QUnit::Test {
+    private {
+        TmpDir tmp("qore-include-locations-");
+    }
+
+    constructor() : QUnit::Test("IncludeLocationsTest", "1.0", \ARGV) {
+        addTestCase("the first declaration of an included file", \firstLineTest());
+        addTestCase("the first declaration after an included file", \afterIncludeTest());
+        addTestCase("nested included files", \nestedTest());
+        addTestCase("declarations after an include that fails", \failedIncludeTest());
+        set_return_value(main());
+    }
+
+    private string writeFile(string name, string src) {
+        string path = tmp.path + DirSep + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(src);
+        f.close();
+        return path;
+    }
+
+    #! parses \a src, which must fail, and returns the error diagnostics
+    private list<hash<ParseDiagnosticInfo>> parseErrors(string src) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse(src, "include-locations");
+            fail("the parse did not fail");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        return (map $1, p.getParseDiagnostics(), $1.severity == "error");
+    }
+
+    #! returns the error diagnostics of \a src, which must fail, other than those of the failed %include
+    private list<hash<ParseDiagnosticInfo>> parseErrorsAfterInclude(string src) {
+        return (map $1, parseErrors(src), $1.message !~ /cannot include|cannot open include/);
+    }
+
+    private checkLoc(hash<ParseDiagnosticInfo> d, string file, int line, int col, int end_col) {
+        assertEq(file, basename(d.file ?? ""), sprintf("%y", d));
+        assertEq(line, d.startLine, sprintf("start line: %y", d));
+        assertEq(col, d.startColumn, sprintf("start column: %y", d));
+        assertEq(line, d.endLine, sprintf("end line: %y", d));
+        assertEq(end_col, d.endColumn, sprintf("end column: %y", d));
+    }
+
+    firstLineTest() {
+        string inc = writeFile("first.qc", "const Z = 1;\n");
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("const Z = 2;\n# padding\n%include " + inc + "\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        checkLoc(l[0], "first.qc", 1, 0, 11);
+    }
+
+    afterIncludeTest() {
+        string inc = writeFile("before.qc", "# a comment\nconst A = 1;\n");
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("const Z = 2;\n%include " + inc + "\nconst Z = 3;\n");
+        assertEq(1, l.size(), sprintf("%N", l));
+        checkLoc(l[0], "include-locations", 3, 0, 11);
+    }
+
+    nestedTest() {
+        string inner = writeFile("inner.qc", "const Y = 1;\n");
+        string outer = writeFile("outer.qc", "%include " + inner + "\nconst Y = 2;\n");
+        list<hash<ParseDiagnosticInfo>> l = parseErrors("%include " + outer + "\nconst Y = 3;\n");
+        assertEq(2, l.size(), sprintf("%N", l));
+        checkLoc(l[0], "outer.qc", 2, 0, 11);
+        checkLoc(l[1], "include-locations", 2, 0, 11);
+    }
+
+    #! an %include that fails does not change the locations of the declarations after it
+    failedIncludeTest() {
+        list<string> targets = (tmp.path + DirSep + "missing.qc", tmp.path);
+        # a file that cannot be read, unless the process can read it anyway (as root or with a capability)
+        string unreadable = writeFile("unreadable.qc", "const U = 1;\n");
+        chmod(unreadable, 0);
+        if (!is_readable(unreadable)) {
+            targets += unreadable;
+        }
+        foreach string target in (targets) {
+            list<hash<ParseDiagnosticInfo>> l = parseErrorsAfterInclude("const Z = 2;\n%include " + target
+                + "\nconst Z = 3;\nconst Z = 4;\n");
+            assertEq(2, l.size(), sprintf("%s: %N", target, l));
+            checkLoc(l[0], "include-locations", 3, 0, 11);
+            checkLoc(l[1], "include-locations", 4, 0, 11);
+        }
+    }
+}

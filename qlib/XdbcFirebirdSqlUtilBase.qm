@@ -237,8 +237,15 @@ table.addForeignConstraint("fk_order_lines_order", "order_id", "orders", "id", {
 
 
     @section xdbcfirebirdsqlutilbasev_0_2 XdbcFirebirdSqlUtilBase Module v0.2
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - implemented @ref select_option_recursive "recursive queries" on Firebird, which runs them to a \c max_depth of
       at most 1023 (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
+    - a recursive query can be the select of an insert-select; create-as-select, which Firebird does not support,
+      raises \c OPTION-ERROR instead of giving SQL that the database refuses
+      (<a href="https://github.com/qoretechnologies/qore/issues/6495">issue 6495</a>)
     - the \c "intersect" and \c "except" @ref select_option_set_operators "set operators" of a select, which Firebird
       does not have, raise \c SET-OPERATOR-ERROR
       (<a href="https://github.com/qoretechnologies/qore/issues/2961">issue 2961</a>)
@@ -1874,6 +1881,10 @@ string sql = db.getSqlIdentifier("Order Date");
                         # the arguments are the expression, the type, and an optional size and scale; the cast gives
                         # a value its type
                         args = firebird_infer_values(args, 1, True);
+                        # the type name is checked first, as it is written into the SQL (qore#6572)
+                        if (!QoreTypeMap{args[1]}) {
+                            SqlUtil::sql_check_cast_type(args[1]);
+                        }
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return cast<XdbcFirebirdTable>(info.table).getCastSql(exp0, args[1], args[2], args[3]);
@@ -2697,7 +2708,7 @@ string sql = db.getSqlIdentifier("Order Date");
             @since XdbcFirebirdSqlUtilBase 0.2
         */
         static string getCastSql(string exp, string type, auto size, auto scale, code<int()> bytes_per_character) {
-            string name = QoreTypeMap{type} ?? type;
+            string name = QoreTypeMap{type} ?? SqlUtil::sql_check_cast_type(type);
             *hash<auto> desc = XdbcFirebirdTypeMap{name};
             string sql = sprintf("cast (%s as %s", exp, name);
             if (desc.size == SZ_MAND) {
@@ -3222,7 +3233,9 @@ where
                 case NT_NUMBER: return string(v);
 
                 # double any single quotes in strings
-                case NT_STRING: v =~ s/'/''/g; return "'" + v + "'";
+                # issue #6586: the quotes are doubled without a regular expression, and a string whose encoding is
+                # invalid is refused
+                case NT_STRING: return AbstractSqlUtilBase::getSqlStringLiteral(v);
 
                 case NT_NULL:
                 case NT_NOTHING: return "null";
@@ -3380,6 +3393,16 @@ string str = table.getSqlValue(date);
         */
         private *int getRecursiveQueryMaxDepthLimitImpl() {
             return FirebirdRecursionDepthLimit;
+        }
+
+        #! Raises \c OPTION-ERROR: Firebird has no create-as-select statement
+        /** @throw OPTION-ERROR Firebird does not support create-as-select
+
+            @since XdbcFirebirdSqlUtilBase 0.2
+        */
+        private string getCreateAsSelectSqlImpl(string select_sql, *hash<auto> opt) {
+            throw "OPTION-ERROR", sprintf("%s: create-as-select is not supported by Firebird; create the table and "
+                "use insert-select instead", getDesc());
         }
 
         #! returns @ref True if the database requires a wildcard \c "*" to be prefixed with the table name when it appears with other column arguments in a select statement

@@ -202,6 +202,22 @@ The work that the cleanup hands to other threads is part of the cleanup, and the
   context before it is moved or released), and `AsyncIoDeferredRelease::release()` applies the delegation wherever it
   runs, so the destructor of an object of a module class that only the controller still references runs.  A
   ThreadPool task records the flag in the same context (`ThreadTask::sandbox_context`)
+- an asynchronous I/O operation that another thread submitted and the cleanup cancels, directly or with a command it
+  queues to an I/O thread (`Command::module_cleanup_delegate`, taken when the command is created and applied while
+  the I/O thread processes it): `applyModuleCleanupCancel()` gives the operation a copy of its context with the flag
+  (`QoreSandboxContext(const QoreSandboxContext*, bool)`, which keeps its sandbox), so its `abort()`, its
+  `onComplete()` and the release of its references, which run on a callback worker, are part of the cleanup.  It is
+  applied by `doCancelIntern()` and also when the cancel finds a `continuePoll()` step of the operation in flight and
+  waits for its result (`pending_aborts`): the deferred cancel keeps the context, whether the command that brings the
+  step's result (which the worker that made the step creates without the flag) completes it or the I/O thread does
+  when it stops (the test holds such a result with the `dbg_async_io_hold_step_results()` hook of a debug build).
+  This is the connection of an HTTP client connection manager that a module keeps until the end of the process: the
+  cleanup deletes the manager with the module's data, and its `closeAll()` cancels the connection's poll operation,
+  which, submitted with the context of the thread that made the request, was refused entry into the HttpClientIo
+  module's Program and reported `PROGRAM-ERROR` on stderr at every exit (qore#6510,
+  `examples/test/qlib/HttpClientIo/ModuleCleanupCancel.qtest`).  An operation that ends on its own after the close,
+  without the cleanup canceling it, is still refused, as is one that another thread canceled in its step before the
+  cleanup stops the I/O thread (its deferred cancel is completed then with the context it had)
 - in turn, such work of a thread that runs such work
 
 The destructors that the cleanup runs (of the objects in the module Programs' data in Phase 1, and of the objects in

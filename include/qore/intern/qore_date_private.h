@@ -197,7 +197,7 @@ enum qore_date_overflow : int {
 #define QORE_DATE_WIDE_MIN_EPOCH (static_cast<int64>(-67768100567971200LL))
 
 //! returns a 128-bit value saturated to the range of int64
-DLLLOCAL static inline int64 qore_date_saturate_int64(__int128 v) {
+static inline int64 qore_date_saturate_int64(__int128 v) {
     if (v > std::numeric_limits<int64>::max()) {
         return std::numeric_limits<int64>::max();
     }
@@ -2004,7 +2004,7 @@ public:
     @return QDO_NONE, QDO_NOT_FINITE if the value is NaN or infinite, or QDO_HOURS if its whole seconds do not fit an
     int64 (and so give more hours than a relative date can hold); the outputs are then not set
 */
-DLLLOCAL static inline int qore_split_float_seconds(double secs, int64& whole, int& us) {
+static inline int qore_split_float_seconds(double secs, int64& whole, int& us) {
     if (__builtin_expect(!std::isfinite(secs), 0)) {
         return QDO_NOT_FINITE;
     }

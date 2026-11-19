@@ -2106,6 +2106,160 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
     return QoreValue();
 }
 
+// returns the first class with the name, in the order of unqualified class resolution, for which check() returns
+// true: the class of the Qore namespace, the class of the current namespace, the class that the root index gives
+// (the first one declared at the lowest depth), the classes of namespaces with class handlers, the class being parsed
+// and its parent classes with the name, and then the other
+// classes with the name in other namespaces, by the depth and then the path of their namespace, so that a class with
+// the name that does not provide a member does not hide one that does (issue #1527)
+QoreClass* qore_root_ns_private::parseFindClassWithMember(const char* cname,
+        const std::function<bool(QoreClass*)>& check, bool all_classes) {
+    assert(cname);
+    std::vector<QoreClass*> tried;
+    tried.reserve(4);
+    auto try_class = [&tried, &check](QoreClass* qc) -> bool {
+        if (!qc || std::find(tried.begin(), tried.end(), qc) != tried.end()) {
+            return false;
+        }
+        tried.push_back(qc);
+        return check(qc);
+    };
+
+    if (!useBrokenNamespaceResolutionParse()) {
+        QoreClass* qc = parseFindQoreClassIntern(cname);
+        if (try_class(qc)) {
+            return qc;
+        }
+    }
+    if (qore_ns_private* nscx = parse_get_ns()) {
+        QoreClass* qc = nscx->parseFindLocalClass(cname);
+        if (try_class(qc)) {
+            return qc;
+        }
+    }
+    {
+        clmap_t::iterator i = clmap.find(cname);
+        if (i != clmap.end() && try_class(i->second.obj)) {
+            return i->second.obj;
+        }
+    }
+    {
+        NamespaceDepthListIterator nhi(nshlist);
+        while (nhi.next()) {
+            QoreClass* qc = nhi.get()->findLoadClass(cname);
+            if (try_class(qc)) {
+                return qc;
+            }
+        }
+    }
+    // without all_classes, only the classes of unqualified class resolution
+    if (!all_classes) {
+        return nullptr;
+    }
+    // the class being parsed and its parent classes with the name
+    {
+        std::vector<QoreClass*> parents;
+        parseGetParentClassesWithName(cname, parents);
+        for (QoreClass* qc : parents) {
+            if (try_class(qc)) {
+                return qc;
+            }
+        }
+    }
+    // the other classes with the name, in an order that does not depend on where the namespaces are in memory
+    struct candidate_t {
+        unsigned depth;
+        std::string path;
+        QoreClass* cls;
+    };
+    std::vector<candidate_t> others;
+    ConstAllNamespacesIterator ai(nsmap);
+    while (ai.next()) {
+        qore_ns_private* nsp = ai.get()->priv;
+        QoreClass* oc = nsp->parseFindLocalClass(cname);
+        if (oc && std::find(tried.begin(), tried.end(), oc) == tried.end()) {
+            others.push_back({nsp->depth, nsp->getPath(), oc});
+        }
+    }
+    std::sort(others.begin(), others.end(), [](const candidate_t& a, const candidate_t& b) {
+        return a.depth != b.depth ? a.depth < b.depth : a.path < b.path;
+    });
+    for (auto& i : others) {
+        if (try_class(i.cls)) {
+            return i.cls;
+        }
+    }
+    return nullptr;
+}
+
+static void get_parent_classes_with_name(const qore_class_private& qc, const char* cname,
+        std::vector<QoreClass*>& parents, std::vector<const qore_class_private*>& seen) {
+    if (!qc.scl || std::find(seen.begin(), seen.end(), &qc) != seen.end()) {
+        return;
+    }
+    seen.push_back(&qc);
+    for (auto& i : *qc.scl) {
+        QoreClass* pc = i->sclass;
+        if (!pc) {
+            continue;
+        }
+        if (!strcmp(pc->getName(), cname) && std::find(parents.begin(), parents.end(), pc) == parents.end()) {
+            parents.push_back(pc);
+        }
+        get_parent_classes_with_name(*qore_class_private::get(*pc), cname, parents, seen);
+    }
+}
+
+// adds the class being parsed, if it has the name, and its parent classes with the name, depth-first in declaration
+// order, as the methods of the hierarchy are searched (issue #1527)
+void qore_root_ns_private::parseGetParentClassesWithName(const char* cname, std::vector<QoreClass*>& parents) {
+    const qore_class_private* cc = parse_get_class_priv();
+    if (!cc) {
+        return;
+    }
+    if (!strcmp(cc->name.c_str(), cname)) {
+        parents.push_back(cc->cls);
+    }
+    std::vector<const qore_class_private*> seen;
+    get_parent_classes_with_name(*cc, cname, parents, seen);
+}
+
+// returns the first class from parseGetParentClassesWithName() that the context has private access to and that has
+// a method with the name (static first) other than copy(), and the method (issue #1527)
+QoreClass* qore_root_ns_private::parseFindParentClassWithMethod(const char* cname, const char* mname,
+        const qore_class_private* class_ctx, const QoreMethod*& method) {
+    method = nullptr;
+    if (!class_ctx) {
+        return nullptr;
+    }
+    std::vector<QoreClass*> parents;
+    parseGetParentClassesWithName(cname, parents);
+    for (QoreClass* parent : parents) {
+        // a class inherited private:internal along the path is not accessible
+        if (!qore_class_private::parseCheckPrivateClassAccess(*parent, class_ctx)) {
+            continue;
+        }
+        const QoreMethod* m = qore_class_private::get(*parent)->parseFindAnyMethodStaticFirst(mname, class_ctx);
+        if (m && (m->isStatic() || strcmp(m->getName(), "copy"))) {
+            method = m;
+            return parent;
+        }
+    }
+    return nullptr;
+}
+
+// resolves "Class::name" as a constant or static variable of a class with that name (see parseFindClassWithMember())
+QoreValue qore_root_ns_private::parseResolveClassConstantInAnyClass(const QoreProgramLocation* loc, const char* cname,
+        const char* name, const QoreTypeInfo*& typeInfo, bool& found) {
+    assert(!found);
+    QoreValue rv;
+    parseFindClassWithMember(cname, [&](QoreClass* qc) -> bool {
+        rv = qore_ns_private::parseResolveReferencedClassConstant(loc, qc, name, typeInfo, found);
+        return found;
+    });
+    return rv;
+}
+
 QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(const QoreProgramLocation* loc,
         const NamedScope& nscope, const QoreTypeInfo*& typeInfo, bool& found) {
     assert(nscope.size() > 1);
@@ -2162,14 +2316,11 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
 
     // now look for class constants if there is only a single namespace or class name in the beginning
     if (!defer_source_class_member && nscope.size() == 2) {
-        QoreClass* qc = parseFindClassIntern(nscope[0]);
-        if (qc) {
-            rv = parseResolveReferencedClassConstant(loc, qc, nscope.getIdentifier(), typeInfo, found);
-            if (found) {
-                printd(5, "qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(%s) found class " \
-                    "constant: %s\n", nscope.ostr, rv.getFullTypeName());
-                return rv;
-            }
+        rv = parseResolveClassConstantInAnyClass(loc, nscope[0], nscope.getIdentifier(), typeInfo, found);
+        if (found) {
+            printd(5, "qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(%s) found class " \
+                "constant: %s\n", nscope.ostr, rv.getFullTypeName());
+            return rv;
         }
     }
 
@@ -2525,7 +2676,7 @@ QoreClass* qore_root_ns_private::parseFindScopedClassWithMethodInternError(const
 }
 
 QoreClass* qore_root_ns_private::parseFindClassWithStaticMethodIntern(const char* cname, const char* mname,
-        const qore_class_private* class_ctx, const QoreMethod** method) {
+        const qore_class_private* class_ctx, const QoreMethod** method, bool all_classes) {
     assert(cname);
     assert(mname);
 
@@ -2533,47 +2684,22 @@ QoreClass* qore_root_ns_private::parseFindClassWithStaticMethodIntern(const char
         *method = nullptr;
     }
 
-    auto check_class = [mname, class_ctx, method](QoreClass* qc) -> QoreClass* {
-        if (!qc) {
-            return nullptr;
-        }
-        const QoreMethod* m = qore_class_private::get(*qc)->parseFindStaticMethod(mname, class_ctx);
+    // the first class with the name that has the static method, in the same order as for constants and static
+    // variables (issue #1527)
+    return parseFindClassWithMember(cname, [mname, class_ctx, method](QoreClass* qc) -> bool {
+        // private methods only of a class that the context has private access to
+        const qore_class_private* ctx = class_ctx
+                && qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx)
+            ? class_ctx : nullptr;
+        const QoreMethod* m = qore_class_private::get(*qc)->parseFindStaticMethod(mname, ctx);
         if (!m) {
-            return nullptr;
+            return false;
         }
         if (method) {
             *method = m;
         }
-        return qc;
-    };
-
-    if (!useBrokenNamespaceResolutionParse()) {
-        if (QoreClass* qc = check_class(parseFindQoreClassIntern(cname))) {
-            return qc;
-        }
-    }
-
-    if (qore_ns_private* nscx = parse_get_ns()) {
-        if (QoreClass* qc = check_class(nscx->parseFindLocalClass(cname))) {
-            return qc;
-        }
-    }
-
-    clmap_t::iterator i = clmap.find(cname);
-    if (i != clmap.end()) {
-        if (QoreClass* qc = check_class(i->second.obj)) {
-            return qc;
-        }
-    }
-
-    NamespaceDepthListIterator nhi(nshlist);
-    while (nhi.next()) {
-        if (QoreClass* qc = check_class(nhi.get()->findLoadClass(cname))) {
-            return qc;
-        }
-    }
-
-    return nullptr;
+        return true;
+    }, all_classes);
 }
 
 // called in 2nd stage of parsing to resolve constant references
@@ -2601,12 +2727,9 @@ QoreValue qore_root_ns_private::parseFindReferencedConstantValueIntern(const Qor
 
     // look for a class constant if there are only 2 elements in the scope list
     if (scname.size() == 2) {
-        QoreClass* qc = parseFindClassIntern(scname[0]);
-        if (qc) {
-            rv = parseResolveReferencedClassConstant(loc, qc, scname.getIdentifier(), typeInfo, found);
-            if (found) {
-                return rv;
-            }
+        rv = parseResolveClassConstantInAnyClass(loc, scname[0], scname.getIdentifier(), typeInfo, found);
+        if (found) {
+            return rv;
         }
     }
 
@@ -3670,6 +3793,12 @@ Var* qore_root_ns_private::parseCheckImplicitGlobalVarIntern(const QoreProgramLo
         assert(!tns->var_list.parseFindVar(vname.getIdentifier()));
         rv = tns->var_list.parseCreatePendingVar(loc, vname.getIdentifier(), typeInfo);
         varmap.update(rv->getName(), this, rv);
+        // an expression adds no code to its Program: an implicit global variable in it is a parse error, and the
+        // variable is removed when the expression's parse is rolled back (issue #6524)
+        if (qore_program_private::get(*getProgram())->expression_mode) {
+            parse_error(*loc, "global variable '%s' cannot be declared in the code of an expression", vname.ostr);
+            tns->pending_var_names.push_back(rv->getName());
+        }
     } else
         rv->checkAssignType(loc, typeInfo);
 

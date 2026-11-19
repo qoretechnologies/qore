@@ -48,6 +48,7 @@
 #include "qore/intern/LexicalSemanticPolicy.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #include <qore/QoreBufferNode.h>
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <bit>
 
@@ -549,10 +550,10 @@ static bool qore_get_as_bool_lexical(const QoreValue& value) {
         case NT_BUFFER:
             return !Strict && !value.get<const QoreBufferNode>()->empty();
         case NT_OBJECT:
-            return !Strict && value.get<const QoreObject>()->getAsBoolDefault();
+            return !Strict && qore_object_ops(value.get<const QoreObject>()).getAsBoolDefault();
         case NT_WEAKREF: {
             const QoreObject* target = value.get<const WeakReferenceNode>()->get();
-            return !Strict && target->isValid() && target->getAsBoolDefault();
+            return !Strict && target->isValid() && qore_object_ops(target).getAsBoolDefault();
         }
         case NT_WEAKREF_LIST:
             return !Strict && !value.get<const WeakListReferenceNode>()->get()->empty();

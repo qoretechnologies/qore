@@ -1,0 +1,17 @@
+hash literal: hash<string, reference<*object<T>>> hash<string, reference<*object<T>>>: equal True
+list literal: list<reference<*object<T>>> list<reference<*object<T>>>: equal True
+int hash literal: hash<string, reference<int>> hash<string, reference<int>>: equal True
+nested hash literal: hash<string, hash<string, reference<*object<T>>>> hash<string, hash<string, reference<*object<T>>>>: equal True
+nested list literal: hash<string, list<reference<*object<T>>>> hash<string, list<reference<*object<T>>>>: equal True
+hash values: list<reference<*object<T>>> list<reference<*object<T>>>: equal True
+list of literal hash values: list<list<reference<*object<T>>>> list<list<reference<*object<T>>>>: equal True
+read hash: p
+read list: p
+read variable: q
+take hash: hash<string, reference<*object<T>>>
+take list: list<reference<*object<T>>>
+take nested: hash<string, list<reference<int>>>
+object: RUNTIME-TYPE-ERROR
+NOTHING: RUNTIME-TYPE-ERROR
+int: RUNTIME-TYPE-ERROR
+push reference: list<reference<*object<T>>> 2

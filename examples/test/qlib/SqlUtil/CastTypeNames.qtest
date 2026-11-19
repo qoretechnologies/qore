@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires MysqlSqlUtil
+%requires OracleSqlUtilBase
+%requires MssqlSqlUtilBase
+%requires Sqlite3SqlUtil
+%requires XdbcFirebirdSqlUtilBase
+
+%exec-class CastTypeNamesTest
+
+#! a cast writes its type name into the SQL; only a type name is accepted (qore#6572)
+class CastTypeNamesTest inherits QUnit::Test {
+    public {
+        # type names that must be accepted, as given
+        const ValidNames = (
+            "varchar", "string", "NUMBER", "nvarchar", "text", "bigint", "double precision", "character varying",
+            "timestamp with time zone", "timestamp without time zone", "numeric(10,2)", "numeric(10, 2)",
+            "varchar(40)", "int[]", "text[][]", "myschema.mytype", "my_type$1",
+            # sizes after any word, as the databases write them
+            "nvarchar(max)", "varchar(MAX)", "varbinary(max)", "timestamp(3) with time zone",
+            "timestamp(6) with local time zone", "interval day(2) to second(6)", "varchar2(10 char)",
+            "varchar2(10 BYTE)", "number(*,2)", "char(10) character set utf8mb4",
+        );
+
+        # values that are not type names; each would change the SQL of the cast
+        const InvalidNames = (
+            "text) || current_user || cast(1 as text",
+            "int; drop table t",
+            "int -- comment",
+            "int /* comment */",
+            "a'b",
+            "a\"b",
+            "int)",
+            "(int",
+            "",
+            " int",
+            "int ",
+            "int  x",
+            "int\nx",
+            "int\tx",
+            "1int",
+            "a.b.c",
+            "numeric(10,2,3)",
+            "numeric(a)",
+            "int(1))",
+            "int(1;)",
+            "int(max char byte)",
+            "int(1)(2)",
+            "int(max,max)",
+            "int (1)",
+            "x--",
+            "é",
+        );
+    }
+
+    constructor() : Test("cast type names", "1.0", \ARGV) {
+        addTestCase("sql_check_cast_type()", \checkFunction());
+        addTestCase("cop_cast() refuses a value that is not a type name when it is created", \copCast());
+        addTestCase("column operators of every driver", \columnOperators());
+        addTestCase("expressions of every driver", \expressions());
+        set_return_value(main());
+    }
+
+    checkFunction() {
+        foreach string n in (ValidNames) {
+            assertEq(n, sql_check_cast_type(n), n);
+        }
+        foreach string n in (InvalidNames) {
+            assertThrows("OPERATOR-ERROR", "invalid cast type name", \sql_check_cast_type(), (n,), n);
+        }
+        # a name that is not ASCII is not given in the message
+        assertThrows("OPERATOR-ERROR", "<2 bytes>", \sql_check_cast_type(), ("é",));
+    }
+
+    copCast() {
+        foreach string n in (ValidNames) {
+            assertEq(n, cop_cast("c", n).arg[0], n);
+        }
+        foreach string n in (InvalidNames) {
+            assertThrows("OPERATOR-ERROR", "invalid cast type name", \cop_cast(), ("c", n), n);
+        }
+    }
+
+    #! the column operator of each driver, as it renders the SQL of a cast
+    columnOperators() {
+        hash<string, code> ops = {
+            "pgsql": PgsqlTable::PgsqlCopMap{COP_CAST}.code,
+            "mysql": MysqlTable::MysqlCopMap{COP_CAST}.code,
+            "oracle": OracleTable::OracleCopMap{COP_CAST}.code,
+            "mssql": MssqlTable::MssqlCopMap{COP_CAST}.code,
+            "sqlite3": Sqlite3Table::Sqlite3CopMap{COP_CAST}.code,
+            "firebird": XdbcFirebirdTable::XdbcFirebirdCopMap{COP_CAST}.code,
+        };
+        foreach hash<auto> i in (ops.pairIterator()) {
+            foreach string n in (InvalidNames) {
+                assertThrows("OPERATOR-ERROR", "invalid cast type name", i.value, ("c", (n,)), i.key + ": " + n);
+            }
+            # a Qore type name is translated to a type of the database
+            string sql = i.value("c", ("string", 20));
+            assertRegex("^cast ?\\(c as [a-z0-9]+", sql.lwr(), i.key);
+            assertFalse(sql.lwr() =~ /as string/, i.key);
+            # a type name that the driver does not describe is given as it is; it raised RUNTIME-TYPE-ERROR
+            assertRegex("as varchar2\\(10 char\\)\\)$", i.value("c", ("varchar2(10 char)",)), i.key);
+            assertRegex("as number\\(\\*,2\\)\\)$", i.value("c", ("number(*,2)",)), i.key);
+        }
+    }
+
+    #! the data provider expression of each driver that has one: the type name is checked before anything else
+    expressions() {
+        hash<string, code> exprs = {
+            "pgsql": PgsqlTable::PgsqlExpressionMap{COP_CAST}.code,
+            "mysql": MysqlTable::MysqlExpressionMap{COP_CAST}.code,
+            "oracle": OracleTable::OracleExpressionMap{COP_CAST}.code,
+            "firebird": XdbcFirebirdTable::FirebirdExpressionMap{COP_CAST}.code,
+        };
+        foreach hash<auto> i in (exprs.pairIterator()) {
+            foreach string n in (InvalidNames) {
+                hash<QueryInfo> info();
+                assertThrows("OPERATOR-ERROR", "invalid cast type name", i.value, (\info, ER_Field, ("x", n)),
+                    i.key + ": " + n);
+            }
+        }
+    }
+}

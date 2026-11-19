@@ -56,6 +56,11 @@
     execution modes release the previous value of the same instruction.  When the scope ends, its temporaries are
     released in the reverse order of their creation.
 */
+class QoreStatementTempScope;
+
+//! the innermost scope of the thread's temporaries (defined in AbstractStatement.cpp)
+DLLLOCAL extern thread_local QoreStatementTempScope* qore_current_temp_scope;
+
 class QoreStatementTempScope {
 public:
     //! creates the scope and makes it the innermost scope of the thread
@@ -64,10 +69,21 @@ public:
     DLLLOCAL explicit QoreStatementTempScope(ExceptionSink* xsink);
 
     //! releases the temporaries held and restores the enclosing scope
-    DLLLOCAL ~QoreStatementTempScope();
+    /** Inlined explicitly with release(): every statement of a loop runs it, on a hot path whose inlining depended
+        on the size of the libqore unit (qore#6494; tools/hot-inlining.txt)
+    */
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE ~QoreStatementTempScope() {
+        release();
+        assert(qore_current_temp_scope == this);
+        qore_current_temp_scope = prev;
+    }
 
     //! releases the temporaries held so far, in the reverse order of their creation; the scope stays active
-    DLLLOCAL void release();
+    DLLLOCAL QORE_INTERN_ALWAYS_INLINE void release() {
+        if (count || site_index) {
+            releaseIntern();
+        }
+    }
 
     //! hands the temporary value of a holder to the innermost scope of the thread
     /** The holder keeps the value but no longer owns it; nothing is done if the holder does not own its value
@@ -166,6 +182,9 @@ private:
     //! site -> position in entries, for a statement that holds many temporaries (a large hash literal with a chain
     //! in each value, for example), so that each hold does not scan them all
     std::unique_ptr<std::unordered_map<const void*, size_t>> site_index;
+
+    //! releases the temporaries held, if there are any (see release())
+    DLLLOCAL void releaseIntern();
 
     //! returns the position of the entry of the site, or count if there is none
     DLLLOCAL size_t find(const void* site);

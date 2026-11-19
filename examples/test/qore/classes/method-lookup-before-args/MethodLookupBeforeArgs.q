@@ -157,7 +157,8 @@ class RedeclaredImpl inherits Redeclared {
     }
 }
 
-#! a method with abstract and concrete variants: no abstract variant is bound to a qualified call
+#! a method with abstract and concrete variants: no abstract variant is bound to a qualified call; a qualified call
+#! of the abstract variant calls the implementation of the class of the object, as for an abstract method (#6161)
 class MixedAbs {
     abstract a(int x);
     abstract a(string s);

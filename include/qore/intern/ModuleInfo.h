@@ -43,6 +43,7 @@ extern "C" {
 
 #include <cstdio>
 #include <exception>
+#include <atomic>
 #include <string>
 #include <map>
 #include <set>
@@ -278,6 +279,11 @@ public:
         return trusted;
     }
 
+    //! returns the sequence number of the module's registration (see QoreModuleManager::getModuleRegistrationSeq())
+    DLLLOCAL uint64_t getRegistrationSeq() const {
+        return reg_seq;
+    }
+
     //! returns true if code that is not trusted loaded the module from outside the directories of library code
     /** Such a module is given only to code that is not trusted and has the same sandbox (see tenantOwner()); see
         QoreModuleManager::checkShadowingLoad()
@@ -425,6 +431,9 @@ protected:
 
     // true if the module is library code; see isTrusted()
     bool trusted = false;
+    // the sequence number of the module's registration (QoreModuleManager::addModule()): a module registered
+    // before the header of a module closed was not loaded by the code after the header (qore#6351)
+    uint64_t reg_seq = 0;
     // true once the module's load has been recorded on it (see QoreModuleManager::addModule())
     bool load_recorded = false;
     // true if code that is not trusted chose the module; see isTenantChosen()
@@ -604,6 +613,14 @@ public:
         return i != map.end() && i->second.find(r) != i->second.end();
     }
 
+    //! removes \a r as a direct dependent of \a l, if it is one, and \a l when it has no dependents left
+    DLLLOCAL void removeDep(const std::string& l, const std::string& r) {
+        md_map_t::iterator i = map.find(l);
+        if (i != map.end() && i->second.erase(r) && i->second.empty()) {
+            map.erase(i);
+        }
+    }
+
     //! returns the dependents of \a l, or nullptr if there are none
     DLLLOCAL const strset_t* getDeps(const std::string& l) const {
         md_map_t::const_iterator i = map.find(l);
@@ -703,6 +720,11 @@ public:
         QoreModuleLoadFrameHelper) is recorded on it; a module registered under a new name keeps it
     */
     DLLLOCAL void addModule(QoreAbstractModule* m);
+
+    //! returns the sequence number of the last module registration (see QoreAbstractModule::reg_seq; qore#6351)
+    DLLLOCAL uint64_t getModuleRegistrationSeq() const {
+        return module_reg_seq.load(std::memory_order_acquire);
+    }
 
     DLLLOCAL QoreAbstractModule* findModule(const char* name) {
         AutoLocker al(mutex);
@@ -817,6 +839,10 @@ public:
     DLLLOCAL void getMissingModuleCandidateFiles(const char* name, QoreProgram* pgm,
             std::vector<std::string>& files);
 
+    //! findAvailableOptionalModule() with the locks of a module load, for qore_aot_check_optional_modules()
+    DLLLOCAL bool checkAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
+            std::string& available);
+
 private:
     //! Appends the candidate paths of a module: the existing files, or the paths that are not files
     DLLLOCAL void getModuleCandidatePaths(const char* name, QoreProgram* pgm, std::vector<std::string>& files,
@@ -824,14 +850,38 @@ private:
 
 public:
 
-    //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
-    /** @param aot_info the metadata record that qcc linked with the module (see qore_aot_register_into_program_v2()),
-        or nullptr; with it, the module's name is checked, an optional module that it was compiled without and that is
-        available now is reported (\c BINARY-MODULE-STALE, as the module has no source to fall back to), and its
-        dependencies are found with its own module path directives (QoreModulePathScope), as for a \c .qmod
+    //! Registers a statically linked AOT module into a Program, without dlopen() or a search of the module path
+    /** Called by the register function that qcc emits for each linked module (qore_<name>_register(), through
+        qore_aot_register_into_program_v2()), always with the module's metadata record: every statically linked
+        module is registered with the restrictions that its code gives its dependencies (qore#6406)
+
+        A statically registered module is never library code, whatever \a path is given: a path in a directory of
+        the process-wide module path does not make it trusted, as its code is linked into the program, not loaded
+        from that directory.  It is checked as a load of the same module by path from outside the module path, for
+        the code that calls the registration:
+        - that is the %Qore code running in the calling thread, also when it registers the module into another
+          Program (for example through a native function that it calls); a native host that calls this function
+          with no %Qore code running is trusted, unless \a tpgm has a sandbox manager (see
+          QoreProgram::setSandboxManager()), whose code is then the caller; parse options that restrict a functional
+          domain in \a tpgm do not make such a call untrusted, as for a load by path;
+        - when that code is not trusted (code that a sandbox governs, or whose parse options restrict a functional
+          domain), the module cannot have the name of a module in the process-wide module path
+          (\c LOAD-MODULE-ERROR), and with a name of its own it is recorded as chosen by that code: it is used only
+          by code with the same sandbox (or, with no sandbox, by the code of the same Program), and a later
+          registration or load of that name by other code is refused;
+        - when a module of that name is already loaded, it is attached to \a tpgm instead, as for a load of a feature
+          that is already loaded: a library module that is already loaded is attached also for code that is not
+          trusted, and a module that such code chose is refused to other code;
+        - registered while a library module that such code loaded is initialized, the module is governed by the
+          sandbox of that code, as a module loaded then by path.
+
+        @param aot_info the metadata record that qcc linked with the module: the module's name is checked, an optional
+        module that it was compiled without and that is available now is reported (\c BINARY-MODULE-STALE, as the
+        module has no source to fall back to), its dependencies are found with its own module path directives
+        (QoreModulePathScope), as for a \c .qmod, and loaded with the restrictions that its code gives them
     */
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
-            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo* aot_info = nullptr);
+            qore_binary_module_desc_t desc_fn, const char* path, const QoreAOTModuleFileInfo& aot_info);
 
     DLLLOCAL QoreHashNode* getModuleHash();
     DLLLOCAL QoreListNode* getModuleList();
@@ -1001,8 +1051,8 @@ public:
         AutoLocker al(mutex);
         for (module_map_t::const_iterator i = map.begin(), e = map.end(); i != e; ++i) {
             if (i->second->getModuleProgram() == pgm) {
-                if (strcmp(i->first, name)) {
-                    binary_user_dep_map.addDep(name, i->first);
+                if (strcmp(i->first, name) && !binary_user_dep_map.addDep(name, i->first)) {
+                    runtime_dep_map.addDep(name, i->first);
                 }
                 return;
             }
@@ -1041,8 +1091,14 @@ public:
 #endif
     }
 
+    //! Records that the user module \a dep requires the user module \a name
+    /** The requirement is recorded as a static one (see runtime_dep_map): a caller recording a requirement at run
+        time only marks it in runtime_dep_map after calling this
+    */
     DLLLOCAL void setUserModuleDependency(const char* name, const char* dep) {
         //printd(5, "QoreModuleManager::setUserModuleDependency('%s' -> '%s')\n", name, dep);
+        // a requirement recorded statically is not one at run time only (qore#6251)
+        runtime_dep_map.removeDep(name, dep);
         if (md_map.addDep(name, dep))
             return;
         rmd_map.addDep(dep, name);
@@ -1145,6 +1201,22 @@ public:
             i = md_map.find(orig_name);
             if (i != md_map.end())
                 md_map.erase(i);
+        }
+        removeRuntimeDependencies(name);
+        if (orig_name) {
+            removeRuntimeDependencies(orig_name);
+        }
+    }
+
+    //! Removes the run-time requirements recorded of and by \a name (runtime_dep_map)
+    DLLLOCAL void removeRuntimeDependencies(const std::string& name) {
+        for (md_map_t::iterator i = runtime_dep_map.begin(); i != runtime_dep_map.end();) {
+            i->second.erase(name);
+            if (i->first == name || i->second.empty()) {
+                runtime_dep_map.erase(i++);
+            } else {
+                ++i;
+            }
         }
     }
 
@@ -1318,6 +1390,16 @@ protected:
     ModMap binary_user_dep_map;
     // user module -> the AOT modules whose Programs it was applied to at run time, which require it (issue #6501)
     ModMap aot_user_dep_map;
+    //! module -> the modules that require it only because it was applied to their Programs at run time (qore#6251)
+    /** Recorded by trySetModuleProgramBinaryDependencyLocked() and trySetModuleProgramUserDependencyLocked() when the
+        requirement is new, and removed when the module is recorded as required while the requiring module is parsed
+        (setUserModuleDependency(), trySetUserBinaryModuleDependency()); cleanup() breaks a dependency cycle at a
+        module that the modules left require only this way.  The entries of a user module are removed when it is
+        deleted (removeUserModuleDependency()); an entry left for a module that is not loaded any more (after a failed
+        load, for example) is harmless: cleanup() reads only the entries of requirements that it finds in the other
+        records, and a static requirement recorded later removes the entry
+    */
+    ModMap runtime_dep_map;
 
     // module blacklist — name and reason are stored as std::string so the map owns
     // its own copies; callers pass through ephemeral buffers (TempEncodingHelper
@@ -1329,6 +1411,9 @@ protected:
     // module hash
     typedef std::map<const char*, QoreAbstractModule*, ltstr> module_map_t;
     module_map_t map;
+
+    //! the sequence number of the last module registration (qore#6351)
+    std::atomic<uint64_t> module_reg_seq{0};
 
     //! Returns the user modules that delUser() cannot delete yet, with the user modules that they require
     /** These are the user modules that AOT user modules require, which are left to cleanup(), and the given user
@@ -1428,10 +1513,14 @@ protected:
     DLLLOCAL bool findAvailableOptionalModule(ExceptionSink& xsink, const std::vector<std::string>& specs,
             QoreProgram* path_pgm, std::string& available);
 
+    /** @param dep_restrictions the restrictions that the code of an AOT module gives its dependencies, if known
+        (see loadAOTBinaryModuleDependencies())
+    */
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
-            ModuleLoadMapHelper* load_guard = nullptr);
+            ModuleLoadMapHelper* load_guard = nullptr,
+            const std::vector<QoreModuleDependencyRestriction>* dep_restrictions = nullptr);
 
     //! Checks that the modules an AOT module of a build tree was compiled with are the ones it was compiled against
     /** A module of a build tree has the depfile that qcc wrote next to it; for any other module nothing is checked.
@@ -1460,8 +1549,24 @@ protected:
     DLLLOCAL std::string findModuleFileUnlocked(const char* name, QoreProgram* pgm);
 
     //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
+    /** @param restrictions the options that the module's directives gave its dependencies, in directive order, if
+        known (from its module metadata, QoreAOTModuleFileInfo::dependency_restrictions): those modules are loaded
+        first, in that order, each with its options (qore#6406)
+        @param relief_dom the domains that the dependencies do not inherit as restrictions from \a path_pgm: those
+        that a module loaded as library code declares in its header (qore#6351)
+        @param post_header_dependencies the dependencies that the module requires only after its header, which
+        inherit the restrictions without \a relief_dom; the others inherit them with it, also one that \a restrictions
+        lists with QMDR_BEFORE_HEADER
+        @param restricted_dom the domains that the module restricts itself, which a relief in effect from a module
+        loading it does not cover for its dependencies
+
+        If an entry of \a restrictions has QMDR_INEXACT, no dependency is relieved: \a relief_dom is ignored, and
+        no relief in effect from a module loading this one applies to its dependencies (qore#6386)
+    */
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
-            const std::vector<std::string>& dependencies, QoreProgram* path_pgm);
+            const std::vector<std::string>& dependencies, QoreProgram* path_pgm,
+            const std::vector<QoreModuleDependencyRestriction>* restrictions = nullptr, int64 relief_dom = 0,
+            const std::vector<std::string>* post_header_dependencies = nullptr, int64 restricted_dom = 0);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,

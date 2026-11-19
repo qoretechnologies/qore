@@ -1,0 +1,124 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# test-platform: macos - threads that enter a Program while another thread parses an expression into it
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class ExpressionRuntimeEntryTest
+
+#! Threads enter a Program while another thread creates an expression in it (issue #6518)
+/** An expression adds no code to its Program, so its parse does not keep other threads out of the Program, as a parse
+    of code does.  The parse of an expression is held at a gate of the debug build (dbg_arm_parse_start_gate(), which
+    stops it with the Program's parse state set), and another thread calls a function of the Program and runs one of
+    its expressions then: neither is refused with PROGRAM-ERROR.  A parse of code, held at the same gate, still keeps
+    the thread out.
+*/
+public class ExpressionRuntimeEntryTest inherits QUnit::Test {
+    constructor() : QUnit::Test("ExpressionRuntimeEntryTest", "1.0", \ARGV) {
+        addTestCase("calls while an expression is parsed", \expressionParseTest());
+        addTestCase("a parse of code still keeps threads out", \codeParseTest());
+        set_return_value(main());
+    }
+
+    private skipWithoutGate() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the test needs a debug build of the library");
+        }
+    }
+
+    private static Program getProgram() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+        p.parse("int sub f(int x) { return x * 2; }", "pgm");
+        p.run();
+        return p;
+    }
+
+    #! returns "OK" if the thread can call into the Program, or the error of the call
+    private static string tryCall(Program p, *Expression e) {
+        try {
+            int v = p.callFunction("f", 21);
+            if (v != 42) {
+                return sprintf("f() returned %d", v);
+            }
+            if (e) {
+                v = e.eval();
+                if (v != 43) {
+                    return sprintf("the expression returned %d", v);
+                }
+            }
+            return "OK";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    expressionParseTest() {
+        skipWithoutGate();
+        Program p = getProgram();
+        Expression e(p, "f(21) + 1", "e");
+        call_function("dbg_arm_parse_start_gate", p, False);
+        Counter c(1);
+        *Expression new_exp;
+        *hash<ExceptionInfo> parse_ex;
+        background sub () {
+            on_exit {
+                # a parse that ends without reaching the gate does not leave the test waiting
+                call_function("dbg_abort_parse_start_gate");
+                c.dec();
+            }
+            try {
+                new_exp = new Expression(p, "f(1) + 2", "new");
+            } catch (hash<ExceptionInfo> ex) {
+                parse_ex = ex;
+            }
+        }();
+        {
+            # the gate is released also if an assertion fails, so that the parse ends
+            on_exit {
+                call_function("dbg_release_parse_start_gate");
+                c.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_start_gate"));
+            # the expression is being parsed: the thread calls into the Program and runs an expression of it
+            assertEq("OK", tryCall(p, e));
+        }
+        assertNothing(parse_ex);
+        assertEq(4, new_exp.eval());
+        assertEq("OK", tryCall(p, e));
+    }
+
+    #! a parse of code, which adds code to the Program, keeps other threads out of it as before
+    codeParseTest() {
+        skipWithoutGate();
+        Program p = getProgram();
+        call_function("dbg_arm_parse_start_gate", p, False);
+        Counter c(1);
+        *hash<ExceptionInfo> parse_ex;
+        background sub () {
+            on_exit {
+                call_function("dbg_abort_parse_start_gate");
+                c.dec();
+            }
+            try {
+                p.parse("int sub g() { return 2; }", "g");
+            } catch (hash<ExceptionInfo> ex) {
+                parse_ex = ex;
+            }
+        }();
+        {
+            on_exit {
+                call_function("dbg_release_parse_start_gate");
+                c.waitForZero();
+            }
+            assertTrue(call_function("dbg_wait_parse_start_gate"));
+            assertEq("PROGRAM-ERROR", tryCall(p));
+        }
+        assertNothing(parse_ex);
+        assertEq(2, p.callFunction("g"));
+    }
+}

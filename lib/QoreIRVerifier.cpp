@@ -215,6 +215,14 @@ static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const Qo
             if (inst->exception_target) {
                 targets.insert(inst->exception_target);
             }
+            // the paths of the debugger's flow requests at a step event (#6201)
+            if (const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get())) {
+                for (QoreIRBasicBlock* target : flow->targets()) {
+                    if (target) {
+                        targets.insert(target);
+                    }
+                }
+            }
         }
     }
     return targets;
@@ -1539,6 +1547,62 @@ bool QoreIRVerifier::verifyModuleIR(const QoreIRFunction& func, std::string& err
     return QoreIRVerifyOwnership(graph, error).verify();
 }
 
+//! Checks the paths of the debugger's flow requests at the step events of a function (QoreIRDebugFlowTargets)
+/** Each path is entered from its step event only: a block of a path of its own (QoreIRBasicBlock::debug_flow) that
+    no other edge enters and that has no Phi, so that the state of the function at the event is its only input
+*/
+static bool verifyDebugFlowTargets(const QoreIRFunction& func,
+        const std::unordered_set<const QoreIRBasicBlock*>& block_set, std::string& error) {
+    std::unordered_map<const QoreIRBasicBlock*, const QoreIRBasicBlock*> entries;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            const QoreIRDebugFlowTargets* flow = qore_ir_debug_flow_targets(inst.get());
+            if (!flow) {
+                continue;
+            }
+            for (const QoreIRBasicBlock* target : flow->targets()) {
+                if (!target) {
+                    continue;
+                }
+                if (!block_set.count(target) || !target->debug_flow || target->instructions.empty()
+                        || target->instructions.front()->opcode == QoreIROpcode::Phi) {
+                    error = "invalid debugger flow path '" + target->name + "' in block '" + block->name + "'";
+                    return false;
+                }
+                if (!entries.emplace(target, block.get()).second) {
+                    error = "debugger flow path '" + target->name + "' entered by more than one step event";
+                    return false;
+                }
+            }
+        }
+    }
+    if (entries.empty()) {
+        return true;
+    }
+    // no other edge enters an entry block
+    for (const auto& block : func.blocks) {
+        if (block->instructions.empty()) {
+            continue;
+        }
+        bool bad = false;
+        qore_ir_visit_successors(*block->instructions.back(), [&](QoreIRBasicBlock* successor) {
+            if (entries.count(successor)) {
+                bad = true;
+            }
+        });
+        for (const auto& inst : block->instructions) {
+            if (inst->exception_target && entries.count(inst->exception_target)) {
+                bad = true;
+            }
+        }
+        if (bad) {
+            error = "debugger flow path in block '" + block->name + "' entered by another edge";
+            return false;
+        }
+    }
+    return true;
+}
+
 bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
     const std::string& registry_error = getOpcodeRegistryValidationError();
     if (!registry_error.empty()) {
@@ -1589,6 +1653,9 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
             }
             return false;
         }
+    }
+    if (!verifyDebugFlowTargets(func, block_set, error)) {
+        return false;
     }
     std::unordered_set<uint32_t> value_ids;
     for (const auto& block : func.blocks) {
@@ -2669,7 +2736,6 @@ static void collectLocalsFromStatementBlock(const StatementBlock* block,
     }
 }
 
-#ifndef QORE_IR_TAKE_OVER_UNIT
 //! Extracts the AST expression from an instruction that stores one.
 //! Returns nullptr if the instruction type doesn't have an expr field.
 static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
@@ -2875,6 +2941,8 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
             return nullptr;
     }
 }
+
+#ifndef QORE_IR_TAKE_OVER_UNIT
 
 //! Extracts an expression that is kept only so AOT serialization can rebuild
 //! call identity metadata. These expressions are not runtime AST fallbacks, but
@@ -3280,6 +3348,7 @@ static int qore_ir_opcode_forwarded_operand(QoreIROpcode op) {
 // documented in QoreIR.h
 void QoreIRFunction::computeReferenceStoreLocals() {
     reference_store_locals.clear();
+    reference_element_locals.clear();
     non_reference_values.clear();
     // the instruction that defines each value
     std::unordered_map<uint32_t, const QoreIRInstruction*> defs;
@@ -3363,9 +3432,8 @@ void QoreIRFunction::computeReferenceStoreLocals() {
             non_reference_values[id] = 1;
         }
     }
-    // the variables of foreach loops that can be given a reference element, and the locals that a store other
-    // than that of a foreach loop assigns
-    std::unordered_set<const void*> reference_element_locals;
+    // the variables of foreach loops that can be given a reference element (reference_element_locals), and the
+    // locals that a store other than that of a foreach loop assigns
     std::unordered_set<const void*> normal_store_locals;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
@@ -3488,6 +3556,19 @@ bool QoreIRFunction::collectHandlerLocals(std::unordered_set<const void*>& local
                 collectLocalsFromIRFunction(*obe_inst->handler_ir, locals, unknown_node_found, visited_handlers);
             }
         }
+    }
+    return !unknown_node_found;
+}
+
+bool QoreIRFunction::collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
+        std::unordered_set<const void*>& locals) {
+    bool unknown_node_found = false;
+    std::unordered_set<const QoreIRFunction*> visited_handlers;
+    if (obe.stmt) {
+        collectLocalsFromStatementBlock(obe.stmt->getCode(), locals, unknown_node_found);
+    }
+    if (obe.handler_ir && visited_handlers.insert(obe.handler_ir.get()).second) {
+        collectLocalsFromIRFunction(*obe.handler_ir, locals, unknown_node_found, visited_handlers);
     }
     return !unknown_node_found;
 }
@@ -4142,8 +4223,14 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // first appears, but a later run of this pass keeps the slots of an earlier one (next_local_slot then starts
     // after all of them)
     uint32_t seen_slots = 0;
+    has_generic_add_assign = false;
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
+            inst->auto_local_string_append = false;
+            if (inst->opcode == QoreIROpcode::AddAssignAny || (inst->opcode == QoreIROpcode::Invoke
+                    && static_cast<const QoreIRInvokeInstruction&>(*inst).invoke_opcode == QoreIROpcode::AddAssignAny)) {
+                has_generic_add_assign = true;
+            }
             const uint32_t slots_before = seen_slots;
             if (inst->result.isValid() && inst->result.id > max_vid) {
                 max_vid = inst->result.id;
@@ -4480,6 +4567,10 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             }
         }
     }
+    // Includes functions and handlers read from stripped AOT images.
+    if (has_generic_add_assign && !defer_release_check_prune) {
+        qore_ir_mark_auto_string_appends(*this);
+    }
 }
 #endif // QORE_IR_TAKE_OVER_UNIT
 
@@ -4494,6 +4585,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     every local (qore#6004)
 */
 struct QoreIRUnrecordedWrites {
+    //! Handler bodies entered by this collection (reported by QORE_IR_OPT_STATS).
+    size_t handler_scans = 0;
     //! the locals written
     std::unordered_set<const void*> locals;
     //! true if any local can be written
@@ -4501,6 +4594,18 @@ struct QoreIRUnrecordedWrites {
 
     DLLLOCAL bool writes(const void* key) const {
         return any || locals.count(key);
+    }
+
+    //! Collects root references and the writes of reachable handlers.
+    DLLLOCAL void collect(const QoreIRFunction& ir_func) {
+        addReferences(ir_func);
+        if (!any) {
+            std::unordered_set<const QoreIRFunction*> visited;
+            addHandlerWrites(ir_func, false, visited);
+        }
+        if (handler_scans && q_env_is_set("QORE_IR_OPT_STATS")) {
+            fprintf(stderr, "IR-OPT-HANDLER-WRITES: %s: scans=%zu\n", ir_func.getDisplayName().c_str(), handler_scans);
+        }
     }
 
     //! adds the locals that \a ir_func creates a reference to
@@ -4528,8 +4633,10 @@ struct QoreIRUnrecordedWrites {
     }
 
     //! adds the writes of the handlers of \a ir_func and of their handlers; \a handler is true if \a ir_func is one
-    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler) {
+    DLLLOCAL void addHandlerWrites(const QoreIRFunction& ir_func, bool handler,
+            std::unordered_set<const QoreIRFunction*>& visited) {
         if (handler) {
+            ++handler_scans;
             addReferences(ir_func);
         }
         for (const auto& block : ir_func.blocks) {
@@ -4558,7 +4665,10 @@ struct QoreIRUnrecordedWrites {
                     any = true;
                     return;
                 }
-                addHandlerWrites(*handler_ir, true);
+                // Inline and out-of-line registrations share handler_ir. Its writes enter the union once (#6647).
+                if (visited.insert(handler_ir).second) {
+                    addHandlerWrites(*handler_ir, true, visited);
+                }
             }
         }
     }
@@ -4601,10 +4711,7 @@ bool qore_ir_collect_take_over_params(const QoreIRFunction& ir_func, const Local
         if (!writes) {
             if (!unrecorded) {
                 unrecorded.emplace();
-                unrecorded->addReferences(ir_func);
-                if (!unrecorded->any) {
-                    unrecorded->addHandlerWrites(ir_func, false);
-                }
+                unrecorded->collect(ir_func);
             }
             writes = unrecorded->writes(key);
         }
@@ -4655,6 +4762,62 @@ bool qore_ir_function_may_deopt(const QoreIRFunction& ir_func) {
         }
     }
     return false;
+}
+
+// documented in QoreIR.h
+//! Adds the locals of the AST expressions that the instructions of the handler functions of \a ir_func (and of their
+//! handlers) evaluate to \a locals: such an expression can write a local that the write analysis of the instruction
+//! does not attribute (qore#6314); returns false if an expression has a node that the walker does not know
+static bool qore_ir_add_handler_ast_locals(const QoreIRFunction& ir_func, std::unordered_set<const void*>& locals,
+        bool handler, std::unordered_set<const QoreIRFunction*>& visited) {
+    bool unknown_node_found = false;
+    for (const auto& block : ir_func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (handler) {
+                if (isLValueOp(inst->opcode)) {
+                    collectLocalsFromExpr(static_cast<const QoreIRLValueInstruction*>(inst.get())->lvalue, locals,
+                        unknown_node_found);
+                }
+                if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                    collectLocalsFromExpr(*expr, locals, unknown_node_found);
+                }
+                if (inst->opcode == QoreIROpcode::Find) {
+                    collectLocalsFromFindInstruction(static_cast<const QoreIRFindInstruction*>(inst.get()), locals,
+                        unknown_node_found);
+                } else if (inst->opcode == QoreIROpcode::Context) {
+                    const auto* ctx = static_cast<const QoreIRContextInstruction*>(inst.get());
+                    collectLocalsFromExpr(ctx->exp, locals, unknown_node_found);
+                    collectLocalsFromExpr(ctx->where_exp, locals, unknown_node_found);
+                    collectLocalsFromExpr(ctx->sort_exp, locals, unknown_node_found);
+                }
+            }
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                const QoreIRFunction* handler_ir = static_cast<const QoreIROnBlockExitInstruction*>(inst.get())
+                    ->handler_ir.get();
+                if (handler_ir && visited.insert(handler_ir).second
+                        && !qore_ir_add_handler_ast_locals(*handler_ir, locals, true, visited)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return !unknown_node_found;
+}
+
+bool qore_ir_collect_handler_written_locals(const QoreIRFunction& ir_func, std::unordered_set<const void*>& written) {
+    QoreIRUnrecordedWrites w;
+    // a handler can write a local through a reference that this function created
+    w.collect(ir_func);
+    if (w.any) {
+        return false;
+    }
+    // and in an AST expression that a handler evaluates (a write that the instruction does not record)
+    std::unordered_set<const QoreIRFunction*> visited;
+    if (!qore_ir_add_handler_ast_locals(ir_func, w.locals, false, visited)) {
+        return false;
+    }
+    written = std::move(w.locals);
+    return true;
 }
 
 // documented in QoreIR.h

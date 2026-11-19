@@ -379,7 +379,6 @@ kill -9 $shells
                 "examples/test/misc/DbTestConnections.qtest": "it only parses datasource strings",
                 "examples/test/bin/run_tests/run-tests-credentials.qtest": "it only prints datasource strings",
                 "examples/test/qlib/QoreRagUtils/VectorStoreConformance.qtest": unique,
-                "examples/test/qlib/SqlUtil/PgsqlSearchPath.qtest": "it makes schemas of its own run and tests them",
                 "examples/test/qlib/SqlUtil/SqlUtilExpressionCast.qtest": "it does not connect",
                 "examples/test/qlib/SqlUtil/SqlUtilSchemaSections.qtest": "it makes a schema of its own run",
                 "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,

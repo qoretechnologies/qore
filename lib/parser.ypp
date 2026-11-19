@@ -106,6 +106,8 @@
 //#define YYDEBUG 1
 
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name);
+static int check_expression_declaration(int first_line, int last_line, int first_col, int last_col,
+        const char* what);
 
 // the nesting depth of a rule is one more than that of its deepest symbol
 #define YYLLOC_DEFAULT(Current, Rhs, N)                         \
@@ -952,8 +954,8 @@ struct GVarSingleDecl : public GVarDecl {
                     type == VT_GLOBAL ? "global" : "thread_local", n);
         }
         if (qore_program_private::get(*getProgram())->expression_mode) {
-            parse_error(*loc, "%s variable declaration '%s' not allowed in expressions' is set",
-                type == VT_GLOBAL ? "global" : "thread_local", n);
+            parse_error(*loc, "%s variable '%s' cannot be declared in the code of an expression",
+                type == VT_GLOBAL ? "a global" : "a thread_local", n);
         }
     }
 
@@ -1025,6 +1027,11 @@ struct GVarListDecl : public GVarDecl {
             } else
                 parse_error(*loc, "element %d in list following '%s' is not a variable reference (%s)", i,
                     type == VT_GLOBAL ? "our" : "thread_local", n.getTypeName());
+        }
+        // the variables are added with the error and rolled back with the expression's parse (issue #6524)
+        if (qore_program_private::get(*getProgram())->expression_mode) {
+            parse_error(*loc, "%s variables cannot be declared in the code of an expression",
+                type == VT_GLOBAL ? "global" : "thread_local");
         }
     }
 
@@ -2258,6 +2265,27 @@ static void make_readonly_untyped_local_error(const QoreProgramLocation* loc, co
     qore_program_private::makeParseException(getProgram(), *loc, "PARSE-EXCEPTION", desc, metadata);
 }
 
+//! Refuses a declaration in the code of an expression (issue #6524)
+/** The code of an expression (Expression, Program::parseExpression()) is parsed as \c "return (<code>);", so code
+    that closes the parenthesis and the statement can declare functions, classes, constants and the like after the
+    return statement.  An expression adds no code to its Program: a declaration in it is a parse error, and the
+    declarations added before the error is raised are rolled back with the expression's parse
+    (qore_program_private::parseExpression()).
+
+    @return -1 if the code is the code of an expression (a parse error has been raised), 0 if not
+*/
+static int check_expression_declaration(int first_line, int last_line, int first_col, int last_col,
+        const char* what) {
+    QoreProgram* pgm = getProgram();
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    if (!pp->expression_mode) {
+        return 0;
+    }
+    const QoreProgramLocation* loc = pp->getLocation(first_line, last_line, first_col, last_col);
+    parse_error(*loc, "%s cannot be declared in the code of an expression", what);
+    return -1;
+}
+
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name) {
     if (parse_check_parse_option(PO_STRONG_ENCAPSULATION)) {
         parse_error(*loc, "illegal out of line %s definition \"%s\" (conflicts with parse option PO_STRONG_ENCAPSULATION)", type, name);
@@ -3218,14 +3246,18 @@ top_level_commands:
 
 top_level_command:
     sub_def {
+        // a declaration in an expression is added with an error and rolled back with the expression's parse
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a function");
         $1->add(*(qore_ns_private::get(*(getRootNS()))));
     }
     | scoped_sub_def {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a function");
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "function", $1->name.ostr);
         $1->add(*(qore_ns_private::get(*(getRootNS()))));
     }
     | class_def {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a class");
         if (parse_check_restriction(QoreParseOptions::NO_CLASS_DEFS)) {
             parse_error(*$1->loc, "class '%s' cannot be defined with parse option NO_CLASS_DEFS set",
                 $1->name->ostr);
@@ -3235,27 +3267,32 @@ top_level_command:
         delete $1;
     }
     | hashdecl_def {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a hashdecl");
         qore_root_ns_private::parseAddHashDecl($1->loc, *($1->name), $1->takeHashDecl());
         delete $1;
     }
     | enum_def {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "an enum");
         if ($1->enumdecl) {
             qore_root_ns_private::parseAddEnum($1->loc, *($1->name), $1->takeEnumDecl());
         }
         delete $1;
     }
     | typedef_decl {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a typedef");
         NamedScope ns($1->getName());
         qore_root_ns_private::parseAddTypedef($1->loc, ns, $1->getTypeInfo(), $1->takeParseTypeInfo(), $1->isPublic());
         delete $1;
     }
     | scoped_typedef_decl {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a typedef");
         // see if strong encapsulation is enabled
         check_strong_encapsulation($1->loc, "typedef", $1->name.ostr);
         qore_root_ns_private::parseAddTypedef($1->loc, $1->name, $1->getTypeInfo(), $1->takeParseTypeInfo(), $1->isPublic());
         delete $1;
     }
     | scoped_const_decl {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a constant");
         if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
@@ -3268,6 +3305,7 @@ top_level_command:
         delete $1;
     }
     | unscoped_const_decl {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a constant");
         if (parse_check_restriction(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*$1->loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
                 $1->name.ostr);
@@ -3278,6 +3316,7 @@ top_level_command:
         delete $1;
     }
     | outofline_methoddef {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a method");
         // see if strong encapsulation is enabled; an unqualified name has already been reported as a function
         // declaration without "sub"
         if ($1->name.size() > 1) {
@@ -3299,6 +3338,7 @@ top_level_command:
         qore_program_private::addStatement(*(getProgram()), $2, @2.native_parse_info);
     }
     | top_namespace_decl {
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a namespace");
         if (parse_check_restriction(QoreParseOptions::NO_NAMESPACE_DEFS)) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
             parse_error(*loc, "namespace definitions cannot be made with parse option NO_NAMESPACE_DEFS set");
@@ -3306,6 +3346,8 @@ top_level_command:
         qore_root_ns_private::parseAddNamespace($1);
     }
     | TOK_MODULE '{' module_decls '}' {
+        check_expression_declaration(@1.first_line, @4.last_line, @1.first_col, @4.last_col,
+            "a module definition");
         QoreModuleDefContext* qmd = get_module_def_context();
         if (!qmd)
             qore_program_private::makeParseWarning(getProgram(), *qore_program_private::get(*getProgram())->getLocation(@1.first_line, @4.last_line, @1.first_col, @4.last_col), QP_WARN_MODULE_ONLY, "MODULE-ONLY", "module definitions are ignored when not defining a module");
@@ -3318,6 +3360,8 @@ top_level_command:
     | TRY_MODULE_ERROR {
         bool has_dollar = $1->var[0] == '$';
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
+        // a %try-module variable is a global variable
+        check_expression_declaration(@1.first_line, @1.last_line, @1.first_col, @1.last_col, "a %try-module variable");
         if (!has_dollar) {
             if (!parse_check_parse_option(PO_ALLOW_BARE_REFS)) {
                 parse_error(*loc, "%%try-module variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is not set", $1->var);
@@ -3699,7 +3743,17 @@ block:
 
 statement_or_block:
     statement
-    { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info; }
+    {
+        // an on_exit, on_success or on_error statement runs when its block ends, so it must be a statement of a
+        // block in braces, not the body of another statement, whose scope would be unclear (issue #240)
+        if (dynamic_cast<OnBlockExitStatement*>($1)) {
+            parse_error(*qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line,
+                @1.first_col, @1.last_col), "an on_exit, on_success or on_error statement must be a statement of a "
+                "block in braces, as it runs when that block ends; it cannot be the body of another statement (an "
+                "if, else, loop, try, catch, context or on_* statement); put it in braces ({ on_exit ...; })");
+        }
+        $$ = new StatementBlock(@1.first_line, @1.last_line, $1); $$->native_parse_info = @1.native_parse_info;
+    }
     |
     block
     { $$ = $1; }

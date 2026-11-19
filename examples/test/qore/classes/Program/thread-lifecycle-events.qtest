@@ -699,7 +699,7 @@ class ThreadLifecycleEventsTest inherits QUnit::Test {
     #! the use of a reference to a lvalue of another Program enters that Program: active, then idle
     activityReference() {
         Program pgm(PO_NEW_STYLE);
-        pgm.parse("our *int x = 1; our list<int> l = (1, 2, 3); auto sub get_x() { return \\x; } "
+        pgm.parse("our *int x = 1; our list<*int> l = (1, 2, 3); auto sub get_x() { return \\x; } "
             "auto sub get_l() { return \\l; }", "referenced");
         pgm.run();
         Queue q();

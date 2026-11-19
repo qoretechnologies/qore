@@ -58,6 +58,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include "qore/intern/QoreDeferredRelease.h"
 #include "qore/intern/QoreCompletionAnalysis.h"
 
@@ -67,6 +68,14 @@ extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::ve
 
 VNode::VNode(LocalVar* lv, const QoreProgramLocation* n_loc, int n_refs, bool n_top_level) :
         lvar(lv), refs(n_refs), loc(n_loc), block_start(false), top_level(n_top_level) {
+    // the options of the declaration: the variable can go out of scope after the statement that declares it, when its
+    // block is initialized, under other options (those of the commit; issue #6589)
+    if (lvar) {
+        if (QoreProgram* pgm = getProgram()) {
+            decl_opts = qore_program_private::getParseWarnOptions(pgm);
+            has_decl_opts = true;
+        }
+    }
     next = update_get_vstack(this);
     // the variable below this one in its frame, for the chains of the local variables that statements can refer to;
     // the chain of a function ends with its first variable, as the top-level variables, which have global scope, are
@@ -89,6 +98,11 @@ VNode::~VNode() {
     if (lvar && !refs && !lvar->isAssigned()) {
         const QoreTypeInfo* ti = lvar->parseGetTypeInfo();
         if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT)) {
+            // the warning is raised as the code that declares the variable enables it (issue #6589)
+            std::optional<ParseWarnHelper> pwh;
+            if (has_decl_opts) {
+                pwh.emplace(decl_opts);
+            }
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_UNREFERENCED_VARIABLE,
                 "UNREFERENCED-VARIABLE", "local variable '%s' was declared in this block but not referenced; to " \
                 "disable this warning, use '%%disable-warning unreferenced-variable' in your code", lvar->getName());
@@ -927,14 +941,14 @@ namespace {
 */
 class ToplevelCodeParseOptionsHelper {
 public:
-    DLLLOCAL ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
+    ToplevelCodeParseOptionsHelper(const QoreParseOptions& po) {
         swap_toplevel_code_parse_options(po, old_stmt, old_loc, old_po);
         rc = &rc_get_tls_ref();
         old_rc_po = rc->getParseOptions();
         rc->setParseOptions(po);
     }
 
-    DLLLOCAL ~ToplevelCodeParseOptionsHelper() {
+    ~ToplevelCodeParseOptionsHelper() {
         rc->setParseOptions(old_rc_po);
         restore_toplevel_code_parse_options(old_stmt, old_loc, old_po);
     }
@@ -981,7 +995,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // in REPARSE mode, it runs once, as below (issue #6474)
     if (statement_list.empty() && cached_toplevel_aot_ctx && cached_toplevel_aot_ctx->hasLazyDebugIR()
             && qore_program_private::get(*pgm)->hasDebuggerAttached()
-            && (!reparse_mode || !aot_toplevel_ran.exchange(true))) {
+            && (!reparse_mode || claimAOTToplevelRun())) {
         QoreIRFunction* debug_ir = getAOTDebugIR(xsink);
         if (!debug_ir) {
             return -1;
@@ -992,12 +1006,15 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
     // AOT pre-compiled top-level function — execute directly if registered; in REPARSE mode, it runs once, and later
     // runs execute the statements that later parses add (issue #6474)
     if (!debug_ast && (!reparse_mode
-            || ((cached_toplevel_aot_fn || cached_toplevel_jit_fn) && !aot_toplevel_ran.exchange(true)))) {
+            || ((cached_toplevel_aot_fn || cached_toplevel_jit_fn) && claimAOTToplevelRun()))) {
         // a run outside of REPARSE mode executes all of the statements (see markExecuted(), issue #6475); the
         // statements of an image with its source are those of the precompiled code, which a later run in REPARSE mode
-        // does not execute again; the paths below (IR/JIT, AST) are taken from here when there is no precompiled
-        // code, and a run with a debugger outside of REPARSE mode records them on the AST path
-        markExecuted();
+        // does not execute again (claimAOTToplevelRun() records them); the paths below (IR/JIT, AST) are taken from
+        // here when there is no precompiled code, and a run with a debugger outside of REPARSE mode records them on
+        // the AST path
+        if (!reparse_mode) {
+            markExecuted();
+        }
         if (cached_toplevel_aot_fn && cached_toplevel_aot_ctx) {
             // Instantiate nested non-closure body locals before AOT execution.
             // Top-level locals are pre-instantiated by QoreProgram.  Closure-use
@@ -1213,55 +1230,57 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
         }
     }
 
-    // In REPARSE mode (PO_ALLOW_REPARSE), only execute statements that haven't been executed yet
-    // This is determined by the execution high water mark (ehwm)
+    // In REPARSE mode (PO_ALLOW_REPARSE), only the statements that no run has executed yet are executed: a run claims
+    // each statement before it executes it by moving the execution high water mark (ehwm) to it, so that each
+    // statement is executed once, also by runs in several threads at the same time (issue #6511).  A statement that
+    // raises an exception has been claimed and is not executed again; the statements after it are executed by the
+    // next run.
     if (runtime_parse_options & PO_ALLOW_REPARSE) {
         int stmt_rc = 0;
 
-        // Determine start position - one past the execution high water mark
-        statement_list_t::iterator start;
-        {
-            std::lock_guard<std::mutex> lg(ehwm_lock);
-            start = ehwm;
-        }
-        if (start != statement_list.end()) {
-            ++start;
-        } else {
-            start = statement_list.begin();
-        }
-
-        // If nothing new to execute, return early
-        if (start == statement_list.end()) {
-            return 0;
-        }
-
         // Authoritative current thread-program data for debug hooks (see note in exec()).
-        ThreadLocalProgramData* tlpd = get_thread_local_program_data();
-        if (!tlpd) {
-            tlpd = rc.getThreadLocalProgramData();
-        }
-        // Execute only new statements
-        for (statement_list_t::iterator i = start; i != statement_list.end(); ++i) {
+        ThreadLocalProgramData* tlpd = nullptr;
+        while (true) {
+            statement_list_t::iterator i, prev;
+            {
+                std::lock_guard<std::mutex> lg(ehwm_lock);
+                prev = ehwm;
+                if (prev != statement_list.end()) {
+                    i = prev;
+                    ++i;
+                } else {
+                    i = statement_list.begin();
+                }
+                if (i == statement_list.end()) {
+                    break;
+                }
+                ehwm = i;
+            }
+            if (!tlpd) {
+                tlpd = get_thread_local_program_data();
+                if (!tlpd) {
+                    tlpd = rc.getThreadLocalProgramData();
+                }
+            }
             if (tlpd->runtimeCheck()) {
                 stmt_rc = tlpd->dbgStep(this, *i, xsink);
                 if (stmt_rc || *xsink) {
+                    // the statement is not executed: it is given back, unless another run has claimed a statement
+                    // after it in the meantime
+                    std::lock_guard<std::mutex> lg(ehwm_lock);
+                    if (ehwm == i) {
+                        ehwm = prev;
+                    }
                     break;
                 }
             }
             stmt_rc = (*i)->exec(rc, return_value, xsink);
-            // Update ehwm to current statement after successful execution
-            // so that on exception, only successfully executed statements are marked
-            if (!stmt_rc && !*xsink) {
-                std::lock_guard<std::mutex> lg(ehwm_lock);
-                ehwm = i;
-            }
             if (*xsink && tlpd->runtimeCheck()) {
                 tlpd->dbgException(*i, xsink);
-                if (*xsink) {
-                    break;
-                }
             }
-            if (stmt_rc) break;
+            if (stmt_rc || *xsink) {
+                break;
+            }
         }
         return stmt_rc;
     }

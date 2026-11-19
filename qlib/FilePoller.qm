@@ -27,7 +27,7 @@
 
 module FilePoller {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "2.1";
     desc = "Filesystem polling solution";
     author = "Petr Vanek <petr@yarpen.cz>";
@@ -113,8 +113,11 @@ module FilePoller {
 
     The @ref FilePoller::FilePoller "FilePoller" class includes support for running in sandboxed Program objects with
     the following parse options set:
-    - \c PO_NO_THREAD_CONTROL: in this case the \c "start_thread" option is required in
-      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()"
+    - \c PO_NO_THREAD_CONTROL: the module declares the \c THREAD_CONTROL @ref function_domains "functional domain"
+      in its module header, so when it is loaded from the module path, it starts its polling thread for such a caller
+      (the thread runs under the caller's sandbox), and the \c "start_thread" option is not required in
+      @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
+      it is required only when the module is loaded by its path, where the declaration does not apply
     - \c PO_NO_PROCESS_CONTROL: the module declares the \c PROCESS @ref function_domains "functional domain"
       in its module header, so when it is loaded from the module path, the \c "sleep" option is not required in
       @ref FilePoller::FilePoller::constructor() "FilePoller::constructor()";
@@ -123,6 +126,14 @@ module FilePoller {
     @section file_poller_relnotes FilePoller Release Notes
 
     @subsection file_poller_2_1 FilePoller v2.1
+    - a started poller whose last reference is dropped is destroyed, which stops its polling thread: the thread holds
+      the poller only for each poll; before, the thread kept the poller, and itself, alive
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - without the \c "start_thread" option, the \c start_thread capability of the thread that creates the poller is
+      used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - an error raised while a polled file is handled (ex: an observer that refuses the file event) is logged, and the
       file is polled again on the next poll; previously polling stopped (see @ref filepollererrors;
       <a href="https://github.com/qoretechnologies/qore/issues/6400">issue 6400</a>)
@@ -230,6 +241,37 @@ public hashdecl FilePollerFileEventInfo {
     *string link;
 }
 
+#! The run flag of a poller, which its polling thread shares
+class FilePollerRunState {
+    public {
+        bool run = False;
+    }
+}
+
+#! What the polling thread of a poller holds: the poller only by a weak reference, and the objects it waits on
+/** The thread takes a strong reference to the poller only for each poll, so that the poller's destructor runs when
+    its owner drops its last reference, and stops the thread
+*/
+class FilePollerThreadRef {
+    public {
+        #! the poller (a weak reference)
+        auto poller;
+        FilePollerRunState state;
+        Qore::Thread::WaitGroup sc;
+        Qore::Thread::Mutex sleep_m;
+        Qore::Thread::Condition sleep_cond;
+    }
+
+    constructor(FilePoller p, FilePollerRunState state, Qore::Thread::WaitGroup sc, Qore::Thread::Mutex sleep_m,
+            Qore::Thread::Condition sleep_cond) {
+        poller := p;
+        self.state = state;
+        self.sc = sc;
+        self.sleep_m = sleep_m;
+        self.sleep_cond = sleep_cond;
+    }
+}
+
 #! File polling class
 public class FilePoller {
     public {
@@ -279,8 +321,8 @@ public class FilePoller {
         #! poll interval in seconds
         int poll_interval = 10;
 
-        #! run flag
-        bool runflag = False;
+        #! run flag, shared with the polling thread
+        FilePollerRunState run_state();
 
         #! internal fatal error flag
         bool fatal = False;
@@ -353,7 +395,9 @@ public class FilePoller {
           @ref Qore::RE_Caseless for case-insensitive matches)
         - \c "sleep": (required when the module is loaded by its path into a context where @ref Qore::PO_NO_PROCESS_CONTROL is set) a
           @ref closure "closure" or @ref call_reference "call reference" to use instead of @ref Qore::sleep() (if not
-          set then @ref Qore::sleep() will be used)
+          set then @ref Qore::sleep() will be used); the polling thread holds it while it sleeps, so a closure that
+          refers to the poller (one created in a method of a subclass, for example) keeps the poller alive after its
+          owner drops its last reference
         - \c "sort_order": an integer constant giving the sort order; valid options are:
             - @ref OrderAsc "OrderAsc": ascending (the default)
             - @ref OrderDesc "OrderDesc": descending
@@ -361,9 +405,11 @@ public class FilePoller {
             - @ref SortNone "SortNone": no sort
             - @ref SortName "SortName": sort by file name (the default)
             - @ref SortDate "SortDate": sort by the file's last modified date
-        - \c "start_thread": (required when imported into a context where @ref Qore::PO_NO_THREAD_CONTROL is set) a
-          @ref closure "closure" or @ref call_reference "call reference" for starting threads; must return the integer
-          thread ID (if not set then @ref background will be used)
+        - \c "start_thread": a @ref closure "closure" or @ref call_reference "call reference" for
+          starting threads; must return the integer thread ID; if not set, the \c start_thread capability that a host
+          sets for the code that creates the object is used (@ref Qore::Thread::ThreadCapabilityScope
+          "ThreadCapabilityScope"), and otherwise @ref background; required with @ref Qore::PO_NO_THREAD_CONTROL only
+          when the module is loaded by its path, where its \c THREAD_CONTROL domain declaration does not apply
 
         @throw FILEPOLLER-CONSTRUCTOR-ERROR invalid option
     */
@@ -371,8 +417,12 @@ public class FilePoller {
         path = n_path;
         mask = n_mask;
 
+        # without the option, the capability of the code that the host runs, if any (qorus#867); it satisfies the
+        # requirement of a Program that may not control threads
+        *code cap = exists n_opts.start_thread ? NOTHING : get_thread_capability("start_thread");
+
         foreach string k in (RequiredKeys) {
-            if (!exists n_opts{k})
+            if (!exists n_opts{k} && (k != "start_thread" || !cap))
                 throw "FILEPOLLER-CONSTRUCTOR-ERROR", sprintf("required key %y missing from constructor hash "
                     "argument)", k);
         }
@@ -430,6 +480,9 @@ public class FilePoller {
                     throw "FILEPOLLER-CONSTRUCTOR-ERROR", sprintf("unknown option %y; known options: %y", h.key,
                         Options);
             }
+        }
+        if (cap) {
+            start_thread = cap;
         }
     }
 
@@ -522,18 +575,28 @@ public class FilePoller {
         m.lock();
         on_exit m.unlock();
 
-        if (runflag)
+        if (run_state.run)
             return tid;
 
         sc.wait();
 
-        runflag = True;
+        run_state.run = True;
         sc.add();
+        # a thread that is not started leaves the poller stopped, so that stop() does not wait for it
+        on_error {
+            run_state.run = False;
+            sc.done();
+        }
 
+        # the thread holds the poller only by a weak reference between its polls, so that the poller's destructor
+        # runs, and stops it, when the owner drops its last reference
+        FilePollerThreadRef ref(self, run_state, sc, sleep_m, sleep_cond);
 %ifdef PO_NO_THREAD_CONTROL
-        return tid = call_function(start_thread, \run());
+        return tid = call_function(start_thread, FilePoller::threadBody(ref));
 %else
-        return tid = (start_thread ? call_function(start_thread, \run()) : background run());
+        return tid = (start_thread
+            ? call_function(start_thread, FilePoller::threadBody(ref))
+            : FilePoller::startThread(ref));
 %endif
     }
 
@@ -556,7 +619,7 @@ public class FilePoller {
 
         {
             AutoLock al(sleep_m);
-            runflag = False;
+            run_state.run = False;
             sleep_cond.broadcast();
         }
 
@@ -574,7 +637,7 @@ public class FilePoller {
 
         {
             AutoLock al(sleep_m);
-            runflag = False;
+            run_state.run = False;
             sleep_cond.broadcast();
         }
     }
@@ -604,11 +667,11 @@ public class FilePoller {
             m.lock();
             on_exit m.unlock();
 
-            if (runflag) {
+            if (run_state.run) {
                 throw "FILEPOLLER-ERROR", sprintf("the polling thread is already running in TID %d", tid);
             }
 
-            runflag = True;
+            run_state.run = True;
             tid = gettid();
         }
         sc.add();
@@ -643,7 +706,7 @@ public class FilePoller {
         date end = now_us() + seconds(secs);
         while (True) {
             call_function(sleep, 1);
-            if (!runflag || (now_us() >= end)) {
+            if (!run_state.run || (now_us() >= end)) {
                 break;
             }
         }
@@ -653,43 +716,160 @@ public class FilePoller {
             date end = now_us() + seconds(secs);
             while (True) {
                 call_function(sleep, 1);
-                if (!runflag || (now_us() >= end)) {
+                if (!run_state.run || (now_us() >= end)) {
                     break;
                 }
             }
         } else {
             # Default: condition-based sleep for instant wakeup on stop
             AutoLock al(sleep_m);
-            if (runflag) {
+            if (run_state.run) {
                 sleep_cond.wait(sleep_m, seconds(secs));
             }
         }
 %endif
     }
 
-    #! starts the polling operation
+    #! the code of the polling thread, which refers to no poller: a closure of a static method
+    private static code<nothing()> threadBody(FilePollerThreadRef ref) {
+        return sub () {
+            FilePoller::pollThread(ref);
+        };
+    }
+
+    #! starts the polling thread from a static method, so that the thread refers to no poller
+    private static int startThread(FilePollerThreadRef ref) {
+        return background FilePoller::pollThread(ref);
+    }
+
+    #! the polling thread: takes a strong reference to the poller for each poll and sleeps without it
+    /** A poller whose last reference is dropped while the thread sleeps is destroyed by the thread that drops it; its
+        destructor stops the thread and waits for it.  If the last reference is the thread's own, the destructor runs
+        in the thread when the poll ends, and only signals the loop to stop.  The base class's destructor stops the
+        thread, after the destructors of its subclasses: a poll that starts meanwhile runs on an object whose subclass
+        destructor has run, so a subclass that cannot poll then stops the poller in its own destructor.
+    */
+    private static pollThread(FilePollerThreadRef ref) {
+        on_exit ref.sc.done();
+        # a thread that ends with an exception leaves the poller stopped, so that it can be started again
+        on_error ref.state.run = False;
+
+        while (ref.state.run) {
+            int interval;
+            *code<nothing(int)> sleep_code;
+            {
+                FilePoller p = ref.poller;
+                # the poller has been destroyed: the thread ends; only this check tells it from an error of the
+                # poll's own code
+                try {
+                    p.getPollCount();
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        break;
+                    }
+                    rethrow;
+                }
+                try {
+                    p.pollOnce();
+                } catch (hash<ExceptionInfo> ex) {
+                    ref.state.run = False;
+                    FilePoller::logPollError(p, ex);
+                    break;
+                }
+                interval = p.poll_interval;
+                sleep_code = p.sleep;
+            }
+            # an error of the sleep stops polling as an error of the poll does
+            try {
+                FilePoller::threadSleep(ref, interval, sleep_code);
+            } catch (hash<ExceptionInfo> ex) {
+                ref.state.run = False;
+                FilePoller p = ref.poller;
+                FilePoller::logPollError(p, ex);
+                break;
+            }
+        }
+
+        try {
+            FilePoller p = ref.poller;
+            p.logInfo("polling finished");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+    }
+
+    #! logs the error that stops polling with the poller, unless it has been destroyed meanwhile
+    private static logPollError(FilePoller p, hash<ExceptionInfo> ex) {
+        try {
+            p.logInfo("cannot get file list from %y: %s: %s", p.path, ex.desc, ex.err);
+        } catch (hash<ExceptionInfo> ex1) {
+            if (ex1.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+    }
+
+    #! sleeps for the given number of seconds in the polling thread, holding no reference to the poller
+    private static threadSleep(FilePollerThreadRef ref, softint secs, *code<nothing(int)> sleep_code) {
+%ifdef PO_NO_PROCESS_CONTROL
+        date end = now_us() + seconds(secs);
+        while (True) {
+            call_function(sleep_code, 1);
+            if (!ref.state.run || (now_us() >= end)) {
+                break;
+            }
+        }
+%else
+        if (sleep_code) {
+            date end = now_us() + seconds(secs);
+            while (True) {
+                call_function(sleep_code, 1);
+                if (!ref.state.run || (now_us() >= end)) {
+                    break;
+                }
+            }
+        } else {
+            AutoLock al(ref.sleep_m);
+            if (ref.state.run) {
+                ref.sleep_cond.wait(ref.sleep_m, seconds(secs));
+            }
+        }
+%endif
+    }
+
+    #! runs one poll of the polling thread or of run()
+    /** An error raised by an event handler is logged, and the file is kept for the next poll (see
+        @ref filepollererrors); any other error is raised
+    */
+    private pollOnce() {
+        in_event = False;
+        try {
+            runOnce();
+        } catch (hash<ExceptionInfo> ex) {
+            if (!in_event) {
+                rethrow;
+            }
+            # the event handler refused or failed to handle a file, which is left in place, as are the other files of
+            # the poll that were not handled yet
+            in_event = False;
+            logInfo("an event handler for a file in %y failed: %s: %s; the file is kept and polled again in %ds", path,
+                ex.err, ex.desc, poll_interval);
+        }
+    }
+
+    #! runs the polling operation in the calling thread (startInline())
     private run() {
         on_exit sc.done();
 
-        while (runflag) {
+        while (run_state.run) {
             try {
-                in_event = False;
-                try {
-                    runOnce();
-                } catch (hash<ExceptionInfo> ex) {
-                    if (!in_event) {
-                        rethrow;
-                    }
-                    # the event handler refused or failed to handle a file, which is left in place, as are the other
-                    # files of the poll that were not handled yet
-                    in_event = False;
-                    logInfo("an event handler for a file in %y failed: %s: %s; the file is kept and polled again in "
-                        "%ds", path, ex.err, ex.desc, poll_interval);
-                }
+                pollOnce();
                 fileSleep(poll_interval);
             } catch (hash<ExceptionInfo> ex) {
                 logInfo("cannot get file list from %y: %s: %s", path, ex.desc, ex.err);
-                runflag = False;
+                run_state.run = False;
                 break;
             }
         }

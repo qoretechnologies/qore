@@ -52,6 +52,7 @@
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QoreForkHandlers.h"
 #include "qore/intern/ql_debug.h"
+#include "qore/intern/qore_string_private.h"
 
 #include <unordered_set>
 #include <set>
@@ -4281,23 +4282,15 @@ void QuicSession::recordResponseHeaderEvent(const QuicStreamInfo& stream) {
     pending_header_events_.push_back({stream.stream_id, stream.status_code, stream.headers});
 }
 
-void QuicSession::takeResponseHeaderEvents(const std::unordered_set<int64_t>& stream_ids,
-        std::vector<QuicResponseHeaderEvent>& out) {
+void QuicSession::takeResponseHeaderEvents(std::vector<QuicResponseHeaderEvent>& out) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (pending_header_events_.empty()) {
         return;
     }
-    std::vector<QuicResponseHeaderEvent> keep;
     for (auto& event : pending_header_events_) {
-        if (stream_ids.count(event.stream_id)) {
-            out.push_back(std::move(event));
-        } else if (streams_.find(event.stream_id) != streams_.end()) {
-            // the request is still registering itself; take the header on a later call
-            keep.push_back(std::move(event));
-        }
-        // a header recorded for a stream that is gone and unclaimed is discarded here
+        out.push_back(std::move(event));
     }
-    pending_header_events_ = std::move(keep);
+    pending_header_events_.clear();
 }
 
 bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
@@ -4336,6 +4329,8 @@ bool QuicSession::serveFastRoute(QuicStreamInfo& stream) {
     view.has_transfer_encoding = find("transfer-encoding") != nullptr;
     view.has_expect = find("expect") != nullptr;
     view.has_upgrade = find("upgrade") != nullptr || find("http2-settings") != nullptr;
+    // a target that the normal path refuses with 400 (qore#6554)
+    view.invalid_text = !qore_http_target_text_valid(stream.path.data(), stream.path.size());
 
     HttpFastFallback why;
     std::shared_ptr<const HttpFastResponse> response = fast.routes->matchH2(view, why);
@@ -4391,11 +4386,13 @@ QoreHashNode* QuicSession::getStreamTrailers(int64_t stream_id) const {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), nullptr);
     for (const auto& i : it->second->trailers) {
         if (i.second.size() == 1) {
-            rv->setKeyValue(i.first.c_str(), new QoreStringNode(i.second[0]), nullptr);
+            // a field value that is not valid UTF-8 is obs-text, given in ISO-8859-1 (qore#6554)
+            rv->setKeyValue(i.first.c_str(), qore_http_field_value_string(i.second[0].data(), i.second[0].size()),
+                nullptr);
         } else {
             QoreListNode* l = new QoreListNode(stringTypeInfo);
             for (const auto& v : i.second) {
-                l->push(new QoreStringNode(v), nullptr);
+                l->push(qore_http_field_value_string(v.data(), v.size()), nullptr);
             }
             rv->setKeyValue(i.first.c_str(), l, nullptr);
         }

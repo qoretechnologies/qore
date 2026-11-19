@@ -935,7 +935,12 @@ hash<HttpClientResponseInfo> resp = f.get(30s);
 
     #! Returns a URL without user information, for error messages
     private static string safeUrl(string url) {
-        return regex_subst(url, "^([^:/?#]+://)[^/?#]*@", "$1");
+        # a URL that is not valid in its encoding cannot be processed; it is not given, as it can hold credentials (qore#6553)
+        try {
+            return regex_subst(url, "^([^:/?#]+://)[^/?#]*@", "$1");
+        } catch () {
+            return sprintf("<URL of %d bytes not valid in its encoding>", url.size());
+        }
     }
 }
 }

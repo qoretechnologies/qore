@@ -28,7 +28,7 @@ int sub invariantQueries(string text, string needle,
         list<int> values, int rounds) {
     int sum = 0;
     for (int i = 0; i < rounds; ++i) {
-        sum += text.length();
+        sum += text.size();
         if (text.contains(needle)) {
             ++sum;
         }
@@ -129,7 +129,7 @@ script.write(scriptCode());
 script.close();
 
 string ast = runMode(script_path, "ast");
-if (ast != "64:0:10:-2:9:5:6:0\n") {
+if (ast != "72:0:10:-2:9:5:6:0\n") {
     printf("unexpected AST output:\n%s", ast);
     exit(2);
 }
@@ -158,14 +158,14 @@ if (aot != ast) {
 
 string stats = runMode(script_path, "ir", "QORE_IR_OPT_STATS=1");
 if (stats !~ /IR-OPT: invariantQueries:.*hoisted=([89]|[1-9][0-9]+)/
-        || stats !~ /64:0:10:-2:9:5:6:0/) {
+        || stats !~ /72:0:10:-2:9:5:6:0/) {
     printf("missing read-only query LICM selection:\n%s", stats);
     exit(2);
 }
 string disabled_stats = runMode(script_path, "ir",
     "QORE_IR_OPT_STATS=1 QORE_DISABLE_IR_QUERY_LICM=1");
 if (disabled_stats !~ /IR-OPT: invariantQueries:.*hoisted=0/
-        || disabled_stats !~ /64:0:10:-2:9:5:6:0/) {
+        || disabled_stats !~ /72:0:10:-2:9:5:6:0/) {
     printf("unexpected disabled read-only query LICM selection:\n%s",
         disabled_stats);
     exit(2);

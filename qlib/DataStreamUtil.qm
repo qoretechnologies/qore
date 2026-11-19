@@ -757,9 +757,8 @@ httpclient.sendWithSendCallback(ds_get_send(scb, enc_func), method, path, hdr, t
                     rethrow;
                 }
                 #printf("DBG ds_get_send() closure: %s: %s\n", ex.err, ex.desc);
-                string str = sprintf("%s: %s", ex.err, ex.desc);
-                # make sure there are no newlines in the string
-                str =~ s/[\r\n]/ /g;
+                # one line, without a string that cannot be processed (qore#6553)
+                string str = DataStreamUtilPrivate::ds_error_line(ex);
                 return {
                     DataStreamError: str,
                 };
@@ -1355,8 +1354,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
                 }
                 # Emit EndStreamResponse with error
                 eos_sent = True;
-                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
-                err_msg =~ s/[\r\n]/ /g;
+                string err_msg = DataStreamUtilPrivate::ds_error_line(ex);
 %ifdef NoJson
                 string json = "{\"code\":\"internal\",\"message\":"
                     + connect_json_escape(err_msg) + "}";
@@ -1407,8 +1405,7 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
                 }
                 # Emit EndStreamResponse with error
                 eos_sent = True;
-                string err_msg = sprintf("%s: %s", ex.err, ex.desc);
-                err_msg =~ s/[\r\n]/ /g;
+                string err_msg = DataStreamUtilPrivate::ds_error_line(ex);
 %ifdef NoJson
                 string json = "{\"code\":\"internal\",\"message\":"
                     + connect_json_escape(err_msg) + "}";
@@ -1612,6 +1609,24 @@ string dae = ds_get_ds_accept_enc_header(hdr."Accept-Encoding");
 
 # private namespace for non-exported definitions
 namespace DataStreamUtilPrivate {
+    # private function
+    # returns "err: desc" for the exception on one line: CR and LF are replaced by spaces; an error code or a
+    # description that is not valid in its encoding (it can come from a peer) cannot be processed and is not given, so
+    # that the caller, which handles an error, does not raise another one (qore#6553)
+    string sub ds_error_line(hash<ExceptionInfo> ex) {
+        auto err = ex.err;
+        if (err.typeCode() == NT_STRING && !err.isEncodingValid()) {
+            err = "<error code not valid in its encoding>";
+        }
+        auto desc = ex.desc;
+        if (desc.typeCode() == NT_STRING && !desc.isEncodingValid()) {
+            desc = "<description not valid in its encoding>";
+        }
+        string str = sprintf("%s: %s", err, desc);
+        str =~ s/[\r\n]/ /g;
+        return str;
+    }
+
     # private function
     # the headers are set in an "auto!" local: the caller's hash may be narrowed (e.g. hash<string, int> for
     # {"X-Count": 1}), and adding a string header would throw

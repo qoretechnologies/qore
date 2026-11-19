@@ -2324,7 +2324,8 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
         if (*req_path) {
             // the parse lookup reads the parse options of the current Program, which is not set on a thread that
             // loads a compiled program, and can be another Program; the options of the target Program apply
-            // (qore#6026)
+            // (qore#6026); a lookup, which runs no code of the Program, so the Program is only made current, not
+            // entered (qore#6185)
             QoreProgramContextHelper pch(pgm);
             qc = qore_root_ns_private::parseFindClass(*pp->RootNS, &loc_builtin, req_path);
         }
@@ -5968,6 +5969,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // run while the global AOT init lock is held, and taking a Program parse lock here can invert lock
                 // order with another loader thread that already holds the Program parse lock and is waiting for AOT
                 // init.
+                // The record is only read and the closure constructed: no code of the Program runs, so the Program is
+                // only made current, not entered (qore#6185).
                 QoreProgramContextHelper closure_pch(pgm);
 
                 // Read flags
@@ -6407,7 +6410,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_VALUE: {
                 std::string value_error;
-                // the Program resolves the hashdecls and types of typed container values (#5895)
+                // the Program resolves the hashdecls and types of typed container values (#5895); reading the value
+                // runs no code of the Program, so it is only made current, not entered (qore#6185)
                 QoreValue value;
                 {
                     QoreProgramContextHelper value_pch(pgm);
@@ -8186,9 +8190,16 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             return nullptr;
         }
         const char* block_name = reader.readStringRef(ptr);
-        // bit 0: is_loop_header; bits 1-3: loop_cancel (see serializeIRFunction())
+        // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
+        // debug_flow (see serializeIRFunction())
         uint8_t block_flags = QoreAOTBinaryReader::readU8(ptr);
-        uint8_t loop_cancel = static_cast<uint8_t>(block_flags >> 1);
+        const bool debug_flow_flags = reader.getHeader().version >= QORE_AOT_DEBUG_FLOW_VERSION;
+        uint8_t loop_cancel = static_cast<uint8_t>(debug_flow_flags ? (block_flags >> 1) & 0x7 : block_flags >> 1);
+        if (debug_flow_flags && (block_flags & ~0x1f)) {
+            error = "invalid flags " + std::to_string(block_flags) + " of block " + std::to_string(i)
+                + " of function " + func->name;
+            return nullptr;
+        }
         if (loop_cancel > QORE_IR_LOOP_CANCEL_MAX) {
             error = "invalid loop cancellation kind " + std::to_string(loop_cancel) + " in block "
                 + std::to_string(i) + " of function " + func->name;
@@ -8199,6 +8210,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         func->blocks[i]->name = block_name ? block_name : "";
         func->blocks[i]->is_loop_header = (block_flags & 1) != 0;
         func->blocks[i]->loop_cancel = static_cast<QoreIRLoopCancel>(loop_cancel);
+        func->blocks[i]->debug_flow = debug_flow_flags && (block_flags & 0x10);
 
         for (int j = 0; j < num_insts; ++j) {
             if (checkCancel()) {
@@ -8569,7 +8581,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
         ir.ast_visible_body_locals = ir.all_body_locals;
     }
 
-    delete ir.cached_pre_instantiated;
+    // the set replaces the previous one (setCachedPreInstantiated())
     auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
     std::unordered_set<const void*> body_local_set;
     for (LocalVar* lv : ir.all_body_locals) {
@@ -8585,7 +8597,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
             cached_pre_inst->insert(lv);
         }
     }
-    ir.cached_pre_instantiated = cached_pre_inst;
+    ir.setCachedPreInstantiated(cached_pre_inst);
 }
 
 //! Re-lower a user function variant to IR and build an AOT context.
@@ -9921,8 +9933,9 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
         std::string& error, bool ignore, bool ignore_after_header) {
     std::string zone;
     bool after_module_header;
+    bool trusted_only;
     std::string read_error;
-    if (!readTimeZone(reader, zone, after_module_header, read_error)) {
+    if (!readTimeZone(reader, zone, after_module_header, trusted_only, read_error)) {
         error = "AOT time zone metadata read error";
         if (label && *label) {
             error += " in ";
@@ -9936,6 +9949,11 @@ static bool applyAOTTimeZoneToProgram(QoreProgram* pgm, const QoreAOTBinaryReade
     }
     // a directive after the header of a module is checked against the restrictions that the header's domains leave
     if (after_module_header ? ignore_after_header : ignore) {
+        return true;
+    }
+    // a directive that the module's own restriction disallowed when it was compiled applies only to a load of the
+    // module as library code, where the locale control domain that the header declares removes it (qore#6352)
+    if (trusted_only && !qore_module_load_is_trusted()) {
         return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -10764,6 +10782,28 @@ static QoreStringNode* aotThreadStackInitError(const AOTThreadStackError& e, con
     aot_module_init_error.desc = err;
     aot_module_init_error.err = e.err;
     return err;
+}
+
+// the functional domains that the module metadata record of the AOT module whose initialization runs in this thread
+// declares, if set (see QoreAOTModuleExpectedDomainsHelper; qore#6351)
+static thread_local std::string aot_module_init_expected_module;
+static thread_local int64 aot_module_init_expected_domains = 0;
+static thread_local bool aot_module_init_expected_set = false;
+
+QoreAOTModuleExpectedDomainsHelper::QoreAOTModuleExpectedDomainsHelper(const char* module, int64 domains)
+        : old_domains(aot_module_init_expected_domains), old_set(aot_module_init_expected_set) {
+    // the new name is copied before anything is changed: a failed allocation changes nothing
+    std::string new_module(module);
+    old_module.swap(aot_module_init_expected_module);
+    aot_module_init_expected_module.swap(new_module);
+    aot_module_init_expected_domains = domains;
+    aot_module_init_expected_set = true;
+}
+
+QoreAOTModuleExpectedDomainsHelper::~QoreAOTModuleExpectedDomainsHelper() {
+    aot_module_init_expected_module.swap(old_module);
+    aot_module_init_expected_domains = old_domains;
+    aot_module_init_expected_set = old_set;
 }
 
 QoreAOTModuleInitLoaderHelper::QoreAOTModuleInitLoaderHelper(QoreProgram* loader)
@@ -14486,10 +14526,10 @@ static int executeInitFunctions(
         return nullptr;
     };
 
-    // ProgramRuntimeParseContextHelper can set td->current_pgm without setting
-    // td->tlpd. Init functions that construct objects need td->tlpd for
-    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in
-    // initMembers), so keep the bridge for nested parse-context callers.
+    // A thread can have td->current_pgm without td->tlpd (a binary module's initialization, before any entry; a
+    // switch of the current Program to one where the thread has no data yet, which does not create it: qore#6537).
+    // Init functions that construct objects need td->tlpd for
+    // thread_instantiate_lvar() (for example SelfInstantiatorHelper in initMembers), so keep the bridge.
     thread_ensure_local_program_data();
 
     // only the debug log reads it
@@ -15506,6 +15546,20 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             local_pgm->waitForTerminationAndDeref(nullptr);
             return err;
         }
+        // the module loader relieved the module's dependencies with the domains that its metadata record declares
+        // (qore#6351): they must be those of its header; checked once, by the module's own initialization
+        if (aot_module_init_expected_set && mod_name && aot_module_init_expected_module == mod_name) {
+            aot_module_init_expected_set = false;
+            if (own_dom != aot_module_init_expected_domains) {
+                QoreStringNode* err = new QoreStringNodeMaker("AOT module metadata read error for module '%s' (%s): "
+                    "the module metadata record declares the functional domains 0x%llx, but the module declares "
+                    "0x%llx in its header; the module is damaged: rebuild it", mod_name,
+                    module_context_desc.c_str(), static_cast<unsigned long long>(aot_module_init_expected_domains),
+                    static_cast<unsigned long long>(own_dom));
+                local_pgm->waitForTerminationAndDeref(nullptr);
+                return err;
+            }
+        }
         if (own_dom) {
             int64 removed = qore_program_private::setModuleOwnDomains(*local_pgm, own_dom,
                 qore_module_load_is_trusted());
@@ -15938,7 +15992,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
             "with a statically registered module is invalid: %s", record ? error.c_str() : "it is missing");
     } else {
         QMM.registerAOTStaticModuleIntern(xsink, tpgm, reinterpret_cast<qore_binary_module_desc_t>(desc_fn), path,
-            &info);
+            info);
     }
     if (xsink) {
         xsink.handleExceptions();
@@ -15947,7 +16001,7 @@ extern "C" DLLEXPORT void qore_aot_register_into_program_v2(QoreProgram* tpgm,
 
 // Phase 4 slice 10d: script-context register path.  Called by the
 // glue object that qcc emits for `qcc -o binary *.qo` (slice 10d).
-// Differs from qore_aot_register_into_program / qore_aot_module_init_v3:
+// Differs from qore_aot_register_into_program_v2() / qore_aot_module_init_v3:
 //
 //   * NO shadow module program created.  Metadata is deserialized
 //     straight into the caller's @p tpgm via

@@ -446,6 +446,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::IteratorRelease: return "iterator.release";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
+        case QoreIROpcode::PushTempMarkPair: return "push.temp.mark.pair";
         case QoreIROpcode::CallAOTHelper: return "call.aot.helper";
         case QoreIROpcode::RefForeachInit: return "ref.foreach.init";
         case QoreIROpcode::RefForeachSize: return "ref.foreach.size";

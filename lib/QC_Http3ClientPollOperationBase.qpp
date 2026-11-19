@@ -170,6 +170,7 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         old_completed_channel_actions.swap(completed_channel_actions);
         old_pending_responses.swap(pending_responses);
         pending_stream_ids.clear();
+        pending_header_events.clear();
         active_stream_count = 0;
         submits_in_progress = 0;
 
@@ -328,17 +329,91 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     return nullptr;
 }
 
-HttpClientEventSink* Http3ClientPollOperationPriv::getReferencedEventSink(int64_t stream_id) const {
-    AutoLocker al(stream_lock);
-    auto it = stream_actions.find(std::to_string(stream_id));
-    if (it == stream_actions.end()) {
-        return nullptr;
+int Http3ClientPollOperationPriv::reportResponseHeaderEvent(HttpClientEventSink& sink,
+        const QuicResponseHeaderEvent& event, ExceptionSink* xsink) {
+    // the shape of the header hash matches the one the HTTP/1.1 path reports: header names in lower case, with the
+    // status line in the status_code and http_version keys
+    ReferenceHolder<QoreHashNode> hdr(httpMultiHeadersToQoreHash(event.headers, true), xsink);
+    hdr->setKeyValue("status_code", event.status_code, xsink);
+    hdr->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+    if (*xsink) {
+        return -1;
     }
-    HttpClientEventSink* sink = it->second->getEventSink();
-    if (sink) {
-        sink->ref();
+    sink.responseHeaders(**hdr);
+    return 0;
+}
+
+int Http3ClientPollOperationPriv::reportResponseHeaderEvents(QuicSession& session, ExceptionSink* xsink) {
+    std::vector<QuicResponseHeaderEvent> header_events;
+    session.takeResponseHeaderEvents(header_events);
+    if (header_events.empty()) {
+        return 0;
     }
-    return sink;
+    // the sinks of the registered requests (referenced), with the index of their header; reported after the lock
+    std::vector<std::pair<HttpClientEventSink*, size_t>> reports;
+    {
+        AutoLocker al(stream_lock);
+        for (size_t i = 0; i < header_events.size(); ++i) {
+            QuicResponseHeaderEvent& event = header_events[i];
+            std::string sid = std::to_string(event.stream_id);
+            auto it = stream_actions.find(sid);
+            if (it != stream_actions.end()) {
+                HttpClientEventSink* sink = it->second->getEventSink();
+                if (sink) {
+                    sink->ref();
+                    reports.emplace_back(sink, i);
+                }
+                continue;
+            }
+            // a request that is still being submitted or registered claims its header when it is registered, or
+            // when its response is dispatched, before the response completes it (the rule of takeResponseAction())
+            if (pending_stream_ids.count(sid) || submits_in_progress > 0) {
+                pending_header_events[sid].push_back(std::move(event));
+            }
+            // otherwise the header belongs to no request (ex: a cancelled one) and is discarded
+        }
+        // a header kept for a stream that no request can claim any more is discarded
+        if (!submits_in_progress) {
+            for (auto i = pending_header_events.begin(); i != pending_header_events.end();) {
+                if (!pending_stream_ids.count(i->first)) {
+                    i = pending_header_events.erase(i);
+                } else {
+                    ++i;
+                }
+            }
+        }
+    }
+    int rc = 0;
+    for (auto& [sink, i] : reports) {
+        if (!rc && reportResponseHeaderEvent(*sink, header_events[i], xsink)) {
+            rc = -1;
+        }
+        sink->deref(xsink);
+    }
+    return rc;
+}
+
+void Http3ClientPollOperationPriv::reportPendingHeaderEventsLocked(const std::string& sid,
+        AbstractAsyncAction* action) {
+    auto it = pending_header_events.find(sid);
+    if (it == pending_header_events.end()) {
+        return;
+    }
+    std::vector<QuicResponseHeaderEvent> events;
+    events.swap(it->second);
+    pending_header_events.erase(it);
+    HttpClientEventSink* sink = action->getEventSink();
+    if (!sink) {
+        return;
+    }
+    // an event that cannot be built is not reported; the request it belongs to is not affected
+    ExceptionSink event_xsink;
+    for (auto& event : events) {
+        if (reportResponseHeaderEvent(*sink, event, &event_xsink)) {
+            break;
+        }
+    }
+    event_xsink.clear();
 }
 
 QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
@@ -459,45 +534,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         // header while the body is still being read.
         {
             auto session = inner_op->getSession();
-            if (session) {
-                // only the requests that have finished registering themselves are considered, so a
-                // header that arrives while its caller is still in submitRequest() is reported by the
-                // read cycle that follows the registration instead of being dropped
-                std::unordered_set<int64_t> reporting_streams;
-                {
-                    AutoLocker al(stream_lock);
-                    for (auto& i : stream_actions) {
-                        if (i.second->getEventSink()) {
-                            reporting_streams.insert(strtoll(i.first.c_str(), nullptr, 10));
-                        }
-                    }
+            if (session && reportResponseHeaderEvents(*session, xsink)) {
+                setError("HTTP3-READ-ERROR", "response header event error", xsink);
+                cleanupPendingState();
+                if (last_poll_info) {
+                    last_poll_info->deref(xsink);
                 }
-                std::vector<QuicResponseHeaderEvent> header_events;
-                if (!reporting_streams.empty()) {
-                    session->takeResponseHeaderEvents(reporting_streams, header_events);
-                }
-                for (auto& event : header_events) {
-                    ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(event.stream_id),
-                        xsink);
-                    if (!sink) {
-                        continue;
-                    }
-                    // the shape of the header hash matches the one the HTTP/1.1 path reports: header
-                    // names in lower case, with the status line in the status_code and http_version keys
-                    ReferenceHolder<QoreHashNode> hdr(httpMultiHeadersToQoreHash(event.headers, true),
-                        xsink);
-                    hdr->setKeyValue("status_code", event.status_code, xsink);
-                    hdr->setKeyValue("http_version", new QoreStringNode("3"), xsink);
-                    if (*xsink) {
-                        setError("HTTP3-READ-ERROR", "response header event error", xsink);
-                        cleanupPendingState();
-                        if (last_poll_info) {
-                            last_poll_info->deref(xsink);
-                        }
-                        return nullptr;
-                    }
-                    sink->responseHeaders(**hdr);
-                }
+                return nullptr;
             }
         }
 
@@ -522,6 +565,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
             bool buffered = false;
             AbstractAsyncAction* action = takeResponseAction(sid, output, buffered, xsink);
+#ifdef DEBUG
+            if (buffered) {
+                // reports that the response of a request that is not registered yet was kept for the registration
+                qore_dbg_http_hold(QoreDbgHttpHoldPoint::Http3ResponseBuffered, *self);
+            }
+#endif
             if (action) {
                 response_dispatched = true;
             }
@@ -848,6 +897,7 @@ void Http3ClientPollOperationPriv::cleanupPendingState() {
     }
     pending_responses.clear();
     pending_stream_ids.clear();
+    pending_header_events.clear();
     submits_in_progress = 0;
     if (stream_blocked_waiters > 0) {
         stream_capacity_cond.broadcast();
@@ -967,6 +1017,8 @@ AbstractAsyncAction* Http3ClientPollOperationPriv::takeResponseAction(const std:
     AutoLocker al(stream_lock);
     auto it = stream_actions.find(sid);
     if (it != stream_actions.end()) {
+        // a header kept for the request when it was not registered yet is reported before its response
+        reportPendingHeaderEventsLocked(sid, it->second);
         it->second->ref();
         return it->second;
     }
@@ -1080,6 +1132,24 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     endSubmitOk(stream_id);
 
+#ifdef DEBUG
+    // a test holds the thread here, with the I/O thread woken, so that the response arrives before the registration
+    if (qore_dbg_http_hold_armed(QoreDbgHttpHoldPoint::Http3Register)) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv(static_cast<AsyncIoControllerPriv*>(
+                ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &wake_xsink)), &wake_xsink);
+            ReferenceHolder<QoreObject> sock(getReferencedSocket(), &wake_xsink);
+            if (ctl_priv && sock) {
+                ctl_priv->wakeSocketByObject(*sock, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+        qore_dbg_http_hold(QoreDbgHttpHoldPoint::Http3Register);
+    }
+#endif
+
     // Phase 3: register stream with action
     bool need_cancel = false;
     QoreListNode* buffered = registerStream(stream_id, action, need_cancel, xsink);
@@ -1149,6 +1219,7 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
             }
             pending_responses.erase(pr_it);
         }
+        pending_header_events.erase(sid);
         need_cancel = true;
         return nullptr;
     }
@@ -1168,6 +1239,10 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     // was created with refcount 1 by caller").
     stream_actions[sid] = action;
     ++active_stream_count;
+
+    // a header that arrived before the registration is reported now, under the lock, so before the I/O thread or
+    // this thread (dispatchBufferedResponses()) can dispatch the response, which completes the request
+    reportPendingHeaderEventsLocked(sid, action);
 
     // Check for buffered responses
     auto pr_it = pending_responses.find(sid);
@@ -1205,6 +1280,7 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
     {
         AutoLocker al(stream_lock);
         pending_stream_ids.erase(sid);
+        pending_header_events.erase(sid);
 
         auto pr_it = pending_responses.find(sid);
         if (pr_it != pending_responses.end()) {
@@ -1256,6 +1332,7 @@ bool Http3ClientPollOperationPriv::completeStream(int64_t stream_id, ExceptionSi
     ReferenceHolder<AbstractAsyncAction> released_action(xsink);
     AutoLocker al(stream_lock);
     pending_stream_ids.erase(sid);
+    pending_header_events.erase(sid);
 
     auto it = stream_actions.find(sid);
     if (it == stream_actions.end()) {

@@ -235,6 +235,10 @@ $function$
 
 
     @section pgsqlsqlutilbasev119 PgsqlSqlUtilBase v1.19
+    - a string given in an SQL string literal (a default value, a comment, a value of the \c "in" operator, of a
+      column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
+      with \c VALUE-ERROR, and its quotes are doubled without a regular expression
+      (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
     - implemented @ref select_option_recursive "recursive queries" on PostgreSQL (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed writing a string to a \c json or \c jsonb column with an insert, an update or an upsert, which
       PostgreSQL refused as \c text; the value is cast to the column's type in the SQL
@@ -688,6 +692,82 @@ string sub pgsql_get_sql_object_name(string nname) {
     return pgsql_get_sql_schema(on.sql_schema) + "." + sql_name;
 }
 
+# returns the name of a function or procedure with an optional argument list for SQL (qore#6579): the name, up to
+# the first "(" outside of double quotes, as pgsql_get_sql_object_name() returns it, and the argument list as given,
+# which must be one parenthesized list (of types, with names, modes and defaults as the server gives them): outside
+# of its double-quoted identifiers and string literals, it has no statement separator, comment, dollar quote or
+# parenthesis that closes the list before its end, and it has no backslash
+string sub pgsql_get_sql_routine_name(string sig) {
+    # the characters that decide are ASCII, so the bytes are read
+    binary b = binary(convert_encoding(sig, "UTF-8"));
+    int len = b.size();
+    int i = 0;
+    bool quoted = False;
+    for (; i < len; ++i) {
+        if (b[i] == 0x22) {
+            quoted = !quoted;
+        } else if (b[i] == 0x28 && !quoted) {
+            break;
+        }
+    }
+    string name = trim(sig.substr(0, sig.length() - (len - i)));
+    if (i == len) {
+        return pgsql_get_sql_object_name(name);
+    }
+    # the argument list: from b[i] == "(" to the end
+    int end = len;
+    while (end > i && (b[end - 1] == 0x20 || b[end - 1] == 0x09 || b[end - 1] == 0x0a || b[end - 1] == 0x0d)) {
+        --end;
+    }
+    int depth = 0;
+    int j = i;
+    while (j < end) {
+        int c = b[j];
+        # a double-quoted identifier or a string literal, with a doubled quote as a quote in it
+        if (c == 0x22 || c == 0x27) {
+            ++j;
+            while (True) {
+                if (j >= end) {
+                    throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y has an unterminated "
+                        "quote", sig);
+                }
+                if (b[j] == 0x5c) {
+                    throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y has a backslash", sig);
+                }
+                if (b[j] == c) {
+                    if (j + 1 < end && b[j + 1] == c) {
+                        j += 2;
+                        continue;
+                    }
+                    break;
+                }
+                ++j;
+            }
+            ++j;
+            continue;
+        }
+        if (c == 0x28) {
+            ++depth;
+        } else if (c == 0x29) {
+            --depth;
+            # the list ends only at the end
+            if (!depth && j != end - 1) {
+                throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y is followed by more text",
+                    sig);
+            }
+        } else if (c == 0x3b || c == 0x24 || c == 0x5c || (j + 1 < end && ((c == 0x2d && b[j + 1] == 0x2d)
+                || (c == 0x2f && b[j + 1] == 0x2a)))) {
+            throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y has a statement separator, "
+                "comment, dollar quote or backslash", sig);
+        }
+        ++j;
+    }
+    if (depth) {
+        throw "FUNCTION-NAME-ERROR", sprintf("PostgreSQL: the argument list of %y is not closed", sig);
+    }
+    return pgsql_get_sql_object_name(name) + binary_to_string(b.substr(i, end - i), "UTF-8");
+}
+
 # returns a schema name as the name of an object gives it, as a double-quoted identifier or a name of word
 # characters, for SQL
 string sub pgsql_get_sql_schema(string sql_schema) {
@@ -706,6 +786,8 @@ string sub pgsql_get_relation_name_literal(string name) {
 # single quotes as an escape character when standard_conforming_strings is off, and an escape string is read the same
 # way whatever its value
 string sub pgsql_get_string_literal(string v) {
+    # issue #6586: a string whose encoding is invalid is refused
+    AbstractSqlUtilBase::checkSqlStringValue(v);
     if (v.find("\\") >= 0) {
         return "E'" + replace(replace(v, "\\", "\\\\"), "'", "''") + "'";
     }
@@ -858,34 +940,38 @@ public class PgsqlType inherits Qore::Serializable {
 
         # process differences in old attributes
         foreach hash oldh in (oldtl.iterator()) {
+            # the names of the type and of its attributes are identifiers (qore#6579)
             if ($# >= tl.size()) {
-                sqll += sprintf("alter type %s drop attribute %s", name, oldh.name);
+                sqll += sprintf("alter type %s drop attribute %s", pgsql_get_sql_object_name(name),
+                    pgsql_get_sql_identifier(oldh.name));
                 continue;
             }
             hash h = tl[$#];
             if (oldh.type != h.type)
-                sqll += sprintf("alter type %s alter attribute %s type %s%s", name, oldh.name, h.type,
-                    opt.force ? " cascade" : "");
+                sqll += sprintf("alter type %s alter attribute %s type %s%s", pgsql_get_sql_object_name(name),
+                    pgsql_get_sql_identifier(oldh.name), h.type, opt.force ? " cascade" : "");
             if (oldh.name != h.name)
-                sqll += sprintf("alter type %s rename attribute %s to %s", name, oldh.name, h.name);
+                sqll += sprintf("alter type %s rename attribute %s to %s", pgsql_get_sql_object_name(name),
+                    pgsql_get_sql_identifier(oldh.name), pgsql_get_sql_identifier(h.name));
         }
         # add any new attributes
         for (int i = oldtl.size(); i < tl.size(); ++i)
-            sqll += sprintf("alter type %s add attribute %s %s", name, tl[i].name, tl[i].type);
+            sqll += sprintf("alter type %s add attribute %s %s", pgsql_get_sql_object_name(name),
+                pgsql_get_sql_identifier(tl[i].name), tl[i].type);
 
         return sqll;
     }
 
     #! returns a string that can be used to create the type in the database
     string getCreateSql(*hash opt) {
-        return sprintf("create type %s as (%s)", name, src);
+        return sprintf("create type %s as (%s)", pgsql_get_sql_object_name(name), src);
     }
 
     #! returns a string that can be used to drop the function from the database
     /** @param opt drop options; if \a force is @ref True "True", then the \c CASCADE option will be used in the drop statement
         */
     string getDropSql(*hash opt) {
-        return sprintf("drop type %s%s", name, opt.force ? " cascade" : "");
+        return sprintf("drop type %s%s", pgsql_get_sql_object_name(name), opt.force ? " cascade" : "");
     }
 
     #! returns a string that can be used to rename a type
@@ -893,7 +979,8 @@ public class PgsqlType inherits Qore::Serializable {
         @param opt this argument is ignored
         */
     string getRenameSql(string new_name, *hash opt) {
-        return sprintf("alter type %s rename to %s", name, new_name);
+        return sprintf("alter type %s rename to %s", pgsql_get_sql_object_name(name),
+            pgsql_is_quoted_identifier(new_name) ? new_name : pgsql_get_sql_identifier(new_name));
     }
 
     #! returns @ref True if the types are equal
@@ -947,6 +1034,8 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
         @param options additional options: where, include, nulls_not_distinct, order, and nulls
         @throw INDEX-OPTION-ERROR for invalid key modifiers or incompatible options
         @note INCLUDE columns are stored separately from the uniqueness keys.
+        @note the access method, storage parameter names and operator classes are written into the DDL as they are
+        given here; the indexes of a table description are checked by PgsqlTable::checkIndexOptions() (qore#6577)
         @see pgsql_index_options for a fulfillment index example
     */
     constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace,
@@ -1055,7 +1144,25 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
             list<string> parts = ();
             HashIterator wi(with_options);
             while (wi.next()) {
-                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+                # a storage parameter value is a number, a boolean or a string literal (qore#6577)
+                auto v = wi.getValue();
+                string vs;
+                switch (v.typeCode()) {
+                    case NT_INT:
+                    case NT_FLOAT:
+                    case NT_NUMBER:
+                        vs = v.toString();
+                        break;
+                    case NT_BOOLEAN:
+                        # as 1 or 0, as the server gives a storage parameter that was set with a number, so that
+                        # the declared index compares equal to the index read from the server
+                        vs = v ? "1" : "0";
+                        break;
+                    default:
+                        vs = pgsql_get_string_literal(v.toString());
+                        break;
+                }
+                parts += sprintf("%s = %s", wi.getKey(), vs);
             }
             sql += sprintf(" with (%s)", parts.join(", "));
         }
@@ -2088,16 +2195,22 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
     }
 
     #! returns a string that can be used to create the function in the database
+    /** @throw FUNCTION-NAME-ERROR the argument list of the name is not one list of types (see
+        pgsql_get_sql_routine_name())
+    */
     softlist<string> getCreateSql(*hash opt) {
-        return sprintf("create%s %s %s %s", opt.replace ? " or replace" : "", type, name, src);
+        return sprintf("create%s %s %s %s", opt.replace ? " or replace" : "", type, pgsql_get_sql_routine_name(name),
+            src);
     }
 
     #! returns a string that can be used to drop the function from the database
     /** @param opt drop options; if \a force is @ref True "True", then the \c CASCADE option will be used in the
         drop statement
+
+        @throw FUNCTION-NAME-ERROR the argument list of the name is not one list of types
     */
     string getDropSql(*hash opt) {
-        return sprintf("drop %s %s%s", type, name, opt.force ? " cascade" : "");
+        return sprintf("drop %s %s%s", type, pgsql_get_sql_routine_name(name), opt.force ? " cascade" : "");
     }
 
     #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not
@@ -2113,7 +2226,8 @@ public class PgsqlFunction inherits SqlUtil::AbstractFunction {
         # RENAME TO takes the new name only: the argument list, which identifies the function, is that of the name
         # renamed; an argument list given with the new name is ignored
         *string bare = (new_name =~ x/^([^(]+)\(/)[0];
-        return sprintf("alter %s %s rename to %s", type, name, pgsql_get_sql_identifier(trim(bare ?? new_name)));
+        return sprintf("alter %s %s rename to %s", type, pgsql_get_sql_routine_name(name),
+            pgsql_get_sql_identifier(trim(bare ?? new_name)));
     }
 
     #! sets the new name of the function
@@ -2412,12 +2526,18 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     #! Compares the query of a view with the query of a view of a schema description as PostgreSQL normalizes them
     /** PostgreSQL keeps the query of a view in a form of its own (ex: with qualified column names and casts), which
         it gives for the query of the view of the description as well, made as a temporary view in a savepoint that
-        is rolled back
+        is rolled back; only a query that AbstractDatabase::viewProbeSourceSafe() accepts is given to it, also when
+        the SQL is only returned (ex: \c qschema \c diff or \c --dry-run)
     */
     private bool viewSourceEqualImpl(AbstractView live, AbstractView tmpl) {
         string live_src = AbstractDatabase::normalizeViewSource(live.src);
         if (live_src == AbstractDatabase::normalizeViewSource(tmpl.src)) {
             return True;
+        }
+        # only a query that can be nothing but one select statement is given to the probe (qore#6578); another is
+        # compared as text, so the view is created again by the alignment
+        if (!AbstractDatabase::viewProbeSourceSafe(tmpl.src)) {
+            return False;
         }
         return live_src == AbstractDatabase::normalizeViewSource(getServerViewSource(tmpl.src));
     }
@@ -3419,10 +3539,11 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     "return_type": AbstractDataProviderTypeMap."any",
                 },
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    # the arguments are the expression, the type, and an optional size and scale; the type name is checked
+                    # first, as it is written into the SQL (qore#6572)
+                    string name = QoreTypeMap{args[1]} ?? SqlUtil::sql_check_cast_type(args[1]);
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
-                    # the arguments are the expression, the type, and an optional size and scale
-                    string name = QoreTypeMap{args[1]} ?? args[1];
                     *hash<auto> desc = PgsqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", exp0, name);
                     if (desc.size == SZ_MAND) {
@@ -3820,9 +3941,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     if (exists args[1]) {
-                        # a quote in the format value is doubled so that it cannot end the string literal
-                        string fmt = replace(PgsqlTable::convertDateFormat(args[1]), "'", "''");
-                        return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
+                        return sprintf("to_timestamp(%s, %s)", exp0, PgsqlTable::getDateFormatLiteral(args[1]));
                     }
                     return sprintf("cast(%s as timestamp)", exp0);
                 },
@@ -3887,9 +4006,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
-                    # a quote in the format value is doubled so that it cannot end the string literal
-                    string fmt = replace(PgsqlTable::convertDateFormat(args[1]), "'", "''");
-                    return sprintf("to_char(%s, '%s')", exp0, fmt);
+                    return sprintf("to_char(%s, %s)", exp0, PgsqlTable::getDateFormatLiteral(args[1]));
                 },
             },
         };
@@ -3898,8 +4015,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         const PgsqlCopMap = {
             COP_CAST: (
                 "code": string sub (string cve, list<auto> args) {
-                    string name = QoreTypeMap{args[0]} ?? args[0];
-                    hash desc = PgsqlTypeMap{name};
+                    string name = QoreTypeMap{args[0]} ?? SqlUtil::sql_check_cast_type(args[0]);
+                    # a type that the driver does not describe (ex: a sized type name such as "varchar2(10 char)") is given as
+                    # it is (qore#6572)
+                    *hash<auto> desc = PgsqlTypeMap{name};
                     string sql = sprintf ("cast (%s as %s", cve, name);
                     switch (name) {
                         default:
@@ -4318,10 +4437,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 auto arg = iop_val.arg;
                 if (cmd.immediate) {
                     # only an identifier is given to the operator's code, as the SQL that it returns is inserted
-                    # directly into the query, as for AbstractTable::insert()
-                    if (arg =~ /[^a-z\._0-9]/i) {
-                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %y "
-                            "which contains illegal characters", getDesc(), iop, arg);
+                    # directly into the query, as for AbstractTable::insert(); the value must match the allowed
+                    # characters as a whole; a string that is not valid in its encoding, which cannot be matched, is
+                    # refused first
+                    if ((arg.typeCode() == NT_STRING && !arg.isEncodingValid()) || arg !~ /\A[A-Za-z\._0-9]*\z/) {
+                        # a value that is not valid in its encoding is not given in the message (qore#6553)
+                        throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s "
+                            "which contains illegal characters", getDesc(), iop,
+                            arg.typeCode() == NT_STRING && !arg.isEncodingValid()
+                                ? sprintf("a string of %d bytes not valid in its encoding", arg.size())
+                                : sprintf("%y", arg));
                     }
                     select_exprs += cmd.code ? cmd.code(i.key, arg) : arg;
                 } else {
@@ -5063,6 +5188,29 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "and not a.attisdropped order by a.attnum", schema, getRelationName());
     }
 
+    #! returns the types that the "delete_others" upsert option converts the values of numeric, date and time key columns to (issue #6635)
+    /** the types are given by the catalog as the columns are declared (ex: \c "timestamp(0) without time zone",
+        \c "numeric(10,2)"), so that a bound value is rounded as the column rounds it when it stores it
+    */
+    private *hash<string, string> getDeleteOthersKeyCastTypes(list<string> pkl) {
+        # a bpchar key is compared as a bpchar without its length, which ignores the padding of the stored value and of
+        # the input and, unlike a cast to the column's length, never truncates it (issue #6675)
+        *hash<auto> qh = ds.select("select a.attname, case when t.typname = 'bpchar' then 'bpchar' "
+            "else format_type(a.atttypid, a.atttypmod) end as type "
+            "from pg_catalog.pg_attribute a join pg_catalog.pg_class c on (c.oid = a.attrelid) "
+            "join pg_catalog.pg_namespace n on (n.oid = c.relnamespace) "
+            "join pg_catalog.pg_type t on (t.oid = a.atttypid) "
+            "where n.nspname = %v and c.relname = %v and a.attnum > 0 and not a.attisdropped "
+            "and (t.typcategory in ('N', 'D', 'T') or t.typname = 'bpchar')", schema, getRelationName());
+        hash<string, string> rv;
+        context (qh) {
+            if (inlist(%attname, pkl)) {
+                rv{%attname} = %type;
+            }
+        }
+        return rv;
+    }
+
     private Columns describeImpl() {
         # get column descriptions; the relation join uses pg_class/pg_namespace (not
         # pg_statio_all_tables, which omits partitioned parent tables - relkind 'p' - because
@@ -5434,14 +5582,25 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         @since %Qore 3.0
     */
     static string convertDateFormat(string fmt) {
+        # the format is written into an SQL string literal (qore#6553)
+        sql_literal_check_encoding(fmt);
         # use negative lookahead to avoid double-replacing "HH24" → "HH2424"
         fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
         fmt = regex_subst(fmt, "mm", "MI", RE_Global);
         fmt = regex_subst(fmt, "us", "US", RE_Global);
         fmt = regex_subst(fmt, "ms", "MS", RE_Global);
-        # escape single quotes for safe SQL embedding
-        fmt = regex_subst(fmt, "'", "''", RE_Global);
         return fmt;
+    }
+
+    #! Returns the date format converted by convertDateFormat() as an SQL string literal (qore#6557)
+    /** A format with a backslash is given as an escape string, which PostgreSQL reads the same way whatever the value
+        of standard_conforming_strings (see pgsql_get_string_literal()); any other format is given in single quotes,
+        with each single quote doubled
+
+        @throw VALUE-ERROR the format is not valid in its encoding
+    */
+    static string getDateFormatLiteral(string fmt) {
+        return pgsql_get_string_literal(convertDateFormat(fmt));
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
@@ -5795,7 +5954,68 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         return new PgsqlPrimaryKey(cname, ch, opt.index_tablespace);
     }
 
+    #! the regular expression of a name in index options: an access method or a storage parameter
+    const PgsqlIndexOptionNameRegex = "\\A[A-Za-z_][A-Za-z0-9_]*\\z";
+
+    #! a name in an operator class: a plain or quoted identifier
+    const PgsqlOpclassIdent = "(?:[A-Za-z_][A-Za-z0-9_$]*|\"(?:[^\"\\x00]|\"\")+\")";
+
+    #! a name with an optional schema in an operator class
+    const PgsqlOpclassQName = PgsqlOpclassIdent + "(?:\\." + PgsqlOpclassIdent + ")?";
+
+    #! a value of an operator class parameter: a number, a name or a string literal without a backslash
+    const PgsqlOpclassValue = "(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]*|'(?:[^'\\\\\\x00]|'')*')";
+
+    #! the optional parameters of an operator class
+    const PgsqlOpclassParams = "(?:\\s*\\(\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue
+        + "(?:\\s*,\\s*" + PgsqlOpclassIdent + "\\s*=\\s*" + PgsqlOpclassValue + ")*\\s*\\))?";
+
+    #! the regular expression of an operator class, also in the form that the server gives (see parsePgIndexDef()):
+    #! a name with an optional schema and optional parameters, after an optional collation (\c "COLLATE name"),
+    #! or a collation alone; a parameter value with a backslash is not accepted, also in the form of the server
+    const PgsqlOpclassRegex = "\\A(?:(?i:collate)\\s+" + PgsqlOpclassQName + "(?:\\s+" + PgsqlOpclassQName
+        + PgsqlOpclassParams + ")?|" + PgsqlOpclassQName + PgsqlOpclassParams + ")\\z";
+
+    #! Checks the index options that are written into the DDL (qore#6577)
+    /** Called for each index of a table description
+
+        @param iname the name of the index
+        @param opt the index options
+
+        @throw INDEX-OPTION-ERROR the access method or a storage parameter name is not a name, a storage parameter
+        value is not a number, a boolean or a string, or an operator class is not an operator class name
+    */
+    static checkIndexOptions(string iname, *hash<auto> opt) {
+        if (exists opt.method && (opt.method.typeCode() != NT_STRING || !regex(opt.method, PgsqlIndexOptionNameRegex))) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the access method %y is not a name", iname, opt.method);
+        }
+        foreach hash<auto> i in (opt.with.pairIterator()) {
+            if (!regex(i.key, PgsqlIndexOptionNameRegex)) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the storage parameter %y is not a name", iname,
+                    i.key);
+            }
+            switch (i.value.typeCode()) {
+                case NT_INT:
+                case NT_FLOAT:
+                case NT_NUMBER:
+                case NT_BOOLEAN:
+                case NT_STRING:
+                    break;
+                default:
+                    throw "INDEX-OPTION-ERROR", sprintf("index %y: the value of the storage parameter %y is not a "
+                        "number, a boolean or a string (got type %y)", iname, i.key, i.value.type());
+            }
+        }
+        foreach hash<auto> i in (opt.opclass.pairIterator()) {
+            if (i.value.typeCode() != NT_STRING || !regex(i.value, PgsqlOpclassRegex)) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the operator class %y of %y is not an operator class "
+                    "name", iname, i.value, i.key);
+            }
+        }
+    }
+
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
+        PgsqlTable::checkIndexOptions(iname, opt);
         foreach auto col in (opt.include) {
             if (col.typeCode() != NT_STRING || !columns.hasKey(col)) {
                 throw "INDEX-OPTION-ERROR", sprintf("Unknown INCLUDE column %y", col);

@@ -1,0 +1,260 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_ThreadCapabilityScope.qpp ThreadCapabilityScope class definition */
+/*
+    QC_ThreadCapabilityScope.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include "qore/intern/QC_ThreadCapabilityScope.h"
+#include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreLibIntern.h"
+#include <qore/QoreSandboxManager.h>
+
+bool thread_capabilities_visible() {
+    // the code of a user module, which the set is for, when the module's Program is not sandboxed: PO_IN_MODULE does
+    // not tell that the code is trusted, as a Program that module code creates inherits it, also in a module that
+    // sandboxed code loaded (which is sandboxed, as is a Program that code acting for sandboxed code creates); the
+    // code of a sandboxed module is judged by the rules below like any other code
+    QoreProgram* pgm = getProgram();
+    if (pgm && pgm->getParseOptions().hasAny(QoreParseOptions(PO_IN_MODULE)) && !qore_program_is_sandboxed(pgm)) {
+        return true;
+    }
+    // other code sees it only if it may control threads itself and no sandbox governs it, as for the creator of a
+    // scope (thread_capability_check_creator()): also a Program that sandboxed code created, which keeps the sandbox
+    // of that code (and is sandboxed by its flag), and not a sandbox that the thread only inherited from the code
+    // that started it, which does not count by itself
+    if (runtime_check_parse_option(PO_NO_THREAD_CONTROL)) {
+        return false;
+    }
+    return !qore_scope_creator_is_sandboxed();
+}
+
+int thread_capability_check_creator(ExceptionSink* xsink) {
+    // decided by the code that creates the scope, never by the sandbox that the thread inherited from its creator
+    // alone (see qore_scope_creator_is_sandboxed()): a host that no sandbox governs sets the capabilities of the
+    // code it runs also in a thread that sandboxed code started, and the capability code must still be code that no
+    // sandbox governs (thread_capability_check_code())
+    if (qore_scope_creator_is_sandboxed()) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "a sandbox governs the calling code, which cannot set the "
+            "capabilities of a thread");
+        return -1;
+    }
+    return 0;
+}
+
+int thread_capability_check_code(const QoreValue v, const char* name, const char* what, ExceptionSink* xsink) {
+    qore_type_t t = v.getType();
+    if (t != NT_RUNTIME_CLOSURE && t != NT_FUNCREF) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': %s is of type %s, not callable code", name,
+            what, v.getFullTypeName());
+        return -1;
+    }
+    const ResolvedCallReferenceNode* rcr = v.get<const ResolvedCallReferenceNode>();
+    QoreParseOptions code_po;
+    // the options and whether it is sandboxed of the same Program: the one whose code the reference runs (for a user
+    // function, the Program that defines it, also when another Program imported it or a copy of it)
+    bool code_sandboxed;
+    int rc = qore_call_reference_code_parse_options(rcr, code_po, xsink, &code_sandboxed);
+    if (*xsink) {
+        return -1;
+    }
+    if (rc < 0) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': the Program of %s has been deleted", name,
+            what);
+        return -1;
+    }
+    // as for module-owned code (qore_check_module_owned_code()): code without a Program of its own (a call reference
+    // to builtin code, or the guard of another capability) would run with no restrictions at all
+    if (!rc) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': %s has no Program of its own (a call "
+            "reference to builtin code); only code of a Program that may control threads can be used", name, what);
+        return -1;
+    }
+    if (code_po & QoreParseOptions(PO_NO_THREAD_CONTROL)) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': the Program of %s does not allow thread "
+            "control (PO_NO_THREAD_CONTROL); only code of a Program that may control threads can be used", name,
+            what);
+        return -1;
+    }
+    if (code_sandboxed) {
+        xsink->raiseException("THREAD-CAPABILITY-ERROR", "capability '%s': %s belongs to a sandboxed Program; only "
+            "code that no sandbox governs can be used", name, what);
+        return -1;
+    }
+    return 0;
+}
+
+ResolvedCallReferenceNode* thread_capability_make_guard(const char* name, const QoreValue code) {
+    assert(code.getType() == NT_RUNTIME_CLOSURE || code.getType() == NT_FUNCREF);
+    return new ThreadCapabilityGuardReferenceNode(name, code.get<ResolvedCallReferenceNode>()->refRefSelf());
+}
+
+//! Sets capabilities of the current thread for the lifetime of the object
+/** A host that runs code for others, such as an application server running a service's code, makes its
+    implementations of capabilities available to the module code that runs for that code: a module that starts
+    threads or wraps callbacks for its caller looks the capability up with
+    @ref Qore::get_thread_capability() "get_thread_capability()"
+    when its caller does not give it as an option.  The capabilities are set for the current thread from the
+    constructor to the destruction of the object; assign it to a local variable, so that the scope ends with the
+    block, also when an exception leaves it.
+
+    @par Example:
+    @code{.py}
+# the service's code, and the module code it calls, see the host's implementations while it runs
+{
+    ThreadCapabilityScope scope({
+        "start_thread": \host_start_thread(),
+        "call_wrapper": \host_call_wrapper(),
+    });
+    service.start();
+}
+    @endcode
+
+    The capabilities that the modules of %Qore look up:
+    |!Name|!Type|!Use
+    |\c start_thread|<tt>code<int(code<nothing()>)></tt>|starts a thread that runs the code given and returns its TID
+    |\c call_wrapper|<tt>code<auto(code<auto()>)></tt>|runs the code given in the host's context and returns its value
+
+    A host may set other names, which no module of %Qore looks up.
+
+    @note
+    - scopes nest: an inner scope adds or replaces capabilities of the outer set; destroying the object restores the
+      outer set, and also leaves any scope created inside it that is still open
+    - a scope belongs to the thread that created it: destroying it in another thread, or after an outer scope has left
+      it, does not change any thread's capabilities
+    - a new thread starts with no capabilities
+    - see design/thread-capability-scope.md
+
+    @since %Qore 3.0
+*/
+qclass ThreadCapabilityScope [dom=THREAD_CONTROL; arg=QoreThreadCapabilityScope* scope; ns=Qore::Thread];
+
+//! Sets the capabilities of the current thread until the object is destroyed
+/** @param capabilities the capabilities by name; each value is the code that implements it
+    @param replace if @ref True, the thread's capabilities are \a capabilities only; otherwise they are added to the
+    current capabilities, replacing those of the same name
+
+    @par Example:
+    @code{.py}
+ThreadCapabilityScope scope({"start_thread": \host_start_thread()});
+    @endcode
+
+    @throw THREAD-CAPABILITY-ERROR a sandbox governs the calling code; a value of \a capabilities is not callable, is a
+    call reference to builtin code, or is code whose own Program does not allow thread control, is sandboxed, or has
+    been deleted
+
+    @note
+    - the code of a capability must itself be allowed to control threads, as it is run for module code whose caller
+      may not; a host cannot pass on the code of the restricted code it runs this way
+    - whether a sandbox governs the calling code is decided by that code: its Program, the Programs of the code that
+      called it on the thread, the sandbox of an operation that the thread continues for another, and the sandboxed
+      code whose callback it runs.  The sandbox that the thread inherited from the code that started it does not
+      count by itself: a host's code that no sandbox governs sets the capabilities of the code it runs also in a
+      thread that sandboxed code started (such as a thread that a sandboxed service started with the host's API);
+      the sandboxed code that runs in that thread still cannot set a scope, and the capabilities' code must still be
+      code that no sandbox governs
+    - the code of a %Program that sandboxed code created, or committed code in, is governed by the sandbox that the
+      %Program keeps of that code wherever it runs (see @ref sandbox_program_capability): it cannot set a scope and
+      sees no capabilities, also when trusted code calls it without the Program object (an imported function, a
+      function copied into an evaluation %Program); the code of a user module sees the capabilities only if the
+      module's %Program is not sandboxed
+    - a Program object is a capability: sandboxed code that a host gives an unsandboxed %Program object, or a call
+      reference to @ref Qore::call_async() "call_async()", can start a thread that runs host code, which can set a
+      scope (see @ref Qore::Program "Program"); a host's call reference to @ref Qore::parallel_map() "parallel_map()"
+      or @ref Qore::parallel_foreach() "parallel_foreach()" that sandboxed code calls does not give that
+*/
+ThreadCapabilityScope::constructor(hash<auto> capabilities, *bool replace) {
+    // the set of a scope stays in effect for the code that runs on the thread after the call that set it, the host's
+    // code included: code that a sandbox governs cannot set one
+    if (thread_capability_check_creator(xsink)) {
+        return;
+    }
+    ConstHashIterator i(capabilities);
+    while (i.next()) {
+        if (thread_capability_check_code(i.get(), i.getKey(), "the code", xsink)) {
+            return;
+        }
+    }
+    size_t level;
+    uint64_t gen;
+    if (thread_push_capability_scope(capabilities, replace, level, gen, xsink)) {
+        return;
+    }
+    self->setPrivate(CID_THREADCAPABILITYSCOPE, new QoreThreadCapabilityScope(level, gen));
+}
+
+//! Restores the capabilities that the thread had before the scope, if the scope is open in the current thread
+/**
+*/
+ThreadCapabilityScope::destructor() {
+    scope->leave(xsink);
+    scope->deref(xsink);
+}
+
+//! Returns a scope in which the thread has no capabilities: the explicit form for objects that belong to no interface
+/** A module that creates a shared or independent object, such as a module-wide cache or poller, from inside the code
+    that a host runs for one of its interfaces creates it in this scope, so that the object takes none of the
+    capabilities of that code, and the threads it starts belong to no interface: the host neither counts them as the
+    interface's nor waits for them.  It is the same as a scope that replaces the set with an empty one
+    (<tt>ThreadCapabilityScope scope({}, True)</tt>).
+
+    @return the scope; assign it to a local variable, so that the scope ends with the block
+
+    @par Example:
+    @code{.py}
+{
+    # the poller is shared by all callers: its threads belong to none of them
+    ThreadCapabilityScope independent = ThreadCapabilityScope::independent();
+    shared_poller = new SharedPoller();
+}
+    @endcode
+
+    @throw THREAD-CAPABILITY-ERROR a sandbox governs the calling code
+*/
+static ThreadCapabilityScope ThreadCapabilityScope::independent() {
+    if (thread_capability_check_creator(xsink)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreHashNode> empty(new QoreHashNode(autoTypeInfo), xsink);
+    size_t level;
+    uint64_t gen;
+    if (thread_push_capability_scope(*empty, true, level, gen, xsink)) {
+        return QoreValue();
+    }
+    return new QoreObject(QC_THREADCAPABILITYSCOPE, getProgram(), new QoreThreadCapabilityScope(level, gen));
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/**
+    @throw THREAD-CAPABILITY-SCOPE-COPY-ERROR objects of this class cannot be copied
+*/
+ThreadCapabilityScope::copy() {
+    xsink->raiseException("THREAD-CAPABILITY-SCOPE-COPY-ERROR", "objects of this class cannot be copied");
+}

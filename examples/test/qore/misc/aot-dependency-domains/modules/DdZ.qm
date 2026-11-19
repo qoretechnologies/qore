@@ -1,0 +1,29 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# module of aot-dependency-domains.qtest: a module that declares the locale control domain, requires DdPrB
+# before its header, which loads DdPrEx with the restriction, and DdPrD after it, which requires DdPrEx too; a
+# request of DdPrD in code that a conditional excludes comes first in the text: DdPrEx keeps the restriction
+# (qore#6351)
+
+%modern
+%ifdef DD_Z_NEVER_DEFINED
+%requires DdPrD
+%endif
+%requires DdPrB
+
+module DdZ {
+    version = "1.0";
+    desc = "a module of aot-dependency-domains.qtest";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    domains = "LOCALE_CONTROL";
+}
+
+%requires DdPrD
+
+public namespace DdZ {
+    public string sub run() {
+        return DdPrD::run();
+    }
+}

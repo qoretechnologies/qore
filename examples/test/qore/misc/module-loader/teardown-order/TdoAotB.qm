@@ -1,0 +1,30 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdoAotB.qm - module of teardown-order.qtest: loads TdoAotA at run time; has no optional module, so its AOT
+# module stays current
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+module TdoAotB {
+    version = "1.0";
+    desc = "module for the module teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdoAotB {
+    #! reports the deletion of the module on stdout: the constants of a module Program are released then
+    class Tracker {
+        destructor() {
+            print("TdoAotB deleted\n");
+        }
+    }
+
+    const DeletionTracker = new Tracker();
+
+    #! loads TdoAotA at run time into the Program of this module, which then requires it
+    public sub load() {
+        load_module("TdoAotA");
+    }
+}

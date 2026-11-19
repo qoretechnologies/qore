@@ -162,13 +162,33 @@ rest (class domain, builtins) is checked as before.
     restrictions of the modules that are not library code and goes on to the nearest Program that is not a module's;
     `call_module_init_closure()` ends the process as out of memory (`ExceptionSink::outOfMemory()`, fail-closed)
     if it cannot record its own barrier
-  - **open design question (third review, reported to prof for David):** under a module initialization barrier, code
-    that runs only in library module Programs is not checked against the code that loaded the module, so state that
-    restricted code put into a library registry before (a call reference to a method of a library object, a library
-    object whose destructor runs then) runs with the exemption when a later library initialization fires it; no qlib
-    chain was found (the catalog listeners are objects of the caller's classes, which are checked), and work handed
-    to a thread is the documented equivalent; a fix would record the restrictions in effect when such state enters a
-    registry, as `thread_caller_restrictions` does for threads
+  - **state that restricted code creates keeps its creator's restrictions (qore#6520; decided rule, the third
+    review's open design question):** under a module initialization barrier, code that runs only in library module
+    Programs is not checked against the code that loaded the module, so state that restricted code put into a library
+    registry before would run with the exemption when a later library initialization fires it.  The restrictions are
+    recorded when such state is *created* (automatic and fail-closed: an opt-in registry API would leave every registry
+    that does not call it exempt), with the creation provenance that the sandboxing already keeps
+    (`QoreSandboxContext`, applied by `QoreSandboxProvenanceHelper` on every invocation path):
+    - an object of a class of library module code (`qore_capture_sandbox_provenance(code_pgm)` in
+      `qore_object_private`), a call reference to library module code (the run-time call reference classes call
+      `qore_capture_call_reference_origin()` from `captureCreatorParseOptions()`) and a closure of library module code
+      (the closure constructors) record `QoreSandboxContext::origin_restrictions`: the restrictions that a domain check
+      would apply to the creating code (`qore_creation_origin_restrictions()`: a sandboxed caller's, the calling code's
+      and those already recorded for the code that runs), nothing when they are empty (the common case, which costs
+      the caller walk only) or when the code is not a library module's (code of a restricted Program is found by the
+      walk itself);
+    - while the code of such state runs (its provenance frame: the call reference and closure dispatch methods, the
+      direct closure paths of the IR interpreter and the JIT, method calls and the destructor of the object),
+      `qore_caller_denied_user_domains()`, `qore_caller_restricts_domain()` and the capture of a thread's caller
+      restrictions add the recorded restrictions of the frames above the module initialization barrier
+      (`qore_get_provenance_origin_restrictions()`), so a library initialization that fires it runs it for its creator;
+    - `examples/test/runner/test_call_reference_provenance.py` requires the provenance helper in every dispatch
+      method of the call reference and closure classes and in the direct closure paths (with the exemptions it names);
+      `library-registry-origin.qtest`: a call reference, a closure, a method call and a destructor of library state
+      that a restricted Program created and that the initialization of another library module runs are refused
+      (INVALID-FUNCTION-ACCESS), and run for an unrestricted creator, in ast, ir and jit;
+    - plain data that restricted code puts into a registry carries no provenance; code that the library runs with such
+      data is the library's own and is checked as such
 - qlib internal paths for restricted callers (qore#6337): `ProviderIndexUtil::loadIndexModule()` (the index lookups;
   `tryLoadModule()` keeps PROCESS_CONTROL), `DataProviderModuleLoader` (not public: `loadKnownFactories()` for DPQL,
   `tryLoad()`/`loadModule()` for the module's loads; `registerKnownFactories*()` keep their domain),

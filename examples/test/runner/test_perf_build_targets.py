@@ -93,6 +93,13 @@ class PerfBuildTargetsTest(unittest.TestCase):
         # the partial build is not installed
         self.assertNotRegex(test, r"(?m)^\s*cmake --install")
 
+    def test_release_build_tests(self):
+        """The tests that check a release build ("# test-release-build: <why>", see test_release_build_markers.py) are
+        in the list that build-perf.sh builds for, so their modules are built (issue #6540)"""
+        recursion = str((ROOT / "examples/test/qore/stack/recursion-frame-budget.qtest").resolve())
+        self.assertIn(recursion, {str(Path(t).resolve()) for t in perf_tests()})
+        self.assertIn("QUnit", targets.modules_of([recursion]))
+
 
 if __name__ == "__main__":
     unittest.main()
