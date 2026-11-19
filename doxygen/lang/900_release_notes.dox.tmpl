@@ -3429,9 +3429,9 @@
     - fixed @ref SqlUtil::op_in() "op_in()" on SQLite with dates, which failed with a syntax error, and with numbers
       and floats, which compared otherwise than the same values bound
       (<a href="https://github.com/qoretechnologies/qore/issues/6634">issue 6634</a>); see @ref sqlite3sqlutilv12
-    - fixed @ref SqlUtil::cop_value() "cop_value()" and the update operators on SQLite with dates, which failed with a
-      syntax error, and with floats, which lost precision (an update stored another value)
-      (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>); see @ref sqlite3sqlutilv12
+    - fixed @ref SqlUtil::cop_value() "cop_value()" and the update operators on SQLite with floats, which lost
+      precision (an update stored another value); a relative date raises an error there, as SQLite has no interval
+      type (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>); see @ref sqlite3sqlutilv12
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)
