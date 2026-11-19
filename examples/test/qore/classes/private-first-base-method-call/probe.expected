@@ -1,0 +1,67 @@
+typed: B::m
+untyped: B::m
+typed, object of a child class: B::m
+untyped, object of a child class: B::m
+call_object_method(): B::m
+call_object_method_args(): B::m
+static, typed: B::s
+static, untyped: B::s
+inside, plain call: A::m
+inside, self call: A::m
+inside, untyped: A::m
+inside, untyped child object: A::m
+inside, static untyped: A::s
+inside, reference: A::m
+child class, untyped: A::m
+unrelated class, untyped: B::m
+unrelated class, typed: B::m
+unrelated class, static: B::s
+unrelated class, reference: B::m
+override: Z::m
+private:internal, untyped: B::m
+private:internal, inside the child: B::m
+private:internal, inside its class: AI::m
+private:hierarchy, untyped: B::m
+private:hierarchy, inside: AH::m
+all private, untyped: METHOD-IS-PRIVATE
+all private, reference: ILLEGAL-CALL-REFERENCE
+all private, inside: A::m
+private inheritance, typed: B::m
+private inheritance, untyped: B::m
+private inheritance, inside: PubA::m
+private override, parent type: METHOD-IS-PRIVATE
+private override, untyped: METHOD-IS-PRIVATE
+private override, reference: ILLEGAL-CALL-REFERENCE
+private override, later parent: B::m
+diamond, typed: DRight::m
+diamond, untyped: DRight::m
+diamond, inside: DLeft::m
+diamond, other method: DTop::other
+static after private, typed: SS::m
+static after private, untyped: SS::m
+hasCallableMethod(): True True True False False
+abstract, typed: METHOD-IS-PRIVATE
+abstract, untyped: METHOD-IS-PRIVATE
+abstract first, typed: METHOD-IS-PRIVATE
+abstract first, untyped: METHOD-IS-PRIVATE
+methodGate, private method, typed: METHOD-IS-PRIVATE
+methodGate, private method, untyped: METHOD-IS-PRIVATE
+methodGate, private methods, typed: METHOD-IS-PRIVATE
+methodGate, private methods, untyped: METHOD-IS-PRIVATE
+methodGate, other name, untyped: METHOD-DOES-NOT-EXIST
+methodGate in second parent, untyped: METHOD-IS-PRIVATE
+iterator, typed calls: [1, 2, 3]
+iterator, untyped calls: [1, 2, 3]
+iterator, map: [1, 2, 3]
+iterator, foldl: 6
+iterator, select: [2, 3]
+iterator, foreach: [1, 2, 3]
+iterator, map inside: []
+iterator, private override, map: [1, 2, 3]
+pseudo-method: X
+reference, untyped: B::m
+reference, untyped child object: B::m
+reference, typed child object: B::m
+reference, static untyped: B::s
+reference, private inheritance: B::m
+repeated: B::m B::s B::m B::s Z::m B::s B::m B::s 

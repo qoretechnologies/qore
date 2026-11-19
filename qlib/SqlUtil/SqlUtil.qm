@@ -156,6 +156,9 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" with a description of another
+      table name, which raised \c LOCK-ERROR instead of giving the SQL that renames the table
+      (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>)
     - a string that is not valid in its encoding is refused with a \c VALUE-ERROR exception when it would be written into
       an SQL string literal, with every driver; added @ref SqlUtil::sql_literal_check_encoding()
       "sql_literal_check_encoding()", which the driver modules use for it, and the check of the value of an immediate
@@ -611,6 +614,22 @@ module SqlUtil {
     - fixed an upsert closure (@ref SqlUtil::AbstractTable::getUpsertClosure()) called after
       @ref SqlUtil::AbstractTable::clear(), which raised \c OBJECT-ALREADY-DELETED with a table's primary key: the
       closure keeps a copy of the key's columns (<a href="https://github.com/qoretechnologies/qore/issues/6686">issue 6686</a>)
+    - fixed the upsert of a row of list values (bulk DML) by @ref SqlUtil::AbstractTable::upsertFromIterator() or an
+      upsert closure made from a row of list values, which failed with a bind error with every driver but Oracle: its
+      rows are upserted row by row where the driver cannot bind them as arrays, and lists of different lengths raise
+      \c UPSERT-ERROR (<a href="https://github.com/qoretechnologies/qore/issues/6691">issue 6691</a>)
+    - fixed the select-first upsert of a row of list values (bulk DML) on Oracle, which failed with \c BIND-ERROR: its
+      rows are upserted one by one (<a href="https://github.com/qoretechnologies/qore/issues/6688">issue 6688</a>)
+    - fixed the upsert of a row with no column to update (only key columns, or all other columns omitted with
+      \c omit_update), which gave an invalid update statement, inserted the row with an update-only upsert on SQL
+      Server, and raised \c UPSERT-ERROR with an update-only upsert on Oracle: the row of its key is unchanged
+      (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>)
+    - fixed the upserts and the \c delete_others option on MySQL without a strict SQL mode, which did not find the row of
+      an integer key out of the range of its column, which MySQL stores as the nearest value in the range: the key
+      values are compared clamped to the range (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>)
+    - fixed the upserts on PostgreSQL with an array column in the upsert key, which failed with
+      <tt>operator does not exist: integer[] = bigint[]</tt>: the key value is converted to the column's array type
+      (<a href="https://github.com/qoretechnologies/qore/issues/6695">issue 6695</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -2088,6 +2107,10 @@ if (sh) {
     - @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst": first a select is made on the unique key, if the data to be updated is equal, nothing is done and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
     - @ref SqlUtil::AbstractTable::UpsertInsertOnly "AbstractTable::UpsertInsertOnly": insert if the row doesn't exist, otherwise do nothing and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
     - @ref SqlUtil::AbstractTable::UpsertUpdateOnly "AbstractTable::UpsertUpdateOnly": update if the row exists, otherwise do nothing and @ref upsert_results "upsert result" @ref SqlUtil::AbstractTable::UR_Unchanged is returned
+
+    With every strategy, a row with no column to update (only the columns of the upsert key, or all other columns
+    omitted with the \c omit_update option) does not update the row of its key, and
+    @ref SqlUtil::AbstractTable::UR_Unchanged is returned for it.
 
     @note @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" is the only upsert strategy that can return @ref SqlUtil::AbstractTable::UR_Updated; the @ref SqlUtil::AbstractTable::UpsertSelectFirst "AbstractTable::UpsertSelectFirst" strategy should be used when verbose reporting is required, particularly if it's necessary to report the actual number of changed rows.
 */

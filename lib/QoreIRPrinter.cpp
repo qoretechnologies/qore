@@ -430,6 +430,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DecrefNoThrow: return "decref.nothrow";
         case QoreIROpcode::ScopeEnter: return "scope.enter";
         case QoreIROpcode::SetCodeParseOptions: return "set.code.parse.options";
+        case QoreIROpcode::TakeHandedOverReturn: return "take.handed.over.return";
+        case QoreIROpcode::ReleaseHandedOverReturn: return "release.handed.over.return";
         case QoreIROpcode::ScopeExit: return "scope.exit";
         case QoreIROpcode::DiscardTemps: return "discard.temps";
         case QoreIROpcode::DiscardTempsKeep: return "discard.temps.keep";
@@ -444,6 +446,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::GePlugin: return "ge.plugin";
         case QoreIROpcode::HandlerReturn: return "handler.return";
         case QoreIROpcode::IteratorRelease: return "iterator.release";
+        case QoreIROpcode::ReleasePlainLocalRead: return "release.plain.local.read";
         case QoreIROpcode::ReleaseOwnedTemp: return "release.owned.temp";
         case QoreIROpcode::PushTempMark: return "push.temp.mark";
         case QoreIROpcode::PushTempMarkPair: return "push.temp.mark.pair";
@@ -1011,6 +1014,9 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                         out << " trim keep=" << sx->keep_handlers;
                     } else if (sx->inline_lowered) {
                         out << " inline";
+                    }
+                    if (sx->hand_over_return) {
+                        out << " hand_over_return";
                     }
                 }
             }

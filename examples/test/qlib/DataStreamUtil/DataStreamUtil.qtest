@@ -93,7 +93,7 @@ class DataStreamUtilTest inherits QUnit::Test {
         assertEq(NOTHING, c);
         c = ds_get_send(sub () {});
         assertEq(Type::Closure, c.type());
-        c = ds_get_recv(sub () {}, sub () {});
+        c = ds_get_recv(sub (auto data) {}, sub (*string trailer) {});
         assertEq(Type::Closure, c.type());
 
         hash hdr;

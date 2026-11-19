@@ -32,6 +32,8 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_File.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/qore_qf_private.h"
 #include <qore/QoreSandboxManager.h>
 
 #include <cerrno>
@@ -227,9 +229,14 @@ ReadOnlyFile f("/tmp/my-file.txt", "iso-8859-1");
     @param encoding The @ref character_encoding "character encoding" for the %ReadOnlyFile. Strings data read from the
     file will be tagged with this @ref character_encoding "character encoding"; if this argument is not given then the
     %ReadOnlyFile will receive the @ref default_encoding "default encoding"
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors; it can be changed with ReadOnlyFile::setEncodingErrors()
 
     @throw READONLYFILE-OPEN-ERROR the given file cannot be opened for reading (\c arg will be assigned to the errno
     value)
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
     @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
     be read
     @throw ILLEGAL-EXPRESSION ReadOnlyFile::constructor() cannot be called with a TTY target when
@@ -237,14 +244,21 @@ ReadOnlyFile f("/tmp/my-file.txt", "iso-8859-1");
     @ref no-terminal-io "%no-terminal-io" is set
 
     @see ReadOnlyFile::open()
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
-ReadOnlyFile::constructor(string path, *string encoding) [flags=NAMED_ARGS] {
+ReadOnlyFile::constructor(string path, *string encoding, *string encoding_errors) [flags=NAMED_ARGS] {
     if (q_check_path(*path, "READONLYFILE-OPEN-ERROR", xsink)) {
+        return;
+    }
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
         return;
     }
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
     SimpleRefHolder<File> f(new File(qe));
+    qore_qf_private::get(**f)->setEncodingErrors(ee);
     if (f->isTty() && runtime_check_parse_option(PO_NO_TERMINAL_IO)) {
         xsink->raiseException("ILLEGAL-EXPRESSION", "ReadOnlyFile::constructor() cannot be called with a TTY target "
             "when 'no-terminal-io' is set");
@@ -269,14 +283,16 @@ ReadOnlyFile::destructor() [doconly=true] {
     assert(false);
 }
 
-//! Creates a new %ReadOnlyFile object with the same @ref character_encoding "character encoding" specification as the original, otherwise no other information is copied
+//! Creates a new %ReadOnlyFile object with the same @ref character_encoding "character encoding" and @ref encoding_errors "encoding_errors" option as the original, otherwise no other information is copied
 /** @par Example:
     @code{.py}
 ReadOnlyFile f1 = f.copy();
     @endcode
  */
 ReadOnlyFile::copy() {
-    self->setPrivate(CID_READONLYFILE, new File(f->getEncoding()));
+    File* nf = new File(f->getEncoding());
+    qore_qf_private::get(*nf)->setEncodingErrors(qore_qf_private::get(*f)->getEncodingErrors());
+    self->setPrivate(CID_READONLYFILE, nf);
 }
 
 //! Opens a file in a particular mode; throws an exception on failure
@@ -385,7 +401,9 @@ int ReadOnlyFile::close() {
     on the next call to this method.
 
     @throw READONLYFILE-READ-PARAMETER-ERROR zero size argument passed
-    @throw STREAM-ENCODING-ERROR the text is in a stateful @ref character_encoding "character encoding" and it has an invalid byte sequence, or it ends in the middle of a character or shift sequence
+    @throw INVALID-ENCODING the text read is not valid in the @ref character_encoding "character encoding" (an
+    invalid byte sequence or a character cut off by the end of the data) and the @ref encoding_errors
+    "encoding_errors" option is \c "raise" (the default); see @ref encoding_errors
     @throw FILE-READ-ERROR file is not open
     @throw FILE-READ-TIMEOUT timeout limit exceeded
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
@@ -398,11 +416,19 @@ int ReadOnlyFile::close() {
     available or the end of the file is reached.  The timeout is checked only before each further read of a call that
     reads its data in several parts, so the timeout exception is thrown only if the timeout period has passed then
 
+    @note the text read is checked with the @ref encoding_errors "encoding_errors" option of the object (see
+    ReadOnlyFile::setEncodingErrors()); with \c "latin1" or \c "keep", a code unit that does not start a valid
+    character is read as a character of its own, and exactly \a size characters are returned, except in a file that
+    cannot seek (ex: a pipe), where the bytes read after them (the rest of what looked like the start of a character)
+    are returned with them; see @ref encoding_errors
+
     @see ReadOnlyFile::readBinary()
 
     @since
     - %Qore 0.8.13 this method uses character semantics instead of byte semantics
     - %Qore 2.3 text in a stateful @ref character_encoding "character encoding" can be read a number of characters at a time
+    - %Qore 3.0 the text read is checked with the @ref encoding_errors "encoding_errors" option; \c INVALID-ENCODING
+      is raised where \c STREAM-ENCODING-ERROR was raised before
  */
 *string ReadOnlyFile::read(softint size, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::read", xsink))
@@ -817,13 +843,20 @@ while (exists (*string line = f.readLine(False))) {
     @return The line read from the file. @ref nothing is returned if end-of-file is encountered, however, if data has been read before EOF, the data read will be returned and @ref nothing (signifying EOF) will be returned on the next call to this method.  Any string returned will be tagged with the %ReadOnlyFile's @ref character_encoding "character encoding".
 
     @throw READONLYFILE-READLINE-ERROR the file is not open
-    @throw STREAM-ENCODING-ERROR the text is in a stateful @ref character_encoding "character encoding", characters were read with ReadOnlyFile::read() or ReadOnlyFile::getchar() before, and the text has an invalid byte sequence or ends in the middle of a character or shift sequence
+    @throw INVALID-ENCODING the line read is not valid in the @ref character_encoding "character encoding" (an
+    invalid byte sequence or a character cut off by the end of the data) and the @ref encoding_errors
+    "encoding_errors" option is \c "raise" (the default); see @ref encoding_errors
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
     @note after characters of text in a stateful @ref character_encoding "character encoding" have been read with ReadOnlyFile::read() or ReadOnlyFile::getchar(), the line is read in the shift state left by them, and the line returned starts and ends in the initial shift state; the character after a line ending in a carriage return is then read to look for a line feed, and it is returned by the next read of text
 
+    @note the line read is checked with the @ref encoding_errors "encoding_errors" option of the object (see
+    ReadOnlyFile::setEncodingErrors())
+
     @see
     - @ref Qore::FileLineIterator
+
+    @since %Qore 3.0 the line read is checked with the @ref encoding_errors "encoding_errors" option
  */
 *string ReadOnlyFile::readLine(bool include_eol = True, *string eol) [flags=NAMED_ARGS] {
     if (check_terminal_io(self, "ReadOnlyFile::readLine", xsink))
@@ -866,6 +899,53 @@ string encoding = f.getEncoding();
  */
 string ReadOnlyFile::getEncoding() [flags=CONSTANT] {
     return new QoreStringNode(f->getEncoding()->getCode());
+}
+
+//! Sets what text read from the %ReadOnlyFile that is not valid in its @ref character_encoding "character encoding" gives
+/** @par Example:
+    @code{.py}
+f.setEncodingErrors(ENCODING_ERRORS_LATIN1);
+    @endcode
+
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default, also if no argument is given)
+    raises \c INVALID-ENCODING, \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags
+    it with the encoding without a check; see @ref encoding_errors
+
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
+    @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
+    @ref stdout, @ref stderr) when @ref no-terminal-io is set
+
+    @see ReadOnlyFile::getEncodingErrors()
+
+    @since %Qore 3.0
+ */
+nothing ReadOnlyFile::setEncodingErrors(*string encoding_errors) [flags=NAMED_ARGS] {
+    if (check_terminal_io(self, "ReadOnlyFile::setEncodingErrors", xsink))
+        return QoreValue();
+
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+        return QoreValue();
+    }
+    qore_qf_private::get(*f)->setEncodingErrors(ee);
+}
+
+//! Returns what text read from the %ReadOnlyFile that is not valid in its @ref character_encoding "character encoding" gives
+/** @par Example:
+    @code{.py}
+string encoding_errors = f.getEncodingErrors();
+    @endcode
+
+    @return one of the @ref encoding_errors_constants: \c "raise", \c "latin1", or \c "keep"; see
+    @ref encoding_errors
+
+    @see ReadOnlyFile::setEncodingErrors()
+
+    @since %Qore 3.0
+ */
+string ReadOnlyFile::getEncodingErrors() [flags=CONSTANT] {
+    return new QoreStringNode(q_encoding_errors_name(qore_qf_private::get(*f)->getEncodingErrors()));
 }
 
 //! Sets the current file position (in bytes from the beginning of the file)
@@ -919,13 +999,24 @@ int ReadOnlyFile::getPos() [flags=RET_VALUE_ONLY] {
     @return the single character read from the file or @ref nothing if no data can be read from the %ReadOnlyFile
 
     @throw FILE-READ-ERROR file is not open
-    @throw FILE-GETCHAR-ERROR invalid multi-byte character read or EOF received while reading a multi-byte character
-    @throw STREAM-ENCODING-ERROR the text is in a stateful @ref character_encoding "character encoding" and it has an invalid byte sequence, or it ends in the middle of a character or shift sequence
+    @throw INVALID-ENCODING the character read is not valid in the @ref character_encoding "character encoding" (an
+    invalid byte sequence or a character cut off by the end of the data) and the @ref encoding_errors
+    "encoding_errors" option is \c "raise" (the default); see @ref encoding_errors
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
 
     @note text in a stateful @ref character_encoding "character encoding" (ex: \c "UTF-7", \c "ISO-2022-JP", \c "IBM930") is read in the shift state left by the characters read before it; each string returned is valid on its own (it starts and ends in the initial shift state, so its bytes can differ from the bytes read), and no bytes after the characters returned are read; once characters have been read, lines and all of the remaining text are read in the same shift state, until the position (ReadOnlyFile::setPos()), the file, or the encoding is changed
 
-    @since %Qore 3.0 text in a stateful @ref character_encoding "character encoding" can be read one character at a time
+    @note the bytes of a character are read one at a time, and each byte is checked when it is read, so that no byte
+    after an invalid one is read, except for the rest of its code unit in an encoding of code units of more than one
+    byte (ex: \c UTF-16), so that the next read starts at a code unit boundary; the invalid sequence is its first
+    code unit, and in a regular file the bytes read after it are given back, so that the next character read starts
+    after it; with the @ref encoding_errors "encoding_errors" option \c "latin1" or \c "keep", the bytes of the
+    invalid sequence are returned (tagged ISO-8859-1 with \c "latin1")
+
+    @since
+    - %Qore 3.0 text in a stateful @ref character_encoding "character encoding" can be read one character at a time
+    - %Qore 3.0 the whole character is checked with the @ref encoding_errors "encoding_errors" option, and
+      \c INVALID-ENCODING is raised where \c FILE-GETCHAR-ERROR was raised before
  */
 *string ReadOnlyFile::getchar() {
     if (check_terminal_io(self, "ReadOnlyFile::getchar", xsink))
@@ -1129,6 +1220,10 @@ bool ReadOnlyFile::isTty() [flags=CONSTANT] {
     @ref True, the encoding of the output string will be the same as the file's character encoding
     @param max_bytes maximum number of bytes to read, negative values mean read until end of file
 
+    @note with \a as_string, the string read is checked with the @ref encoding_errors "encoding_errors" option of the
+    object when the read is complete; an \c INVALID-ENCODING exception is then raised by the poll operation; a
+    character cut off by \a max_bytes is not an error
+
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read a file from the filesystem; the
     @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns the file's
     data after a successful read operation, as a string or binary data according to the \c as_string parameter
@@ -1159,22 +1254,36 @@ string data = File::readTextFile(path);
     @param path the path of the file to retrieve
     @param encoding the name of the @ref character_encoding "character encoding" for the string returned; if this
     argument is not given, then the @ref default_encoding "default character encoding" is assumed
-    @param max_file_len the maximum size of the file returned; if the data on the filesystem exceeds this value, the
-    data returned will be truncated up to this byte length
+    @param max_file_len the maximum number of characters of the file returned; if the file has more characters, the
+    data returned will be truncated to this number of characters
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors
 
     @return the contents of a text file as a string optionally tagged with the given
     @ref character_encoding "character encoding" or @ref nothing if the file is empty or cannot be read
 
     @throw FILE-READ-ERROR an I/O or other error occurred when reading the file
     @throw FILE-OPEN2-ERROR the path contains a NUL character; see @ref path_nul_characters
+    @throw INVALID-ENCODING the text read is not valid in the @ref character_encoding "character encoding" (an
+    invalid byte sequence or a character cut off by the end of the data) and the @ref encoding_errors
+    "encoding_errors" option is \c "raise" (the default); see @ref encoding_errors
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
 
     @since
     - %Qore 0.8.8 introduced this method
     - %Qore 0.8.12 changed the behavior of the method; either a string (possibly an empty string for an empty file)
       will be returned, or an exception will be raised
     - %Qore 0.9.3 added the \a max_file_len parameter
+    - %Qore 3.0 added the \a encoding_errors parameter; the text read is checked by default
 */
-static string ReadOnlyFile::readTextFile(string path, *string encoding, int max_file_len = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+static string ReadOnlyFile::readTextFile(string path, *string encoding, int max_file_len = -1,
+        *string encoding_errors) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+        return QoreValue();
+    }
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
     if (q_check_path(*path, "FILE-OPEN2-ERROR", xsink)) {
@@ -1187,7 +1296,8 @@ static string ReadOnlyFile::readTextFile(string path, *string encoding, int max_
         return QoreValue();
     }
 
-    QoreStringNode* str = qf.read(max_file_len, xsink);
+    qore_qf_private::get(qf)->setEncodingErrors(ee);
+    QoreStringNode* str = qore_qf_private::get(qf)->readString(max_file_len, -1, "readTextFile", xsink);
     return !str && !*xsink ? new QoreStringNode(qe) : str;
 }
 

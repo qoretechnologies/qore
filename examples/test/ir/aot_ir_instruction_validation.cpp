@@ -116,6 +116,10 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU8(0); // no value
         });
     }
+    if (version >= QORE_AOT_CATCH_TABLES_VERSION) {
+        writer.writeU32(0); // catch-exit depths (qore#6733)
+        writer.writeU32(0); // catch-cleanup results
+    }
     writer.endSection(section);
     QoreAOTBinaryHeader header{};
     header.magic = QORE_AOT_BINARY_MAGIC;
@@ -129,6 +133,9 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
     QoreAOTBinaryReader reader;
     std::string error;
     if (!reader.open(data.data(), data.size(), error)) {
+        if (expected && error.find(expected) != std::string::npos) {
+            return true;
+        }
         fprintf(stderr, "%s: cannot open payload: %s\n", label, error.c_str());
         return false;
     }
@@ -210,9 +217,9 @@ int main() {
     for (G group : {G::Base, G::Expr}) {
         run("complete wrong-class payload", O::ConstInt, group, {}, empty, pairing);
     }
-    // The same guard applies to the oldest supported format and the latest one.
-    run("legacy v9 wrong class", O::ConstInt, G::Base, {}, empty, pairing, false, false, 9);
-    run("legacy v9 valid base", O::AddInt, G::Base, {1, 2}, empty, nullptr, false, false, 9);
+    run("v9 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 9 ", false, false, 9);
+    run("AK v47 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 47 ",
+        false, false, QORE_AOT_BATCH_AK_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -321,17 +328,17 @@ int main() {
         };
     };
     run("step event without paths before the flow version", O::DebugStatement, G::DebugStatement, {},
-        debug_step(-1, {}), nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+        debug_step(-1, {}), "unsupported binary format version 45 ", false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
     run("step event without paths", O::DebugStatement, G::DebugStatement, {}, debug_step(0, {}), nullptr,
-        false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        false, false, QORE_AOT_BINARY_VERSION, 0);
     run("step event with paths", O::DebugStatement, G::DebugStatement, {}, debug_step(7, {0, 0, 0}), nullptr,
-        false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        false, false, QORE_AOT_BINARY_VERSION, 0);
     for (int mask : {0x08, 0x10, 0x80, 0xff}) {
         run("step event flow mask", O::DebugStatement, G::DebugStatement, {}, debug_step(mask, {0, 0, 0}),
-            "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+            "invalid debugger flow mask", false, false, QORE_AOT_BINARY_VERSION, 0);
     }
     run("step event flow block", O::DebugStatement, G::DebugStatement, {}, debug_step(1, {5}),
-        "invalid debugger flow path block", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        "invalid debugger flow path block", false, false, QORE_AOT_BINARY_VERSION, 0);
     auto scope_exit = [](int mask, std::vector<uint16_t> blocks) -> Payload {
         return [mask, blocks](QoreAOTBinaryWriter& w) {
             w.writeU32(1); // scope id
@@ -346,11 +353,11 @@ int main() {
         };
     };
     run("ScopeExit without paths before the flow version", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}),
-        nullptr, false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
+        "unsupported binary format version 45 ", false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
     run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), nullptr, false, false,
-        QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        QORE_AOT_BINARY_VERSION, 0);
     run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
-        "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+        "invalid debugger flow mask", false, false, QORE_AOT_BINARY_VERSION, 0);
     // the runtime location of an instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646): a new entry of the
     // function's table is read; a tag that does not exist, the location of an instruction before it when there is
     // none, an entry beyond the table and a new entry without a line are refused

@@ -195,6 +195,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "Кодування рядка для використання, якщо `text` = `True` (за замовчуванням: `UTF-8`)"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Помилки кодування"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Що дає текст, недійсний у своєму кодуванні символів"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "Що дає текст, недійсний у своєму кодуванні символів, якщо `text` = `True`: `raise` (за замовчуванням) викликає помилку `INVALID-ENCODING`, `latin1` повертає текст як `ISO-8859-1`, а `keep` повертає його в кодуванні без перевірки"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
           "source": "Max Len",
           "message": "Макс. довжина"

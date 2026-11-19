@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -63,21 +63,29 @@ public:
         const qore_class_private* class_ctx = runtime_get_class();
         if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*o->getClass(), class_ctx))
             class_ctx = nullptr;
-        ClassAccess access;
         obj = o;
-        // get "next" method if accessible
-        nextMethod = qore_class_private::get(*o->getClass())->runtimeFindCommittedMethod(fwd ? "next" : "prev",
-            access, class_ctx);
+        const qore_class_private* cls = qore_class_private::get(*o->getClass());
+        // get the "next" and "getValue" methods: the methods that calls of them on the object make
+        ClassAccess next_access;
+        nextMethod = cls->runtimeFindCommittedMethod(fwd ? "next" : "prev", next_access, class_ctx);
         // method must be found because we have an instance of AbstractIterator/AbstractBidirectionalIterator
         assert(nextMethod);
+        ClassAccess value_access = Public;
+        if (get_value) {
+            getValueMethod = cls->runtimeFindCommittedMethod("getValue", value_access, class_ctx);
+            // method must be found because we have an instance of AbstractIterator
+            assert(getValueMethod);
+        }
+        // without a class context that can access the private methods of the class, a method that is not accessible
+        // is skipped for the accessible method of the name, as for a call of the method (qore#6704); one test in the
+        // common case (Public is 0)
+        if (!class_ctx && (next_access | value_access)) {
+            findPublicMethods(cls, fwd, next_access, value_access);
+        }
         nextVariant = getCheckVariant(xsink, op, nextMethod);
         if (!nextVariant)
             return;
         if (get_value) {
-            getValueMethod = qore_class_private::get(*o->getClass())->runtimeFindCommittedMethod("getValue", access,
-                class_ctx);
-            // method must be found because we have an instance of AbstractIterator
-            assert(getValueMethod);
             getValueVariant = getCheckVariant(xsink, op, getValueMethod);
             if (!getValueVariant)
                 return;
@@ -131,6 +139,22 @@ public:
         assert(getValueVariant);
         RuntimeConfig& rc = rc_get_current_ref();
         return qore_method_private::evalNormalVariant(*getValueMethod, xsink, rc, obj, getValueVariant, 0);
+    }
+
+    //! replaces the iterator methods that a caller outside the class hierarchy cannot call with the methods of their
+    //! names that it calls, if any (qore#6704)
+    DLLLOCAL QORE_INTERN_NOINLINE void findPublicMethods(const qore_class_private* cls, bool fwd,
+            ClassAccess next_access, ClassAccess value_access) {
+        if (next_access > Public) {
+            if (const QoreMethod* m = cls->runtimeFindPublicCommittedMethod(fwd ? "next" : "prev", QCCM_NORMAL)) {
+                nextMethod = m;
+            }
+        }
+        if (value_access > Public) {
+            if (const QoreMethod* m = cls->runtimeFindPublicCommittedMethod("getValue", QCCM_NORMAL)) {
+                getValueMethod = m;
+            }
+        }
     }
 
     // finds a method with no arguments

@@ -4121,6 +4121,60 @@ struct RuntimeFindCommittedMethodLookup : InternalEdgeCutForContext {
     }
 };
 
+//! the search of a class for the method of a name that a caller outside the class hierarchy can call (qore#6704)
+/** \a m is the class's own committed method of the name, if any.  A public method with an implementation is the
+    match.  A private method overrides the methods of the name of the parent classes of its class, which are then not
+    called in its place (qore#6062): they are not searched.  The other methods (none, a private:internal method,
+    which the run-time lookups do not see from outside its class, and an abstract method, which another class of the
+    hierarchy implements) leave the parent classes to be searched
+*/
+static LookupVisit runtime_public_method_visit(const QoreMethod* m) {
+    if (!m) {
+        return LookupVisit::Descend;
+    }
+    ClassAccess ma = m->getAccess();
+    if (ma == Public) {
+        return qore_method_private::get(*m)->isAbstract() ? LookupVisit::Descend : LookupVisit::Found;
+    }
+    return ma == Private ? LookupVisit::Skip : LookupVisit::Descend;
+}
+
+//! the committed method of the name of the class itself (as qore_class_private::findLocalCommittedMethod() and
+//! findLocalCommittedStaticMethod()) for the cold lookup of the method that a caller outside the class hierarchy calls
+//! (qore#6704)
+/** Not inlined, and separate from those, so that the inlining of those in the hot run-time lookups is not changed
+*/
+static QORE_INTERN_NOINLINE const QoreMethod* runtime_find_local_committed_method(const qore_class_private& priv,
+        const char* name, bool is_static) {
+    const QoreMethod* m = is_static ? priv.parseFindLocalStaticMethod(name) : priv.parseFindLocalMethod(name);
+    return m && !qore_method_private::get(*m)->getFunction()->committedEmpty() ? m : nullptr;
+}
+
+//! BCList::runtimeFindPublicCommittedMethod(): a public method reached through public edges only (qore#6704)
+template <bool Static>
+struct RuntimeFindPublicCommittedMethodLookup {
+    static constexpr bool CheckValid = false;
+    ClassAccess* access = nullptr;
+    const char* name;
+    const QoreMethod* rv = nullptr;
+
+    RuntimeFindPublicCommittedMethodLookup(const char* name) : name(name) {
+    }
+
+    bool cut(const BCNode& n, const qore_class_private* parent) const {
+        return n.access > Public;
+    }
+
+    LookupVisit visit(const BCNode& n, qore_class_private& priv) {
+        const QoreMethod* m = runtime_find_local_committed_method(priv, name, Static);
+        LookupVisit r = runtime_public_method_visit(m);
+        if (r == LookupVisit::Found) {
+            rv = m;
+        }
+        return r;
+    }
+};
+
 //! BCList::parseFindNormalMethod() and BCList::parseFindStaticMethod(): as
 //! qore_class_private::parseFindNormalMethodIntern() and parseFindStaticMethodIntern(), which initialize each class
 //! that they search
@@ -4540,6 +4594,14 @@ const QoreMethod* BCList::runtimeFindCommittedStaticMethod(const char* name, Cla
             return m;
     }
     return nullptr;
+}
+
+// called at run time, only when a lookup found a method that the caller cannot call (qore#6704)
+const QoreMethod* BCList::runtimeFindPublicCommittedMethod(const char* name, bool is_static) const {
+    // the walk searches each class once, also in a hierarchy without a diamond
+    return is_static
+        ? lookup_walk<RuntimeFindPublicCommittedMethodLookup<true>, const char*>(*this, name)
+        : lookup_walk<RuntimeFindPublicCommittedMethodLookup<false>, const char*>(*this, name);
 }
 
 const QoreMethod* BCList::parseFindNormalMethod(const char* name, const qore_class_private* class_ctx,
@@ -6949,7 +7011,11 @@ bool qore_class_private::runtimeHasCallableMethod(const char* m, int mask) const
         w = runtimeFindCommittedStaticMethod(m, access, class_ctx);
     }
 
-    return !w || (!class_ctx && (access > Public)) ? false : true;
+    if (!w) {
+        return false;
+    }
+    // a caller outside the class hierarchy can call the method that it calls instead (qore#6704)
+    return class_ctx || access == Public || runtimeFindPublicCommittedMethod(m, mask);
 }
 
 const QoreMethod* qore_class_private::runtimeFindCommittedStaticMethod(const char* nme, ClassAccess& access,
@@ -7050,6 +7116,17 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
             && !(w = runtimeFindCommittedStaticMethod(nme, access, class_ctx))) {
             return nullptr;
         }
+        // the access of the method found includes its own: a private method has it as well (it is private when all
+        // its variants are, see QoreMethod::isPrivate())
+        assert(class_ctx || access > Public || !w->isPrivate());
+        // a caller outside the class hierarchy calls the method that it can call, as the parse-time lookup finds it
+        // (qore#6704)
+        if (!class_ctx && access > Public) {
+            if (const QoreMethod* pw = runtimeFindPublicCommittedMethod(nme)) {
+                w = pw;
+                access = Public;
+            }
+        }
     }
 
     //printd(5, "QoreClass::getMethodForEval() %s::%s() found method %p class %s\n", name.c_str(), nme, w, w->getClassName());
@@ -7060,15 +7137,40 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         return nullptr;
     }
 
-    if (w->isPrivate() && !class_ctx) {
-        xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally", name.c_str(), nme);
-        return nullptr;
-    } else if ((access > Public) && !class_ctx) {
-        xsink->raiseException("BASE-CLASS-IS-PRIVATE", "%s() is a method of a privately-inherited class %s", nme, name.c_str());
+    // a method that the caller cannot call: no method of the name can be called from outside the class hierarchy
+    if (!class_ctx && access > Public) {
+        if (w->isPrivate()) {
+            xsink->raiseException("METHOD-IS-PRIVATE", "%s::%s() is private and cannot be accessed externally",
+                name.c_str(), nme);
+        } else {
+            xsink->raiseException("BASE-CLASS-IS-PRIVATE", "%s() is a method of a privately-inherited class %s", nme,
+                name.c_str());
+        }
         return nullptr;
     }
 
     return w;
+}
+
+const QoreMethod* qore_class_private::runtimeFindPublicCommittedMethod(const char* nme, int mask) const {
+    // as the parse-time lookup, which does not resolve a call of these methods to a normal method
+    if (!strcmp(nme, "constructor") || !strcmp(nme, "destructor") || !strcmp(nme, "copy")) {
+        return nullptr;
+    }
+    for (bool is_static : {false, true}) {
+        if (!(mask & (is_static ? QCCM_STATIC : QCCM_NORMAL))) {
+            continue;
+        }
+        const QoreMethod* m = runtime_find_local_committed_method(*this, nme, is_static);
+        LookupVisit r = runtime_public_method_visit(m);
+        if (r == LookupVisit::Found) {
+            return m;
+        }
+        if (r == LookupVisit::Descend && scl && (m = scl->runtimeFindPublicCommittedMethod(nme, is_static))) {
+            return m;
+        }
+    }
+    return nullptr;
 }
 
 bool qore_class_private::runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const {

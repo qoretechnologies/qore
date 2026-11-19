@@ -224,7 +224,7 @@ class Utf16ValidationTest inherits QUnit::Test {
             foreach list<int> l in (Unpaired) {
                 string label = Utf16ValidationTest::label(l, enc);
                 sr = new StreamReader(new BinaryInputStream(units(l + (0x62,), enc)), enc);
-                assertThrows("STREAM-ENCODING-ERROR", \sr.readString(), (l.size() + 1), label + " readString()");
+                assertThrows("INVALID-ENCODING", \sr.readString(), (l.size() + 1), label + " readString()");
             }
         }
     }

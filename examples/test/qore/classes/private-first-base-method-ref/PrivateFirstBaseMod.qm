@@ -1,0 +1,41 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+# module of private-first-base-method-ref.qtest (qore#6680), compiled with qcc -m by the test: its classes inherit a
+# method name from two public parent classes, the first of which has a private method of the name
+
+%modern
+
+module PrivateFirstBaseMod {
+    version = "1.0";
+    desc = "test module of qore#6680";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () { PrivateFirstBaseMod::gx = new PrivateFirstBaseMod::X(); };
+}
+
+public namespace PrivateFirstBaseMod {
+    public class A {
+        private string m() { return "A::m"; }
+    }
+
+    public class B {
+        string m() { return "B::m"; }
+    }
+
+    public class X inherits A, B {
+    }
+
+    public class Y inherits A, B {
+        # a member's initial value and a default argument value in the module
+        public {
+            code c = \PrivateFirstBaseMod::gx.m();
+        }
+
+        static string d(code c = \PrivateFirstBaseMod::gx.m()) {
+            return c();
+        }
+    }
+
+    public our X gx;
+}

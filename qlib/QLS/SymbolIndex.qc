@@ -340,7 +340,9 @@ public class FileIndex {
     */
     bool sourceContains(string text) {
         try {
-            return ReadOnlyFile::readTextFile(Document::getFilePath(uri)).find(text) != -1;
+            # a file in another encoding is read as before, without a check of its encoding
+            return ReadOnlyFile::readTextFile(Document::getFilePath(uri), NOTHING, -1, ENCODING_ERRORS_KEEP).find(text)
+                != -1;
         } catch (hash<ExceptionInfo> ex) {
             # a file that cannot be read has no references
         }
