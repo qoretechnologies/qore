@@ -307,6 +307,16 @@ QoreHFTokenizer::InternalEncoding QoreHFTokenizer::encodeText(
     return result;
 }
 
+int QoreHFTokenizer::encodeText(const std::string& text, InternalEncoding& rv, ExceptionSink* xsink) const {
+    try {
+        rv = encodeText(text);
+    } catch (const PreTokenizerError& e) {
+        xsink->raiseException(e.err.c_str(), "%s", e.what());
+        return -1;
+    }
+    return 0;
+}
+
 QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
         const QoreStringNode* text_pair, bool add_special_tokens,
         ExceptionSink* xsink) {
@@ -323,14 +333,20 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
     }
 
     // Encode first text
-    std::string text_str = qoreStdString(text);
-    InternalEncoding enc_a = encodeText(text_str);
+    std::string text_str;
+    InternalEncoding enc_a;
+    if (qoreUtf8String(text, text_str, xsink) || encodeText(text_str, enc_a, xsink)) {
+        return nullptr;
+    }
 
     // Encode second text (optional)
     InternalEncoding enc_b;
     bool has_pair = false;
     if (text_pair && text_pair->size() > 0) {
-        enc_b = encodeText(qoreStdString(text_pair));
+        std::string pair_str;
+        if (qoreUtf8String(text_pair, pair_str, xsink) || encodeText(pair_str, enc_b, xsink)) {
+            return nullptr;
+        }
         has_pair = true;
     }
 
@@ -414,7 +430,8 @@ QoreStringNode* QoreHFTokenizer::decode(const QoreListNode* ids,
         }
     }
 
-    return new QoreStringNode(result);
+    // the tokenizer's text is UTF-8
+    return new QoreStringNode(result, QCS_UTF8);
 }
 
 int QoreHFTokenizer::getVocabSize() const {
@@ -432,16 +449,20 @@ QoreStringNode* QoreHFTokenizer::idToToken(int id, ExceptionSink* xsink) const {
         xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
         return nullptr;
     }
-    return new QoreStringNode(tokenForId(id));
+    return new QoreStringNode(tokenForId(id), QCS_UTF8);
 }
 
-int QoreHFTokenizer::tokenToId(const QoreStringNode* token) const {
+int QoreHFTokenizer::tokenToId(const QoreStringNode* token, ExceptionSink* xsink) const {
     std::shared_lock<std::shared_mutex> lock(rw_mutex);
 
     if (!model || !token) {
         return -1;
     }
-    return idForToken(qoreStdString(token));
+    std::string token_str;
+    if (qoreUtf8String(token, token_str, xsink)) {
+        return -1;
+    }
+    return idForToken(token_str);
 }
 
 QoreHashNode* QoreHFTokenizer::getVocab(ExceptionSink* xsink) const {
@@ -494,8 +515,10 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
     }
 
     // Parse options
-    std::string text_pair = options
-        ? safeGetStdString(options->getKeyValue("text_pair")) : "";
+    std::string text_pair;
+    if (options && qoreUtf8String(options->getKeyValue("text_pair"), text_pair, xsink)) {
+        return nullptr;
+    }
     int max_length = options
         ? (int)options->getKeyValue("max_length").getAsBigInt() : 0;
     std::string truncation = options
@@ -533,14 +556,20 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
         if (words_list) {
             ConstListIterator wli(words_list);
             while (wli.next()) {
-                std::string w = safeGetStdString(wli.getValue());
+                std::string w;
+                if (qoreUtf8String(wli.getValue(), w, xsink)) {
+                    return nullptr;
+                }
                 if (!w.empty()) {
                     words.push_back(std::move(w));
                 }
             }
         } else {
             // Fallback: split on whitespace
-            std::string text_str = qoreStdString(text);
+            std::string text_str;
+            if (qoreUtf8String(text, text_str, xsink)) {
+                return nullptr;
+            }
             std::string word;
             for (char c : text_str) {
                 if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
@@ -558,7 +587,10 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
         }
         enc_a = encodePreTokenizedWords(words);
     } else {
-        enc_a = encodeText(qoreStdString(text));
+        std::string text_str;
+        if (qoreUtf8String(text, text_str, xsink) || encodeText(text_str, enc_a, xsink)) {
+            return nullptr;
+        }
     }
 
     // Encode second text (optional)
@@ -583,8 +615,8 @@ QoreHashNode* QoreHFTokenizer::encodeAdvancedIntern(const QoreStringNode* text,
                 pair_words.push_back(word);
             }
             enc_b = encodePreTokenizedWords(pair_words);
-        } else {
-            enc_b = encodeText(text_pair);
+        } else if (encodeText(text_pair, enc_b, xsink)) {
+            return nullptr;
         }
         has_pair = true;
     }
@@ -881,9 +913,12 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
         return -1;
     }
 
-    std::string text_pair = text_pair_override
-        ? qoreStdString(text_pair_override)
-        : (options ? safeGetStdString(options->getKeyValue("text_pair")) : "");
+    std::string text_pair;
+    if (text_pair_override
+        ? qoreUtf8String(text_pair_override, text_pair, xsink)
+        : (options && qoreUtf8String(options->getKeyValue("text_pair"), text_pair, xsink))) {
+        return -1;
+    }
     int max_length = options ? static_cast<int>(options->getKeyValue("max_length").getAsBigInt()) : 0;
     std::string truncation = options ? safeGetStringKey(options, "truncation") : "";
     std::string padding = options ? safeGetStringKey(options, "padding") : "";
@@ -908,14 +943,20 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
                 if (count && !(count % 100) && qore_check_cancel(xsink, "encoding pre-tokenized words")) {
                     return -1;
                 }
-                std::string w = safeGetStdString(wli.getValue());
+                std::string w;
+                if (qoreUtf8String(wli.getValue(), w, xsink)) {
+                    return -1;
+                }
                 if (!w.empty()) {
                     words.push_back(std::move(w));
                 }
                 ++count;
             }
         } else {
-            std::string text_str = qoreStdString(text);
+            std::string text_str;
+            if (qoreUtf8String(text, text_str, xsink)) {
+                return -1;
+            }
             std::string word;
             for (size_t i = 0; i < text_str.size(); ++i) {
                 if (i && !(i % 100) && qore_check_cancel(xsink, "splitting pre-tokenized text")) {
@@ -937,7 +978,10 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
         }
         enc_a = encodePreTokenizedWords(words);
     } else {
-        enc_a = encodeText(qoreStdString(text));
+        std::string text_str;
+        if (qoreUtf8String(text, text_str, xsink) || encodeText(text_str, enc_a, xsink)) {
+            return -1;
+        }
     }
 
     InternalEncoding enc_b;
@@ -964,8 +1008,8 @@ int QoreHFTokenizer::encodeForModelIntern(const QoreStringNode* text, const Qore
                 pair_words.push_back(word);
             }
             enc_b = encodePreTokenizedWords(pair_words);
-        } else {
-            enc_b = encodeText(text_pair);
+        } else if (encodeText(text_pair, enc_b, xsink)) {
+            return -1;
         }
         has_pair = true;
     }
@@ -1310,7 +1354,7 @@ QoreHashNode* QoreHFTokenizer::buildEncodingHash(const EncodingResult& post_resu
 
     ReferenceHolder<QoreListNode> tok_list(new QoreListNode(stringTypeInfo), xsink);
     for (const auto& t : post_result.tokens) {
-        tok_list->push(new QoreStringNode(t), xsink);
+        tok_list->push(new QoreStringNode(t, QCS_UTF8), xsink);
     }
     result->setKeyValue("tokens", tok_list.release(), xsink);
 
@@ -1411,10 +1455,14 @@ int QoreHFTokenizer::addTokens(const QoreListNode* tokens, ExceptionSink* xsink)
         bool single_word = false;
 
         if (v.getType() == NT_STRING) {
-            content = safeGetStdString(v);
+            if (qoreUtf8String(v, content, xsink)) {
+                return added;
+            }
         } else if (v.getType() == NT_HASH) {
             const QoreHashNode* h = v.get<const QoreHashNode>();
-            content = safeGetStdString(h->getKeyValue("content"));
+            if (qoreUtf8String(h->getKeyValue("content"), content, xsink)) {
+                return added;
+            }
             special = h->getKeyValue("special").getAsBool();
             single_word = h->getKeyValue("single_word").getAsBool();
         } else {
@@ -1485,7 +1533,7 @@ QoreListNode* QoreHFTokenizer::decodeBatch(const QoreListNode* batch,
                 result += tokens[i];
             }
         }
-        rv->push(new QoreStringNode(result), xsink);
+        rv->push(new QoreStringNode(result, QCS_UTF8), xsink);
     }
     return rv.release();
 }
@@ -1855,8 +1903,11 @@ int chatRender(const ChatNodes& nodes, const ChatContext& ctx, const std::string
                     if (!msg) {
                         continue;
                     }
-                    std::string msg_role = safeGetStdString(msg->getKeyValue("role"));
-                    std::string msg_content = safeGetStdString(msg->getKeyValue("content"));
+                    std::string msg_role, msg_content;
+                    if (qoreUtf8String(msg->getKeyValue("role"), msg_role, ctx.xsink)
+                        || qoreUtf8String(msg->getKeyValue("content"), msg_content, ctx.xsink)) {
+                        return -1;
+                    }
                     if (chatRender(node.body, ctx, &msg_role, &msg_content, out)) {
                         return -1;
                     }
@@ -1902,7 +1953,10 @@ QoreStringNode* QoreHFTokenizer::applyChatTemplate(const QoreListNode* messages,
             if (!msg) {
                 continue;
             }
-            std::string content = safeGetStdString(msg->getKeyValue("content"));
+            std::string content;
+            if (qoreUtf8String(msg->getKeyValue("content"), content, xsink)) {
+                return nullptr;
+            }
             if (!content.empty()) {
                 if (!result.empty()) {
                     result += "\n";
@@ -1910,7 +1964,7 @@ QoreStringNode* QoreHFTokenizer::applyChatTemplate(const QoreListNode* messages,
                 result += content;
             }
         }
-        return new QoreStringNode(result);
+        return new QoreStringNode(result, QCS_UTF8);
     }
 
     // the BOS and EOS tokens may be added tokens
@@ -1920,7 +1974,7 @@ QoreStringNode* QoreHFTokenizer::applyChatTemplate(const QoreListNode* messages,
     if (chatRender(nodes, ctx, nullptr, nullptr, result)) {
         return nullptr;
     }
-    return new QoreStringNode(result);
+    return new QoreStringNode(result, QCS_UTF8);
 }
 
 } // namespace QoreTokenizer
