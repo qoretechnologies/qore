@@ -28,16 +28,60 @@
 #include "bson_conversion.h"
 #include "QC_ObjectId.h"
 
-// returns a BSON string as a UTF-8 string; raises INVALID-ENCODING if it is not valid UTF-8
-/* BSON strings are UTF-8 text, which libbson does not check when it reads a document, and documents from a server can
-   have strings that are not valid UTF-8 (written by other drivers or older servers); the text is checked where it
-   enters the program (qore#6604)
+/* BSON strings and the names of the driver are UTF-8 text, which libbson does not check when it reads a document, and
+   documents from a server can have strings that are not valid UTF-8 (written by other drivers or older servers); the
+   text is checked where it enters the program (qore#6604)
 */
-static QoreStringNode* bson_string(const char* p, size_t len, const char* what, ExceptionSink* xsink) {
-    if (q_check_text_encoding(QCS_UTF8, p, len, "MongoDB", what, xsink)) {
+QoreStringNode* mongo_utf8_string(const char* p, size_t len, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    if (q_check_text_encoding(QCS_UTF8, p, len, where, what, xsink)) {
         return nullptr;
     }
     return new QoreStringNode(p, len, QCS_UTF8);
+}
+
+QoreListNode* mongo_utf8_string_list(char** names, const char* where, const char* what, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; names[i]; ++i) {
+        QoreStringNode* name = mongo_utf8_string(names[i], strlen(names[i]), where, what, xsink);
+        if (!name) {
+            return nullptr;
+        }
+        if (list->push(name, xsink)) {
+            return nullptr;
+        }
+    }
+    return list.release();
+}
+
+int mongo_set_utf8_key(QoreHashNode* h, const char* key, size_t len, QoreValue value, ExceptionSink* xsink) {
+    // a hash key is in the default encoding: a UTF-8 key is converted to it, as parse_json() converts its keys
+    // (a BSON key has no NUL character: it is a NUL-terminated string)
+    if (QCS_DEFAULT == QCS_UTF8) {
+        return h->setKeyValue(key, value, xsink);
+    }
+    return h->setKeyValue(QoreString(key, len, QCS_UTF8), value, xsink);
+}
+
+int mongo_utf8_arg(const QoreString& str, TempEncodingHelper& utf8, const char* where, const char* what,
+        ExceptionSink* xsink) {
+    if (q_check_text_encoding(str.getEncoding(), str.c_str(), str.size(), where, what, xsink)) {
+        return -1;
+    }
+    return utf8.set(&str, QCS_UTF8, xsink) ? 0 : -1;
+}
+
+MongoUtf8Key::MongoUtf8Key(const char* key, ExceptionSink* xsink) : key(key) {
+    // a hash key is in the default encoding, and a BSON key is UTF-8 text
+    if (QCS_DEFAULT != QCS_UTF8) {
+        QoreString str(key, QCS_DEFAULT);
+        converted.reset(str.convertEncoding(QCS_UTF8, xsink));
+        this->key = converted ? converted->c_str() : nullptr;
+    }
+}
+
+static QoreStringNode* bson_string(const char* p, size_t len, const char* what, ExceptionSink* xsink) {
+    return mongo_utf8_string(p, len, "MongoDB", what, xsink);
 }
 
 QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
@@ -156,7 +200,11 @@ QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
             bson_t scope;
             bson_init_static(&scope, value->value.v_codewscope.scope_data,
                 value->value.v_codewscope.scope_len);
-            h->setKeyValue("$scope", bson_to_qore_hash(&scope, xsink), xsink);
+            QoreHashNode* scope_hash = bson_to_qore_hash(&scope, xsink);
+            if (!scope_hash) {
+                return QoreValue();
+            }
+            h->setKeyValue("$scope", scope_hash, xsink);
             return h.release();
         }
 
@@ -209,18 +257,19 @@ QoreHashNode* bson_to_qore_hash(const bson_t* doc, ExceptionSink* xsink) {
 
     while (bson_iter_next(&iter)) {
         const char* key = bson_iter_key(&iter);
+        size_t key_len = bson_iter_key_len(&iter);
         // a key is UTF-8 text, as a string is
-        if (q_check_text_encoding(QCS_UTF8, key, bson_iter_key_len(&iter), "MongoDB", "BSON key", xsink)) {
+        if (q_check_text_encoding(QCS_UTF8, key, key_len, "MongoDB", "BSON key", xsink)) {
             return nullptr;
         }
         const bson_value_t* value = bson_iter_value(&iter);
 
-        QoreValue qv = bson_value_to_qore(value, xsink);
+        // the holder releases a value returned with an exception
+        ValueHolder qv(bson_value_to_qore(value, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
-        hash->setKeyValue(key, qv, xsink);
-        if (*xsink) {
+        if (mongo_set_utf8_key(*hash, key, key_len, qv.release(), xsink) || *xsink) {
             return nullptr;
         }
     }
@@ -408,10 +457,14 @@ bson_t* qore_hash_to_bson(const QoreHashNode* hash, ExceptionSink* xsink) {
 
     ConstHashIterator hi(hash);
     while (hi.next()) {
-        const char* key = hi.getKey();
+        MongoUtf8Key key(hi.getKey(), xsink);
+        if (!key) {
+            bson_destroy(doc);
+            return nullptr;
+        }
         QoreValue value = hi.get();
 
-        if (qore_value_to_bson_append(doc, key, value, xsink)) {
+        if (qore_value_to_bson_append(doc, key.c_str(), value, xsink)) {
             bson_destroy(doc);
             return nullptr;
         }

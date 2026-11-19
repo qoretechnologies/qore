@@ -29,7 +29,14 @@ requests and recovery.  A sandbox control exercises program interruption.  Docum
 with strings, keys, code, symbols, regular expressions and their options and
 DBPointer collections that are not valid UTF-8 (built from raw bytes where
 libbson refuses to append them) raise INVALID-ENCODING, and valid text other
-than ASCII is converted tagged UTF-8 (qore#6604).
+than ASCII is converted tagged UTF-8 (qore#6604).  An invalid string in the
+scope of code with scope (also in an array) raises it without leaking the
+values converted before it.  The helpers for text exchanged with libmongoc
+(names from the server, the URI and the names given to the driver, BSON keys)
+are checked here, as the classes that use them need a server.  The test forks
+a child process before the library is initialized, which initializes it with
+an ISO-8859-1 default encoding: BSON keys are converted to the default
+encoding for hashes and back to UTF-8 for BSON.
 
 ``bson_append_array_unsafe_begin`` is the supported name of the old array
 begin function starting with libbson 2.3.  Qore supplies every contiguous key
