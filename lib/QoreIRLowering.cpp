@@ -24101,18 +24101,32 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
         return QoreIRValue();
     }
 
-    // The iterator takes its own reference before running any stage. Borrow a plain local directly. A load
-    // through a reference owns the value it read, which stays in the statement's cleanup (qore#6638).
     QoreIRValue owned_source = source;
+    bool release_plain_source = false;
+    const auto& instructions = builder.getBlock()->instructions;
     if (root_streaming && op->getKind() == QoreStreamingOperatorNode::First
-            && dynamic_cast<const VarRefNode*>(base_source.getInternalNode())) {
-        auto& instructions = builder.getBlock()->instructions;
-        QoreIRInstruction* def = instructions.empty() ? nullptr : instructions.back().get();
-        if (def && def->opcode == QoreIROpcode::LoadLocal && def->result.id == source.id) {
-            static_cast<QoreIRLocalInstruction*>(def)->auto_ref = false;
+            && qore_get_var_ref_node(base_source.getInternalNode()) && !instructions.empty()) {
+        const auto* def = instructions.back().get();
+        if (def->result.id == source.id) {
+            switch (def->opcode) {
+                case QoreIROpcode::LoadLocal: {
+                    const auto* load = static_cast<const QoreIRLocalInstruction*>(def);
+                    release_plain_source = !load->is_ref && !load->is_closure
+                        && !QoreTypeInfo::isReference(load->local->getTypeInfo());
+                    [[fallthrough]];
+                }
+                case QoreIROpcode::LoadClosure:
+                case QoreIROpcode::LoadGlobal:
+                case QoreIROpcode::LoadThreadLocal:
+                case QoreIROpcode::LoadLValue:
+                    owned_source = QoreIRValue();
+                    functional_source_captures.back().value = QoreIRValue();
+                    break;
+                default:
+                    // A declaration such as P p("old") gives a construction result, not a variable read.
+                    break;
+            }
         }
-        owned_source = QoreIRValue();
-        functional_source_captures.back().value = QoreIRValue();
     }
 
     bool source_uses_iterate = !stages.empty()
@@ -24173,6 +24187,11 @@ QoreIRValue QoreIRLowering::lowerLazyPipelineFused(const QoreValue& base_source,
     QoreIRValue iter_val = iter_inst->result;
     // the iterator of an operator in an expression (see QoreIRInstruction::restore_on_exception_exit)
     iter_inst->restore_on_exception_exit = true;
+    if (release_plain_source) {
+        // The iterator now owns the source. The load's discriminator preserves a reference read until the
+        // statement ends, even if the stages subsequently change the variable (qore#6638).
+        builder.createReleaseOwnedTemp(source, loc)->opcode = QoreIROpcode::ReleasePlainLocalRead;
+    }
 
     // an exception that leaves the pipeline for a handler of this function releases the element that the iterator
     // gave, the list built so far, the iterator and the base source first, as the AST interpreter releases the

@@ -210,3 +210,13 @@ string topResult = string(first (map 1, top)) + ((top = NOTHING) ?? "") + marker
 auto topTarget = (new P("top-reference"),);
 auto topRef = \topTarget;
 topResult = string(first (map 1, topRef)) + ((topTarget = NOTHING) ?? "") + marker("top-reference");
+
+# A declaration used as the source also stores the newly constructed value in its local.
+string sub replaceSource(reference<P> p) {
+    p = new P("replacement");
+    return "";
+}
+sub firstDeclared() {
+    string s = string(first (map 1, P p("declared"))) + replaceSource(\p) + marker("declared");
+}
+firstDeclared();
