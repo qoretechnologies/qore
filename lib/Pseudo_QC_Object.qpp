@@ -373,6 +373,7 @@ string <object>::uniqueHash() [const;flags=CONSTANT] {
     - if not found, an \c CALL-REFERENCE-ERROR exception is thrown
 
     @throw CALL-REFERENCE-ERROR cannot resolve call reference; method not accessible in the calling context, or the identifier contains a NUL character (since %Qore 3.0)
+    @throw ILLEGAL-CALL-REFERENCE the identifier names the \c constructor(), \c destructor() or \c copy() method of the object's class or of one of its parent classes, which run only when an object is created, deleted or copied (since %Qore 3.0)
 
     @note
     - Pseudo-methods run with the class context of the caller, which enables this method to access any accessible

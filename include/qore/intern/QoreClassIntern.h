@@ -4937,6 +4937,33 @@ public:
     }
     */
 
+    //! returns true if the method is the constructor or the destructor of the class that declares it
+    /** user code may not call these methods explicitly; the declaring class can be a base class of the class that
+        a method of the name is looked up in (qore#6783)
+    */
+    DLLLOCAL static bool isConstructorOrDestructor(const QoreMethod& m) {
+        const qore_class_private* qc = get(*m.getClass());
+        return &m == qc->constructor || &m == qc->destructor;
+    }
+
+    //! returns true if the method is the constructor, the destructor or the copy method of the class that declares it
+    /** no call reference can be made to these methods, whose variants are not normal method variants (qore#6783)
+    */
+    DLLLOCAL static bool isNotReferenceable(const QoreMethod& m) {
+        return isConstructorOrDestructor(m) || &m == get(*m.getClass())->copyMethod;
+    }
+
+    //! raises an exception for a call reference to a method that cannot be referenced, and returns -1, or returns 0
+    DLLLOCAL static int checkReferenceable(const QoreMethod& m, ExceptionSink* xsink) {
+        if (!isNotReferenceable(m)) {
+            return 0;
+        }
+        xsink->raiseException("ILLEGAL-CALL-REFERENCE", "cannot make a call reference to %s::%s(), which is called "
+            "only when an object is %s", m.getClassName(), m.getName(),
+            !strcmp(m.getName(), "constructor") ? "created" : (!strcmp(m.getName(), "copy") ? "copied" : "deleted"));
+        return -1;
+    }
+
     DLLLOCAL const QoreMethod* getMethodForEval(const char* nme, QoreProgram* pgm,
         const qore_class_private* class_ctx, ExceptionSink* xsink) const;
 
