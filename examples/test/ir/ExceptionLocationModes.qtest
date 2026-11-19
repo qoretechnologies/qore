@@ -28,6 +28,10 @@
     the report, must be the AST interpreter's in every execution mode (with the thresholds of ExecModeHarness, so that
     tiered and JIT execution compile the code after its first call), on the IR tier of tiered execution, and as qcc
     executables compiled with -O0 and -O3.
+
+    Not probed: the call stack location of the destructor of a function body's local at the end of the function
+    (qore#6672), and an exception raised by a callee that a qcc executable replaces with the callee's summary, which
+    the script avoids by calling the probes through call references (qore#6673).
 */
 class ExceptionLocationModesTest inherits QUnit::Test {
     public {
