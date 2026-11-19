@@ -4778,6 +4778,9 @@ map upsert($1), row_list;
         @ref SqlUtil::AbstractTable::getUpsertClosureWithValidation() for a similar method that returns a validating
         closure; the closure returned by this method is faster than the one returned by
         @ref SqlUtil::AbstractTable::getUpsertClosure() since there is no validation
+
+        @note the SQL of the closure is made with the table's description when the closure is made; the closure keeps
+        working after @ref clear(), but does not follow a change of the table's definition in the database
     */
     code<int(hash<auto>)> getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # check upsert options
@@ -9293,7 +9296,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     }
 
     private Columns checkUpsertRow(hash<auto> row, reference<int> upsert_strategy) {
-        return getAllUpsertColumns(row).firstValue();
+        # the upsert closures keep the columns of the key: a copy of the key's column list, as clear() deletes the
+        # key object of the table (issue #6686)
+        return new Columns(getAllUpsertColumns(row).firstValue());
     }
 
     #! Returns a closure that inserts a row and updates the row with its upsert key if the insert is a duplicate
