@@ -23,7 +23,7 @@ using Payload = std::function<void(QoreAOTBinaryWriter&)>;
 static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
         const std::vector<uint32_t>& operands, const Payload& payload, const char* expected,
         bool tag_only = false, bool wide = false, uint16_t version = QORE_AOT_BINARY_VERSION,
-        uint32_t result_id = 3, uint64_t features = 0) {
+        uint32_t result_id = 3, uint64_t features = 0, const Payload* stmt_loc = nullptr) {
     QoreAOTBinaryWriter writer;
     writer.feature_flags = features | (wide ? QORE_AOT_FEAT_WIDE_IR_OPERANDS : 0);
     uint32_t section = writer.beginSection(QoreAOTSectionType::TOPLEVEL);
@@ -71,6 +71,10 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU16(0);
         }
         writer.writeStringRef("");
+        // no runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+        if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
+            writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+        }
     };
     writer.writeU16(static_cast<uint16_t>(tag_only ? 1 : defined.size() + 2)); // instructions
     for (uint32_t id : defined) {
@@ -100,6 +104,14 @@ static bool check(QoreProgram* pgm, const char* label, O opcode, uint8_t group,
             writer.writeU16(0);
         }
         writer.writeStringRef("");
+        // the runtime location (QORE_AOT_STATEMENT_LOCATIONS_VERSION): none, unless the case gives one
+        if (version >= QORE_AOT_STATEMENT_LOCATIONS_VERSION) {
+            if (stmt_loc) {
+                (*stmt_loc)(writer);
+            } else {
+                writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+            }
+        }
         writeSimple(O::ReturnNothing, G::Return, 0, [&]() {
             writer.writeU8(0); // no value
         });
@@ -178,9 +190,10 @@ int main() {
     unsigned count = 0;
     auto run = [&](const char* label, O op, G group, std::vector<uint32_t> operands, Payload payload,
             const char* error = nullptr, bool tag_only = false, bool wide = false,
-            uint16_t version = QORE_AOT_BINARY_VERSION, uint32_t result_id = 3, uint64_t features = 0) {
+            uint16_t version = QORE_AOT_BINARY_VERSION, uint32_t result_id = 3, uint64_t features = 0,
+            const Payload* stmt_loc = nullptr) {
         ok = check(pgm, label, op, static_cast<uint8_t>(group), operands, payload, error,
-            tag_only, wide, version, result_id, features) && ok;
+            tag_only, wide, version, result_id, features, stmt_loc) && ok;
         ++count;
     };
     const Payload empty = [](QoreAOTBinaryWriter&) {};
@@ -338,6 +351,32 @@ int main() {
         QORE_AOT_DEBUG_FLOW_VERSION, 0);
     run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
         "invalid debugger flow mask", false, false, QORE_AOT_DEBUG_FLOW_VERSION, 0);
+    // the runtime location of an instruction (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646): a new entry of the
+    // function's table is read; a tag that does not exist, the location of an instruction before it when there is
+    // none, an entry beyond the table and a new entry without a line are refused
+    auto stmt_loc = [&](const char* label, const Payload& loc, const char* error) {
+        run(label, O::AddInt, G::Base, {1, 2}, empty, error, false, false, QORE_AOT_BINARY_VERSION, 3, 0, &loc);
+    };
+    auto new_entry = [](int line) -> Payload {
+        return [line](QoreAOTBinaryWriter& w) {
+            w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::New));
+            w.writeU32(static_cast<uint32_t>(line));
+            w.writeU32(static_cast<uint32_t>(line));
+            w.writeStringRef("stmt.q");
+        };
+    };
+    stmt_loc("statement location", new_entry(3), nullptr);
+    stmt_loc("statement location without a line", new_entry(0), "a runtime location has no line");
+    stmt_loc("statement location tag", [](QoreAOTBinaryWriter& w) {
+        w.writeU8(4);
+    }, "invalid runtime location tag 4");
+    stmt_loc("statement location of none before", [](QoreAOTBinaryWriter& w) {
+        w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Previous));
+    }, "has the runtime location of an instruction before it that has none");
+    stmt_loc("statement location entry", [](QoreAOTBinaryWriter& w) {
+        w.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+        w.writeU32(0);
+    }, "runtime location 0 is beyond the 0 location(s) of the function");
     qore_destroy_program(pgm);
     qore_cleanup();
     if (ok) {

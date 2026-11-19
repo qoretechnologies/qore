@@ -34,6 +34,7 @@
 
 #include "qore/intern/qore_dbi_private.h"
 #include "qore/intern/QoreException.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #include <cassert>
 #include <cctype>
@@ -610,7 +611,7 @@ void qore_dbi_private::closeWithWarnings(Datasource* ds) const {
 }
 
 void qore_dbi_private::reportCloseWarnings(Datasource* ds, ExceptionSink& xsink) {
-    for (QoreException* e = xsink.getException(); e; e = e->next) {
+    for (QoreException* e = qore_exception_sink_ops(xsink).getException(); e; e = e->next) {
         Queue* q;
         ReferenceHolder<QoreHashNode> h(ds->getEventQueueHash(q, QDBI_EVENT_WARNING), nullptr);
         if (!h) {

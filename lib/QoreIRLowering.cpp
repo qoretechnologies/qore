@@ -983,6 +983,24 @@ static bool isSharedVar(const VarRefNode* var) {
 
 static bool qore_ir_type_may_hold_object(const QoreTypeInfo* ti, int depth = 0);
 
+//! Returns the runtime location of a statement whose location is \a loc in the code of the statement whose runtime
+//! location is \a outer (see QoreIRInstruction::stmt_loc)
+/** A statement on the lines of the statement that contains it, such as the body of a loop written on one line, takes
+    the location of the containing statement: an exception gives the same file and lines with either, and the IR
+    interpreter and native code then do not store the location at each change between the two statements (qore#6646);
+    the columns of the location, which the call stack entry of a rethrow and of a frame without a call site give,
+    are the containing statement's
+*/
+static const QoreProgramLocation* qore_ir_statement_location(const QoreProgramLocation* outer,
+        const QoreProgramLocation* loc) {
+    if (outer && loc && outer->start_line == loc->start_line && outer->end_line == loc->end_line
+            && outer->getFile() == loc->getFile() && outer->getSource() == loc->getSource()
+            && outer->offset == loc->offset && outer->getLanguage() == loc->getLanguage()) {
+        return outer;
+    }
+    return loc;
+}
+
 //! Returns true if evaluating \a val may create a temporary besides its value whose release can be observed
 /** A value made by a call or a construction, and a value that can hold an object read from a variable that other code
     can change while the expression runs - a global, thread-local or closure-bound variable, a local that a closure
@@ -5070,6 +5088,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         if (!*it) {
             continue;
         }
+        // the code of the statement runs in its location, as with the AST interpreter (AbstractStatement::exec()),
+        // which is restored after it: the code that the enclosing statement runs after it, such as the release of
+        // the locals of its block, the next iteration of a loop or its condition, runs in the enclosing statement's
+        // location (qore#6646)
+        QoreIRStatementLocationHelper stmt_loc_helper(builder,
+            qore_ir_statement_location(builder.getStatementLocation(), (*it)->loc));
         if (set_code_parse_options && (!code_po_statement
                 || !qore_ir_statement_parse_options_equal(code_po_statement, *it))) {
             builder.createSetCodeParseOptions((*it)->pwo.parse_options, (*it)->loc);
@@ -5366,6 +5390,7 @@ void QoreIRLowering::pushBlockCleanup(BlockCleanupEntry entry) {
     entry.open_scopes = scope_stack.size();
     entry.open_catch_depth = catch_cleanup_depth;
     entry.open_try_depth = try_catch_cleanup_depth_stack.size();
+    entry.stmt_loc = builder.getStatementLocation();
     cleanup_stack.push_back(entry);
 }
 
@@ -5606,6 +5631,7 @@ bool QoreIRLowering::makeDebugFlowEntries(QoreIRDebugFlowTargets& flow, QoreIRBa
         auto br = std::make_unique<QoreIRBranchInstruction>();
         br->target = path;
         br->loc = loc;
+        br->stmt_loc = builder.getStatementLocation();
         entry->instructions.push_back(std::move(br));
         return entry;
     };
@@ -5934,6 +5960,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         // (when inlining handler bodies that push to cleanup_stack), which would
         // invalidate a reference into the vector.
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
+        // the cleanup runs in the location of the statement that contains the block (see BlockCleanupEntry::stmt_loc)
+        QoreIRStatementLocationHelper stmt_loc_helper(builder, entry.stmt_loc);
         if (unwind_temp_depth != SIZE_MAX) {
             size_t entry_temp_depth = std::max(entry.temp_scope_depth, unwind_temp_depth);
             if (entry_temp_depth < unwound_temp_depth) {

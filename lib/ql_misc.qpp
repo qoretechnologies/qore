@@ -50,6 +50,7 @@
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #endif
 
 #include <cerrno>
@@ -1482,7 +1483,7 @@ parse(code, filename);
         if (!wsink.isException())
             return QoreValue();
 
-        QoreException* e = wsink.catchException();
+        QoreException* e = qore_exception_sink_ops(wsink).catchException();
         return e->makeExceptionObjectAndDelete(xsink);
     }
 
@@ -3460,7 +3461,7 @@ load_module("mysql");
     QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), q_get_runtime_call_program(runtime_cfg), nullptr, QMLO_NONE,
         warning_mask);
     if (!*xsink && wsink) {
-        return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
+        return qore_exception_sink_ops(wsink).catchException()->makeExceptionObjectAndDelete(xsink);
     }
     return QoreValue();
 }
