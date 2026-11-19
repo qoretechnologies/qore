@@ -166,6 +166,12 @@ This generalizes the existing Phase 1.5 init-expression outliner
      locals must not cross the boundary; a shared local's lifecycle op
      may sit inside the region only if the local has no references
      after it (the common `for`-init-in-previous-block shape);
+   - the catch blocks opened in the region are closed in it, and the
+     region closes none opened before it (a dataflow of the number of
+     the function's catch blocks open, from the exit depths of the
+     catch blocks' exit blocks); the helper counts the depths of its
+     exit blocks (`catch_exit_depths`) from the catch blocks open when
+     it is called (qore#6651);
    - the function entry block is never part of a region.
 
    Reference-promoted closure-use locals may cross the boundary when
@@ -310,7 +316,8 @@ This generalizes the existing Phase 1.5 init-expression outliner
   own unwind path — the same sequence a real nested call produces.
 - The helper takes the function's tables of its try statements for the
   instructions that it lowers (`catch_interrupted_returns`,
-  `catch_cleanup_results`, `catch_exit_unwind`), releases its locals in their declaration
+  `catch_cleanup_results`, `catch_exit_unwind`; `catch_exit_depths`
+  too, qore#6651), releases its locals in their declaration
   order (the coordinator's `all_body_locals` order), and an exception in
   it whose handler's temp scope is the coordinator's leaves every temp
   scope of the helper.  An exit of the helper on an exception returns

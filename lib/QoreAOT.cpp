@@ -4064,6 +4064,11 @@ struct AOTFnOutlineRegion {
     std::vector<const LocalVar*> contained_locals;
     //! The shared locals that the helper can assign or remove (see QoreIRCallAOTHelperInstruction)
     std::vector<const LocalVar*> written_shared_locals;
+    //! The number of the function's catch blocks open where the region starts, if the region has catch blocks
+    /** The helper counts the catch blocks that the exit block of a catch block closes from those open when it is
+        called (QoreIRFunction::catch_exit_depths)
+    */
+    uint32_t catch_depth = 0;
 };
 
 //! Whole-function analysis state for outline-region discovery.
@@ -4411,10 +4416,152 @@ private:
     std::unordered_set<const QoreIRInstruction*> unknown_handler_locals;
     std::unordered_map<uint32_t, size_t> scope_enter_idx;
     std::vector<std::pair<uint32_t, size_t>> scope_exit_ids;
+    //! catch_depth_in: no path into the block seen yet
+    static constexpr int CatchDepthUnknown = -2;
+    //! catch_depth_in: the paths into the block disagree
+    static constexpr int CatchDepthConflict = -1;
+    //! catchDepthAfter(): the innermost catch block of an unknown depth was closed
+    static constexpr int CatchDepthInvalid = -3;
+    //! the number of the function's catch blocks open at the start of each block, computed for the first region with
+    //! catch blocks (see checkRegionCatchDepth())
+    std::vector<int> catch_depth_in;
+    bool catch_depths_computed = false;
     std::unordered_map<uint32_t, size_t> temp_mark_idx;
     std::vector<std::pair<uint32_t, size_t>> temp_discard_ids;
     bool has_closure_create = false;
     bool has_exception_paths = false;
+
+    //! Applies the catch blocks that \a inst opens or closes to \a depth, the number of the frame's catch blocks open
+    //! before it (or CatchDepthConflict)
+    /** Returns CatchDepthInvalid if \a inst closes the innermost catch block of an unknown depth
+    */
+    static int catchDepthAfter(const QoreIRFunction& fn, const QoreIRInstruction* inst, int depth) {
+        if (inst->opcode == QoreIROpcode::CatchException) {
+            return depth == CatchDepthConflict ? depth : depth + 1;
+        }
+        if (inst->opcode == QoreIROpcode::CatchCleanup) {
+            // the exit block of a catch block closes those opened since its try statement began, which sets the
+            // depth whatever the paths into it left open; any other CatchCleanup closes the innermost one
+            auto i = fn.catch_exit_depths.find(inst);
+            if (i != fn.catch_exit_depths.end()) {
+                return static_cast<int>(i->second);
+            }
+            return depth == CatchDepthConflict ? CatchDepthInvalid : depth - 1;
+        }
+        return depth;
+    }
+
+    //! Merges the depth \a depth of an edge into \a in, the depth at the start of its target; returns true if \a in
+    //! changed
+    static bool mergeCatchDepth(int& in, int depth) {
+        int merged = in == CatchDepthUnknown || in == depth ? depth : CatchDepthConflict;
+        if (merged == in) {
+            return false;
+        }
+        in = merged;
+        return true;
+    }
+
+    //! Propagates the number of the frame's catch blocks open over the blocks [\a first..\a last] from \a entry_depth
+    //! at the start of block \a first
+    /** Fills \a in, the depths at the start of the blocks (CatchDepthConflict where the paths into a block disagree,
+        as where a catch block without an exit block that an exception leaves open meets the normal path, until the
+        exit block that the exception reaches closes it); calls \a edge(depth) for each edge to block \a exit and
+        \a inst_cb(depth after) for each instruction; stops when either returns false
+    */
+    template <typename E, typename I>
+    bool propagateCatchDepths(const QoreIRFunction& fn, size_t first, size_t last, size_t exit, int entry_depth,
+            std::vector<int>& in, E&& edge, I&& inst_cb) {
+        const size_t count = last - first + 1;
+        in.assign(count, CatchDepthUnknown);
+        in[0] = entry_depth;
+        std::vector<size_t> work{0};
+        std::vector<bool> queued(count, false);
+        queued[0] = true;
+        bool ok = true;
+        while (!work.empty() && ok) {
+            size_t bi = work.back();
+            work.pop_back();
+            queued[bi] = false;
+            int depth = in[bi];
+            for (const auto& inst_ptr : fn.blocks[first + bi]->instructions) {
+                QoreIRInstruction* inst = inst_ptr.get();
+                if (!inst || inst->opcode == QoreIROpcode::Phi) {
+                    continue;
+                }
+                // an exception edge is taken before the instruction opens or closes a catch block (the exception
+                // edge of a CatchException is a thread_exit, which does not enter the catch block)
+                aotOutlineForEachBlockTarget(inst, [&](QoreIRBasicBlock*& target) {
+                    if (!target || !ok) {
+                        return;
+                    }
+                    auto it = block_idx.find(target);
+                    if (it == block_idx.end()) {
+                        return;
+                    }
+                    if (it->second == exit) {
+                        ok = edge(depth);
+                        return;
+                    }
+                    if (it->second < first || it->second > last) {
+                        return;
+                    }
+                    size_t ti = it->second - first;
+                    if (mergeCatchDepth(in[ti], depth) && !queued[ti]) {
+                        queued[ti] = true;
+                        work.push_back(ti);
+                    }
+                });
+                if (!ok) {
+                    break;
+                }
+                depth = catchDepthAfter(fn, inst, depth);
+                if (!inst_cb(depth)) {
+                    ok = false;
+                    break;
+                }
+                if (depth == CatchDepthInvalid) {
+                    depth = CatchDepthConflict;
+                }
+            }
+        }
+        return ok;
+    }
+
+    //! Checks that the catch blocks opened in \a region are closed in it and that it closes none opened before it
+    /** Sets the region's catch_depth; returns the reason for rejecting the region, or nullptr
+    */
+    const char* checkRegionCatchDepth(const QoreIRFunction& fn, AOTFnOutlineRegion& region) {
+        if (!catch_depths_computed) {
+            // the depths at the start of the function's blocks; the function starts with none open
+            catch_depths_computed = true;
+            propagateCatchDepths(fn, 0, fn.blocks.size() - 1, SIZE_MAX, 0, catch_depth_in, [](int) { return true; },
+                [](int) { return true; });
+        }
+        int entry_depth = catch_depth_in[region.first];
+        if (entry_depth < 0) {
+            return "catch depth at region entry unknown";
+        }
+        const char* why = nullptr;
+        std::vector<int> in;
+        propagateCatchDepths(fn, region.first, region.last, region.last + 1, entry_depth, in, [&](int depth) {
+            if (depth != entry_depth) {
+                why = "catch block open at region exit";
+                return false;
+            }
+            return true;
+        }, [&](int depth) {
+            if (depth == CatchDepthInvalid || (depth >= 0 && depth < entry_depth)) {
+                why = "region closes a catch block opened before it";
+                return false;
+            }
+            return true;
+        });
+        if (!why) {
+            region.catch_depth = static_cast<uint32_t>(entry_depth);
+        }
+        return why;
+    }
 
     bool validateRegion(const QoreIRFunction& fn, AOTFnOutlineRegion& region,
             const std::unordered_set<const void*>& body_local_set, bool dbg) {
@@ -4455,6 +4602,8 @@ private:
             }
         }
         std::unordered_set<const LocalVar*> region_locals;
+        // true if the region opens or closes a catch block
+        bool has_catch_ops = false;
         // the locals that an instruction of the region can write (qore#6314)
         std::unordered_set<const LocalVar*> region_written;
         size_t temp_push_count = 0;
@@ -4493,6 +4642,10 @@ private:
                         }
                         break;
                     }
+                    case QoreIROpcode::CatchException:
+                    case QoreIROpcode::CatchCleanup:
+                        has_catch_ops = true;
+                        break;
                     default:
                         break;
                 }
@@ -4603,6 +4756,15 @@ private:
             bool enter_in = it != scope_enter_idx.end() && in_region(it->second);
             if (in_region(i) != enter_in) {
                 return fail("scope enter/exit crosses region boundary");
+            }
+        }
+        // The catch blocks of the region must be opened and closed in it: the exit block of a catch block closes the
+        // catch blocks of the frame down to the depth of its try statement, which the helper counts from the catch
+        // blocks open when it is called (qore#6651)
+        if (has_catch_ops) {
+            const char* why = checkRegionCatchDepth(fn, region);
+            if (why) {
+                return fail(why);
             }
         }
         // A closure created in the region that captures both a local of the region (instantiated in the helper)
@@ -5484,8 +5646,10 @@ private:
             + region.shared_locals.size();
         // the function's tables of its try statements, keyed by instruction, go with the instructions that the helper
         // lowers: the value of a return of a try block that the exception interrupted is released before the catch
-        // block runs and the information of a catch block is released when a jump leaves it; without them, the helper
-        // kept the return value until it returned, after the catch block (qore#6650)
+        // block runs, the information of a catch block is released when a jump leaves it (qore#6650), and the exit
+        // block of a catch block closes the catch blocks opened since its try statement began (qore#6651); without
+        // them, the helper kept the return value until it returned, after the catch block, and closed the innermost
+        // catch block only, which could be one that the exit block's try statement is in
         for (auto& b : helper->blocks) {
             for (auto& inst_ptr : b->instructions) {
                 const QoreIRInstruction* inst = inst_ptr.get();
@@ -5497,6 +5661,11 @@ private:
                 }
                 if (auto i = fn->catch_cleanup_results.find(inst); i != fn->catch_cleanup_results.end()) {
                     helper->catch_cleanup_results.insert(*i);
+                }
+                if (auto i = fn->catch_exit_depths.find(inst); i != fn->catch_exit_depths.end()) {
+                    // the helper counts the catch blocks from those open when it is called
+                    assert(i->second >= region.catch_depth);
+                    helper->catch_exit_depths[inst] = i->second - region.catch_depth;
                 }
             }
         }
