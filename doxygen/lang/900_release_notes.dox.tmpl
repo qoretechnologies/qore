@@ -2330,6 +2330,10 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - fixed @ref Qore::SQL::SQLStatement::describe() "SQLStatement::describe()" before the first execution of a statement
+      with a driver that describes it without executing it (ex: oracle), which lost the values given to
+      @ref Qore::SQL::SQLStatement::bind() "SQLStatement::bind()": the next fetch returned \c NULL for them
+      (<a href="https://github.com/qoretechnologies/qore/issues/6690">issue 6690</a>)
     - <hash>::values() and @ref Qore::hash_values() "hash_values()" return the references in a hash with a declared
       value type as they are, as for an untyped hash, instead of crashing the process (issue #6558)
     - @ref Qore::File::redirect() "File::redirect()" locks the two files in the same order whichever is redirected,
