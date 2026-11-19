@@ -201,8 +201,12 @@ class SocketWildcardBindTest inherits QUnit::Test {
             client.close();
             server.close();
         }
-        # without SO_REUSEADDR the port cannot be bound while the closed connection holds it
-        {
+        # without SO_REUSEADDR the port cannot be bound while the closed connection holds it in TIME_WAIT; a kernel
+        # whose table of TIME_WAIT connections is full (tcp_max_tw_buckets, as when many tests run at once in the
+        # network namespace of a CI pod) closes the connection without keeping it, and then nothing holds the port:
+        # the precondition is checked where the system's sockets show the TIME_WAIT connection, or cannot be read
+        *list<string> states = PortHolder::tcp_local_states(port);
+        if (!exists states || inlist("06", states)) {
             Socket s();
             on_exit s.close();
             # all-interfaces: tests the bind on all interfaces
