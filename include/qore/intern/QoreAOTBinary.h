@@ -581,6 +581,11 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
 //!      v9-v45 image has none: a request at a step event of its code returns from the function.
+//! v48: the method name of an object method reference (OBJ_METHOD_REF_EXPR and EN_OBJ_METH_REF expressions, and the
+//!      name that native code passes to qore_rt_create_object_method_ref_aot()) is
+//!      "\x02<declared class reference>\x01<method class reference>\x01<method name>" for a normal method of a parent
+//!      class that the compiler resolved for the receiver's declared class (qore_aot_object_method_ref_name(),
+//!      qore#6680); an earlier reader would take it for the name of a method that does not exist.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -667,10 +672,13 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
 //! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
 constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
+//! First format version whose object method references can give the method resolved for the receiver's declared
+//! class (see v48 above); a reader of an earlier image reads plain method names.
+constexpr uint16_t QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION = 48;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DEBUG_FLOW_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_INHERITED_OBJECT_METHOD_REF_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
