@@ -460,7 +460,6 @@ public:
     QoreIRValue lowerHashMapSelect(const QoreValue& expr, std::string& error);
     QoreIRValue lowerIterate(const QoreValue& expr, std::string& error);
     QoreIRValue lowerStreaming(const QoreValue& expr, std::string& error);
-    QoreIRValue lowerConsumedTruthValue(const QoreValue& expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerLogicalAnd(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalOr(const QoreValue& expr, std::string& error);
     QoreIRValue lowerLogicalNot(const QoreValue& expr, std::string& error);
