@@ -138,6 +138,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         addTestCase("the code of another tenant does not run in a build that a tenant called", \refused());
         addTestCase("the same tenant's code, the build's own code and host code run", \allowed());
         addTestCase("a build that trusted code enters may run any tenant's code", \trustedCaller());
+        addTestCase("the code of the Program that created the build runs in it, whatever its domain",
+            \creatorCode());
         addTestCase("sandboxes without a domain refuse nothing", \noDomain());
         set_return_value(main());
     }
@@ -245,6 +247,39 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         assertEq(10, BuildCallArgs(b.getCallReference("make"), 10).size());
         assertEq(10, BuildThreadCall(b.getCallReference("make"), 10).size());
         assertEq(10, BuildNested(BuildCallArgs, b.getCallReference("make"), 10).size());
+    }
+
+    creatorCode() {
+        # a capability created by the code of a trusted Program, which the host then gives a sandbox of another
+        # domain: the build's own code, and the creator's code that the caller's code calls in the build, run
+        Program creator(PO_MODERN);
+        creator.parse("%modern
+list<string> sub make(int n) {
+    list<string> l = ();
+    for (int i = 0; i < n; ++i) {
+        l += \"c\";
+    }
+    return l;
+}
+auto sub run(code c, softlist<auto> args) {
+    return call_function_args(c, args);
+}
+code sub mk() {
+    return Qore::SandboxManager::createTrustedBuildCall(\\run());
+}
+", "creator");
+        code cap = creator.callFunction("mk");
+        SandboxManager mc();
+        mc.setUncontrolledApiPolicy(True);
+        mc.setIsolationDomain("c");
+        creator.setSandboxManager(mc);
+        # the build's own code
+        assertEq(10, a.callFunction("call", cap, (creator.getCallReference("make"), 10)).size());
+        # the creator's code that the caller's code calls in the build
+        assertEq(10, a.callFunction("call", cap, (a.getCallReference("call"), (creator.getCallReference("make"),
+            10))).size());
+        # another tenant's code is still refused there
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", cap, (b.getCallReference("make"), 10)));
     }
 
     noDomain() {
