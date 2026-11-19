@@ -539,7 +539,8 @@ public:
             }
 
             member_class_ctx = mi->getClassContext(class_ctx);
-            typeInfo = qore_substitute_type_params_if_needed(mi->getTypeInfo(),
+            // the type of the declaration whose storage the access uses (issue #6670)
+            typeInfo = qore_substitute_type_params_if_needed(mi->getStorageTypeInfo(mem, member_class_ctx),
                 instantiated_type ? instantiated_type : theclass->getTypeInfo());
             return 0;
         }

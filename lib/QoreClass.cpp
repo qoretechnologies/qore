@@ -11455,6 +11455,14 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #endif
 }
 
+const QoreTypeInfo* QoreMemberInfo::getStorageTypeInfoIntern(const char* mem,
+        const qore_class_private* storage_cls) const {
+    // the member of the class that holds the storage is its own declaration, unless another declaration of the
+    // hierarchy shares that storage
+    const QoreMemberInfo* own = storage_cls->members.find(mem);
+    return (own && own->getClass() == storage_cls) ? own->getTypeInfo() : getTypeInfo();
+}
+
 void QoreMemberInfo::addContextMap(const QoreMemberInfo& mi) {
     if (!mi.cls_context_map) {
         return;

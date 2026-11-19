@@ -18,17 +18,17 @@ class G {
         X o();
     }
 
-    setv(auto x) { v = x; }
-    seto(auto x) { o = x; }
-    incv() { ++v; }
-    string get() { auto x = v; return sprintf("%y (%s) %s", v, x.type(), o.m()); }
+    gsetv(auto x) { v = x; }
+    gseto(auto x) { o = x; }
+    gincv() { ++v; }
+    string gget() { auto x = v; return sprintf("%y (%s) %s", v, x.type(), o.m()); }
 }
 
 class P inherits private:internal G {
-    psetv(auto x) { setv(x); }
-    pseto(auto x) { seto(x); }
-    pincv() { incv(); }
-    string pget() { return get(); }
+    psetv(auto x) { gsetv(x); }
+    pseto(auto x) { gseto(x); }
+    pincv() { gincv(); }
+    string pget() { return gget(); }
 }
 
 class Q {
@@ -37,9 +37,9 @@ class Q {
         Y o();
     }
 
-    setv(auto x) { v = x; }
-    seto(auto x) { o = x; }
-    string get() { auto x = v; return sprintf("%y (%s) %s", v, x.type(), o.m()); }
+    qsetv(auto x) { v = x; }
+    qseto(auto x) { o = x; }
+    string qget() { auto x = v; return sprintf("%y (%s) %s", v, x.type(), o.m()); }
 }
 
 class C1 inherits P, Q {}
@@ -50,7 +50,8 @@ sub t(string label, code c) {
         c();
         printf("  %s: ok\n", label);
     } catch (hash<ExceptionInfo> ex) {
-        printf("  %s: %s: %s\n", label, ex.err, ex.desc);
+        # the name of the operation in the description depends on the code that makes the assignment
+        printf("  %s: %s: %s\n", label, ex.err, regex_subst(ex.desc, "^<[^>]+> ", ""));
     }
 }
 
@@ -61,11 +62,11 @@ sub check(object o) {
     t("G: ++v", sub () { o.pincv(); });
     t("G: o = new Y()", sub () { o.pseto(new Y()); });
     t("G: o = new X()", sub () { o.pseto(new X()); });
-    t("Q: v = 5", sub () { o.setv(5); });
-    t("Q: v = \"x\"", sub () { o.setv("x"); });
-    t("Q: o = new X()", sub () { o.seto(new X()); });
+    t("Q: v = 5", sub () { o.qsetv(5); });
+    t("Q: v = \"x\"", sub () { o.qsetv("x"); });
+    t("Q: o = new X()", sub () { o.qseto(new X()); });
     printf("  G: %s\n", o.pget());
-    printf("  Q: %s\n", o.get());
+    printf("  Q: %s\n", o.qget());
     printf("  o.v: %y\n", o.v);
 }
 
