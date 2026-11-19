@@ -15968,6 +15968,11 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     }
     // the runtime location: the statement's (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646)
     qore_aot_write_stmt_loc(writer, stmt_locs, inst->stmt_loc);
+    // the temp scopes (QORE_AOT_TEMP_SCOPES_VERSION, qore#6742)
+    if constexpr (QORE_AOT_BINARY_VERSION >= QORE_AOT_TEMP_SCOPES_VERSION) {
+        qore_aot_write_varu32(writer, inst->temp_scope_id);
+        qore_aot_write_varu32(writer, inst->unwind_inner_temp_scope_id);
+    }
 
     return true;
 }
@@ -16268,8 +16273,11 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                 mark.loc = inst_ptr->loc;
                 // both marks are code of the pair's statement
                 mark.stmt_loc = inst_ptr->stmt_loc;
+                // the outer temp scope, then the inner one (qore#6742)
+                mark.temp_scope_id = inst_ptr->temp_scope_id;
                 QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
                 inner_mark.stmt_loc = inst_ptr->stmt_loc;
+                inner_mark.temp_scope_id = inst_ptr->unwind_inner_temp_scope_id;
                 if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr, stmt_locs)
                         || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr, stmt_locs)) {
                     return false;
