@@ -2198,6 +2198,32 @@ protected:
     bool has_po;
 };
 
+//! Restores the thread's runtime location and statement when it goes out of scope
+/** For runtime code that runs Qore code in the frame of its caller, such as the on_exit and on_error handlers of a
+    block, whose statements store their own locations: the caller's code continues in the location that it had, as
+    the AST interpreter restores the location of each statement when it ends (AbstractStatement::exec()), which the
+    IR interpreter and native code assume of the code that they call (see QoreIRInstruction::stmt_loc, qore#6646)
+*/
+class QoreRuntimeLocationRestoreHelper {
+public:
+    DLLLOCAL QoreRuntimeLocationRestoreHelper() : cache(get_runtime_location_cache()), loc(*cache.loc_ptr),
+            statement(*cache.stmt_ptr) {
+    }
+
+    DLLLOCAL ~QoreRuntimeLocationRestoreHelper() {
+        *cache.loc_ptr = loc;
+        *cache.stmt_ptr = statement;
+    }
+
+    QoreRuntimeLocationRestoreHelper(const QoreRuntimeLocationRestoreHelper&) = delete;
+    QoreRuntimeLocationRestoreHelper& operator=(const QoreRuntimeLocationRestoreHelper&) = delete;
+
+private:
+    RuntimeLocationCache cache;
+    const QoreProgramLocation* loc;
+    const AbstractStatement* statement;
+};
+
 class QoreProgramOptionalLocationHelper {
 public:
     DLLLOCAL QoreProgramOptionalLocationHelper(const QoreProgramLocation* loc) : restore((bool)loc) {

@@ -363,7 +363,7 @@ w.writeSegment("DTM", (("137", "20260122", "102"),));
         */
         writeRawSegment(string segment_str) {
             # Add terminator if not present
-            if (segment_str.size() > 0 && segment_str[segment_str.size() - 1] != delimiters.segment_terminator) {
+            if (segment_str.size() > 0 && segment_str[segment_str.length() - 1] != delimiters.segment_terminator) {
                 segment_str += delimiters.segment_terminator;
             }
             writeOutput(segment_str);

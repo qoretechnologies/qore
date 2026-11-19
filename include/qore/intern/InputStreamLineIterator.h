@@ -68,7 +68,8 @@ protected:
 class InputStreamLineIterator : public QoreIteratorBase, public QoreLineTerminatorSource {
 public:
     DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, InputStream* is, const QoreEncoding* encoding,
-            const QoreStringNode* n_eol, bool n_trim, size_t bufsize = DefaultStreamBufferSize) :
+            const QoreStringNode* n_eol, bool n_trim, size_t bufsize = DefaultStreamBufferSize,
+            qore_encoding_errors_t encoding_errors = qore_encoding_errors_t::RAISE) :
         src(is, xsink),
         reader(xsink),
         enc(encoding),
@@ -78,7 +79,7 @@ public:
 
         // reference src for assignment to BufferedStreamReader
         src->ref();
-        reader = new BufferedStreamReader(xsink, *src, enc, bufsize);
+        reader = new BufferedStreamReader(xsink, *src, enc, bufsize, encoding_errors);
     }
 
     DLLLOCAL InputStreamLineIterator(ExceptionSink* xsink, StreamReader* sr, const QoreStringNode* n_eol = nullptr,
@@ -104,9 +105,18 @@ public:
         if (validp && line && !line->empty()) {
             line.discard();
         }
+        uint64_t consumed = reader->getConsumed();
         validp = getLine(xsink);
         if (validp) {
             ++num;   // Increment line number.
+        } else if (*xsink) {
+            // a line whose bytes were read, all or some, and that raised an exception is counted, so that the lines
+            // after it keep their numbers: a line that is not valid in the encoding (INVALID-ENCODING), and a line
+            // that the stream raised an exception in the middle of (its bytes read before the exception are lost);
+            // an exception raised before any byte of a line was read (ex: by the stream) does not count a line
+            if (reader->getConsumed() != consumed) {
+                ++num;
+            }
         } else {
             num = 0; // Reset iterator.
         }
@@ -147,6 +157,16 @@ public:
 
     DLLLOCAL const QoreEncoding* getEncoding() const {
         return enc;
+    }
+
+    //! returns what a line that is not valid in the encoding gives (the encoding_errors option of the reader)
+    DLLLOCAL qore_encoding_errors_t getEncodingErrors() const {
+        return reader->getEncodingErrors();
+    }
+
+    //! sets the class name given in the exception raised for a line that is not valid in the encoding
+    DLLLOCAL void setOwnerName(const char* name) {
+        owner_name = name;
     }
 
     DLLLOCAL virtual void deref() override {
@@ -203,7 +223,8 @@ private:
     }
 
     DLLLOCAL bool getLine(ExceptionSink* xsink) {
-        line = reader->readLine(*eol, trim, xsink);
+        // a line that is not valid in the encoding is reported with its line number
+        line = reader->readLine(*eol, trim, xsink, owner_name, "next", num + 1);
         return (bool)line;
     }
 
@@ -214,6 +235,8 @@ private:
     SimpleRefHolder<QoreStringNode> line;
     SimpleRefHolder<QoreStringNode> eol;
     int64 num = 0;
+    //! the class name given in the exception raised for a line that is not valid in the encoding
+    const char* owner_name = "InputStreamLineIterator";
     bool validp = false;
     bool trim;
 };

@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%try-module oracle
+%define NoOracle
+%endtry
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class DescribeKeepsBoundValuesTest
+
+#! SQLStatement::describe() before the first execution keeps the values given to bind() (issue #6690)
+/** a driver with the exec-describe method describes a statement without executing it, and the statement is closed
+    after it: the next fetch prepared it again with the arguments of prepare() only, so that the values given to bind()
+    were lost; runs with the drivers that have the method (Oracle, MySQL) when \c QORE_DB_CONNSTR_ORACLE and
+    \c QORE_DB_CONNSTR_MYSQL are set
+*/
+class DescribeKeepsBoundValuesTest inherits QUnit::Test {
+    constructor() : Test("DescribeKeepsBoundValues", "1.0", \ARGV) {
+        addTestCase("Oracle", \oracleTest());
+        addTestCase("MySQL", \mysqlTest());
+        set_return_value(main());
+    }
+
+    oracleTest() {
+%ifdef NoOracle
+        testSkip("no oracle module");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_ORACLE) {
+            testSkip("QORE_DB_CONNSTR_ORACLE is not set");
+        }
+        check(new Datasource(ENV.QORE_DB_CONNSTR_ORACLE), " from dual", "oracle");
+    }
+
+    mysqlTest() {
+%ifdef NoMysql
+        testSkip("no mysql module");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_MYSQL) {
+            testSkip("QORE_DB_CONNSTR_MYSQL is not set");
+        }
+        check(new Datasource(ENV.QORE_DB_CONNSTR_MYSQL), "", "mysql");
+    }
+
+    private check(Datasource ds, string from, string db) {
+        on_exit ds.rollback();
+        string sql = "select %v as s, 1 as n" + from;
+        # values given to bind()
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare(sql);
+            st.bind("abc");
+            hash<auto> desc = st.describe();
+            assertTrue(desc.hasKey("s") || desc.hasKey("S"), db + ": described");
+            list<hash<auto>> rows = st.fetchRows(-1);
+            assertEq("abc", rows[0].s, db + ": bind()");
+        }
+        # values given to bind() again after another describe(): the last ones are bound
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare(sql);
+            st.bind("abc");
+            st.bind("def");
+            st.describe();
+            assertEq("def", st.fetchRows(-1)[0].s, db + ": the last bind()");
+            # executed again with other values
+            st.bind("ghi");
+            assertEq("ghi", st.fetchRows(-1)[0].s, db + ": bound again after the fetch");
+        }
+        # bind() and then bindValues(): the values are bound again in the order in which they were given
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare("select %v as a, %v as b" + from);
+            st.bind("p", "q");
+            st.bindValues("v1", "v2");
+            st.describe();
+            hash<auto> row = st.fetchRows(-1)[0];
+            assertEq(("v1", "v2"), (row.a, row.b), db + ": bind() then bindValues()");
+        }
+        # bindValues() alone
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare("select %v as a" + from);
+            st.bindValues("vv");
+            st.describe();
+            assertEq("vv", st.fetchRows(-1)[0].a, db + ": bindValues()");
+        }
+        # describe() twice
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare(sql);
+            st.bind("abc");
+            st.describe();
+            st.describe();
+            assertEq("abc", st.fetchRows(-1)[0].s, db + ": describe() twice");
+        }
+        # a statement closed with close() or a commit is prepared again without the values bound before, with and
+        # without describe()
+        foreach bool desc in ((False, True)) {
+            foreach string how in (("close", "commit", "datasource commit", "datasource rollback")) {
+                SQLStatement st(ds);
+                on_exit st.close();
+                st.prepare(sql);
+                st.bind("abc");
+                switch (how) {
+                    case "close": st.close(); break;
+                    case "commit": st.commit(); break;
+                }
+                if (desc) {
+                    st.describe();
+                }
+                # the end of the transaction after describe() closes the statement as well
+                switch (how) {
+                    case "datasource commit": ds.commit(); break;
+                    case "datasource rollback": ds.rollback(); break;
+                }
+                assertEq(NULL, st.fetchRows(-1)[0].s, sprintf("%s: %s%s", db, how, desc ? " and describe()" : ""));
+            }
+        }
+        # values given to exec() are bound as with bind()
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare(sql);
+            st.bind("abc");
+            st.exec("e1");
+            assertEq("e1", st.fetchRows(-1)[0].s, db + ": exec() arguments");
+        }
+        # values given to prepare(), as before
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare(sql, "xyz");
+            st.describe();
+            assertEq("xyz", st.fetchRows(-1)[0].s, db + ": prepare() arguments");
+        }
+        # a statement prepared again with other SQL does not bind the values of the statement before
+        {
+            SQLStatement st(ds);
+            on_exit st.close();
+            st.prepare(sql);
+            st.bind("abc");
+            st.prepare("select 2 as n" + from);
+            st.describe();
+            assertEq(2, st.fetchRows(-1)[0].n.toInt(), db + ": another statement");
+        }
+    }
+}

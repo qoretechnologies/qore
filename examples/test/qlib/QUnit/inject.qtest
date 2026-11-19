@@ -40,7 +40,9 @@ public class B inherits A {
 }
 
 public class InputStreamLineIteratorFake inherits Qore::AbstractLineIterator {
-    constructor(InputStream is, *string encoding, *string eol, bool trimEol = True) {
+    constructor(InputStream is, *string encoding, *string eol, bool trimEol = True,
+            int buffer_size = DefaultStreamBufferSize,
+            *string encoding_errors) {
         throw "TEST-EXCEPTION", "this signifies that it actually works";
     }
     bool next() {

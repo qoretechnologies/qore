@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 #include "qore/Qore.h"
 
@@ -24,6 +25,19 @@ struct PreToken {
     std::string text;
     size_t start;
     size_t end;
+};
+
+//! An error that a pre-tokenizer raises for text that it cannot pre-tokenize (ex: a regular expression match error)
+/** The pre-tokenizer interface has no ExceptionSink: the error is raised as a Qore exception with its code where the
+    text is encoded (QoreHFTokenizer::encodeText())
+*/
+class PreTokenizerError : public std::runtime_error {
+public:
+    //! the Qore exception code
+    const std::string err;
+
+    PreTokenizerError(const char* err, const std::string& desc) : std::runtime_error(desc), err(err) {
+    }
 };
 
 //! Abstract base class for pre-tokenizers

@@ -66,7 +66,8 @@ public class CsvIterator inherits CsvUtil::AbstractCsvIterator {
         @ref True "True" and \c "header_lines" is 0 or \c "headers" is also present; unknown field type
     */
     constructor(Qore::InputStream input, string encoding = "UTF-8", *hash<auto> opts)
-            : AbstractCsvIterator(CsvByteOrderMark::getLineIterator(input, encoding, opts.eol), opts) {
+            : AbstractCsvIterator(CsvByteOrderMark::getLineIterator(input, encoding, opts.eol, opts.encoding_errors),
+                opts) {
     }
 
     #! Creates the CsvIterator in multi-type mode from an @ref Qore::InputStream "InputStream" and other arguments
@@ -80,7 +81,8 @@ public class CsvIterator inherits CsvUtil::AbstractCsvIterator {
         @ref True "True" and \c "header_lines" is 0 or \c "headers" is also present; unknown field type
     */
     constructor(Qore::InputStream input, string encoding = "UTF-8", hash<auto> spec, hash<auto> opts)
-            : AbstractCsvIterator(CsvByteOrderMark::getLineIterator(input, encoding, opts.eol), spec, opts) {
+            : AbstractCsvIterator(CsvByteOrderMark::getLineIterator(input, encoding, opts.eol, opts.encoding_errors),
+                spec, opts) {
     }
 
     auto memberGate(string name) {

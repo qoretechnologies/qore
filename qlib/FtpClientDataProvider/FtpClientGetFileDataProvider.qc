@@ -81,8 +81,10 @@ public class FtpClientGetFileDataProvider inherits AbstractDataProvider {
         ftp.get(remote_path: path, output_stream: out);
         return {
             "path": path,
+            # the text received is checked in its encoding as the text readers check the text they read
             "data": req.text
-                ? cast<StringOutputStream>(out).getData()
+                ? FileLocationHandler::AbstractFileLocationHandler::checkTextEncoding(
+                    cast<StringOutputStream>(out).getData(), req.encoding_errors, sprintf("FTP file %y", path))
                 : cast<BinaryOutputStream>(out).getData(),
         };
     }

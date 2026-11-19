@@ -1865,8 +1865,13 @@ static QoreValue read_node_EN_OBJ_METH_REF(AOTExprNodeReadCtx& ctx) {
     if (num_children >= 1) {
         target = ctx.recurse(ctx);
     }
-    return QoreValue(new ParseObjectMethodReferenceNode(&loc_builtin,
-        target, strdup(method_name.c_str())));
+    // the method resolved when parsing is restored (qore#6680)
+    ParseObjectMethodReferenceNode* omr = qore_aot_make_object_method_ref(ctx.pgm, target, method_name.c_str());
+    if (!omr) {
+        ctx.failed = true;
+        return QoreValue();
+    }
+    return QoreValue(omr);
 }
 
 static QoreValue read_node_EN_SELF_METH_REF(AOTExprNodeReadCtx& ctx) {

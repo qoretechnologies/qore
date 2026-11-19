@@ -32,6 +32,8 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         #! Valid SFTP location options
         /** supported options:
             - \c encoding: the output string encoding for text files
+            - \c encoding_errors: (read) what text that is not valid in its encoding gives; see
+              @ref filelocationhandler_encoding_errors
             - \c ssh2_private_key: the path to the private key file
             - \c ssh2_public_key: the path to the public key file
         */
@@ -49,6 +51,13 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
                 "desc": "the public key file",
             },
         };
+
+        #! Valid SFTP location read options
+        /** @since FileLocationHandler 3.0
+        */
+        const SftpClientLocationReadOpts = SftpClientLocationOpts + {
+            "encoding_errors": EncodingErrorsOption,
+        };
     }
 
     #! Retrieves a text file from the given location
@@ -65,9 +74,11 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         object sftp = getSftpClient(scheme, location, opts, \file);
         string rv = sftp.getTextFile(file);
         if (opts.encoding && opts.encoding.lwr() != rv.encoding().lwr()) {
-            return force_encoding(rv, opts.encoding);
+            rv = force_encoding(rv, opts.encoding);
         }
-        return rv;
+        # the text is tagged with its encoding without a check
+        return AbstractFileLocationHandler::checkTextEncoding(rv, opts.encoding_errors,
+            AbstractFileLocationHandler::getRequestedLocation(scheme, location));
     }
 
     #! Retrieves a binary file from the given location
@@ -123,7 +134,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an SFTP transfer
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding, opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location
@@ -221,7 +232,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return SftpClientLocationOpts;
+        return SftpClientLocationReadOpts;
     }
 
     #! Gets supported write options

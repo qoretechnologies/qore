@@ -1,0 +1,71 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires JsonFileDataProvider
+
+%exec-class JsonFileEncodingErrorsTest
+
+#! Tests the encoding_errors option of the JSON file read data provider (issue #6604)
+public class JsonFileEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! UTF-8 JSON with the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("[{\"name\": \"Ren") + <e9> + binary("\"}]");
+    }
+
+    constructor() : Test("JsonFileEncodingErrorsTest", "1.0") {
+        addTestCase("read data provider", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    #! Returns the records read by the provider
+    private static list<hash<auto>> readAll(JsonFileReadDataProvider prov) {
+        list<hash<auto>> rv = ();
+        AbstractDataProviderRecordIterator i = prov.searchRecords();
+        while (i.next()) {
+            push rv, i.getValue();
+        }
+        return rv;
+    }
+
+    private dataProviderTest() {
+        hash<DataProviderOptionInfo> info = JsonFileReadDataProvider::ConstructorOptions.encoding_errors;
+        assertEq("raise", info.default_value);
+        assertEq(("raise", "latin1", "keep"), map $1.value, info.allowed_values);
+
+        # the read action offers the option; the read-data action, whose data string is not read from a file or a
+        # stream and so is not checked, does not
+        assertTrue(exists DataProviderActionCatalog::getAppActionEx(JsonFileDataProvider::AppName, "read")
+            .options.encoding_errors);
+        hash<auto> data_opts = DataProviderActionCatalog::getAppActionEx(JsonFileDataProvider::AppName, "read-data")
+            .options;
+        assertTrue(exists data_opts.data);
+        assertFalse(exists data_opts.encoding_errors);
+
+        TmpDir dir();
+        string path = dir.path + DirSep + "data.json";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Data);
+        }
+        foreach hash<auto> input in ({"path": path}, {"stream": new BinaryInputStream(Data)}) {
+            assertThrows("INVALID-ENCODING", "not valid UTF-8", \readAll(), new JsonFileReadDataProvider(input));
+        }
+        foreach hash<auto> input in ({"path": path}, {"stream": new BinaryInputStream(Data)}) {
+            assertEq(({"name": "René"},), readAll(new JsonFileReadDataProvider(input
+                + {"encoding_errors": "latin1"})), input.firstKey());
+        }
+        list<hash<auto>> recs = readAll(new JsonFileReadDataProvider({"path": path, "encoding_errors": "keep"}));
+        assertEq(1, recs.size());
+        assertThrows("OPTION-VALUE-ERROR", "encoding_errors", sub () {
+            new JsonFileReadDataProvider({"path": path, "encoding_errors": "ignore"});
+        });
+    }
+}

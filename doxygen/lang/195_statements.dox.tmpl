@@ -630,7 +630,12 @@ int sub check(int i) {
     the return value of the block: a @ref return "return statement" in it replaces the value of a return that left
     the block, which is released at the end of the return statement, and a return without a value replaces it with no
     value; a handler that runs later can replace it again.  A return in a @ref try "try statement" in the handler
-    replaces it when the try statement ends (see @ref try_return).
+    replaces it when the try statement ends (see @ref try_return).\n\n
+    A return in a handler returns from the function, as a return in the block would, also when the block ends
+    without a return or is left by a @ref break "break" or @ref continue "continue": the remaining handlers of the
+    block run, and a handler that completes normally keeps the value, which the next handler's return replaces.  When
+    an exception or a @ref thread_exit "thread_exit" leaves the block, or a later handler raises one, the exception
+    or thread_exit goes on and the value is released.
 
     @par Example
 @code{.py}

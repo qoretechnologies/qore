@@ -2242,7 +2242,8 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
     #! Returns the end of the given file for error reports
     private static *string getFileTail(string path, int size = 8192) {
         try {
-            ReadOnlyFile f(path);
+            # the tail can start in the middle of a character, so it is read without a check of its encoding
+            ReadOnlyFile f(path, NOTHING, ENCODING_ERRORS_KEEP);
             int file_size = f.hstat().size;
             if (file_size > size) {
                 f.setPos(file_size - size);

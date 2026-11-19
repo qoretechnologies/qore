@@ -61,6 +61,8 @@ class UserVariantBase;
 class UserSignature;
 class QoreProgram;
 class QoreTypeInfo;
+class StatementBlock;
+class QoreStackLocation;
 struct QoreTypeParamInstantiation;
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
@@ -214,9 +216,59 @@ private:
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 
 //! Check and clear the thread-local JIT deopt flag.
-//! Returns true if a JIT guard failure requested deopt to AST.
+//! Returns true if a JIT guard failure requested deopt to AST, or while a debugger has native frames to report (issue
+//! #6602): the code that native code returns into then calls qore_jit_take_guard_deopt() and
+//! qore_jit_debug_frame_return()
 //! Called by evalTiered() after JIT execution returns.
 DLLLOCAL bool qore_jit_deopt_requested();
+
+//! Returns true if a JIT guard failure requested deopt to AST, and clears the request; out of line and cold
+/** Called after qore_jit_deopt_requested() returned true, which it also does while a debugger has native frames to
+    report
+*/
+DLLLOCAL bool qore_jit_take_guard_deopt();
+
+//! Makes the function exit event of a native frame that returns, if it was running when a debugger attached
+/** Called by the C++ code that native code returns into after qore_jit_deopt_requested() returned true, while the
+    frame is the top of the call stack (issue #6602); the debugger gets a copy of the result \a val and cannot change
+    it.  Out of line and cold.
+
+    @param uvb the variant whose native code returned
+    @param val the result of the native code
+    @param deopt true if the call was deoptimized: the AST interpreter made the exit event
+
+    A frame that ends with an exception makes its exit event with no value at the next event of the debugger in the
+    thread, as the AST and IR interpreters make it when the exception leaves the frame
+*/
+DLLLOCAL void qore_jit_debug_frame_return(const UserVariantBase* uvb, const QoreValue& val, bool deopt,
+        ExceptionSink* xsink);
+
+//! Clears the deopt request, keeping the check of the native returns for the native frames that are still running
+/** For code that runs native code that has no exit event of its own (top-level code, background helpers)
+
+    @return true if a JIT guard failure requested deopt to AST
+*/
+DLLLOCAL bool qore_jit_clear_deopt_request();
+
+//! Requests the check of the native returns of the thread (qore_jit_deopt_requested()) for a debugger that attached
+DLLLOCAL void qore_jit_request_debug_frame_return();
+
+//! Returns the thread's count of the frames of all Programs that were running when a debugger attached and have not
+//! made their exit events yet; the native returns keep being checked while it is not zero
+/** The count is changed through the pointer, also when the data of a Program in the thread is deleted in another
+    thread
+*/
+DLLLOCAL std::atomic<int>* qore_jit_debug_frame_count();
+
+//! Returns the block of a call stack location of native code (a native entry or a direct native call), else nullptr
+/** @param tag if true, the location is tagged as running when a debugger attached (see qore_rt_native_frame_tagged())
+*/
+DLLLOCAL const StatementBlock* qore_rt_native_frame_block(const QoreStackLocation* loc, bool tag);
+
+//! Returns true if a call stack location of native code is the one tagged by qore_rt_native_frame_block()
+/** A frame pushed later at the same address is not tagged
+*/
+DLLLOCAL bool qore_rt_native_frame_tagged(const QoreStackLocation* loc);
 
 //! Info about a batch callee for LLVM lowering (Approach B: direct LLVM arg passing).
 //! Used by QoreIRToLLVM to decide how to emit CallDirect instructions.

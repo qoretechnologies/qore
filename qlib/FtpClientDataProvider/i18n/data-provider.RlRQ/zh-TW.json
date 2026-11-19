@@ -63,6 +63,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "當 `text` = `True` 時要使用的字串編碼（預設：`UTF-8`）"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "編碼錯誤"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "在其字元編碼中無效的文字的處理方式"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "當 `text` = `True` 時，在其字元編碼中無效的文字的處理方式：`raise`（預設值）會引發 `INVALID-ENCODING` 錯誤，`latin1` 會將文字以 `ISO-8859-1` 傳回，`keep` 則不經檢查而以該編碼傳回"
+        },
         "app.RlRQ.action.c2VuZC1maWxl.display_name": {
           "source": "Send File With FTP",
           "message": "透過 FTP 傳送檔案"

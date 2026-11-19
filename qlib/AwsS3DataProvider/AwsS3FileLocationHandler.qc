@@ -89,7 +89,10 @@ public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFile
     #! Retrieves a text file from the given location
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
         string str = download(location, opts).toString(opts.encoding ?? "UTF-8");
-        return AbstractFileLocationHandler::forceEncoding(str, opts.encoding);
+        # the handler is reached through a "conn://" location, whose connection name it does not know: the message
+        # names the location in the connection
+        return AbstractFileLocationHandler::checkTextEncoding(AbstractFileLocationHandler::forceEncoding(str,
+            opts.encoding), opts.encoding_errors, sprintf("Amazon S3 file location %y", location));
     }
 
     #! Retrieves a binary file from the given location
@@ -117,7 +120,7 @@ public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFile
 
     #! Returns a stream reader for the object's data at the given location
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding, opts.encoding_errors);
     }
 
     #! Returns an input stream for the object's data at the given location
@@ -181,7 +184,9 @@ public class AwsS3FileLocationHandler inherits FileLocationHandler::AbstractFile
 
     #! Gets supported read options
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return LocationOpts;
+        return LocationOpts + {
+            "encoding_errors": EncodingErrorsOption,
+        };
     }
 
     #! Gets supported write options

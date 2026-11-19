@@ -181,12 +181,26 @@ public:
         }
 
         for (const QoreAcceptSpec& as : accept_vec) {
+            // a typed callable checks the signature of the callable with the map of its specs (qore#6660)
             if (!as.map && as.spec.isRuntimeBaseType(t)) {
                 return true;
             }
         }
         return false;
     }
+
+    //! Returns true if this is a typed callable type (code<...> or *code<...>; see QoreComplexCodeTypeInfo)
+    /** A flag that the constructor of QoreComplexCodeTypeInfo sets, so that the type comparisons can ask it on every
+        call (qore#6660)
+    */
+    DLLLOCAL bool isComplexCode() const {
+        return complex_code;
+    }
+
+    //! Returns false if this is a typed callable type and \a n is a closure or call reference that it does not accept
+    /** Only the signature is checked: a value that is no closure or call reference gives true (qore#6660)
+    */
+    DLLLOCAL bool complexCodeAcceptsCallable(const QoreValue& n) const;
 
     DLLLOCAL const QoreAcceptSpec& getFirstAcceptSpec() const {
         assert(!accept_vec.empty());
@@ -984,10 +998,21 @@ public:
         }
         bool hta = hasType(a);
         bool htb = hasType(b);
-        if (hta && htb)
+        if (hta && htb) {
+            // the specs of a typed callable do not hold its signature (qore#6660)
+            if (__builtin_expect(a->complex_code || b->complex_code, 0)) {
+                return complexCodeTypesEqual(a, b);
+            }
             return accept_vec_compare(a->getAcceptSpecs(), b->getAcceptSpecs()) && return_vec_compare(a->return_vec, b->return_vec);
+        }
         return hta || htb ? false : true;
     }
+
+    //! Returns true if \a a and \a b are typed callable types with the same signature (qore#6660)
+    /** Called for two different types of which at least one is a typed callable type: the specs of a typed callable
+        type are those of any closure or call reference, so the signature is compared here
+    */
+    DLLLOCAL static bool complexCodeTypesEqual(const QoreTypeInfo* a, const QoreTypeInfo* b);
 
     // static version of method, checking for null pointer
     DLLLOCAL static bool isInputIdentical(const QoreTypeInfo* a, const QoreTypeInfo* b) {
@@ -999,8 +1024,12 @@ public:
         }
         bool hta = hasType(a);
         bool htb = hasType(b);
-        if (hta && htb)
+        if (hta && htb) {
+            if (__builtin_expect(a->complex_code || b->complex_code, 0)) {
+                return complexCodeTypesEqual(a, b);
+            }
             return accept_vec_compare(a->getAcceptSpecs(), b->getAcceptSpecs());
+        }
         return hta || htb ? false : true;
     }
 
@@ -1018,11 +1047,19 @@ public:
         return acceptsInputUncheckedDifferent(target, source);
     }
 
+    //! Returns true if \a target is code or *code and \a source a typed callable type whose values it accepts
+    //! (qore#6660)
+    /** Before the signature of a typed callable was part of its type, code and code<...> were the same type
+    */
+    DLLLOCAL static __attribute__((noinline)) bool codeAcceptsTypedCallablesUnchecked(const QoreTypeInfo* target,
+            const QoreTypeInfo* source);
+
     //! Compares two different types for acceptsInputUnchecked() (issue #5782)
     DLLLOCAL static __attribute__((noinline)) bool acceptsInputUncheckedDifferent(const QoreTypeInfo* target,
             const QoreTypeInfo* source) {
         if (!isInputIdentical(target, source)) {
-            return false;
+            // code accepts the values of a typed callable type unchecked (qore#6660)
+            return codeAcceptsTypedCallablesUnchecked(target, source);
         }
         if (!target) {
             return true;
@@ -1065,8 +1102,12 @@ public:
         }
         bool hta = hasType(a);
         bool htb = hasType(b);
-        if (hta && htb)
+        if (hta && htb) {
+            if (__builtin_expect(a->complex_code || b->complex_code, 0)) {
+                return complexCodeTypesEqual(a, b);
+            }
             return return_vec_compare(a->return_vec, b->return_vec);
+        }
         return hta || htb ? false : true;
     }
 
@@ -1581,6 +1622,8 @@ public:
 protected:
     //! true for an AOT deferred placeholder type only
     bool aot_deferred_placeholder = false;
+    //! true for a typed callable type (QoreComplexCodeTypeInfo) only; see isComplexCode()
+    bool complex_code = false;
 
 private:
     const q_accept_vec_t accept_vec;
@@ -5078,6 +5121,12 @@ public:
     */
     DLLLOCAL bool isSignatureCompatible(const class AbstractFunctionSignature* sig) const;
 
+    //! Returns true if \a n is a closure or call reference that this type accepts (qore#6660)
+    /** A callable whose function is not known, or that has no variant, is accepted; a call reference to a function
+        with more than one variant is accepted if one of its variants has a compatible signature
+    */
+    DLLLOCAL bool acceptsCallable(const QoreValue& n) const;
+
 protected:
     //! return type (nullptr = nothing); orphaned when the declaration that it is the type of is retired (#6419)
     QoreOrphanablePtr<const QoreTypeInfo> returnType;
@@ -5097,6 +5146,11 @@ protected:
 
     DLLLOCAL virtual bool hasDefaultValueImpl() const {
         return orNothing;
+    }
+
+    //! a typed callable rejects the closures and call references of other signatures (qore#6660)
+    DLLLOCAL virtual bool validatesInputImpl() const {
+        return true;
     }
 
     DLLLOCAL virtual QoreValue getDefaultQoreValueImpl() const {
