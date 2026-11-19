@@ -156,6 +156,10 @@ module SqlUtil {
 
 
     @section sqlutilv3_11_0 SqlUtil v3.11.0
+    - fixed @ref SqlUtil::AbstractDatabase::getAlignSql() "AbstractDatabase::getAlignSql()" with a \c sequence_map,
+      \c function_map or \c procedure_map entry whose target exists, which renamed the source onto it (and left a
+      target sequence unaligned); as documented, the source is renamed only when the target does not exist
+      (<a href="https://github.com/qoretechnologies/qore/issues/6729">issue 6729</a>)
     - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" with a description of another
       table name, which raised \c LOCK-ERROR instead of giving the SQL that renames the table
       (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>)
