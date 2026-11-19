@@ -844,6 +844,48 @@ hash<auto> cpp_api_binary_data(binary b) {
     return rv.release();
 }
 
+//! decodes a string with the C++ API's base64 decoding methods that return a string (issue #6621)
+/** @param str the encoded string
+    @param url @ref True for the base64url methods (\c parseBase64UrlToString()), @ref False for the base64 ones
+    (\c parseBase64ToString())
+    @param node @ref True for the QoreStringNode methods, @ref False for the QoreString ones
+    @param encoding the encoding argument of the method; if not present, the overload without an encoding is called
+
+    @return a hash with \c str: the decoded string, and \c encoding: its encoding
+
+    @throw BASE64-PARSE-ERROR the string is not valid in the encoding
+*/
+hash<auto> cpp_api_string_parse_base64(string str, bool url, bool node, *string encoding) {
+    const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : nullptr;
+    SimpleRefHolder<QoreStringNode> rv;
+    if (node) {
+        if (url) {
+            rv = enc ? str->parseBase64UrlToString(enc, xsink) : str->parseBase64UrlToString(xsink);
+        } else {
+            rv = enc ? str->parseBase64ToString(enc, xsink) : str->parseBase64ToString(xsink);
+        }
+    } else {
+        const QoreString* s = str;
+        std::unique_ptr<QoreString> r;
+        if (url) {
+            r.reset(enc ? s->parseBase64UrlToString(enc, xsink) : s->parseBase64UrlToString(xsink));
+        } else {
+            r.reset(enc ? s->parseBase64ToString(enc, xsink) : s->parseBase64ToString(xsink));
+        }
+        if (r) {
+            rv = new QoreStringNode(*r);
+        }
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+    assert(rv);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("encoding", new QoreStringNode(rv->getEncoding()->getCode()), xsink);
+    h->setKeyValue("str", rv.release(), xsink);
+    return h.release();
+}
+
 //! writes data of the given size, which is never touched, with OutputStream::write() of the stream (see above)
 /** @param output_stream the stream to write to
     @param size the number of bytes to write
