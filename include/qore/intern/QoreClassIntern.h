@@ -1555,6 +1555,25 @@ public:
         return cls_context_map ? cls_context_map->size() : 0;
     }
 
+    //! returns the type of the member that an access in a class context uses (issue #6670)
+    /** @param mem the name of the member
+        @param member_class_ctx the storage of the access, as returned by getClassContext()
+
+        A member held in the storage of another class (\a member_class_ctx) is that class's own declaration, which
+        this member hides in the object's class: its type is the type of that declaration, not of this one
+    */
+    DLLLOCAL const QoreTypeInfo* getStorageTypeInfo(const char* mem,
+            const qore_class_private* member_class_ctx) const {
+        if (member_class_ctx && member_class_ctx != getClass()) {
+            return getStorageTypeInfoIntern(mem, member_class_ctx);
+        }
+        return getTypeInfo();
+    }
+
+    //! returns the type of the declaration of the member in \a storage_cls; see getStorageTypeInfo()
+    DLLLOCAL const QoreTypeInfo* getStorageTypeInfoIntern(const char* mem,
+            const qore_class_private* storage_cls) const;
+
     // issue #2970: marks the member to be accessed with the classes in the argument when
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi);

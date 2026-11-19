@@ -1508,8 +1508,9 @@ int qore_object_private::getLValueResolvedPrehashed(const char* key,
     }
     const qore_class_private* member_class_ctx =
         info.getClassContext(class_ctx);
+    // the type of the declaration whose storage the access uses (issue #6670)
     const QoreTypeInfo* mti = qore_substitute_type_params_if_needed(
-        info.getTypeInfo(),
+        info.getStorageTypeInfo(key, member_class_ctx),
         instantiated_type ? instantiated_type : theclass->getTypeInfo());
 
     qore_object_lock_handoff_helper qolhh(this, lvh.vl);
@@ -1550,7 +1551,7 @@ int qore_object_private::tryAssignScalarMemberResolvedPrehashed(
         return 0;
     }
     const QoreTypeInfo* member_type = qore_substitute_type_params_if_needed(
-        info.getTypeInfo(),
+        info.getStorageTypeInfo(key, member_class_ctx),
         instantiated_type ? instantiated_type : theclass->getTypeInfo());
     if (QoreTypeInfo::parseReturns(member_type, expected_type) != QTI_IDENT) {
         return 0;
