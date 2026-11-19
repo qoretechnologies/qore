@@ -7392,7 +7392,7 @@ ProgramRuntimeParseAccessHelper::~ProgramRuntimeParseAccessHelper() {
     qore_program_private::decThreadCount(*count_pgm, td->tid, xsink);
 }
 
-bool QoreNativeDestructorProgramEntry::runWithoutContext(QoreProgram* p) {
+bool QoreNativeDestructorProgramEntry::runWithoutContext(QoreProgram* p, ExceptionSink* xsink) {
     assert(!pgm);
     ThreadData* td = thread_data.get();
     // the destructor runs in the context of the current Program, which the thread is in, without entering it
@@ -7409,6 +7409,7 @@ bool QoreNativeDestructorProgramEntry::runWithoutContext(QoreProgram* p) {
         return false;
     }
     pgm = p;
+    this->xsink = xsink;
     tid = td->tid;
     return true;
 }

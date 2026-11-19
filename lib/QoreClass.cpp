@@ -10726,8 +10726,9 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     QoreProgram* pgm_ctx = qore_get_method_pgm_context(thisclass, spgm_holder);
     // a native destructor runs without the context of a Program that refuses runtime entry while code is parsed in it
     // (qore#6752); declared after the holder, so that the thread leaves the Program before the holder releases it
-    QoreNativeDestructorProgramEntry native_entry(xsink);
-    if (pgm_ctx && !variant->isUser() && native_entry.runWithoutContext(pgm_ctx)) {
+    // (a builtin variant is native code; a user variant, also of AOT-compiled code, has the call type CT_USER)
+    QoreNativeDestructorProgramEntry native_entry;
+    if (pgm_ctx && ct == CT_BUILTIN && native_entry.runWithoutContext(pgm_ctx, xsink)) {
         pgm_ctx = nullptr;
     }
     // a destructor is called by no call expression: its frame is located where the code that runs it is, and it can

@@ -3063,7 +3063,9 @@ protected:
 */
 class QoreNativeDestructorProgramEntry {
 public:
-    DLLLOCAL QoreNativeDestructorProgramEntry(ExceptionSink* xsink) : xsink(xsink) {
+    //! Creates the object without entering any Program; only the Program is initialized, as one is created for
+    //! every destructor call
+    DLLLOCAL QoreNativeDestructorProgramEntry() {
     }
 
     DLLLOCAL ~QoreNativeDestructorProgramEntry() {
@@ -3076,16 +3078,17 @@ public:
     /** If so, the thread has entered \a p without its context, unless it is deleting it, until the destructor of this
         object
     */
-    DLLLOCAL bool runWithoutContext(QoreProgram* p);
+    DLLLOCAL bool runWithoutContext(QoreProgram* p, ExceptionSink* xsink);
 
     DLLLOCAL QoreNativeDestructorProgramEntry(const QoreNativeDestructorProgramEntry&) = delete;
     DLLLOCAL QoreNativeDestructorProgramEntry& operator=(const QoreNativeDestructorProgramEntry&) = delete;
 
 private:
-    ExceptionSink* xsink;
-    //! the Program that the thread entered, or nullptr
+    //! the Program that the thread entered, or nullptr; the other members are set when it is set
     QoreProgram* pgm = nullptr;
-    int tid = 0;
+    //! receives the exceptions of leaving the Program
+    ExceptionSink* xsink;
+    int tid;
 
     DLLLOCAL void leave();
 };
