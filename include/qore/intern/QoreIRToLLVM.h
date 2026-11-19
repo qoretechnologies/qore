@@ -2868,6 +2868,10 @@ private:
     llvm::AllocaInst* getOrCreateLocalValidEpoch(const void* key,
             llvm::Function* llvm_func);
     void markLocalCacheFresh(const void* key, llvm::Function* llvm_func);
+    //! Releases compiler-held duplicate owners before a dynamic local string append.
+    void prepareAutoLocalStringAppend(const QoreIRInstruction& inst, llvm::Value* lhs, llvm::Module& module,
+        llvm::Function* llvm_func);
+
     //! Emits the copy-on-write string append of \a inst (string.append.cow, or the invoke made for it in a try block)
     /** A paired local append (QoreIRInstruction::string_append_local_cow) of a local that only native code holds
         appends to the local's string through its storage, and the runtime stack's local is released by the compiler

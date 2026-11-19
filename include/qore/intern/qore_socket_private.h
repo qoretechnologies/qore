@@ -4241,7 +4241,9 @@ public:
                 if (isdigit(*(t2))) {
                     h->setKeyValue("status_code", atoi(t2), nullptr);
                     if (strlen(t2) > 4) {
-                        h->setKeyValue("status_message", new QoreStringNode(t2 + 4), nullptr);
+                        // a reason phrase can have obs-text (RFC 9112 section 4), given in ISO-8859-1 (qore#6554)
+                        h->setKeyValue("status_message", qore_http_field_value_string(t2 + 4, strlen(t2 + 4)),
+                            nullptr);
                     }
                 }
             }
@@ -4469,7 +4471,19 @@ public:
             strtolower(buf);
             //printd(5, "setting %s = '%s'\n", buf, t);
 
-            ReferenceHolder<> val(new QoreStringNode(t), nullptr);
+            // a field name is a token (RFC 9110 section 5.1), which has no byte above 0x7f; a request with another
+            // name is answered with 400 by HttpServer (qore#6554)
+            if ((flags & CHF_REQUEST) && info) {
+                for (const char* n = buf; *n; ++n) {
+                    if (static_cast<unsigned char>(*n) > 0x7f) {
+                        info->setKeyValue("invalid-field-name", true, nullptr);
+                        break;
+                    }
+                }
+            }
+
+            // a field value that is not valid UTF-8 is obs-text, given in ISO-8859-1 (qore#6554)
+            ReferenceHolder<> val(qore_http_field_value_string(t, strlen(t)), nullptr);
 
             if (flags & CHF_PROCESS) {
                 if (!strcmp(buf, "connection")) {

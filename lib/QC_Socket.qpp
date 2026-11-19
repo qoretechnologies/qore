@@ -5786,8 +5786,12 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - \c accept-charset: the response encoding chosen from any \c "Accept-Charset" header by the rule of
       @ref Qore::get_http_accept_charset() "get_http_accept_charset()" (RFC 9110; \c "utf8" without one)
     - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header
+    - \c invalid-field-name: (only set when parsing a request header) @ref True "True" if a header name has a byte
+      above 0x7f, so that it is not a token (RFC 9110 section 5.1); \c HttpServer answers such a request with
+      \c 400
 
-    @return a hash of headers (where each header key is converted to lower-case) also including the following keys giving additional information about the HTTP header received:
+    @return a hash of headers (where each header key is converted to lower-case; a header value, as the
+    \c status_message, that is not valid UTF-8 is given in ISO-8859-1 with its bytes unchanged, as RFC 9110 obs-text) also including the following keys giving additional information about the HTTP header received:
     - \c http_version: a string giving the HTTP version set in the header
     - \c status_code: (HTTP responses only) an integer giving the status code
     - \c status_message: (HTTP responses only) if present in an HTTP response, this key will be set to the message after the status code

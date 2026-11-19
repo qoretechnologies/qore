@@ -37,15 +37,7 @@ public namespace SqlUtil {
     @since SqlUtil 3.11
 */
 public string sub sql_literal_check_encoding(string value) {
-    # a regular expression matches every valid string, and no string that is not valid in its encoding (one that
-    # cannot be converted to UTF-8 raises an exception)
-    bool valid;
-    try {
-        valid = (value =~ /^/);
-    } catch (hash<ExceptionInfo> ex) {
-        valid = False;
-    }
-    if (!valid) {
+    if (!value.isEncodingValid()) {
         throw "VALUE-ERROR", sprintf("a string of %d bytes given to an SQL string literal is not valid in its encoding "
             "(%s)", value.size(), value.encoding());
     }

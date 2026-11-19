@@ -1719,7 +1719,7 @@ public namespace RestHandler {
                 foreach string astr in (hdr.accept) {
                     # a value that is not valid in its encoding (request data) names no media type; it is skipped, as the
                     # substitution below cannot remove its parameters (qore#6553)
-                    if (!(astr =~ /^/)) {
+                    if (!astr.isEncodingValid()) {
                         continue;
                     }
                     do {

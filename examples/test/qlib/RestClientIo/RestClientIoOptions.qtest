@@ -65,6 +65,77 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+# answers each request, on a connection of its own, with the octets of its body as the client sent them: the
+# HttpServer refuses a body that is not valid text in its encoding (JSON is UTF-8; qore#6554) before a handler sees it,
+# and the encoding test checks the octets that the client sends in ISO-8859-1
+class RawEchoServer {
+    private {
+        Socket listener();
+        int port;
+        Counter done(1);
+        bool stopping;
+        *string error;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen(8);
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    *string getError() {
+        return error;
+    }
+
+    stop() {
+        stopping = True;
+        # a connection wakes up the accept loop, which then ends
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        s.close();
+        done.waitForZero();
+        listener.close();
+    }
+
+    private run() {
+        on_exit done.dec();
+        while (True) {
+            Socket s = listener.accept();
+            on_exit s.close();
+            if (stopping) {
+                break;
+            }
+            try {
+                serve(s);
+            } catch (hash<ExceptionInfo> ex) {
+                error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    private serve(Socket s) {
+        hash<auto> hdr = s.readHTTPHeader(30s);
+        binary body;
+        if (hdr."content-length") {
+            body = s.recvBinary(int(hdr."content-length"), 30s);
+        } else if (hdr."transfer-encoding" == "chunked") {
+            body = s.readHTTPChunkedBodyBinary(30s).body ?? binary();
+        }
+        binary rv = binary(make_json({
+            "method": hdr.method,
+            "content_type": hdr."content-type",
+            "octets": body.toHex(),
+        }));
+        s.send(binary(sprintf("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %d\r\n"
+            "Connection: close\r\n\r\n", rv.size())) + rv);
+    }
+}
+
 public class RestClientIoOptionsTest inherits QUnit::Test {
     private {
         HttpServer server;
@@ -92,6 +163,9 @@ public class RestClientIoOptionsTest inherits QUnit::Test {
 
 
     testEncoding() {
+        RawEchoServer raw();
+        on_exit raw.stop();
+        string url = raw.getUrl();
         RestClientIo rest({"url": url, "data": "json", "encoding": "ISO-8859-1"});
         on_exit rest.close();
         assertEq("ISO-8859-1", rest.getEncoding());
@@ -117,6 +191,7 @@ public class RestClientIoOptionsTest inherits QUnit::Test {
         on_exit utf8.close();
         assertNothing(utf8.getEncoding());
         assertEq("22c3a422", utf8.restPost("/x", "ä").body.octets);
+        assertNothing(raw.getError());
     }
 
     testEncodingPassthru() {

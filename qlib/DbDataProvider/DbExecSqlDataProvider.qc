@@ -76,6 +76,7 @@ public class DbExecSqlDataProvider inherits DbDataProviderBase {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        DbDataProviderBase::checkRawSqlAllowed("an SQL statement to execute");
         AbstractDatasource ds = db.getDatasource();
         DbOperationTransactionHelper trans(ds);
         return {

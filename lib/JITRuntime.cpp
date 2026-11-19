@@ -150,9 +150,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
     { "qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any) },
     { "qore_rt_add_assign_any", reinterpret_cast<void*>(&qore_rt_add_assign_any) },
+    { "qore_rt_add_assign_local_any", reinterpret_cast<void*>(&qore_rt_add_assign_local_any) },
+    { "qore_rt_drop_local_string_cache", reinterpret_cast<void*>(&qore_rt_drop_local_string_cache) },
     { "qore_rt_sub_assign_any", reinterpret_cast<void*>(&qore_rt_sub_assign_any) },
     { "qore_rt_mul_assign_any", reinterpret_cast<void*>(&qore_rt_mul_assign_any) },
     { "qore_rt_add_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_any_throwing) },
+    { "qore_rt_add_assign_local_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_local_any_throwing) },
     { "qore_rt_sub_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_sub_assign_any_throwing) },
     { "qore_rt_mul_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_mul_assign_any_throwing) },
     { "qore_rt_div_any", reinterpret_cast<void*>(&qore_rt_div_any) },
@@ -181,6 +184,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr) },
     { "qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string) },
     { "qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len) },
+    { "qore_rt_make_ascii_string_len", reinterpret_cast<void*>(&qore_rt_make_ascii_string_len) },
     { "qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote) },
     { "qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing) },
     { "qore_rt_find", reinterpret_cast<void*>(&qore_rt_find) },
@@ -905,6 +909,38 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t rig
     return qore_rt_result_or_nothing(result, xsink);
 }
 
+// Only the duplicate references to this string can be dropped: the deferred tracker can keep
+// a previous value live for another SSA use, including an object with an observable destructor.
+extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry,
+        uint64_t* current, uint64_t* previous) {
+    QoreValue value = fromBits(left);
+    if (value.isPlainPointer() && value.getType() == NT_STRING) {
+        for (uint64_t* slot : {entry, current, previous}) {
+            if (slot && *slot == left) {
+                *slot = toBits(QoreValue());
+                value.get<QoreStringNode>()->deref();
+            }
+        }
+    }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue value = fromBits(left);
+    QoreValue rhs = fromBits(right);
+    // Converting a built-in scalar, date or binary cannot call back into the program and replace
+    // the borrowed left side. Other operands take the normal path, which owns it during conversion.
+    if (value.isPlainPointer() && value.getType() == NT_STRING
+            && (!rhs.hasNode() || rhs.isScalar() || rhs.getType() == NT_INT
+                || rhs.getType() == NT_DATE || rhs.getType() == NT_BINARY)) {
+        return qore_rt_string_append_cow(left, right, xsink);
+    }
+    if (value.isInt() && rhs.isInt()) {
+        // Both operands fit in 48 bits. Their sum fits in int64, and QoreValue boxes it if necessary.
+        return toBits(QoreValue(value.getInt() + rhs.getInt()));
+    }
+    return qore_rt_result_or_nothing(qore_compound_assign_value(LVCompoundOp::AddAssign, value, rhs, xsink), xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
@@ -1597,6 +1633,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t 
     QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
     QoreValue v(s);
     return toBits(v);
+}
+
+//! As qore_rt_make_string_len() for a literal that is ASCII text: the string has its ASCII prefix known (qore#6625)
+extern "C" DLLEXPORT uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len) {
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    qore_string_private::get(*s)->setOwnedAsciiText();
+    return toBits(QoreValue(s));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink) {
@@ -25380,6 +25423,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mul_any_throwing
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_add_assign_any_throwing(
         uint64_t left, uint64_t right, ExceptionSink* xsink) {
     uint64_t result = qore_rt_add_assign_any(left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_add_assign_local_any_throwing(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_add_assign_local_any(left, right, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
