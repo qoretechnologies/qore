@@ -1903,6 +1903,15 @@ int qore_class_private::initializeHierarchy(qcp_set_t& qcp_set) {
     return 0;
 }
 
+bool qore_class_private::checkInheritedInternalMemberContext(const qore_class_private* class_ctx,
+        const qore_class_private* decl) const {
+    if (class_ctx == this) {
+        return true;
+    }
+    ClassAccess ca;
+    return getClass(*class_ctx, ca) && (!decl || class_ctx == decl || class_ctx->getClass(*decl, ca));
+}
+
 int qore_class_private::initializeMembers() {
     // nothing is resolved again for a committed user class (see parseInitPartial())
     if (!parse_resolve_class_members && !(committed && !sys)) {
