@@ -1773,7 +1773,8 @@ private:
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
     //! Cached ptr-to-ptr for the thread's call site, the location of the call being made (QoreRcCallSiteHelper)
     llvm::Value* call_site_cache_ptr = nullptr;
-    int last_runtime_line = -1;             //!< Last source line emitted for location tracking
+    //! the runtime location (QoreIRInstruction::stmt_loc) that the code of the block being lowered stored last
+    const QoreProgramLocation* last_runtime_loc = nullptr;
 
     //! Returns the constant location that AOT code holds in its image for `loc`, one per distinct location of the
     //! module, or nullptr if `loc` has no line
@@ -2493,6 +2494,15 @@ private:
             const QoreIRInstruction* inst, bool synthetic, const QoreIRInstruction* folded_host = nullptr);
     //! Stores \a loc as the runtime location of the frame, without the line check of emitRuntimeLocationUpdate()
     void emitRuntimeLocationStore(const QoreProgramLocation* loc);
+
+    //! Removes the stores of the runtime location that store the location that the thread has already
+    /** The code of each block stores the runtime location of its first instruction (emitRuntimeLocationUpdate()),
+        as the block can be entered in any location; a store of the location that every path to it has stored last
+        is removed, such as the store of a loop's location in its condition after the code of its next iteration
+        stored it (qore#6646).  The entry block and the landing pads start in an unknown location; a call restores
+        the location of its caller when it returns.
+    */
+    void removeRedundantRuntimeLocationStores(llvm::Function* llvm_func);
 
     // Get or create the per-function JIT deopt block.
     // On guard failure, branches here to set the thread-local deopt flag

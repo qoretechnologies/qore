@@ -81,6 +81,7 @@ public:
     T* append(Args&&... args) {
         T* inst = block->template appendInstruction<T>(std::forward<Args>(args)...);
         inst->temp_scope_id = exception_temp_scope_id;
+        inst->stmt_loc = stmt_loc;
         if (region_record) {
             recordRegionInstruction(inst);
         }
@@ -101,6 +102,19 @@ public:
     //! returns the record of the body of the functional loop that is being lowered, if any
     QoreIRRegionRecord* getRegionRecord() const {
         return region_record;
+    }
+
+    //! sets the location of the statement whose code the instructions appended from now on are, and returns the
+    //! previous one (see QoreIRInstruction::stmt_loc)
+    const QoreProgramLocation* setStatementLocation(const QoreProgramLocation* loc) {
+        const QoreProgramLocation* old = stmt_loc;
+        stmt_loc = loc;
+        return old;
+    }
+
+    //! returns the location of the statement whose code is being lowered (see QoreIRInstruction::stmt_loc)
+    const QoreProgramLocation* getStatementLocation() const {
+        return stmt_loc;
     }
 
     QoreIRFunction* getFunction() const;
@@ -651,6 +665,8 @@ private:
     std::vector<uint32_t> temp_scope_id_stack;
     //! the record of the body of a functional loop that is being lowered, if any (see setRegionRecord())
     QoreIRRegionRecord* region_record = nullptr;
+    //! the location of the statement whose code is being lowered (see setStatementLocation())
+    const QoreProgramLocation* stmt_loc = nullptr;
 
     //! records an instruction appended in the body of a functional loop (see QoreIRRegionRecord)
     void recordRegionInstruction(QoreIRInstruction* inst);
@@ -658,5 +674,25 @@ private:
     std::vector<uint32_t> exception_temp_scope_id_stack;
 };
 
+
+//! Sets the location of the statement whose code the IR builder appends while it is in scope (see
+//! QoreIRBuilder::setStatementLocation())
+class QoreIRStatementLocationHelper {
+public:
+    QoreIRStatementLocationHelper(QoreIRBuilder& builder, const QoreProgramLocation* loc) : builder(builder),
+            old_loc(builder.setStatementLocation(loc)) {
+    }
+
+    ~QoreIRStatementLocationHelper() {
+        builder.setStatementLocation(old_loc);
+    }
+
+    QoreIRStatementLocationHelper(const QoreIRStatementLocationHelper&) = delete;
+    QoreIRStatementLocationHelper& operator=(const QoreIRStatementLocationHelper&) = delete;
+
+private:
+    QoreIRBuilder& builder;
+    const QoreProgramLocation* old_loc;
+};
 
 #endif

@@ -156,6 +156,7 @@ public:
 
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/ThreadClosureVariableStack.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 struct ThreadLocalProgramData {
@@ -4909,7 +4910,7 @@ public:
                 if (collect_diagnostics) {
                     markDiagnostic(*ne);
                 }
-                sink->raiseException(ne);
+                qore_exception_sink_ops(sink).raiseException(ne);
             }
             exceptions_raised++;
         }
@@ -5325,7 +5326,7 @@ public:
 
         if (loc) {
             // ensure that all exceptions reflect the current parse location
-            xsink.overrideLocation(*loc);
+            qore_exception_sink_ops(xsink).overrideLocation(*loc);
         }
 
         parseSink->assimilate(xsink);
@@ -6493,7 +6494,7 @@ public:
             pgm.priv->markDiagnostic(*ne);
         }
         ne->arg = arg_holder.release();
-        wsink.raiseException(ne);
+        qore_exception_sink_ops(wsink).raiseException(ne);
     }
 
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation &loc, int code,
@@ -6521,7 +6522,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation& loc, int code,
@@ -6541,7 +6542,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     //! Raises a parse warning and attaches structured metadata when diagnostic collection is enabled
@@ -6559,7 +6560,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm) {
