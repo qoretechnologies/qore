@@ -3416,6 +3416,53 @@ static bool qore_ir_collect_scalar_uses(const QoreIRFunction& func, QoreIRScalar
     return true;
 }
 
+// documented in QoreIRAnalysis.h
+void qore_ir_mark_auto_string_appends(QoreIRFunction& func) {
+    QoreIRScalarUses uses;
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        const auto& instructions = block->instructions;
+        for (size_t i = 1; i < instructions.size(); ++i) {
+            if (qore_ir_analysis_cancelled(check_count, "IR auto string append analysis")) {
+                return;
+            }
+            auto& op = *instructions[i];
+            const QoreIRInstruction* store = nullptr;
+            if (op.opcode == QoreIROpcode::AddAssignAny && i + 1 < instructions.size()) {
+                store = instructions[i + 1].get();
+            } else if (op.opcode == QoreIROpcode::Invoke) {
+                const auto& invoke = static_cast<const QoreIRInvokeInstruction&>(op);
+                if (invoke.invoke_opcode == QoreIROpcode::AddAssignAny && invoke.normal_target
+                        && invoke.normal_target != invoke.exception_target
+                        && !invoke.normal_target->instructions.empty()) {
+                    store = invoke.normal_target->instructions.front().get();
+                }
+            }
+            if (!store || store->opcode != QoreIROpcode::StoreLocal
+                    || instructions[i - 1]->opcode != QoreIROpcode::LoadLocal
+                    || op.operands.size() != 2 || store->operands.size() != 1
+                    || store->operands[0].id != op.result.id) {
+                continue;
+            }
+            auto& load = static_cast<QoreIRLocalInstruction&>(*instructions[i - 1]);
+            const auto& write = static_cast<const QoreIRLocalInstruction&>(*store);
+            if (!load.local || load.local->getTypeInfo() != autoTypeInfo || load.local->closureUse()
+                    || load.local != write.local || write.mode != AssignmentMode::Normal
+                    || load.result.id != op.operands[0].id) {
+                continue;
+            }
+            // Count phi and other out-of-line operands, too. A borrowed load must end at this +=.
+            if (uses.empty() && !qore_ir_collect_scalar_uses(func, uses, check_count)) {
+                return;
+            }
+            if (uses[load.result.id].size() == 1) {
+                load.auto_local_string_append = true;
+                op.auto_local_string_append = true;
+            }
+        }
+    }
+}
+
 //! Returns true when a call cannot consume \a value, so passing it as an argument is a plain read.
 /** A call takes its own reference to a node-valued argument rather than taking the caller's: the
     interpreter's buildArgListFromIROperands() refSelf()s each one into the argument list, and
@@ -6307,7 +6354,7 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
             }
             // copy by length: a ConstString is emitted with an explicit byte count and may hold
             // embedded NULs
-            constant.string_value.assign(str.c_str(), str.size());
+            constant.setStringValue(str.c_str(), str.size());
             return true;
         }
         default:
@@ -13022,6 +13069,9 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     // (qore#6072)
     func.defer_release_check_prune = false;
     qore_ir_prune_release_checks(func);
+    if (func.has_generic_add_assign) {
+        qore_ir_mark_auto_string_appends(func);
+    }
 }
 
 size_t qore_ir_optimize_fresh_list_calls(QoreIRFunction& func,

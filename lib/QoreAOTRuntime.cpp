@@ -8282,6 +8282,11 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         error = "malformed IR function '" + func->name + "': " + error;
         return nullptr;
     }
+    // the control flow and the SSA form that the interpreter and the JIT take from the IR without a check (qore#6468)
+    if (!QoreIRVerifier::verifyModuleIR(*func, error)) {
+        error = "AOT IR verification failed in '" + func->name + "': " + error;
+        return nullptr;
+    }
     return func;
 }
 
@@ -8572,7 +8577,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
         ir.ast_visible_body_locals = ir.all_body_locals;
     }
 
-    delete ir.cached_pre_instantiated;
+    // the set replaces the previous one (setCachedPreInstantiated())
     auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
     std::unordered_set<const void*> body_local_set;
     for (LocalVar* lv : ir.all_body_locals) {
@@ -8588,7 +8593,7 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
             cached_pre_inst->insert(lv);
         }
     }
-    ir.cached_pre_instantiated = cached_pre_inst;
+    ir.setCachedPreInstantiated(cached_pre_inst);
 }
 
 //! Re-lower a user function variant to IR and build an AOT context.

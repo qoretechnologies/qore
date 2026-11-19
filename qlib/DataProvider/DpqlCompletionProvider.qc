@@ -176,6 +176,16 @@ list<hash<DpqlCompletionItem>> items = provider.getCompletions('@na', 3, fields)
     @endcode
 */
 public class DpqlCompletionProvider {
+    #! Returns a character of the text for a test of an ASCII character class
+    /** The text is scanned byte by byte; a byte of a multi-byte character is not text on its own,
+        and a regular expression raises an exception for it (qore#6554).  It is given as an empty string,
+        which, as the byte did before, matches no class, negated or not (ex: \c [^a-z]), so the result of
+        every test is unchanged
+    */
+    private static *string asc(*string c) {
+        return (exists c && !c.isDataAscii()) ? "" : c;
+    }
+
     private {
         #! Available expressions
         *hash<string, hash<DataProviderExpressionInfo>> expressions;
@@ -785,7 +795,7 @@ public class DpqlCompletionProvider {
 
         # Extract function name before the paren
         int name_start = paren_pos - 1;
-        while (name_start >= 0 && chr(text.getByte(name_start)) =~ /\s/) {
+        while (name_start >= 0 && asc(chr(text.getByte(name_start))) =~ /\s/) {
             --name_start;
         }
         if (name_start < 0) {
@@ -794,9 +804,9 @@ public class DpqlCompletionProvider {
         int id_end = name_start + 1;
         while (name_start >= 0) {
             string sc = chr(text.getByte(name_start));
-            if (sc =~ /[a-zA-Z0-9_]/) {
+            if (asc(sc) =~ /[a-zA-Z0-9_]/) {
                 --name_start;
-            } else if (sc == "-" && name_start + 1 < id_end && chr(text.getByte(name_start + 1)) =~ /[a-zA-Z]/) {
+            } else if (sc == "-" && name_start + 1 < id_end && asc(chr(text.getByte(name_start + 1))) =~ /[a-zA-Z]/) {
                 --name_start;
             } else {
                 break;
@@ -900,7 +910,7 @@ public class DpqlCompletionProvider {
                 ++depth;
             } else if (c == "}" && depth > 0) {
                 --depth;
-            } else if (c =~ /[=<>!&|]/) {
+            } else if (asc(c) =~ /[=<>!&|]/) {
                 # Operators end field context
                 in_field_context = False;
             }
@@ -2078,7 +2088,7 @@ public class DpqlCompletionProvider {
             if (n) {
                 end += n;
             } else if (end > pos && end + 1 < text.size() && chr(text.getByte(end)) == "-"
-                    && chr(text.getByte(end + 1)) =~ /^[a-zA-Z]$/) {
+                    && asc(chr(text.getByte(end + 1))) =~ /^[a-zA-Z]$/) {
                 ++end;
             } else {
                 break;
@@ -2398,7 +2408,7 @@ public class DpqlCompletionProvider {
         int name_end = paren_pos;
         int name_start = paren_pos - 1;
         # Skip whitespace before the paren (whitespace is ASCII)
-        while (name_start >= 0 && chr(text.getByte(name_start)) =~ /\s/) {
+        while (name_start >= 0 && asc(chr(text.getByte(name_start))) =~ /\s/) {
             --name_start;
         }
         if (name_start < 0) {
@@ -2412,10 +2422,10 @@ public class DpqlCompletionProvider {
         while (name_start >= 0) {
             int b = text.getByte(name_start);
             string sc = chr(b);
-            if (sc =~ /[a-zA-Z0-9_]/) {
+            if (asc(sc) =~ /[a-zA-Z0-9_]/) {
                 --name_start;
             } else if (sc == "-" && name_start + 1 < id_end
-                    && chr(text.getByte(name_start + 1)) =~ /[a-zA-Z]/) {
+                    && asc(chr(text.getByte(name_start + 1))) =~ /[a-zA-Z]/) {
                 # hyphenated identifier: '-' followed by a letter (looking right)
                 --name_start;
             } else {

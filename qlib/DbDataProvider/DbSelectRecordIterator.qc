@@ -64,6 +64,7 @@ public class DbSelectRecordIterator inherits AbstractDbRecordIterator {
             throw "DBSELECT-ERROR", sprintf("where_cond must be empty for DbSelectRecordIterator; value provided: %y",
                 where_cond);
         }
+        DbDataProviderBase::checkRawSqlAllowed("the \"sql\" search option");
         # an implicit transaction acquired by a failed statement is released here, as the iterator does not exist
         AbstractSQLStatement stmt = ds.getSQLStatement();
         bool in_trans = ds.currentThreadInTransaction();
