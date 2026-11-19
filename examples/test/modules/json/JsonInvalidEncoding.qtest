@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires qore >= 2.0
+%requires json
+%requires QUnit
+
+%exec-class JsonInvalidEncodingTest
+
+#! JSON text that is not valid in its encoding raises INVALID-ENCODING where it is parsed (qore#6604)
+/** parse_json() checks the JSON string (and so jwt_decode()), JsonSaxParser each string and key; a JSON string in a
+    multi-byte encoding other than UTF-8 is converted to UTF-8 to be parsed
+*/
+public class JsonInvalidEncodingTest inherits QUnit::Test {
+    constructor() : Test("JsonInvalidEncodingTest", "1.0") {
+        addTestCase("parse_json() of invalid UTF-8", \parseJsonInvalid());
+        addTestCase("parse_json() of valid text", \parseJsonValid());
+        addTestCase("parse_json() of multi-byte encodings", \parseJsonMultiByte());
+        addTestCase("jwt_decode()", \jwtDecode());
+        addTestCase("JsonSaxParser", \sax());
+        addTestCase("parse_toon()", \parseToon());
+        set_return_value(main());
+    }
+
+    #! returns the bytes as a string tagged UTF-8 without a check
+    private static string utf8(binary b) {
+        return binary_to_string(b, "UTF-8");
+    }
+
+    #! returns the base64url form of the bytes, without padding
+    private static string b64url(binary b) {
+        string s = replace(replace(make_base64_string(b), "+", "-"), "/", "_");
+        s =~ s/=+$//;
+        return s;
+    }
+
+    parseJsonInvalid() {
+        # in a string value, in a key, in a nested value, after valid text other than ASCII
+        list<list<auto>> cases = (
+            (<22e922>, 1),                             # "\xe9"
+            (<7b22e9223a317d>, 2),                     # {"\xe9":1}
+            (<5b2261e9225d>, 3),                       # ["a\xe9"]
+            (<7b2261223a5b7b2262223a2263e9227d5d7d>, 13),   # {"a":[{"b":"c\xe9"}]}
+            (<5b22c3a9e282ac22ff5d>, 8),               # ["é€"\xff] (outside a string)
+            (<5b22eda080225d>, 2),                     # a surrogate in UTF-8 (CESU-8)
+            (<5b22c0af225d>, 2),                       # an overlong form of "/"
+            (<5b22f4908080225d>, 2),                   # above U+10FFFF
+            (<5b22e282>, 2),                           # a character cut off by the end of the text
+        );
+        foreach list<auto> c in (cases) {
+            string expected = sprintf("^parse_json\\(\\): the JSON text is not valid UTF-8: invalid byte sequence at "
+                "byte offset %d$", c[1]);
+            assertThrows("INVALID-ENCODING", expected, \parse_json(), (utf8(c[0]),), sprintf("%y", c[0]));
+            assertThrows("INVALID-ENCODING", "^parseJSON\\(\\): the JSON text", \parseJSON(), (utf8(c[0]),),
+                sprintf("%y", c[0]));
+        }
+        # a UTF-8 byte order mark is skipped, and the offset is that of the text
+        assertThrows("INVALID-ENCODING", "byte offset 4$", \parse_json(), (utf8(<efbbbf22e922>),));
+        # the bytes of a UTF-16 byte order mark at the start of UTF-8 text are skipped, as before, and the offset is
+        # that in the text
+        assertThrows("INVALID-ENCODING", "byte offset 3$", \parse_json(), (utf8(<feff22e922>),));
+        assertThrows("INVALID-ENCODING", "byte offset 3$", \parse_json(), (utf8(<fffe22e922>),));
+    }
+
+    parseJsonValid() {
+        assertEq({"é€😀": ("ü", "\u0000x", "😀")},
+            parse_json("{\"é€😀\": [\"ü\", \"\\u0000x\", \"\\ud83d\\ude00\"]}"));
+        assertEq("é", parse_json(utf8(<efbbbf22c3a922>)));
+        # escapes give valid characters
+        string s = parse_json("\"\\u00e9\\u20ac\\ud83d\\ude00\"");
+        assertEq("é€😀", s);
+        assertTrue(s.isEncodingValid());
+        # an escaped lone surrogate is a syntax error, as before
+        assertThrows("JSON-PARSE-ERROR", \parse_json(), ("\"\\ud800\"",));
+        # a single-byte encoding has no invalid bytes, and its strings keep its encoding
+        string latin1 = binary_to_string(<5b22e9225d>, "ISO-8859-1");
+        list<auto> l = parse_json(latin1);
+        assertEq(("é",), l);
+        assertEq("ISO-8859-1", l[0].encoding());
+    }
+
+    parseJsonMultiByte() {
+        # characters whose second byte is "\\" (5c) in Shift_JIS ("ソ" 83 5c) and Big5 ("功" a5 5c)
+        foreach list<string> c in ((("Shift_JIS", "ソ"), ("Big5", "功"), ("GBK", "丂"), ("EUC-JP", "日本"),
+                ("UTF-16LE", "é€😀"), ("UTF-16BE", "é€😀"), ("UTF-16", "é€"))) {
+            string text = convert_encoding("{\"" + c[1] + "\": [\"" + c[1] + "\", 1]}", c[0]);
+            hash<auto> h = parse_json(text);
+            assertEq({c[1]: (c[1], 1)}, h, c[0]);
+            assertEq("UTF-8", h.firstKey().encoding(), c[0]);
+            assertEq("UTF-8", h.firstValue()[0].encoding(), c[0]);
+        }
+        # a multi-byte encoding is checked in its own encoding before it is converted
+        assertThrows("INVALID-ENCODING", "^parse_json\\(\\): the JSON text is not valid Shift_JIS: invalid byte "
+            "sequence at byte offset 2$", \parse_json(), (binary_to_string(<5b2283225d>, "Shift_JIS"),));
+        # a lone high surrogate (U+D800) at byte offset 4
+        assertThrows("INVALID-ENCODING", "^parse_json\\(\\): the JSON text is not valid UTF-16LE: invalid byte "
+            "sequence at byte offset 4$", \parse_json(), (binary_to_string(<5b00220000d822005d00>, "UTF-16LE"),));
+        # a stateful encoding: in ISO-2022-JP, "、" is 21 22 after an escape sequence, and 22 is a double quote
+        string iso2022 = convert_encoding("[\"、\", \"a\"]", "ISO-2022-JP");
+        assertEq(<22>, binary(iso2022).substr(6, 1));
+        list<auto> l = parse_json(iso2022);
+        assertEq(("、", "a"), l);
+        assertEq("UTF-8", l[0].encoding());
+        # the byte order mark of text in the generic UTF-16 encoding gives its byte order
+        foreach string bo in ("UTF-16LE", "UTF-16BE") {
+            binary b = (bo == "UTF-16LE" ? <fffe> : <feff>) + binary(convert_encoding("[\"Üé\"]", bo));
+            assertEq(("Üé",), parse_json(binary_to_string(b, "UTF-16")), bo);
+        }
+    }
+
+    jwtDecode() {
+        string header = b64url(binary("{\"alg\":\"HS256\",\"typ\":\"JWT\"}"));
+        string token = header + "." + b64url(<7b22737562223a22e9227d>) + ".";
+        assertThrows("INVALID-ENCODING", "^jwt_decode\\(\\): the JWT payload is not valid UTF-8: invalid byte "
+            "sequence at byte offset 8$", \jwt_decode(), (token, NOTHING, False));
+        token = b64url(<7b22616c67223a22e9227d>) + "." + b64url(binary("{}")) + ".";
+        assertThrows("INVALID-ENCODING", "^jwt_decode\\(\\): the JWT header is not valid UTF-8: invalid byte sequence "
+            "at byte offset 8$", \jwt_decode(), (token, NOTHING, False));
+        # a valid token with characters other than ASCII
+        token = jwt_encode({"sub": "é€😀"}, "secret");
+        assertEq("é€😀", jwt_decode(token, "secret").claims.sub);
+    }
+
+    sax() {
+        JsonSaxParser p();
+        code cb = sub (hash<auto> e) {};
+        # a value, a key
+        assertThrows("INVALID-ENCODING", "^JsonSaxParser::parse\\(\\): the JSON string ending at line 1, column 10 "
+            "is not valid UTF-8: invalid byte sequence at byte offset 1$", \p.parse(),
+            (utf8(<5b2261222c2262e9225d>), cb));
+        assertThrows("INVALID-ENCODING", "^JsonSaxParser::parse\\(\\): the JSON string ending at line 2, column \\d+ "
+            "is not valid UTF-8: invalid byte sequence at byte offset 0$", \p.parse(), (utf8(<7b0a22e9223a317d>), cb));
+        # a stream, read in parts
+        assertThrows("INVALID-ENCODING", "^JsonSaxParser::parseStream\\(\\): the JSON string ending at line 1, "
+            "column \\d+ is not valid UTF-8: invalid byte sequence at byte offset 3$", \p.parseStream(),
+            (new BinaryInputStream(<5b22c3a961e9225d>), cb));
+        # the byte order mark of text in the generic UTF-16 encoding gives its byte order ("Ü" is dc 00 in UTF-16LE)
+        list<auto> sv = ();
+        p.parse(binary_to_string(<fffe> + binary(convert_encoding("[\"Ü\"]", "UTF-16LE")), "UTF-16"),
+            sub (hash<auto> e) {
+                if (e.value.typeCode() == NT_STRING) {
+                    push sv, e.value;
+                }
+            });
+        assertEq(("Ü",), sv);
+        # text in another encoding is checked in its encoding before it is converted
+        assertThrows("INVALID-ENCODING", "^JsonSaxParser::parse\\(\\): the JSON text is not valid Shift_JIS: invalid "
+            "byte sequence at byte offset 2$", \p.parse(), (binary_to_string(<5b2283225d>, "Shift_JIS"), cb));
+        # valid text other than ASCII gives its keys and strings
+        list<auto> values = ();
+        p.parse("{\"é\": [\"€😀\", \"\\ud83d\\ude00\"]}", sub (hash<auto> e) {
+            if (e.value.typeCode() == NT_STRING) {
+                push values, e.value;
+            }
+        });
+        assertEq(("é", "€😀", "😀"), values);
+    }
+
+    parseToon() {
+        assertThrows("INVALID-ENCODING", "^parse_toon\\(\\): the TOON text is not valid UTF-8: invalid byte sequence "
+            "at byte offset 4$", \parse_toon(), (utf8(<613a2061e9>),));
+        assertThrows("INVALID-ENCODING", "^parse_toon\\(\\): the TOON text is not valid UTF-8: invalid byte sequence "
+            "at byte offset 0$", \parse_toon(), (utf8(<e93a2031>),));
+        # the byte order mark of text in the generic UTF-16 encoding gives its byte order ("Ü" is dc 00 in UTF-16LE)
+        assertEq({"a": "Üß"}, parse_toon(binary_to_string(<fffe> + binary(convert_encoding("a: Üß", "UTF-16LE")),
+            "UTF-16")));
+        hash<auto> h = parse_toon("é: €😀");
+        assertEq({"é": "€😀"}, h);
+        assertEq("UTF-8", h."é".encoding());
+    }
+}

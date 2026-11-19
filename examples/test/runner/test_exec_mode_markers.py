@@ -211,6 +211,10 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   ISO-8859-1
         # - dataframe-default-encoding-names (#6100): its checks run in child processes whose default character
         #   encodings differ
+        # - default-encoding-tokens (#6604): its checks run in child processes whose default character encodings
+        #   differ
+        # - default-encoding-keys (#6604): its checks run in child processes whose default character encodings
+        #   differ
         # - relative-date-range (#6101): its probes run in child processes that set their own --exec-mode and in qcc
         #   executables
         # - ParseStackBoundary-2 (#6047): the module loads that it checks in the primary thread run in child processes
@@ -418,6 +422,8 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/qlib/QUnit/result-counts.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding.qtest",
                                  "modules/dataframe/test/dataframe-default-encoding-names.qtest",
+                                 "modules/tokenizer/test/default-encoding-tokens.qtest",
+                                 "modules/protobuf/test/default-encoding-keys.qtest",
                                  "modules/dataframe/test/dataframe-aot-plugin-helpers.qtest",
                                  "modules/dataframe/test/dataframe-plugin-exception-handler.qtest",
                                  "modules/dataframe/test/dataframe-inline-mask-subscript.qtest",

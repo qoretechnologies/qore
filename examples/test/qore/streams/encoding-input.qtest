@@ -108,15 +108,19 @@ public class EncodingConversionInputStreamTest inherits QUnit::Test {
 
     invalid() {
         EncodingConversionInputStream is(new SrcStream(<C5C48D>), "UTF-8", "ISO8859-2");
-        assertThrows("ENCODING-CONVERSION-ERROR", sub() { is.read(1); });
-        assertThrows("ENCODING-CONVERSION-ERROR", sub() { is.read(1); });
+        # input that is not valid in the source encoding (qoretechnologies/qore#6730)
+        assertThrows("INVALID-ENCODING", "EncodingConversionInputStream::read\\(\\): the input is not valid UTF-8: "
+            "invalid byte sequence at byte offset 0$", sub() { is.read(1); });
+        assertThrows("INVALID-ENCODING", sub() { is.read(1); });
     }
 
     invalidAtEnd() {
         EncodingConversionInputStream is(new SrcStream(<C5A0C4>), "UTF-8", "ISO8859-2");
         assertEq(<A9>, is.read(1));
-        assertThrows("ENCODING-CONVERSION-ERROR", sub() { is.read(1); });
-        assertThrows("ENCODING-CONVERSION-ERROR", sub() { is.read(1); });
+        # a character cut off by the end of the input (qoretechnologies/qore#6730)
+        assertThrows("INVALID-ENCODING", "EncodingConversionInputStream::read\\(\\): the input is not valid UTF-8: "
+            "invalid byte sequence at byte offset 2$", sub() { is.read(1); });
+        assertThrows("INVALID-ENCODING", sub() { is.read(1); });
     }
 
     circRef() {
@@ -161,7 +165,7 @@ public class EncodingConversionInputStreamTest inherits QUnit::Test {
         assertEq(binary("Ａb"), convert(fw, "UTF-16", "UTF-8", 1, 100));
         # a mark alone and a single byte
         assertEq(binary(), convert(<fffe>, "UTF-16", "UTF-8", 1, 100));
-        assertThrows("ENCODING-CONVERSION-ERROR", \convert(), (<ff>, "UTF-16", "UTF-8", 1, 100));
+        assertThrows("INVALID-ENCODING", \convert(), (<ff>, "UTF-16", "UTF-8", 1, 100));
     }
 
     private binary convert(binary src, string srcEnc, string dstEnc, int chunk, int readSize) {

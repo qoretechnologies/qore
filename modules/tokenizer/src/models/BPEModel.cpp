@@ -54,7 +54,11 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
         // Populate vocab maps
         ConstHashIterator vi2(vocab_hash);
         while (vi2.next()) {
-            std::string token = vi2.getKey();
+            // the key is in the default encoding, and the token is UTF-8 text, as the text to tokenize is
+            std::string token;
+            if (configKey(vi2.getKey(), "vocabulary token", token, xsink)) {
+                return;
+            }
             int id = (int)vi2.get().getAsBigInt();
             vocab[token] = id;
             if (id >= 0 && id < (int)id_to_token.size()) {
@@ -72,7 +76,10 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
 
             if (entry.getType() == NT_STRING) {
                 // "a b" format
-                std::string s = safeGetStdString(entry);
+                std::string s = configString(entry, "merge", xsink);
+                if (*xsink) {
+                    return;
+                }
                 size_t space_pos = s.find(' ');
                 if (space_pos != std::string::npos) {
                     a = s.substr(0, space_pos);
@@ -82,8 +89,14 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
                 // ["a", "b"] tuple format
                 const QoreListNode* tuple = safeGetList(entry);
                 if (tuple->size() >= 2) {
-                    a = safeGetStdString(tuple->retrieveEntry(0));
-                    b = safeGetStdString(tuple->retrieveEntry(1));
+                    a = configString(tuple->retrieveEntry(0), "merge", xsink);
+                    if (*xsink) {
+                        return;
+                    }
+                    b = configString(tuple->retrieveEntry(1), "merge", xsink);
+                    if (*xsink) {
+                        return;
+                    }
                 }
             }
 
@@ -99,14 +112,21 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
     // Read unk_token - can be a string or an object with "content"
     QoreValue unk_val = config->getKeyValue("unk_token");
     if (unk_val.getType() == NT_STRING) {
-        std::string unk_str = safeGetStdString(unk_val);
+        std::string unk_str = configString(unk_val, "configuration value 'unk_token'", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!unk_str.empty()) {
             unk_token = std::move(unk_str);
         }
     } else if (unk_val.getType() == NT_HASH) {
         const QoreHashNode* unk_hash = safeGetHash(unk_val);
         if (unk_hash) {
-            std::string content = safeGetStringKey(unk_hash, "content");
+            std::string content = configString(unk_hash->getKeyValue("content"),
+                "configuration value 'unk_token' content", xsink);
+            if (*xsink) {
+                return;
+            }
             if (!content.empty()) {
                 unk_token = content;
             }
@@ -114,12 +134,18 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
     }
 
     // Read optional fields
-    std::string prefix_str = safeGetStringKey(config, "continuing_subword_prefix");
+    std::string prefix_str = configStringKey(config, "continuing_subword_prefix", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!prefix_str.empty()) {
         continuing_subword_prefix = prefix_str;
     }
 
-    std::string suffix_str = safeGetStringKey(config, "end_of_word_suffix");
+    std::string suffix_str = configStringKey(config, "end_of_word_suffix", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!suffix_str.empty()) {
         end_of_word_suffix = suffix_str;
     }

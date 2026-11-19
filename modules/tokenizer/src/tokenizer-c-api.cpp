@@ -74,8 +74,8 @@ DLLEXPORT int32_t qore_tokenizer_count_tokens(void* handle,
     ExceptionSink xsink;
 
     SimpleRefHolder<QoreStringNode> qtext(new QoreStringNode(text, text_len, QCS_UTF8));
-    ReferenceHolder<QoreHashNode> result(tokenizer->encode(qtext.release(),
-        nullptr, true, &xsink), &xsink);
+    ReferenceHolder<QoreHashNode> result(tokenizer->encode(*qtext,
+        nullptr, true, "qore_tokenizer_count_tokens()", &xsink), &xsink);
 
     if (xsink || !result) {
         return -1;
@@ -110,8 +110,8 @@ DLLEXPORT char** qore_tokenizer_tokenize(void* handle,
     ExceptionSink xsink;
 
     SimpleRefHolder<QoreStringNode> qtext(new QoreStringNode(text, text_len, QCS_UTF8));
-    ReferenceHolder<QoreHashNode> result(tokenizer->encode(qtext.release(),
-        nullptr, true, &xsink), &xsink);
+    ReferenceHolder<QoreHashNode> result(tokenizer->encode(*qtext,
+        nullptr, true, "qore_tokenizer_tokenize()", &xsink), &xsink);
 
     if (xsink || !result) {
         *count_out = 0;
