@@ -2289,6 +2289,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // of a type that the parser did not check, and releases its own value, as the value that the handler's return
         // replaced
         bool handed_over = pending_return_handed_over && !blockHasTerminator(builder.getBlock());
+        // the value of the return before the TakeHandedOverReturn, which an exception in the cleanups interrupts
+        // (#6762)
+        QoreIRValue given = lowered;
         if (handed_over) {
             QoreIRValue taken = builder.createTakeHandedOverReturn(lowered, stmt->loc)->result;
             builder.createReleaseOwnedTemp(lowered, stmt->loc);
@@ -2303,9 +2306,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // statements that can catch the exception (try_return_value_stack, qore#5941); emitBlockCleanups() lowers
         // nothing after such a handler (#6030)
         QoreIRReturnInstruction* ret = builder.createReturn(lowered);
-        // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
+        // every try statement that the return leaves can catch an exception that interrupts it (qore#5941), the
+        // value given to the TakeHandedOverReturn too, which is the value of the return until it runs (#6762)
         for (std::vector<uint32_t>& try_returns : try_return_value_stack) {
             try_returns.push_back(lowered.id);
+            if (given.id != lowered.id) {
+                try_returns.push_back(given.id);
+            }
         }
         // record the parse-time type of the returned expression: the declared type of a member or otherwise the
         // type recorded for the expression; ParseNode::getTypeInfo() is not used generally, since some nodes (such as
@@ -6964,6 +6971,8 @@ bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, QoreIRValue resul
     }
     // handlers run out of line past the cap in the cleanups can have handed another value over (see the return
     // statement, #6137)
+    // the value of the return before a TakeHandedOverReturn, which an exception in the cleanups interrupts (#6762)
+    QoreIRValue given = value;
     if (pending_return_handed_over) {
         QoreIRValue taken = builder.createTakeHandedOverReturn(value, loc)->result;
         builder.createReleaseOwnedTemp(value, loc);
@@ -6972,9 +6981,13 @@ bool QoreIRLowering::lowerHandedOverReturn(size_t start_depth, QoreIRValue resul
     QoreIRReturnInstruction* ret = builder.createReturn(value);
     // the value can be one of any type (see TakeHandedOverReturn)
     ret->value_parse_type = nullptr;
-    // every try statement that the return leaves can catch an exception that interrupts it (qore#5941)
+    // every try statement that the return leaves can catch an exception that interrupts it (qore#5941), the value
+    // given to the TakeHandedOverReturn too (see the return statement, #6762)
     for (std::vector<uint32_t>& try_returns : try_return_value_stack) {
         try_returns.push_back(value.id);
+        if (given.id != value.id) {
+            try_returns.push_back(given.id);
+        }
     }
     return true;
 }
