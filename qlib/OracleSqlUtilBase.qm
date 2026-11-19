@@ -5726,8 +5726,9 @@ group by p.index_name", schema.upr(), name.upr());
         @return the SQL literal of the value
 
         @throw VALUE-ERROR the value cannot be given exactly: a string whose encoding is invalid (also one with a lone
-        UTF-16 surrogate, which its conversion to UTF-16 refuses), that has a NUL character, or that has more than 2000 UTF-16 code units (a character outside of the
-        Basic Multilingual Plane has two) or an escaped form longer than 4000 bytes (the limits of
+        UTF-16 surrogate, which its conversion to UTF-16 refuses), that has a NUL character, or that has more than
+        2000 UTF-16 code units (a character outside of the Basic Multilingual Plane has two) or an escaped form longer
+        than 4000 bytes (the limits of
         Oracle's national character strings and string literals); a \c float or a \c number that is not a finite
         value, or a \c number with an absolute value of \c 1e126 or more; a relative date (a duration), or a date
         whose year is before 1 or after 9999; or a value of another type

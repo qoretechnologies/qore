@@ -50,6 +50,20 @@ hashdecl TestArgInfo {
     string key = "value";
 }
 
+#! a hash with a type that has the keys of an exception with a location, but not the other ones of ExceptionInfo
+hashdecl TestErrorInfo {
+    string err = "SHAPE-ERROR";
+    string desc = "an error of another shape";
+    string file = "x.q";
+    int line = 10;
+}
+
+#! an argument with a type whose "ex" member holds an exception
+hashdecl TestWrapInfo {
+    string key = "value";
+    hash<ExceptionInfo> ex;
+}
+
 #! Raises the exception that the request's path names
 class ThrowHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -106,6 +120,24 @@ class ThrowRestClass inherits AbstractRestClass {
 
     hash<HttpHandlerResponseInfo> getTyped(hash<auto> cx, *hash<auto> ah) {
         throw "TYPED-ERROR", "the description", <TestArgInfo>{};
+    }
+
+    hash<HttpHandlerResponseInfo> getShape(hash<auto> cx, *hash<auto> ah) {
+        # a hash of a hashdecl that has an exception's keys with a location
+        throw "SHAPE-ERROR", "the description", <TestErrorInfo>{};
+    }
+
+    hash<HttpHandlerResponseInfo> getTypedWrap(hash<auto> cx, *hash<auto> ah) {
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex) {
+            throw "WRAP-ERROR", "the wrapping error", <TestWrapInfo>{"ex": ex};
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> getData(hash<auto> cx, *hash<auto> ah) {
+        # an argument with "err", "file" and "line" but no "desc" is data of the application, not an exception
+        throw "DATA-ERROR", "the description", {"err": "PARSE", "file": "input.csv", "line": 3};
     }
 
     hash<HttpHandlerResponseInfo> getChained(hash<auto> cx, *hash<auto> ah) {
@@ -277,6 +309,34 @@ class HttpServerErrorBodyLocationTest inherits QUnit::Test {
             ex = parse_json(response.body);
             assertEq("TYPED-ERROR", ex.err, label);
             assertEq({"key": "value"}, ex.arg, label);
+
+            # a hash of another hashdecl with the keys of an exception and a location
+            response = get("throw?action=shape");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("SHAPE-ERROR", ex.arg.err, label);
+            if (!debug) {
+                assertEq(sort(("err", "desc")), sort(ex.arg.keys()), label);
+            } else {
+                assertEq("x.q", ex.arg.file, label);
+            }
+
+            # an argument with a type whose "ex" member holds an exception
+            response = get("throw?action=typedWrap");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("value", ex.arg.key, label);
+            assertEq("INNER-ERROR", ex.arg.ex.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.arg.ex.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.arg.ex.file, label);
+            }
+
+            # data of the application is given as it is
+            response = get("throw?action=data");
+            assertEq(409, response.status_code, label);
+            assertEq({"err": "PARSE", "file": "input.csv", "line": 3}, parse_json(response.body).arg, label);
 
             response = get("throw?action=chained");
             assertEq(409, response.status_code, label);
