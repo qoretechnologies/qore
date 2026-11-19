@@ -1,0 +1,33 @@
+var: RUNTIME-TYPE-ERROR
+var param type: RUNTIME-TYPE-ERROR
+var param count: RUNTIME-TYPE-ERROR
+var reassign: RUNTIME-TYPE-ERROR
+param: RUNTIME-OVERLOAD-ERROR
+param or nothing: RUNTIME-OVERLOAD-ERROR
+return: RUNTIME-TYPE-ERROR
+member: RUNTIME-TYPE-ERROR
+member or nothing: RUNTIME-TYPE-ERROR
+list push: RUNTIME-TYPE-ERROR
+list assign: RUNTIME-TYPE-ERROR
+list element: RUNTIME-TYPE-ERROR
+hash assign: RUNTIME-TYPE-ERROR
+hash key: RUNTIME-TYPE-ERROR
+call ref: RUNTIME-TYPE-ERROR
+method ref: RUNTIME-TYPE-ERROR
+builtin ref: RUNTIME-TYPE-ERROR
+ok var: closure 11
+ok contravariant param: 1
+ok covariant return: 2
+ok default arg: 3
+ok nothing return: accepted
+ok untyped code: x
+ok param: accepted
+ok param nothing: accepted
+ok return: 11
+ok member: 11
+ok list: list<code<int(int)>> 11
+ok hash: hash<string, code<int(int)>> 11
+ok call ref: 2
+ok overloaded call ref: 4
+ok method ref: 8
+ok builtin ref: 3

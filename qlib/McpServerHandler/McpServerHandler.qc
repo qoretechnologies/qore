@@ -3890,7 +3890,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         outside the lock.
     */
     notifyToolsListChanged() {
-        broadcastLegacyNotification(\McpServerConnection::sendToolsChangedNotification());
+        broadcastLegacyNotification(sub (McpServerConnection conn) { conn.sendToolsChangedNotification(); });
         notifySubscribers("toolsListChanged");
     }
 
@@ -3899,7 +3899,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
         @see @ref notifyToolsListChanged() */
     notifyResourcesListChanged() {
-        broadcastLegacyNotification(\McpServerConnection::sendResourcesChangedNotification());
+        broadcastLegacyNotification(sub (McpServerConnection conn) { conn.sendResourcesChangedNotification(); });
         notifySubscribers("resourcesListChanged");
     }
 
@@ -3908,7 +3908,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
 
         @see @ref notifyToolsListChanged() */
     notifyPromptsListChanged() {
-        broadcastLegacyNotification(\McpServerConnection::sendPromptsChangedNotification());
+        broadcastLegacyNotification(sub (McpServerConnection conn) { conn.sendPromptsChangedNotification(); });
         notifySubscribers("promptsListChanged");
     }
 
