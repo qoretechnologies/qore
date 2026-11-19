@@ -8935,6 +8935,163 @@ static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_skip_code
     }
 }
 
+//! The state of the frame of QoreIRInterpreter::execute() that the dismissal of a call's exception event needs, and
+//! where the code continues after it (see qore_ir_dismiss_call(); qore#6626)
+struct QoreIRDismissCall {
+    //! the frame: its values, temps, temp scope marks and the bookkeeping of its borrowed temps
+    IRCallFrame* frame;
+    //! the weak-load temps of the frame (a local of execute())
+    std::unordered_map<uint32_t, int32_t>* weak_load_temp_slots;
+    //! the order of the release of a statement's temps by an exception
+    const std::vector<uint32_t>* release_groups;
+    //! the names of the values that the release of temps releases, for a test (see QoreIRInterpreter::execute())
+    std::vector<std::string>* cleanup_log;
+    //! the debugger's state of the frame
+    QoreIRDebugFrameState* dbg_state;
+    //! the call whose exception event the debugger dismissed
+    const QoreIRInvokeInstruction* inv;
+    //! the statement of the exception event
+    const AbstractStatement* stmt;
+    ExceptionSink* xsink;
+    //! in: the call's block and position; out: where the code continues, or the return or throw at which the
+    //! function ends
+    QoreIRBasicBlock* block;
+    size_t ip;
+};
+
+//! Clears a slot as clearSlotForOverwrite() in QoreIRInterpreter::execute() does
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_clear_slot(QoreIRDismissCall& dc,
+        uint32_t id) {
+    IRCallFrame& f = *dc.frame;
+    if (id >= f.values.size()) {
+        return;
+    }
+    bool had_borrowed_value = dc.weak_load_temp_slots->erase(id) > 0;
+    if (id < f.borrowed_temp_remaining.size() && f.borrowed_temp_remaining[id] > 0) {
+        f.borrowed_temp_remaining[id] = 0;
+        --f.borrowed_temp_active;
+        had_borrowed_value = true;
+    }
+    bool had_cleanup = removeAllCleanupEntries(f.cleanup, id);
+    if (had_cleanup && !had_borrowed_value) {
+        f.values[id].discard(dc.xsink);
+    }
+    f.values[id] = QoreValue();
+}
+
+//! Releases the temps of the temp scope at the given index of the frame's marks, and the temp scopes opened after it,
+//! as cleanupToTempMark() in QoreIRInterpreter::execute() does for an exception (no_throw); the mark is kept if
+//! \a keep_mark
+static QORE_INTERN_NOINLINE __attribute__((cold)) void qore_ir_dismiss_release_temps(QoreIRDismissCall& dc,
+        size_t mark_index, bool keep_mark) {
+    IRCallFrame& f = *dc.frame;
+    // the dismissal's sink takes the exceptions of the destructors (the lambda falls back to a sink of its own only
+    // without one)
+    assert(dc.xsink);
+    assert(mark_index < f.temp_cleanup_marks.size());
+    size_t cleanup_size = f.temp_cleanup_marks[mark_index].cleanup_size + (keep_mark ? 1 : 0);
+    if (f.cleanup.size() > cleanup_size + 1) {
+        f.cleanup.orderForException(cleanup_size, *dc.release_groups);
+    }
+    while (f.cleanup.size() > cleanup_size) {
+        uint32_t id = f.cleanup.back();
+        f.cleanup.pop_back();
+        if (id >= f.values.size()) {
+            continue;
+        }
+        QoreValue& slot = f.values[id];
+        if (dc.cleanup_log && slot.hasNode()) {
+            if (slot.getType() == NT_STRING) {
+                QoreStringValueHelper str(slot);
+                dc.cleanup_log->push_back(str->getBuffer());
+            } else {
+                dc.cleanup_log->push_back(slot.getTypeName());
+            }
+        }
+        slot.discard(dc.xsink);
+        slot = QoreValue();
+        dc.weak_load_temp_slots->erase(id);
+        // as releaseBorrowedTemp()
+        if (id < f.borrowed_temp_remaining.size() && f.borrowed_temp_remaining[id] > 0) {
+            f.borrowed_temp_remaining[id] = 0;
+            --f.borrowed_temp_active;
+            f.values[id] = QoreValue();
+        }
+    }
+    f.temp_cleanup_marks.erase(f.temp_cleanup_marks.begin() + mark_index + (keep_mark ? 1 : 0),
+        f.temp_cleanup_marks.end());
+    f.ephemeral_weak_ref_slots.clear();
+}
+
+//! Dismisses the exception event of a call: the call gives no value, and the code continues after the statement
+//! (qore#6626)
+/** Out of line, with the frame's state passed explicitly, so that the interpreter's loop does not pay for it: only a
+    debugger's dismissal runs it.
+
+    The statement's own temp scope is found by the mark depth that the statement recorded when it started
+    (qore_ir_dbg_statement_mark_depth()), and the code continues at the DiscardTemps that closes it
+    (qore_ir_find_dismiss_target()); the statement's temporaries are released now, as the AST interpreter releases
+    them while the exception unwinds, before its event, so that the exceptions of their destructors are dismissed with
+    it.  A statement with a temp scope of its own whose end is not found (a return or a throw statement, whose scope
+    ends with the function's exit) ends the function, which returns no value, as a dismissed exception of a throw
+    statement does (#5825).  The restores of the skipped code are done and the values that it defines cleared
+    (qore_ir_dismiss_skip_code()).
+
+    @return true if the function ends: the caller unwinds the frame at dc.block / dc.ip (the return or throw reached,
+    whose open implicit contexts the frame's exit restores, or the call); false if the code continues at dc.block /
+    dc.ip
+*/
+static QORE_INTERN_NOINLINE __attribute__((cold)) bool qore_ir_dismiss_call(QoreIRDismissCall& dc) {
+    IRCallFrame& f = *dc.frame;
+    QoreIRBasicBlock* dismiss_block = nullptr;
+    size_t dismiss_ip = 0;
+    std::vector<QoreIRBasicBlock*> dismiss_path;
+    ptrdiff_t stmt_marks = qore_ir_dbg_statement_mark_depth(*dc.dbg_state, dc.stmt);
+    size_t cur_marks = f.temp_cleanup_marks.size();
+    // the scope of the statement's own temp scope, if it has one and the scopes are paired
+    uint32_t stmt_scope_id = stmt_marks >= 0 && cur_marks > static_cast<size_t>(stmt_marks)
+        ? f.temp_cleanup_marks[static_cast<size_t>(stmt_marks)].scope_id : 0;
+    bool found = qore_ir_find_dismiss_target(dc.inv->normal_target, stmt_scope_id, false, dismiss_block, dismiss_ip,
+        dismiss_path);
+    bool exit_function = !found && stmt_scope_id;
+    bool exit_path = exit_function && qore_ir_find_dismiss_target(dc.inv->normal_target, 0, true, dismiss_block,
+        dismiss_ip, dismiss_path);
+    if (stmt_scope_id && (found || exit_function)) {
+        // the statement's mark stays for its DiscardTemps if the code continues there, and goes if the function ends
+        qore_ir_dismiss_release_temps(dc, static_cast<size_t>(stmt_marks), found);
+        if (*dc.xsink) {
+            dc.xsink->clear();
+        }
+    }
+    if (found || exit_path) {
+        std::vector<uint32_t> to_clear;
+        IRValueSlots values{f.values};
+        qore_ir_dismiss_skip_code(dismiss_path, dismiss_block, dismiss_ip, values, f.cleanup, dc.xsink, to_clear);
+        for (uint32_t id : to_clear) {
+            qore_ir_dismiss_clear_slot(dc, id);
+        }
+    }
+    if (dc.inv->result.isValid() && !hasCleanupEntry(f.cleanup, dc.inv->result.id)) {
+        qore_ir_dismiss_clear_slot(dc, dc.inv->result.id);
+    }
+    if (exit_function) {
+        if (exit_path) {
+            dc.block = dismiss_block;
+            dc.ip = dismiss_ip;
+        }
+        dc.dbg_state->exit_dismissed = true;
+        return true;
+    }
+    if (found) {
+        dc.block = dismiss_block;
+        dc.ip = dismiss_ip;
+    } else {
+        dc.block = dc.inv->normal_target;
+        dc.ip = 0;
+    }
+    return false;
+}
+
 //! Starts the events of the statements that contain the given statement, whose exception event was made
 static void qore_ir_dbg_start_chain(QoreIRDebugFrameState& st, const AbstractStatement* stmt) {
     if (!st.nest_used) {
@@ -11190,6 +11347,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         return held && qore_ir_release_weak_receiver(val, xsink);
     };
 
+    // keep in sync with qore_ir_dismiss_clear_slot(), which the dismissal of a call's exception event runs
     auto clearSlotForOverwrite = [&](uint32_t id) {
         if (id >= values.size()) {
             return;
@@ -11340,6 +11498,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Releases the temps registered after the sentinel of the temp scope at the given index of temp_cleanup_marks,
     // and the sentinel and the temp scopes opened after it unless keep_mark is given (see cleanupToTempScope())
+    // keep in sync with qore_ir_dismiss_release_temps(), which the dismissal of a call's exception event runs
     auto cleanupToTempMark = [&](size_t mark_index, bool no_throw, bool keep_mark) {
         assert(mark_index < temp_cleanup_marks.size());
         // the mark's sentinel is at cleanup_size; keeping the mark keeps its sentinel too
@@ -12955,10 +13114,11 @@ dispatch_folded_step_host:
                         fflush(stderr);
                     }
                     if (debug_active) {
-                        tlpd->dbgException(get_exception_statement(inst), xsink);
+                        const AbstractStatement* exc_stmt = get_exception_statement(inst);
+                        tlpd->dbgException(exc_stmt, xsink);
                         dbg_state.exc_reported = *xsink ? xsink->getException() : nullptr;
                         if (*xsink) {
-                            qore_ir_dbg_start_chain(dbg_state, get_exception_statement(inst));
+                            qore_ir_dbg_start_chain(dbg_state, exc_stmt);
                         }
                         // the debugger can set the local variables of the frame at the stop of the exception
                         invalidateExternalCaches();
@@ -12971,66 +13131,20 @@ dispatch_folded_step_host:
                         // dbgException may dismiss the exception. AST execution aborts the
                         // statement that raised and then continues at statement cleanup; it
                         // does not resume the failed expression's normal continuation.
-                        if (!*xsink) {
-                            QoreIRBasicBlock* dismiss_block = nullptr;
-                            size_t dismiss_ip = 0;
-                            std::vector<QoreIRBasicBlock*> dismiss_path;
+                        if (!*xsink) [[unlikely]] {
                             // the call gives no value, and the code continues after the statement (qore#6626)
-                            ptrdiff_t stmt_marks = qore_ir_dbg_statement_mark_depth(dbg_state,
-                                get_exception_statement(inst));
-                            size_t cur_marks = temp_cleanup_marks.size();
-                            // the scope of the statement's own temp scope, if it has one and the scopes are paired
-                            uint32_t stmt_scope_id = stmt_marks >= 0 && cur_marks > static_cast<size_t>(stmt_marks)
-                                ? temp_cleanup_marks[static_cast<size_t>(stmt_marks)].scope_id : 0;
+                            // release_groups, not the address in func again: the interpreter computes the address
+                            // once for every call, and a second expression costs it a second copy
+                            QoreIRDismissCall dc{&frame, &weak_load_temp_slots, release_groups, cleanup_log,
+                                &dbg_state, inv, exc_stmt, xsink, block, ip};
                             prev_block = block;
-                            bool found = qore_ir_find_dismiss_target(inv->normal_target, stmt_scope_id, false,
-                                dismiss_block, dismiss_ip, dismiss_path);
-                            // a statement with a temp scope of its own whose end is not found (a return or a throw
-                            // statement, whose scope ends with the function's exit) ends the function, which
-                            // returns no value, as a dismissed exception of a throw statement does (#5825); the
-                            // restores of the code on the path to its return or throw are done
-                            bool exit_function = !found && stmt_scope_id;
-                            bool exit_path = exit_function && qore_ir_find_dismiss_target(inv->normal_target, 0, true,
-                                dismiss_block, dismiss_ip, dismiss_path);
-                            if (stmt_scope_id && (found || exit_function)) {
-                                // the temporaries of the statement are released now, as the AST interpreter
-                                // releases them while the exception unwinds, before its event: the exceptions of
-                                // their destructors are dismissed with it; the statement's mark stays for its
-                                // DiscardTemps if the code continues there, and goes if the function ends
-                                cleanupToTempMark(static_cast<size_t>(stmt_marks), true, found);
-                                if (*xsink) {
-                                    xsink->clear();
-                                }
-                            }
-                            if (found || exit_path) {
-                                std::vector<uint32_t> to_clear;
-                                qore_ir_dismiss_skip_code(dismiss_path, dismiss_block, dismiss_ip, values, cleanup,
-                                    xsink, to_clear);
-                                for (uint32_t id : to_clear) {
-                                    clearSlotForOverwrite(id);
-                                }
-                            }
-                            if (inv->result.isValid() && !hasCleanupEntry(cleanup, inv->result.id)) {
-                                clearSlotForOverwrite(inv->result.id);
-                            }
+                            bool exit_function = qore_ir_dismiss_call(dc);
+                            block = dc.block;
+                            ip = dc.ip;
                             if (exit_function) {
-                                // the frame's exit restores the implicit contexts still open at the return
-                                // reached; those that the path closed were restored above
-                                if (exit_path) {
-                                    block = dismiss_block;
-                                    ip = dismiss_ip;
-                                }
-                                dbg_state.exit_dismissed = true;
-                                unwindForException();
-                                cleanupLocalCaches();
-                                return exitAfterUnwind();
-                            }
-                            if (found) {
-                                block = dismiss_block;
-                                ip = dismiss_ip;
-                            } else {
-                                block = inv->normal_target;
-                                ip = 0;
+                                // the function ends as after the dismissal of an exception at a landing pad; the
+                                // call's call-site scope ends first, as on the way to a landing pad
+                                goto dbg_dismissed_exit;
                             }
                             break;
                         }
@@ -13069,6 +13183,9 @@ dispatch_folded_step_host:
                     dbgReportException();
                     dbgReportEnclosing();
                     if (dbg_state.exit_dismissed) {
+                        // also reached from the dismissal of a call's exception event that ends the function
+                        // (qore_ir_dismiss_call())
+dbg_dismissed_exit:
                         unwindForException();
                         cleanupLocalCaches();
                         return exitAfterUnwind();
