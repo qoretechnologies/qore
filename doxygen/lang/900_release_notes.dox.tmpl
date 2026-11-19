@@ -2404,6 +2404,8 @@
     - a call of a method in a diamond class hierarchy tests the variants of a method of a shared ancestor once, not
       once for each path to the ancestor, so that a later path through a private edge no longer hides the parent
       classes after it, and a \c RUNTIME-OVERLOAD-ERROR lists them once (see @ref overloading_intro; issue #6488)
+    - @ref connectionprovider_3_1 "ConnectionProvider" accepts closures and call references for \c code connection
+      options and checks parameterized option types by assignment (issue #6712)
     - @ref connectionproviderintro "ConnectionProvider" module: a list connection option with allowed element values
       accepts its allowed elements; every non-empty list was refused (see @ref connectionprovider_3_1; issue #6490)
     - @ref Qore::thread_list() "thread_list()" lists a thread from the time its TID is returned by the
