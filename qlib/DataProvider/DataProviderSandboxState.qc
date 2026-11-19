@@ -85,6 +85,32 @@ class DataProviderSandboxState {
         }
     }
 
+    #! Returns True if the calling code may change a process-wide registry or cache
+    /** Sandboxed code (Qore::SandboxManager::isSandboxed()) may not, except in a deferred initialization that trusted
+        code registered (see checkRegistration()) (qore#6747)
+    */
+    static bool mayRegisterShared() {
+        return !SandboxManager::isSandboxed() || Priv::_trusted_deferred_init;
+    }
+
+    #! Refuses a change of a process-wide registry or cache of a standard module to sandboxed code
+    /** The entries of such a registry are used by every caller of the module, so an entry that one sandboxed tenant
+        placed, replaced or removed would change what the module does for other tenants (qore#6747).
+
+        @param registry the registry, for the error
+        @param what the kind of entry, for the error
+        @param name the name of the entry
+        @param removal @ref True if the entry is removed
+
+        @throw DATA-PROVIDER-REGISTRATION-DENIED sandboxed code registers, replaces or removes an entry
+    */
+    static checkSharedRegistration(string registry, string what, string name, *bool removal) {
+        if (!DataProviderSandboxState::mayRegisterShared()) {
+            throw "DATA-PROVIDER-REGISTRATION-DENIED", sprintf("sandboxed code cannot %s %s%s in the process-wide "
+                "%s", removal ? "remove" : "register", what, name.val() ? sprintf(" %y", name) : "", registry);
+        }
+    }
+
     #! The module now does, or no longer does, register an app with uncontrolled external I/O
     static setModuleUncontrolled(string module_name, bool uncontrolled) {
         AutoLock al(lck);

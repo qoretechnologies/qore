@@ -36,7 +36,6 @@ public class JinaDataProvider inherits JinaDataProviderCommon {
 
     private {
         static hash<string, Reflection::Class> childMap = DefaultChildMap;
-        static Mutex child_lock();
 
         const DefaultChildMap = {
             "read-url": Class::forName("JinaDataProvider::JinaReaderDataProvider"),
@@ -51,6 +50,10 @@ public class JinaDataProvider inherits JinaDataProviderCommon {
             "rerank":
                 Class::forName("JinaDataProvider::JinaRerankDataProvider"),
         };
+    }
+
+    private:internal {
+        static Mutex child_lock();
     }
 
     #! Creates the root provider from an authenticated transport

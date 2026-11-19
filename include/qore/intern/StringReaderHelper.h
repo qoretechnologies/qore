@@ -86,9 +86,18 @@ DLLLOCAL bool q_encoding_checks_text(const QoreEncoding* enc);
 DLLLOCAL qore_offset_t q_text_invalid_offset(const char* p, size_t len, const QoreEncoding* enc,
         bool allow_cut_end = false, size_t ascii_prefix = 0);
 
+//! returns the byte offset of the first byte sequence of the string that is not valid in its encoding, or -1
+/** As q_text_invalid_offset(), with the ASCII prefix of the string, which is found a word at a time and kept with
+    the string; strings in encodings whose text is not checked (see q_encoding_checks_text()) are valid
+
+    @param str the string
+    @param allow_cut_end if true, a valid start of a character cut off by the end of the string is not an error
+*/
+DLLLOCAL qore_offset_t q_string_invalid_offset(const QoreString& str, bool allow_cut_end = false);
+
 //! raises the \c INVALID-ENCODING exception of a text reader
 /** @param xsink the exception sink
-    @param cls the name of the class of the reader
+    @param cls the name of the class of the reader, or nullptr for a function
     @param meth the name of the method of the reader
     @param what what was read (ex: \c "line read")
     @param enc the encoding of the text

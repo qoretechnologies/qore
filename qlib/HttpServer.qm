@@ -1222,6 +1222,14 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         Priv::ExternalConnectionKeeper external_connections();
 
+        #! The maximum number of header values in @ref encoding_preferences_cache and the longest value cached
+        /** The header is chosen by the client, so the cache is emptied when it is full and long values are not cached
+        */
+        const MaxCachedEncodingPreferences = 64;
+        const MaxCachedEncodingHeaderLength = 256;
+    }
+
+    private:internal {
         #! Cached HTTP date header value
         static string cached_date_header;
 
@@ -1245,14 +1253,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Protects @ref encoding_preferences_cache
         static Mutex encoding_preferences_lck();
 
-        #! The maximum number of header values in @ref encoding_preferences_cache and the longest value cached
-        /** The header is chosen by the client, so the cache is emptied when it is full and long values are not cached
-        */
-        const MaxCachedEncodingPreferences = 64;
-        const MaxCachedEncodingHeaderLength = 256;
-    }
-
-    private:internal {
         #! The information about the names of the fields of the configured response headers (\c hdr)
         /** A subclass can change \c hdr after the constructor and while requests are served; each response reads
             \c hdr and this once and compares the headers that this was made for with its own, so that the names are
@@ -6460,9 +6460,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         bool no_new_dedicated = False;
         int id;
 
-        #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
-        static *code<nothing(HttpListener)> dbg_stopping_hook;
-
         # socket handler hash
         hash<string, AbstractHttpSocketHandlerInterface> shh;
 
@@ -6514,6 +6511,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             SSL_VERIFY_FAIL_IF_NO_PEER_CERT: "SSL_VERIFY_FAIL_IF_NO_PEER_CERT",
             SSL_VERIFY_CLIENT_ONCE: "SSL_VERIFY_CLIENT_ONCE",
         };
+    }
+
+    private:internal {
+        #! the test hook that stop() calls once it has marked the listener as stopping (see dbgSetStoppingHook())
+        static *code<nothing(HttpListener)> dbg_stopping_hook;
     }
 
     #! Creates the object with the given parameters

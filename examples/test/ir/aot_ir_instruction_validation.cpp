@@ -220,6 +220,8 @@ int main() {
     run("v9 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 9 ", false, false, 9);
     run("AK v47 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 47 ",
         false, false, QORE_AOT_BATCH_AK_VERSION);
+    run("AL v48 payload", O::AddInt, G::Base, {1, 2}, empty, "unsupported binary format version 48 ",
+        false, false, QORE_AOT_BATCH_AL_VERSION);
     for (O op : {O::ConstInt, O::Br, O::BrIf, O::Return, O::Invoke, O::InvokeMethodDirect,
             O::ScopeEnter, O::MakeList, O::DebugStatement}) {
         run("wrong nested opcode", O::Invoke, G::Invoke, {}, invoke(op), pairing);
@@ -352,9 +354,12 @@ int main() {
             }
         };
     };
+    // the function of a check has only the instruction: a ScopeExit that is decoded is then refused by the verification
+    // of the stacks, as no scope is open (qore#6468), which happens only once the instruction has been decoded
+    const char* no_scope = "ScopeExit closes an entry of the scopes that is not the innermost one";
     run("ScopeExit without paths before the flow version", O::ScopeExit, G::ScopeExit, {}, scope_exit(-1, {}),
         "unsupported binary format version 45 ", false, false, QORE_AOT_DEBUG_FLOW_VERSION - 1, 0);
-    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), nullptr, false, false,
+    run("ScopeExit with paths", O::ScopeExit, G::ScopeExit, {}, scope_exit(5, {0, 0}), no_scope, false, false,
         QORE_AOT_BINARY_VERSION, 0);
     run("ScopeExit flow mask", O::ScopeExit, G::ScopeExit, {}, scope_exit(0x40, {}),
         "invalid debugger flow mask", false, false, QORE_AOT_BINARY_VERSION, 0);

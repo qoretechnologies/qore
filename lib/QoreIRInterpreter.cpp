@@ -6921,6 +6921,11 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
             inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
         }
+        // a variant that the class context cannot call is not cached: the generic call path raises the error of the
+        // AST interpreter, whose variant search skips it (qore#6735)
+        if (!qore_class_private::runtimeCheckMethodVariantAccess(*method, variant, class_ctx)) {
+            return false;
+        }
         // a variant with functional domains declared in Qore source is checked against the caller on each call
         // that resolves it at run time (see qore_get_variant_denied_domains()), so it is not cached here
         if (variant->isUser() && variant->getUserVariantBase()->getDeclaredDomain()) {
@@ -13414,6 +13419,9 @@ dispatch_folded_step_host:
                 // CatchExceptionHelper for rethrow support, rethrown check + xsink->clear(),
                 // executeHandlerBody() for IR-compiled handlers, and error flag update.
                 auto* lp_inst = static_cast<QoreIRLandingPadInstruction*>(inst);
+                // the scopes that the handler unwinds to are open: a path that closed one of them has closed a scope
+                // twice (qore#6658, see ScopeExit)
+                assert(scope_stack.size() >= lp_inst->scope_depth);
                 while (scope_stack.size() > lp_inst->scope_depth) {
                     // the temporaries of the statements of the scope that the exception left are released before
                     // its handlers run, as in the AST (see unwindForException()); the statement that raised the
@@ -18408,6 +18416,12 @@ load_local_done:
             }
             case QoreIROpcode::ScopeExit: {
                 auto* scope_inst = static_cast<QoreIRScopeExitInstruction*>(inst);
+                // a scope exit names the innermost scope open: the interpreter closes the innermost one whatever its
+                // id, so an exit of a scope that is closed already closes an enclosing one (qore#6658: native code
+                // closes the scope that the id names, and is not affected); the lowering and the verification of IR
+                // read from a module guarantee it, which a debug build checks
+                assert(scope_stack.empty() || !scope_stack.back().enter
+                    || scope_stack.back().enter->scope_id == scope_inst->scope_id);
                 if (scope_inst->trim) {
                     // The scope stays open: only the handlers registered after its first keep_handlers ones are
                     // dropped, without running them, because they are lowered inline; the handlers kept run on the

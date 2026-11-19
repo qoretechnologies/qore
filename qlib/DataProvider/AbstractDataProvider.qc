@@ -2468,7 +2468,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         const string GenericApiCallConnectionMemberName = "conn";
     }
 
-    private {
+    private:internal {
         #! flag if callbacks are locked
         static bool callbacks_locked = False;
 
@@ -2511,9 +2511,7 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             @since DataProvider 3.5
         */
         static *code<*AbstractDataProvider(object)> cb_build_generic_api_call_child;
-    }
 
-    private:internal {
         #! Optional debug info collector
         /** @since DataProvider 3.3
         */
@@ -6230,6 +6228,36 @@ hash<GeneratedDataInfo> output = prov.finishCreate();
                 (map $1.key, expmap.pairIterator(), $1.value.role & role));
         }
         return expinfo;
+    }
+
+    #! Returns True if the host's callback for dynamic value resolution says that the value needs resolution
+    /** For subclasses that resolve dynamic values; the callback itself is not visible to subclasses, as it is the
+        host's (qore#6748)
+
+        @param value the value to check
+
+        @return False if no callback has been set (see setDynamicValueCallbacks())
+
+        @since DataProvider 3.12
+    */
+    private static bool valueNeedsResolution(auto value) {
+        *code cb = cb_value_needs_resolution;
+        return cb ? cb(value).toBool() : False;
+    }
+
+    #! Resolves a dynamic value with the host's callback for dynamic value resolution
+    /** For subclasses that resolve dynamic values; the callback itself is not visible to subclasses, as it is the
+        host's (qore#6748)
+
+        @param value the value to resolve
+
+        @return the resolved value, or \a value if no callback has been set (see setDynamicValueCallbacks())
+
+        @since DataProvider 3.12
+    */
+    private static auto resolveValue(auto value) {
+        *code cb = cb_resolve_value;
+        return cb ? cb(value) : value;
     }
 
     #! Ensures that no callbacks can be set for dynamic URI resolution

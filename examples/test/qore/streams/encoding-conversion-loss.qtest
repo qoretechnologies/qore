@@ -222,8 +222,9 @@ class EncodingConversionLossTest inherits QUnit::Test {
             binary out;
             *hash<ExceptionInfo> ex = inputStreamError(i.data, enc, "UTF-8", block, \out);
             if (ex) {
-                assertEq("ENCODING-CONVERSION-ERROR", ex.err, sprintf("block %d", block));
-                assertRegex(sprintf("byte offset %d ", i.offset), ex.desc, sprintf("block %d", block));
+                # input cut off at the end is not valid in the source encoding (qoretechnologies/qore#6730)
+                assertEq("INVALID-ENCODING", ex.err, sprintf("block %d", block));
+                assertRegex(sprintf("byte offset %d$", i.offset), ex.desc, sprintf("block %d", block));
                 # only the characters before it can have been read
                 assertEq(binary("日").substr(0, out.size()), out, sprintf("block %d", block));
             } else {

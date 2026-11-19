@@ -45,9 +45,17 @@ std::string ByteFallbackDecoder::decode(const std::vector<std::string>& tokens) 
     std::string result;
     std::string byte_buffer;
 
+    // as in Hugging Face tokenizers, the bytes of consecutive byte tokens are kept if they are valid UTF-8, else
+    // each byte token is replaced by U+FFFD (qore#6604)
     auto flush_bytes = [&]() {
         if (!byte_buffer.empty()) {
-            result += byte_buffer;
+            if (q_get_invalid_text_offset(QCS_UTF8, byte_buffer.data(), byte_buffer.size()) < 0) {
+                result += byte_buffer;
+            } else {
+                for (size_t i = 0; i < byte_buffer.size(); ++i) {
+                    result += "\xef\xbf\xbd";
+                }
+            }
             byte_buffer.clear();
         }
     };

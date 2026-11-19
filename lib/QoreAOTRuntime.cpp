@@ -4585,9 +4585,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
-                        method = findAOTStaticMethod(qc, ref2);
-                        if (!method) {
-                            method = qc->findMethod(ref2);
+                        // the method that the image records with the class that declares it (qore#6679)
+                        bool have_class;
+                        method = qore_aot_resolve_static_method_ref_target(pgm, qc, ref2, have_class);
+                        if (!have_class) {
+                            method = findAOTStaticMethod(qc, ref2);
+                            if (!method) {
+                                method = qc->findMethod(ref2);
+                            }
                         }
                     }
                 }

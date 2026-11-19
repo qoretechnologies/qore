@@ -23,6 +23,19 @@
     of a large list to BSON.  A hash or list nested too deeply to be converted to BSON, or a BSON document nested too
     deeply to be converted to a hash, raises \c STACK-LIMIT-EXCEEDED.
 
+    A document received from the server is converted to a hash with its strings (string values, code, symbols,
+    regular expressions and their options, DBPointer collections) tagged UTF-8 and its keys converted to the default
+    encoding (the encoding of hash keys, as \c parse_json() converts its keys); a BSON string or key that is not valid
+    UTF-8 (which libbson does not check in the documents that it reads, and which a document written by another driver
+    or an older server can have) raises \c INVALID-ENCODING with the byte offset of the first invalid byte sequence,
+    as does a database or collection name from the server that is not valid UTF-8.
+
+    Text given to the driver is UTF-8: the strings of a document are converted to UTF-8 and its keys from the default
+    encoding, and the URI and the database and collection names given to the module are checked in their encodings
+    (\c INVALID-ENCODING) and converted to UTF-8; the names returned by \c getName() are tagged UTF-8.  A document
+    with a key that the default encoding cannot hold (ex: \c "€" with an \c ISO-8859-1 default encoding) raises
+    \c ENCODING-CONVERSION-ERROR where it is converted to a hash.
+
     This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
     more information). The module is tagged as such in the module's header (meaning it can be loaded
     unconditionally regardless of how the %Qore library was initialized).
@@ -68,14 +81,6 @@ list<hash<auto>> docs = users.aggregate((
     {"$project": {"name": 1, "email": 1}},
 )).toList();
     @endcode
-
-    @section mongodb_strings Strings and Character Encodings
-
-    BSON strings and keys, MongoDB database and collection names and connection URIs are UTF-8: the strings that the
-    module gives them are converted to UTF-8, whatever their encoding, and the strings that it reads from them are
-    tagged UTF-8.
-    The keys of a document are hash keys, which are in the @ref default_encoding "default character encoding", so
-    they are converted to and from it.
 
     @section mongodbconnection Connection Strings
 

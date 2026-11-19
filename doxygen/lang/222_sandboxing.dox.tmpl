@@ -429,6 +429,24 @@ authenticate();
     hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
     method that sets it.  See @ref module_public_variables.
 
+    Reading is not restricted: a class that sandboxed code derives from a public class of a module can read the
+    class's static members that are visible to subclasses (\c private, which is \c private:hierarchy), and call the
+    methods of the objects that they hold.  State that a class keeps for all of its callers (caches of objects and
+    connections, the callbacks and loggers of the host, the state of other callers' operations) is therefore
+    \c private:internal, which no subclass can see; a subclass that needs to use such state calls a method that the
+    class provides for it.  In the standard modules, the static members that a subclass of a public class can still
+    read are listed, each with the reason why every caller may read it, and a check of the sources
+    (\c examples/test/runner/test_module_shared_statics.py) fails for any other.
+
+    The same applies to the code of a module that changes such state for its caller: a registry, lookup, resolver,
+    serializer, codec, schema or type cache of a standard module, which every caller uses, refuses registrations,
+    replacements and removals from sandboxed code
+    (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), whatever functional domains the
+    sandbox gives it, so that one tenant cannot change what a module does for another;
+    modules register their entries in their initialization, which no sandbox governs (see @ref sandbox_module_init).
+    A check of the sources of the standard modules (\c examples/test/runner/test_shared_registry_checks.py) fails for
+    a registry mutator that makes no such check.
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
@@ -530,7 +548,8 @@ authenticate();
 
     A module that a caller loads by path, or finds through a module path that a %Program added with
     \c %prepend-module-path or \c %append-module-path, is not library code: it is initialized under the sandbox of
-    the code that loads it, and a source module's %Program keeps that sandbox.  Neither is a library module that code
+    the code that loads it, and a source module's %Program keeps that sandbox.  A binary module is native code, which no
+    sandbox governs: code that is not trusted loads one only from the module path (see @ref sandbox_native_code).  Neither is a library module that code
     that is not trusted loads into a %Program container of its own (for example with
     @ref Qore::Program::loadApplyToPrivateUserModule() "Program::loadApplyToPrivateUserModule()"): it is parsed and
     initialized with the container's code and parse defines, under the sandbox of the code that loads it.
@@ -549,6 +568,28 @@ authenticate();
       that is not trusted and that has the same sandbox, or, for code with no sandbox, that runs in the same %Program:
       a later request for its name from other code, library code included, and a reload raise \c LOAD-MODULE-ERROR,
       naming the module and its file
+
+    @subsection sandbox_native_code The Trust Model of Native Code
+    Native code (a binary module, and the native code of a module compiled with \c qcc) runs with the privileges of
+    the process: no sandbox governs it, as it does not run through the checks of the library.  It is therefore trusted
+    code, and the module loader maps it only when trusted code decided the load:
+    - the module file is in a directory of the process-wide module path, which the host controls; or
+    - the code that loads it is trusted (no sandbox governs it and its functional domains are not restricted); or
+    - the code that loads it may use uncontrolled APIs: neither its parse options
+      (@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS") nor any sandbox that governs it
+      (@ref Qore::SandboxManager::setUncontrolledApiPolicy() "SandboxManager::setUncontrolledApiPolicy()") forbid them.
+
+    Otherwise the load is refused with \c LOAD-MODULE-ERROR, whether the module is loaded by its path, found through a
+    module path of the loading code, or loaded into a %Program that the loading code created; a compiled module whose
+    source module is next to it is loaded as the source module, which runs under the sandbox of the loading code.  A
+    module statically linked into a program built with \c qcc is part of that program's own native code and needs no
+    such decision.
+
+    What the library checks when it loads native code that it may load is the integrity of the file, not its trust:
+    the code signature of a module on macOS (when signatures are verified) detects a damaged file, and the
+    verification of the IR that a compiled module carries (the IR that the IR interpreter and the debugger run)
+    detects IR damaged by accident; neither is a security boundary, as the module's native code could do anything that
+    its IR could (qore#6776).
 
     @subsection sandbox_static_modules Statically Linked Modules
 
@@ -942,6 +983,17 @@ socket) and connects to the checked addresses only
 
     A sandbox that restricts neither network nor filesystem access (for example one that is used only to interrupt
     code) does not check database connections.
+
+    @subsection sandbox_net_cached_data Data Cached from a Network Destination
+    Code that is shared by several sandboxes, such as a library module, and that serves data it obtained from a network
+    destination to later callers (a cache of tokens that a metadata endpoint issued, for example) must serve it only to
+    a caller that could have fetched it itself: a caller whose sandbox denies the destination would otherwise receive
+    the data without a connection that the sandbox checks.  @ref Qore::SandboxManager::checkNetworkConnect()
+    "SandboxManager::checkNetworkConnect()" applies the policy that a TCP connection made at that point would be checked
+    against, and raises the exception that the connection would raise, without connecting; the cache calls it before it
+    serves a cached value.  Data that a secret or a credential file authorizes is instead cached under a key that covers
+    the secret or the content of the file, which the caller reads with its own policy.  The token caches of the
+    \c AzureAuth and \c GcpAuth modules follow these rules.
 
     @subsection sandbox_net_protocols Protocol Constants
 

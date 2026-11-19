@@ -47,7 +47,11 @@ public namespace EdifactUtil {
                 registry = new hash<string, EdifactSchema>();
             }
             bool reload = opts.reload ?? False;
-            if (!reload && registry{release}) {
+            # the registry and the directory cache are process-wide: sandboxed code neither gets a schema that other
+            # code loaded (from a directory that it may not read) nor places one that other code then gets
+            # (qore#6750)
+            bool shared = !SandboxManager::isSandboxed();
+            if (shared && !reload && registry{release}) {
                 return registry{release};
             }
 
@@ -60,7 +64,9 @@ public namespace EdifactUtil {
                 };
                 schema = cache.loadSchema(release, cache_opts);
                 if (schema) {
-                    registry{release} = schema;
+                    if (shared) {
+                        registry{release} = schema;
+                    }
                     return schema;
                 }
             }
@@ -75,8 +81,10 @@ public namespace EdifactUtil {
 
             EdifactDirectoryLoader loader();
             schema = loader.loadFromFlatDir(opts.dir, release, opts.loader_opts ?? {});
-            cache.writeSchema(schema);
-            registry{release} = schema;
+            if (shared) {
+                cache.writeSchema(schema);
+                registry{release} = schema;
+            }
             return schema;
         }
 

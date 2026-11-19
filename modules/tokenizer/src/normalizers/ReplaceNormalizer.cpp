@@ -26,12 +26,18 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
     const QoreHashNode* pattern_hash = safeGetHashKey(config, "pattern");
     if (pattern_hash) {
         // Try to get "String" key from the pattern hash
-        std::string str_val = safeGetStringKey(pattern_hash, "String");
+        std::string str_val = configStringKey(pattern_hash, "String", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!str_val.empty()) {
             pattern = str_val;
         } else {
             // Check if it's a Regex type
-            std::string regex_val = safeGetStringKey(pattern_hash, "Regex");
+            std::string regex_val = configStringKey(pattern_hash, "Regex", xsink);
+            if (*xsink) {
+                return;
+            }
             if (!regex_val.empty()) {
                 try {
                     regex_pattern = std::regex(regex_val);
@@ -49,7 +55,10 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
         }
     } else {
         // Maybe it's a plain string
-        std::string str = safeGetStdString(config->getKeyValue("pattern"));
+        std::string str = configStringKey(config, "pattern", xsink);
+        if (*xsink) {
+            return;
+        }
         if (!str.empty()) {
             pattern = std::move(str);
         } else {
@@ -60,7 +69,10 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
     }
 
     // Read the "content" (replacement) string
-    std::string content_str = safeGetStringKey(config, "content");
+    std::string content_str = configStringKey(config, "content", xsink);
+    if (*xsink) {
+        return;
+    }
     if (!content_str.empty()) {
         replacement = content_str;
     }

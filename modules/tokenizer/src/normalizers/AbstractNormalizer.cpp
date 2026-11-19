@@ -85,7 +85,10 @@ std::unique_ptr<AbstractNormalizer> AbstractNormalizer::fromConfig(const QoreHas
     }
 
     // Get the "type" field
-    std::string type = safeGetStringKey(config, "type");
+    std::string type = configStringKey(config, "type", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     if (type.empty()) {
         xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
             "normalizer config missing 'type' field");

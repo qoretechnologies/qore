@@ -392,6 +392,9 @@ public class EmbedderRateLimiter {
     }
 
     private:internal {
+        #! True for a limiter that getShared() returns, which every client of its account in the process uses
+        bool shared;
+
         #! Serializes the shared limiter registry
         static Mutex registry_lock();
         #! Key -> process-wide limiter
@@ -439,6 +442,7 @@ public class EmbedderRateLimiter {
             return limiter;
         }
         limiter = new EmbedderRateLimiter(requests_per_minute, tokens_per_minute);
+        limiter.shared = True;
         registry{key} = limiter;
         return limiter;
     }
@@ -485,9 +489,13 @@ int ticket = limiter.admit(estimated_tokens, limiter.getClockUs() + 60000000);
 
         @param c returns the current time in microseconds; it must never go backwards
 
+        @throw EMBEDDER-RATE-LIMIT-ACCESS-DENIED the limiter is shared (see getShared()) and the calling code is
+        sandboxed
+
         @since QoreRagTypes 1.0
     */
     setClock(code<int()> c) {
+        checkSeam("clock");
         AutoLock al(m);
         clock = c;
     }
@@ -511,11 +519,28 @@ limiter.setClock(int sub () { return now_us; });
 limiter.setWaiter(bool sub (int ms) { push waits, ms; now_us += ms * 1000; return False; });
         @endcode
 
+        @throw EMBEDDER-RATE-LIMIT-ACCESS-DENIED the limiter is shared (see getShared()) and the calling code is
+        sandboxed
+
         @since QoreRagTypes 1.0
     */
     setWaiter(code<bool(int)> w) {
+        checkSeam("waiter");
         AutoLock al(m);
         waiter = w;
+    }
+
+    #! Refuses a test seam of a shared limiter to sandboxed code
+    /** The clock and the waiter of a limiter that getShared() returns are called on the threads of every client
+        of its account in the process, so code that a sandbox governs cannot set them (qore#6750)
+
+        @throw EMBEDDER-RATE-LIMIT-ACCESS-DENIED the limiter is shared and the calling code is sandboxed
+    */
+    private:internal checkSeam(string what) {
+        if (shared && SandboxManager::isSandboxed()) {
+            throw "EMBEDDER-RATE-LIMIT-ACCESS-DENIED", sprintf("sandboxed code cannot set the %s of a shared rate "
+                "limiter, which runs on the threads of every client of its account", what);
+        }
     }
 
     #! Admits one request, waiting until it fits in the window
@@ -2032,6 +2057,9 @@ public class RagProviderRegistry {
         static hash<string, AbstractRerankerFactory> reranker_cache = {};
         static hash<string, AbstractVectorStoreFactory> vector_store_cache = {};
         static hash<string, AbstractChunkerFactory> chunker_cache = {};
+    }
+
+    private:internal {
         static Mutex registry_lock();
     }
 

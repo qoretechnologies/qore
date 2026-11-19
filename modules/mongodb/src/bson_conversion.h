@@ -33,6 +33,76 @@
 #include <mongoc/mongoc.h>
 #include <bson/bson.h>
 
+#include <memory>
+
+//! Returns UTF-8 text from libbson or libmongoc as a string tagged UTF-8
+/** @param p the text
+    @param len the size of the text in bytes
+    @param where the function or method that takes the text, for the exception (ex: \c "MongoDB")
+    @param what what the text is, for the exception (ex: \c "BSON string")
+    @param xsink for the \c INVALID-ENCODING exception raised if the text is not valid UTF-8
+
+    @return the string, or nullptr if an exception was raised
+*/
+DLLLOCAL QoreStringNode* mongo_utf8_string(const char* p, size_t len, const char* where, const char* what,
+        ExceptionSink* xsink);
+
+//! Returns a list of the UTF-8 names of a NULL-terminated array of names from libmongoc as strings tagged UTF-8
+/** @param names the names
+    @param where the method that takes the names, for the exception (ex: \c "MongoClient::listDatabaseNames()")
+    @param what what a name is, for the exception (ex: \c "database name")
+    @param xsink for the \c INVALID-ENCODING exception raised if a name is not valid UTF-8
+
+    @return the list, or nullptr if an exception was raised
+*/
+DLLLOCAL QoreListNode* mongo_utf8_string_list(char** names, const char* where, const char* what,
+        ExceptionSink* xsink);
+
+//! Sets a UTF-8 key of a hash, converted to the default encoding (the encoding of hash keys)
+/** @param h the hash
+    @param key the UTF-8 key, which must be valid UTF-8
+    @param len the size of the key in bytes
+    @param value the value, which is released if the key cannot be set
+    @param xsink for an exception converting the key
+
+    @return 0 for OK, -1 for an error
+*/
+DLLLOCAL int mongo_set_utf8_key(QoreHashNode* h, const char* key, size_t len, QoreValue value, ExceptionSink* xsink);
+
+//! Checks a string given to libmongoc in its encoding and converts it to UTF-8, the encoding of the driver
+/** @param str the string
+    @param utf8 set to the UTF-8 string
+    @param where the method that takes the string, for the exception (ex: \c "MongoClient::getDatabase()")
+    @param what what the string is, for the exception (ex: \c "database name")
+    @param xsink for the \c INVALID-ENCODING exception raised if the string is not valid in its encoding, or an
+    exception converting it
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int mongo_utf8_arg(const QoreString& str, TempEncodingHelper& utf8, const char* where, const char* what,
+        ExceptionSink* xsink);
+
+//! A hash key (in the default encoding) as a UTF-8 key for libbson
+class MongoUtf8Key {
+public:
+    //! converts the key; check the object with operator bool() for an exception
+    DLLLOCAL MongoUtf8Key(const char* key, ExceptionSink* xsink);
+
+    //! returns true if the key could be converted
+    DLLLOCAL explicit operator bool() const {
+        return key != nullptr;
+    }
+
+    //! returns the UTF-8 key
+    DLLLOCAL const char* c_str() const {
+        return key;
+    }
+
+private:
+    const char* key;
+    std::unique_ptr<QoreString> converted;
+};
+
 //! Convert a BSON document to a Qore hash
 /** @param doc the BSON document to convert
     @param xsink exception sink for error handling

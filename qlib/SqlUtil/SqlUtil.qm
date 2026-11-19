@@ -8383,11 +8383,16 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         structured configuration used by the default deserializer.
     */
     public sub sqlutil_register_ds_deserializer(*code new_ds_get) [dom=PROCESS_CONTROL] {
+        # the deserializer is process-wide and is given every caller's datasource configuration (qore#6747)
+        DataProvider::checkSharedRegistration("SqlUtil configuration", "datasource deserializer", "",
+            !exists new_ds_get);
         ds_get = new_ds_get;
     }
 
     #! registers a closure or call reference taking a string type and string datasource configuration that will return an AbstractDatasource
     public sub sqlutil_register_ds_serializer(*code new_ds_do) [dom=PROCESS_CONTROL] {
+        # the serializer is process-wide and is given every caller's datasources (qore#6747)
+        DataProvider::checkSharedRegistration("SqlUtil configuration", "datasource serializer", "", !exists new_ds_do);
         ds_do = new_ds_do;
     }
 
@@ -8447,7 +8452,7 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
         @since %SqlUtil 3.2.0
     */
     public class TableCache {
-        private {
+        private:internal {
             #! resolved tables keyed by connection description, then by table name
             static hash<string, hash<string, AbstractTable>> cache = {};
 
@@ -8461,6 +8466,12 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             tables only through getCached(), for its own datasource (qore#6337)
         */
         static *AbstractTable get(string dsdesc, string name) [dom=PROCESS_CONTROL] {
+            # a table cached by other code holds its connection: sandboxed code gets cached tables only through
+            # getCached(), for its own datasource (qore#6747)
+            if (!DataProvider::mayRegisterShared()) {
+                throw "PERMISSION-DENIED", sprintf("sandboxed code cannot read table %y of connection %y from the "
+                    "process-wide table cache; use sqlutil_get_cached_table() with its own datasource", name, dsdesc);
+            }
             return TableCache::getIntern(dsdesc, name);
         }
 
@@ -8486,7 +8497,9 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             # the key is the description that the datasource gives, which a subclass of AbstractDatasource chooses:
             # code restricted from the PROCESS_CONTROL domain of put() gets only a table of its own datasource from
             # the cache, and does not fill it (qore#6337)
-            bool restricted = SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL);
+            # sandboxed code likewise (qore#6747)
+            bool restricted = SandboxManager::isCallerRestricted(DOM_PROCESS_CONTROL)
+                || !DataProvider::mayRegisterShared();
             if (cached && (!restricted || cached.getDatasource() == ds)) {
                 return cached;
             }
@@ -8499,6 +8512,8 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
 
         #! Caches the given table unless another thread cached one first; returns the table in the cache
         static AbstractTable put(string dsdesc, string name, AbstractTable t) [dom=PROCESS_CONTROL] {
+            # a table placed by sandboxed code would be given to other callers (qore#6747)
+            DataProvider::checkSharedRegistration("SqlUtil table cache", "table", name);
             return TableCache::putIntern(dsdesc, name, t);
         }
 
@@ -8515,6 +8530,8 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
 
         #! Discards cached tables; see @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()"
         static clear(*string dsdesc, *string name) [dom=PROCESS_CONTROL] {
+            # the cache is process-wide (qore#6747)
+            DataProvider::checkSharedRegistration("SqlUtil table cache", "table", name ?? "*", True);
             TableCache::lck.lock();
             on_exit TableCache::lck.unlock();
 
@@ -8575,6 +8592,9 @@ sqlutil_register_table_resolver(\MyTableRegistry::getTable());
         @since %SqlUtil 3.2.0
     */
     public sub sqlutil_register_table_resolver(*code new_table_resolve) [dom=PROCESS_CONTROL] {
+        # the resolver is process-wide and is given every caller's datasources (qore#6747)
+        DataProvider::checkSharedRegistration("SqlUtil configuration", "table resolver", "",
+            !exists new_table_resolve);
         table_resolve = new_table_resolve;
     }
 

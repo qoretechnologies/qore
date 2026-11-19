@@ -47,6 +47,14 @@ public namespace BitbucketDataProvider {
     Registering twice is harmless; the second registration replaces the first with the same value.
 */
 public class BitbucketCodecs {
+    private:internal {
+        #! True once the codecs have been registered (in the module's initialization; see register())
+        static bool registered;
+
+        #! Serializes registration
+        static Mutex register_lock();
+    }
+
     public {
         #! Codec name: a branch name presented for Bitbucket's nested branch reference
         const BranchRef = "bitbucket-branch-ref";
@@ -114,7 +122,12 @@ public class BitbucketCodecs {
     /** Called before the action set that references them is built.  Safe to call more than once.
     */
     static register() {
+        AutoLock al(register_lock);
+        if (registered) {
+            return;
+        }
         map RestSchemaActionCodecs::registerCodec($1), Codecs.iterator();
+        registered = True;
     }
 }
 }

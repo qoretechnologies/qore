@@ -1,0 +1,186 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - AOT code generation and linking of qcc executables
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes that set their own execution modes
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires ../TestInterpreter.qm
+%requires FsUtil
+%requires ../ExecModeHarness.qm
+
+%exec-class ParamWriteFoldReleaseTest
+
+#! A parameter's write releases the value of a fold over a lazy pipeline or with a conditional expression
+/** The AST interpreter's fold gives its value alone once its source and its functional iterators are released, so a
+    write of the parameter that a call gives the value to destroys the object before the callee continues.  The
+    compiled modes kept the reference of the accumulator's Phi until the statement ended when the Phi after the loop
+    could not take it over: a fold over a fused pipeline of map and select stages, and a fold whose expression is a
+    conditional expression (?:, ??, ?*) of its arguments (issue #6442).  The script (ParamWriteFoldRelease.qr) logs
+    the destructions for foldl and foldr over pipelines, lists and iterators with plain and conditional expressions,
+    nested folds, folds whose expression creates the objects, map and select over a fold's value and exceptions
+    raised in a fold's expression, from a function and from top-level code; every execution mode, tiered execution on
+    the IR tier and qcc executables at -O0 and -O3 (with and without QORE_AOT_EH) must give the AST interpreter's
+    output.
+*/
+class ParamWriteFoldReleaseTest inherits QUnit::Test {
+    private {
+        string qore = TestInterpreter::qore_interpreter();
+        string libdir = ENV.QORE_LIBDIR ?? dirname(qore);
+        string qcc = ENV.QCC ?? (is_file(libdir + "/qcc") ? libdir + "/qcc" : dirname(qore) + "/qcc");
+        string script = get_script_dir() + "/ParamWriteFoldRelease.qr";
+        string env;
+        *string expected;
+
+        #! the lines of the AST interpreter's output that must precede another one: (earlier, later)
+        const Order = (
+            ("dtor fm2", "dtor fm1"),
+            ("dtor fm1", "after write fold-map"),
+            ("dtor fs2", "dtor fs1"),
+            ("dtor fs1", "after write fold-select"),
+            ("dtor fsm2", "dtor fsm1"),
+            ("dtor fsm1", "after write fold-select-map"),
+            ("dtor fms2", "dtor fms1"),
+            ("dtor fms1", "after write fold-map-select"),
+            ("dtor fsms2", "dtor fsms1"),
+            ("dtor fsms1", "after write fold-sms"),
+            ("dtor fnc2", "dtor fnc1"),
+            ("dtor fnc1", "after write fold-nc"),
+            ("dtor fq2", "dtor fq1"),
+            ("dtor fq1", "after write fold-q"),
+            ("dtor fvc2", "dtor fvc1"),
+            ("dtor fvc1", "after write fold-vc"),
+            ("dtor fncm2", "dtor fncm1"),
+            ("dtor fncm1", "after write fold-nc-map"),
+            ("dtor fncs2", "dtor fncs1"),
+            ("dtor fncs1", "after write fold-nc-sm"),
+            ("dtor rm1", "dtor rm2"),
+            ("dtor rm2", "after write foldr-map"),
+            ("dtor rnc1", "dtor rnc2"),
+            ("dtor rnc2", "after write foldr-nc"),
+            ("dtor rq1", "dtor rq2"),
+            ("dtor rq2", "after write foldr-q"),
+            ("dtor rncs1", "dtor rncs2"),
+            ("dtor rncs2", "after write foldr-nc-select"),
+            ("dtor fi2", "dtor fi1"),
+            ("dtor fi1", "after write fold-iter"),
+            ("dtor fmi2", "dtor fmi1"),
+            ("dtor fmi1", "after write fold-map-iter"),
+            ("dtor fo2", "dtor fo1fo2"),
+            ("dtor fo1fo2", "after write fold-obj"),
+            ("dtor fqn2", "dtor fqn1x"),
+            ("dtor fqn1x", "after write fold-q-new"),
+            ("dtor top-fnc2", "dtor top-fnc1"),
+            ("dtor top-fnc1", "after write top-fold-nc"),
+            ("dtor top-fs2", "dtor top-fs1"),
+            ("dtor top-fs1", "after write top-fold-select"),
+            ("dtor fone", "after write fold-one"),
+            ("dtor fn1a", "after write fold-nested"),
+            ("dtor fgnew", "after write fold-global"),
+            ("dtor mf2", "after write map-fold"),
+            ("dtor sf2", "after write select-fold"),
+            ("dtor msel", "after write map-sel-single"),
+            ("after write fold-local", "dtor fl1"),
+            ("dtor fx3", "caught  FOLD-ERR"),
+        );
+    }
+
+    constructor() : Test("ParamWriteFoldRelease", "1.0", \ARGV) {
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s ", libdir, libdir);
+        addTestCase("the AST interpreter destroys a parameter's argument at the parameter's write", \testAst());
+        addTestCase("every execution mode destroys a parameter's argument at the parameter's write", \testModes());
+        addTestCase("compiled executables destroy a parameter's argument at the parameter's write", \testAot());
+        set_return_value(main());
+    }
+
+    private string getExpected() {
+        if (!expected) {
+            expected = ExecModeHarness::run(sprintf("%s%s -b --enable-debug --exec-mode=ast %s", env, qore,
+                script));
+        }
+        return expected;
+    }
+
+    testAst() {
+        list<string> lines = getExpected().split("\n");
+        assertEq("round end 2", lines.last() ?: lines[lines.size() - 2]);
+        # the index of the first occurrence of each line
+        hash<string, int> index();
+        foreach string line in (lines) {
+            if (!exists index{line}) {
+                index{line} = $#;
+            }
+        }
+        foreach list<string> order in (Order) {
+            *int before = index{order[0]};
+            *int after = index{order[1]};
+            assertTrue(exists before && exists after && before < after, sprintf("%y before %y", order[0], order[1]));
+        }
+    }
+
+    testModes() {
+        string exp = getExpected();
+        hash<string, list<string>> wrong();
+        foreach string mode in (ExecModeHarness::ExecModes + ExecModeHarness::IRTierName) {
+            bool ir_tier = mode == ExecModeHarness::IRTierName;
+            string cmd = sprintf("%s%s -b --enable-debug --exec-mode=%s %s", env, qore, ir_tier ? "tiered" : mode,
+                script);
+            string actual = ir_tier ? ExecModeHarness::run_ir_tier(cmd) : ExecModeHarness::run(cmd);
+            list<string> diff = differences(exp, actual);
+            if (diff) {
+                wrong{mode} = diff;
+            }
+        }
+        # native code compiled before the code that calls it runs, and call sites that the IR interpreter ran inline
+        # calling a callee once it is compiled
+        foreach string control in (("QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ",
+                "QORE_JIT_SYNC_COMPILE=1 QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=20 ")) {
+            foreach string mode in (("jit", "tiered")) {
+                string actual = ExecModeHarness::run(sprintf("%s%s%s -b --enable-debug --exec-mode=%s %s", env,
+                    control, qore, mode, script));
+                list<string> diff = differences(exp, actual);
+                if (diff) {
+                    wrong{control + mode} = diff;
+                }
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    testAot() {
+        string exp = getExpected();
+        TmpDir tmp("qore-param-write-fold-release-");
+        hash<string, list<string>> wrong();
+        # QORE_AOT_EH is read when the code is compiled
+        foreach string level in (("-O0", "-O3")) {
+            foreach string prefix in (("", "QORE_AOT_EH=1 ")) {
+                string exe = tmp.path + DirSep + "fixture" + level;
+                string out = backquote(sprintf("%s%s%s %s -o %s %s 2>&1", env, prefix, qcc, level, exe, script));
+                assertTrue(is_file(exe), "compiled the executable: " + out);
+                list<string> diff = differences(exp, ExecModeHarness::run_any(env + exe));
+                if (diff) {
+                    wrong{prefix + level} = diff;
+                }
+                unlink(exe);
+            }
+        }
+        assertEq({}, wrong);
+    }
+
+    #! returns the lines of the output that differ from the expected output, as "expected -> actual"
+    static list<string> differences(string exp, string actual) {
+        list<string> el = exp.split("\n");
+        list<string> al = actual.split("\n");
+        list<string> rv = ();
+        for (int i = 0; i < max(el.size(), al.size()); ++i) {
+            if (el[i] !== al[i]) {
+                rv += sprintf("%d: %y -> %y", i, el[i], al[i]);
+            }
+        }
+        return rv;
+    }
+}
