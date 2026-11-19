@@ -66,6 +66,12 @@ module WebSocketUtil {
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
     @subsection wsu_v16 v1.6
+    - @ref ws_read_message() and @ref ws_parse_frame() raise \c WEBSOCKET-FRAME-ERROR for a close frame with a
+      one-byte payload, which they took as a close frame without a status code, or with a close code that a close
+      frame may not have (RFC 6455 section 7.4), and \c WEBSOCKET-INVALID-PAYLOAD for a close reason that is not
+      valid UTF-8
+      (<a href="https://github.com/qoretechnologies/qore/issues/6755">issue 6755</a>,
+      <a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - added the optional \c max_frame_size parameter to @ref ws_read_message(): a frame whose length exceeds it raises
       \c WEBSOCKET-FRAME-TOO-LARGE before its payload is read
     - @ref ws_read_message() raises \c WEBSOCKET-FRAME-ERROR for a 64-bit frame length with its most significant
@@ -260,6 +266,53 @@ public namespace WebSocketUtil {
         return ws_encode_frame(msg, op, masked ?? False, fin, rsv_bits);
     }
 
+    #! Returns True if a received close frame may have the given status code (RFC 6455 section 7.4; qore#6755)
+    /** The codes 1000 - 1003 and 1007 - 1014 of the IANA registry and 3000 - 4999 for libraries, frameworks and
+        applications; not the reserved code 1004, the codes that must not be sent in a close frame (1005, 1006, 1015),
+        the unused codes below 1000, or the codes 1016 - 2999 and above 4999, which are not defined
+    */
+    bool sub ws_close_code_valid(int code) {
+        if (code >= 3000) {
+            return code <= 4999;
+        }
+        return code >= 1000 && code <= 1014 && code != 1004 && code != WSCC_NoStatusRcvd
+            && code != WSCC_AbnormalClosure;
+    }
+
+    #! Parses the payload of a received close frame: sets the close code in \a h and returns the reason, if any
+    /** @throw WEBSOCKET-FRAME-ERROR the payload has one byte (the status code has two, RFC 6455 section 5.5.1) or a
+        status code that a close frame may not have (RFC 6455 section 7.4): the connection fails with
+        @ref WSCC_ProtocolError (qore#6755)
+        @throw WEBSOCKET-INVALID-PAYLOAD the reason is not valid UTF-8: the connection fails with
+        @ref WSCC_InvalidData (RFC 6455 sections 5.5.1 and 8.1; qore#6604)
+    */
+    *string sub ws_parse_close_payload(reference<hash<WsMsgInfo>> h, *binary data) {
+        if (!data) {
+            # https://tools.ietf.org/html/rfc6455#section-7.1.5
+            # If this Close control frame contains no status code, _The WebSocket Connection Close Code_ is
+            # considered to be 1005
+            h.close = WSCC_NoStatusRcvd;
+            return;
+        }
+        if (data.size() < 2) {
+            throw "WEBSOCKET-FRAME-ERROR", "WebSocket close frame with a one-byte payload";
+        }
+        # get an unsigned 2-byte integer in network byte order (MSB) for the close code
+        h.close = get_word_16(data, 0);
+        if (!ws_close_code_valid(h.close)) {
+            throw "WEBSOCKET-FRAME-ERROR", sprintf("WebSocket close frame with the close code %d, which a close frame "
+                "may not have", h.close);
+        }
+        if (data.size() == 2) {
+            return;
+        }
+        string reason = data.substr(2).toString("UTF-8");
+        if (!reason.isEncodingValid()) {
+            throw "WEBSOCKET-INVALID-PAYLOAD", "the reason of a WebSocket close frame is not valid UTF-8";
+        }
+        return reason;
+    }
+
     #! read and decode a message from a socket
     /** @par Example:
         @code{.py}
@@ -283,6 +336,11 @@ hash<WsMsgInfo> h = ws_read_message(sock);
 
         @throw WEBSOCKET-FRAME-ERROR the 64-bit frame length has its most significant bit set (RFC 6455 section 5.2)
         @throw WEBSOCKET-FRAME-TOO-LARGE the frame's length exceeds \a max_frame_size; the payload is not read
+        @throw WEBSOCKET-FRAME-ERROR a close frame with a one-byte payload or a close code that a close frame may not
+        have (1005, 1006, 1015, 1004, below 1000, 1016 - 2999 and above 4999; RFC 6455 sections 5.5.1 and 7.4): the
+        connection fails with @ref WSCC_ProtocolError
+        @throw WEBSOCKET-INVALID-PAYLOAD the reason of a close frame is not valid UTF-8: the connection fails with
+        @ref WSCC_InvalidData
 
         @since WebSocketUtil 1.5 added \c rsv1, \c rsv2, \c rsv3 fields
         @since WebSocketUtil 1.6 added the \c max_frame_size parameter
@@ -353,18 +411,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         h.info{"b0"} = b0;
         h.info{"b1"} = b1;
         if (h.op == WSOP_Close) {
-            if (data) {
-                # get an unsigned 2-byte integer in network byte order (MSB) for the close code
-                h.close = get_word_16(data, 0);
-                # remove the first 2 bytes extracted above
-                splice data, 0, 2;
-                *string txtmsg = data ? data.toString("utf8") : NOTHING;
-                data = txtmsg;
-            } else {
-                # https://tools.ietf.org/html/rfc6455#section-7.1.5
-                # If this Close control frame contains no status code, _The WebSocket Connection Close Code_ is considered to be 1005
-                h.close = WSCC_NoStatusRcvd;
-            }
+            data = ws_parse_close_payload(\h, data);
         } else if (op == WSOP_Text)
             data = data.toString(sock.getEncoding());
 
@@ -389,6 +436,11 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         - \c info: user-defined info; may include debug-only metadata
 
         @throw WEBSOCKET-ERROR if the buffer is too short to contain a valid frame
+        @throw WEBSOCKET-FRAME-ERROR a close frame with a one-byte payload or a close code that a close frame may not
+        have (1005, 1006, 1015, 1004, below 1000, 1016 - 2999 and above 4999; RFC 6455 sections 5.5.1 and 7.4): the
+        connection fails with @ref WSCC_ProtocolError
+        @throw WEBSOCKET-INVALID-PAYLOAD the reason of a close frame is not valid UTF-8: the connection fails with
+        @ref WSCC_InvalidData
 
         @note This function is used for HTTP/2 WebSocket where frame data comes
         from HTTP/2 DATA frames rather than directly from the socket
@@ -479,16 +531,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             h.info{"b1"} = b1;
         }
         if (h.op == WSOP_Close) {
-            if (data) {
-                # get an unsigned 2-byte integer in network byte order (MSB) for the close code
-                h.close = get_word_16(data, 0);
-                # remove the first 2 bytes extracted above
-                splice data, 0, 2;
-                *string txtmsg = data ? data.toString("utf8") : NOTHING;
-                data = txtmsg;
-            } else {
-                h.close = WSCC_NoStatusRcvd;
-            }
+            data = ws_parse_close_payload(\h, data);
         } else if (op == WSOP_Text) {
             data = data.toString(encoding ?? "UTF-8");
         }

@@ -456,6 +456,15 @@ private:
     */
     DLLLOCAL void rejectMessage(uint16_t code, const char* reason, ExceptionSink* xsink);
 
+    //! Fails the connection for a frame whose data is not valid: closes it with the code given, and tells the
+    //! connection's code why with an \c "error" frame (qore#6604, qore#6755)
+    /** @param code the close code: 1002 (protocol error) or 1007 (invalid payload data)
+        @param reason the reason of the close frame
+        @param desc the description of the error for the \c "error" frame
+        @param xsink exception sink
+    */
+    DLLLOCAL void failConnection(uint16_t code, const char* reason, const char* desc, ExceptionSink* xsink);
+
     //! Ends the operation for a lost connection: with 1006, or with the protocol error that the server closed for
     /** After a protocol error of the client, the connection is reported closed with it, also when the client closes
         the connection before the server's close frame is written (issue #5878)

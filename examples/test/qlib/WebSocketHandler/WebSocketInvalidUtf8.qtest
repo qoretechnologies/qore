@@ -4,7 +4,11 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 #
 # A WebSocket text message that is not valid UTF-8 closes the connection with 1007 (RFC 6455 section 8.1) before the
-# connection's code sees it, over HTTP/1.1 (plain and compressed with permessage-deflate) and HTTP/2 (qore#6554).
+# connection's code sees it, over HTTP/1.1 (plain and compressed with permessage-deflate) and HTTP/2 (qore#6554):
+# also in echo mode, which echoes messages in C++, and before gotRawMessage(), which gets a compressed message with
+# its compressed payload (qore#6604).  A close frame whose reason is not valid UTF-8 closes it with 1007 (qore#6604),
+# and a close frame with a one-byte payload or a close code that a close frame may not have (RFC 6455 section 7.4)
+# with 1002 (qore#6755).
 
 %modern
 
@@ -22,24 +26,54 @@
 
 %exec-class WebSocketInvalidUtf8Test
 
+#! the close codes that a close frame may not have (RFC 6455 section 7.4, the IANA registry)
+const InvalidCloseCodes = (0, 999, 1004, 1005, 1006, 1015, 1016, 2999, 5000, 65535);
+
+#! valid close codes, which the server answers with the same code
+const ValidCloseCodes = (1000, 1001, 1003, 1007, 1011, 1014, 3000, 4999);
+
 class EchoConnection inherits WebSocketConnection {
     public {
         # the messages that reached the connection
         Queue got();
+        # the messages that reached gotRawMessage()
+        Queue raw();
     }
 
-    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    private {
+        EchoHandler h;
+    }
+
+    constructor(EchoHandler handler) : WebSocketConnection(handler) {
+        h = handler;
+    }
+
+    int gotRawMessage(hash<WsMsgInfo> msg) {
+        raw.push(msg);
+        return WSC_Process;
     }
 
     gotMessage(string msg) {
+        if (msg == "echo-on") {
+            # the messages are echoed in C++ from then on; set before the answer, so the next message is echoed
+            setEchoMode();
+            send("ok");
+            return;
+        }
         got.push(msg);
         send("ECHO:" + msg);
+    }
+
+    connectionClosed() {
+        h.closed.push({"code": getCloseCode(), "reason": getCloseReason()});
     }
 }
 
 class EchoHandler inherits WebSocketHandler {
     public {
         Queue errs();
+        # the close code and reason of each connection, as connectionClosed() gets them
+        Queue closed();
         *EchoConnection last;
     }
 
@@ -67,7 +101,15 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
     constructor() : Test("WebSocket text messages that are not valid UTF-8", "1.0") {
         addTestCase("HTTP/1.1", \http1Test());
         addTestCase("HTTP/1.1 with permessage-deflate", \http1DeflateTest());
+        addTestCase("HTTP/1.1 echo mode", \http1EchoTest());
+        addTestCase("HTTP/1.1 UTF-8 corner cases", \http1Utf8CornerTest());
+        addTestCase("HTTP/1.1 gotRawMessage()", \http1RawTest());
+        addTestCase("HTTP/1.1 close reason", \http1CloseReasonTest());
+        addTestCase("HTTP/1.1 close frame with a one-byte payload", \http1CloseOneByteTest());
+        addTestCase("HTTP/1.1 invalid close codes", \http1InvalidCloseCodeTest());
+        addTestCase("HTTP/1.1 valid close codes", \http1ValidCloseCodeTest());
         addTestCase("HTTP/2", \http2Test());
+        addTestCase("HTTP/2 close frames", \http2CloseTest());
         set_return_value(main());
     }
 
@@ -91,6 +133,13 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         delete server;
     }
 
+    setUp() {
+        plain.errs.clear();
+        plain.closed.clear();
+        deflate.errs.clear();
+        deflate.closed.clear();
+    }
+
     private openRaw(Socket s, string path, *string extensions) {
         s.connect("localhost:" + port);
         hash<auto> hdr = {
@@ -108,12 +157,26 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         assertEq(101, s.readHTTPHeader(10s).status_code, "the WebSocket handshake succeeds");
     }
 
-    # asserts that the server closes the connection with 1007 (Invalid Frame Payload Data)
-    private assertInvalid(Socket s, EchoHandler handler) {
+    # asserts that the server closes the connection with the given code, and that the connection's code is told
+    /** @param answer True to answer the server's close frame with the same code, as a client does: the close code
+        of an HTTP/1.1 connection is that of the client's close frame (1006 without one); a client that sent its close
+        frame already does not answer
+    */
+    private assertClose(Socket s, EchoHandler handler, int code, string err_regex, *bool answer) {
         hash<WsMsgInfo> h = ws_read_message(s, 30s);
         assertEq(WSOP_Close, h.op, "the server closes the connection");
-        assertEq(WSCC_InvalidData, h.close, "with 1007");
-        assertRegex("not valid UTF-8", handler.errs.get(30s));
+        assertEq(code, h.close, sprintf("with %d", code));
+        assertRegex(err_regex, handler.errs.get(30s), "the handler logs the error");
+        if (answer) {
+            s.send(ws_encode_message(code.encodeMsb(2), WSOP_Close, True, True));
+        }
+        s.close();
+        assertEq(code, handler.closed.get(30s).code, "connectionClosed() gets the close code");
+    }
+
+    # asserts that the server closes the connection with 1007 (Invalid Frame Payload Data)
+    private assertInvalid(Socket s, EchoHandler handler) {
+        assertClose(s, handler, WSCC_InvalidData, "not valid UTF-8", True);
     }
 
     http1Test() {
@@ -140,10 +203,171 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         s.send(ws_encode_message(payload, WSOP_Text, True, True, WS_RSV1));
         assertInvalid(s, deflate);
         assertEq(0, deflate.last.got.size());
+        # gotRawMessage() gets the compressed message, with its compressed payload: the message is checked once it is
+        # decompressed
+        hash<WsMsgInfo> raw = deflate.last.raw.get(1s);
+        assertTrue(raw.rsv1, "gotRawMessage() gets the RSV1 bit of the compressed message");
+        assertEq(payload, binary(raw.msg), "gotRawMessage() gets the compressed payload");
+        assertEq(0, deflate.last.raw.size());
     }
 
-    http2Test() {
-        Queue msgs();
+    http1EchoTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/plain");
+        s.send(ws_encode_message("echo-on", WSOP_Text, True, True));
+        assertEq("ok", ws_read_message(s, 30s).msg);
+        # echo mode echoes the message as it is
+        s.send(ws_encode_message("café", WSOP_Text, True, True));
+        assertEq(binary("café"), binary(ws_read_message(s, 30s).msg));
+        # a message that is not valid UTF-8 is not echoed: the next frame is the close frame
+        s.send(ws_encode_message(<61ff62>, WSOP_Text, True, True));
+        assertInvalid(s, plain);
+        assertEq(0, plain.last.got.size(), "echo mode gives no message to the connection");
+    }
+
+    #! The check of the server (RFC 3629): ASCII text is checked a word at a time, also between other characters
+    http1Utf8CornerTest() {
+        string a7 = strmul("a", 7);
+        string a9 = strmul("a", 9);
+        list<binary> valid = (
+            binary(),
+            binary(strmul("a", 100)),
+            binary(strmul("a", 15) + "é"),
+            # characters across the boundaries of the words
+            binary(a7 + "€" + a7 + "𝄞" + a7 + "é" + strmul("b", 16)),
+            binary("€𝄞éü中"),
+            # the largest code point, U+FFFF, the last code point before the surrogates and the first after them
+            <f48fbfbf>, <efbfbf>, <ed9fbf>, <ee8080>,
+        );
+        list<binary> invalid = (
+            # overlong forms
+            <c0af>, <c1bf>, <e080af>, <f08080af>,
+            # surrogates
+            <eda080>, <edbfbf>,
+            # above U+10FFFF
+            <f4908080>, <f5808080>, <ff>,
+            # a lone continuation byte, also after ASCII text that fills a word
+            <80>, binary(a9) + <80>, binary(strmul("a", 16)) + <bf>,
+            # a character cut off by the end of the message
+            <e282>, binary(a9) + <c3>, binary(a7) + <f09d84>,
+            # a character cut off by an ASCII character
+            binary("abcdefgh") + <e2> + binary("abc"), <c361>,
+        );
+        foreach binary b in (valid) {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            s.send(ws_encode_message("echo-on", WSOP_Text, True, True));
+            assertEq("ok", ws_read_message(s, 30s).msg);
+            s.send(ws_encode_message(b, WSOP_Text, True, True));
+            hash<WsMsgInfo> h = ws_read_message(s, 30s);
+            assertEq(WSOP_Text, h.op, sprintf("%y is valid UTF-8", b));
+            assertEq(b, binary(h.msg ?? ""));
+            s.send(ws_encode_message(binary(), WSOP_Close, True, True));
+            ws_read_message(s, 30s);
+            s.close();
+            assertEq(WSCC_NoStatusRcvd, plain.closed.get(30s).code);
+        }
+        foreach binary b in (invalid) {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            s.send(ws_encode_message(b, WSOP_Text, True, True));
+            hash<WsMsgInfo> h = ws_read_message(s, 30s);
+            assertEq(WSOP_Close, h.op, sprintf("%y is not valid UTF-8", b));
+            assertEq(WSCC_InvalidData, h.close, sprintf("%y: 1007", b));
+            s.close();
+            plain.closed.get(30s);
+        }
+    }
+
+    http1RawTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/plain");
+        s.send(ws_encode_message("ok", WSOP_Text, True, True));
+        assertEq("ECHO:ok", ws_read_message(s, 30s).msg);
+        # a fragmented message that is not valid UTF-8 is checked once it is complete
+        s.send(ws_encode_message(<61>, WSOP_Text, True, False));
+        s.send(ws_encode_message(<ff62>, WSOP_Continuation, True, True));
+        assertInvalid(s, plain);
+        # gotRawMessage() got only the valid message
+        assertEq("ok", plain.last.raw.get(1s).msg);
+        assertEq(0, plain.last.raw.size(), "gotRawMessage() does not get a message that is not valid UTF-8");
+        assertEq("ok", plain.last.got.get(1s));
+        assertEq(0, plain.last.got.size());
+    }
+
+    http1CloseReasonTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/plain");
+        # the reason of a close frame is UTF-8
+        s.send(ws_encode_message(WSCC_NormalClosure.encodeMsb(2) + <61ff62>, WSOP_Close, True, True));
+        assertClose(s, plain, WSCC_InvalidData, "close reason");
+
+        # a valid reason is given to the connection in UTF-8
+        Socket s2();
+        on_exit s2.close();
+        openRaw(s2, "/plain");
+        s2.send(ws_encode_message(WSCC_GoingAway.encodeMsb(2) + binary("adiós"), WSOP_Close, True, True));
+        hash<WsMsgInfo> h = ws_read_message(s2, 30s);
+        assertEq(WSOP_Close, h.op);
+        assertEq(WSCC_GoingAway, h.close);
+        s2.close();
+        hash<auto> closed = plain.closed.get(30s);
+        assertEq(WSCC_GoingAway, closed.code);
+        assertEq("adiós", closed.reason);
+        assertEq("UTF-8", closed.reason.encoding());
+        assertEq(0, plain.errs.size(), "a valid close frame is no error");
+    }
+
+    http1CloseOneByteTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/plain");
+        # a close payload starts with a two-byte status code (RFC 6455 section 5.5.1)
+        s.send(ws_encode_message(<03>, WSOP_Close, True, True));
+        assertClose(s, plain, WSCC_ProtocolError, "one-byte payload");
+    }
+
+    http1InvalidCloseCodeTest() {
+        foreach int code in (InvalidCloseCodes) {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            s.send(ws_encode_message(code.encodeMsb(2), WSOP_Close, True, True));
+            assertClose(s, plain, WSCC_ProtocolError, "Invalid close code");
+        }
+    }
+
+    http1ValidCloseCodeTest() {
+        foreach int code in (ValidCloseCodes) {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/plain");
+            s.send(ws_encode_message(code.encodeMsb(2), WSOP_Close, True, True));
+            hash<WsMsgInfo> h = ws_read_message(s, 30s);
+            assertEq(WSOP_Close, h.op);
+            assertEq(code, h.close, sprintf("the server answers the close code %d with it", code));
+            s.close();
+            assertEq(code, plain.closed.get(30s).code);
+        }
+        # a close frame without a status code is valid too, and is answered with one without a status code
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/plain");
+        s.send(ws_encode_message(binary(), WSOP_Close, True, True));
+        hash<WsMsgInfo> h = ws_read_message(s, 30s);
+        assertEq(WSOP_Close, h.op);
+        assertEq(WSCC_NoStatusRcvd, h.close);
+        s.close();
+        assertEq(WSCC_NoStatusRcvd, plain.closed.get(30s).code);
+        assertEq(0, plain.errs.size(), "a valid close frame is no error");
+    }
+
+    private WebSocketClient getHttp2Client(Queue msgs) {
         WebSocketClient wsc(sub (*data msg) {
             msgs.push(msg);
         }, {
@@ -152,15 +376,49 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
             "ssl_verify_cert": False,
             "timeout": 30000,
         });
-        on_exit delete wsc;
         wsc.connect();
         if (!wsc.isHttp2()) {
+            delete wsc;
             testSkip("HTTP/2 was not negotiated");
         }
+        return wsc;
+    }
+
+    http2Test() {
+        Queue msgs();
+        WebSocketClient wsc = getHttp2Client(msgs);
+        on_exit delete wsc;
         wsc.send("ok");
         assertEq("ECHO:ok", msgs.get(30s));
         wsc.send(binary_to_string(<61ff62>, "UTF-8"));
         assertRegex("not valid UTF-8", plain.errs.get(30s));
         assertNothing(msgs.get(30s), "the connection is closed");
+        assertEq(WSCC_InvalidData, wsc.getCloseCode(), "the client is told the close code");
+        assertEq(WSCC_InvalidData, plain.closed.get(30s).code, "connectionClosed() gets the close code");
+    }
+
+    http2CloseTest() {
+        # the frames are sent with the client's raw send: its close API sends only valid close frames
+        hash<string, list<auto>> cases = {
+            "reason": (WSCC_NormalClosure.encodeMsb(2) + <61ff62>, WSCC_InvalidData, "close reason"),
+            "one byte": (<03>, WSCC_ProtocolError, "one-byte payload"),
+            "1005": (WSCC_NoStatusRcvd.encodeMsb(2), WSCC_ProtocolError, "Invalid close code"),
+            "2999": (2999.encodeMsb(2), WSCC_ProtocolError, "Invalid close code"),
+            "4999": (4999.encodeMsb(2), 4999, NOTHING),
+        };
+        foreach hash<auto> i in (cases.pairIterator()) {
+            Queue msgs();
+            WebSocketClient wsc = getHttp2Client(msgs);
+            on_exit delete wsc;
+            wsc.send(i.value[0], WSOP_Close, True);
+            assertNothing(msgs.get(30s), i.key + ": the connection is closed");
+            assertEq(i.value[1], wsc.getCloseCode(), i.key + ": the client is told the close code");
+            assertEq(i.value[1], plain.closed.get(30s).code, i.key + ": connectionClosed() gets the close code");
+            if (i.value[2]) {
+                assertRegex(i.value[2], plain.errs.get(30s), i.key + ": the handler logs the error");
+            } else {
+                assertEq(0, plain.errs.size(), i.key + ": a valid close frame is no error");
+            }
+        }
     }
 }

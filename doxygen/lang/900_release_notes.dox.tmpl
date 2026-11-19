@@ -151,10 +151,10 @@
     \c HTTP-CLIENT-RECEIVE-ERROR; a response header value that is not valid UTF-8 is given in ISO-8859-1, as RFC 9110
     obs-text (issue #6554).
 
-    @par WebSocket Servers Close a Connection That Sends Text That Is Not UTF-8
-    A WebSocket text message that is not valid UTF-8 closes the connection with code 1007 (RFC 6455 section 8.1)
-    before the connection's code sees it, in @ref websockethandlerintro "WebSocketHandler" over HTTP/1.1, HTTP/2 and
-    HTTP/3 (issue #6554).
+    @par WebSocket Connections Are Closed for Text That Is Not UTF-8
+    A WebSocket text message or close reason that is not valid UTF-8 closes the connection with code 1007 (RFC 6455
+    section 8.1) before the application sees it, in @ref websockethandlerintro "WebSocketHandler" and
+    @ref websocketclientintro "WebSocketClient" over HTTP/1.1, HTTP/2 and HTTP/3 (issues #6554, #6604).
 
     @par on_exit, on_success and on_error Must Be Statements of a Block
     An \c on_exit, \c on_success or \c on_error statement that is the body of another statement without braces (an
@@ -2855,6 +2855,8 @@
     - @ref WebSocketUtil::ws_read_message() "ws_read_message()" read a 64-bit WebSocket frame length with its most
       significant bit set as a negative length, and then read the socket until the peer closed it, buffering without
       limit; such a frame is now an error (issue #5878)
+    - @ref WebSocketUtil::ws_read_message() "ws_read_message()" accepted a close frame with a one-byte payload or a
+      close code that a close frame may not have (ex: 1005, 1006, 999); it is now an error (issue #6755)
     - the parse result types of the @ref plus_operator "+", @ref minus_operator "-", @ref multiplication_operator "*"
       and @ref division_operator "/" operators did not allow every value the operator gives at runtime (ex: \c float
       for <tt>number * float</tt>), so a typed container built from the result raised \c RUNTIME-TYPE-ERROR, and the
