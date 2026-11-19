@@ -511,7 +511,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::SetCodeParseOptions, "SetCodeParseOptions"      , false, false, false,  4, "Set the parse options of the top-level code that follows", true , false, "AbstractStatement", false, false, false, false, false }, // 439
     { QoreIROpcode::PushTempMarkPair, "PushTempMarkPair"            , false, false, false,  0, "Push the sentinels of two nested statement-scoped cleanup regions", false, false, "ParseNode", false, false, false, false, false }, // 440
     { QoreIROpcode::TakeHandedOverReturn, "TakeHandedOverReturn"     , true , false, false, OPCODE_MIN_OPERANDS(0), "Give a return the value that handlers run out of line past the inline cap handed over, if any", true , false, "ReturnStatement", true , false, false, false, false }, // 441
-    { QoreIROpcode::ReleaseHandedOverReturn, "ReleaseHandedOverReturn"  , false, false, false,  0, "Release the value that handlers run out of line past the inline cap handed over, if any", true , true , "ReturnStatement", false, false, false, false, false }, // 442
+    { QoreIROpcode::ReleaseHandedOverReturn, "ReleaseHandedOverReturn"  , false, false, false, OPCODE_MIN_OPERANDS(0), "Release the value that handlers run out of line past the inline cap handed over, if any", true , true , "ReturnStatement", false, false, false, false, false }, // 442
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

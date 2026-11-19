@@ -1446,7 +1446,8 @@ private:
     /** As a return statement at the point of the ScopeExit: the cleanup entries below \a start_depth (the index of the
         scope that the ScopeExit left) are lowered as the block cleanups of a return, and the Return gives the value.
     */
-    DLLLOCAL bool lowerHandedOverReturn(size_t start_depth, const QoreProgramLocation* loc, std::string& error);
+    DLLLOCAL bool lowerHandedOverReturn(size_t start_depth, QoreIRValue result, const QoreProgramLocation* loc,
+        std::string& error);
     //! true if the block cleanups of pending_return have a ScopeExit whose handlers run out of line past the inline cap
     //! and hand the values of their returns over (QoreIRScopeExitInstruction::hand_over_return, #6137)
     /** The return takes the value handed over, if any (QoreIROpcode::TakeHandedOverReturn), and a return in a handler
