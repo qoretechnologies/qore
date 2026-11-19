@@ -52,6 +52,7 @@ public class HttpServerChunkedTrailersTest inherits QUnit::Test {
     constructor() : Test("HttpServerChunkedTrailersTest", "1.0") {
         addTestCase("trailers do not replace or add request header fields", \trailerTest());
         addTestCase("a compressed body is decoded with the request's own header fields", \compressedTest());
+        addTestCase("trailers do not choose the charset of a decompressed body", \charsetTest());
         server = new TrailerTestHttpServer();
         on_exit delete server;
         set_return_value(main());
@@ -91,5 +92,16 @@ public class HttpServerChunkedTrailersTest inherits QUnit::Test {
             (gz.substr(0, 5), gz.substr(5)), "Content-Encoding: identity\r\nX-T: 2\r\n");
         assertEq(200, resp.status_code, resp.body);
         assertEq("body=compressed body;ce=gzip;ct=text/plain;x-t=2;trailer-ce=identity", resp.body);
+    }
+
+    charsetTest() {
+        # ISO-8859-1 text, gzipped: trailers that name another charset (as a Content-Type, and as the name that the
+        # server keeps the request's original Content-Type under) do not change the charset it is decoded with
+        binary gz = gzip(<636166e9>);
+        hash<auto> resp = request("Content-Type: text/plain;charset=iso-8859-1\r\nContent-Encoding: gzip\r\n",
+            (gz,), "Content-Type: text/plain;charset=utf-8\r\n_qore_orig_content_type: text/plain;charset=utf-8\r\n"
+            "X-T: 3\r\n");
+        assertEq(200, resp.status_code, resp.body);
+        assertEq("body=café;ce=gzip;ct=text/plain;x-t=3;trailer-ce=-", resp.body);
     }
 }
