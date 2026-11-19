@@ -248,6 +248,9 @@ hash<auto> desc = {
       column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
       with \c VALUE-ERROR, and its quotes are doubled without a regular expression
       (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - fixed @ref SqlUtil::op_in() "op_in()" with dates, which wrote an ANSI \c timestamp literal that SQLite does not
+      accept, and with numbers and floats, which compared otherwise than the same values bound: the values are written
+      as the sqlite3 driver binds them (<a href="https://github.com/qoretechnologies/qore/issues/6634">issue 6634</a>)
     - implemented @ref select_option_recursive "recursive queries", which need SQLite 3.8.3 or later
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
@@ -1410,11 +1413,32 @@ string sql = pk.getTableConstraintSql();
 
             #! where operator specializations for Sqlite3
             /** SQLite has no ANSI \c substring(... from ... for ...) syntax, so @ref SqlUtil::op_substr() "op_substr()"
-                uses SQLite's \c substr() function
+                uses SQLite's \c substr() function; the values of @ref SqlUtil::op_in() "op_in()" are written as the
+                sqlite3 driver binds them (issue #6634)
 
                 @since Sqlite3SqlUtil 1.2
             */
             const Sqlite3OpMap = DefaultOpMap + {
+                OP_IN: DefaultOpMap{OP_IN} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
+                        list<string> in_exprs = ();
+                        foreach auto v in (arg) {
+                            # a binary value is bound, as with "="
+                            if (v.typeCode() == NT_BINARY) {
+                                info.args += v;
+                                in_exprs += "%v";
+                                continue;
+                            }
+                            *string sv = Sqlite3Table::getInValue(v);
+                            if (!exists sv) {
+                                throw "VALUE-ERROR", sprintf("%s: cannot convert type %y to an SQL string for "
+                                    "op_in() (value: %y)", info.table.getDesc(), v.type(), v);
+                            }
+                            in_exprs += sv;
+                        }
+                        return in_exprs ? sprintf("%s in (%s)", cn, join(",", in_exprs)) : "1 != 1";
+                    },
+                },
                 OP_SUBSTR: {
                     "code": string sub (reference<hash<QueryInfo>> info, string cn, softlist<auto> arg) {
                         info.args += arg[0]; # start
@@ -2263,6 +2287,32 @@ string sql = pk.getTableConstraintSql();
                     # sqlite3 driver binds for it
                     return "'" + v.format("IF") + "'";
             }
+        }
+
+        #! returns the SQL of a value of @ref SqlUtil::op_in() "op_in()", which compares as the value bound by the sqlite3 driver
+        /** the driver binds a date as the text of its ISO-8601 form with its UTC offset (\c "IF" format) and a number
+            as its text, so that they are written as these strings; a float is written with the 17 significant digits
+            that give the same double (an infinity as a literal that SQLite reads as one, NaN, which SQLite stores as
+            \c NULL, as \c null); any other value is written as @ref getSqlValue() writes it (issue #6634)
+        */
+        static *string getInValue(auto v) {
+            switch (v.typeCode()) {
+                case NT_DATE: return "'" + v.format("IF") + "'";
+                case NT_NUMBER: return "'" + string(v) + "'";
+                case NT_FLOAT: {
+                    if (v != v) {
+                        return "null";
+                    }
+                    if (v == 1e308 * 10) {
+                        return "9e999";
+                    }
+                    if (v == -(1e308 * 10)) {
+                        return "-9e999";
+                    }
+                    return sprintf("%.17g", v);
+                }
+            }
+            return Sqlite3Table::getSqlValueIntern(v);
         }
 
         #! returns the column name for use in SQL strings, as getSqlIdentifier() returns it
