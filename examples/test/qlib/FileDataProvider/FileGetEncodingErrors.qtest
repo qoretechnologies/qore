@@ -1,0 +1,52 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires FileDataProvider
+
+%exec-class FileGetEncodingErrorsTest
+
+#! Tests the encoding_errors field of the get request of the file data provider (issue #6604)
+public class FileGetEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! UTF-8 text with the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("abc ") + <e9> + binary(" def\n");
+    }
+
+    constructor() : Test("FileGetEncodingErrorsTest", "1.0") {
+        addTestCase("get request", \getTest());
+        set_return_value(main());
+    }
+
+    private getTest() {
+        TmpDir dir();
+        string path = dir.path + DirSep + "data.txt";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Data);
+        }
+        AbstractDataProvider prov = new FileDataProvider().getChildProviderEx("get");
+        AbstractDataField field = prov.getRequestType().getFields().encoding_errors;
+        assertEq("raise", field.getDefaultValue());
+
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \prov.doRequest(), {"path": path, "text": True});
+        assertThrows("INVALID-ENCODING", \prov.doRequest(), {"path": path, "text": True, "encoding_errors": "raise"});
+        hash<auto> rv = prov.doRequest({"path": path, "text": True, "encoding_errors": "latin1"});
+        assertEq("ISO-8859-1", rv.data.encoding());
+        assertEq(Data, binary(rv.data));
+        rv = prov.doRequest({"path": path, "text": True, "encoding_errors": "keep"});
+        assertEq("UTF-8", rv.data.encoding());
+        assertEq(Data, binary(rv.data));
+        assertThrows("ENCODING-ERRORS-ERROR", \prov.doRequest(), {"path": path, "text": True,
+            "encoding_errors": "ignore"});
+        # binary data is not text
+        assertEq(Data, prov.doRequest({"path": path}).data);
+    }
+}

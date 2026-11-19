@@ -96,7 +96,12 @@ MongoCollection MongoDatabase::getCollection(string name) {
             xsink)) {
         return QoreValue();
     }
-    mongoc_collection_t* coll = database->getCollection(name->c_str());
+    // MongoDB names are UTF-8
+    TempEncodingHelper utf8_name(name, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    mongoc_collection_t* coll = database->getCollection(utf8_name->c_str());
     if (!coll) {
         xsink->raiseException("MONGODB-DATABASE-ERROR", "failed to get collection '%s'", name->c_str());
         return QoreValue();
@@ -122,7 +127,12 @@ MongoCollection MongoDatabase::createCollection(string name) {
             xsink)) {
         return QoreValue();
     }
-    mongoc_collection_t* coll = database->createCollection(name->c_str(), xsink);
+    // MongoDB names are UTF-8
+    TempEncodingHelper utf8_name(name, QCS_UTF8, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    mongoc_collection_t* coll = database->createCollection(utf8_name->c_str(), xsink);
     if (*xsink) {
         return QoreValue();
     }

@@ -151,7 +151,9 @@ class QlibRequiresByNameTest inherits QUnit::Test {
 
     #! Returns @ref True if a file without an extension is a Qore script, as the scripts in bin/ are
     private static bool isQoreScript(string path) {
-        ReadOnlyFile f(path);
+        # the bytes are kept as they are (the readers raise INVALID-ENCODING for text that is not valid by default), so
+        # that the check below finds a file that is not text
+        ReadOnlyFile f(path, NOTHING, ENCODING_ERRORS_KEEP);
         *string first = f.readLine();
         # a file that is not text (ex: an image) is not a script
         return exists first && first.isEncodingValid() && first =~ /^#!.*\bq(ore|r)\b/;

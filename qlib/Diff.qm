@@ -932,10 +932,11 @@ if (patch) {
         @since Diff 1.1
     */
     public string sub diff_files(string path1, string path2, int ctx_lines = 3) {
-        ReadOnlyFile f1(path1);
+        # the files are compared as they are, without a check of their encoding
+        ReadOnlyFile f1(path1, NOTHING, ENCODING_ERRORS_KEEP);
         string s1 = f1.read(-1);
 
-        ReadOnlyFile f2(path2);
+        ReadOnlyFile f2(path2, NOTHING, ENCODING_ERRORS_KEEP);
         string s2 = f2.read(-1);
 
         return diff_unified(s1, s2, path1, path2, ctx_lines);

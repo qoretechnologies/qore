@@ -15,8 +15,8 @@
 #! qore#6646: AOT images record the runtime locations of IR instructions
 /** Runs qore-aot-ir-statement-locations-test (aot_ir_statement_locations.cpp): the locations of the statements of an
     IR function written by the AOT writer are read back with the same sharing, an instruction without one has none,
-    the two marks that a PushTempMarkPair is written as have the pair's, and the IR of an image of the format before
-    QORE_AOT_STATEMENT_LOCATIONS_VERSION takes the locations of its instructions.  The malformed encodings are checked
+    the two marks that a PushTempMarkPair is written as have the pair's, and an image predating statement locations
+    is refused.  The malformed encodings are checked
     by AOTIRInstructionValidation.qtest.
 */
 class AOTIRStatementLocationsTest inherits QUnit::Test {
@@ -41,7 +41,7 @@ class AOTIRStatementLocationsTest inherits QUnit::Test {
         int rc;
         string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
         assertEq(0, rc, output);
-        assertEq("PASS: 24 AOT IR statement location checks\n", output);
+        assertEq("PASS: 22 AOT IR statement location checks\n", output);
     }
 
     private static string shellQuote(string value) {

@@ -1,0 +1,201 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./MysqlTestIsolation.qm
+
+%try-module mysql
+%define NoMysql
+%endtry
+
+%exec-class MysqlNonStrictKeysTest
+
+#! upserts and delete_others find the row of a key that MySQL clamps to the range of its column (issue #6689)
+/** without a strict SQL mode, MySQL stores an integer key out of the range of its column as the nearest value in the
+    range; the key comparison converted the value without clamping it, so that an upsert inserted another row or failed
+    with a duplicate key, and delete_others deleted the row of the key; runs when \c QORE_DB_CONNSTR_MYSQL is set
+*/
+class MysqlNonStrictKeysTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        string skip = "QORE_DB_CONNSTR_MYSQL is not set";
+
+        const Strategies = {
+            "auto": AbstractTable::UpsertAuto,
+            "update-first": AbstractTable::UpsertUpdateFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
+            "insert-first": AbstractTable::UpsertInsertFirst,
+            "insert-only": AbstractTable::UpsertInsertOnly,
+            "update-only": AbstractTable::UpsertUpdateOnly,
+        };
+
+        # column type: list of (key, the key as the column stores it)
+        const Cases = {
+            "int": (
+                (9999999999, 2147483647), ("1e30", 2147483647), (99999999999999999999999n, 2147483647),
+                (1e30, 2147483647), (-1e30, -2147483648), (-2.5, -2), (2.5, 2), (1.5n, 2),
+            ),
+            "int unsigned": (
+                # (MariaDB stores a string or a number of a negative value below the range of a 64-bit integer, as
+                # "-1e30", as the largest value of an unsigned column, MySQL 8 as 0: such a value is not checked)
+                (9999999999, 4294967295), (-5, 0), (-2.5, 0), (-5n, 0), ("-1e3", 0), (1e30, 4294967295),
+            ),
+            "tinyint": (
+                (300, 127), (-300, -128), ("1e30", 127), (1e30, 127), (127.5, 127),
+            ),
+            "bigint": (
+                (99999999999999999999999n, 9223372036854775807), ("-1e30", -9223372036854775807 - 1),
+                (1e19, 9223372036854775807),
+                # a float within the range that is larger than 2^53 is converted exactly, one at the bound is clamped
+                (4611686018427387904.0, 4611686018427387904), (9223372036854775808.0, 9223372036854775807),
+            ),
+        };
+    }
+
+    constructor() : Test("MysqlNonStrictKeys", "1.0", \ARGV) {
+        addTestCase("non-strict SQL mode", \nonStrictTest());
+        addTestCase("non-strict SQL mode: composite key", \compositeTest());
+        addTestCase("strict SQL mode", \strictTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoMysql
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            try {
+                Datasource d(MysqlRunDatabase::getConnectionString(ENV.QORE_DB_CONNSTR_MYSQL, "MysqlNonStrictKeys"));
+                d.open();
+                ds = d;
+            } catch (hash<ExceptionInfo> ex) {
+                skip = sprintf("cannot connect: %s: %s", ex.err, ex.desc);
+            }
+        }
+%else
+        skip = "no mysql module";
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+            remove ds;
+        }
+        if (ENV.QORE_DB_CONNSTR_MYSQL) {
+            MysqlRunDatabase::teardown();
+        }
+    }
+
+    #! each key is found as the column stores it by every strategy and by delete_others
+    nonStrictTest() {
+        Datasource d = getDs();
+        d.exec("set session sql_mode = ''");
+        on_exit d.exec("set session sql_mode = default");
+        on_exit d.rollback();
+        int n = 0;
+        foreach hash<auto> c in (Cases.pairIterator()) {
+            string name = sprintf("mnsk_%d", ++n);
+            d.exec(sprintf("create table %s (k %s not null, v integer, primary key (k))", name, c.key));
+            d.commit();
+            on_exit {
+                d.rollback();
+                d.exec("drop table " + name);
+                d.commit();
+            }
+            AbstractTable t = new Table(d, name).getTable();
+            foreach list<auto> kc in (c.value) {
+                auto key = kc[0];
+                foreach hash<auto> st in (Strategies.pairIterator()) {
+                    string desc = sprintf("%s %y: %s", c.key, key, st.key);
+                    t.del();
+                    t.insert({"k": key, "v": 1});
+                    t.insert({"k": 7, "v": 7});
+                    try {
+                        t.upsert({"k": key, "v": 2}, st.value);
+                    } catch (hash<ExceptionInfo> ex) {
+                        fail(sprintf("%s: %s: %s", desc, ex.err, ex.desc));
+                    }
+                    *hash<auto> row = t.selectRow({"where": {"k": kc[1]}});
+                    assertEq(st.key == "insert-only" ? 1 : 2, row.v.toInt(), desc + ": the row of the key");
+                    assertEq(2, t.rowCount(), desc + ": no other row");
+                    *hash<string, int> rh;
+                    try {
+                        rh = t.upsertFromIterator(({"k": key, "v": 3},).iterator(), st.value, {"delete_others": True});
+                    } catch (hash<ExceptionInfo> ex) {
+                        fail(sprintf("%s: delete_others: %s: %s", desc, ex.err, ex.desc));
+                    }
+                    assertEq(1, rh.deleted, desc + ": delete_others deletes the other row");
+                    *list<hash<auto>> rows = t.selectRows();
+                    assertEq(1, rows.size(), desc + ": delete_others keeps the row of the key");
+                    assertEq(kc[1], rows[0].k.toInt(), desc + ": delete_others: the key");
+                }
+            }
+        }
+    }
+
+    #! a composite key with integer columns out of their ranges and a string column
+    compositeTest() {
+        Datasource d = getDs();
+        d.exec("set session sql_mode = ''");
+        on_exit d.exec("set session sql_mode = default");
+        on_exit d.rollback();
+        string name = "mnsk_comp";
+        d.exec(sprintf("create table %s (a int not null, b tinyint unsigned not null, c varchar(10) not null, "
+            "v integer, primary key (a, b, c))", name));
+        d.commit();
+        on_exit {
+            d.rollback();
+            d.exec("drop table " + name);
+            d.commit();
+        }
+        AbstractTable t = new Table(d, name).getTable();
+        hash<auto> key = {"a": 9999999999, "b": -5, "c": "x"};
+        foreach hash<auto> st in (Strategies.pairIterator()) {
+            string desc = "composite key: " + st.key;
+            t.del();
+            t.insert(key + {"v": 1});
+            t.insert({"a": 1, "b": 1, "c": "x", "v": 7});
+            t.upsert(key + {"v": 2}, st.value);
+            *hash<auto> row = t.selectRow({"where": {"a": 2147483647, "b": 0, "c": "x"}});
+            assertEq(st.key == "insert-only" ? 1 : 2, row.v.toInt(), desc);
+            assertEq(2, t.rowCount(), desc + ": no other row");
+            *hash<string, int> rh = t.upsertFromIterator((key + {"v": 3},).iterator(), st.value,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, desc + ": delete_others");
+            assertEq(1, t.rowCount(), desc + ": delete_others keeps the row of the key");
+        }
+    }
+
+    #! in a strict SQL mode a key out of the range of its column is not clamped: it does not match the row of the
+    #! nearest value
+    strictTest() {
+        Datasource d = getDs();
+        d.exec("set session sql_mode = 'STRICT_TRANS_TABLES'");
+        on_exit d.exec("set session sql_mode = default");
+        on_exit d.rollback();
+        string name = "mnsk_strict";
+        d.exec(sprintf("create table %s (k int not null, v integer, primary key (k))", name));
+        d.commit();
+        on_exit {
+            d.rollback();
+            d.exec("drop table " + name);
+            d.commit();
+        }
+        AbstractTable t = new Table(d, name).getTable();
+        t.insert({"k": 2147483647, "v": 1});
+        assertEq(AbstractTable::UR_Unchanged, t.upsert({"k": 9999999999, "v": 2}, AbstractTable::UpsertUpdateOnly));
+        assertEq(1, t.selectRow().v.toInt(), "the row of the nearest value is not updated");
+    }
+
+    private Datasource getDs() {
+        if (!ds) {
+            testSkip(skip);
+        }
+        return ds;
+    }
+}

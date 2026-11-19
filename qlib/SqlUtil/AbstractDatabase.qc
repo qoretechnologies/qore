@@ -565,7 +565,12 @@ list l = db.getAlignSql(schema_hash);
 
             Table t(ds, th.key);
             if (t.checkExistence()) {
-                l += AbstractDatabase::doCallback(opt, t.getRenameSql(th.value), AC_Rename, "table", th.key, NOTHING, th.value);
+                # a table that the schema describes is renamed by its alignment below, which reads it under its name
+                # before the rename: the rename is not made twice (issue #6721)
+                if (!schema_hash.tables{th.value}) {
+                    l += AbstractDatabase::doCallback(opt, t.getRenameSql(th.value), AC_Rename, "table", th.key,
+                        NOTHING, th.value);
+                }
                 opt.db_table_cache.add(th.value, t);
             }
         }
