@@ -1378,8 +1378,9 @@ int TopLevelStatementBlock::execIR(QoreIRFunction* ir_func, bool use_jit, const 
 
         // Clear any pending deopt request from top-level JIT execution.
         // Top-level code handles guard failures internally (e.g., via
-        // try-catch) and must not propagate deopt to subsequent calls.
-        qore_jit_deopt_requested();
+        // try-catch) and must not propagate deopt to subsequent calls; the request of a debugger for the exit events of
+        // the native frames that were running when it attached is kept for them (issue #6602)
+        qore_jit_clear_deopt_request();
     } else {
         // suppress_guard_deopt=true: top-level code must not deopt on
         // guard failure because re-executing the entire block from the
