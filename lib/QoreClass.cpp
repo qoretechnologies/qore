@@ -7020,7 +7020,9 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
         // Keep the owning Program alive and select its context without claiming parse ownership.
         // A module loader can own parsing while waiting for an initializer in this thread, so
         // runtime readers must only take the committed namespace's read lock, never its parse lock.
-        ProgramRuntimeParseAccessHelper pch(xsink, lookup_pgm ? lookup_pgm : getProgram());
+        // The lookup runs none of the Program's code: a Program that refuses runtime entry while code is parsed in
+        // it is entered without its context (qore#6752)
+        ProgramRuntimeParseAccessHelper pch(xsink, lookup_pgm ? lookup_pgm : getProgram(), true);
         if (*xsink) {
             return nullptr;
         }
@@ -10619,11 +10621,17 @@ void DestructorMethodFunction::evalDestructor(const QoreClass& thisclass, QoreOb
     //printd(5, "DestructorMethodFunction::evalDestructor() %s::%s() o: %p, v: %d, ct: %d\n", getClassName(),
     //  getName(), self, self->isValid(),ct);
     QoreSourceProgramHolder spgm_holder(xsink);
+    QoreProgram* pgm_ctx = qore_get_method_pgm_context(thisclass, spgm_holder);
+    // a native destructor runs without the context of a Program that refuses runtime entry while code is parsed in it
+    // (qore#6752); declared after the holder, so that the thread leaves the Program before the holder releases it
+    QoreNativeDestructorProgramEntry native_entry(xsink);
+    if (pgm_ctx && !variant->isUser() && native_entry.runWithoutContext(pgm_ctx)) {
+        pgm_ctx = nullptr;
+    }
     // a destructor is called by no call expression: its frame is located where the code that runs it is, and it can
     // run between a call site and the frame that takes it, as when a temporary value is released
     CodeEvaluationHelper ceh(xsink, rc, this, variant, "destructor", (QoreListNode*)nullptr, self,
-        qore_class_private::get(thisclass), ct, false, nullptr,
-        qore_get_method_pgm_context(thisclass, spgm_holder), nullptr, nullptr, 0, true);
+        qore_class_private::get(thisclass), ct, false, nullptr, pgm_ctx, nullptr, nullptr, 0, true);
     if (*xsink) return;
 
     DESMV_const(variant)->evalDestructor(thisclass, self, rc, xsink);
