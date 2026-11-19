@@ -235,6 +235,13 @@
     @ref Qore::ReadOnlyFile::getchar() "ReadOnlyFile::getchar()" raise \c INVALID-ENCODING for an invalid character,
     where they raised \c STREAM-ENCODING-ERROR and \c FILE-GETCHAR-ERROR (see @ref encoding_errors; issue #6604).
 
+    @par Encoding Conversion Streams Raise INVALID-ENCODING for Invalid Input
+    @ref Qore::EncodingConversionInputStream "EncodingConversionInputStream" and
+    @ref Qore::EncodingConversionOutputStream "EncodingConversionOutputStream" raise \c INVALID-ENCODING for every
+    input not valid in the source encoding, where they raised \c ENCODING-CONVERSION-ERROR or passed it through (UTF-8
+    above U+10FFFF), and @ref Qore::convert_encoding() "convert_encoding()" checks a string already in the target
+    encoding (see @ref encoding_errors; issue #6730).
+
     @par trunc_str() Raises INVALID-ENCODING for a String Not Valid in Its Encoding Within the Length
     @ref Qore::trunc_str() "trunc_str()" raises \c INVALID-ENCODING for an invalid character within the length, also
     when the whole string is within it, where it returned the part before the character or the string unchecked
@@ -1106,7 +1113,7 @@
     @par An encoding_errors Option for Text Readers
     The file and stream readers and the line iterators take an \c encoding_errors option (\c "raise", \c "latin1"
     or \c "keep") that sets what text read that is not valid in its encoding gives (see @ref encoding_errors;
-    issue #6604).
+    issue #6604), as do the encoding conversion streams for their input (issue #6730).
 
     @par Testing Whether a String Is Valid in Its Encoding
     @ref Qore::<string>::isEncodingValid() "<string>::isEncodingValid()" tests whether a string is valid in its

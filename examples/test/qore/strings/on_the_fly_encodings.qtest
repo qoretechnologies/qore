@@ -161,7 +161,7 @@ class OnTheFlyEncodingTest inherits QUnit::Test {
             assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), (binary_to_string(l[0], l[1]), "UTF-8"),
                 label);
             InputStream is = new EncodingConversionInputStream(new BinaryInputStream(l[0]), l[1], "UTF-8");
-            assertThrows("ENCODING-CONVERSION-ERROR", sub () { while (is.read(64)) {} }, NOTHING, label
+            assertThrows("INVALID-ENCODING", sub () { while (is.read(64)) {} }, NOTHING, label
                 + " (stream)");
         }
         # valid input around the invalid values converts
