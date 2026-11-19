@@ -35,7 +35,8 @@
 
 %exec-class DeleteOthersRoundedKeysTest
 
-#! the delete_others upsert option keeps the row of an input key that the column rounds (issue #6635)
+#! the delete_others upsert option keeps the row of an input key that the column rounds (issue #6635); also the key
+#! columns of other forms (#6675: CHAR padding, #6674: names in another case, with the select-first upsert)
 /** a key value that the column rounds when it stores it (a date with fractional seconds in a column with whole
     seconds, a number with more decimals than the column, a float in an integer column) was not found by the lookup
     of the input keys that matched no row, as the bound value was compared with the rounded one, so the row that the
@@ -62,6 +63,7 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
         addTestCase("SQL Server: rounded keys", \mssqlTest());
         addTestCase("CHAR keys", \charKeysTest());
         addTestCase("mixed-case key columns", \mixedCaseKeyTest());
+        addTestCase("select-first upsert with mixed-case columns", \mixedCaseSelectFirstTest());
         set_return_value(main());
     }
 
@@ -298,6 +300,40 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
             assertEq(2, t.rowCount(), db + ": composite key: the input's rows remain");
             # the callback is given the whole row
             assertEq((4,), cb_deleted, db + ": the info callback");
+        }
+    }
+
+    #! the select-first upsert compares the row read with the input by the columns' names in any case: a row whose
+    #! values are unchanged is not updated again (issue #6674)
+    mixedCaseSelectFirstTest() {
+        Datasource sqlite("sqlite3:x@:memory:");
+        hash<string, Datasource> h = {"sqlite": sqlite} + dbs;
+        foreach string db in (keys h) {
+            # PostgreSQL folds an unquoted name to lower case: there is no mixed-case name to test
+            if (db == "pgsql") {
+                continue;
+            }
+            Datasource ds = h{db};
+            on_exit ds.rollback();
+            ds.exec("create table dork_sf (MixK int not null, Val int, lv int, primary key (MixK))");
+            ds.commit();
+            on_exit dropTable(ds, "dork_sf");
+            AbstractTable t = new Table(ds, "dork_sf").getTable();
+            # the names as the table's description gives them
+            list<string> cl = t.describe().keys();
+            hash<auto> row = {cl[0]: 1, cl[1]: 2, cl[2]: 3};
+            assertEq(AbstractTable::UR_Inserted, t.upsert(row, AbstractTable::UpsertSelectFirst), db + ": inserted");
+            assertEq(AbstractTable::UR_Unchanged, t.upsert(row, AbstractTable::UpsertSelectFirst), db + ": unchanged");
+            row{cl[1]} = 4;
+            assertEq(AbstractTable::UR_Updated, t.upsert(row, AbstractTable::UpsertSelectFirst), db + ": updated");
+            # NULL values
+            hash<auto> nrow = {cl[0]: 2, cl[1]: NULL, cl[2]: NULL};
+            assertEq(AbstractTable::UR_Inserted, t.upsert(nrow, AbstractTable::UpsertSelectFirst), db + ": NULL");
+            assertEq(AbstractTable::UR_Unchanged, t.upsert(nrow, AbstractTable::UpsertSelectFirst),
+                db + ": NULL unchanged");
+            # a row with only the key column
+            assertEq(AbstractTable::UR_Unchanged, t.upsert({cl[0]: 1}, AbstractTable::UpsertSelectFirst),
+                db + ": key only");
         }
     }
 

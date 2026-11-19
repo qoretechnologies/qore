@@ -574,6 +574,8 @@ module SqlUtil {
     - fixed the \c delete_others upsert option with a primary key column whose name the driver gives in another case
       in the rows read (ex: a mixed-case name on MySQL): the key values are taken by the column's name in any case
       (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
+    - fixed a select-first upsert, which updated an unchanged row when the driver gives a column's name in another case
+      (ex: a mixed-case name on MySQL) (<a href="https://github.com/qoretechnologies/qore/issues/6674">issue 6674</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index

@@ -5264,19 +5264,19 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         return ds.vselectRows(sql, args);
     }
 
-    #! returns the key of each column of the primary key in a row read from the table (issue #6674)
+    #! returns the key of each of the given columns in a row read from the table (issue #6674)
     /** @param row a row read from the table
-        @param pkl the columns of the primary key as the table's description gives them
+        @param cols the columns as the table's description gives them
+        @param what the operation that needs the columns, for the error message
 
         @return each column mapped to the key that gives its value in \a row: the column's name, or the key that is
-        the name in another case (a driver may give the names of the result in lower case)
+        the name in another case (a driver may give the names of the result in lower case, ex: MySQL)
 
-        @throw UPSERT-ERROR a column of the primary key is not in the row, so that the row could not be matched or
-        deleted by its key
+        @throw UPSERT-ERROR a column is not in the row, so that the row could not be matched by it
     */
-    private hash<string, string> getDeleteOthersResultKeys(hash<auto> row, list<string> pkl) {
+    private hash<string, string> getResultColumnKeys(hash<auto> row, list<string> cols, string what) {
         hash<string, string> rv;
-        foreach string col in (pkl) {
+        foreach string col in (cols) {
             if (row.hasKey(col)) {
                 rv{col} = col;
                 continue;
@@ -5284,8 +5284,8 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
             string lc = col.lwr();
             *list<string> ks = select keys row, $1.lwr() == lc;
             if (ks.size() != 1) {
-                throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option cannot find the primary key column %y "
-                    "in the rows read from the table (columns: %y)", getDesc(), col, keys row);
+                throw "UPSERT-ERROR", sprintf("%s: %s cannot find the column %y in the rows read from the table "
+                    "(columns: %y)", getDesc(), what, col, keys row);
             }
             rv{col} = ks[0];
         }
@@ -5315,7 +5315,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         *hash<string, string> rkeys;
         foreach hash<auto> row in (getStatement()) {
             if (!rkeys) {
-                rkeys = getDeleteOthersResultKeys(row, pkl);
+                rkeys = getResultColumnKeys(row, pkl, "the 'delete_others' option");
             }
             hash<auto> rk = (map {$1: row{rkeys{$1}}}, pkl);
             string key = getDeleteOthersKey(rk, pkl);
@@ -5347,7 +5347,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
             *hash<string, string> fkeys;
             foreach hash<auto> frow in (found) {
                 if (!fkeys) {
-                    fkeys = getDeleteOthersResultKeys(frow, pkl);
+                    fkeys = getResultColumnKeys(frow, pkl, "the 'delete_others' option");
                 }
                 kept{getDeleteOthersKey((map {$1: frow{fkeys{$1}}}, pkl), pkl)} = True;
             }
@@ -9108,6 +9108,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         string insert_sql = getUpsertInsertSql(example_row);
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 
+        # the names of the columns in the row read, which a driver may give in another case than the table's
+        # description (ex: MySQL) (issue #6674)
+        *hash<string, string> dkeys;
         return int sub (hash<auto> row) {
             list<auto> args = row.(cols.keys()).values();
             #printf("select_sql: %s args: %y\n", select_sql, args);
@@ -9116,7 +9119,10 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
                 ds.vexec(insert_sql, row.values());
                 return UR_Inserted;
             }
-            if (dbrow == row{updc})
+            if (!dkeys) {
+                dkeys = getResultColumnKeys(dbrow, updc, "a select-first upsert");
+            }
+            if ((map {$1: dbrow{dkeys{$1}}}, updc) == row{updc})
                 return UR_Unchanged;
 
             #printf("dbrow: %y row{%y}: %y\n", dbrow, updc, row{updc});
