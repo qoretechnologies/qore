@@ -39,6 +39,7 @@
 
 //! a simple thread-safe counter object; objects can block on it until the counter reaches zero
 class QoreCounter {
+    friend class qore_counter_ops;
 public:
     //! creates the counter and initializes the count
     DLLEXPORT QoreCounter(int nc = 0);
@@ -83,22 +84,8 @@ public:
     //! returns the number of threads blocked on this object
     DLLEXPORT int getWaiting() const;
 
-    // internal use only - for internal counters
-    DLLLOCAL void waitForZero();
-    DLLLOCAL void dec();
-    //! waits until the count is at most \a n; returns 0, or ETIMEDOUT if it is still higher after \a timeout_ms
-    DLLLOCAL int waitForCountAtMost(int n, int timeout_ms);
-
-    // internal use only - the fork handlers of process-wide counters (see QoreForkCounter)
-    //! acquires the counter's lock before fork()
-    DLLLOCAL void lockForFork();
-    //! releases the counter's lock in the parent after fork()
-    DLLLOCAL void unlockForFork();
-    //! initializes the counter's lock and condition again in the child after fork()
-    /** @param count the count in the child, or -1 to keep the count
-    */
-    DLLLOCAL void reinitAfterFork(int count = -1);
-
+        
+            
 private:
     //! private implementation of the counter
     struct qore_counter_private* priv;

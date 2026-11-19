@@ -522,6 +522,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local_weak_receiver", reinterpret_cast<void*>(&qore_rt_load_local_weak_receiver) },
     { "qore_rt_load_local_weak_receiver_aot", reinterpret_cast<void*>(&qore_rt_load_local_weak_receiver_aot) },
     { "qore_rt_end_weak_receiver_call", reinterpret_cast<void*>(&qore_rt_end_weak_receiver_call) },
+    { "qore_rt_read_element_local_receiver", reinterpret_cast<void*>(&qore_rt_read_element_local_receiver) },
     { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
     { "qore_rt_load_global_int_aot", reinterpret_cast<void*>(&qore_rt_load_global_int_aot) },
     { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
@@ -1493,7 +1494,7 @@ extern "C" DLLEXPORT void qore_rt_throw_value(ExceptionSink* xsink, uint64_t val
     }
     QoreValue arg = fromBits(val);
     if (arg.getType() == NT_LIST) {
-        xsink->raiseException(arg.get<const QoreListNode>());
+        qore_exception_sink_ops(xsink).raiseException(arg.get<const QoreListNode>());
     } else {
         QoreValue owned_arg = arg.needsRef() ? arg.refSelf() : arg;
         xsink->raiseExceptionArg("THROW-ERROR", owned_arg, "throw");
@@ -1555,10 +1556,9 @@ extern "C" DLLEXPORT void qore_rt_dbg_step(const AbstractStatement* statement, v
     if (!tlpd || !tlpd->runtimeCheck()) {
         return;
     }
-    // the event runs in the statement's own location, as in the IR interpreter: native code updates the runtime
-    // location only when the line changes, so it is still that of the code before, which can be another statement
-    // on the same line or the statement that contains this one (#6248); the next line that native code reaches sets
-    // it again
+    // the event runs in the statement's own location, as in the IR interpreter (#6248): native code stores no
+    // location for the step instruction, so the location is still that of the code before; the step hook restores
+    // the code's location after the event (QoreIRToLLVM::emitDebugStepHook(), qore#6646)
     if (statement && statement->loc) {
         *get_runtime_location_cache().loc_ptr = statement->loc;
     }
@@ -1738,7 +1738,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_catch_exception(ExceptionSink* xsink) {
         catch_stack.push_back({nullptr, nullptr});
         return toBits(QoreValue());
     }
-    QoreException* caught = xsink->catchException();
+    QoreException* caught = qore_exception_sink_ops(xsink).catchException();
     QoreException* saved = catch_swap_exception(caught);
     catch_stack.push_back({caught, saved});
     QoreHashNode* info = caught->makeExceptionObject();
@@ -3094,6 +3094,43 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint
     return qore_rt_is_weak_reference_type(type) ? qore_rt_read_element_local(val, xsink) : val;
 }
 
+//! Reads the variable of a foreach loop that is the receiver of a method call, keeping the object of a weak reference
+/** As qore_rt_read_element_local(), except that the object that a weak reference held by the variable refers to is
+    returned with a reference of its own, which \a slot holds, and \a owned_out is set to 2: the receiver of a method
+    call is kept until the call returns, as the AST interpreter keeps the object of a call
+    (qore_object_private::startCall()), so that a method that removes the last strong reference to its object can
+    still use it (qore#6594); qore_rt_end_weak_receiver_call() releases it when the call returns, and the exception
+    edge of the call releases the slot.  Any other value is read as qore_rt_read_element_local_held() reads it when
+    \a current is not null (an untyped variable that can be given a reference, issue #6441), and as
+    qore_rt_read_element_local() reads it otherwise; \a slot and \a owned_out are then left as they are.  Native code
+    calls it for every pointer value of an untyped variable (see QoreIRToLLVM::loadLocalCacheValue()), so a value that
+    is not a weak reference or a reference is returned after inline tests only.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_receiver(uint64_t val, uint64_t* slot, int8_t* owned_out,
+        uint64_t* current, uint64_t* previous, uint8_t* held, ExceptionSink* xsink) {
+    // the value is decoded as qore_rt_read_element_local_held() decodes it
+    if ((val & TAG_MASK) != TAG_POINTER || !(val & PAYLOAD_MASK)) {
+        return qore_rt_read_element_local(val, xsink);
+    }
+    qore_type_t type = reinterpret_cast<const AbstractQoreNode*>(val & PAYLOAD_MASK)->getType();
+    if (type == NT_WEAKREF) {
+        QoreValue target = qore_rt_get_weak_reference_target(fromBits(val));
+        // the call clears the slot when it returns, and an exception edge releases it: it holds no value here
+        assert(fromBits(*slot).isNothing());
+        // released after the slot is set, in case a value is left in it
+        ValueHolder old_slot(fromBits(*slot), xsink);
+        *slot = toBits(target.refSelf());
+        *owned_out = 2;
+        return toBits(target);
+    }
+    if (type == NT_REFERENCE) {
+        return current
+            ? qore_rt_read_element_local_held_reference(val, current, previous, held, xsink)
+            : qore_rt_read_element_local(val, xsink);
+    }
+    return qore_rt_is_weak_reference_type(type) ? qore_rt_read_element_local(val, xsink) : val;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
     if (v.hasNode() && v.getType() == NT_REFERENCE) {
@@ -4297,6 +4334,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* memb
     if (qore_weak_reference_target_destroyed(*val)) {
         return toBits(QoreValue());
     }
+    // a weak reference to an object is read as its object: the receiver of a call read from a member is a temporary
+    // of the statement, which keeps the object until the statement ends, as in the AST interpreter (qore#6594)
+    if (qore_value_is_object_weak_reference(*val)) {
+        return toBits(val->eval(xsink));
+    }
     return toBits(val.release());
 }
 
@@ -4309,7 +4351,11 @@ static uint64_t qore_rt_load_static_var_impl(QoreVarInfo* vi, const char* var_na
     if (*xsink) {
         return toBits(QoreValue());
     }
-    return toBits(!preserve_weak_result && val->needsEval() ? val->eval(xsink) : val.release());
+    // a weak reference to an object is read as its object also as the base of a call: the receiver of a call read
+    // from a container is a temporary of the statement, which keeps the object until the statement ends, as in the
+    // AST interpreter (qore#6594)
+    return toBits((!preserve_weak_result || qore_value_is_object_weak_reference(*val)) && val->needsEval()
+        ? val->eval(xsink) : val.release());
 }
 
 static QoreValue qore_rt_eval_runtime_var(Var* var, ExceptionSink* xsink) {
@@ -6429,7 +6475,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreType
 
     QoreValue value = fromBits(value_bits);
     QoreValue init = value.needsRef() ? value.refSelf() : value;
-    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, init, xsink);
+    // the initializer is the list of the arguments of the constructor (issue #6172)
+    QoreListNode* result = qore_list_private::newComplexListFromArgs(typeInfo, init, xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -6482,7 +6529,8 @@ static uint64_t qore_rt_new_complex_from_value_consume_impl(const QoreTypeInfo* 
             holder.release().get<QoreHashNode>(), xsink, !(flags & QORE_RT_COMPLEX_INIT_PRECHECKED));
         return toBits(result ? QoreValue(result) : QoreValue());
     }
-    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, holder.release(), xsink);
+    // the initializer is the list of the arguments of the constructor (issue #6172)
+    QoreListNode* result = qore_list_private::newComplexListFromArgs(typeInfo, holder.release(), xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -7900,6 +7948,10 @@ static uint64_t qore_rt_hash_key_access_hash_impl(uint64_t hash_val, const char*
     return toBits(result);
 }
 
+// \a preserve_weak_result: the value is the base of a method call: a weak reference to a hash or a list is returned as
+// it is; a weak reference to an object is read as its object, as without it: the receiver of a call read from a
+// container is a temporary of the statement, which keeps the object until the statement ends, as in the AST
+// interpreter (qore#6594)
 static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         size_t key_hash, bool prehashed, ExceptionSink* xsink, bool preserve_weak_result) {
     QoreValue raw_v = fromBits(hash_val);
@@ -7919,7 +7971,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         if (*xsink) {
             return toBits(QoreValue());
         }
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(rv)) {
             qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -7938,7 +7990,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         }
         result.refSelf();
         // the value is returned as it is stored, as the AST interpreter returns it
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(result)) {
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -7954,7 +8006,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         }
         result.refSelf();
         // the value is returned as it is stored, as the AST interpreter returns it
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(result)) {
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -7968,7 +8020,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         if (*xsink) {
             return toBits(QoreValue());
         }
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(rv)) {
             qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -11519,7 +11571,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
             // that do not make a complete character can make one with the bytes of the next part, so the count of the
             // concatenation is made on the concatenation (qore#6597)
             if (value.isShortString()) {
-                current = QCS_DEFAULT;
+                current = QCS_UTF8;
                 if (characters) {
                     bool invalid;
                     measured += qore_short_string_utf8_length(value, invalid);
@@ -11536,7 +11588,9 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
                 if (string) {
                     if (characters) {
                         const qore_string_private* priv = qore_string_private::get(*string);
-                        if (priv->isStateful()) {
+                        // Only UTF-8 has a strict width scanner here. Other encodings must be
+                        // validated on the joined text, except Latin-1 where every byte is valid.
+                        if (current != QCS_UTF8 && current != QCS_ISO_8859_1) {
                             direct = false;
                             break;
                         }
@@ -11577,7 +11631,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
     }
     QoreStringNodeValueHelper string(*concatenated);
     return static_cast<int64_t>(
-        characters ? string->length() : string->strlen());
+        characters ? qore_string_private::characterCount(**string, xsink) : string->strlen());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
@@ -12180,6 +12234,14 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             const char* mname = method_call->getName();
             if (mname && nargs == 1) {
                 // Phase 5.2c: Pseudo-methods on built-in types (read-only, non-mutating)
+                if (fromBits(args[0]).getType() == NT_STRING) {
+                    if (!strcmp(mname, "length")) {
+                        return qore_fast_length(args[0], xsink);
+                    }
+                    if (!strcmp(mname, "size")) {
+                        return qore_fast_strlen(args[0], xsink);
+                    }
+                }
                 if (!strcmp(mname, "length") || !strcmp(mname, "size")) {
                     return qore_fast_any_size(args[0], xsink);
                 } else if (!strcmp(mname, "keys")) {
@@ -12355,12 +12417,20 @@ extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
     if (arg.isShortString()) {
-        return toBits(static_cast<int64_t>(qore_short_string_utf8_length(arg)));
+        bool invalid;
+        size_t count = qore_short_string_utf8_length(arg, invalid);
+        if (invalid) {
+            QoreStringValueHelper str(arg);
+            qore_string_private::get(**str)->raiseInvalidEncoding(xsink);
+            return toBits(0);
+        }
+        return toBits(static_cast<int64_t>(count));
     }
     if (arg.hasNode()) {
         const AbstractQoreNode* node = arg.getInternalNode();
         if (node->getType() == NT_STRING) {
-            return toBits(static_cast<int64_t>(static_cast<const QoreStringNode*>(node)->length()));
+            const auto* str = static_cast<const QoreStringNode*>(node);
+            return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
         }
         if (node->getType() == NT_BINARY) {
             return toBits(static_cast<int64_t>(static_cast<const BinaryNode*>(node)->size()));
@@ -13163,7 +13233,12 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         val = fromBits(result_bits);
     }
 
-    // Restore thread-local runtime parse options/location saved above.
+    // Restore thread-local runtime parse options/location saved above.  The callers' code depends on it: native
+    // code and the IR interpreter store their runtime location only when their statement changes
+    // (QoreIRInstruction::stmt_loc, qore#6646), so the location must be the caller's again after the call.  It is
+    // restored only when the variant has a parse location, and not when an exception other than QoreJITException
+    // leaves exec_fn() (native code and the IR interpreter report errors through xsink); not RAII, as it is restored
+    // before the body locals are released
     if (swapped_runtime_ctx) {
         const AbstractStatement* dummy_stmt;
         const QoreProgramLocation* dummy_loc;
@@ -13882,7 +13957,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_t(const QoreFunction
                 // Missing return statement: check type and set location to method definition
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*sig->getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {
@@ -14203,7 +14278,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t execClosureDirect_t(const QoreClosureB
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -14485,7 +14560,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_fast_with_target_t(uint64
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*sig->getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {
@@ -14764,7 +14839,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_self_recursive_t(const Ab
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -15226,7 +15301,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_method_fast_impl_t(const 
             // Missing return statement: set location to method definition
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -15624,6 +15699,8 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
         return 0;
     }
 
+    // the handlers' statements store their own locations: the caller continues in its own (qore#6646)
+    QoreRuntimeLocationRestoreHelper loc_restore;
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
@@ -15687,7 +15764,7 @@ static inline __attribute__((always_inline)) int8_t qore_rt_exec_on_block_exit_i
                 std::unique_ptr<SingleArgvContextHelper> argv_helper;
                 std::unique_ptr<CatchExceptionHelper> ex_helper;
                 if (type == OBE_Error && xsink) {
-                    QoreException* except = xsink->getException();
+                    QoreException* except = qore_exception_sink_ops(xsink).getException();
                     if (except) {
                         ex_helper.reset(new CatchExceptionHelper(except));
                         argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
@@ -19584,7 +19661,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
                 if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                     if (*xsink) {
-                        xsink->overrideLocation(*sig->getParseLocation());
+                        qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                         xsink->appendLastDescription(": block missing return statement");
                     }
                 } else {
@@ -20250,6 +20327,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx
 #include "qore/intern/QoreRegexExtractOperatorNode.h"
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 
 #ifndef QORE_JIT_RUNTIME_GIVEN_ARGS_UNIT
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand(int32_t opcode, uint64_t expr_bits, uint64_t operand_bits,
@@ -21534,7 +21612,7 @@ static QORE_INTERN_ALWAYS_INLINE bool try_dispatch_method_fast_t(QoreObject* o, 
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
-                xsink->overrideLocation(*sig->getParseLocation());
+                qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                 xsink->appendLastDescription(": block missing return statement");
             }
         } else {
@@ -23192,7 +23270,7 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_static_method_direct_impl
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
-                    xsink->overrideLocation(*sig->getParseLocation());
+                    qore_exception_sink_ops(xsink).overrideLocation(*sig->getParseLocation());
                     xsink->appendLastDescription(": block missing return statement");
                 }
             } else {

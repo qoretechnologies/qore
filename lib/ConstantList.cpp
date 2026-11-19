@@ -40,6 +40,8 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/xxhash.h"
 #include "qore/intern/QoreForkHandlers.h"
+#include "qore/intern/QoreValueExceptionOps.h"
+#include "qore/intern/QoreProgramObjectLockOps.h"
 
 #include <algorithm>
 #include <atomic>
@@ -117,7 +119,7 @@ bool qore_is_deferred_runtime_init_exception(ExceptionSink* xsink) {
         return false;
     }
 
-    for (QoreException* ex = xsink->getException(); ex; ex = ex->next) {
+    for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
         if (qore_is_deferred_runtime_init_err(ex->err)) {
             return true;
         }
@@ -543,7 +545,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         // the exceptions that the initialization raises are those after the last one of the parse sink now: the sink
         // holds the other exceptions of the parse too
         const QoreException* prev_tail = nullptr;
-        if (ExceptionSink* psink = getProgram()->getParseExceptionSink()) {
+        if (ExceptionSink* psink = qore_program_ops(getProgram()).getParseExceptionSink()) {
             prev_tail = qore_es_private::get(*psink)->tail;
         }
         // resolve a deferred explicit declared type here (rather than eagerly in the parser) so that forward
@@ -568,7 +570,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
         if (declaredTypeInfo) {
             const QoreTypeInfo* exprTypeInfo = parse_context.typeInfo;
             qore_type_result_e res = QoreTypeInfo::parseAccepts(declaredTypeInfo, exprTypeInfo);
-            if (res == QTI_NOT_EQUAL && pgm->getParseExceptionSink()) {
+            if (res == QTI_NOT_EQUAL && qore_program_ops(pgm).getParseExceptionSink()) {
                 QoreStringNode* edesc = new QoreStringNodeMaker("constant '%s' declared as ", name.c_str());
                 QoreTypeInfo::getThisType(declaredTypeInfo, *edesc);
                 edesc->concat(", but initializer expression is ");
@@ -584,7 +586,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         // Enrich exception with constant name for better debugging
         if (err) {
-            ExceptionSink* xsink = getProgram()->getParseExceptionSink();
+            ExceptionSink* xsink = qore_program_ops(getProgram()).getParseExceptionSink();
             // the exceptions that the initialization raised (ExceptionSink::appendLastDescription() changes the first
             // exception of the sink, which can be another one of the parse); none if the sink does not hold the last
             // exception that it held before any more
@@ -627,11 +629,11 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     }
 
     // do not evaluate expression if any parse exceptions have been thrown
-    if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
+    if (!val.hasNode() || !val.getInternalNode()->needs_eval() || qore_program_ops(pgm).parseExceptionRaised()) {
         if (!QoreTypeInfo::hasType(typeInfo)) {
             // a date has the type of its subtype, as a date literal does (issue #5722)
             typeInfo = QoreTypeInfo::getKnownValueType(val);
-        } else if (explicit_type && val && !val.needsEval() && !pgm->parseExceptionRaised()) {
+        } else if (explicit_type && val && !val.needsEval() && !qore_program_ops(pgm).parseExceptionRaised()) {
             // only fold the value into the declared type when the declared type actually accepts the
             // initializer expression; if the parse-time type check above already raised a PARSE-TYPE-ERROR,
             // running acceptAssignment() here would report a second, redundant RUNTIME-TYPE-ERROR for the
@@ -775,7 +777,7 @@ int ConstantEntry::parseCommitRuntimeInit(ExceptionSink* runtime_xsink) {
             // an exception raised outside of user code (ex: by an operator of the initializer, which runs without a
             // location) is located at the constant, so that it can be reported at its source (issue #6516)
             if (loc) {
-                for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+                for (QoreException* ex = qore_exception_sink_ops(xsink).getException(); ex; ex = ex->next) {
                     if (ex->start_line < 0) {
                         ex->set(*loc);
                         ex->start_column = loc->start_column;

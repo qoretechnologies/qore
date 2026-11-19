@@ -6,6 +6,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../QoreBuildTree.qm
 %requires FsUtil
 %exec-class AOTRetainedMetadataTest
 
@@ -76,6 +77,8 @@ int sub retainedMain() {
             "later.callFunction(\"runRetained\");\nprintf(\"RETAINED-METADATA-OK\\n\");\n");
         *list<*string> target = Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/;
         string flags = target ? target[0] : "-ldl";
+        # a sanitizer build of libqore needs the same sanitizer in the host (qore#6682)
+        flags += " " + QoreBuildTree::sanitizer_flags(libdir).join(" ");
         hash<string, int> compressions = {"none": 0, "zlib": 1, "zstd": 2, "sectioned": 3};
         foreach string mode in ("none", "zlib", "zstd", "sectioned") {
             string dir = tmp.path + "/" + mode;

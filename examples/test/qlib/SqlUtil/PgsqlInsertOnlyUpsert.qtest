@@ -66,7 +66,13 @@ class RecordingDatasource inherits AbstractDatasource {
         return 0;
     }
     auto execRaw(string sql) { return vexec(sql); }
-    auto select(string sql, ...) { throw "UNEXPECTED-SELECT", sql; }
+    auto select(string sql, ...) {
+        # the types of the key columns that upserts read from the catalog (issue #6676): none are converted
+        if (sql =~ /from pg_catalog\.pg_attribute /) {
+            return {};
+        }
+        throw "UNEXPECTED-SELECT", sql;
+    }
     auto selectRow(string sql, ...) { return vselectRow(sql, argv); }
     auto selectRows(string sql, ...) { throw "UNEXPECTED-SELECT", sql; }
     auto selectTyped(string sql, ...) { throw "UNEXPECTED-SELECT", sql; }

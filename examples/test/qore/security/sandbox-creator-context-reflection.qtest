@@ -1,0 +1,81 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The sandbox that a Program keeps of the code that created it gives that code no privileges in it: sandboxed code
+# that gets an object of a helper Program that trusted code created for it cannot read the helper's global variables
+# with reflection
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires reflection
+%exec-class SandboxCreatorContextReflectionTest
+
+class SandboxCreatorContextReflectionTest inherits QUnit::Test {
+    private {
+        #! the sandboxed Program
+        Program sandboxed;
+        #! the helper Programs created by the tests, kept while their objects are used
+        list<Program> helpers = ();
+    }
+
+    #! the code of the sandboxed Program
+    const SandboxedSource = "%modern
+%requires reflection
+string sub steal(code make) {
+    object o = make();
+    try {
+        Class c = Class::getClass(o);
+        GlobalVar v = c.getNamespace().getGlobalVar(\"secret\");
+        return \"stolen:\" + v.getValue();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+";
+
+    #! the code of a helper Program
+    const HelperSource = "%modern
+our string secret = \"top-secret\";
+class Handle {
+}
+object sub create_handle() {
+    return new Handle();
+}
+";
+
+    constructor() : QUnit::Test("sandbox creator context and reflection", "1.0", \ARGV) {
+        addTestCase("a helper Program created for sandboxed code", \helperForSandbox());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sandboxed = new Program(PO_MODERN);
+        sandboxed.setSandboxManager(sm);
+        sandboxed.parse(SandboxedSource, "sandboxed");
+    }
+
+    helperForSandbox() {
+        # trusted code that sandboxed code calls creates the helper
+        code make = object sub () {
+            Program h(PO_MODERN);
+            h.parse(HelperSource, "helper");
+            helpers += h;
+            return h.callFunction("create_handle");
+        };
+        assertEq("REFLECTION-ACCESS-ERROR", sandboxed.callFunction("steal", make));
+        # also in a system-policy capability
+        code cap = SandboxManager::createSystemPolicyCall(make);
+        assertEq("REFLECTION-ACCESS-ERROR", sandboxed.callFunction("steal", cap));
+        # and a helper that trusted code created on its own
+        Program h(PO_MODERN);
+        h.parse(HelperSource, "helper");
+        helpers += h;
+        object o = h.callFunction("create_handle");
+        assertEq("REFLECTION-ACCESS-ERROR", sandboxed.callFunction("steal", object sub () { return o; }));
+    }
+}

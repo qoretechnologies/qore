@@ -2830,7 +2830,8 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
             pending_class_path += 2;
         }
         // the parse lookup reads the parse options of the current Program, which is not set on a thread that loads a
-        // compiled program; the options of the target Program apply (qore#6026)
+        // compiled program; the options of the target Program apply (qore#6026); a lookup, which runs no code of the
+        // Program, so the Program is only made current, not entered (qore#6185)
         QoreProgramContextHelper pch(pgm);
         qc = qore_root_ns_private::parseFindClass(
             *pp->RootNS, &loc_builtin, pending_class_path);
@@ -3581,6 +3582,7 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
     // the namespace write lock or for an initializer that waits for this call.
     // Every caller already keeps pgm alive: lazy context materialization holds
     // Program access, and module registration runs in the owning loader.
+    // A lookup, which runs no code of the Program, so the Program is only made current, not entered (qore#6185).
     QoreProgramContextHelper pch(pgm);
     QoreTypeParamInstantiation parse_type_param_instantiation;
     variant = func->parseFindVariantNoDiagnostics(arg_types, class_ctx, receiver_type_info,
@@ -3784,7 +3786,8 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     if (!pgm) {
         return true;
     }
-    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs
+    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs; a
+    // lookup, which runs no code of the Program, so the Program is only made current, not entered (qore#6185)
     QoreProgramContextHelper pch(pgm);
     // the type that the reader finds must be the value's own: a hashdecl or class of the same name that the Program
     // has is another type, and a type that the Program does not have resolves to a deferred type that is not the
@@ -15802,10 +15805,45 @@ const char* getLocalTypePath(const LocalVar* lv) {
     return path.c_str();
 }
 
+//! The statement location table of an IR function being written (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
+struct QoreAOTStmtLocWriteTable {
+    //! the index of each location written
+    std::unordered_map<const QoreProgramLocation*, uint32_t> index;
+    //! the runtime location of the instruction written last
+    const QoreProgramLocation* prev = nullptr;
+};
+
+//! Writes the runtime location of an IR instruction (QoreIRInstruction::stmt_loc; see QoreAOTStmtLocTag)
+static void qore_aot_write_stmt_loc(QoreAOTBinaryWriter& writer, QoreAOTStmtLocWriteTable& table,
+        const QoreProgramLocation* loc) {
+    // a location without a line is none, as an instruction's own location without one (see serializeIRInstruction())
+    if (!loc || loc->start_line <= 0) {
+        writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::None));
+        table.prev = nullptr;
+        return;
+    }
+    if (loc == table.prev) {
+        writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Previous));
+        return;
+    }
+    table.prev = loc;
+    auto i = table.index.find(loc);
+    if (i != table.index.end()) {
+        writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::Entry));
+        writer.writeU32(i->second);
+        return;
+    }
+    table.index.emplace(loc, static_cast<uint32_t>(table.index.size()));
+    writer.writeU8(static_cast<uint8_t>(QoreAOTStmtLocTag::New));
+    qore_aot_write_line(writer, loc->start_line);
+    qore_aot_write_line(writer, loc->end_line);
+    writer.writeSourcePath(loc->getFile() ? loc->getFile() : "");
+}
+
 //! Serialize a single IR instruction
 static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInstruction* inst,
         const std::unordered_map<const QoreIRBasicBlock*, uint16_t>& block_idx,
-        const AOTExprWriteFunc& writeExpr) {
+        const AOTExprWriteFunc& writeExpr, QoreAOTStmtLocWriteTable& stmt_locs) {
     std::string classify_error;
     QoreIRInstGroup group = classifyInstruction(inst, &classify_error);
     if (!classify_error.empty()) {
@@ -15927,6 +15965,8 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
         qore_aot_write_line(writer, 0);
         writer.writeStringRef("");
     }
+    // the runtime location: the statement's (QORE_AOT_STATEMENT_LOCATIONS_VERSION, qore#6646)
+    qore_aot_write_stmt_loc(writer, stmt_locs, inst->stmt_loc);
 
     return true;
 }
@@ -16201,7 +16241,9 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         block_idx[func.blocks[i].get()] = static_cast<uint16_t>(i);
     }
 
-    // 5. Serialize blocks
+    // 5. Serialize blocks, with the statement location table of the function (QORE_AOT_STATEMENT_LOCATIONS_VERSION):
+    // the IR functions written in its instructions have tables of their own
+    QoreAOTStmtLocWriteTable stmt_locs;
     for (auto& block : func.blocks) {
         writer.writeStringRef(block->name.c_str());
         // bit 0: is_loop_header; bits 1-3: loop_cancel; bit 4 (from format version QORE_AOT_DEBUG_FLOW_VERSION):
@@ -16223,9 +16265,12 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                 // the outer mark has the location that the pair has, as the statement's mark had it
                 QoreIRInstruction mark(QoreIROpcode::PushTempMark);
                 mark.loc = inst_ptr->loc;
+                // both marks are code of the pair's statement
+                mark.stmt_loc = inst_ptr->stmt_loc;
                 QoreIRInstruction inner_mark(QoreIROpcode::PushTempMark);
-                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr)
-                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr)) {
+                inner_mark.stmt_loc = inst_ptr->stmt_loc;
+                if (!serializeIRInstruction(writer, &mark, block_idx, writeExpr, stmt_locs)
+                        || !serializeIRInstruction(writer, &inner_mark, block_idx, writeExpr, stmt_locs)) {
                     return false;
                 }
                 continue;
@@ -16247,7 +16292,7 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
                         static_cast<uint8_t>(group));
                 }
             }
-            if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr)) {
+            if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr, stmt_locs)) {
                 return false;
             }
             if (QoreEnvironmentValue trace_holder("QORE_AOT_TRACE_IR_SERIALIZE");
@@ -21381,38 +21426,9 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         if (!priv->scl || priv->ahm.empty()) {
             continue;
         }
-        std::unordered_set<std::string> existing_methods;
-        existing_methods.reserve(priv->hm.size());
-        size_t method_count = 0;
-        for (auto& mi : priv->hm) {
-            if (++method_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
-                error = "operation cancelled during AOT abstract method inheritance restore";
-                return false;
-            }
-            existing_methods.insert(mi.first);
-        }
-
+        // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
+        // the inherited overload list that source parsing attaches during initializeHierarchy() (issue #6161)
         priv->ahm.parseInit(*priv, priv->scl);
-
-        // Abstract resolution can synthesize a local method on this class
-        // after commitClassesPrepare() has already run parseAddAncestors().
-        // Give those synthesized methods the same inherited overload list
-        // source parsing would attach during initializeHierarchy().
-        method_count = 0;
-        for (auto& mi : priv->hm) {
-            if (++method_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
-                error = "operation cancelled during AOT abstract method inheritance restore";
-                return false;
-            }
-            if (existing_methods.find(mi.first) == existing_methods.end()
-                    && strcmp(mi.second->getName(), "constructor")
-                    && strcmp(mi.second->getName(), "destructor")
-                    && strcmp(mi.second->getName(), "copy")) {
-                priv->parseAddAncestors(mi.second);
-            }
-        }
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't
         // redundantly walk the same classes.

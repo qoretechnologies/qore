@@ -345,6 +345,7 @@ void QoreIRBuilder::setFunction(QoreIRFunction* n_func) {
     temp_scope_id_stack.clear();
     exception_temp_scope_id = 0;
     exception_temp_scope_id_stack.clear();
+    stmt_loc = nullptr;
 }
 
 void QoreIRBuilder::setBlock(QoreIRBasicBlock* n_block) {

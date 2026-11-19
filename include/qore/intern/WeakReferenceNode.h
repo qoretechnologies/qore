@@ -124,4 +124,16 @@ DLLLOCAL inline bool qore_weak_reference_target_destroyed(const QoreValue& v) {
     return v.getType() == NT_WEAKREF && !v.get<const WeakReferenceNode>()->get()->isValid();
 }
 
+//! returns true if the value is a weak reference to an object
+/** Inline tag and node type tests, without QoreValue::getType(), for the paths that test every value they read
+    (qore#6594)
+*/
+DLLLOCAL inline bool qore_value_is_object_weak_reference(const QoreValue& v) {
+    if (!v.isPlainPointer()) {
+        return false;
+    }
+    const AbstractQoreNode* n = v.getPtr();
+    return n && n->getType() == NT_WEAKREF;
+}
+
 #endif

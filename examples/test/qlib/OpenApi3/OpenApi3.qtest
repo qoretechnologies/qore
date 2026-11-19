@@ -435,6 +435,7 @@ public class OpenApi3Test inherits QUnit::Test {
 
         addTestCase("Test direction-specific required properties", \testDirectionRequired());
         addTestCase("Test empty object request bodies", \testEmptyObjectRequestBodies());
+        addTestCase("Test Accept media ranges", \testAcceptMediaRange());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -847,6 +848,28 @@ public class OpenApi3Test inherits QUnit::Test {
         # replacing an unknown reference raises the same exception
         assertThrows("INVALID-REFERENCE-TYPE", "Unknown", \schema.replaceTypeForReference(),
             ("Unknown", newtype));
+    }
+
+
+    #! qore#6603: a media range of the Accept header is matched as a media range (RFC 9110 section 12.5.1), never
+    #! as a regular expression
+    testAcceptMediaRange() {
+        hash<auto> soh = ValidOpenApi3Schema + {"paths": {"/test": {"get": {"responses": {"200": {
+            "description": "ok", "content": {MimeTypeJson: {"schema": {"type": "string"}}}}}}}}};
+        OpenApi3Schema so("", soh);
+        # a subtype wildcard
+        hash<HttpResponseInfo> r = so.processResponse("get", "/test", 200, "OK", NOTHING, "application/*");
+        assertRegex("^application/", r.hdr."Content-Type", "application/*");
+        # a range that is no valid pattern does not match, and the next type is used
+        r = so.processResponse("get", "/test", 200, "OK", NOTHING, ("text/(a*", MimeTypeJson));
+        assertRegex("^" + MimeTypeJson, r.hdr."Content-Type", "the next type is used");
+        # a range matches whole types only: a partial type is not a prefix or substring match
+        assertThrows("ACCEPT-ERROR", \so.processResponse(), ("get", "/test", 200, "OK", NOTHING, "plication/*"),
+            "a partial type");
+        # "*" as the type is a wildcard only with "*" as the subtype
+        assertThrows("ACCEPT-ERROR", \so.processResponse(), ("get", "/test", 200, "OK", NOTHING, "*/json"),
+            "*/json");
+        assertThrows("ACCEPT-ERROR", \so.processResponse(), ("get", "/test", 200, "OK", NOTHING, ".*"), ".*");
     }
 
     testFiles() {
