@@ -74,7 +74,8 @@ class FileLocationHandlerDataProvider inherits AbstractFileLocationHandler {
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
         data rv = read(location, opts);
         string str = rv.typeCode() == NT_STRING ? rv : rv.toString(opts.encoding ?? "UTF-8");
-        return AbstractFileLocationHandler::forceEncoding(str, opts.encoding);
+        return AbstractFileLocationHandler::checkTextEncoding(AbstractFileLocationHandler::forceEncoding(str,
+            opts.encoding), opts.encoding_errors, sprintf("%s://%s/%s", scheme, conn_name, location));
     }
 
     #! Retrieves a binary file from the given location
@@ -118,7 +119,7 @@ class FileLocationHandlerDataProvider inherits AbstractFileLocationHandler {
     /** @note the file is transferred in full in a background thread
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding, opts.encoding_errors);
     }
 
     #! Returns an input stream for the file's data at the given location
@@ -165,7 +166,7 @@ class FileLocationHandlerDataProvider inherits AbstractFileLocationHandler {
 
     #! Gets supported read options
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return FileLocationHandlerConnection::ConnectionLocationOpts;
+        return FileLocationHandlerConnection::ConnectionLocationReadOpts;
     }
 
     #! Gets supported write options

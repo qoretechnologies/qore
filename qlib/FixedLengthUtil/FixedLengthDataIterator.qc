@@ -93,7 +93,7 @@ while (i.next()) {
     */
     constructor(string data, hash<auto> spec, *hash<auto> opts)
         : FixedLengthAbstractIterator(new InputStreamLineIterator(new StringInputStream(data), data.encoding(),
-            opts.eol, opts.trim), spec, opts) {
+            opts.eol, opts.trim ?? True, DefaultStreamBufferSize, opts.encoding_errors), spec, opts) {
     }
 }
 }

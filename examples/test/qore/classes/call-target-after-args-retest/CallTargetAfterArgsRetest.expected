@@ -1,0 +1,36 @@
+class C
+deleted by argument: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+deleted by argument through another variable: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+reassigned by argument: 2
+reassigned by argument after deleting: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+removed by argument: 3
+removed and deleted by argument: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+weak reference deleted by argument: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+weak reference kept by argument: 3
+kept by argument: 3
+  iteration 0: 3
+  iteration 1: 6
+deleted in loop: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+map with implicit argument: [2, 3, 4, 5]
+map deleted by argument: OBJECT-ALREADY-DELETED: cannot call C::m() on an object that has already been deleted
+class D
+deleted by argument: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+deleted by argument through another variable: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+reassigned by argument: 101
+reassigned by argument after deleting: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+removed by argument: 102
+removed and deleted by argument: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+weak reference deleted by argument: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+weak reference kept by argument: 102
+kept by argument: 102
+  iteration 0: 102
+  iteration 1: 204
+deleted in loop: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+map with implicit argument: [101, 102, 103, 104]
+map deleted by argument: OBJECT-ALREADY-DELETED: cannot call D::m() on an object that has already been deleted
+class E
+deleted by argument: OBJECT-ALREADY-DELETED: cannot call E::n() on an object that has already been deleted
+deleted by argument through another variable: OBJECT-ALREADY-DELETED: cannot call E::n() on an object that has already been deleted
+removed and deleted by argument: OBJECT-ALREADY-DELETED: cannot call E::n() on an object that has already been deleted
+weak reference deleted by argument: OBJECT-ALREADY-DELETED: cannot call E::n() on an object that has already been deleted
+map deleted by argument: OBJECT-ALREADY-DELETED: cannot call E::n() on an object that has already been deleted

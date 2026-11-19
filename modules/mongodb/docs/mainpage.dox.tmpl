@@ -69,6 +69,14 @@ list<hash<auto>> docs = users.aggregate((
 )).toList();
     @endcode
 
+    @section mongodb_strings Strings and Character Encodings
+
+    BSON strings and keys, MongoDB database and collection names and connection URIs are UTF-8: the strings that the
+    module gives them are converted to UTF-8, whatever their encoding, and the strings that it reads from them are
+    tagged UTF-8.
+    The keys of a document are hash keys, which are in the @ref default_encoding "default character encoding", so
+    they are converted to and from it.
+
     @section mongodbconnection Connection Strings
 
     MongoDB connections use the standard MongoDB connection string format:

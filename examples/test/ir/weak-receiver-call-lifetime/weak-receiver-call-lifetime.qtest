@@ -23,11 +23,13 @@
     OBJECT-ALREADY-DELETED (qore#6590).
 
     The functions of receivers.q make such calls through typed and untyped locals, in and out of a try block, with a
-    temporary argument, in a chain, in a loop, from a closure that captures the local and in the function that does,
-    with a method that raises (with and without a handler in the function), with a receiver whose destructor raises
-    (also with a method that raises), and in a function that qcc outlines; also a static method given the object as
-    an argument, a method that keeps the object, and a call on an object that was deleted before it.  Their destructors log the order of the releases.  The output is compared with the AST in the
-    ir, jit and tiered modes and in executables made by qcc at -O0 and -O3, with and without function outlining.
+    temporary argument, in a chain, in a loop, from a closure that captures the local (also in an expression that goes
+    on after the call returns) and in the function that does (also when a closure assigns it; qore#6645), with a
+    method that raises (with and without a handler in the function), with a receiver whose destructor raises (also
+    with a method that raises), and in a function that qcc outlines; also a static method given the object as an
+    argument, a method that keeps the object, and a call on an object that was deleted before it.  Their destructors
+    log the order of the releases.  The output is compared with the AST in the ir, jit and tiered modes, on the IR
+    tier of the tiered mode, and in executables made by qcc at -O0 and -O3, with and without function outlining.
 */
 class WeakReceiverCallLifetimeTest inherits QUnit::Test {
     public {
@@ -96,9 +98,18 @@ class WeakReceiverCallLifetimeTest inherits QUnit::Test {
         assertRegex("(?m)^typed: \\|m~a\\|pa\\|e$", expected, "the AST keeps the receiver until the call returns");
         assertRegex("(?m)^raising: \\|ra~a\\|cERR\\|e$", expected,
             "the AST releases the receiver of a call that raises");
+        # a closure's call through the weak local it captures, in an expression that goes on after the call returns
+        # (qore#6645)
+        assertRegex("(?m)^closureStatement: \\|m~a\\|q\\|pa\\|e$", expected,
+            "the AST releases the receiver of a closure's call when the call returns");
+        assertRegex("(?m)^closureAssigns: \\|m~a\\|q\\|pa\\|e$", expected,
+            "the AST releases the receiver of a call through a local that a closure assigns when the call returns");
         foreach string mode in (Modes) {
             assertEq(expected, runMode(src, mode), mode);
         }
+        # the IR tier: every function runs on the IR tier of the tiered mode
+        assertEq(expected, ExecModeHarness::run_ir_tier(sprintf("%s %s -b --enable-debug --exec-mode=tiered %s",
+            lib_env, qore_bin, src)), "IR tier");
         foreach string opt in (OptLevels) {
             foreach hash<auto> i in (OutlineEnv.pairIterator()) {
                 string exe = join_paths(dir.path, "receivers" + opt + (i.key == "outlined" ? "-outlined" : ""));

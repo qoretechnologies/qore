@@ -1,0 +1,101 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+
+%try-module sqlite3
+%define NoSqlite3
+%endtry
+
+%exec-class Sqlite3OpInTest
+
+#! the values of op_in() on SQLite compare as the same values bound do (issue #6634)
+/** op_in() wrote a date as an ANSI \c timestamp literal, which SQLite does not accept (a syntax error), in the local
+    time zone; and a number as a numeric literal, which compares otherwise than the text that the sqlite3 driver binds
+    in a column without a type affinity
+*/
+class Sqlite3OpInTest inherits QUnit::Test {
+    constructor() : Test("Sqlite3OpIn", "1.0", \ARGV) {
+        addTestCase("op_in() and bound values", \opInTest());
+        addTestCase("op_in() SQL", \sqlTest());
+        set_return_value(main());
+    }
+
+    opInTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        ds.exec("create table x (id integer, d timestamp, s text, i integer, f real, b boolean, n numeric, u)");
+        AbstractTable t = new Table(ds, "x").getTable();
+        float third = 1.0 / 3;
+        t.insert({"id": 1, "d": 2024-01-01T10:00:00.123456+02:00, "s": "a'b", "i": 1, "f": third, "b": True,
+            "n": 1.5n, "u": 1.5n});
+        t.insert({"id": 2, "d": 2024-01-02T10:00:00Z, "s": "c", "i": 2, "f": 2.25, "b": False, "n": 2n, "u": 2});
+        t.insert({"id": 4, "f": 1e308 * 10});
+        t.insert({"id": 3, "d": 2024-01-03T00:00:00-05:00, "s": "", "i": NULL, "f": NULL, "b": NULL, "n": NULL,
+            "u": NULL});
+        hash<string, list<auto>> cases = {
+            # the same instant in another time zone is another value, as with a bound value
+            "d": (2024-01-01T10:00:00.123456+02:00, 2024-01-02T10:00:00Z, 2024-01-01T08:00:00.123456Z,
+                2024-01-03T00:00:00-05:00),
+            "s": ("a'b", "c", "", "x"),
+            "i": (1, 2, 3),
+            "f": (third, 2.25, 0.1, 1e308 * 10, -(1e308 * 10)),
+            "b": (True, False),
+            "n": (1.5n, 2n, 3n),
+            # a column without a type affinity stores a number as the text that the driver binds
+            "u": (1.5n, 2n, 2),
+        };
+        foreach hash<auto> c in (cases.pairIterator()) {
+            hash<string, bool> matched;
+            foreach auto v in (c.value) {
+                list<auto> eq = map $1.id, t.selectRows({"columns": "id", "where": {c.key: v}, "orderby": "id"}) ?? ();
+                list<auto> by_in = map $1.id, t.selectRows({"columns": "id", "where": {c.key: op_in((v,))},
+                    "orderby": "id"}) ?? ();
+                assertEq(eq, by_in, sprintf("%s %y", c.key, v));
+                map matched{$1.toString()} = True, eq;
+            }
+            # all values at once match the rows that each value matches
+            list<auto> all = map $1.id.toString(), t.selectRows({"columns": "id", "where": {c.key: op_in(c.value)},
+                "orderby": "id"}) ?? ();
+            assertEq(sort(keys matched), all, c.key + ": all values");
+        }
+        # a NULL value matches no row (SQL "in (null)"; "=" with NULL is "is null" in SqlUtil)
+        assertEq((), t.selectRows({"where": {"i": op_in((NULL,))}}) ?? (), "NULL");
+        # an empty list matches no row
+        assertEq((), t.selectRows({"where": {"i": op_in(())}}) ?? (), "empty list");
+        # a binary value is bound, as with "="; a value that cannot be written raises an error
+        ds.exec("create table bx (id integer, v blob)");
+        AbstractTable bt = new Table(ds, "bx").getTable();
+        bt.insert({"id": 1, "v": <0102>});
+        bt.insert({"id": 2, "v": binary("a'b")});
+        assertEq((1, 2), map $1.id, bt.selectRows({"where": {"v": op_in((<0102>, binary("a'b")))}, "orderby": "id"}),
+            "binary values");
+        assertThrows("VALUE-ERROR", "cannot convert type \"hash\"",
+            sub () { bt.selectRows({"where": {"v": op_in(({"a": 1},))}}); });
+    }
+
+    sqlTest() {
+%ifdef NoSqlite3
+        testSkip("no sqlite3 module");
+%endif
+        Datasource ds("sqlite3:x@:memory:");
+        on_exit ds.rollback();
+        ds.exec("create table x (d timestamp, n numeric)");
+        AbstractTable t = new Table(ds, "x").getTable();
+        list<auto> args;
+        string sql = t.getSelectSql({"where": {"d": op_in((2024-01-01T10:00:00.5+02:00,)),
+            "n": op_in((1.5n,))}}, \args);
+        assertEq(-1, sql.find("timestamp '"), "no ANSI timestamp literal");
+        assertNeq(-1, sql.find("'" + 2024-01-01T10:00:00.5+02:00.format("IF") + "'"),
+            "the date as the driver binds it: " + sql);
+        assertNeq(-1, sql.find("'1.5'"), "the number as the driver binds it: " + sql);
+    }
+}

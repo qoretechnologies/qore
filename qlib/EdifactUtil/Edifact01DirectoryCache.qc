@@ -47,7 +47,7 @@ public namespace EdifactUtil {
             if (!base.size()) {
                 return leaf;
             }
-            if (base[base.size() - 1] == "/") {
+            if (base.substr(-1) == "/") {
                 return base + leaf;
             }
             return base + "/" + leaf;
@@ -89,9 +89,7 @@ public namespace EdifactUtil {
 
         private string serializeCacheString(string val) {
             string out;
-            int len = val.size();
-            for (int i = 0; i < len; ++i) {
-                string ch = val[i];
+            foreach string ch in (val.splitChars()) {
                 int code = ord(ch);
                 if (ch == "\\") {
                     out += "\\\\";

@@ -27,6 +27,9 @@ public namespace EdifactUtil {
     #! Abstract iterator options
     public const EdifactIteratorOptions = {
         "encoding": "The character encoding for the data",
+        "encoding_errors": "What text read from a stream or a file that is not valid in its encoding gives: "
+            "`raise` (the default) raises INVALID-ENCODING, `latin1` reads it as ISO-8859-1, `keep` keeps it "
+            "without a check",
         "skip_service_segments": "If True, skip UNA/UNB/UNZ/UNH/UNT segments in iteration (default: False)",
         "extended_record": "If True, return extended format with 'type' and 'record' keys (default: False)",
     };
@@ -70,6 +73,9 @@ while (i.next()) {
             #! Encoding for string conversion
             *string m_encoding;
 
+            #! What text read that is not valid in its encoding gives; see @ref encoding_errors
+            *string m_encoding_errors;
+
             #! Segment count for current message
             int m_segment_count = 0;
 
@@ -93,6 +99,9 @@ while (i.next()) {
             if (opts.encoding) {
                 m_encoding = opts.encoding;
             }
+            if (opts.encoding_errors) {
+                m_encoding_errors = opts.encoding_errors;
+            }
             if (opts.skip_service_segments) {
                 m_skip_service = parse_boolean(opts.skip_service_segments);
             }
@@ -107,9 +116,12 @@ while (i.next()) {
             @return the text read; empty for an empty stream
 
             @throw ENCODING-BYTE-ORDER-ERROR the data is in the other byte order than its UTF-16 or UTF-32 encoding
+            @throw INVALID-ENCODING the text is not valid in its encoding and the \c encoding_errors option is
+            \c "raise" (the default); see @ref encoding_errors
+            @throw ENCODING-ERRORS-ERROR an unknown \c encoding_errors value was given
         */
         private string readText(Qore::InputStream is) {
-            StreamReader reader(is, m_encoding ?? get_default_encoding());
+            StreamReader reader(is, m_encoding ?? get_default_encoding(), m_encoding_errors);
             return reader.readString(-1) ?? "";
         }
 

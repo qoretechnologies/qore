@@ -51,6 +51,7 @@ null
         addTestCase("NdjsonIterator basic", \testNdjsonIteratorBasic());
         addTestCase("NdjsonIterator empty lines", \testNdjsonIteratorEmptyLines());
         addTestCase("NdjsonIterator CRLF", \testNdjsonIteratorCrlf());
+        addTestCase("NdjsonIterator CRLF with characters other than ASCII", \testNdjsonIteratorCrlfNonAscii());
         addTestCase("NdjsonIterator invalid JSON recovery", \testNdjsonIteratorInvalidJson());
         addTestCase("NdjsonIterator mixed types", \testNdjsonIteratorMixedTypes());
         addTestCase("NdjsonIterator line too long", \testNdjsonIteratorLineTooLong());
@@ -148,6 +149,61 @@ null
         assertEq({"id": 1}, results[0]);
         assertEq({"id": 2}, results[1]);
         assertEq({"id": 3}, results[2]);
+    }
+
+    #! the CR of a CRLF line with characters other than ASCII is removed (issue #6697)
+    testNdjsonIteratorCrlfNonAscii() {
+        list<string> lines = ('{"a": "é"}', '{"b": "€"}', '{"c": "😀"}', '{"d": "é€😀"}');
+        # the longest line in bytes, without its CR
+        int max_bytes = max(map $1.size(), lines);
+        assertEq(18, max_bytes);
+        string data = lines.join("\r\n") + "\r\n";
+
+        # a line of max_line_length bytes followed by a CR is not too long
+        NdjsonDataProvider::NdjsonIterator iter(data, <NdjsonDataProvider::NdjsonIteratorOptions>{
+            "max_line_length": max_bytes,
+            "skip_empty_lines": True,
+        });
+        list<auto> results = ();
+        while (iter.next()) {
+            push results, iter.getValue();
+        }
+        assertEq(({"a": "é"}, {"b": "€"}, {"c": "😀"}, {"d": "é€😀"}), results);
+
+        # one byte less is too long, and the length reported is that of the line without its CR
+        assertThrows("NDJSON-LINE-TOO-LONG", "line 4 exceeds maximum length of 17 bytes \\(actual: 18\\)",
+            sub () {
+                new NdjsonDataProvider::NdjsonIterator(data, <NdjsonDataProvider::NdjsonIteratorOptions>{
+                    "max_line_length": max_bytes - 1,
+                });
+            }
+        );
+
+        # a line of 2-byte characters of exactly max_line_length bytes, followed by a CR
+        string line = '"' + strmul("é", 20) + '"';
+        assertEq(42, line.size());
+        NdjsonDataProvider::NdjsonIterator iter2(line + "\r\n" + line + "\r\n",
+            <NdjsonDataProvider::NdjsonIteratorOptions>{"max_line_length": 42, "skip_empty_lines": True});
+        assertTrue(iter2.next());
+        assertEq(strmul("é", 20), iter2.getValue());
+        assertTrue(iter2.next());
+        assertEq(strmul("é", 20), iter2.getValue());
+        assertFalse(iter2.next());
+
+        # the stream iterator counts the same bytes: the CR of a CRLF line ending is not counted
+        NdjsonDataProvider::InputStreamNdjsonIterator siter(new BinaryInputStream(binary(data)),
+            <NdjsonDataProvider::NdjsonIteratorOptions>{"max_line_length": max_bytes, "skip_empty_lines": True});
+        results = ();
+        while (siter.next()) {
+            push results, siter.getValue();
+        }
+        assertEq(({"a": "é"}, {"b": "€"}, {"c": "😀"}, {"d": "é€😀"}), results);
+        NdjsonDataProvider::InputStreamNdjsonIterator siter2(new BinaryInputStream(binary(data)),
+            <NdjsonDataProvider::NdjsonIteratorOptions>{"max_line_length": max_bytes - 1});
+        assertThrows("NDJSON-LINE-TOO-LONG", "line 4 exceeds maximum length of 17 bytes \\(actual: 18\\)", sub () {
+            while (siter2.next()) {
+            }
+        });
     }
 
     testNdjsonIteratorInvalidJson() {

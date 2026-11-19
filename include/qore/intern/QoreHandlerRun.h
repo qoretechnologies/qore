@@ -48,9 +48,12 @@
 
     The hand-over matters only while the handler runs during an unwind (an exception or a thread_exit): the value
     replaces the value of the return that the unwind interrupted, which the function holds until its locals are
-    released, as the AST interpreter keeps the value of a return until the function ends.  Otherwise the return value
-    of the function is not pending (a block left without a return), and the value is ignored, as the AST interpreter's
-    is when the block is not left by a return.
+    released, as the AST interpreter keeps the value of a return until the function ends; or in the block cleanups of
+    a return statement whose handlers run out of line past the inline cap of the lowering (returning, #6137): the
+    value replaces the value of the return, which takes it when its cleanups end
+    (QoreIROpcode::TakeHandedOverReturn).  Otherwise the return value of the function is not pending (a block left
+    without a return, or a return whose handlers were lowered inline, which replace its value themselves), and the
+    value is ignored, as the AST interpreter's is when the block is not left by a return.
 */
 struct QoreHandlerRunContext {
     //! Takes the value of a return statement of the handler (borrowed: the function takes a reference of its own)
@@ -58,10 +61,21 @@ struct QoreHandlerRunContext {
 
     //! true if the handler runs while an exception or a thread_exit unwinds the block of its function
     bool unwinding = false;
+    //! true if the handler runs in the block cleanups of a return statement past the inline cap of the lowering, whose
+    //! value the values handed over replace (QoreIRScopeExitInstruction::hand_over_return, #6137)
+    bool returning = false;
     //! the function that takes the values that the handler hands over, if any
     hand_over_t hand_over = nullptr;
     //! the data of hand_over
     void* data = nullptr;
+    //! the count of the values handed over to the function that takes them (the frame of the IR interpreter that
+    //! runs the handlers, or the hold of native code), which qore_handler_return() increments, or nullptr (#6552)
+    /** A ScopeExit past the inline cap outside the cleanups of a return statement compares it before and after its
+        handlers run: only the values that reach its function count, not those of the handlers of the functions that
+        its handlers call, which have counts of their own; a run of the handlers of a block of a handler forwards to
+        the same count (forwardFrom())
+    */
+    uint64_t* hand_over_count = nullptr;
     //! the context of the run that this one is nested in, if any
     QoreHandlerRunContext* prev = nullptr;
     //! the index of the IR frame of the handler in the thread's IR frame pool, if the handler runs in the IR
@@ -74,13 +88,19 @@ struct QoreHandlerRunContext {
     //! reference to the return value of its function (#6074)
     DLLLOCAL void forwardFrom(const QoreHandlerRunContext& outer) {
         unwinding = outer.unwinding;
+        returning = outer.returning;
         hand_over = outer.hand_over;
         data = outer.data;
+        hand_over_count = outer.hand_over_count;
     }
 };
 
 //! Returns the context of the innermost handler run of the current thread, if any (see QoreHandlerRunContext)
 DLLLOCAL QoreHandlerRunContext*& qore_handler_run_context();
+
+//! Returns the count of the values handed over to the function that the innermost handler run of the current thread
+//! hands its values to (QoreHandlerRunContext::hand_over_count), or 0 if none (#6552)
+DLLLOCAL uint64_t qore_handler_run_hand_over_count();
 
 //! Pushes the context of a handler run for the lifetime of the object, on every way out (an exception, a thread_exit,
 //! a cancellation), and pops it
@@ -107,7 +127,8 @@ private:
 };
 
 //! Hands the value of a return statement of a handler run out of line to the function that it runs for (#6074)
-/** See QoreHandlerRunContext.  \a value is borrowed.  Does nothing outside an unwind, or outside a handler run.
+/** See QoreHandlerRunContext.  \a value is borrowed.  Does nothing outside an unwind or the cleanups of a return past
+    the inline cap, or outside a handler run.
 */
 DLLLOCAL void qore_handler_return(QoreValue value, ExceptionSink* xsink);
 

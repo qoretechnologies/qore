@@ -1,0 +1,241 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - FTP and HTTP connections over local sockets, regular file reads
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires FileLocationHandler
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires WebUtil
+
+%include ../../qore/classes/FtpServer.qc
+
+%exec-class FileLocationHandlerEncodingErrorsTest
+
+#! An HTTP server serving the files of a directory, and storing the body of a POST request in a file
+class EncodingTestHttpServer inherits HttpServer {
+    private:internal {
+        int port;
+    }
+
+    constructor(string root) : HttpServer(<HttpServerOptionInfo>{
+                "logger": new Logger("test", LoggerLevel::getLevelInfo()),
+            }) {
+        setDefaultHandler("file-handler", new EncodingTestFileHandler(root));
+        port = addListener(<HttpListenerOptionInfo>{"service": 0, "node": "127.0.0.1"}).port;
+        waitForAsyncIo();
+    }
+
+    int getPort() {
+        return port;
+    }
+}
+
+#! Serves the files of a directory as UTF-8 text, and stores the body of a POST request in a file
+class EncodingTestFileHandler inherits FileHandler {
+    constructor(string file_root) : FileHandler(file_root) {
+    }
+
+    private *hash<HttpResponseInfo> tryServeRequest(HttpServer::HttpListenerInterface listener, Qore::Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.method == "POST") {
+            File f();
+            f.open2(file_root + DirSep + cx.resource_path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(body);
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": "OK",
+            };
+        }
+        # the text is declared UTF-8, so that it is read as UTF-8 (text/plain without a charset is ISO-8859-1)
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": ReadOnlyFile::readBinaryFile(file_root + DirSep + cx.resource_path),
+            "hdr": {"Content-Type": "text/plain; charset=utf-8"},
+        };
+    }
+}
+
+#! Tests the encoding_errors read option of the file location handlers (issue #6604)
+public class FileLocationHandlerEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! UTF-8 text with the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("abc ") + <e9> + binary(" def\n");
+    }
+
+    constructor() : Test("FileLocationHandlerEncodingErrorsTest", "1.0") {
+        addTestCase("option declarations", \optionTest());
+        addTestCase("helper", \helperTest());
+        addTestCase("file", \fileTest());
+        addTestCase("data", \dataTest());
+        addTestCase("ftp", \ftpTest());
+        addTestCase("http", \httpTest());
+        set_return_value(main());
+    }
+
+    #! Checks the text and stream reads of a location with each option value
+    /** @param url the location
+        @param charset_declared if the transport declares the encoding of the text, which the \c encoding option
+        does not override
+    */
+    private checkLocation(string url, bool charset_declared = False) {
+        on_error printf("ERROR URL: %y\n", url);
+        string enc_opt = "{";
+        string close = "";
+
+        # the default raises INVALID-ENCODING
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \FileLocationHandler::getTextFileFromLocation(),
+            url + close);
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \FileLocationHandler::getTextFileFromLocation(),
+            url + enc_opt + "encoding_errors=raise}");
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", sub () {
+            StreamReader sr = FileLocationHandler::getStreamReaderFromLocation(url + close);
+            sr.readString(-1);
+        });
+
+        # "latin1" tags the text ISO-8859-1 with its bytes
+        string str = FileLocationHandler::getTextFileFromLocation(url + enc_opt + "encoding_errors=latin1}");
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq(Data, binary(str));
+        assertEq("abc é def\n", str);
+        StreamReader sr = FileLocationHandler::getStreamReaderFromLocation(url + enc_opt + "encoding_errors=latin1}");
+        str = sr.readString(-1);
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq(Data, binary(str));
+
+        # "keep" keeps the text without a check
+        str = FileLocationHandler::getTextFileFromLocation(url + enc_opt + "encoding_errors=keep}");
+        assertEq("UTF-8", str.encoding());
+        assertEq(Data, binary(str));
+        assertFalse(str.isEncodingValid());
+        sr = FileLocationHandler::getStreamReaderFromLocation(url + enc_opt + "encoding_errors=keep}");
+        str = sr.readString(-1);
+        assertEq(Data, binary(str));
+
+        # an unknown value is rejected
+        assertThrows("ENCODING-ERRORS-ERROR", \FileLocationHandler::getTextFileFromLocation(),
+            url + enc_opt + "encoding_errors=ignore}");
+        assertThrows("ENCODING-ERRORS-ERROR", \FileLocationHandler::getStreamReaderFromLocation(),
+            url + enc_opt + "encoding_errors=ignore}");
+
+        # valid text is read in its encoding with each option
+        if (charset_declared) {
+            return;
+        }
+        foreach string ee in ("raise", "latin1", "keep") {
+            # a single-byte encoding has no invalid bytes
+            str = FileLocationHandler::getTextFileFromLocation(url + enc_opt + "encoding=ISO-8859-1,encoding_errors="
+                + ee + "}");
+            assertEq("ISO-8859-1", str.encoding(), ee);
+            assertEq("abc é def\n", str, ee);
+        }
+    }
+
+    private optionTest() {
+        foreach string scheme in ("file", "ftp", "sftp", "http", "https", "rest", "rests", "data") {
+            hash<FileHandlerInfo> info = FileLocationHandler::getHandlerInfo(scheme);
+            assertEq("raise", info.read_options.encoding_errors.default_value, scheme);
+            assertEq("string", info.read_options.encoding_errors.type, scheme);
+            assertFalse(exists info.write_options.encoding_errors, scheme);
+        }
+        # the connection handler passes it through to the target, which gives its default
+        hash<FileHandlerInfo> info = FileLocationHandler::getHandlerInfo("conn");
+        assertEq("string", info.read_options.encoding_errors.type);
+        assertFalse(exists info.read_options.encoding_errors.default_value);
+        assertFalse(exists info.write_options.encoding_errors);
+    }
+
+    private helperTest() {
+        string text = binary_to_string(Data, "UTF-8");
+        assertThrows("INVALID-ENCODING", "^test location: the text read is not valid UTF-8: invalid byte sequence at "
+            "byte offset 4", \AbstractFileLocationHandler::checkTextEncoding(), (text, NOTHING, "test location"));
+        assertThrows("INVALID-ENCODING", \AbstractFileLocationHandler::checkTextEncoding(), (text, "raise", "x"));
+        string str = AbstractFileLocationHandler::checkTextEncoding(text, "latin1", "x");
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq(Data, binary(str));
+        str = AbstractFileLocationHandler::checkTextEncoding(text, "keep", "x");
+        assertEq("UTF-8", str.encoding());
+        assertEq(Data, binary(str));
+        # the message of the core readers
+        assertThrows("ENCODING-ERRORS-ERROR", "^unknown encoding_errors value 'x'; expecting one of: 'raise', "
+            "'latin1', 'keep'$", \AbstractFileLocationHandler::checkTextEncoding(), (text, "x", "x"));
+        # valid text is returned as it is
+        foreach string ee in ("raise", "latin1", "keep") {
+            str = AbstractFileLocationHandler::checkTextEncoding("abc é", ee, "x");
+            assertEq("UTF-8", str.encoding());
+            assertEq("abc é", str);
+        }
+        # a single-byte encoding is not checked, also for a byte that it does not define
+        str = AbstractFileLocationHandler::checkTextEncoding(binary_to_string(<41814a>, "WINDOWS-1252"), NOTHING,
+            "x");
+        assertEq("WINDOWS-1252", str.encoding());
+        # US-ASCII is checked
+        assertThrows("INVALID-ENCODING", \AbstractFileLocationHandler::checkTextEncoding(),
+            (binary_to_string(<41814a>, "US-ASCII"), NOTHING, "x"));
+    }
+
+    private fileTest() {
+        TmpDir dir();
+        string path = dir.path + DirSep + "data.txt";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Data);
+        f.close();
+        checkLocation("file://" + path);
+        checkLocation(path);
+    }
+
+    private dataTest() {
+        # the handler is called directly: a location string that is not valid UTF-8 cannot be parsed for its scheme
+        AbstractFileLocationHandler handler = FileLocationHandler::getHandler("data");
+        string text = binary_to_string(Data, "UTF-8");
+        assertThrows("INVALID-ENCODING", "^data://: the text read is not valid UTF-8", \handler.getTextFile(),
+            ("data", text, {"encoding_errors": "raise"}));
+        assertThrows("INVALID-ENCODING", \handler.getTextFile(), ("data", text));
+        string str = handler.getTextFile("data", text, {"encoding_errors": "latin1"});
+        assertEq("ISO-8859-1", str.encoding());
+        assertEq(Data, binary(str));
+        str = handler.getTextFile("data", text, {"encoding_errors": "keep"});
+        assertEq(Data, binary(str));
+        StreamReader sr = handler.getStreamReader("data", text, {"encoding_errors": "latin1"});
+        assertEq(Data, binary(sr.readString(-1)));
+        sr = handler.getStreamReader("data", text, {"encoding_errors": "raise"});
+        assertThrows("INVALID-ENCODING", \sr.readString(), -1);
+        # valid text is read with the option
+        assertEq("abc", FileLocationHandler::getTextFileFromLocation("data://abc{encoding_errors=raise}"));
+        assertEq("abc", FileLocationHandler::getTextFileFromLocation("data://abc"));
+    }
+
+    private ftpTest() {
+        FtpServer serv(0, m_options.verbose, "127.0.0.1");
+        on_exit serv.shutdown();
+        serv.setFs();
+        string url = sprintf("ftp://user:pass@127.0.0.1:%d/%s.txt", serv.getPort(), get_random_string());
+        FileLocationHandler::writeFileToLocation(url, Data);
+        checkLocation(url);
+        # the location is reported without its credentials
+        try {
+            FileLocationHandler::getTextFileFromLocation(url);
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("INVALID-ENCODING", ex.err);
+            assertNRegex("pass", ex.desc);
+        }
+    }
+
+    private httpTest() {
+        TmpDir dir();
+        EncodingTestHttpServer serv(dir.path);
+        on_exit delete serv;
+        string url = sprintf("http://127.0.0.1:%d/%s.txt", serv.getPort(), get_random_string());
+        FileLocationHandler::writeFileToLocation(url, Data);
+        checkLocation(url, True);
+    }
+}

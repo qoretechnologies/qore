@@ -466,7 +466,11 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
               key should be set to the columns to omit in the update clause; a select-first upsert neither compares
-              nor updates them, and a row with no other column to update is unchanged when its key exists
+              nor updates them; with every strategy, a row with no other column to update (as a row with only the
+              key columns) does not update the row of its key (@ref UR_Unchanged), and is inserted if the key does not
+              exist, except by an update-only upsert; a strategy that tries the insert first (insert-first,
+              insert-only, and the merge statements of some drivers) raises the database's error if the row cannot be
+              inserted (ex: a row without a value for a column that is \c NOT \c NULL without a default)
             - \c upsert_columns: a list of column names that identifies the unique index or constraint to use for the
               upsert operation
         */
@@ -509,6 +513,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             raised; with this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
+            - @ref UR_Unchanged (a row with no column to update whose key exists; see the \c omit_update option)
         */
         const UpsertInsertFirst = 1;
 
@@ -517,6 +522,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
+            - @ref UR_Unchanged (a row with no column to update whose key exists; see the \c omit_update option)
         */
         const UpsertUpdateFirst = 2;
 
@@ -533,6 +539,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** With this upsert strategy, the following row result codes are possible:
             - @ref UR_Inserted
             - @ref UR_Verified (the only value returned by certain drivers with optimized upsert implementations)
+            - @ref UR_Unchanged (a row with no column to update whose key exists; see the \c omit_update option)
         */
         const UpsertAuto = 4;
 
@@ -589,7 +596,7 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! row was updated because it was different (only possible with @ref UpsertSelectFirst)
         const UR_Updated = 3;
 
-        #! row was unchanged (only possible with @ref UpsertSelectFirst, @ref UpsertInsertOnly, and @ref UpsertUpdateOnly)
+        #! row was unchanged (with @ref UpsertSelectFirst, @ref UpsertInsertOnly, and @ref UpsertUpdateOnly, and with any strategy for a row with no column to update whose key exists)
         const UR_Unchanged = 4;
 
         #! row was deleted (only possible with batch upsert methods such as @ref AbstractTable::upsertFromIterator() where \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True")
@@ -4142,8 +4149,9 @@ table.insert(row);
         list<auto> exec_args = ia.args;
         args = exec_args;
 
-        # check for a bulk insert in case the driver does not support array binding
-        if (!hasArrayBind()) {
+        # check for a bulk insert in case the driver does not support array binding, or does not bind the row as arrays
+        # (ia.row_by_row, given by the driver's getInsertSqlAndArgs(); issue #6695)
+        if (ia.row_by_row || !hasArrayBind()) {
             int size = 0;
             foreach auto arg in (exec_args) {
                 if (arg.typeCode() == NT_LIST) {
@@ -4184,7 +4192,9 @@ table.insert(row);
         @ref getInsertArgs() gives are those of the SQL that @ref insert() runs; a driver that makes another SQL for
         some rows (PostgreSQL's \c UNNEST insert of a hash of lists) overrides it
 
-        @return a hash with \c sql: the SQL, and \c args: the values bound to its placeholders, in their order
+        @return a hash with \c sql: the SQL, and \c args: the values bound to its placeholders, in their order; a
+        driver that binds arrays sets \c row_by_row to @ref True "True" for a row of list values that it cannot bind as
+        arrays, which is then inserted row by row (issue #6695)
     */
     private hash<auto> getInsertSqlAndArgs(hash<auto> row) {
         # issue #3352: do not execute runtime DML while holding the lock
@@ -4781,6 +4791,17 @@ map upsert($1), row_list;
 
         @note the SQL of the closure is made with the table's description when the closure is made; the closure keeps
         working after @ref clear(), but does not follow a change of the table's definition in the database
+
+        @note a row of list values (bulk DML: its first value is a list, except a value of a PostgreSQL array column,
+        which is a row of list values if it is a list of lists; a column that is not a list has its value in every
+        row) can be given to a closure made from a row of list values (a closure made from a hash row upserts hash
+        rows without any other cost, and passes a row of list values to the driver as it is, which only the Oracle
+        driver binds as arrays; getBulkUpsertClosure() and upsertFromIterator() take both);
+        its rows are upserted with array binding where the
+        driver supports it for the strategy, otherwise row by row, and the closure returns @ref UR_Verified for it (a
+        driver that binds arrays may return the code of the row for a row of one-element lists), or
+        @ref UR_Unchanged for a row of empty lists; lists of different lengths raise \c UPSERT-ERROR before any row
+        is upserted
     */
     code<int(hash<auto>)> getUpsertClosure(hash<auto> row, int upsert_strategy = UpsertAuto, *hash<auto> opt) {
         # check upsert options
@@ -4791,9 +4812,8 @@ map upsert($1), row_list;
         }
 
         # accommodate for bulk DML
-        if (row.firstValue().typeCode() == NT_LIST) {
-            row = map {$1.key : $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, row.pairIterator();
-        }
+        hash<auto> orig_row = row;
+        row = getBulkUpsertExampleRow(row);
 
         hash<auto> upsert_row;
         if (opt.upsert_columns) {
@@ -4815,16 +4835,13 @@ map upsert($1), row_list;
         # conversions uses a closure of its own, made from it (issue #6676)
         *hash<string, string> casts = getUpsertKeyCastTypes(cols);
         if (!casts) {
-            return c;
+            # a closure made from a row of list values (bulk DML) upserts its rows row by row (issue #6691)
+            return getUpsertRowsClosure(orig_row, c);
         }
         # the conversions are taken once, so that a row costs only the signature of its values
         hash<string, code> by_sig = {getUpsertCastSignatureIntern(casts, row): c};
         int strategy = upsert_strategy;
-        return int sub (hash<auto> r) {
-            # rows of list values (bulk DML) use the closure of the example row
-            if (r.firstValue().typeCode() == NT_LIST) {
-                return c(r);
-            }
+        code<int(hash<auto>)> by_row = int sub (hash<auto> r) {
             string sig = getUpsertCastSignatureIntern(casts, r);
             *code rc = by_sig{sig};
             if (!rc) {
@@ -4832,6 +4849,91 @@ map upsert($1), row_list;
             }
             return rc(r);
         };
+        # a closure made from a row of list values (bulk DML) upserts its rows row by row, each with the closure of its
+        # values (issue #6691)
+        return getUpsertRowsClosure(orig_row, by_row);
+    }
+
+    #! returns @ref True "True" if the row is a row of list values (bulk DML): its first value is a list
+    /** a driver whose columns take lists as values (ex: PostgreSQL arrays) overrides it (issue #6691)
+    */
+    private bool isBulkUpsertRow(hash<auto> row) {
+        return row.firstValue().typeCode() == NT_LIST;
+    }
+
+    #! returns the first row of a row of list values (bulk DML: its first value is a list), or the row itself
+    /** an upsert closure is made from the first row of an example row of list values (issue #6691)
+    */
+    private hash<auto> getBulkUpsertExampleRow(hash<auto> row) {
+        if (!isBulkUpsertRow(row)) {
+            return row;
+        }
+        return map {$1.key: $1.value.typeCode() == NT_LIST ? $1.value[0] : $1.value}, row.pairIterator();
+    }
+
+    #! returns the upsert closure for rows like the example row
+    /** a closure made from a hash row is the closure of the strategy, which upserts hash rows without any other cost;
+        a closure made from a row of list values (bulk DML) upserts rows of list values and hash rows
+        (getBulkUpsertRowsClosure()) (issue #6691)
+    */
+    private code<int(hash<auto>)> getUpsertRowsClosure(hash<auto> example_row, code c, bool array_bind = False) {
+        return isBulkUpsertRow(example_row) ? getBulkUpsertRowsClosure(c, array_bind) : c;
+    }
+
+    #! returns a closure that upserts each row of a row of list values (bulk DML) with the given closure
+    /** a row of list values (its first value is a list) gives a row for each element of its lists, whose value of a
+        column that is not a list is the column's value; the rows are upserted one by one, as by
+        getBulkUpsertClosure(), for the upsert closures of the drivers that cannot bind the lists of the row as arrays
+        in the upsert statement (issue #6691); any other row is passed to the closure
+
+        @param c the upsert closure
+        @param array_bind @ref True "True" if the closure binds the lists of a row of list values as arrays (ex: an
+        Oracle \c MERGE): the row is passed to the closure after its lists are checked
+
+        The closure returns @ref UR_Verified for a row of list values that it upserts row by row, and
+        @ref UR_Unchanged without executing any SQL for a row of empty lists.
+
+        @throw UPSERT-ERROR a list of the row has another length than the first value; raised before any row is
+        upserted
+    */
+    private code<int(hash<auto>)> getBulkUpsertRowsClosure(code c, bool array_bind = False) {
+        # a hash row costs only the type check of its first value
+        if (array_bind) {
+            return int sub (hash<auto> r) {
+                if (r.firstValue().typeCode() == NT_LIST && isBulkUpsertRow(r)) {
+                    checkBulkUpsertRow(r);
+                    if (!r.firstValue()) {
+                        return UR_Unchanged;
+                    }
+                }
+                return c(r);
+            };
+        }
+        return int sub (hash<auto> r) {
+            if (r.firstValue().typeCode() != NT_LIST || !isBulkUpsertRow(r)) {
+                return c(r);
+            }
+            checkBulkUpsertRow(r);
+            if (!r.firstValue()) {
+                return UR_Unchanged;
+            }
+            map c($1), r.contextIterator();
+            return UR_Verified;
+        };
+    }
+
+    #! raises UPSERT-ERROR if a list of a row of list values (bulk DML) has another length than the first value
+    /** (issue #6691)
+    */
+    private checkBulkUpsertRow(hash<auto> r) {
+        int size = r.firstValue().size();
+        foreach hash<auto> i in (r.pairIterator()) {
+            if (i.value.typeCode() == NT_LIST && i.value.size() != size) {
+                throw "UPSERT-ERROR", sprintf("%s: the lists of a row of list values (bulk DML) must have the same "
+                    "length; column %y has %d element%s, the first value %d: %y", getDesc(), i.key, i.value.size(),
+                    i.value.size() == 1 ? "" : "s", size, r);
+            }
+        }
     }
 
     #! returns the closure of an upsert strategy for the given key columns and example row
@@ -4887,8 +4989,21 @@ upsert(row_hash);
     */
     code<int(hash<auto>)> getBulkUpsertClosure(hash<auto> example_row, int upsert_strategy = AbstractTable::UpsertAuto, *hash<auto> opt) {
         code<int(hash<auto>)> upsert = getUpsertClosure(example_row, upsert_strategy, opt);
+        if (isBulkUpsertRow(example_row)) {
+            return int sub (hash<auto> h) {
+                upsert(h);
+                return UR_Verified;
+            };
+        }
+        # an upsert closure made from a hash row upserts only hash rows, which take it directly: rows of list values
+        # are upserted row by row (issue #6691)
+        code<int(hash<auto>)> rows = getBulkUpsertRowsClosure(upsert);
         return int sub (hash<auto> h) {
-            map upsert($1), h.contextIterator();
+            if (h.firstValue().typeCode() == NT_LIST && isBulkUpsertRow(h)) {
+                rows(h);
+            } else {
+                upsert(h);
+            }
             return UR_Verified;
         };
     }
@@ -5077,7 +5192,7 @@ map upsert($1), row_list;
 hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @endcode
 
-        @param i the @ref Qore::AbstractIterator argument that will provide the data to upsert or merge into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::SQLStatement class is well-suited to be used here)
+        @param i the @ref Qore::AbstractIterator argument that will provide the data to upsert or merge into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::SQLStatement class is well-suited to be used here); a row can be a row of list values (bulk DML: its first value is a list; see @ref getUpsertClosure()), whose rows are upserted and which is counted once, as \c "verified"; the rows have the keys of the first row in the same order (a row of list values after hash rows is recognized by the value of the first key of the first row)
         @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
         @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options
 
@@ -5085,7 +5200,9 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
@@ -5118,7 +5235,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
 hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @endcode
 
-        @param i the @ref Qore::AbstractIterator argument that will provide the data to upsert or merge into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::SQLStatement class is well-suited to be used here)
+        @param i the @ref Qore::AbstractIterator argument that will provide the data to upsert or merge into the current table; the @ref Qore::AbstractIterator::getValue() "getValue()" method of this object must return a hash giving row values (for example, the @ref Qore::SQL::SQLStatement class is well-suited to be used here); a row can be a row of list values (bulk DML: its first value is a list; see @ref getUpsertClosure()), whose rows are upserted and which is counted once, as \c "verified"; the rows have the keys of the first row in the same order (a row of list values after hash rows is recognized by the value of the first key of the first row)
         @param upsert_strategy see @ref upsert_options for possible values for the upsert strategy
         @param opt a hash of options for the upsert operation; see @ref SqlUtil::AbstractTable::UpsertOptions for common options; each driver can support additional driver-specific options; note that this method ignores any \c "commit_block" option
 
@@ -5126,7 +5243,9 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly,  or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
@@ -5188,38 +5307,51 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         hash<string, hash<auto>> pkh;
 
         hash<auto> row = i.getValue();
+        # the options that each row uses are read once
+        bool delete_others = opt.delete_others ?? False;
+        *code info_callback = opt.info_callback;
+        int commit_block = opt.commit_block ?? 0;
         # the primary key values of the rows of the current input row if it is a row of list values (bulk DML), for
-        # "delete_others", checked before the row is upserted (issue #6687)
+        # "delete_others", checked before the row is upserted (issue #6687); the first row is checked before the upsert
+        # closure is made from it
         *list<hash<auto>> bulk_keys;
-        # the first row is checked before the upsert closure is made from it
-        bool first_row = True;
-        if (opt.delete_others) {
+        if (delete_others) {
             bulk_keys = checkDeleteOthersInputRow(row, pkl);
         }
         code upsert = getUpsertClosure(row, upsert_strategy, opt);
+        # a closure made from a hash row upserts only hash rows: a row of list values (bulk DML) after it, whose first
+        # column (the rows have the keys of the first row in the same order) has a list, uses a closure made from it
+        # (issue #6691)
+        *string bulk_check_key = isBulkUpsertRow(row) ? NOTHING : row.firstKey();
+        *code bulk_upsert;
 
-        opt.change_count = 0;
-        do {
-            if (first_row) {
-                first_row = False;
-            } else if (opt.delete_others) {
-                bulk_keys = checkDeleteOthersInputRow(row, pkl);
+        # the number of rows by result code
+        list<int> counts = (0, 0, 0, 0, 0, 0, 0);
+        int change_count = 0;
+        while (True) {
+            int code;
+            if (bulk_check_key && row{bulk_check_key} instanceof list<auto> && isBulkUpsertRow(row)) {
+                if (!bulk_upsert) {
+                    bulk_upsert = getUpsertClosure(row, upsert_strategy, opt);
+                }
+                code = bulk_upsert(row);
+            } else {
+                code = upsert(row);
             }
-            int code = upsert(row);
-            ++rh{AbstractTable::UpsertResultMap{code}};
-            if (opt.info_callback) {
-                opt.info_callback(getSqlName(), row, code);
+            ++counts[code];
+            if (info_callback) {
+                info_callback(getSqlName(), row, code);
             }
 
-            if (code != UR_Unchanged && opt.commit_block) {
-                if (++opt.change_count >= opt.commit_block) {
+            if (commit_block && code != UR_Unchanged) {
+                if (++change_count >= commit_block) {
                     ds.commit();
-                    opt.change_count = 0;
+                    change_count = 0;
                 }
             }
 
             # save primary key value in primary key hash if "delete_others" is set
-            if (opt.delete_others) {
+            if (delete_others) {
                 if (bulk_keys) {
                     foreach hash<auto> k in (bulk_keys) {
                         pkh{getDeleteOthersKey(k, pkl)} = k;
@@ -5228,9 +5360,19 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
                     pkh{getDeleteOthersKey(row, pkl)} = row{pkl};
                 }
             }
-        } while (i.next() && (row = i.getValue()));
 
-        if (opt.delete_others) {
+            if (!i.next() || !(row = i.getValue())) {
+                break;
+            }
+            if (delete_others) {
+                bulk_keys = checkDeleteOthersInputRow(row, pkl);
+            }
+        }
+
+        map rh{UpsertResultMap{$1}} = counts[$1.toInt()], keys UpsertResultMap, counts[$1.toInt()];
+
+        if (delete_others) {
+            opt.change_count = change_count;
             rh += doDeleteOthersIntern(pkh, pkl, opt);
         }
 
@@ -5247,7 +5389,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         length than the first value of a row of list values
     */
     private *list<hash<auto>> checkDeleteOthersInputRow(hash<auto> row, list<string> pkl) {
-        if (row.firstValue().typeCode() != NT_LIST) {
+        if (row.firstValue().typeCode() != NT_LIST || !isBulkUpsertRow(row)) {
             checkDeleteOthersRow(row, pkl);
             return;
         }
@@ -5566,9 +5708,9 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is
           @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since
           rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is
-          @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or
-          @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if
           \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
@@ -5636,7 +5778,9 @@ hash h = table.upsertFromSelect(table2, ("where": ("account_type": "CUSTOMER")),
         - \c "inserted": the number of rows inserted
         - \c "verified": the number of rows updated unconditionally; note that this key is returned with all upsert strategy codes other than @ref SqlUtil::AbstractTable::UpsertSelectFirst instead of \c "updated"
         - \c "updated": the number of rows updated; note that this key is only returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, otherwise updated rows are reported as \c "verified" since rows are updated unconditionally with other the upsert strategy codes
-        - \c "unchanged": the number of rows unchanged; this key can only be returned if \a upsert_strategy is @ref SqlUtil::AbstractTable::UpsertSelectFirst, @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly
+        - \c "unchanged": the number of rows unchanged; this key is returned with @ref SqlUtil::AbstractTable::UpsertSelectFirst,
+          @ref SqlUtil::AbstractTable::UpsertInsertOnly, or @ref SqlUtil::AbstractTable::UpsertUpdateOnly, and with any
+          strategy for rows with no column to update whose key exists
         - \c "deleted": the number of rows deleted; this can only be returned if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True"
 
         @throw OPTION-ERROR invalid or unsupported option
@@ -9309,9 +9453,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     */
     private code<int(hash<auto>)> getUpsertInsertFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         string insert_sql = getUpsertInsertSql(example_row);
-        list updc = ();
-        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
+        list updc = getUpsertUpdateColumns(example_row, cols, opt);
         # a row with only key columns (or with all other columns omitted from the update) has nothing to update
+        *string update_sql = updc ? getUpsertUpdateSql(example_row, cols, \updc, opt) : NOTHING;
         *string key_sql = updc ? NOTHING : getUpsertKeySelectSql(cols, example_row);
 
         return int sub (hash<auto> row) {
@@ -9320,8 +9464,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
             }
 
             if (key_sql) {
+                # nothing to update: the existing row is unchanged (issue #6692)
                 if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
-                    return UR_Verified;
+                    return UR_Unchanged;
                 }
             } else if (tryUpdate(update_sql, row, cols, updc)) {
                 return UR_Verified;
@@ -9334,9 +9479,21 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     }
 
     private code<int(hash<auto>)> getUpsertUpdateFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
-        list updc = ();
-        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
         string insert_sql = getUpsertInsertSql(example_row);
+        list updc = getUpsertUpdateColumns(example_row, cols, opt);
+        if (!updc) {
+            # a row with only key columns, or with all other columns omitted from the update, has nothing to update:
+            # an existing row is unchanged, and a new row is inserted (issue #6692)
+            string key_sql = getUpsertKeySelectSql(cols, example_row);
+            return int sub (hash<auto> row) {
+                if (ds.vselectRow(key_sql, row{cols.keys()}.values())) {
+                    return UR_Unchanged;
+                }
+                ds.vexec(insert_sql, row.values());
+                return UR_Inserted;
+            };
+        }
+        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 
         return int sub (hash<auto> row) {
             if (tryUpdate(update_sql, row, cols, updc))
@@ -9480,7 +9637,13 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     }
 
     private code<int(hash<auto>)> getUpsertUpdateOnly(Columns cols, hash<auto> example_row, *hash<auto> opt) {
-        list updc = ();
+        list updc = getUpsertUpdateColumns(example_row, cols, opt);
+        if (!updc) {
+            # nothing to update: a row is unchanged, and no row is inserted (issue #6692)
+            return int sub (hash<auto> row) {
+                return UR_Unchanged;
+            };
+        }
         string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
 
         return int sub (hash<auto> row) {
@@ -9587,12 +9750,22 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         return sql;
     }
 
+    #! returns the columns of a row that an upsert updates: the columns that are not in the key nor omitted with the
+    #! \c omit_update option
+    private list<string> getUpsertUpdateColumns(hash<auto> row, Columns cols, *hash<auto> opt) {
+        # hash of columns to skip on update if applicable
+        *hash<string, bool> suh = map {$1: True}, opt.omit_update;
+        return select keys row, !cols.hasKey($1) && !suh{$1};
+    }
+
     private string getUpsertUpdateSql(hash<auto> row, Columns cols, reference updc, *hash<auto> opt) {
         # make list of columns not in unique key if necessary
         if (!updc) {
-            # hash of columns to skip on update if applicable
-            *hash suh = map {$1: True}, opt.omit_update;
-            map updc += $1, keys row, !cols.hasKey($1) && !suh.$1;
+            updc = getUpsertUpdateColumns(row, cols, opt);
+        }
+        # an update without columns is not valid SQL: the callers handle a row with nothing to update (issue #6692)
+        if (!updc) {
+            throw "UPSERT-ERROR", sprintf("%s: the upsert has no column to update: %y", getDesc(), keys row);
         }
 
         # make sql
@@ -12808,9 +12981,20 @@ list<auto> l = table.getAlignSql(table2);
 
         # check name
         if (name != t.name) {
-            l += AbstractDatabase::doCallback(opt, getRenameSql(t.name), AbstractDatabase::AC_Rename, "table", name,
-                NOTHING, t.name);
-            name = t.name;
+            # the comment of the table is read under its name before the rename: it is compared below, after the
+            # name has changed (issue #6721)
+            if (supportsTableComments()) {
+                getCommentUnlocked();
+            }
+            # the SQL is made under the lock that the caller holds: getRenameSql() takes it (issue #6721)
+            l += AbstractDatabase::doCallback(opt, getRenameSqlImpl(t.name), AbstractDatabase::AC_Rename, "table",
+                name, NOTHING, t.name);
+            # a table whose SQL is executed by the callback is renamed in the table cache too, as by getRenameSql()
+            if (opt.sql_callback_executed) {
+                doRenameIntern(t.name, opt.db_table_cache);
+            } else {
+                name = t.name;
+            }
         }
 
         bool uixc = uniqueIndexCreatesConstraintImpl();
