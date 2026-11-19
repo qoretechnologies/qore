@@ -1862,6 +1862,8 @@ data decode_http_body(*string content_type, binary body, string assumed_encoding
                 }
             }
             if (offset >= 0) {
+                // the offset in the body, with the byte order mark that the string does not have
+                offset += static_cast<qore_offset_t>(body->size() - str->size());
                 desc->sprintf(": invalid byte sequence at byte offset " QLLD, static_cast<int64>(offset));
             }
             xsink->raiseException("INVALID-ENCODING", desc);

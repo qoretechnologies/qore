@@ -228,6 +228,12 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         # a UTF-16 byte order mark is counted in the offset
         checkInvalid(sub () { readAll(<fffe410000dc>, "UTF-16", "UTF-8", 4096); }, inputDesc("UTF-16LE", 4),
             "UTF-16 with a byte order mark");
+        # and so is the byte order mark of a generic UTF-32 string in the error of convert_encoding(); the string keeps
+        # its byte order mark (binary_to_string() removes it, decode_http_body() with "keep" does not)
+        string utf32 = decode_http_body("text/plain;charset=utf-32", <0000feff0000004100110000>, "UTF-8", "keep");
+        assertEq(12, utf32.size(), "the string has the byte order mark");
+        *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(utf32, "UTF-8"); });
+        assertRegex("byte offset 8 ", ex.desc, "UTF-32 with a byte order mark");
     }
 
     unrepresentableTest() {

@@ -221,12 +221,20 @@ public class HttpBodyCharsetTest inherits QUnit::Test {
             "raise"));
         # a body without a Content-Type that is text, in the assumed encoding
         assertThrows("INVALID-ENCODING", msg, \decode_http_body(), (NOTHING, <61ff>, "UTF-8"));
-        # a lone surrogate in a UTF-16 body with a byte order mark
-        assertThrows("INVALID-ENCODING", "not valid UTF-16LE", \decode_http_body(), ("text/plain", <fffe00d8>));
+        # a lone surrogate in a UTF-16 body with a byte order mark: the offset is that in the body, with the byte
+        # order mark
+        assertThrows("INVALID-ENCODING", "not valid UTF-16LE: invalid byte sequence at byte offset 2$",
+            \decode_http_body(), ("text/plain", <fffe00d8>));
+        assertThrows("INVALID-ENCODING", "not valid UTF-8: invalid byte sequence at byte offset 4$",
+            \decode_http_body(), ("text/plain", <efbbbf61ff>));
+        # a UTF-32 byte order mark that the body keeps (the charset is the generic UTF-32): an invalid value after it
+        assertThrows("INVALID-ENCODING", "byte offset 4$", \decode_http_body(),
+            ("text/plain;charset=utf-32", <0000feff00110000>));
         # a byte that is not a character of a single-byte encoding (0x81 in windows-1252), as
         # <string>::isEncodingValid() says
         assertThrows("INVALID-ENCODING", "^decode_http_body\\(\\): the HTTP message body is not valid WINDOWS-1252: "
-            "invalid byte sequence at byte offset 1$", \decode_http_body(), ("text/plain;charset=windows-1252", <618162>));
+            "invalid byte sequence at byte offset 1$", \decode_http_body(),
+            ("text/plain;charset=windows-1252", <618162>));
         string cp = decode_http_body("text/plain;charset=windows-1252", <618162>, "UTF-8", "latin1");
         assertEq("ISO-8859-1", cp.encoding());
         assertEq(<618162>, binary(cp));
