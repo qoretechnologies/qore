@@ -155,9 +155,11 @@ module HttpServerUtil {
     @section httputil1_6 HttpServerUtil 1.6
     - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
       reads a chunked request body as bytes and decodes it once, after any decompression, as a body with a
-      \c Content-Length is, and raises \c HTTP-BODY-ENCODING-ERROR, which the server answers with 400, for a body
-      that is not valid text in its encoding; added
+      \c Content-Length is (with the server's default text encoding as the assumed encoding), and raises
+      \c HTTP-BODY-ENCODING-ERROR, which the server answers with 400, for a body that is text and not valid in its
+      encoding; binary data is never refused; added
       @ref HttpServer::AbstractHttpRequestHandler::decodeRequestText() "AbstractHttpRequestHandler::decodeRequestText()"
+      and @ref HttpServer::HttpListenerInterface::getDefaultTextEncoding() "HttpListenerInterface::getDefaultTextEncoding()"
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
       does not merge the trailer fields of a chunked request body into the request's header fields; they are given
@@ -1869,6 +1871,19 @@ public class HttpListenerInterface inherits AbstractLogger {
     */
     int getMaxDecodedBodySize() {
         return DefaultMaxDecodedBodySize;
+    }
+
+    #! Returns the encoding assumed for request text without an encoding declaration
+    /** @return the encoding assumed for request text whose encoding is not declared or defined by its type; this
+        implementation returns \c "ISO-8859-1", the default of
+        @ref HttpServer::HttpServer::getDefaultTextEncoding() "HttpServer::getDefaultTextEncoding()"
+
+        @see @ref HttpServer::AbstractHttpRequestHandler::getMessageBody() "AbstractHttpRequestHandler::getMessageBody()"
+
+        @since HttpServerUtil 1.6
+    */
+    string getDefaultTextEncoding() {
+        return "ISO-8859-1";
     }
 
     #! Returns a hash of extra headers to be added to all responses from this listener
@@ -4223,11 +4238,16 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
     #! Returns a request body received as binary data as text, refusing a body that is not valid in its encoding
     /** Text is decoded by the rules shared by all HTTP clients and servers (see
-        @ref Qore::decode_http_body() "decode_http_body()") with \a assumed_encoding as the assumed encoding; a body
-        of another type is returned as a string in \a assumed_encoding.  The bytes of the body are not changed.
+        @ref Qore::decode_http_body() "decode_http_body()") with \a assumed_encoding as the assumed encoding: the
+        string has the bytes of the body without any byte order mark.
+
+        A body that @ref Qore::decode_http_body() "decode_http_body()" does not take as text (ex:
+        \c application/octet-stream or \c image/png, also with a \c charset parameter) is binary data, which has no
+        encoding, and is never refused: it is returned with its bytes unchanged as a string in \a assumed_encoding
+        if they are valid in it, or else in ISO-8859-1, in which every byte is a character.
 
         Text from outside the server is checked where it enters it, before any handler processes it: a body that is
-        not valid text in its encoding raises \c HTTP-BODY-ENCODING-ERROR, which the
+        text and not valid in its encoding raises \c HTTP-BODY-ENCODING-ERROR, which the
         @ref HttpServer::HttpServer "HttpServer" answers with HTTP 400 (Bad Request).  The error has a name of its
         own so that the server answers only this error with 400, and not an \c INVALID-ENCODING error that a handler
         raises for text of its own.
@@ -4239,15 +4259,21 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
 
         @return the request body as a string
 
-        @throw HTTP-BODY-ENCODING-ERROR the body is not valid text in its encoding; the server answers this error with
-        HTTP 400 (Bad Request)
+        @throw HTTP-BODY-ENCODING-ERROR the body is text that is not valid in its encoding; the server answers this
+        error with HTTP 400 (Bad Request)
 
         @since HttpServerUtil 1.6
     */
     static string decodeRequestText(hash<auto> hdr, binary body, string assumed_encoding) {
         auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
         data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed_encoding);
-        string str = rv.typeCode() == NT_STRING ? rv : body.toString(assumed_encoding);
+        if (rv.typeCode() != NT_STRING) {
+            # binary data has no encoding: it is never refused, and is given in ISO-8859-1 when its bytes are not
+            # valid in the assumed encoding
+            string str = body.toString(assumed_encoding);
+            return str.isEncodingValid() ? str : body.toString("ISO-8859-1");
+        }
+        string str = rv;
         if (!str.isEncodingValid()) {
             throw "HTTP-BODY-ENCODING-ERROR", sprintf("the request body of %d bytes has an invalid encoding: it is "
                 "not valid text in encoding %s", body.size(), str.encoding());
@@ -4309,10 +4335,12 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
     #! optionally retrieves and post-processes any message body
     /** A chunked request body is read as binary data and decoded once, after any decompression: text is decoded by
         the rules shared by all HTTP clients and servers, as a body with a \c Content-Length is (see
-        decodeRequestText(); the encoding of the socket, which the server sets from the \c Content-Type of the
-        request, is the assumed encoding), and a body that is not valid text in its encoding is refused with
-        \c HTTP-BODY-ENCODING-ERROR before the handler processes it.  A compressed body is decoded in the same way
-        when @ref decompress_to_string is set.
+        decodeRequestText(); the assumed encoding is the listener's
+        @ref HttpServer::HttpListenerInterface::getDefaultTextEncoding() "HttpListenerInterface::getDefaultTextEncoding()",
+        which is the server's default text encoding, or the socket's encoding if no listener is given), and a body
+        that is text and not valid in its encoding is refused with \c HTTP-BODY-ENCODING-ERROR before the handler
+        processes it; binary data is never refused.  A compressed body is decoded in the same way when
+        @ref decompress_to_string is set.
 
         @param s the socket of the request
         @param hdr the request headers
@@ -4356,13 +4384,20 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
             body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body, NOTHING,
                 getMaxDecodedBodySize(listener));
             if (decompress_to_string) {
-                body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, s.getEncoding());
+                body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, getAssumedTextEncoding(s, listener));
             }
         } else if (chunked_text && body.typeCode() == NT_BINARY) {
-            body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, s.getEncoding());
+            body = AbstractHttpRequestHandler::decodeRequestText(hdr, body, getAssumedTextEncoding(s, listener));
         }
 
         return body;
+    }
+
+    #! Returns the encoding assumed for request text without an encoding declaration, as the server assumes it
+    /** private:internal, so that it cannot clash with a method of a subclass
+    */
+    private:internal static string getAssumedTextEncoding(Socket s, *HttpListenerInterface listener) {
+        return listener ? listener.getDefaultTextEncoding() : s.getEncoding();
     }
 
     #! helper method for handling log messages

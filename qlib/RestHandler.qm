@@ -1759,12 +1759,22 @@ public namespace RestHandler {
                     : get_exception_string(ex);
 
                 logError("RestHandler: %s", maskData(desc));
-                # a chunked request body read when the method is called that is not valid text in its encoding is
-                # an error of the client, answered as a body read before dispatching is (qore#6604)
-                rv = ex.err == "HTTP-BODY-ENCODING-ERROR"
-                    ? cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(400,
-                        sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)))
-                    : returnRestException(ex);
+                # a chunked request body read when the method is called that is not valid text in its encoding or
+                # that is too large once decompressed is an error of the client, answered as the server answers it
+                # for a body read before dispatching (qore#6604)
+                switch (ex.err) {
+                    case "HTTP-BODY-ENCODING-ERROR":
+                        rv = cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(400,
+                            sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)));
+                        break;
+                    case "HTTP-BODY-TOO-LARGE":
+                        rv = cast<hash<HttpHandlerResponseInfo>>(AbstractHttpRequestHandler::makeResponse(413,
+                            sprintf("%s: %s", ex.err, ex.desc), errorResponseHeaders(cx)));
+                        break;
+                    default:
+                        rv = returnRestException(ex);
+                        break;
+                }
             }
 
             if (!rv.reply_sent) {

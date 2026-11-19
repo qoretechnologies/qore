@@ -165,7 +165,11 @@ class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
       answered with \c 400 before the handler processes it: a body with a \c Content-Length, a buffered HTTP/2 or
       HTTP/3 body, an HTTP/1.1 chunked body (read whole and decoded once, so a character can be split over chunks)
       and a compressed body (decoded after it is decompressed, when the handler's
-      @ref HttpServer::AbstractHttpRequestHandler::decompress_to_string "decompress_to_string" is set)
+      @ref HttpServer::AbstractHttpRequestHandler::decompress_to_string "decompress_to_string" is set); text whose
+      encoding is not declared or defined by its type is decoded in the default text encoding of the server
+      (@ref HttpServer::HttpServer::setDefaultTextEncoding() "HttpServer::setDefaultTextEncoding()") on every path
+    - a body that is not text, such as \c application/octet-stream or \c image/png, also with a \c charset
+      parameter, is binary data and is never refused
     .
 
     A chunked body is read when the handler gets it, with
@@ -271,8 +275,7 @@ log("started listener on %s", lh.desc);
       \c Content-Length, buffered over HTTP/2 or HTTP/3, chunked, or compressed) is not valid text in its encoding, is
       answered with @c 400 before any handler sees it, over HTTP/1.x,
       HTTP/2 and HTTP/3; a header value that is not valid UTF-8 is given to the handler in ISO-8859-1 with its bytes
-      unchanged, as obs-text (RFC 9110 section 5.5) (issues #6554 and #6604; see @ref httpserver_invalid_text); a
-      compressed body with a \c Content-Length that was not valid text was answered with @c 500
+      unchanged, as obs-text (RFC 9110 section 5.5) (issues #6554 and #6604; see @ref httpserver_invalid_text)
     - a handler path that is a regular expression is compiled when the handler is set
       (@ref HttpServer::HttpServer::setHandler() "HttpServer::setHandler()",
       @ref HttpServer::HttpServer::setDynamicHandler() "HttpServer::setDynamicHandler()",
@@ -7034,6 +7037,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # ignore if server was deleted
             }
         }
+    }
+
+    #! Returns the encoding assumed for request text without an encoding declaration: the server's default text encoding
+    /** @return the server's default text encoding (@ref HttpServer::HttpServer::getDefaultTextEncoding() "HttpServer::getDefaultTextEncoding()")
+
+        @since HttpServer 1.7
+    */
+    string getDefaultTextEncoding() {
+        return serv ? serv.getDefaultTextEncoding() : "ISO-8859-1";
     }
 
     #! Returns the effective maximum size in bytes of a decompressed request body for this listener
