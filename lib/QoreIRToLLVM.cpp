@@ -2387,7 +2387,23 @@ llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* c
     const QoreClass* qc = check->check_any_class ? nullptr : check->check_class;
     const QoreClass* method_qc = check->check_any_class ? nullptr : check->check_method_class;
     if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
-        return emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
+        if (check->check_after_args) {
+            // the check after the arguments tests only that the object has not been deleted: it is made for an
+            // object of any class (QoreIRLowering::emitCallTargetCheckAfterArgs()), so neither test takes the classes
+            assert(!qc && !method_qc);
+            // the test of the check before the arguments, if it dominates this one (issue #6646)
+            auto i = valid_object_tests.find(target);
+            if (i != valid_object_tests.end()) {
+                auto* tested = llvm::dyn_cast<llvm::Instruction>(i->second);
+                if (tested && dominates(tested->getParent(), builder->GetInsertBlock())) {
+                    return emitValidObjectRetest(target, tested, *layout, llvm_func);
+                }
+            }
+            return emitValidObjectTest(target, *layout, llvm_func);
+        }
+        llvm::Value* valid = emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
+        valid_object_tests[target] = valid;
+        return valid;
     }
     auto fast = module.getOrInsertFunction("qore_rt_call_target_is_valid_object",
         llvm::FunctionType::get(i1_type, {i64_type, ptr_type, ptr_type, i1_type}, false));
@@ -2557,6 +2573,44 @@ llvm::Value* QoreIRToLLVM::emitValidObjectTest(llvm::Value* qv, const QoreJITObj
     result->addIncoming(builder->getFalse(), node_block);
     result->addIncoming(builder->getFalse(), other_block);
     result->addIncoming(valid, status_block);
+    return result;
+}
+
+// documented in QoreIRToLLVM.h
+llvm::Value* QoreIRToLLVM::emitValidObjectRetest(llvm::Value* qv, llvm::Value* tested,
+        const QoreJITObjectLayout& layout, llvm::Function* llvm_func) {
+    // JIT only: the layout is the running libqore's
+    assert(!aot_mode);
+    llvm::LLVMContext& ctx = builder->getContext();
+    llvm::BasicBlock* status_block = llvm::BasicBlock::Create(ctx, "obj.retest.status", llvm_func);
+    llvm::BasicBlock* full_block = llvm::BasicBlock::Create(ctx, "obj.retest.full", llvm_func);
+    llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "obj.retest.done", llvm_func);
+    builder->CreateCondBr(tested, status_block, full_block);
+    // an object that passed the test before the arguments: only its deleted status can have changed
+    // (qore_object_private::isValidInline()); its type, private data and class are read from the same value as in the
+    // full test, which also reads the object's node after the arguments: both rely on the value of the call's target
+    // keeping the object's memory valid until the call
+    builder->SetInsertPoint(status_block);
+    llvm::Value* obj_ptr = builder->CreateIntToPtr(
+        builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK)), ptr_type);
+    llvm::Value* priv = builder->CreateLoad(ptr_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), obj_ptr, layout.priv_offset), "obj.retest.priv");
+    llvm::LoadInst* status = builder->CreateAlignedLoad(i32_type,
+        builder->CreateConstInBoundsGEP1_64(builder->getInt8Ty(), priv, layout.status_offset), llvm::MaybeAlign(4),
+        "obj.retest.status");
+    status->setAtomic(llvm::AtomicOrdering::Monotonic);
+    llvm::Value* valid = builder->CreateICmpNE(status,
+        llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "obj.retest.valid");
+    builder->CreateBr(done_block);
+    // otherwise (the check before the arguments called its helper): the full test, for an object of any class
+    builder->SetInsertPoint(full_block);
+    llvm::Value* full = emitValidObjectTest(qv, layout, llvm_func);
+    llvm::BasicBlock* full_end = builder->GetInsertBlock();
+    builder->CreateBr(done_block);
+    builder->SetInsertPoint(done_block);
+    llvm::PHINode* result = builder->CreatePHI(i1_type, 2, "obj.retest.result");
+    result->addIncoming(valid, status_block);
+    result->addIncoming(full, full_end);
     return result;
 }
 
@@ -15789,6 +15843,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     aot_hash_string_extraction_cache.clear();
     aot_hash_string_extraction_instruction = nullptr;
     current_self_bits = nullptr;
+    valid_object_tests.clear();
     aot_hash_string_extraction_reuses = 0;
     aot_hash_string_extraction_overlap_reuses = 0;
     aot_hash_string_extraction_cross_block_reuses = 0;
