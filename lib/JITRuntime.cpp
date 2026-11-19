@@ -19699,10 +19699,17 @@ static QORE_INTERN_ALWAYS_INLINE uint64_t qore_rt_call_direct_aot_impl_t(QoreAOT
             const QoreAOTCallTarget& target = ctx->call_targets[slot];
             const UserVariantBase* uvb = target.uvb ? target.uvb
                 : target.variant ? target.variant->getUserVariantBase() : nullptr;
-            if (uvb && qore_rt_debugger_attached(uvb)) {
-                AOTDirectCallTypeParams type_params(target.explicit_type_param_instantiation);
-                return qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args,
-                    arg_cleanups, nargs, xsink, type_params.effective);
+            if (uvb) {
+                QoreSourceProgramHolder holder(xsink);
+                QoreProgram* pgm = qore_rt_function_execution_program(target.pgm, getProgram(), uvb, holder, xsink);
+                if (!pgm && *xsink) {
+                    return toBits(QoreValue());
+                }
+                if (pgm && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
+                    AOTDirectCallTypeParams type_params(target.explicit_type_param_instantiation);
+                    return qore_rt_call_function_direct_impl(target.func, target.variant, target.pgm, args,
+                        arg_cleanups, nargs, xsink, type_params.effective);
+                }
             }
         }
     }
@@ -19948,6 +19955,38 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
     return qore_rt_call_direct_aot_impl_t<false>(ctx, slot, args, arg_cleanups, nargs, xsink);
 }
 
+// The native caller has already published the callee's stack location. The ordinary binder will
+// publish that same call with a frame of locals. Present its original caller and call site for
+// the duration of binding and execution, then restore the native frame for the caller's epilogue.
+class AOTDebugCallFrame {
+public:
+    explicit AOTDebugCallFrame(const UserVariantBase& uvb) : frame(get_runtime_stack_location()) {
+        if (qore_is_aot_native_call_frame(frame) && frame->getCallName() == uvb.getCallName()) {
+            stmt = get_runtime_statement();
+            loc = get_runtime_location();
+            update_runtime_stack_location(frame->getNext());
+            update_runtime_statement_location(frame->getStatement(), &frame->getLocation());
+        } else {
+            frame = nullptr;
+        }
+    }
+
+    ~AOTDebugCallFrame() {
+        if (frame) {
+            update_runtime_statement_location(stmt, loc);
+            update_runtime_stack_location(frame);
+        }
+    }
+
+    AOTDebugCallFrame(const AOTDebugCallFrame&) = delete;
+    AOTDebugCallFrame& operator=(const AOTDebugCallFrame&) = delete;
+
+private:
+    const QoreStackLocation* frame;
+    const AbstractStatement* stmt = nullptr;
+    const QoreProgramLocation* loc = nullptr;
+};
+
 // The fast entry can have its caller's context. Resolve the standard native symbol in the
 // executing Program on the debug path, including when several variants have the same name.
 extern "C" DLLEXPORT uint64_t qore_rt_debug_aot_fast_function(const char* name, AotFunctionPtr standard,
@@ -19991,6 +20030,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_debug_aot_fast_function(const char* name, 
                 qore_list_private::get(**argv)->pushIntern(arg);
             }
             inst.owner = uvb->getUserSignature();
+            AOTDebugCallFrame frame(*uvb);
             return toBits(f->evalFunctionTmpArgs(v, *argv, pgm, rc_get_current_ref(), xsink,
                 inst.empty() ? nullptr : &inst));
         }

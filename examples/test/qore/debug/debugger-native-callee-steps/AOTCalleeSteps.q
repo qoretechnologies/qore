@@ -36,6 +36,8 @@ class Recorder inherits DebugProgram {
             if (line >= 7 && line <= 16) {
                 events += sprintf("step %d", line);
                 if (line == 14) {
+                    list frames = map $1.function, get_thread_call_stack(), $1.function == "length" || $1.function == "runProbe";
+                    events += frames.join(" > ");
                     events += sprintf("local %y", get_local_vars(1).value.value);
                 }
                 if (line == 14 && action == "next") { rs = DebugStepOver; }

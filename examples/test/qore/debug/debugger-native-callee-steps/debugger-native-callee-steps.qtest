@@ -68,9 +68,9 @@ class DebuggerNativeCalleeStepsTest inherits QUnit::Test {
     directCallSteps() {
         string fixture = get_script_dir() + "/AOTCalleeSteps.q";
         string expected = "";
-        foreach string trace in ("step 23 [\"step 14\", \"local 3\", \"step 7\", \"step 8\", \"step 15\", \"step 16\"]",
-                "next 23 [\"step 14\", \"local 3\", \"step 15\", \"step 16\"]",
-                "out 23 [\"step 14\", \"local 3\", \"step 7\", \"step 15\", \"step 16\"]") {
+        foreach string trace in ("step 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 7\", \"step 8\", \"step 15\", \"step 16\"]",
+                "next 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 15\", \"step 16\"]",
+                "out 23 [\"step 14\", \"length > runProbe\", \"local 3\", \"step 7\", \"step 15\", \"step 16\"]") {
             expected += "helper " + trace + "\nfast " + trace + "\n";
         }
         foreach string mode in (ExecModeHarness::ExecModes) {
