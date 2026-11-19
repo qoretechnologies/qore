@@ -171,8 +171,9 @@ x=null@endverbatim
 
     A thread started with the @ref background "background operator" leaves the Program that started it when its code
     has ended, before it frees its thread-local data, so the Program can be deleted while the thread frees its data,
-    and the destructors that this runs at the thread's end run in no Program of the thread's own: each runs in the
-    Program of its class, as everywhere else.
+    and the destructors that freeing it runs at the thread's end run in no Program of the thread's own: each runs in
+    the Program of its class, as everywhere else; one whose class's Program has been deleted raises a
+    \c PROGRAM-ERROR exception.
 
     The member initialization expressions of the classes and @ref hashdecl "hashdecls" of a Program are code of that
     Program, whichever Program's code creates the object or hash: a Program that inherited or imported them, or the

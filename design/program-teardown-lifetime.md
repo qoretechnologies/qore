@@ -30,7 +30,8 @@ A thread's Program context (`td->current_pgm`, `td->tlpd`, the Program of its `R
 location are valid only while the thread holds the Program's thread count.  A thread started with the `background`
 operator has its Program as its context from its registration and holds its count until `BGThreadParams::del()`;
 `op_background_thread()` calls `leave_background_thread_program()` before that, as
-`ProgramThreadCountContextHelper::restoreContext()` restores the outer context before it releases the count, so the
+`ProgramThreadCountContextHelper::restoreContext()` restores the outer Program context before it releases the count
+(the runtime location, which the scoped location helpers restore for a nested context, is reset with it), so the
 thread's teardown (`ThreadData::del()`, which runs the destructors of its thread-local data) runs in no Program of its
 own, as a thread started with `q_run_thread()` does, while the Program can be deleted (qore#6629).
 

@@ -54,15 +54,25 @@ class Tracked {
             after_blocker.dec();
         }
         # the frame of a destructor is located where the code that runs it is: an exception and the call stack use
-        # that location
+        # that location, which is not in the Program that started the thread ("root"), as that Program is deleted
         list<hash<CallStackInfo>> stack = get_thread_call_stack();
         try {
             throw "TRACKED-DESTRUCTOR";
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "TRACKED-DESTRUCTOR" && stack) {
+            if (!inRoot(stack) && !inRoot(ex.callstack)) {
                 destroyed.dec();
             }
         }
+    }
+
+    #! returns True if a frame of the call stack given is located in code with the label "root"
+    private static bool inRoot(list<hash<CallStackInfo>> stack) {
+        foreach hash<CallStackInfo> frame in (stack) {
+            if (frame.file == "root") {
+                return True;
+            }
+        }
+        return False;
     }
 }
 
@@ -112,6 +122,7 @@ public class ThreadExitProgramContextTest inherits QUnit::Test {
         # a failed assertion does not leave the thread blocked
         on_error release.push(True);
         Queue gate();
+        on_error gate.push(True);
         Program root(ProgramOptions, True);
         root.parse(ProgramCode, "root");
         # the thread data hash frees its values in the order in which they were saved; the order is checked below
@@ -124,7 +135,8 @@ public class ThreadExitProgramContextTest inherits QUnit::Test {
         # the thread is at its end, in the destructor of the Blocker: it has left the root, and its data is no longer
         # the root's to free
         assertEq(0, entered.waitForZero(30s), "the thread's end runs the first destructor");
-        # the root is torn down and freed while the thread frees its data
+        # the root is torn down and freed while the thread frees its data; this does not wait for the thread, which
+        # has released the root (it would hang here if the thread still held the root while it freed its data)
         delete root;
         release.push(True);
         assertEq(0, destroyed.waitForZero(30s), "the thread's end runs the second destructor");

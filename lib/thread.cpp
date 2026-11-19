@@ -8494,10 +8494,12 @@ static void q_finish_counted_thread() {
     expression in the Program, which the Program frees with its code: it is reset as well.
 */
 static void leave_background_thread_program(ThreadData* td) {
-    // the thread is at the bottom of its stack of Program contexts and Program entries
+    // the thread is at the bottom of its stack of Program contexts, Program entries and call stack locations
     assert(!td->current_pgm_ctx);
     assert(!td->entry_pgm);
     assert(!td->callback_caller_pgm);
+    assert(!td->current_stack_location.load(std::memory_order_relaxed));
+    assert(!td->call_site_loc);
     set_thread_current_pgm(td, nullptr);
     td->tlpd = nullptr;
     sync_runtime_config_program(td);
