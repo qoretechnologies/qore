@@ -4963,6 +4963,7 @@ private:
             // before the call (qore#6300)
             call->shared_locals = region.shared_locals;
             call->written_shared_locals = region.written_shared_locals;
+            call->function_body = true;
             call->result = fn->createValue();
             if (call->result.id > fn->max_value_id) {
                 fn->max_value_id = call->result.id;

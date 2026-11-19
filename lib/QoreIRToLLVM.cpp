@@ -14798,7 +14798,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     if (ret->has_value) {
                         returned.push_back(ret->value.id);
                     }
-                } else if (aot_mode && inst->opcode == QoreIROpcode::CallAOTHelper && inst->result.isValid()) {
+                } else if (aot_mode && inst->opcode == QoreIROpcode::CallAOTHelper && inst->result.isValid()
+                        && static_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())->function_body) {
                     // the result of an outlined helper's call on an exception is the value of an interrupted return
                     // (or of a handler's return) that the helper hands over (see outline_held_return), even where
                     // the call has no return of its own (qore#6650)
