@@ -4992,9 +4992,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(QoreAOTC
     }
 
     ClassAccess access = Public;
-    const QoreMethod* method = qc->findStaticMethod(method_name, access);
-    if (!method) {
-        method = qc->findMethod(method_name, access);
+    // a reference that the compiler resolved records the class that declares its method, which is called whatever
+    // other parent class has a method of the name (qore#6679); a deferred reference has the name only
+    bool have_class;
+    const QoreMethod* method = qore_aot_resolve_static_method_ref_target(pgm, qc, method_name, have_class);
+    std::string name_buf;
+    if (have_class) {
+        name_buf = qore_aot_static_method_ref_target_name(method_name);
+        method_name = name_buf.c_str();
+        if (method) {
+            // the access of the method from the named class: its own, or private if it is inherited through a
+            // private parent class
+            bool priv = false;
+            if (method->getClass() != qc) {
+                qc->getClass(*method->getClass(), priv);
+            }
+            access = priv ? Private : method->getAccess();
+        }
+    } else {
+        method = qc->findStaticMethod(method_name, access);
+        if (!method) {
+            method = qc->findMethod(method_name, access);
+        }
     }
     if (!method) {
         xsink->raiseException("CALL-REFERENCE-ERROR",

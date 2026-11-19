@@ -23919,9 +23919,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 qore_ir_create_global_string_ptr(builder,
                                     qc->getNamespacePath(),
                                     "static_call_ref_class_path");
+                            // the method with the class that declares it, so that the method that the compiler
+                            // resolved is the one called (qore#6679)
                             llvm::Value* method_name =
                                 qore_ir_create_global_string_ptr(builder,
-                                    method->getName(),
+                                    qore_aot_encode_static_method_ref_target(method, qc).c_str(),
                                     "static_call_ref_method_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
                                     {ptr_type, ptr_type, ptr_type, ptr_type}, false);
@@ -33976,9 +33978,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             qore_ir_create_global_string_ptr(builder,
                                 qc->getNamespacePath(),
                                 "static_call_ref_class_path");
+                        // the method with the class that declares it, so that the method that the compiler
+                        // resolved is the one called (qore#6679)
                         llvm::Value* method_name =
                             qore_ir_create_global_string_ptr(builder,
-                                method->getName(),
+                                qore_aot_encode_static_method_ref_target(method, qc).c_str(),
                                 "static_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type, ptr_type}, false);
