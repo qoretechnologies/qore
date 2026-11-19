@@ -50,7 +50,7 @@
 
 module ServerSentEventClient {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
-    domains = "PROCESS_CONTROL";
+    domains = "PROCESS_CONTROL,THREAD_CONTROL";
     version = "1.1";
     desc = "User module for handling SSE events on the client side";
     author = "David Nichols <david@qore.org>";
@@ -140,6 +140,12 @@ sse.observersReady();
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
+    - declares the \c THREAD_CONTROL domain in its module header, so that its threads start for a caller restricted with
+      @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" and run under the caller's sandbox
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
+    - without the \c "start_thread" option, the \c start_thread capability of the thread that creates the client is
+      used, as a host sets it for the code it runs with @ref Qore::Thread::ThreadCapabilityScope "ThreadCapabilityScope"
+      (<a href="https://github.com/qoretechnologies/qorus/issues/867">qorus issue 867</a>)
     - errors that are written to @ref Qore::stderr "stderr" as a last resort are left out when the module's code has no
       terminal I/O (@ref Qore::PO_NO_TERMINAL_IO "PO_NO_TERMINAL_IO") instead of raising an exception
       (<a href="https://github.com/qoretechnologies/qore/issues/6438">issue 6438</a>)

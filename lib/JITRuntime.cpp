@@ -150,9 +150,12 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
     { "qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any) },
     { "qore_rt_add_assign_any", reinterpret_cast<void*>(&qore_rt_add_assign_any) },
+    { "qore_rt_add_assign_local_any", reinterpret_cast<void*>(&qore_rt_add_assign_local_any) },
+    { "qore_rt_drop_local_string_cache", reinterpret_cast<void*>(&qore_rt_drop_local_string_cache) },
     { "qore_rt_sub_assign_any", reinterpret_cast<void*>(&qore_rt_sub_assign_any) },
     { "qore_rt_mul_assign_any", reinterpret_cast<void*>(&qore_rt_mul_assign_any) },
     { "qore_rt_add_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_any_throwing) },
+    { "qore_rt_add_assign_local_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_local_any_throwing) },
     { "qore_rt_sub_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_sub_assign_any_throwing) },
     { "qore_rt_mul_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_mul_assign_any_throwing) },
     { "qore_rt_div_any", reinterpret_cast<void*>(&qore_rt_div_any) },
@@ -181,6 +184,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr) },
     { "qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string) },
     { "qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len) },
+    { "qore_rt_make_ascii_string_len", reinterpret_cast<void*>(&qore_rt_make_ascii_string_len) },
     { "qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote) },
     { "qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing) },
     { "qore_rt_find", reinterpret_cast<void*>(&qore_rt_find) },
@@ -518,6 +522,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_load_local_weak_receiver", reinterpret_cast<void*>(&qore_rt_load_local_weak_receiver) },
     { "qore_rt_load_local_weak_receiver_aot", reinterpret_cast<void*>(&qore_rt_load_local_weak_receiver_aot) },
     { "qore_rt_end_weak_receiver_call", reinterpret_cast<void*>(&qore_rt_end_weak_receiver_call) },
+    { "qore_rt_read_element_local_receiver", reinterpret_cast<void*>(&qore_rt_read_element_local_receiver) },
     { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
     { "qore_rt_load_global_int_aot", reinterpret_cast<void*>(&qore_rt_load_global_int_aot) },
     { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
@@ -903,6 +908,38 @@ extern "C" DLLEXPORT uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t rig
     QoreValue rv = fromBits(right);
     QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::AddAssignAny, lv, rv, xsink);
     return qore_rt_result_or_nothing(result, xsink);
+}
+
+// Only the duplicate references to this string can be dropped: the deferred tracker can keep
+// a previous value live for another SSA use, including an object with an observable destructor.
+extern "C" DLLEXPORT void qore_rt_drop_local_string_cache(uint64_t left, uint64_t* entry,
+        uint64_t* current, uint64_t* previous) {
+    QoreValue value = fromBits(left);
+    if (value.isPlainPointer() && value.getType() == NT_STRING) {
+        for (uint64_t* slot : {entry, current, previous}) {
+            if (slot && *slot == left) {
+                *slot = toBits(QoreValue());
+                value.get<QoreStringNode>()->deref();
+            }
+        }
+    }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_add_assign_local_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue value = fromBits(left);
+    QoreValue rhs = fromBits(right);
+    // Converting a built-in scalar, date or binary cannot call back into the program and replace
+    // the borrowed left side. Other operands take the normal path, which owns it during conversion.
+    if (value.isPlainPointer() && value.getType() == NT_STRING
+            && (!rhs.hasNode() || rhs.isScalar() || rhs.getType() == NT_INT
+                || rhs.getType() == NT_DATE || rhs.getType() == NT_BINARY)) {
+        return qore_rt_string_append_cow(left, right, xsink);
+    }
+    if (value.isInt() && rhs.isInt()) {
+        // Both operands fit in 48 bits. Their sum fits in int64, and QoreValue boxes it if necessary.
+        return toBits(QoreValue(value.getInt() + rhs.getInt()));
+    }
+    return qore_rt_result_or_nothing(qore_compound_assign_value(LVCompoundOp::AddAssign, value, rhs, xsink), xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
@@ -1597,6 +1634,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_string_len(const char* str, uint64_t 
     QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
     QoreValue v(s);
     return toBits(v);
+}
+
+//! As qore_rt_make_string_len() for a literal that is ASCII text: the string has its ASCII prefix known (qore#6625)
+extern "C" DLLEXPORT uint64_t qore_rt_make_ascii_string_len(const char* str, uint64_t len) {
+    QoreStringNode* s = new QoreStringNode(str, static_cast<size_t>(len));
+    qore_string_private::get(*s)->setOwnedAsciiText();
+    return toBits(QoreValue(s));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_backquote(const char* cmd, ExceptionSink* xsink) {
@@ -3051,6 +3095,43 @@ extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_held(uint64_t val, uint
     return qore_rt_is_weak_reference_type(type) ? qore_rt_read_element_local(val, xsink) : val;
 }
 
+//! Reads the variable of a foreach loop that is the receiver of a method call, keeping the object of a weak reference
+/** As qore_rt_read_element_local(), except that the object that a weak reference held by the variable refers to is
+    returned with a reference of its own, which \a slot holds, and \a owned_out is set to 2: the receiver of a method
+    call is kept until the call returns, as the AST interpreter keeps the object of a call
+    (qore_object_private::startCall()), so that a method that removes the last strong reference to its object can
+    still use it (qore#6594); qore_rt_end_weak_receiver_call() releases it when the call returns, and the exception
+    edge of the call releases the slot.  Any other value is read as qore_rt_read_element_local_held() reads it when
+    \a current is not null (an untyped variable that can be given a reference, issue #6441), and as
+    qore_rt_read_element_local() reads it otherwise; \a slot and \a owned_out are then left as they are.  Native code
+    calls it for every pointer value of an untyped variable (see QoreIRToLLVM::loadLocalCacheValue()), so a value that
+    is not a weak reference or a reference is returned after inline tests only.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_read_element_local_receiver(uint64_t val, uint64_t* slot, int8_t* owned_out,
+        uint64_t* current, uint64_t* previous, uint8_t* held, ExceptionSink* xsink) {
+    // the value is decoded as qore_rt_read_element_local_held() decodes it
+    if ((val & TAG_MASK) != TAG_POINTER || !(val & PAYLOAD_MASK)) {
+        return qore_rt_read_element_local(val, xsink);
+    }
+    qore_type_t type = reinterpret_cast<const AbstractQoreNode*>(val & PAYLOAD_MASK)->getType();
+    if (type == NT_WEAKREF) {
+        QoreValue target = qore_rt_get_weak_reference_target(fromBits(val));
+        // the call clears the slot when it returns, and an exception edge releases it: it holds no value here
+        assert(fromBits(*slot).isNothing());
+        // released after the slot is set, in case a value is left in it
+        ValueHolder old_slot(fromBits(*slot), xsink);
+        *slot = toBits(target.refSelf());
+        *owned_out = 2;
+        return toBits(target);
+    }
+    if (type == NT_REFERENCE) {
+        return current
+            ? qore_rt_read_element_local_held_reference(val, current, previous, held, xsink)
+            : qore_rt_read_element_local(val, xsink);
+    }
+    return qore_rt_is_weak_reference_type(type) ? qore_rt_read_element_local(val, xsink) : val;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_deref_if_reference(uint64_t val, ExceptionSink* xsink) {
     QoreValue v = fromBits(val);
     if (v.hasNode() && v.getType() == NT_REFERENCE) {
@@ -4254,6 +4335,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* memb
     if (qore_weak_reference_target_destroyed(*val)) {
         return toBits(QoreValue());
     }
+    // a weak reference to an object is read as its object: the receiver of a call read from a member is a temporary
+    // of the statement, which keeps the object until the statement ends, as in the AST interpreter (qore#6594)
+    if (qore_value_is_object_weak_reference(*val)) {
+        return toBits(val->eval(xsink));
+    }
     return toBits(val.release());
 }
 
@@ -4266,7 +4352,11 @@ static uint64_t qore_rt_load_static_var_impl(QoreVarInfo* vi, const char* var_na
     if (*xsink) {
         return toBits(QoreValue());
     }
-    return toBits(!preserve_weak_result && val->needsEval() ? val->eval(xsink) : val.release());
+    // a weak reference to an object is read as its object also as the base of a call: the receiver of a call read
+    // from a container is a temporary of the statement, which keeps the object until the statement ends, as in the
+    // AST interpreter (qore#6594)
+    return toBits((!preserve_weak_result || qore_value_is_object_weak_reference(*val)) && val->needsEval()
+        ? val->eval(xsink) : val.release());
 }
 
 static QoreValue qore_rt_eval_runtime_var(Var* var, ExceptionSink* xsink) {
@@ -6386,7 +6476,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_complex_list_from_value(const QoreType
 
     QoreValue value = fromBits(value_bits);
     QoreValue init = value.needsRef() ? value.refSelf() : value;
-    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, init, xsink);
+    // the initializer is the list of the arguments of the constructor (issue #6172)
+    QoreListNode* result = qore_list_private::newComplexListFromArgs(typeInfo, init, xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -6439,7 +6530,8 @@ static uint64_t qore_rt_new_complex_from_value_consume_impl(const QoreTypeInfo* 
             holder.release().get<QoreHashNode>(), xsink, !(flags & QORE_RT_COMPLEX_INIT_PRECHECKED));
         return toBits(result ? QoreValue(result) : QoreValue());
     }
-    QoreListNode* result = qore_list_private::newComplexListFromValue(typeInfo, holder.release(), xsink);
+    // the initializer is the list of the arguments of the constructor (issue #6172)
+    QoreListNode* result = qore_list_private::newComplexListFromArgs(typeInfo, holder.release(), xsink);
     return toBits(result ? QoreValue(result) : QoreValue());
 }
 
@@ -7857,6 +7949,10 @@ static uint64_t qore_rt_hash_key_access_hash_impl(uint64_t hash_val, const char*
     return toBits(result);
 }
 
+// \a preserve_weak_result: the value is the base of a method call: a weak reference to a hash or a list is returned as
+// it is; a weak reference to an object is read as its object, as without it: the receiver of a call read from a
+// container is a temporary of the statement, which keeps the object until the statement ends, as in the AST
+// interpreter (qore#6594)
 static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         size_t key_hash, bool prehashed, ExceptionSink* xsink, bool preserve_weak_result) {
     QoreValue raw_v = fromBits(hash_val);
@@ -7876,7 +7972,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         if (*xsink) {
             return toBits(QoreValue());
         }
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(rv)) {
             qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -7895,7 +7991,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         }
         result.refSelf();
         // the value is returned as it is stored, as the AST interpreter returns it
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(result)) {
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -7911,7 +8007,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         }
         result.refSelf();
         // the value is returned as it is stored, as the AST interpreter returns it
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(result)) {
             qore_rt_evaluate_owned_weak_reference_result(result, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -7925,7 +8021,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         if (*xsink) {
             return toBits(QoreValue());
         }
-        if (!preserve_weak_result) {
+        if (!preserve_weak_result || qore_value_is_object_weak_reference(rv)) {
             qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
             if (*xsink) {
                 return toBits(QoreValue());
@@ -11476,7 +11572,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
             // that do not make a complete character can make one with the bytes of the next part, so the count of the
             // concatenation is made on the concatenation (qore#6597)
             if (value.isShortString()) {
-                current = QCS_DEFAULT;
+                current = QCS_UTF8;
                 if (characters) {
                     bool invalid;
                     measured += qore_short_string_utf8_length(value, invalid);
@@ -11493,7 +11589,9 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
                 if (string) {
                     if (characters) {
                         const qore_string_private* priv = qore_string_private::get(*string);
-                        if (priv->isStateful()) {
+                        // Only UTF-8 has a strict width scanner here. Other encodings must be
+                        // validated on the joined text, except Latin-1 where every byte is valid.
+                        if (current != QCS_UTF8 && current != QCS_ISO_8859_1) {
                             direct = false;
                             break;
                         }
@@ -11534,7 +11632,7 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_measure(
     }
     QoreStringNodeValueHelper string(*concatenated);
     return static_cast<int64_t>(
-        characters ? string->length() : string->strlen());
+        characters ? qore_string_private::characterCount(**string, xsink) : string->strlen());
 }
 
 extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
@@ -12137,6 +12235,14 @@ static uint64_t qore_rt_call_with_args_impl(uint64_t expr_bits, uint64_t* args,
             const char* mname = method_call->getName();
             if (mname && nargs == 1) {
                 // Phase 5.2c: Pseudo-methods on built-in types (read-only, non-mutating)
+                if (fromBits(args[0]).getType() == NT_STRING) {
+                    if (!strcmp(mname, "length")) {
+                        return qore_fast_length(args[0], xsink);
+                    }
+                    if (!strcmp(mname, "size")) {
+                        return qore_fast_strlen(args[0], xsink);
+                    }
+                }
                 if (!strcmp(mname, "length") || !strcmp(mname, "size")) {
                     return qore_fast_any_size(args[0], xsink);
                 } else if (!strcmp(mname, "keys")) {
@@ -12312,12 +12418,20 @@ extern "C" DLLEXPORT uint64_t qore_fast_time(ExceptionSink* xsink) {
 extern "C" DLLEXPORT uint64_t qore_fast_length(uint64_t arg_bits, ExceptionSink* xsink) {
     QoreValue arg = fromBits(arg_bits);
     if (arg.isShortString()) {
-        return toBits(static_cast<int64_t>(qore_short_string_utf8_length(arg)));
+        bool invalid;
+        size_t count = qore_short_string_utf8_length(arg, invalid);
+        if (invalid) {
+            QoreStringValueHelper str(arg);
+            qore_string_private::get(**str)->raiseInvalidEncoding(xsink);
+            return toBits(0);
+        }
+        return toBits(static_cast<int64_t>(count));
     }
     if (arg.hasNode()) {
         const AbstractQoreNode* node = arg.getInternalNode();
         if (node->getType() == NT_STRING) {
-            return toBits(static_cast<int64_t>(static_cast<const QoreStringNode*>(node)->length()));
+            const auto* str = static_cast<const QoreStringNode*>(node);
+            return toBits(static_cast<int64_t>(qore_string_private::characterCount(*str, xsink)));
         }
         if (node->getType() == NT_BINARY) {
             return toBits(static_cast<int64_t>(static_cast<const BinaryNode*>(node)->size()));
@@ -25332,6 +25446,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mul_any_throwing
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_add_assign_any_throwing(
         uint64_t left, uint64_t right, ExceptionSink* xsink) {
     uint64_t result = qore_rt_add_assign_any(left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_add_assign_local_any_throwing(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_add_assign_local_any(left, right, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

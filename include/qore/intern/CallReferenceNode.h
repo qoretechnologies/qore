@@ -254,6 +254,13 @@ class StaticMethodCallReferenceNode : public LocalStaticMethodCallReferenceNode 
 protected:
     QoreProgram* pgm;
     const qore_class_private* class_ctx;
+    //! the classes that a call of the reference reads, referenced as long as the reference exists (qore#6622)
+    /** the class of the method, the class context of the code that created the reference, and the class that the
+        receiver of the calls belongs to: the Program is held with a weak reference only, and the classes that it
+        imported (its copies of them) are released when the Program is deleted, while a call of the reference reads
+        the method and the classes before it finds that the Program has been deleted
+    */
+    const qore_class_private* held_classes[3] = {};
 
     DLLLOCAL virtual bool derefImpl(ExceptionSink* xsink);
 
@@ -792,10 +799,12 @@ DLLLOCAL int qore_call_reference_check_target(const ResolvedCallReferenceNode* r
     imported the function still holds it: it is taken with a reference while its options are read.  Such a Program
     is deleted once another thread has deleted it or is deleting it, also while threads still hold references to it.
 
+    @param sandboxed if not nullptr, set to true if the same Program is sandboxed (see qore_program_is_sandboxed())
+
     @return 1 if the code has a Program (\a po is set to its options), 0 if it has none (builtin code), -1 if the
     Program of its code has been deleted
 */
 DLLLOCAL int qore_call_reference_code_parse_options(const ResolvedCallReferenceNode* rcr, QoreParseOptions& po,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, bool* sandboxed = nullptr);
 
 #endif

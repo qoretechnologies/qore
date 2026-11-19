@@ -2830,7 +2830,8 @@ static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* 
             pending_class_path += 2;
         }
         // the parse lookup reads the parse options of the current Program, which is not set on a thread that loads a
-        // compiled program; the options of the target Program apply (qore#6026)
+        // compiled program; the options of the target Program apply (qore#6026); a lookup, which runs no code of the
+        // Program, so the Program is only made current, not entered (qore#6185)
         QoreProgramContextHelper pch(pgm);
         qc = qore_root_ns_private::parseFindClass(
             *pp->RootNS, &loc_builtin, pending_class_path);
@@ -3581,6 +3582,7 @@ const AbstractQoreFunctionVariant* qore_aot_resolve_variant_from_arg_type_signat
     // the namespace write lock or for an initializer that waits for this call.
     // Every caller already keeps pgm alive: lazy context materialization holds
     // Program access, and module registration runs in the owning loader.
+    // A lookup, which runs no code of the Program, so the Program is only made current, not entered (qore#6185).
     QoreProgramContextHelper pch(pgm);
     QoreTypeParamInstantiation parse_type_param_instantiation;
     variant = func->parseFindVariantNoDiagnostics(arg_types, class_ctx, receiver_type_info,
@@ -3784,7 +3786,8 @@ static bool qoreAOTContainerValueTypeResolvable(const QoreAOTBinaryWriter& write
     if (!pgm) {
         return true;
     }
-    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs
+    // the type is resolved as the reader resolves it, in the context of the Program, which resolving a class needs; a
+    // lookup, which runs no code of the Program, so the Program is only made current, not entered (qore#6185)
     QoreProgramContextHelper pch(pgm);
     // the type that the reader finds must be the value's own: a hashdecl or class of the same name that the Program
     // has is another type, and a type that the Program does not have resolves to a deferred type that is not the
@@ -15989,6 +15992,23 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         return false;
     }
 
+    // the IR that qcc writes passes the verification of the reader, which would refuse the module (qore#6468): in a
+    // debug build always, otherwise with QORE_AOT_VERIFY_WRITTEN_IR set; the tests of the verification write
+    // malformed IR with QORE_AOT_TEST_NO_WRITE_VERIFY set
+#ifdef DEBUG
+    bool verify_written = !getenv("QORE_AOT_TEST_NO_WRITE_VERIFY");
+#else
+    bool verify_written = getenv("QORE_AOT_VERIFY_WRITTEN_IR");
+#endif
+    if (verify_written) {
+        std::string verify_error;
+        if (!QoreIRVerifier::verifyModuleIR(func, verify_error)) {
+            qoreAOTSetExprSerializationError("the IR of function '" + func.name + "' fails the verification of IR "
+                "read from an AOT module: " + verify_error);
+            return false;
+        }
+    }
+
     // The counts of the IR have fixed widths in the AOT format; a count that does not fit would wrap and make the
     // reader decode a different function than was written, so the function is refused instead (qore#6127)
     {
@@ -21364,38 +21384,9 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
         if (!priv->scl || priv->ahm.empty()) {
             continue;
         }
-        std::unordered_set<std::string> existing_methods;
-        existing_methods.reserve(priv->hm.size());
-        size_t method_count = 0;
-        for (auto& mi : priv->hm) {
-            if (++method_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
-                error = "operation cancelled during AOT abstract method inheritance restore";
-                return false;
-            }
-            existing_methods.insert(mi.first);
-        }
-
+        // abstract resolution can synthesize a local method on this class; AbstractMethodMap::parseInit() gives it
+        // the inherited overload list that source parsing attaches during initializeHierarchy() (issue #6161)
         priv->ahm.parseInit(*priv, priv->scl);
-
-        // Abstract resolution can synthesize a local method on this class
-        // after commitClassesPrepare() has already run parseAddAncestors().
-        // Give those synthesized methods the same inherited overload list
-        // source parsing would attach during initializeHierarchy().
-        method_count = 0;
-        for (auto& mi : priv->hm) {
-            if (++method_count % 100 == 0
-                    && qore_check_cancel(nullptr, "AOT abstract method inheritance restore")) {
-                error = "operation cancelled during AOT abstract method inheritance restore";
-                return false;
-            }
-            if (existing_methods.find(mi.first) == existing_methods.end()
-                    && strcmp(mi.second->getName(), "constructor")
-                    && strcmp(mi.second->getName(), "destructor")
-                    && strcmp(mi.second->getName(), "copy")) {
-                priv->parseAddAncestors(mi.second);
-            }
-        }
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't
         // redundantly walk the same classes.

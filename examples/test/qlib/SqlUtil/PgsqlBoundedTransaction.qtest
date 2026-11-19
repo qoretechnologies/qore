@@ -95,7 +95,7 @@ class BoundedTransactionTest inherits QUnit::Test {
     #! Returns the session's timeouts in milliseconds; a timeout that the server does not have is 0
     /** The statement reads no catalog: current_setting() instead of the pg_settings view, which builds a row for
         every setting of the server, so that it completes in a fraction of the shortest statement timeout that the
-        tests set (150 ms), which it runs under when it reads that timeout; a read of pg_settings was cancelled by
+        tests set (500 ms), which it runs under when it reads that timeout; a read of pg_settings was cancelled by
         it when other tests loaded the server.
     */
     private static hash<string, int> readSettings(AbstractDatasource ds) {
@@ -283,15 +283,16 @@ class BoundedTransactionTest inherits QUnit::Test {
         assertEq("55P03", failure.arg.alterr);
         assertTrue(now_us() - start < 10s, "the lock wait, not an unbounded wait, ends the blocked statement");
 
-        # Stricter session settings remain effective for every deadline.
+        # Stricter session settings remain effective for every deadline.  The statement timeout leaves the ordinary
+        # statements of the check a margin on a loaded server, and is still shorter than the statement it cancels.
         f.ds.execRaw("set lock_timeout = '50ms'");
-        f.ds.execRaw("set statement_timeout = '150ms'");
+        f.ds.execRaw("set statement_timeout = '500ms'");
         f.ds.execRaw("set transaction_timeout = '5s'");
         f.ds.commit();
         original = readSettings(f.ds);
         f.ds.commit();
         limits = f.table.beginOfflineRewriteTransaction(100);
-        assertEq({"lock_timeout_ms": 50, "statement_timeout_ms": 150, "transaction_timeout_ms": 5000}, limits);
+        assertEq({"lock_timeout_ms": 50, "statement_timeout_ms": 500, "transaction_timeout_ms": 5000}, limits);
         assertEq(limits, readSettings(f.ds));
         failure = NOTHING;
         try { f.ds.execRaw("select 1 from pg_sleep(1)"); }

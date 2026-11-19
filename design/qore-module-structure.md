@@ -1024,7 +1024,9 @@ The teardown handles each holder:
   `qore_module_dependencies`, user modules from their `%requires` of user and binary
   modules. Of the modules that can be deleted, a native binary module is deleted
   first; then the modules that a native binary module left requires (they block it);
-  then the other modules; user modules before AOT modules, and by name within a rank.
+  then the other modules, by name within a rank. Whether a module is a user module or
+  an AOT module does not change its rank: a stale AOT module that falls back to its
+  source is the same module and is deleted in the same order (qore#6251).
 
 The Programs that a native binary module owns are deleted by the module itself:
 Qore does not clear their data, as an owner can still use its Program (a module's
@@ -1032,16 +1034,25 @@ program cleanup callback can delete it, for example). Their objects are released
 while every module exists and the library's services run only if the native module
 is deleted in `delUser()`, that is, if no AOT module requires it.
 
-A dependency cycle (a native binary module required by a module whose classes its
-own Programs hold objects of, for example) cannot be ordered and is broken at the
-module of the lowest rank. A native binary module must also release everything it
-holds in Qore — Programs and exception sinks — in its `module_delete` function, while
-libqore exists: `qore_cleanup()` frees the thread infrastructure afterwards, and an
-`ExceptionSink` with exceptions that is a static object reports them only when static
-objects are destroyed, which then crashes.
+A dependency cycle (a native binary module required by a module whose classes its own
+Programs hold objects of, for example) cannot be ordered and is broken at the module
+of the lowest rank, and of those, at a module that the modules left require only
+because it was applied to their Programs at run time (`load_module()` called from
+their code; `runtime_dep_map`). A module that requires another with `%requires` can
+hold objects of its classes in the constants of its Program, initialized when it is
+parsed; a module loaded later from its code cannot be in them. A cycle made by a
+run-time load (a module loading a module that requires it, maybe indirectly) is thus
+broken at the module loaded, and every module required with `%requires` is still
+deleted after the modules requiring it. A native binary module must also release
+everything it holds in Qore — Programs and exception sinks — in its `module_delete`
+function, while libqore exists: `qore_cleanup()` frees the thread infrastructure
+afterwards, and an `ExceptionSink` with exceptions that is a static object reports
+them only when static objects are destroyed, which then crashes.
 
 Tests: `examples/test/qore/misc/module-loader/module-teardown/module-teardown.qtest`
-(user and AOT module dependency order, opaque cycles, exit status) and
+(user and AOT module dependency order, opaque cycles, exit status),
+`examples/test/qore/misc/module-loader/teardown-order/teardown-order.qtest` (cycles
+through a run-time load, with stale AOT modules loaded from their sources) and
 `examples/test/module-cpp-api/program-owner/program-owner-teardown.qtest` (Programs
 owned by a native binary module).
 

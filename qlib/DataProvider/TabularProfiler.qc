@@ -411,8 +411,15 @@ public class TabularProfiler {
         #! @ref CurrencyCodes for quick lookups
         const CurrencyCodeSet = map {$1: True}, CurrencyCodes;
 
-        #! @ref EmptyMarkers for quick lookups
-        const EmptyMarkerSet = map {$1: True}, EmptyMarkers;
+        #! @ref EmptyMarkers for quick lookups, keyed by the hex digits of their UTF-8 bytes
+        /** A hash key is held in the encoding of the process, which need not represent every marker (\c "—" in
+            ISO-8859-1): the markers are looked up by their UTF-8 bytes, so that the module loads and matches them in
+            any process encoding (issue #6663)
+        */
+        const EmptyMarkerSet = map {TabularProfiler::getEmptyMarkerKey($1): True}, EmptyMarkers;
+
+        #! The length in characters of the longest of the @ref EmptyMarkers
+        const MaxEmptyMarkerLength = max(map $1.length(), EmptyMarkers);
 
         #! Header labels that name periods
         const PeriodHeaderRegex = "^\\s*(W(K|eek)?\\s*\\d{1,2}|KW\\s*\\d{1,2}|Q[1-4]|\\d{4}[-/]\\d{1,2}|\\d{1,2}[-/]\\d{4}"
@@ -424,6 +431,25 @@ public class TabularProfiler {
 
         #! Values longer than this are truncated when redacted
         const MaxRedactedLength = 24;
+    }
+
+    #! Returns the key of a text in @ref EmptyMarkerSet: the hex digits of its UTF-8 bytes (issue #6663)
+    private static string getEmptyMarkerKey(string text) {
+        return binary(text.encoding() == "UTF-8" ? text : convert_encoding(text, "UTF-8")).toHex();
+    }
+
+    #! Counts an empty marker found in a cell
+    /** A marker that the encoding of the process cannot represent (\c "—" in ISO-8859-1) cannot be a key of the
+        reported counts, and is not counted (issue #6663)
+    */
+    private static countEmptyMarker(reference<hash<string, int>> empty_markers, string text) {
+        try {
+            ++empty_markers{text};
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "ENCODING-CONVERSION-ERROR") {
+                rethrow;
+            }
+        }
     }
 
     #! Profiles a workbook or text file
@@ -1051,19 +1077,32 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             }
             return rv;
         };
-        if (values.size() == 1 && empty && inlist(values[0], BoolMarks)) {
+        # the values are compared in UTF-8 with the pairs and the marks, which the encoding of the process need not
+        # represent (a comparison converts to the encoding of its first operand, and "✓" has no ISO-8859-1 form;
+        # issue #6663); a match is mapped back to the value as the spellings hold it
+        list<string> utf8_values = map $1.encoding() == "UTF-8" ? $1 : convert_encoding($1, "UTF-8"), values;
+        code value_of = *string sub (string word) {
+            foreach string u in (utf8_values) {
+                if (u == word) {
+                    return values[$#];
+                }
+            }
+        };
+        if (values.size() == 1 && empty && inlist(utf8_values[0], BoolMarks)) {
             return {"bool_true": (written(values[0]),), "bool_false": (), "empty_is_false": True};
         }
         foreach list<string> pair in (BoolPairs) {
             # both values, or one of them, but nothing else
-            if (values.size() <= 2 && !(select values, !inlist($1, pair))) {
+            if (values.size() <= 2 && !(select utf8_values, !inlist($1, pair))) {
                 if (values.size() == 1 && !empty) {
                     # one value and no other: not enough to call it yes/no
                     return;
                 }
+                *string yes = value_of(pair[0]);
+                *string no = value_of(pair[1]);
                 return {
-                    "bool_true": inlist(pair[0], values) ? (written(pair[0]),) : (),
-                    "bool_false": inlist(pair[1], values) ? (written(pair[1]),) : (),
+                    "bool_true": yes ? (written(yes),) : (),
+                    "bool_false": no ? (written(no),) : (),
                     "empty_is_false": False,
                 };
             }
@@ -1103,8 +1142,8 @@ bool line_total = TabularProfiler::isTotalsFormula("D3", "SUM(B3:C3)"); # False
             }
             if (rows[r][col].typeCode() == NT_STRING) {
                 string text = trim(rows[r][col]);
-                if (EmptyMarkerSet{text}) {
-                    ++empty_markers{text};
+                if (text.length() <= MaxEmptyMarkerLength && EmptyMarkerSet{getEmptyMarkerKey(text)}) {
+                    countEmptyMarker(\empty_markers, text);
                 }
             }
             hash<auto> cls = classify(rows[r][col]);

@@ -1,0 +1,21 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# TdoOptional.qm - optional module of teardown-order.qtest
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# The test modules that load it with %try-module are compiled to AOT modules while it is not on the module path; the
+# test puts it on the module path for some runs only, which makes their AOT modules stale, so that they are loaded
+# from their sources instead (AOT-MODULE-STALE, BINARY-MODULE-SOURCE-FALLBACK)
+
+%modern
+
+module TdoOptional {
+    version = "1.0";
+    desc = "optional module for the module teardown order tests";
+    author = "Qore Technologies, s.r.o.";
+    license = "MIT";
+}
+
+public namespace TdoOptional {
+    public const Available = True;
+}
