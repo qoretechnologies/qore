@@ -115,10 +115,16 @@ string sub runMode(string mode) {
 
 string sub runAot() {
     string exe = "/tmp/qore-ir-borrowed-list-read-" + string(getpid());
-    string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
+    string compile_out = backquote(sprintf("QORE_AOT_DUMP_IR=1 LD_LIBRARY_PATH=%s %s -O3 -o %s %s 2>&1",
         libqore_dir, qcc_bin, exe, script_path));
     if (!is_file(exe)) {
         printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    # Identity maps borrow during lowering, before the optimizer counts the reads it rewrites.
+    string identity_ir = (compile_out.split("=== IR for safeIdentity(")[1] ?? "").split("\n=====")[0];
+    if (identity_ir.find("\n  list.get.value.noref ->") < 0) {
+        printf("missing borrowed list read in safeIdentity:\n%s", identity_ir);
         exit(2);
     }
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe));
@@ -142,8 +148,7 @@ if (aot != expected) {
 # fused into MapHashKeyOffsetAny before its inner loop is emitted.
 string stats = ExecModeHarness::run(sprintf("QORE_DISABLE_IR_MAP_HASH_OFFSET_ANY=1 QORE_IR_OPT_STATS=1 "
     "LD_LIBRARY_PATH=%s %s -b --exec-mode=ir %s", libqore_dir, qore_bin, script_path));
-if (stats !~ /IR-OPT: safeIdentity:.*borrowed-list=1/
-        || stats !~ /IR-OPT: safeSelect:.*borrowed-list=1/
+if (stats !~ /IR-OPT: safeSelect:.*borrowed-list=1/
         || stats !~ /IR-OPT: safeMap:.*borrowed-list=1/
         || stats !~ /IR-OPT: scopedBorrowedRead:.*borrowed-list=1/) {
     printf("missing borrowed-list optimization:\n%s", stats);
