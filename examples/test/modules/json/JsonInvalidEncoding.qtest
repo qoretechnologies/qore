@@ -137,6 +137,15 @@ public class JsonInvalidEncodingTest inherits QUnit::Test {
         assertThrows("INVALID-ENCODING", "^JsonSaxParser::parseStream\\(\\): the JSON string ending at line 1, "
             "column \\d+ is not valid UTF-8: invalid byte sequence at byte offset 3$", \p.parseStream(),
             (new BinaryInputStream(<5b22c3a961e9225d>), cb));
+        # the byte order mark of text in the generic UTF-16 encoding gives its byte order ("Ü" is dc 00 in UTF-16LE)
+        list<auto> sv = ();
+        p.parse(binary_to_string(<fffe> + binary(convert_encoding("[\"Ü\"]", "UTF-16LE")), "UTF-16"),
+            sub (hash<auto> e) {
+                if (e.value.typeCode() == NT_STRING) {
+                    push sv, e.value;
+                }
+            });
+        assertEq(("Ü",), sv);
         # text in another encoding is checked in its encoding before it is converted
         assertThrows("INVALID-ENCODING", "^JsonSaxParser::parse\\(\\): the JSON text is not valid Shift_JIS: invalid "
             "byte sequence at byte offset 2$", \p.parse(), (binary_to_string(<5b2283225d>, "Shift_JIS"), cb));
@@ -155,6 +164,9 @@ public class JsonInvalidEncodingTest inherits QUnit::Test {
             "at byte offset 4$", \parse_toon(), (utf8(<613a2061e9>),));
         assertThrows("INVALID-ENCODING", "^parse_toon\\(\\): the TOON text is not valid UTF-8: invalid byte sequence "
             "at byte offset 0$", \parse_toon(), (utf8(<e93a2031>),));
+        # the byte order mark of text in the generic UTF-16 encoding gives its byte order ("Ü" is dc 00 in UTF-16LE)
+        assertEq({"a": "Üß"}, parse_toon(binary_to_string(<fffe> + binary(convert_encoding("a: Üß", "UTF-16LE")),
+            "UTF-16")));
         hash<auto> h = parse_toon("é: €😀");
         assertEq({"é": "€😀"}, h);
         assertEq("UTF-8", h."é".encoding());

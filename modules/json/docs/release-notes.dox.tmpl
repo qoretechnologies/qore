@@ -10,8 +10,9 @@
       @ref Qore::Json::parse_toon() "parse_toon()" and @ref Qore::Json::JsonSaxParser "JsonSaxParser" raise
       \c INVALID-ENCODING for text that is not valid in its encoding, which was returned in strings
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
-    - @ref Qore::Json::parse_json() "parse_json()" converts a JSON string in a multi-byte encoding other than UTF-8
-      (ex: \c Shift_JIS, \c UTF-16) to UTF-8 to parse it, which it could not, and returns UTF-8 strings for it
+    - @ref Qore::Json::parse_json() "parse_json()" parses a JSON string in a multi-byte encoding other than UTF-8
+      (ex: \c Shift_JIS, \c UTF-16), whose bytes it parsed as they were, by converting it to UTF-8; its strings are
+      UTF-8
       (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
     - input that ends inside a JSON object or array after \c "{", \c "[" or \c "," raises \c JSON-PARSE-ERROR;
       it was parsed as @ref nothing, so a truncated document could not be told from an empty one

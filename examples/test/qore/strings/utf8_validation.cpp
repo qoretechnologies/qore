@@ -338,6 +338,13 @@ static void check_public_api() {
         {sjis, "a\x83\x5c", 3, -1},
         {sjis, "a\x83", 2, 1},
         {QCS_UTF16LE, "a\0\0\xd8", 4, 2},             // a lone high surrogate
+        // the generic UTF-16: a byte order mark gives the byte order ("Ü" is dc 00 in UTF-16LE, a lone low
+        // surrogate if read as UTF-16BE); without one, the text is UTF-16BE
+        {QCS_UTF16, "\xff\xfe\xdc\0a\0", 6, -1},
+        {QCS_UTF16, "\xfe\xff\0\xdc\0a", 6, -1},
+        {QCS_UTF16, "\0\xdc", 2, -1},
+        {QCS_UTF16, "\xff\xfea\0\0\xd8", 6, 4},        // a lone high surrogate after the byte order mark
+        {QCS_UTF16, "\xdc\0", 2, 0},                    // no byte order mark: a lone low surrogate in UTF-16BE
     };
     for (const Case& c : cases) {
         std::string label = std::string(c.enc->getCode()) + " " + hex(reinterpret_cast<const unsigned char*>(c.bytes),

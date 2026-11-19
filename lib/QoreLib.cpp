@@ -4640,12 +4640,20 @@ void q_raise_invalid_read_text(ExceptionSink* xsink, const char* cls, const char
 }
 
 qore_offset_t q_get_invalid_text_offset(const QoreEncoding* enc, const char* p, size_t len) {
+    // in an encoding without a byte order (the generic UTF-16, or a Unicode encoding created on the fly such as
+    // UTF-32), a byte order mark gives the byte order of the text, as when it is converted; the offset is in the text
+    const QoreEncoding* bo = q_get_bom_byte_order(enc, p, len);
+    if (bo) {
+        size_t bom = bo->getMinCharWidth();
+        qore_offset_t offset = q_text_invalid_offset(p + bom, len - bom, bo);
+        return offset < 0 ? -1 : offset + static_cast<qore_offset_t>(bom);
+    }
     return q_text_invalid_offset(p, len, enc);
 }
 
 int q_check_text_encoding(const QoreEncoding* enc, const char* p, size_t len, const char* where, const char* what,
         ExceptionSink* xsink) {
-    qore_offset_t offset = q_text_invalid_offset(p, len, enc);
+    qore_offset_t offset = q_get_invalid_text_offset(enc, p, len);
     if (offset < 0) {
         return 0;
     }
