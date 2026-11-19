@@ -1102,9 +1102,10 @@ public *int sub http_parse_content_length(auto value) {
 /** The information of an exception tells where it was raised in the server's code; an error response for a client
     has it only when debugging is enabled (qore#6780).  This returns the type, error code and description of the
     exception, its argument for a user exception (a system exception's argument is set by the library and can have
-    internal information), and the same information of a chained exception (\c next) and of an exception wrapped in
-    the argument as its \c ex key (as data providers wrap the exception that they rethrow); not its location
-    (\c file, \c line, \c endline, \c source, \c offset, \c lang) or its call stack.
+    internal information, and is not given), and the same information of a chained exception (\c next), of an
+    exception given as the argument, and of an exception wrapped in the argument as its \c ex key (as data providers
+    wrap the exception that they rethrow); not its location (\c file, \c line, \c endline, \c source, \c offset,
+    \c lang) or its call stack.
 
     @param ex the exception
 
@@ -1122,23 +1123,31 @@ public hash<ExceptionInfo> sub http_get_client_exception_info(hash<auto> ex) {
     }
     if (ex.type == "User" && exists ex.arg) {
         auto arg = ex.arg;
-        # an exception wrapped in the argument is given without its location too
-        if (arg.typeCode() == NT_HASH && arg.ex.typeCode() == NT_HASH && exists arg.ex.err) {
-            try {
-                arg.ex = http_get_client_exception_info(arg.ex);
-            } catch () {
-                # the argument's type does not take the exception's information: the argument is not given
-                remove arg;
-            }
+        # the keys are tested with hasKey(), which a hash of a hashdecl answers for any key: reading a key that its
+        # hashdecl does not declare raises an exception
+        if (http_is_exception_info(arg)) {
+            # an exception given as the argument
+            arg = http_get_client_exception_info(arg);
+        } else if (arg.typeCode() == NT_HASH && arg.hasKey("ex") && http_is_exception_info(arg.ex)) {
+            # an exception wrapped in the argument; the argument is copied to a hash without a type, which takes the
+            # exception's information whatever the type of its "ex" member
+            hash<auto> h = {} + arg;
+            h.ex = http_get_client_exception_info(arg.ex);
+            arg = h;
         }
-        if (exists arg) {
-            rv.arg = arg;
-        }
+        rv.arg = arg;
     }
     if (ex.next.typeCode() == NT_HASH) {
         rv.next = http_get_client_exception_info(ex.next);
     }
     return rv;
+}
+
+#! Returns True if the value is the information of an exception: a hash with an error code and a location or a call stack
+/** @since %HttpServerUtil 1.6
+*/
+bool sub http_is_exception_info(auto v) {
+    return v.typeCode() == NT_HASH && v.hasKey("err") && (v.hasKey("file") || v.hasKey("callstack"));
 }
 
 #! Returns @ref True if the request is an HTTP/2 or HTTP/3 extended CONNECT (RFC 8441 / RFC 9220)

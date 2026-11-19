@@ -45,6 +45,11 @@
 #! the file name of this test, which the location of an exception raised here names
 const ThisFile = "HttpServerErrorBodyLocation.qtest";
 
+#! the argument of an exception, a hash with a type
+hashdecl TestArgInfo {
+    string key = "value";
+}
+
 #! Raises the exception that the request's path names
 class ThrowHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -88,6 +93,19 @@ class ThrowRestClass inherits AbstractRestClass {
             # as AbstractDataProvider::getWrappedExceptionArg() does
             throw "WRAP-ERROR", "the wrapping error", {"key": "value", "ex": ex};
         }
+    }
+
+    hash<HttpHandlerResponseInfo> getExarg(hash<auto> cx, *hash<auto> ah) {
+        try {
+            throw "INNER-ERROR", "the inner error";
+        } catch (hash<ExceptionInfo> ex) {
+            # the exception given as the argument
+            throw "EXARG-ERROR", "the outer error", ex;
+        }
+    }
+
+    hash<HttpHandlerResponseInfo> getTyped(hash<auto> cx, *hash<auto> ah) {
+        throw "TYPED-ERROR", "the description", <TestArgInfo>{};
     }
 
     hash<HttpHandlerResponseInfo> getChained(hash<auto> cx, *hash<auto> ah) {
@@ -240,6 +258,25 @@ class HttpServerErrorBodyLocationTest inherits QUnit::Test {
                 assertRegex(ThisFile, ex.arg.ex.file, label);
                 assertGt(0, ex.arg.ex.callstack.size(), label);
             }
+
+            # an exception given as the argument
+            response = get("throw?action=exarg");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("EXARG-ERROR", ex.err, label);
+            assertEq("INNER-ERROR", ex.arg.err, label);
+            if (!debug) {
+                assertEq(sort(("type", "err", "desc")), sort(ex.arg.keys()), label);
+            } else {
+                assertRegex(ThisFile, ex.arg.file, label);
+            }
+
+            # an argument whose hash has a type that has no "ex" member
+            response = get("throw?action=typed");
+            assertEq(409, response.status_code, label);
+            ex = parse_json(response.body);
+            assertEq("TYPED-ERROR", ex.err, label);
+            assertEq({"key": "value"}, ex.arg, label);
 
             response = get("throw?action=chained");
             assertEq(409, response.status_code, label);
