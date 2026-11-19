@@ -549,7 +549,7 @@ static void tempScopeLoop(QoreIRFunction& fn, QoreIRBuilder& b, bool in_body) {
 //! a raising instruction in a temp scope nested in the temp scope of its handler, and in a scope that the handler's
 //! landing pad leaves (\a landing_pad: the handler starts with a landing pad); the handler's path meets the normal
 //! path in the outer temp scope
-static void scopeHandler(QoreIRFunction& fn, QoreIRBuilder& b, bool landing_pad) {
+static void scopeHandler(QoreIRFunction& fn, QoreIRBuilder& b, bool landing_pad, bool late_landing_pad = false) {
     QoreIRBasicBlock* h = fn.createBlock("handler");
     QoreIRBasicBlock* next = fn.createBlock("next");
     QoreIRBasicBlock* join = fn.createBlock("join");
@@ -565,6 +565,10 @@ static void scopeHandler(QoreIRFunction& fn, QoreIRBuilder& b, bool landing_pad)
     b.createBranch(join);
     b.setBlock(h);
     if (landing_pad) {
+        // late_landing_pad: another instruction runs before it in its block
+        if (late_landing_pad) {
+            b.createConstInt(3);
+        }
         b.createLandingPad(0);
     }
     b.createBranch(join);
@@ -1176,17 +1180,11 @@ int main(int argc, char** argv) {
     }, [](QoreIRFunction& fn) {
         find(fn, QoreIROpcode::ContextDestroy)->exception_target = fn.blocks[1].get();
     }, "has an exception target");
+    // the landing pad runs after another instruction of its block (a landing pad swapped with the terminator of its
+    // block would never run, and is not checked, as the instructions after a terminator are not)
     run("landing pad after another instruction", [](QoreIRFunction& fn, QoreIRBuilder& b) {
-        scopeHandler(fn, b, true);
-    }, [](QoreIRFunction& fn) {
-        auto* lp = find(fn, QoreIROpcode::LandingPad);
-        for (auto& block : fn.blocks) {
-            auto& insts = block->instructions;
-            if (!insts.empty() && insts[0].get() == lp) {
-                std::swap(insts[0], insts[1]);
-            }
-        }
-    }, "a landing pad is not the first instruction of its block");
+        scopeHandler(fn, b, true, true);
+    }, nullptr, "a landing pad is not the first instruction of its block");
 
     run("contexts destroyed outermost first", [](QoreIRFunction& fn, QoreIRBuilder& b) {
         contexts(fn, b, true);

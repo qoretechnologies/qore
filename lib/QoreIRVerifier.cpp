@@ -771,6 +771,15 @@ bool QoreIRVerifyOwnership::checkUse(const QoreIRVerifyState& s, uint32_t id, co
 }
 
 bool QoreIRVerifyOwnership::applyStack(QoreIRVerifyState& s, const QoreIRInstruction& inst, uint32_t b, size_t pos) {
+    // the two nested temp scopes of a PushTempMarkPair are opened as by two PushTempMarks, the outer one first (the
+    // AOT debug IR stores it as these two instructions; the IR that qcc verifies before it writes it has the pair)
+    if (inst.opcode == QoreIROpcode::PushTempMarkPair) {
+        if (s.known[QORE_IR_VERIFY_TEMPS]) {
+            s.stacks[QORE_IR_VERIFY_TEMPS].push_back(inst.temp_scope_id);
+            s.stacks[QORE_IR_VERIFY_TEMPS].push_back(inst.unwind_inner_temp_scope_id);
+        }
+        return true;
+    }
     QoreIRVerifyStackEffect e = qore_ir_verify_stack_effect(inst);
     if (e.stack == QORE_IR_VERIFY_NUM_STACKS) {
         return true;
