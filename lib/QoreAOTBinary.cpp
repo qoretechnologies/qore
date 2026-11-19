@@ -15802,7 +15802,6 @@ const char* getLocalTypePath(const LocalVar* lv) {
     return path.c_str();
 }
 
-//! Serialize a single IR instruction
 //! The statement location table of an IR function being written (QORE_AOT_STATEMENT_LOCATIONS_VERSION)
 struct QoreAOTStmtLocWriteTable {
     //! the index of each location written
@@ -15838,6 +15837,7 @@ static void qore_aot_write_stmt_loc(QoreAOTBinaryWriter& writer, QoreAOTStmtLocW
     writer.writeSourcePath(loc->getFile() ? loc->getFile() : "");
 }
 
+//! Serialize a single IR instruction
 static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInstruction* inst,
         const std::unordered_map<const QoreIRBasicBlock*, uint16_t>& block_idx,
         const AOTExprWriteFunc& writeExpr, QoreAOTStmtLocWriteTable& stmt_locs) {
