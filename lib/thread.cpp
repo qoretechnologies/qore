@@ -5276,7 +5276,6 @@ QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::enterSandboxBudgets(T
     pp->getSandboxManagerRefs(own_ptr, creator_ptr);
     ReferenceHolder<QoreSandboxManager> own(own_ptr, nullptr);
     ReferenceHolder<QoreSandboxManager> creator(creator_ptr, nullptr);
-    budgets_entered = own || creator;
     // the sandbox of the code that created the Program has call budgets in it as well: a call into the Program by
     // trusted code is a call of that sandbox (a call made inside a budget of the manager starts none)
     if (own) {
@@ -5285,12 +5284,6 @@ QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::enterSandboxBudgets(T
     if (creator) {
         td->sandbox_budgets.enter(td->tid, *creator, this);
     }
-}
-
-QORE_INTERN_NOINLINE void ProgramThreadCountContextHelper::leaveSandboxBudgetsIntern() {
-    budgets_entered = false;
-    ThreadData* td = thread_data.get();
-    td->sandbox_budgets.leave(td->tid, this);
 }
 
 void ProgramThreadCountContextHelper::setOtherProgram(ThreadData* td, ExceptionSink* xsink, QoreProgram* pgm,

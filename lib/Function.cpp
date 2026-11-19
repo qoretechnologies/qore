@@ -1608,9 +1608,6 @@ static void qore_report_flag_violation(const AbstractQoreFunctionVariant* varian
 #endif
 
 CodeEvaluationHelper::~CodeEvaluationHelper() {
-    // the budgets that the entry of the Program started are left before sandbox_provenance, which was applied before
-    // the entry and is destroyed before this helper's base
-    leaveSandboxBudgets();
 #ifdef DEBUG
     // Verify a QCF_NO_DOMAIN_THROW claim: dbg_variant is only set once init() committed to running
     // the call, so an exception present now appeared during the call itself and escaped a frame
@@ -1843,7 +1840,7 @@ QORE_INTERN_ALWAYS_INLINE void CodeEvaluationHelper::initImpl(const QoreFunction
     dbg_runtime_chosen_variant = qore_dbg_runtime_chosen_variant;
     qore_dbg_runtime_chosen_variant = false;
 #endif
-    sandbox_provenance.set(self);
+    QoreSandboxProvenanceHelper::set(self);
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
