@@ -2697,6 +2697,22 @@ static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
         *const_cast<QoreMethod*>(variant_method))->getFunction();
     const AbstractQoreFunctionVariant* variant = mfb
         ? mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
+    // the method found by name can be of the other kind than the one that the parser bound: a static method of a
+    // base class found first for a call of a private:internal method of the variant's class of the same name, which
+    // a lookup without the class's context does not see; the variant's class's own method of the other kind with the
+    // recorded signature is the one bound (qore#6653)
+    if (!variant && method_ref.variant_class_path && *method_ref.variant_class_path) {
+        if (const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo)) {
+            if (const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                    !method->isStatic())) {
+                MethodFunctionBase* other_mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
+                variant = other_mfb ? other_mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
+                if (variant) {
+                    variant_method = m;
+                }
+            }
+        }
+    }
     if (variant) {
         method = variant_method;
     }
@@ -2759,6 +2775,22 @@ static const AbstractQoreFunctionVariant* findAOTStaticMethodVariantByRef(
     MethodFunctionBase* mfb = qore_method_private::get(
         *const_cast<QoreMethod*>(variant_method))->getFunction();
     const AbstractQoreFunctionVariant* variant = findAOTVariantBySignatureText(mfb, method_ref.sig_text);
+    // the method found by name can be of the other kind than the one that the parser bound: a static method of a
+    // base class found first for a self call of a private:internal method of the variant's class of the same name,
+    // which a lookup without the class's context does not see; the variant's class's own method of the other kind
+    // with the recorded signature is the one bound (qore#6653)
+    if (!variant && method_ref.variant_class_path && *method_ref.variant_class_path) {
+        if (const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo)) {
+            if (const QoreMethod* m = findAOTVariantClassLocalMethod(variant_qc, method_ref.method_name,
+                    !method->isStatic())) {
+                MethodFunctionBase* other_mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
+                variant = findAOTVariantBySignatureText(other_mfb, method_ref.sig_text);
+                if (variant) {
+                    variant_method = m;
+                }
+            }
+        }
+    }
     if (variant) {
         method = variant_method;
     }
