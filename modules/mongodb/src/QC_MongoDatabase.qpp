@@ -106,7 +106,11 @@ MongoCollection MongoDatabase::getCollection(string name) {
     }
     mongoc_collection_t* coll = database->getCollection(utf8_name->c_str());
     if (!coll) {
-        xsink->raiseException("MONGODB-DATABASE-ERROR", "failed to get collection '%s'", name->c_str());
+        // the name is added to the message with its encoding
+        QoreStringNodeHolder desc(new QoreStringNode("failed to get collection '"));
+        desc->concat(name, xsink);
+        desc->concat('\'');
+        xsink->raiseException("MONGODB-DATABASE-ERROR", desc.release());
         return QoreValue();
     }
     return new QoreObject(QC_MONGOCOLLECTION, getProgram(),

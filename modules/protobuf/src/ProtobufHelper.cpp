@@ -485,7 +485,14 @@ QoreHashNode* ProtobufHelper::mapFieldToHash(const Message& msg, const FieldDesc
                 xsink)) {
             return nullptr;
         }
-        // a hash key is in the default encoding: the UTF-8 key is converted to it, as parse_json() converts its keys
+        // a hash key is in the default encoding: the UTF-8 key is converted to it, as parse_json() converts its keys;
+        // with a UTF-8 default encoding, the key is used as it is
+        if (QCS_DEFAULT == QCS_UTF8) {
+            if (hash->setKeyValue(key_str.c_str(), val.release(), xsink) || *xsink) {
+                return nullptr;
+            }
+            continue;
+        }
         QoreString key(key_str.data(), key_str.size(), QCS_UTF8);
         if (hash->setKeyValue(key, val.release(), xsink) || *xsink) {
             return nullptr;
@@ -518,7 +525,12 @@ bool ProtobufHelper::setMapFieldFromHash(Message* msg, const FieldDescriptor* fi
         const char* key = hi.getKey();
         switch (key_field->cpp_type()) {
             case FieldDescriptor::CPPTYPE_STRING: {
-                // a hash key is in the default encoding, a protobuf string key is UTF-8 text
+                // a hash key is in the default encoding, a protobuf string key is UTF-8 text; with a UTF-8 default
+                // encoding, the key is used as it is
+                if (QCS_DEFAULT == QCS_UTF8) {
+                    entry_ref->SetString(entry, key_field, std::string(key));
+                    break;
+                }
                 QoreString key_str(key, QCS_DEFAULT);
                 TempEncodingHelper utf8_key(key_str, QCS_UTF8, xsink);
                 if (!utf8_key) {

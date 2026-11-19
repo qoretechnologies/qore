@@ -323,6 +323,7 @@ static void check_public_api() {
         qore_offset_t offset;
     };
     const QoreEncoding* sjis = QEM.findCreate("Shift_JIS");
+    const QoreEncoding* utf32 = QEM.findCreate("UTF-32");
     const Case cases[] = {
         {QCS_UTF8, "", 0, -1},
         {QCS_UTF8, "abc", 3, -1},
@@ -345,6 +346,11 @@ static void check_public_api() {
         {QCS_UTF16, "\0\xdc", 2, -1},
         {QCS_UTF16, "\xff\xfea\0\0\xd8", 6, 4},        // a lone high surrogate after the byte order mark
         {QCS_UTF16, "\xdc\0", 2, 0},                    // no byte order mark: a lone low surrogate in UTF-16BE
+        // UTF-32, created on the fly (big-endian): a little-endian byte order mark gives the byte order
+        {utf32, "\xff\xfe\0\0\xdc\0\0\0", 8, -1},
+        {utf32, "\0\0\xfe\xff\0\0\0\xdc", 8, -1},
+        {utf32, "\xff\xfe\0\0\0\xd8\0\0", 8, 4},     // a surrogate after the byte order mark
+        {utf32, "\xff\xfe\0\0\0\0\x11\0", 8, 4},     // above U+10FFFF after the byte order mark
     };
     for (const Case& c : cases) {
         std::string label = std::string(c.enc->getCode()) + " " + hex(reinterpret_cast<const unsigned char*>(c.bytes),

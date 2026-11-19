@@ -24,8 +24,8 @@ extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
     Tokenizers work on UTF-8 text: text given to a method (text to encode, words, tokens, added tokens, chat
     messages and templates, the strings and token keys of the configuration) is checked in its own encoding and an
     \c INVALID-ENCODING exception is raised if it is not valid, and text in another encoding is converted to UTF-8,
-    so that the same text gives the same token IDs in any encoding; offsets are byte offsets in the UTF-8 form of the text.  Decoded text is UTF-8; see
-    @ref tokenizer_text_encoding.
+    so that the same text gives the same token IDs in any encoding; offsets are byte offsets in the UTF-8 form of the
+    text.  Decoded text is UTF-8; see @ref tokenizer_text_encoding.
 
     @par Example:
     @code{.py}

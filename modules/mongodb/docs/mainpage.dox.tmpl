@@ -32,7 +32,9 @@
 
     Text given to the driver is UTF-8: the strings of a document are converted to UTF-8 and its keys from the default
     encoding, and the URI and the database and collection names given to the module are checked in their encodings
-    (\c INVALID-ENCODING) and converted to UTF-8; the names returned by \c getName() are tagged UTF-8.
+    (\c INVALID-ENCODING) and converted to UTF-8; the names returned by \c getName() are tagged UTF-8.  A document
+    with a key that the default encoding cannot hold (ex: \c "€" with an \c ISO-8859-1 default encoding) raises
+    \c ENCODING-CONVERSION-ERROR where it is converted to a hash.
 
     This module is released under the MIT license (see \c COPYING.MIT in the source distribution for
     more information). The module is tagged as such in the module's header (meaning it can be loaded

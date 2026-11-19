@@ -46,3 +46,12 @@ out("json-found", exists h.m{key} ? "yes" : "no");
 string json = schema.toJson("test.M", {"m": m});
 out("to-json", json);
 out("to-json-encoding", json.encoding());
+
+# a map key that the default encoding cannot hold (the euro sign in UTF-8) cannot be a hash key in it
+string err = "none";
+try {
+    schema.decode("test.M", <0a090a046be282ac120176>);
+} catch (hash<ExceptionInfo> ex) {
+    err = ex.err;
+}
+out("euro-key-error", err);

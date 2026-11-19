@@ -42,6 +42,8 @@ class ProtobufDefaultEncodingKeysTest inherits QUnit::Test {
             assertEq(yes, r."json-found", enc);
             assertEq(make_hex_string(binary("{\"m\":{\"ké\":\"v\"}}")), r."to-json", enc);
             assertEq(make_hex_string(binary("UTF-8")), r."to-json-encoding", enc);
+            assertEq(make_hex_string(binary(enc == "UTF-8" ? "none" : "ENCODING-CONVERSION-ERROR")),
+                r."euro-key-error", enc + ": a key that the default encoding cannot hold");
         }
     }
 

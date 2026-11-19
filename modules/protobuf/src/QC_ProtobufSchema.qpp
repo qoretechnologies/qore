@@ -373,6 +373,8 @@ binary ProtobufSchema::encode(string type, hash<auto> data) {
     @throw INVALID-ENCODING if a string field or a string map key of a \c proto2 message is not valid UTF-8 (a
     \c proto3 message with such a string fails to parse, \c PROTOBUF-DECODE-ERROR); a \c bytes field holds data
     that is not text
+    @throw ENCODING-CONVERSION-ERROR if a string map key cannot be held in the default encoding, the encoding of hash
+    keys (ex: \c "€" with an \c ISO-8859-1 default encoding)
     @throw PROTOBUF-DEPTH-ERROR if the message has message fields nested more than 100 levels deep (see
     @ref protobufnesting)
 
@@ -426,7 +428,8 @@ string ProtobufSchema::toJson(string type, hash<auto> data) {
     @throw PROTOBUF-DECODE-ERROR if a string map key in the message contains a NUL character, which a hash key cannot
     hold, so the message cannot be decoded to a hash
     @throw INVALID-ENCODING if \a json is not valid text in its encoding
-    @throw ENCODING-CONVERSION-ERROR if \a json cannot be converted to UTF-8
+    @throw ENCODING-CONVERSION-ERROR if \a json cannot be converted to UTF-8, or a string map key of the message
+    cannot be held in the default encoding, the encoding of hash keys
 
     @note \a json is checked in its own encoding and converted to UTF-8 (the encoding libprotobuf parses); the strings
     of the hash returned are tagged UTF-8, and string map keys are converted to the default encoding, as in decode()
