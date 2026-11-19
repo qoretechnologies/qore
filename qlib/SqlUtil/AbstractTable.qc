@@ -463,7 +463,8 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c info_callback: see @ref upsert_info_callback
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
-              key should be set to the columns to omit in the update clause
+              key should be set to the columns to omit in the update clause; a select-first upsert neither compares
+              nor updates them, and a row with no other column to update is unchanged when its key exists
             - \c upsert_columns: a list of column names that identifies the unique index or constraint to use for the
               upsert operation
         */
@@ -9297,9 +9298,10 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
     private code<int(hash<auto>)> getUpsertSelectFirst(Columns cols, hash<auto> example_row, *hash<auto> opt) {
         #printf("getUpsertSelectFirst() %s: %y\n", name, cols.keys());
         list<string> updc();
-        string select_sql = getUpsertSelectSql(example_row, cols, \updc);
+        string select_sql = getUpsertSelectSql(example_row, cols, \updc, opt);
         string insert_sql = getUpsertInsertSql(example_row);
-        string update_sql = getUpsertUpdateSql(example_row, cols, \updc, opt);
+        # nothing to update: an existing row is unchanged (issue #6683)
+        *string update_sql = updc ? getUpsertUpdateSql(example_row, cols, \updc, opt) : NOTHING;
 
         # the names of the columns in the row read, which a driver may give in another case than the table's
         # description (ex: MySQL) (issue #6674)
@@ -9311,6 +9313,9 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
             if (!dbrow) {
                 ds.vexec(insert_sql, row.values());
                 return UR_Inserted;
+            }
+            if (!update_sql) {
+                return UR_Unchanged;
             }
             if (!dkeys) {
                 dkeys = getResultColumnKeys(dbrow, updc, "a select-first upsert");
@@ -9505,16 +9510,17 @@ int ucnt = table.updateDpql({"counter": "@counter + 1"}, '@status == "active"');
         return False;
     }
 
-    private string getUpsertSelectSql(hash<auto> row, Columns cols, reference<list<string>> updc) {
+    private string getUpsertSelectSql(hash<auto> row, Columns cols, reference<list<string>> updc,
+            *hash<auto> opt) {
         if (cols.size() != row.size()) {
-            # make list of columns not in unique key
-            map updc += $1, keys row, !cols.hasKey($1);
-        } else {
-            updc = cols.keys();
+            # make list of columns not in unique key, without the columns that are not updated (issue #6683)
+            *hash<string, bool> suh = map {$1: True}, opt.omit_update;
+            map updc += $1, keys row, !cols.hasKey($1) && !suh{$1};
         }
-
+        # a row with only key columns, or whose other columns are all omitted from the update, has nothing to compare
+        # or update: the key columns are selected to find the row (issue #6683)
         return sprintf("select %s from %s where %s",
-                        (foldl $1 + ", " + $2, getColumnSqlNames(updc)),
+                        (foldl $1 + ", " + $2, getColumnSqlNames(updc ? updc : cols.keys())),
                         getSqlName(),
                         getUpsertKeyConditions(cols, row)
             );
