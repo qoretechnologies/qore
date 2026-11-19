@@ -83,10 +83,14 @@ public class JsonInvalidEncodingTest inherits QUnit::Test {
     }
 
     parseJsonMultiByte() {
-        # characters whose second byte is "\\" (5c) in Shift_JIS ("ソ" 83 5c) and Big5 ("功" a5 5c)
-        foreach list<string> c in ((("Shift_JIS", "ソ"), ("Big5", "功"), ("GBK", "丂"), ("EUC-JP", "日本"),
-                ("UTF-16LE", "é€😀"), ("UTF-16BE", "é€😀"), ("UTF-16", "é€"))) {
-            string text = convert_encoding("{\"" + c[1] + "\": [\"" + c[1] + "\", 1]}", c[0]);
+        # characters whose second byte is "\\" (5c) in Shift_JIS ("ソ" 83 5c) and Big5 ("功" a5 5c); the Big5 text
+        # is given by its bytes, as parse_json() only decodes it, and the iconv of some platforms (musl's) cannot
+        # encode Big5
+        foreach list<auto> c in ((("Shift_JIS", "ソ"), ("Big5", "功", <7b22a55c223a205b22a55c222c20315d7d>),
+                ("GBK", "丂"), ("EUC-JP", "日本"), ("UTF-16LE", "é€😀"), ("UTF-16BE", "é€😀"), ("UTF-16", "é€"))) {
+            string text = c[2]
+                ? binary_to_string(c[2], c[0])
+                : convert_encoding("{\"" + c[1] + "\": [\"" + c[1] + "\", 1]}", c[0]);
             hash<auto> h = parse_json(text);
             assertEq({c[1]: (c[1], 1)}, h, c[0]);
             assertEq("UTF-8", h.firstKey().encoding(), c[0]);

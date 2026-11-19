@@ -93,10 +93,23 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         );
     }
 
+    #! why the cases of the invalid Shift_JIS bytes 81 20 are skipped, or nothing
+    /** The conversions from Shift_JIS take the validity of the input from iconv; the iconv of some platforms (musl's)
+        decodes a lead byte followed by a byte that is not a trail byte without an error
+    */
+    static *string sjisIconvAccepts() {
+        try {
+            binary b = binary(convert_encoding(binary_to_string(<41812042>, "Shift_JIS"), "UTF-8"));
+            return sprintf("the iconv of the platform decodes the invalid Shift_JIS bytes 41812042 to %s", b.toHex());
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+
     constructor() : QUnit::Test("EncodingConversionInvalid", "1.0", \ARGV) {
         addTestCase("malformed UTF-8 in an input stream", \malformedUtf8InputTest());
         addTestCase("malformed UTF-8 in an output stream", \malformedUtf8OutputTest());
         addTestCase("malformed UTF-8 after the first block", \largeInputTest());
+        addTestCase("the iconv of the platform refuses invalid Shift_JIS", \sjisIconvTest());
         addTestCase("invalid input in other encodings", \otherInvalidTest());
         addTestCase("a character the target cannot hold", \unrepresentableTest());
         addTestCase("valid input converts", \validTest());
@@ -211,8 +224,24 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
             "cut off");
     }
 
+    #! the cases of the invalid Shift_JIS bytes 81 20 need an iconv that refuses them
+    sjisIconvTest() {
+        *string reason = sjisIconvAccepts();
+        if (reason) {
+            testSkip(reason);
+        }
+        *hash<ExceptionInfo> ex = getError(sub () { convert_encoding(binary_to_string(<41812042>, "Shift_JIS"),
+            "UTF-8"); });
+        assertEq("ENCODING-CONVERSION-ERROR", ex.err);
+    }
+
     otherInvalidTest() {
+        bool sjis_accepted = exists sjisIconvAccepts();
         foreach hash<auto> i in (OtherInvalid) {
+            # the iconv of the platform decodes these bytes (see sjisIconvTest())
+            if (sjis_accepted && i.enc == "Shift_JIS" && i.data == <41812042>) {
+                continue;
+            }
             foreach string to in ("UTF-8", "UTF-16LE", "ISO-8859-1") {
                 if (to == i.enc) {
                     continue;
@@ -353,7 +382,10 @@ class EncodingConversionInvalidTest inherits QUnit::Test {
         binary prefix = binary(convert_encoding(strmul("é", 2049), "UTF-16LE"));
         assertEq(binary(strmul("é", 2049) + "\u{0}\u{dc}A"), readAll(prefix + <00dc4100>, "UTF-16LE", "UTF-8",
             4095, ENCODING_ERRORS_LATIN1));
-        assertEq(binary("A\u{81} B"), readAll(<41812042>, "Shift_JIS", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
+        # the iconv of the platform decodes these bytes (see sjisIconvTest())
+        if (!sjisIconvAccepts()) {
+            assertEq(binary("A\u{81} B"), readAll(<41812042>, "Shift_JIS", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
+        }
         assertEq(binary("A\u{80}AB"), readAll(<41804142>, "US-ASCII", "UTF-8", 1, ENCODING_ERRORS_LATIN1));
         # a substituted character that the target encoding cannot hold
         *hash<ExceptionInfo> ex = getError(sub () { readAll(<61ff>, "UTF-8", "US-ASCII", 1,
