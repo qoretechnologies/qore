@@ -77,8 +77,8 @@ public class NdjsonIterator inherits AbstractIterator {
         for (int i = 0; i < lines.size(); i++) {
             string line = lines[i];
             # Remove trailing CR if present (CRLF case)
-            if (line.size() > 0 && line[line.size() - 1] == "\r") {
-                lines[i] = line.substr(0, line.size() - 1);
+            if (line.size() > 0 && line.substr(-1) == "\r") {
+                lines[i] = line.substr(0, -1);
                 line = lines[i];
             }
             if (line.size() > opts.max_line_length) {
@@ -195,17 +195,24 @@ public class InputStreamNdjsonIterator inherits AbstractIterator {
 
     #! Creates the iterator from an input stream
     /** @param input_stream the input stream to read from
-        @param options iterator options
+        @param options iterator options; see @ref ndjsondataprovider_encoding_errors for \c encoding_errors
+
+        @throw ENCODING-ERRORS-ERROR an unknown \c encoding_errors value was given
     */
     constructor(Qore::InputStream input_stream, *hash<NdjsonIteratorOptions> options) {
         opts = options ?? <NdjsonIteratorOptions>{};
-        reader = new StreamReader(input_stream, opts.encoding);
+        reader = new StreamReader(input_stream, opts.encoding, opts.encoding_errors);
     }
 
     #! Advances to the next JSON value
     /** @return True if there is a next value, False if iteration is complete
 
         @throw NDJSON-LINE-TOO-LONG if a line exceeds max_line_length
+        @throw INVALID-ENCODING a line is not valid in its encoding, \c encoding_errors is \c "raise" (or
+        \c "keep", and the line cannot be processed), and \c skip_invalid_json is not set; see
+        @ref ndjsondataprovider_encoding_errors
+        @throw ENCODING-CONVERSION-ERROR a line in a UTF-16 or UTF-32 encoding kept with \c encoding_errors
+        \c "keep" cannot be converted to UTF-8 for processing, and \c skip_invalid_json is not set
     */
     bool next() {
         if (eos) {
@@ -215,7 +222,19 @@ public class InputStreamNdjsonIterator inherits AbstractIterator {
         while (True) {
             line_number++;
 
-            *string line = reader.readLine();
+            *string line;
+            try {
+                line = reader.readLine();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "INVALID-ENCODING") {
+                    rethrow;
+                }
+                # the line is consumed; it is skipped as a line that is not valid JSON is
+                if (opts.skip_invalid_json) {
+                    continue;
+                }
+                throw ex.err, sprintf("line %d: %s", line_number, ex.desc), ex.arg;
+            }
 
             if (!exists line) {
                 eos = True;
@@ -223,24 +242,38 @@ public class InputStreamNdjsonIterator inherits AbstractIterator {
                 current_value = NOTHING;
                 return False;
             }
-            # the processing below is byte-oriented; text in a UTF-16 or UTF-32 encoding is processed as UTF-8
-            if (line.encoding() =~ /^UTF-(16|32)/) {
-                line = convert_encoding(line, "UTF-8");
-            }
+            bool empty;
+            try {
+                # the processing below is byte-oriented; text in a UTF-16 or UTF-32 encoding is processed as UTF-8
+                if (line.encoding() =~ /^UTF-(16|32)/) {
+                    line = convert_encoding(line, "UTF-8");
+                }
 
-            # Check line length
-            if (line.size() > opts.max_line_length) {
-                throw "NDJSON-LINE-TOO-LONG", sprintf("line %d exceeds maximum length of %d bytes (actual: %d)",
-                    line_number, opts.max_line_length, line.size());
-            }
+                # Remove trailing CR if present (CRLF case)
+                if (line.size() > 0 && line.substr(-1) == "\r") {
+                    line = line.substr(0, -1);
+                }
 
-            # Remove trailing CR if present (CRLF case)
-            if (line.size() > 0 && line[line.size() - 1] == "\r") {
-                line = line.substr(0, line.size() - 1);
+                # Check line length; the CR of a CRLF line ending is not counted, as with NdjsonIterator
+                if (line.size() > opts.max_line_length) {
+                    throw "NDJSON-LINE-TOO-LONG", sprintf("line %d exceeds maximum length of %d bytes (actual: %d)",
+                        line_number, opts.max_line_length, line.size());
+                }
+                empty = line.empty() || line =~ /^\s*$/;
+            } catch (hash<ExceptionInfo> ex) {
+                # a line kept without a check (encoding_errors "keep") that is not valid in its encoding cannot be
+                # converted or processed; it is skipped as a line that is not valid JSON is
+                if (ex.err != "INVALID-ENCODING" && ex.err != "ENCODING-CONVERSION-ERROR") {
+                    rethrow;
+                }
+                if (opts.skip_invalid_json) {
+                    continue;
+                }
+                throw ex.err, sprintf("line %d: %s", line_number, ex.desc), ex.arg;
             }
 
             # Handle empty lines
-            if (line.empty() || line =~ /^\s*$/) {
+            if (empty) {
                 if (opts.skip_empty_lines) {
                     continue;
                 }

@@ -156,6 +156,7 @@ public:
 
 #include "qore/intern/ThreadLocalVariableData.h"
 #include "qore/intern/ThreadClosureVariableStack.h"
+#include "qore/intern/QoreValueExceptionOps.h"
 #include "qore/intern/QoreProgramObjectLockOps.h"
 
 struct ThreadLocalProgramData {
@@ -235,6 +236,8 @@ public:
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
+        // the records of the frames that were running when a debugger attached leave the thread's count (#6602)
+        dbgDropAttachFrames(0);
         lvstack.del(xsink);
         cvstack.del(xsink);
         delete this;
@@ -358,7 +361,64 @@ public:
         return breakFlag;
     }
 
+    //! Makes the function exit event of a frame running native code that returns (issue #6602)
+    /** Called by qore_jit_debug_frame_return() while the frame is the top of the call stack (\a top); the frame
+        makes its exit event if it was running when the debugger attached
+
+        @param block the frame's block, if known, else the one recorded at the attach
+        @param val the frame's return value: the debugger cannot change it
+    */
+    DLLLOCAL void dbgNativeFrameReturn(const QoreStackLocation* top, const StatementBlock* block, const QoreValue& val,
+            ExceptionSink* xsink);
+
 private:
+    //! A frame of the Program's code that was running when the debugger attached (issue #6602)
+    /** Native code makes no function exit event: the frame makes it when it returns normally into the C++ code that
+        called it (dbgNativeFrameReturn()), and, when it ends with an exception, with no value at the next event of
+        the debugger in the thread (dbgCheckAttachFrames()), as the interpreters make it when the exception leaves the
+        frame.  A frame of the AST or IR interpreter makes its own exit event, and its record is removed then
+        (dbgFunctionExit()).
+    */
+    struct DbgAttachFrame {
+        //! the frame's call stack location
+        const QoreStackLocation* loc;
+        //! the frame's block, if known (a location of native code: a native entry or a direct native call)
+        const StatementBlock* block;
+        //! true for a location of native code, which is tagged (qore_rt_native_frame_tagged()), else the location of
+        //! a call (CodeEvaluationHelper)
+        bool native_loc;
+    };
+    //! the frames of the Program's code that were running when the debugger attached, the outermost first
+    std::vector<DbgAttachFrame> dbg_attach_frames;
+    //! the count of the records of all Programs in the thread (qore_jit_debug_frame_count()), set when frames are
+    //! recorded; the native returns keep the exit events requested while it is not zero
+    std::atomic<int>* dbg_frame_count = nullptr;
+
+    //! records the frames of the Program's code on the thread's call stack when the debugger attaches
+    DLLLOCAL void dbgRecordAttachFrames();
+
+    //! makes the exit events of the frames that were running when the debugger attached and have left the call stack
+    DLLLOCAL void dbgCheckAttachFrames(ExceptionSink* xsink) {
+        if (!dbg_attach_frames.empty()) {
+            dbgFlushReturnedFrames(xsink);
+        }
+    }
+
+    //! makes the exit events of the recorded frames that are no longer on the call stack, innermost first
+    /** @return the number of the recorded frames that are still on the call stack
+    */
+    DLLLOCAL size_t dbgFlushReturnedFrames(ExceptionSink* xsink);
+
+    //! removes the records after the first \a keep ones and updates the thread's count
+    DLLLOCAL void dbgDropAttachFrames(size_t keep);
+
+    //! returns true if a recorded frame is the location \a loc
+    DLLLOCAL static bool dbgIsAttachFrame(const DbgAttachFrame& frame, const QoreStackLocation* loc);
+
+    //! the function exit event, without the check of the frames that were running when the debugger attached
+    DLLLOCAL void dbgFunctionExitIntern(const StatementBlock* statement, QoreValue& returnValue,
+            ExceptionSink* xsink);
+
     // not implemented
     DLLLOCAL ThreadLocalProgramData(const ThreadLocalProgramData& old) = delete;
 
@@ -4909,7 +4969,7 @@ public:
                 if (collect_diagnostics) {
                     markDiagnostic(*ne);
                 }
-                sink->raiseException(ne);
+                qore_exception_sink_ops(sink).raiseException(ne);
             }
             exceptions_raised++;
         }
@@ -5325,7 +5385,7 @@ public:
 
         if (loc) {
             // ensure that all exceptions reflect the current parse location
-            xsink.overrideLocation(*loc);
+            qore_exception_sink_ops(xsink).overrideLocation(*loc);
         }
 
         parseSink->assimilate(xsink);
@@ -6493,7 +6553,7 @@ public:
             pgm.priv->markDiagnostic(*ne);
         }
         ne->arg = arg_holder.release();
-        wsink.raiseException(ne);
+        qore_exception_sink_ops(wsink).raiseException(ne);
     }
 
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation &loc, int code,
@@ -6521,7 +6581,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation& loc, int code,
@@ -6541,7 +6601,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     //! Raises a parse warning and attaches structured metadata when diagnostic collection is enabled
@@ -6559,7 +6619,7 @@ public:
         if (pgm->priv->collect_diagnostics) {
             pgm->priv->markDiagnostic(*ne);
         }
-        pgm->priv->warnSink->raiseException(ne);
+        qore_exception_sink_ops(pgm->priv->warnSink).raiseException(ne);
     }
 
     DLLLOCAL void attachDebug(const qore_debug_program_private* n_dpgm) {

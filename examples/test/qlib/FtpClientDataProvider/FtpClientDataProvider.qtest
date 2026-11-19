@@ -72,6 +72,30 @@ public class FtpClientDataProviderTest inherits QUnit::Test {
         });
         assertEq(str, h."data");
 
+        # text that is not valid in its encoding raises INVALID-ENCODING unless encoding_errors is "latin1" or "keep"
+        # (issue #6604)
+        {
+            binary invalid = binary("abc ") + <e9> + binary(" def");
+            string invalid_path = "/invalid.txt";
+            root.getChildProviderEx("create-file").doRequest({"path": invalid_path, "data": invalid});
+            assertEq("raise", prov.getRequestType().getFields().encoding_errors.getDefaultValue());
+            assertThrows("INVALID-ENCODING", "FTP file.*not valid UTF-8", \prov.doRequest(), {"path": invalid_path,
+                "text": True});
+            assertThrows("INVALID-ENCODING", \prov.doRequest(), {"path": invalid_path, "text": True,
+                "encoding_errors": "raise"});
+            h = prov.doRequest({"path": invalid_path, "text": True, "encoding_errors": "latin1"});
+            assertEq("ISO-8859-1", h."data".encoding());
+            assertEq(invalid, binary(h."data"));
+            h = prov.doRequest({"path": invalid_path, "text": True, "encoding_errors": "keep"});
+            assertEq("UTF-8", h."data".encoding());
+            assertEq(invalid, binary(h."data"));
+            assertThrows("ENCODING-ERRORS-ERROR", \prov.doRequest(), {"path": invalid_path, "text": True,
+                "encoding_errors": "ignore"});
+            # binary data is not checked
+            assertEq(invalid, prov.doRequest({"path": invalid_path}).data);
+            root.getChildProviderEx("delete").doRequest({"path": invalid_path});
+        }
+
         prov = root.getChildProviderEx("stat");
         sinfo = prov.getSummaryInfo();
         assertEq("stat", sinfo.name);

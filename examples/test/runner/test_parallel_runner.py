@@ -399,6 +399,7 @@ kill -9 $shells
                 "examples/test/qlib/DbDataProvider/DbMaterializedViewRefresh.qtest": no_objects + " in MySQL",
                 "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
                 "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
+                "examples/test/qore/dbi/describe-keeps-bound-values.qtest": no_objects,
                 "modules/dataframe/test/dataframe-dbi.qtest": unique,
             },
         }
@@ -408,6 +409,7 @@ kill -9 $shells
             "examples/test/qlib/DbDataProvider/DbSqlUtilWhereOperators.qtest": unique,
             "examples/test/qore/classes/Datasource/Datasource.qtest": no_objects,
             "examples/test/qore/classes/DatasourcePool/DatasourcePool.qtest": no_objects,
+            "examples/test/qore/dbi/describe-keeps-bound-values.qtest": no_objects,
             "modules/dataframe/test/dataframe-dbi.qtest": unique,
         }
         exempt["FREETDS"] = {

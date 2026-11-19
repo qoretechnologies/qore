@@ -36,7 +36,7 @@
 module FtpClientDataProvider {
     # the module registers process-wide functionality (data provider factories, types, apps or callbacks)
     domains = "PROCESS_CONTROL";
-    version = "2.0";
+    version = "2.1";
     desc = "user module providing a data provider API for FTP servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -95,7 +95,7 @@ module FtpClientDataProvider {
                     "required": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                FtpClientGetFileRequestDataType::Fields - ("path", "location")
+                FtpClientGetFileRequestDataType::Fields - ("path", "location", "encoding_errors")
             ),
         });
 
@@ -145,6 +145,12 @@ module FtpClientDataProvider {
     - @ref FtpClientDataProvider::FtpClientStatResponseDataType "FtpClientStatResponseDataType"
 
     @section ftpclientdataprovider_relnotes Release Notes
+
+    @subsection ftpclientdataprovider_v2_1 FtpClientDataProvider v2.1
+    - the \c get-file request checks text in its encoding and takes the \c encoding_errors field: \c "raise" (the
+      default) raises \c INVALID-ENCODING, \c "latin1" returns text that is not valid as \c ISO-8859-1, \c "keep"
+      returns it without a check (see @ref encoding_errors)
+      (<a href="https://github.com/qoretechnologies/qore/issues/6604">issue 6604</a>)
 
     @subsection ftpclientdataprovider_v2_0 FtpClientDataProvider v2.0
     - added support for the data provider action catalog API

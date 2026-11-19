@@ -4493,7 +4493,9 @@ QoreStringNode* q_remove_bom(QoreStringNode* str, const QoreEncoding*& enc) {
     return str;
 }
 
-QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc, f_read_t my_read) {
+QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc, f_read_t my_read,
+        qore_encoding_errors_t mode, const char* cls, const char* meth, const QoreEncoding** text_enc,
+        bool remove_bom) {
     size_t size = 0;
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
     while (true) {
@@ -4512,11 +4514,206 @@ QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc,
     if (!size)
         return 0;
     str->terminate(size);
-    // resolve any UTF-16 byte order mark, as in q_read_string() and q_read_string_short(); without
+    // resolve any UTF-16 byte order mark, as in q_read_string(); without
     // this the mark would be decoded as a character and, with the byte-order-neutral "UTF-16"
     // encoding, little-endian data would be decoded as big-endian
-    q_remove_bom(*str, enc);
+    if (remove_bom) {
+        q_remove_bom(*str, enc);
+    }
+    if (text_enc) {
+        *text_enc = enc;
+    }
+    // the text is checked in the encoding of the byte order found, without the byte order mark
+    if (q_check_read_text(**str, mode, cls, meth, "text read", xsink)) {
+        return nullptr;
+    }
     return str.release();
+}
+
+int q_get_encoding_errors(const QoreString* name, qore_encoding_errors_t& rv, ExceptionSink* xsink) {
+    if (!name) {
+        rv = qore_encoding_errors_t::RAISE;
+        return 0;
+    }
+    TempEncodingHelper n(name, QCS_UTF8, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    auto is = [&n](const char* v) -> bool {
+        size_t len = strlen(v);
+        return n->size() == len && !memcmp(n->c_str(), v, len);
+    };
+    if (is("raise")) {
+        rv = qore_encoding_errors_t::RAISE;
+        return 0;
+    }
+    if (is("latin1")) {
+        rv = qore_encoding_errors_t::LATIN1;
+        return 0;
+    }
+    if (is("keep")) {
+        rv = qore_encoding_errors_t::KEEP;
+        return 0;
+    }
+    xsink->raiseException("ENCODING-ERRORS-ERROR", new QoreStringNodeMaker("unknown encoding_errors value '%s'; "
+        "expecting one of: 'raise', 'latin1', 'keep'", n->c_str()));
+    return -1;
+}
+
+const char* q_encoding_errors_name(qore_encoding_errors_t mode) {
+    switch (mode) {
+        case qore_encoding_errors_t::RAISE: return "raise";
+        case qore_encoding_errors_t::LATIN1: return "latin1";
+        case qore_encoding_errors_t::KEEP: return "keep";
+    }
+    assert(false);
+    return "raise";
+}
+
+bool q_encoding_checks_text(const QoreEncoding* enc) {
+    return enc->isMultiByte() || enc == QCS_USASCII || qore_encoding_private::isStateful(enc);
+}
+
+// returns the byte offset of the first byte sequence that cannot be converted from a stateful encoding, or -1
+static qore_offset_t q_stateful_invalid_offset(const char* p, size_t len, const QoreEncoding* enc,
+        bool allow_cut_end) {
+    // the conversion is opened with a local exception sink, so that it raises nothing
+    ExceptionSink lx;
+    IconvHelper c(QCS_UTF8, enc, &lx);
+    if (lx) {
+        // the conversion is not available, so the text cannot be checked
+        lx.clear();
+        return -1;
+    }
+    char* in = const_cast<char*>(p);
+    size_t in_left = len;
+    while (in_left) {
+        char obuf[1024];
+        char* op = obuf;
+        size_t out_left = sizeof obuf;
+        size_t rc = c.iconv(&in, &in_left, &op, &out_left);
+        if (rc != static_cast<size_t>(-1)) {
+            continue;
+        }
+        int err = errno;
+        if (err == E2BIG) {
+            continue;
+        }
+        if (err == EINVAL && allow_cut_end) {
+            return -1;
+        }
+        return static_cast<qore_offset_t>(in - p);
+    }
+    return -1;
+}
+
+qore_offset_t q_text_invalid_offset(const char* p, size_t len, const QoreEncoding* enc, bool allow_cut_end,
+        size_t ascii_prefix) {
+    assert(ascii_prefix <= len);
+    if (enc == QCS_UTF8) {
+        // the one definition of a valid UTF-8 character (qore#6604)
+        bool incomplete = false;
+        size_t valid = ascii_prefix + IconvHelper::validUtf8Prefix(p + ascii_prefix, len - ascii_prefix,
+            incomplete);
+        if (valid == len || (incomplete && allow_cut_end)) {
+            return -1;
+        }
+        return static_cast<qore_offset_t>(valid);
+    }
+    if (enc == QCS_USASCII) {
+        for (size_t i = ascii_prefix; i < len; ++i) {
+            if (static_cast<unsigned char>(p[i]) >= 0x80) {
+                return static_cast<qore_offset_t>(i);
+            }
+        }
+        return -1;
+    }
+    if (enc->isMultiByte()) {
+        // the encoding's own character function, so that a stricter one is used as soon as it has one
+        size_t i = enc->isAsciiCompat() ? ascii_prefix : 0;
+        while (i < len) {
+            qore_offset_t l = enc->getCharLen(p + i, len - i);
+            if (l > 0) {
+                i += l;
+                continue;
+            }
+            if (l < 0 && allow_cut_end) {
+                return -1;
+            }
+            return static_cast<qore_offset_t>(i);
+        }
+        return -1;
+    }
+    if (qore_encoding_private::isStateful(enc)) {
+        return q_stateful_invalid_offset(p, len, enc, allow_cut_end);
+    }
+    // every byte is a character in a single-byte encoding
+    return -1;
+}
+
+void q_raise_invalid_read_text(ExceptionSink* xsink, const char* cls, const char* meth, const char* what,
+        const QoreEncoding* enc, size_t offset, int64 line) {
+    QoreStringNode* desc = new QoreStringNodeMaker("%s::%s(): the %s is not valid %s: invalid byte sequence at byte "
+        "offset " QLLD, cls, meth, what, enc->getCode(), (int64)offset);
+    if (line > 0) {
+        desc->sprintf(" (line " QLLD ")", line);
+    }
+    xsink->raiseException("INVALID-ENCODING", desc);
+}
+
+const QoreEncoding* q_get_bom_byte_order(const QoreEncoding* enc, const char* p, size_t len) {
+    if (enc == QCS_UTF16) {
+        if (len < 2) {
+            return nullptr;
+        }
+        unsigned char b0 = static_cast<unsigned char>(p[0]);
+        unsigned char b1 = static_cast<unsigned char>(p[1]);
+        if (b0 == 0xfe && b1 == 0xff) {
+            return QCS_UTF16BE;
+        }
+        if (b0 == 0xff && b1 == 0xfe) {
+            return QCS_UTF16LE;
+        }
+        return nullptr;
+    }
+    const qore_encoding_private* ep = qore_encoding_private::get(*enc);
+    if (ep->swapped_bom.empty()) {
+        return nullptr;
+    }
+    size_t bom_len;
+    const QoreEncoding* bom_enc = ep->getBomEncoding(enc, p, len, bom_len);
+    return bom_enc != enc ? bom_enc : nullptr;
+}
+
+int q_check_read_text(QoreString& str, qore_encoding_errors_t mode, const char* cls, const char* meth,
+        const char* what, ExceptionSink* xsink, int64 line, bool allow_cut_end) {
+    if (mode == qore_encoding_errors_t::KEEP || str.empty()) {
+        return 0;
+    }
+    const QoreEncoding* enc = str.getEncoding();
+    if (!q_encoding_checks_text(enc)) {
+        return 0;
+    }
+    size_t ascii = 0;
+    if (enc->isAsciiCompat() && !qore_encoding_private::isStateful(enc)) {
+        // the ASCII prefix is found a word at a time and is kept with the string, so that its character offsets are
+        // then found without a scan
+        const qore_string_private* p = qore_string_private::get(str);
+        ascii = p->getAsciiPrefix(p->effective_buf(), str.size());
+        if (ascii >= str.size()) {
+            return 0;
+        }
+    }
+    qore_offset_t off = q_text_invalid_offset(str.c_str(), str.size(), enc, allow_cut_end, ascii);
+    if (off < 0) {
+        return 0;
+    }
+    if (mode == qore_encoding_errors_t::LATIN1) {
+        str.setEncoding(QCS_ISO_8859_1);
+        return 0;
+    }
+    q_raise_invalid_read_text(xsink, cls, meth, what, enc, off, line);
+    return -1;
 }
 
 int q_check_char_read_encoding(const QoreEncoding* enc, ExceptionSink* xsink) {
@@ -4585,6 +4782,7 @@ int QoreStatefulTextDecoder::decode(const char* buf, size_t len, std::string& ou
     // "ESC $ B F | K" gives "日K") instead of failing with EINVAL, as it does when they are its only input
     for (size_t i = 0; i < len; ++i) {
         pending.push_back(buf[i]);
+        ++call_bytes;
         char* in = &pending[0];
         size_t in_left = pending.size();
         while (in_left) {
@@ -4605,8 +4803,9 @@ int QoreStatefulTextDecoder::decode(const char* buf, size_t len, std::string& ou
                 break;
             }
             if (err != ECANCELED) {
-                xsink->raiseException("STREAM-ENCODING-ERROR", "invalid byte sequence read according to the input "
-                    "encoding: '%s'", cd_enc->getCode());
+                // the invalid sequence starts at the first byte not converted; the bytes after it are discarded
+                raiseInvalid(cd_enc, call_bytes - in_left, false, xsink);
+                pending.clear();
             }
             assert(*xsink);
             return -1;
@@ -4620,9 +4819,7 @@ int QoreStatefulTextDecoder::checkEnd(const QoreEncoding* enc, ExceptionSink* xs
     if (pending.empty()) {
         return 0;
     }
-    xsink->raiseException("STREAM-ENCODING-ERROR", "the end of the data was reached after " QLLD " byte%s of an "
-        "incomplete character or shift sequence according to the input encoding: '%s'", (int64)(pending.size()),
-        pending.size() == 1 ? "" : "s", enc->getCode());
+    raiseInvalid(enc, call_bytes - pending.size(), true, xsink);
     pending.clear();
     return -1;
 }
@@ -4714,6 +4911,165 @@ QoreStringNode* QoreStatefulTextDecoder::readChars(const QoreEncoding* enc, int6
     return utf8.empty() ? nullptr : encode(utf8, enc, xsink);
 }
 
+void QoreStatefulTextDecoder::raiseInvalid(const QoreEncoding* enc, size_t offset, bool cut, ExceptionSink* xsink) {
+    invalid = true;
+    if (ctx) {
+        q_raise_invalid_read_text(xsink, ctx->cls, ctx->meth, ctx->what, enc, offset, ctx->line);
+        return;
+    }
+    if (cut) {
+        xsink->raiseException("INVALID-ENCODING", "the end of the data was reached after an incomplete character or "
+            "shift sequence according to the input encoding: '%s'", enc->getCode());
+    } else {
+        xsink->raiseException("INVALID-ENCODING", "invalid byte sequence read according to the input encoding: '%s'",
+            enc->getCode());
+    }
+}
+
+// returns the bytes of the given UTF-8 text in the given stateful encoding as they are in the middle of text in it
+// (without the bytes that iconv writes at the start of text in it); empty if it cannot be represented in it
+static std::string q_stateful_text_bytes(const QoreEncoding* enc, const std::string& utf8) {
+    ExceptionSink lx;
+    QoreString s(utf8.data(), utf8.size(), QCS_UTF8);
+    TempEncodingHelper t(&s, enc, &lx);
+    if (lx || !t) {
+        lx.clear();
+        return std::string();
+    }
+    // the helper's own copy is changed
+    t.makeTemp();
+    qore_string_private::get(const_cast<QoreString&>(**t))->removeStatefulPrefix();
+    return std::string(t->c_str(), t->size());
+}
+
+// reads bytes one at a time and appends them to the given string until it ends with the given marker or the end of the
+// data is reached; returns 0 for OK, -1 if an exception was raised
+static int q_read_to_marker(f_read_t& my_read, const std::string& marker, std::string& raw, ExceptionSink* xsink) {
+    auto ends_with_marker = [&raw, &marker]() -> bool {
+        return raw.size() >= marker.size() && !raw.compare(raw.size() - marker.size(), marker.size(), marker);
+    };
+    if (marker.empty()) {
+        return 0;
+    }
+    for (size_t i = 1; !ends_with_marker(); ++i) {
+        // a line can be arbitrarily long, so the read can be cancelled
+        if (!(i % 1024) && qore_check_cancel(xsink, "stateful text read")) {
+            return -1;
+        }
+        char b;
+        qore_offset_t rc = my_read(&b, 1, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (!rc) {
+            break;
+        }
+        raw.push_back(b);
+    }
+    return 0;
+}
+
+QoreStringNode* QoreStatefulTextDecoder::readMode(const QoreEncoding* enc, f_read_t& my_read,
+        qore_encoding_errors_t mode, const ReadContext& c, ExceptionSink* xsink, const std::string& marker_utf8,
+        bool trim, std::string* found_eol, const std::function<QoreStringNode*(f_read_t&, ExceptionSink*)>& read) {
+    // the input that was read before the call and has not been returned: the characters decoded ahead, in the
+    // encoding, and the bytes of an incomplete character; the byte offsets of the call start with it
+    std::string raw;
+    if (!ahead.empty()) {
+        ExceptionSink lx;
+        SimpleRefHolder<QoreStringNode> a(encode(ahead, enc, &lx));
+        if (a) {
+            raw.assign(a->c_str(), a->size());
+        }
+        lx.clear();
+    }
+    raw.append(pending);
+    // the context is used by the exception raised by decode() and checkEnd() during the call
+    struct ContextHelper {
+        QoreStatefulTextDecoder& d;
+        ContextHelper(QoreStatefulTextDecoder& d, const ReadContext& c, size_t start) : d(d) {
+            d.ctx = &c;
+            d.call_bytes = start;
+            d.invalid = false;
+        }
+        ~ContextHelper() {
+            d.ctx = nullptr;
+        }
+    } ch(*this, c, raw.size());
+
+    // with qore_encoding_errors_t::LATIN1, the bytes read are kept, to be returned if the text is not valid
+    f_read_t rec = [&raw, &my_read](void* dest, size_t limit, ExceptionSink* read_xsink) -> qore_offset_t {
+        qore_offset_t rc = my_read(dest, limit, read_xsink);
+        if (rc > 0) {
+            raw.append(static_cast<const char*>(dest), rc);
+        }
+        return rc;
+    };
+    const bool latin1 = mode == qore_encoding_errors_t::LATIN1;
+    ExceptionSink lx;
+    SimpleRefHolder<QoreStringNode> rv(read(latin1 ? rec : my_read, &lx));
+    if (!lx) {
+        return rv.release();
+    }
+    if (!invalid) {
+        xsink->assimilate(lx);
+        return nullptr;
+    }
+    // the text is not valid in the encoding: its shift state is not known until the end of its line, so the rest of
+    // the line is read up to and including its end-of-line marker, and the text after it is read from the initial
+    // shift state
+    reset();
+    invalid = false;
+    const std::string marker = q_stateful_text_bytes(enc, marker_utf8);
+    if (!latin1) {
+        // the rest of the line is skipped, and the exception is raised, with any exception raised by the skip
+        std::string skipped;
+        ExceptionSink skip_xsink;
+        q_read_to_marker(my_read, marker, skipped, &skip_xsink);
+        xsink->assimilate(lx);
+        xsink->assimilate(skip_xsink);
+        return nullptr;
+    }
+    // the bytes of the whole line are returned
+    lx.clear();
+    if (q_read_to_marker(my_read, marker, raw, xsink)) {
+        return nullptr;
+    }
+    bool ended = !marker.empty() && raw.size() >= marker.size()
+        && !raw.compare(raw.size() - marker.size(), marker.size(), marker);
+    if (found_eol) {
+        if (ended) {
+            *found_eol = marker_utf8;
+        } else {
+            found_eol->clear();
+        }
+    }
+    if (ended && trim) {
+        raw.resize(raw.size() - marker.size());
+    } else if (raw.empty()) {
+        return nullptr;
+    }
+    return new QoreStringNode(raw.data(), raw.size(), QCS_ISO_8859_1);
+}
+
+QoreStringNode* QoreStatefulTextDecoder::readChars(const QoreEncoding* enc, int64 size, f_read_t my_read,
+        qore_encoding_errors_t mode, const ReadContext& c, ExceptionSink* xsink) {
+    return readMode(enc, my_read, mode, c, xsink, "\n", false, nullptr,
+        [this, enc, size](f_read_t& r, ExceptionSink* x) -> QoreStringNode* {
+            return readChars(enc, size, r, x);
+        });
+}
+
+QoreStringNode* QoreStatefulTextDecoder::readLine(const QoreEncoding* enc, const std::string& eol, bool trim,
+        bool cr_lookahead, f_read_t my_read, qore_encoding_errors_t mode, const ReadContext& c, ExceptionSink* xsink,
+        std::string* found_eol) {
+    // a line that is not valid ends with the marker, or with a line feed
+    return readMode(enc, my_read, mode, c, xsink, eol.empty() ? std::string("\n") : eol, trim, found_eol,
+        [this, enc, &eol, trim, cr_lookahead, found_eol](f_read_t& r, ExceptionSink* x) -> QoreStringNode* {
+            return readLine(enc, eol, trim, cr_lookahead, r, x, found_eol);
+        });
+}
+
 QoreStringNode* QoreStatefulTextDecoder::readLine(const QoreEncoding* enc, const std::string& eol, bool trim,
         bool cr_lookahead, f_read_t my_read, ExceptionSink* xsink, std::string* found_eol) {
     if (found_eol) {
@@ -4778,174 +5134,162 @@ QoreStringNode* QoreStatefulTextDecoder::readLine(const QoreEncoding* enc, const
     return line.empty() ? nullptr : encode(line, enc, xsink);
 }
 
-QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read) {
+// returns a * b, or SIZE_MAX if the product does not fit
+static size_t q_sat_mul(size_t a, size_t b) {
+    return (b && a > SIZE_MAX / b) ? SIZE_MAX : a * b;
+}
+
+// returns a + b, or SIZE_MAX if the sum does not fit
+static size_t q_sat_add(size_t a, size_t b) {
+    return a > SIZE_MAX - b ? SIZE_MAX : a + b;
+}
+
+QoreStringNode* q_read_string(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read,
+        qore_encoding_errors_t mode, const char* cls, const char* meth, const QoreEncoding** text_enc,
+        bool remove_bom, std::string* leftover) {
     if (!size)
         return nullptr;
     if (size < 0)
-        return q_read_string_all(xsink, enc, my_read);
+        return q_read_string_all(xsink, enc, my_read, mode, cls, meth, text_enc, remove_bom);
     if (q_check_char_read_encoding(enc, xsink)) {
         return nullptr;
     }
+    if (text_enc) {
+        *text_enc = enc;
+    }
 
-    // original number of characters requested
-    size_t orig_size = size;
+    // the number of characters requested
+    const size_t want = size;
+    // the width of a code unit: the smallest width of a character
+    const unsigned mw = enc->getMinCharWidth();
+    const bool multi = enc->isMultiByte();
 
-    // byte offset of the byte position directly after the last full character scanned
+    // the byte offset after the last character scanned, and the number of characters scanned
     size_t last_char = 0;
-
-    // total number of characters read
     size_t char_len = 0;
+    // the byte length of a character that is not complete at last_char, or 0
+    size_t incomplete_len = 0;
 
-    // minimum character width
-    unsigned mw = enc->getMinCharWidth();
-    // get minimum byte length
-    size *= mw;
+    bool check_bom = !remove_bom || !multi;
+    // true if an invalid code unit was read as a character of its own (qore_encoding_errors_t::LATIN1 and KEEP)
+    bool invalid = false;
+    // true if the end of the data was reached
+    bool eof = false;
 
-    bool check_bom = false;
+    // gives back the bytes read after the given offset, if they can be given back
+    auto give_back = [&](QoreStringNode& s, size_t offset) {
+        if (leftover && offset < s.size()) {
+            leftover->assign(s.c_str() + offset, s.size() - offset);
+            s.terminate(offset);
+        }
+    };
 
     SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
-    while (char_len < orig_size) {
-        // get the minimum number of bytes to read
-        size_t bs = size - str->size();
-
-        // ensure there is space in the buffer
+    while (char_len < want) {
+        // the bytes still needed at least: a code unit for each character missing, and the rest of a character that
+        // is not complete; they are read in blocks, so that the number of characters requested is never trusted
+        // for an allocation (and the arithmetic saturates for a very large number)
+        size_t remaining = want - char_len;
+        size_t need = incomplete_len
+            ? q_sat_add(incomplete_len, q_sat_mul(remaining - 1, mw))
+            : q_sat_mul(remaining, mw);
+        size_t avail = str->size() - last_char;
+        assert(need > avail);
+        size_t bs = QORE_MIN(need - avail, (size_t)DefaultStreamReaderHelperBufferSize);
         str->reserve(str->size() + bs);
-
-        int rc = my_read((void*)(str->c_str() + str->size()), bs, xsink);
-        if (*xsink)
-            return 0;
-        if (rc == 0)
+        qore_offset_t rc = my_read((void*)(str->c_str() + str->size()), bs, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!rc) {
+            eof = true;
             break;
-
+        }
         str->terminate(str->size() + rc);
 
-        //printd(5, "srh bs: %d rc: %d str: '%s' (%d %s)\n", bs, rc, str->c_str(), str->size(), enc->getCode());
-
-        // if we have a non-multi-byte character encoding, then we can use byte lengths
-        if (!enc->isMultiByte()) {
-            if ((size_t)size == str->size())
-                break;
+        if (!multi) {
+            // a single-byte encoding: each byte is a character
+            char_len = last_char = str->size();
             continue;
-        } else if (!check_bom && str->size() >= q_bom_check_size(enc)) {
-            check_bom = true;
-            q_remove_bom(*str, enc);
         }
 
-        // scan data read and find the last valid character position
-        const char* e = str->c_str() + str->size();
-        while (char_len < orig_size && last_char < str->size()) {
-            const char* p = str->c_str() + last_char;
-            int cc = enc->getCharLen(p, e - p);
-            if (!cc) {
-                xsink->raiseException("STREAM-ENCODING-ERROR", "invalid multi-byte character received in byte offset "
-                    QLLD " according to the input encoding: '%s'", (int64)last_char, enc->getCode());
-
-                return 0;
+        if (!check_bom && str->size() >= q_bom_check_size(enc)) {
+            check_bom = true;
+            q_remove_bom(*str, enc);
+            if (text_enc) {
+                *text_enc = enc;
             }
+        }
 
-            //printd(5, "StreamReader::readString() orig: " QLLD " size: " QLLD " char_len: " QLLD " rc: %d "
-            //    last_char: " QSD " c: %d (offset: " QLLD ") cc: %d '%s'\n", orig_size, size, char_len, rc,
-            //    last_char, *p, p - str->c_str(), cc, enc->getCode());
-
+        // scan the bytes read for whole characters
+        incomplete_len = 0;
+        while (char_len < want && last_char < str->size()) {
+            const char* p = str->c_str() + last_char;
+            qore_offset_t cc = enc->getCharLen(p, str->size() - last_char);
             if (cc > 0) {
-                // increment character count
                 ++char_len;
-                // increment byte position after last full character read
                 last_char += cc;
                 continue;
             }
-
-            // otherwise we need to recalculate the total size to read and break
-            cc = -cc;
-            // how many bytes of this character do we have
-            unsigned hb = (str->size() - last_char);
-            assert((unsigned)cc > hb);
-            // we will add one byte for the missing character below; here we add in any other bytes we might need
-            if ((unsigned)cc > (hb + 1))
-                size += (cc - hb - 1);
-
-            break;
-        }
-
-        // now we add the minimum character byte length to the remaining size
-        // for every character we have not yet read
-        size = str->size() + ((orig_size - char_len) * mw);
-    }
-
-    return str->empty() ? 0 : str.release();
-}
-
-QoreStringNode* q_read_string_short(ExceptionSink* xsink, int64 size, const QoreEncoding* enc, f_read_t my_read) {
-    if (!size) {
-        return nullptr;
-    }
-    // a single block of data can end in a shifted run, so it is not a string of its own in a stateful encoding
-    if (q_check_char_read_encoding(enc, xsink)) {
-        return nullptr;
-    }
-
-    unsigned mw = enc->getMinCharWidth();
-    size_t bs;
-    if (size < 0) {
-        bs = DefaultStreamReaderHelperBufferSize;
-    } else {
-        size_t max_bs;
-        if (size > (int64)(SIZE_MAX / mw)) {
-            max_bs = DefaultStreamReaderHelperBufferSize;
-        } else {
-            max_bs = (size_t)size * mw;
-        }
-        bs = max_bs ? max_bs : mw;
-        if (bs > DefaultStreamReaderHelperBufferSize) {
-            bs = DefaultStreamReaderHelperBufferSize;
+            if (cc < 0) {
+                // a valid start of a character, which needs at least -cc bytes
+                incomplete_len = -cc;
+                break;
+            }
+            // an invalid code unit
+            if (mode == qore_encoding_errors_t::RAISE) {
+                // the bytes after the invalid code unit are given back for the next read
+                give_back(**str, last_char + QORE_MIN((size_t)mw, str->size() - last_char));
+                q_raise_invalid_read_text(xsink, cls, meth, "text read", enc, last_char);
+                return nullptr;
+            }
+            // it is read as a character of its own, so that the characters after it are found at code unit
+            // boundaries (ex: an unpaired surrogate in UTF-16)
+            invalid = true;
+            ++char_len;
+            last_char += QORE_MIN((size_t)mw, str->size() - last_char);
         }
     }
 
-    SimpleRefHolder<QoreStringNode> str(new QoreStringNode(enc));
-    str->reserve(bs);
-    int rc = my_read((void*)str->c_str(), bs, xsink);
-    if (*xsink || rc <= 0) {
+    if (str->empty()) {
         return nullptr;
     }
 
-    str->terminate(rc);
-
-    if (!enc->isMultiByte()) {
+    if (!multi) {
+        // a single-byte encoding: only US-ASCII has bytes that are not characters; with "raise", the bytes after the
+        // invalid byte are given back, as in a multi-byte encoding
+        if (mode == qore_encoding_errors_t::RAISE && q_encoding_checks_text(enc)) {
+            qore_offset_t off = q_text_invalid_offset(str->c_str(), str->size(), enc);
+            if (off >= 0) {
+                give_back(**str, off + 1);
+                q_raise_invalid_read_text(xsink, cls, meth, "text read", enc, off);
+                return nullptr;
+            }
+        }
+        if (q_check_read_text(**str, mode, cls, meth, "text read", xsink)) {
+            return nullptr;
+        }
         return str.release();
     }
 
-    if (str->size() >= q_bom_check_size(enc)) {
-        q_remove_bom(*str, enc);
-    }
-
-    size_t last_char = 0;
-    size_t char_len = 0;
-    size_t max_chars = (size < 0) ? SIZE_MAX : (size_t)size;
-    const char* e = str->c_str() + str->size();
-    while (last_char < str->size() && char_len < max_chars) {
-        const char* p = str->c_str() + last_char;
-        int cc = enc->getCharLen(p, e - p);
-        if (!cc) {
-            xsink->raiseException("STREAM-ENCODING-ERROR", "invalid multi-byte character received in byte offset "
-                QLLD " according to the input encoding: '%s'", (int64)last_char, enc->getCode());
-            return nullptr;
+    if (last_char < str->size()) {
+        if (eof) {
+            // the bytes of a character cut off by the end of the data, which are read as one character
+            if (mode == qore_encoding_errors_t::RAISE) {
+                q_raise_invalid_read_text(xsink, cls, meth, "text read", enc, last_char);
+                return nullptr;
+            }
+            invalid = true;
+        } else {
+            // bytes read after the characters returned (the start of a character that turned out to be invalid):
+            // they are given back for the next read if possible, otherwise they stay with the text
+            give_back(**str, last_char);
         }
-        if (cc < 0) {
-            break;
-        }
-
-        ++char_len;
-        last_char += cc;
     }
 
-    if (!last_char) {
-        return nullptr;
+    if (invalid && mode == qore_encoding_errors_t::LATIN1) {
+        str->setEncoding(QCS_ISO_8859_1);
     }
-
-    if (last_char != str->size()) {
-        str->terminate(last_char);
-    }
-
     return str.release();
 }
 

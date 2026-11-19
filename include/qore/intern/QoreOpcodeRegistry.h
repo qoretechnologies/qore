@@ -207,7 +207,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::IteratorNext, "IteratorNext"                  , false, false, true ,  0, "IteratorNext", false, true , "ParseNode", true , false, false, false, false }, // 135
     { QoreIROpcode::OnBlockExit, "OnBlockExit"                   , false, false, false,  0, "OnBlockExit", false, true , "ParseNode", false, false, false, false, false }, // 136
     { QoreIROpcode::ScopeEnter, "ScopeEnter"                    , false, false, false,  0, "ScopeEnter", false, true , "ParseNode", false, false, false, false, false }, // 137
-    { QoreIROpcode::ScopeExit, "ScopeExit"                     , false, false, false,  0, "ScopeExit", false, true , "ParseNode", false, false, false, false, false }, // 138
+    { QoreIROpcode::ScopeExit, "ScopeExit"                     , false, false, false, OPCODE_MIN_OPERANDS(0), "ScopeExit", false, true , "ParseNode", true , true , false, false, false }, // 138
     { QoreIROpcode::ThreadExit, "ThreadExit"                    , false, false, true ,  0, "ThreadExit", false, true , "ParseNode", false, false, false, false, false }, // 139
     { QoreIROpcode::Context, "Context"                       , false, false, false,  0, "ContextInit: create Context frame from data+where+sort", true , true , "ParseNode", true , false, false, false, false }, // 140
     { QoreIROpcode::Summarize, "Summarize"                     , false, false, false,  0, "Summarize", false, true , "ParseNode", false, false, false, false, false, QORE_OPCODE_PROPERTY_NO_AOT_IR }, // 141
@@ -510,6 +510,9 @@ constexpr OpcodeInfo OPCODE_REGISTRY[QORE_IR_MAX_OPCODE + 1] = {
     { QoreIROpcode::HandlerReturn, "HandlerReturn"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "Hand the value of a return in a handler run out of line to its function", true , true , "ReturnStatement", false, false, false, false, false }, // 438
     { QoreIROpcode::SetCodeParseOptions, "SetCodeParseOptions"      , false, false, false,  4, "Set the parse options of the top-level code that follows", true , false, "AbstractStatement", false, false, false, false, false }, // 439
     { QoreIROpcode::PushTempMarkPair, "PushTempMarkPair"            , false, false, false,  0, "Push the sentinels of two nested statement-scoped cleanup regions", false, false, "ParseNode", false, false, false, false, false }, // 440
+    { QoreIROpcode::TakeHandedOverReturn, "TakeHandedOverReturn"     , true , false, false, OPCODE_MIN_OPERANDS(0), "Give a return the value that handlers run out of line past the inline cap handed over, if any", true , false, "ReturnStatement", true , false, false, false, false }, // 441
+    { QoreIROpcode::ReleaseHandedOverReturn, "ReleaseHandedOverReturn"  , false, false, false, OPCODE_MIN_OPERANDS(0), "Release the value that handlers run out of line past the inline cap handed over, if any", true , true , "ReturnStatement", false, false, false, false, false }, // 442
+    { QoreIROpcode::ReleasePlainLocalRead, "ReleasePlainLocalRead"  , false, false, false,  1, "Release an operator source read from a plain local", true , true , "ParseNode", false, false, false, false, false }, // 443
 };
 
 //! Returns true if row i of OPCODE_REGISTRY is the opcode with value i, for every row

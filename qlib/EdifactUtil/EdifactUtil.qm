@@ -348,6 +348,7 @@ while (iter.next()) {
 
     |!Option|!Type|!Description
     |\c encoding|string|Character encoding for the data (default: auto-detect)
+    |\c encoding_errors|string|What text read from a stream or a file that is not valid in its encoding gives, one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING, \c "latin1" reads the text as \c ISO-8859-1 with its bytes, \c "keep" keeps it in the encoding without a check; data in a single-byte encoding such as \c ISO-8859-1 (\c UNOC) has no invalid bytes; see @ref encoding_errors
     |\c skip_service_segments|bool|If True, skip UNA/UNB/UNZ/UNH/UNT in iteration (default: False)
     |\c extended_record|bool|If True, return extended format with \c type and \c record keys (default: False)
 

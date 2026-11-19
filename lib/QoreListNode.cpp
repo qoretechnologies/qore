@@ -482,6 +482,24 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
     return newComplexListFromValueImpl<true>(typeInfo, init, xsink, policy);
 }
 
+//! returns true if a list of type \a lti is kept with its type for the list type \a target: a list of typed callables
+//! for a list of code, whose values it accepts as they are (qore#6660)
+/** Before the signature of a typed callable was part of its type, list<code> and list<code<...>> were the same type,
+    and a list of closures kept the type of its closures when it was assigned or cast to list<code>
+*/
+static __attribute__((noinline)) bool qore_list_keeps_typed_callables(const QoreTypeInfo* target,
+        const QoreTypeInfo* lti) {
+    const QoreTypeInfo* tv = QoreTypeInfo::getReturnComplexListOrNothing(target);
+    if (tv != codeTypeInfo && tv != codeOrNothingTypeInfo) {
+        return false;
+    }
+    const QoreTypeInfo* sv = QoreTypeInfo::getReturnComplexListOrNothing(lti);
+    if (!sv || !sv->isComplexCode()) {
+        return false;
+    }
+    return tv == codeOrNothingTypeInfo || !static_cast<const QoreComplexCodeTypeInfo*>(sv)->isOrNothing();
+}
+
 template <bool Lexical>
 QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromValueImpl(const QoreTypeInfo* typeInfo, QoreValue init,
         ExceptionSink* xsink, LexicalSemanticPolicy policy, bool ctor_args) {
@@ -491,7 +509,7 @@ QORE_INTERN_ALWAYS_INLINE QoreListNode* qore_list_private::newComplexListFromVal
     if (init.getType() == NT_LIST) {
         l = init.get<QoreListNode>();
         const QoreTypeInfo* lti = qore_list_private::get(*l)->complexTypeInfo;
-        if (lti && QoreTypeInfo::equal(typeInfo, lti)) {
+        if (lti && (QoreTypeInfo::equal(typeInfo, lti) || qore_list_keeps_typed_callables(typeInfo, lti))) {
             return holder.release().get<QoreListNode>();
         }
         // try to fold the type

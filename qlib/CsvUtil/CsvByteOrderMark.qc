@@ -80,17 +80,21 @@ class CsvByteOrderMark {
         @param encoding the character encoding of the stream; if not given, the default character encoding is
         assumed
         @param eol the line separator; if not given, it is detected
+        @param encoding_errors what text read that is not valid in the encoding gives; see @ref encoding_errors
 
         @return a line iterator for the stream; when the stream is read as UTF-8, a UTF-8 byte order mark at its start
         is skipped; a UTF-16 byte order mark is removed by the line iterator itself, and in any other encoding the
         bytes of a UTF-8 byte order mark are characters of the content
+
+        @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
     */
-    static InputStreamLineIterator getLineIterator(InputStream input, *string encoding, *string eol) {
+    static InputStreamLineIterator getLineIterator(InputStream input, *string encoding, *string eol,
+            *string encoding_errors) {
         string enc = encoding ?? get_default_encoding();
         if (isUtf8(enc)) {
             input = new CsvUtf8BomSkippingInputStream(input);
         }
-        return new InputStreamLineIterator(input, enc, eol);
+        return new InputStreamLineIterator(input, enc, eol, encoding_errors: encoding_errors);
     }
 
     #! Returns a line iterator for the string that skips a byte order mark at its start

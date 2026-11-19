@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - iconv conversion of protobuf strings and keys to and from ISO-8859-1
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Protobuf strings are UTF-8: the strings that a message is decoded to are tagged UTF-8 and its string map keys are
+# converted to the default encoding, and the strings and string map keys that a message is encoded from are
+# converted to UTF-8 (issue #6615).  The test runs its cases in its own process and again in a child process whose
+# default encoding is ISO-8859-1; the strings are made from bytes, since a string literal has the default encoding.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+
+%requires QUnit
+%requires protobuf
+%requires ../../../examples/test/TestInterpreter.qm
+
+%exec-class ProtobufUtf8StringsTest
+
+class ProtobufUtf8StringsTest inherits QUnit::Test {
+    public {
+        const Proto = "syntax = \"proto3\";\n"
+            "package test;\n"
+            "message Inner {\n"
+            "  string text = 1;\n"
+            "}\n"
+            "message Text {\n"
+            "  string text = 1;\n"
+            "  repeated string items = 2;\n"
+            "  map<string, string> labels = 3;\n"
+            "  map<int32, string> numbered = 4;\n"
+            "  Inner sub = 5;\n"
+            "}\n";
+        const Proto2 = "syntax = \"proto2\";\n"
+            "package test2;\n"
+            "message Text {\n"
+            "  optional string text = 1;\n"
+            "}\n";
+
+        #! the environment variable that marks the child process
+        const ChildVar = "QORE_PROTOBUF_UTF8_TEST_CHILD";
+    }
+
+    private {
+        # "café" in UTF-8
+        string utf8 = binary_to_string(<636166c3a9>, "UTF-8");
+    }
+
+    constructor() : QUnit::Test("ProtobufUtf8StringsTest", "1.0", \ARGV) {
+        addTestCase("decoded strings are UTF-8", \testDecode());
+        addTestCase("encoded strings are converted to UTF-8", \testEncode());
+        addTestCase("proto2 strings", \testProto2());
+        if (!ENV{ChildVar}) {
+            addTestCase("a default encoding that is not UTF-8", \testChild());
+        }
+        set_return_value(main());
+    }
+
+    #! returns the string in the default encoding
+    private string inDefault(string str) {
+        return convert_encoding(str, get_default_encoding());
+    }
+
+    testDecode() {
+        ProtobufSchema schema(Proto);
+        binary data = schema.encode("test.Text", {
+            "text": utf8,
+            "items": (utf8, utf8),
+            "labels": {inDefault(utf8): utf8},
+            "numbered": {"1": utf8},
+            "sub": {"text": utf8},
+        });
+        hash<auto> h = schema.decode("test.Text", data);
+        foreach string str in ((h.text, h.items[0], h.items[1], h.labels.firstValue(), h.numbered."1",
+                h.sub.text)) {
+            assertEq("UTF-8", str.encoding());
+            assertEq(binary(utf8), binary(str));
+        }
+        # the map key is in the default encoding, as hash keys are
+        string key = h.labels.firstKey();
+        assertEq(get_default_encoding(), key.encoding());
+        assertEq(binary(inDefault(utf8)), binary(key));
+    }
+
+    testEncode() {
+        ProtobufSchema schema(Proto);
+        # the wire data of a message with UTF-8 strings
+        binary expected = schema.encode("test.Text", {
+            "text": utf8,
+            "items": (utf8,),
+            "labels": {inDefault(utf8): utf8},
+        });
+        # the same message with strings in ISO-8859-1
+        string latin1 = convert_encoding(utf8, "ISO-8859-1");
+        assertNeq(binary(utf8), binary(latin1));
+        binary data = schema.encode("test.Text", {
+            "text": latin1,
+            "items": (latin1,),
+            "labels": {inDefault(utf8): latin1},
+        });
+        assertEq(expected, data);
+        hash<auto> h = schema.decode("test.Text", data);
+        assertEq(binary(utf8), binary(h.text));
+        assertEq(binary(utf8), binary(h.items[0]));
+        assertEq(binary(utf8), binary(h.labels.firstValue()));
+    }
+
+    # proto2 strings are not checked by protobuf, so a string in another encoding would give the wire its bytes
+    testProto2() {
+        ProtobufSchema schema(Proto2);
+        string latin1 = convert_encoding(utf8, "ISO-8859-1");
+        binary data = schema.encode("test2.Text", {"text": latin1});
+        assertEq(schema.encode("test2.Text", {"text": utf8}), data);
+        hash<auto> h = schema.decode("test2.Text", data);
+        assertEq("UTF-8", h.text.encoding());
+        assertEq(binary(utf8), binary(h.text));
+    }
+
+    #! runs the test cases in a child process whose default encoding is ISO-8859-1
+    testChild() {
+        string qore = TestInterpreter::qore_interpreter();
+        list<string> opts = TestInterpreter::interpreter_options(get_script_path());
+        string cmd = sprintf("%s=1 %s %s --charset=ISO-8859-1 %s 2>&1", ChildVar, qore,
+            (map sprintf("'%s'", replace($1, "'", "'\\''")), opts).join(" "), get_script_path());
+        int rc;
+        string output = backquote(cmd, \rc);
+        assertEq(0, rc, output);
+    }
+}

@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires FixedLengthUtil
+
+%exec-class FixedLengthEncodingErrorsTest
+
+#! Tests the encoding_errors option of the fixed-length readers (issue #6604)
+public class FixedLengthEncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! UTF-8 data whose second line has the ISO-8859-1 byte of "é", which is not valid UTF-8
+        const Data = binary("abc\n") + <e9> + binary("xy\nghi\n");
+
+        #! The record specification: one record of a three-byte field
+        const Spec = {
+            "rec": {
+                "f": {"length": 3, "type": "string"},
+            },
+        };
+    }
+
+    constructor() : Test("FixedLengthEncodingErrorsTest", "1.0") {
+        addTestCase("file iterator", \fileIteratorTest());
+        addTestCase("stream iterator", \streamIteratorTest());
+        addTestCase("read data provider", \dataProviderTest());
+        addTestCase("option metadata", \metadataTest());
+        set_return_value(main());
+    }
+
+    #! Writes the test data to a file and returns its path
+    private static string writeData(TmpDir dir) {
+        string path = dir.path + DirSep + "data.txt";
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Data);
+        return path;
+    }
+
+    #! Returns the values of the field of all records of the iterator
+    private static list<string> readAll(AbstractIterator i) {
+        list<string> rv = ();
+        while (i.next()) {
+            push rv, i.getValue().record.f;
+        }
+        return rv;
+    }
+
+    #! Checks the records read with each option value
+    private checkRecords(code get_iterator) {
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \readAll(), get_iterator());
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", \readAll(), get_iterator({"encoding_errors": "raise"}));
+
+        list<string> l = readAll(get_iterator({"encoding_errors": "latin1"}));
+        assertEq(("abc", "éxy", "ghi"), l);
+        assertEq("ISO-8859-1", l[1].encoding());
+        assertEq(<e97879>, binary(l[1]));
+
+        # "keep" keeps the line without a check: the line is read, and its fields cannot be taken from text that is
+        # not valid
+        assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", \readAll(),
+            get_iterator({"encoding_errors": "keep"}));
+
+        assertThrows("ENCODING-ERRORS-ERROR", sub () { readAll(get_iterator({"encoding_errors": "ignore"})); });
+    }
+
+    private fileIteratorTest() {
+        TmpDir dir();
+        string path = writeData(dir);
+        checkRecords(AbstractIterator sub (*hash<auto> opts) {
+            return new FixedLengthFileIterator(path, Spec, {"encoding": "UTF-8"} + opts);
+        });
+    }
+
+    private streamIteratorTest() {
+        checkRecords(AbstractIterator sub (*hash<auto> opts) {
+            return new FixedLengthIterator(new BinaryInputStream(Data), "UTF-8", Spec, opts);
+        });
+    }
+
+    private dataProviderTest() {
+        TmpDir dir();
+        string path = writeData(dir);
+        foreach hash<auto> input in ({"path": path}, {"stream": new BinaryInputStream(Data)}) {
+            assertThrows("INVALID-ENCODING", sub () {
+                map $1, new FixedLengthReadDataProvider(input + {"spec": Spec}).searchRecords();
+            });
+        }
+        foreach hash<auto> input in ({"path": path}, {"stream": new BinaryInputStream(Data)}) {
+            list<hash<auto>> recs = map $1, new FixedLengthReadDataProvider(input + {"spec": Spec,
+                "encoding_errors": "latin1"}).searchRecords();
+            assertEq("éxy", recs[1].record.f, input.firstKey());
+        }
+        assertThrows("OPTION-VALUE-ERROR", "encoding_errors", sub () {
+            new FixedLengthReadDataProvider({"path": path, "spec": Spec, "encoding_errors": "ignore"});
+        });
+    }
+
+    private metadataTest() {
+        hash<DataProviderOptionInfo> info = FixedLengthReadDataProvider::ConstructorOptions.encoding_errors;
+        assertEq("raise", info.default_value);
+        assertEq(("raise", "latin1", "keep"), map $1.value, info.allowed_values);
+    }
+}

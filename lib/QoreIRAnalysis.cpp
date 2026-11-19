@@ -1290,6 +1290,8 @@ bool qore_ir_instruction_may_invalidate_caller_caches(
         case QoreIROpcode::InvokeSimError:
         case QoreIROpcode::OnBlockExit:
         case QoreIROpcode::ScopeExit:
+        // the release of a value that a handler handed over can run a destructor (#6137)
+        case QoreIROpcode::ReleaseHandedOverReturn:
         case QoreIROpcode::Backquote:
             return true;
 
@@ -5928,6 +5930,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 make_inst = std::move(make_hash);
             }
             make_inst->loc = materialization.consumer->loc;
+            make_inst->stmt_loc = materialization.consumer->stmt_loc;
             make_inst->cached_start_line =
                 materialization.consumer->cached_start_line;
             make_inst->temp_scope_id = materialization.consumer->temp_scope_id;
@@ -5956,6 +5959,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         materialization.runtime_check);
             }
             construct->loc = materialization.consumer->loc;
+            construct->stmt_loc = materialization.consumer->stmt_loc;
             construct->cached_start_line =
                 materialization.consumer->cached_start_line;
             construct->temp_scope_id = materialization.consumer->temp_scope_id;
@@ -6015,6 +6019,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         owned_read->second.local,
                         owned_read->second.auto_ref);
                     load->loc = old->loc;
+                    load->stmt_loc = old->stmt_loc;
                     load->cached_start_line = old->cached_start_line;
                     load->temp_scope_id = old->temp_scope_id;
                     load->is_closure = owned_read->second.is_closure;
@@ -6036,6 +6041,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                         std::make_unique<QoreIRConstInstruction>();
                     constant->opcode = QoreIROpcode::ConstInt;
                     constant->loc = old->loc;
+                    constant->stmt_loc = old->stmt_loc;
                     constant->cached_start_line = old->cached_start_line;
                     constant->temp_scope_id = old->temp_scope_id;
                     constant->result = old->result;
@@ -6062,6 +6068,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                             std::make_unique<QoreIRConstInstruction>();
                         constant->opcode = QoreIROpcode::ConstInt;
                         constant->loc = (*it)->loc;
+                        constant->stmt_loc = (*it)->stmt_loc;
                         constant->result = func.createValue();
                         func.max_value_id = std::max(func.max_value_id,
                             constant->result.id);
@@ -6077,6 +6084,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                     auto replacement_inst = std::make_unique<QoreIRInstruction>(
                         operation.opcode);
                     replacement_inst->loc = old->loc;
+                    replacement_inst->stmt_loc = old->stmt_loc;
                     replacement_inst->cached_start_line =
                         old->cached_start_line;
                     replacement_inst->result = operation.result;
@@ -6492,6 +6500,7 @@ static size_t qore_ir_fold_pure_builtin_calls_round(QoreIRFunction& func, size_t
             auto replacement = std::make_unique<QoreIRConstInstruction>();
             replacement->opcode = fold->second.opcode;
             replacement->loc = inst->loc;
+            replacement->stmt_loc = inst->stmt_loc;
             replacement->cached_start_line = inst->cached_start_line;
             replacement->result = inst->result;
             replacement->temp_scope_id = inst->temp_scope_id;
@@ -6662,6 +6671,7 @@ static size_t qore_ir_fold_scalar_list_queries(QoreIRFunction& func,
             }
             auto replacement = std::make_unique<QoreIRConstInstruction>();
             replacement->loc = (*it)->loc;
+            replacement->stmt_loc = (*it)->stmt_loc;
             replacement->result = (*it)->result;
             QoreIRValueFacts facts;
             facts.assigned_state = QoreIRAssignedState::Assigned;
@@ -7031,6 +7041,8 @@ static bool qore_ir_may_mutate_unknown_local(QoreIROpcode opcode) {
         case QoreIROpcode::InvokeSimError:
         case QoreIROpcode::OnBlockExit:
         case QoreIROpcode::ScopeExit:
+        // the release of a value that a handler handed over can run a destructor (#6137)
+        case QoreIROpcode::ReleaseHandedOverReturn:
         case QoreIROpcode::Backquote:
         case QoreIROpcode::StoreLValue:
         case QoreIROpcode::PreIncLValue:
@@ -7208,7 +7220,8 @@ static size_t qore_ir_eliminate_common_pure_calls(QoreIRFunction& func, size_t& 
                 }
             }
             if (inst->opcode == QoreIROpcode::DiscardTemps || inst->opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || inst->opcode == QoreIROpcode::UnwindTemps || inst->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || inst->opcode == QoreIROpcode::ReleasePlainLocalRead) {
                 // an owned call result is released here, so a call before this point must not be
                 // reused after it
                 available.clear();
@@ -7390,6 +7403,7 @@ static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
         branch->cached_start_line = original.cached_start_line;
         branch->intrinsic = original.intrinsic;
         branch->loc = original.loc;
+        branch->stmt_loc = original.stmt_loc;
         branch->exception_target = original.exception_target;
         branch->element_type = original.element_type;
         branch->temp_scope_id = original.temp_scope_id;
@@ -7571,7 +7585,8 @@ static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
             for (auto it = instructions.begin(); it != instructions.end();) {
                 (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
                 QoreIRInstruction& inst = **it;
-                if (inst.opcode == QoreIROpcode::ReleaseOwnedTemp && !inst.operands.empty()) {
+                if ((inst.opcode == QoreIROpcode::ReleaseOwnedTemp || inst.opcode == QoreIROpcode::ReleasePlainLocalRead)
+                        && !inst.operands.empty()) {
                     // the value that a ReleaseStageInput keeps (its second operand) is defined just before it, in the
                     // same block, so it cannot be removed while the release is kept; the instruction is not made a
                     // ReleaseOwnedTemp with one operand, whose exception that a destructor raises goes elsewhere
@@ -7931,7 +7946,8 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             }
 
             if (inst.opcode == QoreIROpcode::DiscardTemps || inst.opcode == QoreIROpcode::DiscardTempsKeep
-                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || inst.opcode == QoreIROpcode::UnwindTemps || inst.opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || inst.opcode == QoreIROpcode::ReleasePlainLocalRead) {
                 scoped_expressions.clear();
                 scoped_loads.clear();
             }
@@ -8130,6 +8146,9 @@ static bool qore_ir_is_borrowed_list_element_consumer(const QoreIRInstruction& i
         case QoreIROpcode::NeHard:
         case QoreIROpcode::ToBool:
             return true;
+        case QoreIROpcode::ReleaseOwnedTemp:
+            // A borrowed element has no cleanup reference to release.
+            return inst.operands.size() == 1 && inst.operands[0].id == value_id;
         case QoreIROpcode::ListAppend:
             return inst.operands.size() == 2 && inst.operands[1].id == value_id;
         case QoreIROpcode::ListSetValue:
@@ -12040,6 +12059,7 @@ static size_t qore_ir_load_read_only_constant_containers(QoreIRFunction& func, s
         });
         auto load = std::make_unique<QoreIRLoadConstantInstruction>(nullptr, qore_ir_get_rebuilt_constant(old)->get());
         load->loc = old.loc;
+        load->stmt_loc = old.stmt_loc;
         load->cached_start_line = old.cached_start_line;
         load->result = old.result;
         load->temp_scope_id = old.temp_scope_id;
@@ -12539,6 +12559,7 @@ private:
                 case QoreIROpcode::IteratorNext:
                 case QoreIROpcode::IteratorRelease:
                 case QoreIROpcode::ReleaseOwnedTemp:
+                case QoreIROpcode::ReleasePlainLocalRead:
                 case QoreIROpcode::CheckException:
                     rv = false;
                     break;
@@ -12578,6 +12599,7 @@ static bool qore_ir_release_check_transparent(const QoreIRInstruction* inst, con
         case QoreIROpcode::GtInt:
         case QoreIROpcode::GeInt:
         case QoreIROpcode::ListSize:
+        case QoreIROpcode::ReleasePlainLocalRead:
             return true;
         // the release of a fused pipeline's stage input (a second operand) checks the sink with its own handler
         case QoreIROpcode::ReleaseOwnedTemp:
@@ -13278,6 +13300,7 @@ size_t qore_ir_fold_fresh_list_size_calls(QoreIRFunction& func,
             auto constant = std::make_unique<QoreIRConstInstruction>();
             constant->opcode = QoreIROpcode::ConstInt;
             constant->loc = (*inst)->loc;
+            constant->stmt_loc = (*inst)->stmt_loc;
             constant->result = (*inst)->result;
             constant->constant.kind = QoreIRConstant::Kind::Int;
             constant->constant.int_value = replacement->second;
@@ -14468,7 +14491,8 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (instruction->opcode == QoreIROpcode::DiscardTemps
                     || instruction->opcode == QoreIROpcode::DiscardTempsKeep
                     || instruction->opcode == QoreIROpcode::UnwindTemps
-                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp) {
+                    || instruction->opcode == QoreIROpcode::ReleaseOwnedTemp
+                    || instruction->opcode == QoreIROpcode::ReleasePlainLocalRead) {
                 discarded = true;
             }
         }
@@ -15495,6 +15519,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             if (valid && have_phi_kind && final_consumer
                     && final_result.isValid()) {
                 scalar_phi->loc = final_consumer->loc;
+                scalar_phi->stmt_loc = final_consumer->stmt_loc;
                 scalar_phi->cached_start_line =
                     final_consumer->cached_start_line;
                 scalar_phi->result = final_result;
@@ -15691,6 +15716,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                         source_call->pgm, source_call->expr);
                 replacement->intrinsic = source_call->intrinsic;
                 replacement->loc = source_call->loc;
+                replacement->stmt_loc = source_call->stmt_loc;
                 replacement->cached_start_line =
                     source_call->cached_start_line;
                 replacement->temp_scope_id =
@@ -15726,6 +15752,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     std::make_unique<QoreIRConstInstruction>();
                 replacement->opcode = QoreIROpcode::ConstNothing;
                 replacement->loc = projection.consumer->loc;
+                replacement->stmt_loc = projection.consumer->stmt_loc;
                 replacement->cached_start_line =
                     projection.consumer->cached_start_line;
                 replacement->temp_scope_id =
@@ -15804,6 +15831,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 auto source_constant =
                     std::make_unique<QoreIRConstInstruction>();
                 source_constant->loc = projection.consumer->loc;
+                source_constant->stmt_loc = projection.consumer->stmt_loc;
                 source_constant->cached_start_line =
                     projection.consumer->cached_start_line;
                 source_constant->temp_scope_id =
@@ -15868,6 +15896,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                     std::make_unique<QoreIRInstruction>(
                         QoreIROpcode::RefSelf);
                 replacement->loc = projection.consumer->loc;
+                replacement->stmt_loc = projection.consumer->stmt_loc;
                 replacement->cached_start_line =
                     projection.consumer->cached_start_line;
                 replacement->temp_scope_id =
@@ -15969,6 +15998,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             QoreIROpcode::LoadLocal, request.source->local,
             request.source->auto_ref);
         clone->loc = request.source->loc;
+        clone->stmt_loc = request.source->stmt_loc;
         clone->cached_start_line = request.source->cached_start_line;
         clone->temp_scope_id = request.source->temp_scope_id;
         clone->is_closure = request.source->is_closure;
@@ -16708,6 +16738,7 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                         invoke->cached_start_line;
                     replacement->intrinsic = invoke->intrinsic;
                     replacement->loc = invoke->loc;
+                    replacement->stmt_loc = invoke->stmt_loc;
                     replacement->result = invoke->result;
                     replacement->operands = invoke->operands;
                     replacement->element_type =
@@ -18053,6 +18084,7 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                     auto release = std::make_unique<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
                     release->operands.push_back(arg);
                     release->loc = call->loc;
+                    release->stmt_loc = call->stmt_loc;
                     release->cached_start_line = call->cached_start_line;
                     release->temp_scope_id = call->temp_scope_id;
                     releases.push_back(std::move(release));
@@ -18071,6 +18103,7 @@ size_t qore_ir_fold_boxed_return_param_calls(QoreIRFunction& func,
                         std::make_unique<QoreIRBranchInstruction>();
                     branch->target = invoke->normal_target;
                     branch->loc = invoke->loc;
+                    branch->stmt_loc = invoke->stmt_loc;
                     branch->cached_start_line =
                         invoke->cached_start_line;
                     branch->intrinsic = invoke->intrinsic;
@@ -18841,6 +18874,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                 phi_uses->second.front().inst);
             auto replacement = std::make_unique<QoreIRPhiInstruction>();
             replacement->loc = candidate.consumer->loc;
+            replacement->stmt_loc = candidate.consumer->stmt_loc;
             replacement->cached_start_line =
                 candidate.consumer->cached_start_line;
             replacement->temp_scope_id = candidate.consumer->temp_scope_id;
@@ -19064,6 +19098,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
         }
         clone->intrinsic = source.intrinsic;
         clone->loc = source.loc;
+        clone->stmt_loc = source.stmt_loc;
         clone->cached_start_line = source.cached_start_line;
         clone->temp_scope_id = source.temp_scope_id;
         clone->element_type = source.element_type;
@@ -19140,6 +19175,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
                         QoreIROpcode::LoadLocal, request.source->local,
                         request.source->auto_ref);
                     clone->loc = request.source->loc;
+                    clone->stmt_loc = request.source->stmt_loc;
                     clone->cached_start_line =
                         request.source->cached_start_line;
                     clone->temp_scope_id = request.source->temp_scope_id;
@@ -20101,6 +20137,7 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
     }
     auto takes_value = [](const QoreIRInstruction* use) -> bool {
         switch (use->opcode) {
+            case QoreIROpcode::ToBool:
             case QoreIROpcode::MakeList:
             case QoreIROpcode::MakeHash:
             case QoreIROpcode::MakeHashConstKeys:
@@ -20178,6 +20215,7 @@ void QoreIRFunction::releasePlainLocalReadsBeforeWrites() {
             auto release = std::make_unique<QoreIRInstruction>(QoreIROpcode::ReleaseOwnedTemp);
             release->operands.push_back(load->result);
             release->loc = insts[last_use]->loc;
+            release->stmt_loc = insts[last_use]->stmt_loc;
             release->temp_scope_id = insts[last_use]->temp_scope_id;
             insts.insert(insts.begin() + last_use + 1, std::move(release));
         }

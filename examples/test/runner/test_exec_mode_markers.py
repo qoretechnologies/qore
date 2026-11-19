@@ -311,6 +311,8 @@ class ExecModeMarkerTest(unittest.TestCase):
         #   execution mode
         # - aot-dependency-domains (#6351): its checks load modules from source and compiled with qcc in child
         #   processes, as a module is loaded once in a process
+        # - AOTDebugCatchTables (#6733): the program runs in child processes started without an execution mode, from
+        #   source and as a qcc executable
         # - WebSocketAsyncTextEncoding (#6619): each case runs in a child process with a default encoding of its own
         # - globalsetup-stop (#6659): the tests whose global setup stops run in child processes of its own binary
         # - TabularProfilerEncoding (#6663): each case runs in a child process with a default encoding of its own
@@ -326,6 +328,7 @@ class ExecModeMarkerTest(unittest.TestCase):
                                  "examples/test/ir/AOTInitParseOptions.qtest",
                                  "examples/test/ir/AOTInstanceOfTypePath.qtest",
                                  "examples/test/ir/AOTDumpInfoPendingConstants.qtest",
+                                 "examples/test/ir/AOTDebugCatchTables.qtest",
                                  "examples/test/ir/AOTDumpInfoFindCallRef.qtest",
                                  "examples/test/ir/AOTModuleInitException.qtest",
                                  "examples/test/ir/AOTMemberInitNegativeOffsets.qtest",

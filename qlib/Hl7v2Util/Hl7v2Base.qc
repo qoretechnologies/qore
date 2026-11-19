@@ -96,7 +96,7 @@ public namespace Hl7v2Util {
 
         #! Parses a single HL7 v2 segment
         hash<Hl7v2Segment> parseSegment(string segment, int index = 1) {
-            if (segment.size() < 3) {
+            if (segment.length() < 3) {
                 throw "HL7V2-PARSE-ERROR", sprintf("segment %d is too short", index);
             }
 
@@ -105,7 +105,7 @@ public namespace Hl7v2Util {
 
             list<hash<Hl7v2Field>> fields = ();
             if (tag == "MSH") {
-                if (segment.size() < 8) {
+                if (segment.length() < 8) {
                     throw "HL7V2-PARSE-ERROR", sprintf("MSH segment %d is missing MSH-1/MSH-2 delimiters",
                         index);
                 }
@@ -113,7 +113,7 @@ public namespace Hl7v2Util {
                 delimiters = msh_delimiters;
                 push fields, makeLiteralField(delimiters.getFieldSeparator());
                 push fields, makeLiteralField(delimiters.getEncodingCharacters());
-                if (segment.size() > 8) {
+                if (segment.length() > 8) {
                     string rest = segment.substr(8);
                     if (rest[0] == delimiters.getFieldSeparator()) {
                         rest = rest.substr(1);
@@ -124,7 +124,7 @@ public namespace Hl7v2Util {
                         }
                     }
                 }
-            } else if (segment.size() > 3) {
+            } else if (segment.length() > 3) {
                 if (segment[3] != delimiters.getFieldSeparator()) {
                     throw "HL7V2-PARSE-ERROR", sprintf("segment %d (%s) does not use the active field "
                         "separator", index, tag);
@@ -247,8 +247,7 @@ public namespace Hl7v2Util {
         list<string> splitMessageSegments(string data) {
             list<string> segments = ();
             string current = "";
-            for (int i = 0; i < data.size(); i++) {
-                string ch = data[i];
+            foreach string ch in (data.splitChars()) {
                 if (ch == "\r" || ch == "\n") {
                     if (current.size()) {
                         push segments, current;
@@ -270,8 +269,7 @@ public namespace Hl7v2Util {
             string current = "";
             bool in_escape = False;
 
-            for (int i = 0; i < str.size(); i++) {
-                string ch = str[i];
+            foreach string ch in (str.splitChars()) {
                 if (ch == delimiters.getEscapeCharacter()) {
                     in_escape = !in_escape;
                     current += ch;
@@ -287,7 +285,7 @@ public namespace Hl7v2Util {
 
             if (in_escape) {
                 throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in value of length %d",
-                    str.size());
+                    str.length());
             }
             push rv, current;
             return rv;
@@ -296,8 +294,7 @@ public namespace Hl7v2Util {
         #! Returns True if a string contains the given unescaped separator
         bool containsUnescaped(string str, string separator) {
             bool in_escape = False;
-            for (int i = 0; i < str.size(); i++) {
-                string ch = str[i];
+            foreach string ch in (str.splitChars()) {
                 if (ch == delimiters.getEscapeCharacter()) {
                     in_escape = !in_escape;
                     continue;
@@ -308,7 +305,7 @@ public namespace Hl7v2Util {
             }
             if (in_escape) {
                 throw "HL7V2-ESCAPE-ERROR", sprintf("unterminated HL7 escape sequence in value of length %d",
-                    str.size());
+                    str.length());
             }
             return False;
         }
@@ -368,7 +365,7 @@ public namespace Hl7v2Util {
                     throw "HL7V2-WRITE-ERROR", "MSH segments require MSH-2 encoding characters";
                 }
                 string encoding_characters = string(fields[0]);
-                if (encoding_characters.size() < 4) {
+                if (encoding_characters.length() < 4) {
                     throw "HL7V2-WRITE-ERROR", sprintf("MSH-2 encoding characters must have at least four "
                         "characters: %y", encoding_characters);
                 }

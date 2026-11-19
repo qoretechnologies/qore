@@ -1255,6 +1255,14 @@ sub foo(code c) {
     - <b>Return types</b> are covariant: the assigned closure can return a more specific type than declared
     - <b>Parameter types</b> are contravariant: the assigned closure can accept more general types than declared
 
+    The signature is checked wherever a value is stored or passed: in variables, parameters, return values, members
+    and the elements of typed lists and hashes.  A mismatch that is known at parse time is a parse error; otherwise
+    the closure or call reference is checked at run time, and one with an incompatible signature raises a
+    \c RUNTIME-TYPE-ERROR exception.  A call reference to a function or method with several variants is accepted if
+    one of its variants is compatible.  The plain \c code type accepts every closure and call reference.  Two
+    typed callable types are the same type only if their signatures are the same, so variants of a function or
+    method may differ in the signature of a typed callable parameter alone.
+
     @par Examples
     @code{.py}
 # Basic typed callable with return and parameter types
@@ -1305,7 +1313,9 @@ code<int(int)> tripler = getMultiplier(3);
 int result = tripler(5);  # returns 15
     @endcode
 
-    @note Closures with default parameters can be assigned to typed callables expecting fewer parameters, as long as the required parameters match.
+    @note Closures with default parameters, or with parameters that accept \c NOTHING, can be assigned to typed
+    callables expecting fewer parameters, as long as the required parameters match; a typed callable with the return
+    type \c nothing accepts a callable with any return type.
 
     @note A typed callable signature declares parameter <i>types</i> only; parameter names are not part of the type and may not be given in the signature.
 
