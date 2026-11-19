@@ -1831,9 +1831,10 @@ private:
         const QoreClass* qc = nullptr, const QoreClass* method_qc = nullptr);
 
     //! Emits the inline test of the check of a call's target after its arguments (check_after_args) when the test
-    //! @a tested of the check before them dominates it: an object that passed that test, whose type, private data and
-    //! class do not change, is tested only for its deleted status; otherwise the full test (emitValidObjectTest()) is
-    //! made (JIT only, issue #6646)
+    //! @a tested of the check before them, made on the same value @a qv, dominates it: an object that passed that test,
+    //! whose type, private data and class do not change, is tested only for its deleted status; otherwise the full
+    //! test (emitValidObjectTest()) is made for an object of any class, as the check after the arguments tests only
+    //! that the object has not been deleted (JIT only, issue #6646)
     llvm::Value* emitValidObjectRetest(llvm::Value* qv, llvm::Value* tested, const QoreJITObjectLayout& layout,
         llvm::Function* llvm_func);
 

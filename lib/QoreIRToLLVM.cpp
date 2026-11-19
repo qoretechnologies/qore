@@ -2387,6 +2387,9 @@ llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* c
     const QoreClass* method_qc = check->check_any_class ? nullptr : check->check_method_class;
     if (const QoreJITObjectLayout* layout = qore_jit_object_layout()) {
         if (check->check_after_args) {
+            // the check after the arguments tests only that the object has not been deleted: it is made for an
+            // object of any class (QoreIRLowering::emitCallTargetCheckAfterArgs()), so neither test takes the classes
+            assert(!qc && !method_qc);
             // the test of the check before the arguments, if it dominates this one (issue #6646)
             auto i = valid_object_tests.find(target);
             if (i != valid_object_tests.end()) {
@@ -2395,7 +2398,7 @@ llvm::Value* QoreIRToLLVM::emitCallTargetFastTest(const QoreIRExprInstruction* c
                     return emitValidObjectRetest(target, tested, *layout, llvm_func);
                 }
             }
-            return emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
+            return emitValidObjectTest(target, *layout, llvm_func);
         }
         llvm::Value* valid = emitValidObjectTest(target, *layout, llvm_func, qc, method_qc);
         valid_object_tests[target] = valid;
@@ -2583,7 +2586,9 @@ llvm::Value* QoreIRToLLVM::emitValidObjectRetest(llvm::Value* qv, llvm::Value* t
     llvm::BasicBlock* done_block = llvm::BasicBlock::Create(ctx, "obj.retest.done", llvm_func);
     builder->CreateCondBr(tested, status_block, full_block);
     // an object that passed the test before the arguments: only its deleted status can have changed
-    // (qore_object_private::isValidInline()); the value is held, so the object is not freed
+    // (qore_object_private::isValidInline()); its type, private data and class are read from the same value as in the
+    // full test, which also reads the object's node after the arguments: both rely on the value of the call's target
+    // keeping the object's memory valid until the call
     builder->SetInsertPoint(status_block);
     llvm::Value* obj_ptr = builder->CreateIntToPtr(
         builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, PAYLOAD_MASK)), ptr_type);
@@ -2596,7 +2601,7 @@ llvm::Value* QoreIRToLLVM::emitValidObjectRetest(llvm::Value* qv, llvm::Value* t
     llvm::Value* valid = builder->CreateICmpNE(status,
         llvm::ConstantInt::get(i32_type, static_cast<uint32_t>(layout.deleted_status)), "obj.retest.valid");
     builder->CreateBr(done_block);
-    // otherwise (the check before the arguments called its helper): the full test
+    // otherwise (the check before the arguments called its helper): the full test, for an object of any class
     builder->SetInsertPoint(full_block);
     llvm::Value* full = emitValidObjectTest(qv, layout, llvm_func);
     llvm::BasicBlock* full_end = builder->GetInsertBlock();

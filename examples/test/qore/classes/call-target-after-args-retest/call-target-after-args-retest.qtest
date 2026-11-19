@@ -21,10 +21,13 @@
     otherwise.
 
     CallTargetAfterArgsRetest.q makes such calls on objects of the method's class (which pass the check before the
-    arguments) and of a subclass (which do not, and are checked by the helper), with arguments that delete the object
-    directly, through another variable, in an iteration of a loop and in an element of a map, and that do not delete
-    it; its output must be the one in CallTargetAfterArgsRetest.expected, which the AST interpreter prints, in every
-    execution mode and on the IR tier.
+    arguments), of a subclass (which do not, and are checked by the helper) and through weak references, with
+    arguments that delete the object directly, through another variable, in an iteration of a loop and in an element of
+    a map, that reassign or remove the target variable (the check stays on the original object), and that do not
+    delete it; its output must be the one in CallTargetAfterArgsRetest.expected, which the AST interpreter prints, in
+    every execution mode and on the IR tier.  The calls are made directly in the top-level code: a call on a deleted
+    object that the check after the arguments did not catch raises the error of the call, which names the method's
+    signature (a check whose status test always passed fails the jit and tiered cases).
 */
 class CallTargetAfterArgsRetestTest inherits QUnit::Test {
     private {
