@@ -2748,6 +2748,11 @@ public:
     DLLLOCAL const QoreMethod* runtimeFindCommittedStaticMethod(const char* name, ClassAccess& access,
             const qore_class_private* class_ctx, bool allow_internal) const;
 
+    //! finds the first committed public method of the name (normal or static as \a is_static) in the parent classes
+    //! reached through public inheritance only and not overridden by a private method: the method that a caller
+    //! outside the class hierarchy can call (see qore_class_private::runtimeFindPublicCommittedMethod())
+    DLLLOCAL const QoreMethod* runtimeFindPublicCommittedMethod(const char* name, bool is_static) const;
+
     DLLLOCAL bool match(const QoreClass* cls);
     DLLLOCAL void execConstructors(QoreObject* o, BCEAList* bceal, RuntimeConfig& rc, ExceptionSink* xsink) const;
 
@@ -5249,6 +5254,20 @@ public:
 
     DLLLOCAL const QoreMethod* runtimeFindCommittedMethodForEval(const char* nme, ClassAccess& access,
         const qore_class_private* class_ctx) const;
+
+    //! returns the method of the name that a caller outside the class hierarchy calls, or nullptr if there is none
+    /** The first public normal method, otherwise the first public static method, of the class or of a parent class
+        reached through public inheritance only, as the parse-time lookups without a class context find it: a
+        private method, and the methods of a privately inherited class, are skipped (qore#6704).  A private method
+        overrides the methods of the name of the parent classes of its class, which are not returned in its place
+        (qore#6062).  Called by the run-time lookups when the method that they found first cannot be called by such
+        a caller
+
+        @param nme the name of the method
+        @param mask the kinds of methods searched: QCCM_NORMAL and / or QCCM_STATIC
+    */
+    DLLLOCAL const QoreMethod* runtimeFindPublicCommittedMethod(const char* nme,
+            int mask = QCCM_NORMAL | QCCM_STATIC) const;
 
     DLLLOCAL const QoreMethod* runtimeFindAnyCommittedMethod(const char* nme) const {
         ClassAccess access = Public;

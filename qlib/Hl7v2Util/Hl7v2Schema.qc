@@ -381,10 +381,10 @@ public namespace Hl7v2Util {
                 hash<Hl7v2Field> field, hash<Hl7v2FieldDef> field_def) {
             foreach auto repetition in (field.repetitions) {
                 string value = flattenFieldValue(repetition);
-                if (value.size() > field_def.max_length) {
+                if (value.length() > field_def.max_length) {
                     return makeIssue(Hl7v2ValidationSeverity::Error, "field-too-long",
                         sprintf("%s-%d (%s) length %d exceeds schema maximum %d", segment.tag,
-                            field_def.position, field_def.name, value.size(), field_def.max_length),
+                            field_def.position, field_def.name, value.length(), field_def.max_length),
                         segment, field_def.position);
                 }
             }
@@ -469,7 +469,7 @@ public namespace Hl7v2Util {
             if (!base) {
                 return leaf;
             }
-            return base[base.size() - 1] == DirSep ? base + leaf : base + DirSep + leaf;
+            return base.substr(-1) == DirSep ? base + leaf : base + DirSep + leaf;
         }
     }
 
@@ -585,10 +585,10 @@ public namespace Hl7v2Util {
         private bool isFieldElement(string tag, hash<auto> element) {
             string path = element.path ?? "";
             string prefix = tag + ".";
-            if (path.substr(0, prefix.size()) != prefix) {
+            if (path.substr(0, prefix.length()) != prefix) {
                 return False;
             }
-            string name = path.substr(prefix.size());
+            string name = path.substr(prefix.length());
             return !IgnoredElementNames{name};
         }
 
@@ -1047,9 +1047,7 @@ public namespace Hl7v2Util {
 
         private static string serializeString(string val) {
             string out;
-            int len = val.size();
-            for (int i = 0; i < len; ++i) {
-                string ch = val[i];
+            foreach string ch in (val.splitChars()) {
                 int code = ord(ch);
                 if (ch == "\\") {
                     out += "\\\\";

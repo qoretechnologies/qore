@@ -1203,7 +1203,7 @@ public class DropboxDataProviderTest inherits QUnit::Test {
 
         # the option set is the handler's own, not the conn:// handler's; an option that does not apply must be
         # rejected rather than silently ignored
-        assertEq(("autorename", "encoding", "mode", "mute"), sort(keys handler.getReadOptions()));
+        assertEq(("autorename", "encoding", "encoding_errors", "mode", "mute"), sort(keys handler.getReadOptions()));
         assertEq(("autorename", "encoding", "mode", "mute"), sort(keys handler.getWriteOptions()));
 
         binary content = binary("native content");
@@ -1215,6 +1215,18 @@ public class DropboxDataProviderTest inherits QUnit::Test {
         assertEq("{\"path\":\"/d/n.txt\"}", req.hdr{DropboxRestClientBase::ApiArgHeader});
         # the bytes arrive as the response body, not base64-encoded into a JSON field as the action returns them
         assertEq("native content", handler.getTextFile("conn", "d/n.txt", {}));
+
+        # text that is not valid in its encoding raises INVALID-ENCODING unless encoding_errors is "latin1" or "keep"
+        # (issue #6604)
+        binary invalid = binary("caf") + <e9>;
+        rest.setResponse(invalid, {"dropbox-api-result": make_json({"name": "n.txt"})});
+        # the message names the location in the connection, as the handler does not know the connection's name
+        assertThrows("INVALID-ENCODING", "^Dropbox file location \"d/n.txt\": the text read is not valid UTF-8",
+            \handler.getTextFile(), ("conn", "d/n.txt", {}));
+        rest.setResponse(invalid, {"dropbox-api-result": make_json({"name": "n.txt"})});
+        string text = handler.getTextFile("conn", "d/n.txt", {"encoding_errors": "latin1"});
+        assertEq("ISO-8859-1", text.encoding());
+        assertEq("café", text);
 
         # writes default to replacing an existing file, as they do for every other file location scheme
         rest.setResponse({".tag": "file", "id": "id:1"});

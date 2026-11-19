@@ -792,13 +792,33 @@ public class GoogleDriveDataProviderTest inherits QUnit::Test {
         FakeGoogleRestClientIo rest();
         GoogleDriveFileLocationHandler handler(rest);
 
-        assertEq(("container", "content_type", "encoding", "export_mime_type"),
+        assertEq(("container", "content_type", "encoding", "encoding_errors", "export_mime_type"),
             sort(keys handler.getReadOptions()));
 
         # Drive addresses a file by an immutable ID, so a read location is an ID
         rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, binary("native content"));
         assertEq(binary("native content"), handler.getBinaryFile("conn", "f1", {}));
         assertRegex("alt=media", rest.last().path, "the content is read directly rather than as metadata");
+
+        # text that is not valid in its encoding raises INVALID-ENCODING unless encoding_errors is "latin1" or "keep"
+        # (issue #6604); the message names the location in the connection, as the handler does not know the
+        # connection's name
+        binary invalid = binary("caf") + <e9>;
+        rest.bodies = ({"id": "f1", "name": "n.txt", "mimeType": "text/plain"}, invalid);
+        rest.served = 0;
+        assertThrows("INVALID-ENCODING", "^Google Drive file location \"f1\": the text read is not valid UTF-8",
+            \handler.getTextFile(), ("conn", "f1", {}));
+        rest.served = 0;
+        string text = handler.getTextFile("conn", "f1", {"encoding_errors": "latin1"});
+        assertEq("ISO-8859-1", text.encoding());
+        assertEq("café", text);
+        rest.served = 0;
+        text = handler.getTextFile("conn", "f1", {"encoding_errors": "keep"});
+        assertEq("UTF-8", text.encoding());
+        assertEq(invalid, binary(text));
+        rest.served = 0;
+        assertThrows("ENCODING-ERRORS-ERROR", "^unknown encoding_errors value 'ignore'; expecting one of: "
+            "'raise', 'latin1', 'keep'$", \handler.getTextFile(), ("conn", "f1", {"encoding_errors": "ignore"}));
 
         # a Google-native document has no byte content, and says so rather than failing obscurely
         FakeGoogleRestClientIo rest2();

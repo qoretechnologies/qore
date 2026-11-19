@@ -84,6 +84,7 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
                 "desc": "Character encoding for the input file (and output data)",
                 "default_value": "UTF-8",
             },
+            "encoding_errors": EncodingErrorsOptionInfo,
             "eol": <DataProviderOptionInfo>{
                 "display_name": "End Of Line Chars",
                 "short_desc": "The end of line / record character(s)",

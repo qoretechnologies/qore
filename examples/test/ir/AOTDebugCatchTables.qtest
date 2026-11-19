@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.  SPDX-License-Identifier: MIT
+# test-exec-mode: children - its checks run in child processes started without an execution mode and in qcc executables
+# test-platform: macos - AOT code generation and linking of the debug IR of a program that a debugger runs
+# An AOT function that a debugger runs closes its catch blocks as it does without one (qore#6733).
+#
+# Once a debugger is attached, an AOT function runs its serialized debug IR in the IR interpreter
+# (UserVariantBase::materializeAOTDebugIR()).  The exits of catch blocks close the catch blocks opened since their try
+# statement began, and release the exception information that their CatchException made, as recorded in the
+# catch-exit depths and catch-cleanup results of the function (QoreIRFunction::catch_exit_depths,
+# catch_cleanup_results; #5968, #6079); a module that did not have them closed one catch block at each exit, and a
+# function with nested catch blocks then raised an assertion of the thread's catch state, or left a catch block open.
+# The functions of qore/statements/catch-scope-handlers run in a thread with a debugger attached, in a qcc executable
+# and from source, and log as without the debugger.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires ../TestInterpreter.qm
+%exec-class AOTDebugCatchTablesTest
+
+class AOTDebugCatchTablesTest inherits QUnit::Test {
+    private {
+        string qore_bin = TestInterpreter::qore_interpreter();
+        string libqore_dir;
+        string qcc_bin;
+        FsUtil::TmpDir tmp("aot-debug-catch-tables-");
+        string script;
+
+        #! the debugger and the thread that runs the functions of the program with it
+        const Debugger = "
+class StepDebugger inherits DebugProgram {
+    public { int steps = 0; }
+    onAttach(ProgramControl pgm, reference rs, reference rts) { rs = DebugStep; }
+    onDetach(ProgramControl pgm, reference rs, reference rts) { rs = DebugDetach; }
+    onStep(ProgramControl pgm, int blk, *int sid, *int bid, reference flow, reference rs, reference rts) {
+        rs = DebugStep;
+        if (sid) {
+            ++steps;
+        }
+    }
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rts) { rs = DebugStep; }
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+    onException(ProgramControl pgm, int sid, hash<auto> ex, reference dismiss, reference rs, reference rts) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rts) {}
+}
+StepDebugger dbg();
+ProgramControl pc = ProgramControl::getProgram();
+Counter done(1);
+background sub () {
+    on_exit done.dec();
+    if (ARGV[0] == \"debug\") {
+        dbg.addProgram(pc);
+    }
+    on_exit if (ARGV[0] == \"debug\") {
+        dbg.removeProgram(pc);
+    }
+";
+    }
+
+    constructor() : Test("AOT debug IR catch tables", "1.0", \ARGV) {
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        addTestCase("the source with a debugger", \sourceDebug());
+        addTestCase("a qcc executable with a debugger", \aotDebug());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the program of catch-scope-handlers, whose functions run in a thread with the debugger attached
+        string src = ReadOnlyFile::readTextFile(get_script_dir()
+            + "/../qore/statements/catch-scope-handlers/CatchScopeHandlers.q");
+        int i = src.find("foreach string fn in ((\"h1\"");
+        if (i < 0) {
+            throw "SETUP-ERROR", "the main loop of CatchScopeHandlers.q is not found";
+        }
+        string code = replace(src.substr(0, i), "%modern", "%modern\n%allow-debugger") + Debugger;
+        foreach string line in (src.substr(i).split("\n")) {
+            code += "    " + line + "\n";
+        }
+        code += "}();\ndone.waitForZero();\nprintf(\"STEPS:%s\\n\", dbg.steps > 0 ? \"yes\" : \"no\");\n";
+        script = tmp.path + "/catch-scope-handlers-debug.q";
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(code);
+        f.close();
+    }
+
+    sourceDebug() {
+        string expected = run(sprintf("%s --exec-mode=ast %s plain", qore_bin, script));
+        assertEq(expected, run(sprintf("%s %s debug", qore_bin, script)), "from source");
+    }
+
+    aotDebug() {
+        if (!is_file(qcc_bin) && qcc_bin != "qcc") {
+            testSkip("qcc is not available");
+        }
+        string exe = tmp.path + "/catch-scope-handlers-debug";
+        string out = run(sprintf("%s -O0 -o %s %s", qcc_bin, exe, script), True);
+        assertTrue(is_file(exe), "qcc compiles the program: " + out);
+        string expected = run(sprintf("%s --exec-mode=ast %s plain", qore_bin, script));
+        assertEq(expected, run(exe + " debug"), "the debug IR of the executable");
+    }
+
+    #! runs the command with the library of the build; returns its output, without the line of the step events
+    private string run(string cmd, bool any_rc = False) {
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", libqore_dir,
+            libqore_dir, libqore_dir, cmd), \rc);
+        if (!any_rc) {
+            assertEq(0, rc, cmd + ": " + out);
+        }
+        # the step events are made only with the debugger: they are counted, not compared
+        return (select out.split("\n"), $1 !~ /^STEPS:/).join("\n");
+    }
+}

@@ -1159,8 +1159,10 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
 
         # the option set is the handler's own; an option that does not apply must be rejected rather than
         # silently ignored
-        assertEq(("container", "content_type", "encoding", "storage_class", "version_id"),
+        assertEq(("container", "content_type", "encoding", "encoding_errors", "storage_class", "version_id"),
             sort(keys handler.getReadOptions()));
+        assertEq(("container", "content_type", "encoding", "storage_class", "version_id"),
+            sort(keys handler.getWriteOptions()));
 
         # S3 has no path: the bucket cannot be derived from the key, so it comes from the location or the
         # container option
@@ -1180,6 +1182,22 @@ public class AwsS3DataProviderTest inherits QUnit::Test {
         assertEq(binary("native content"), handler.getBinaryFile("conn", "b/n.txt", {}));
         assertEq("/b/n.txt", rest.paths[0]);
         assertEq("native content", handler.getTextFile("conn", "b/n.txt", {}));
+
+        # text that is not valid in its encoding raises INVALID-ENCODING unless encoding_errors is "latin1" or "keep"
+        # (issue #6604)
+        binary invalid = binary("caf") + <e9>;
+        rest.bodies = (binary_to_string(invalid, "UTF-8"),);
+        # the message names the location in the connection, as the handler does not know the connection's name
+        assertThrows("INVALID-ENCODING", "^Amazon S3 file location \"b/n.txt\": the text read is not valid UTF-8",
+            \handler.getTextFile(), ("conn", "b/n.txt", {}));
+        rest.bodies = (binary_to_string(invalid, "UTF-8"),);
+        string text = handler.getTextFile("conn", "b/n.txt", {"encoding_errors": "latin1"});
+        assertEq("ISO-8859-1", text.encoding());
+        assertEq("café", text);
+        rest.bodies = (binary_to_string(invalid, "UTF-8"),);
+        text = handler.getTextFile("conn", "b/n.txt", {"encoding_errors": "keep"});
+        assertEq(invalid, binary(text));
+        assertEq("UTF-8", text.encoding());
 
         # a version can be addressed on a version-enabled bucket
         rest.paths = ();
