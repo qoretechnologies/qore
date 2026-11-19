@@ -3452,7 +3452,8 @@ bool qore_assign_through_element_reference(const QoreValue& cur, const QoreValue
     }
     // the reference is held for the assignment, which can replace the container that holds it
     ValueHolder ref(cur.refSelf(), xsink);
-    LValueHelper lvh(*ref->get<const ReferenceNode>(), xsink);
+    // an assignment: a member behind a write gate is not read first, as the AST interpreter assigns it
+    LValueHelper lvh(*ref->get<const ReferenceNode>(), xsink, false, true);
     if (lvh) {
         lvh.assign(val.refSelf(), "<lvalue>");
     }

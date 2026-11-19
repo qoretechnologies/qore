@@ -28,6 +28,10 @@ class C {
     }
 }
 
+hashdecl HD {
+    auto a;
+}
+
 our *T g_p;
 our int g = 1;
 
@@ -60,6 +64,20 @@ sub write_object(object o, int v) {
 }
 sub write_type_error(hash<string, reference<int>> h, auto v) {
     h.a = v;
+}
+sub write_hashdecl(hash<HD> h, int v) {
+    h.a = v;
+}
+sub write_loop_local() {
+    int x = 0;
+    hash<string, reference<int>> h = {"a": \x};
+    list<int> seen = ();
+    for (int i = 1; i <= 3; ++i) {
+        h.a = x + i;
+        # the local is read again after the store through the element
+        seen += x;
+    }
+    printf("a local read again in a loop: %y\n", seen);
 }
 sub write_local_target() {
     int x = 1;
@@ -110,3 +128,12 @@ try {
     printf("type error: %s: %s\n", ex.err, ex.desc);
 }
 write_local_target();
+write_hashdecl(<HD>{"a": \g}, 41);
+printf("hash<HD>: %d\n", g);
+{
+    C c2();
+    c2.m = 1;
+    write_auto_hash({"a": \c2.m}, 42);
+    printf("an object member as the target: %d\n", c2.m);
+}
+write_loop_local();
