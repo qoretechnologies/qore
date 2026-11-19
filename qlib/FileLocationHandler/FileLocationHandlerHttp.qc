@@ -232,9 +232,17 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         # the text is decoded without a check, which the encoding_errors option makes below; the rule of the HTTP
         # clients for a response body would give text that is not valid in its encoding in ISO-8859-1 (qore#6604)
         hash<auto> resp = request(scheme, location, opts, "GET", NOTHING, False);
-        string assumed = opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding;
-        # the HttpClientIo module is loaded when the request is made
-        resp = call_static_method("HttpClientIo::HttpClientStreamHandle", "decodeResponseText", resp, assumed, "keep");
+        # the request's assumed encoding: the encoding option, or the one of a bound client
+        hash<HttpIoRequestInfo> info = getRequestInfo(scheme, location, opts, "GET", NOTHING);
+        string assumed = info.assume_encoding;
+        # a body with a content coding that was not decoded (the encoding_passthru option) is not text
+        bool content_encoded = info.encoding_passthru && resp.body.typeCode() == NT_BINARY
+            && resp.headers."content-encoding" && resp.headers."content-encoding" != "identity";
+        if (!content_encoded) {
+            # the HttpClientIo module is loaded when the request is made
+            resp = call_static_method("HttpClientIo::HttpClientStreamHandle", "decodeResponseText", resp, assumed,
+                "keep");
+        }
         string text = HttpIoSupport::getStringBody(resp, assumed);
         return AbstractFileLocationHandler::checkTextEncoding(text, opts.encoding_errors,
             AbstractFileLocationHandler::getRequestedLocation(scheme, location));

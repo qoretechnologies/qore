@@ -1208,6 +1208,8 @@ public class HttpClientStreamHandle {
         and its text is not decoded
 
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the decoded body exceeds \a max_size
+        @throw INVALID-ENCODING the body is text of a structured type (JSON, YAML, XML, ...) that is not valid in its
+        encoding (see @ref decodeResponseText())
     */
     static hash<auto> normalizeResponseBody(hash<auto> resp, int max_size = 0,
             string assumed_encoding = "ISO-8859-1", bool decode_text = True, bool decode_content = True) {

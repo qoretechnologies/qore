@@ -223,6 +223,13 @@ public class HttpBodyCharsetTest inherits QUnit::Test {
         assertThrows("INVALID-ENCODING", msg, \decode_http_body(), (NOTHING, <61ff>, "UTF-8"));
         # a lone surrogate in a UTF-16 body with a byte order mark
         assertThrows("INVALID-ENCODING", "not valid UTF-16LE", \decode_http_body(), ("text/plain", <fffe00d8>));
+        # a byte that is not a character of a single-byte encoding (0x81 in windows-1252), as
+        # <string>::isEncodingValid() says
+        assertThrows("INVALID-ENCODING", "^decode_http_body\\(\\): the HTTP message body is not valid WINDOWS-1252$",
+            \decode_http_body(), ("text/plain;charset=windows-1252", <618162>));
+        string cp = decode_http_body("text/plain;charset=windows-1252", <618162>, "UTF-8", "latin1");
+        assertEq("ISO-8859-1", cp.encoding());
+        assertEq(<618162>, binary(cp));
         # valid text
         assertEq("aé", decode_http_body("text/plain;charset=utf-8", <61c3a9>));
 

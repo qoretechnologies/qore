@@ -48,6 +48,7 @@
 #include <llvm/Config/llvm-config.h>
 #include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreAsciiCompatStringHelper.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
@@ -1841,8 +1842,17 @@ data decode_http_body(*string content_type, binary body, string assumed_encoding
     SimpleRefHolder<SimpleValueQoreNode> rv(qore_decode_http_body(ct, body, assumed));
     if (rv->getType() == NT_STRING) {
         const QoreStringNode* str = static_cast<const QoreStringNode*>(*rv);
-        if (q_check_text_encoding(str->getEncoding(), str->c_str(), str->size(), "decode_http_body()",
-            "HTTP message body", xsink)) {
+        // the check of <string>::isEncodingValid() and of the "latin1" mode: also a byte that is not a character of
+        // a single-byte encoding (ex: 0x81 in windows-1252) is not valid
+        if (!qore_string_encoding_valid(*str)) {
+            QoreStringNode* desc = new QoreStringNodeMaker("decode_http_body(): the HTTP message body is not valid %s",
+                str->getEncoding()->getCode());
+            // the offset of the first invalid byte, where the structure of the encoding locates it
+            qore_offset_t offset = q_get_invalid_text_offset(str->getEncoding(), str->c_str(), str->size());
+            if (offset >= 0) {
+                desc->sprintf(": invalid byte sequence at byte offset " QLLD, static_cast<int64>(offset));
+            }
+            xsink->raiseException("INVALID-ENCODING", desc);
             return QoreValue();
         }
     }

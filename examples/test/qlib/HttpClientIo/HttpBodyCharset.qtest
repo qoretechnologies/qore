@@ -261,6 +261,7 @@ class HttpBodyCharsetTest inherits QUnit::Test {
         addTestCase("HttpClientIo stream handle", \httpClientIoStreamTest());
         addTestCase("HttpClientIo octets", \httpClientIoOctetsTest());
         addTestCase("HttpClientIo text decoding", \decodeResponseTextTest());
+        addTestCase("HttpClientIo text decoding of bodies that are not valid", \decodeResponseTextInvalidTest());
         addTestCase("no Content-Type", \noContentTypeTest());
         addTestCase("RestClient", \restClientTest());
         addTestCase("RestClientIo", \restClientIoTest());
@@ -569,6 +570,35 @@ class HttpBodyCharsetTest inherits QUnit::Test {
     }
 
     # the text decoding of a response whose body has been received as octets
+    #! decodeResponseText() gives a body that is not valid in its encoding as HTTPClient does (qore#6604)
+    decodeResponseTextInvalidTest() {
+        int n = 0;
+        foreach string name in (keys TestHandler::Cases) {
+            hash<CharsetCase> c = TestHandler::Cases{name};
+            if (!c.invalid) {
+                continue;
+            }
+            ++n;
+            hash<auto> resp = {"headers": {"content-type": c.content_type}, "body": c.body};
+            if (c.error) {
+                assertThrows(c.error, \HttpClientStreamHandle::decodeResponseText(), (resp,), name);
+                # with "raise", the same
+                assertThrows(c.error, \HttpClientStreamHandle::decodeResponseText(), (resp, "ISO-8859-1", "raise"),
+                    name + " raise");
+            } else {
+                checkBody(HttpClientStreamHandle::decodeResponseText(resp).body, c, name);
+                # with "raise", any text that is not valid raises
+                assertThrows("INVALID-ENCODING", \HttpClientStreamHandle::decodeResponseText(),
+                    (resp, "ISO-8859-1", "raise"), name + " raise");
+            }
+            # with "keep", the text is given in its encoding without a check
+            auto body = HttpClientStreamHandle::decodeResponseText(resp, "ISO-8859-1", "keep").body;
+            assertEq(NT_STRING, body.typeCode(), name + " keep");
+            assertFalse(body.isEncodingValid(), name + " keep");
+        }
+        assertGt(0, n, "there are bodies that are not valid");
+    }
+
     decodeResponseTextTest() {
         # a character encoding sent as the content encoding of the body is its charset, as with HTTPClient
         hash<auto> resp = HttpClientStreamHandle::decodeResponseText({
