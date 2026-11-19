@@ -60,6 +60,7 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
         addTestCase("MySQL: rounded keys", \mysqlTest());
         addTestCase("Oracle: rounded keys", \oracleTest());
         addTestCase("SQL Server: rounded keys", \mssqlTest());
+        addTestCase("CHAR keys", \charKeysTest());
         set_return_value(main());
     }
 
@@ -182,6 +183,10 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
             {"type": "integer", "key": 1.4, "other": 5},
             {"type": "integer", "key": 1.5n, "other": 1},
             {"type": "float(10)", "key": 1.2345, "other": 5.5},
+            # CHAR keys are padded by Oracle: exact keys are found too (issue #6675)
+            {"type": "char(5)", "key": "a", "other": "b"},
+            {"type": "nchar(5)", "key": "a", "other": "b"},
+            {"type": "char(5 char)", "key": "a", "other": "b", "composite": True},
             {"type": "timestamp(0) with local time zone", "key": 2026-01-01T10:00:00.7, "other": 2025-01-01T10:00:00},
             {"type": "number(10,2)", "key": 1.005n, "other": 5n, "composite": True},
         ));
@@ -202,6 +207,64 @@ class DeleteOthersRoundedKeysTest inherits QUnit::Test {
             {"type": "money", "key": 1.00005, "other": 5.5},
             {"type": "numeric(10,2)", "key": 1.005n, "other": 5n, "composite": True},
         ));
+    }
+
+    #! fixed-length character keys: a padded value is matched, and a cast never truncates a longer one (issue #6675)
+    charKeysTest() {
+        if (dbs.oracle) {
+            Datasource ds = dbs.oracle;
+            on_exit ds.rollback();
+            # a key longer than the column, with update-only: it matches no row, so both rows are deleted; a cast to
+            # the column's length would truncate it to the first row's key and keep that row
+            AbstractTable t = createCharTable(ds, "dork_c1", "char(5)", ("abcde", "b"));
+            on_exit dropTable(ds, "dork_c1");
+            *hash<string, int> rh = t.upsertFromIterator(({"k": "abcdefg", "v": 2},).iterator(),
+                AbstractTable::UpsertUpdateOnly, {"delete_others": True});
+            assertEq(2, rh.deleted, "oracle: an overlong key matches no row");
+            assertEq(0, t.rowCount());
+            # a multibyte key in a column with a length in bytes
+            t = createCharTable(ds, "dork_c2", "char(3 byte)", ("b",));
+            on_exit dropTable(ds, "dork_c2");
+            rh = t.upsertFromIterator(({"k": "é", "v": 2},).iterator(), AbstractTable::UpsertAuto,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, "oracle: a multibyte key");
+            assertEq(("é",), map trim($1.k), t.selectRows());
+            # an overlong NCHAR key of characters above U+FFFF, which count as two UTF-16 code units: no row is kept
+            t = createCharTable(ds, "dork_c4", "nchar(1000)", (strmul("😀", 500),));
+            on_exit dropTable(ds, "dork_c4");
+            rh = t.upsertFromIterator(({"k": strmul("😀", 501), "v": 2},).iterator(), AbstractTable::UpsertUpdateOnly,
+                {"delete_others": True});
+            assertEq(1, rh.deleted, "oracle: an overlong NCHAR key of supplementary characters");
+            assertEq(0, t.rowCount());
+        }
+        if (dbs.pgsql) {
+            Datasource ds = dbs.pgsql;
+            on_exit ds.rollback();
+            # a key given with trailing spaces is the stored key: only the other row is deleted
+            AbstractTable t = createCharTable(ds, "dork_c3", "char(5)", ("a", "b"));
+            on_exit dropTable(ds, "dork_c3");
+            *hash<string, int> rh = t.upsertFromIterator(({"k": "a  ", "v": 2},).iterator(),
+                AbstractTable::UpsertAuto, {"delete_others": True});
+            assertEq(1, rh.deleted, "pgsql: a key with trailing spaces");
+            assertEq(("a",), map trim($1.k), t.selectRows());
+        }
+        if (!dbs.oracle && !dbs.pgsql) {
+            testSkip("no Oracle or PostgreSQL connection");
+        }
+    }
+
+    private AbstractTable createCharTable(Datasource ds, string name, string type, list<string> keys_in) {
+        ds.exec(sprintf("create table %s (k %s not null, v integer, primary key (k))", name, type));
+        ds.commit();
+        AbstractTable t = new Table(ds, name).getTable();
+        map t.insert({"k": $1, "v": 1}), keys_in;
+        return t;
+    }
+
+    private static dropTable(Datasource ds, string name) {
+        ds.rollback();
+        ds.exec("drop table " + name);
+        ds.commit();
     }
 
     private Datasource getDs(string db) {

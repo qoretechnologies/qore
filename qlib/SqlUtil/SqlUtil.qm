@@ -590,6 +590,9 @@ module SqlUtil {
       <tt>1.005</tt> in a <tt>numeric(10,2)</tt> column): the PostgreSQL, MySQL, Oracle and SQL Server drivers
       compare key values converted to the column's type
       (<a href="https://github.com/qoretechnologies/qore/issues/6635">issue 6635</a>)
+    - fixed the \c delete_others upsert option, which deleted the row of an input key of a \c CHAR(n) or \c NCHAR(n)
+      primary key on Oracle, which stores it padded, or of a key given with trailing spaces on PostgreSQL: the values
+      are compared padded, without being truncated (<a href="https://github.com/qoretechnologies/qore/issues/6675">issue 6675</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
