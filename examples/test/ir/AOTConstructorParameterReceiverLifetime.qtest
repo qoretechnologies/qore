@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires ../TestInterpreter.qm
+%requires ../QoreBuildTree.qm
 %requires FsUtil
 
 %exec-class AOTConstructorParameterReceiverLifetimeTest
@@ -16,9 +17,10 @@ class AOTConstructorParameterReceiverLifetimeTest inherits QUnit::Test {
     /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
         linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
     */
-    private static list<string> libqoreTargetFlags() {
+    private static list<string> libqoreTargetFlags(string lib_dir) {
         *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
-        return m ? (m[0],) : ();
+        # a sanitizer build of libqore needs the same sanitizer in what links with it (qore#6682)
+        return (m ? (m[0],) : ()) + QoreBuildTree::sanitizer_flags(lib_dir);
     }
 
     private {
@@ -191,7 +193,7 @@ int main(int, char**) {
             "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s/*.qo %s"
             " -L%s -Wl,-rpath,%s -lqore -o %s %s",
             libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
-            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
+            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe, libqoreTargetFlags(libqore_dir).join(" ")));
         assertTrue(is_file(exe), optimization + " aggregate host linked: " + link_out);
 
         string out = run(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));
