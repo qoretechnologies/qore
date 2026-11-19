@@ -252,11 +252,10 @@ hash<auto> desc = {
       accept, and with numbers and floats, which compared otherwise than the same values bound: the values are written
       as the sqlite3 driver binds them (<a href="https://github.com/qoretechnologies/qore/issues/6634">issue 6634</a>)
     - fixed @ref SqlUtil::cop_value() "cop_value()" and the update operators (ex: @ref SqlUtil::uop_plus() "uop_plus()")
-      with dates, which wrote an ANSI \c timestamp literal that SQLite does not accept, and with floats, which were
-      written with 9 significant digits (an update stored another value): a date is written as the driver binds it, a
-      float with 17 digits, and a relative date raises \c VALUE-ERROR, as SQLite has no interval type; a float
-      default that 9 digits could not hold, as created before, now differs from its description in a schema
-      alignment (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>)
+      with floats, which were written with 9 significant digits (an update stored another value): a float is written
+      with 17 digits, and a relative date raises \c VALUE-ERROR, as SQLite has no interval type; a float default that
+      9 digits could not hold, as created before, now differs from its description in a schema alignment
+      (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>)
     - implemented @ref select_option_recursive "recursive queries", which need SQLite 3.8.3 or later
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
