@@ -59,7 +59,7 @@ TSAN_FLAGS="-fsanitize=thread"
 
 # the tests that compile a C++ fixture (a host executable, a module or a program that loads libqore) against the
 # libqore of the build, with its sanitizer flags (qore#6587: the thread stack tests, qore#6682: the others); the tests
-# of qore/threads and qore/debug are added below
+# of qore/threads and qore/debug are added below, as are the race tests of other directories (qore#6792)
 FIXTURE_TESTS="
 examples/test/qore/threads/frame-check-stack.qtest
 examples/test/qore/threads/parse-stack-boundary.qtest
@@ -75,6 +75,7 @@ examples/test/ir/LocalVarLValueLookup.qtest
 examples/test/ir/OptionalMapTypeFolding.qtest
 examples/test/ir/RecursiveClosureLocals.qtest
 examples/test/qore/classes/Socket/ssl-config-init.qtest
+examples/test/qore/misc/dgc-removed-object-set-race.qtest
 examples/test/qore/misc/libqore-dlopen/libqore-dlopen.qtest
 examples/test/qore/misc/module-loader/aot-binary-symbol-resolution.qtest
 examples/test/qore/parser/modern-option-consistency/modern-option-consistency.qtest
