@@ -2250,11 +2250,12 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
     if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
-        // the class that the reference names (qore#6285)
+        // the class that the reference names (qore#6285), and the method with the class that declares it
+        // (qore#6679)
         const QoreClass* qc = scr->getScopeClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
-        ctx.writer.writeStringRef(method ? method->getName() : "");
+        ctx.writer.writeStringRef(qore_aot_encode_static_method_ref_target(method, qc).c_str());
         return true;
     }
     if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {
@@ -2475,6 +2476,63 @@ const QoreMethod* qore_aot_find_loading_method(const QoreClass* qc, const char* 
     return nullptr;
 }
 
+std::string qore_aot_encode_static_method_ref_target(const QoreMethod* method, const QoreClass* scope_qc) {
+    if (!method) {
+        return std::string();
+    }
+    std::string rv(method->getName());
+    const QoreClass* decl_qc = method->getClass();
+    if (decl_qc && decl_qc != scope_qc) {
+        rv += "\n";
+        rv += qore_aot_encode_class_ref(decl_qc);
+    }
+    return rv;
+}
+
+std::string qore_aot_static_method_ref_target_name(const char* target) {
+    if (!target) {
+        return std::string();
+    }
+    const char* nl = strchr(target, '\n');
+    return nl ? std::string(target, nl - target) : std::string(target);
+}
+
+const QoreMethod* qore_aot_resolve_static_method_ref_target(QoreProgram* pgm, const QoreClass* scope_qc,
+        const char* target, bool& have_class) {
+    have_class = false;
+    const char* nl = target ? strchr(target, '\n') : nullptr;
+    if (!nl) {
+        return nullptr;
+    }
+    have_class = true;
+    std::string name(target, nl - target);
+    const QoreClass* decl_qc = qore_aot_resolve_class_ref(pgm, nl + 1, false);
+    if (!decl_qc || !scope_qc || name.empty()) {
+        return nullptr;
+    }
+    // the class that declares the method is the named class or one of its parent classes
+    if (decl_qc != scope_qc) {
+        bool priv = false;
+        if (scope_qc->getClass(*decl_qc, priv) != decl_qc) {
+            return nullptr;
+        }
+    }
+    // the method of the class itself, not of one of its parent classes; the compiler checked its access
+    const QoreMethod* method = decl_qc->findLocalStaticMethod(name.c_str());
+    if (!method) {
+        method = decl_qc->findLocalMethod(name.c_str());
+    }
+    // a reference read while the class is being loaded, as in a static member's initial value, whose method is not
+    // committed yet
+    if (!method) {
+        method = qore_aot_find_loading_method(decl_qc, name.c_str(), true);
+        if (method && method->getClass() != decl_qc) {
+            method = nullptr;
+        }
+    }
+    return method;
+}
+
 static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const char* kind,
         bool prefer_static, const QoreClass** class_out = nullptr) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
@@ -2491,6 +2549,22 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
         return nullptr;
     }
 
+    // the method of a static method call reference that the image records with the class that declares it
+    // (qore#6679)
+    if (prefer_static) {
+        bool have_class;
+        const QoreMethod* method = qore_aot_resolve_static_method_ref_target(ctx.pgm, qc, method_name, have_class);
+        if (have_class) {
+            if (!method) {
+                ctx.error = std::string("cannot resolve ") + kind + " method reference '" + class_path + "::"
+                    + qore_aot_static_method_ref_target_name(method_name) + "'";
+            }
+            if (class_out) {
+                *class_out = qc;
+            }
+            return method;
+        }
+    }
     const QoreMethod* method = prefer_static
         ? qc->findStaticMethod(method_name) : qc->findMethod(method_name);
     if (!method) {
@@ -2580,11 +2654,11 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
     }
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
     const QoreMethod* method = scr->getMethod();
-    // the class that the reference names (qore#6285)
+    // the class that the reference names (qore#6285), and the method with the class that declares it (qore#6679)
     const QoreClass* qc = scr->getScopeClass();
     std::string class_ref = qore_aot_encode_class_ref(qc);
     ctx.writer.writeStringRef(class_ref.c_str());
-    ctx.writer.writeStringRef(method ? method->getName() : "");
+    ctx.writer.writeStringRef(qore_aot_encode_static_method_ref_target(method, qc).c_str());
     return true;
 }
 

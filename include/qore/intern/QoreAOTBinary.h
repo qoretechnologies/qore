@@ -616,6 +616,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!        variant that the call selected by parameter name (its parameter types and ellipsis), so that the arguments
 //!        keep their source evaluation order and bind to the selected overload (qore_aot_inline_constructor_ref(),
 //!        qore#6699); a v48 reader would take the string for a class name or bind the arguments by position
+//!      - static method call references in compiled code, also one through an object, record the class that declares
+//!        the method (name + LF + declaring-class ref when it differs from the written class; qore#6679)
 //!      - no format change, but the code and the IR that a v48 compiler wrote differ (an image must be rebuilt):
 //!        the accumulator of a fold is released once the fold's value has a reference of its own (qore#6442); the
 //!        exception targets of the handlers that a ScopeExit runs after it has closed its scope and of the end of a try
@@ -625,6 +627,14 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 constexpr uint16_t QORE_AOT_BATCH_AL_VERSION = 48;
 //! The shared format version for the changes in batch AM (see v49 above).
 constexpr uint16_t QORE_AOT_BATCH_AM_VERSION = 49;
+//! First format version whose static method call references record the class that declares their method (see v49
+//! above, qore#6679): the method name of a STATIC_METHOD_REF or EN_STATIC_METH_REF expression, and the name that
+//! native code passes to qore_rt_create_static_method_call_ref_aot(), is followed by a newline and the class
+//! reference of the class that declares the method when that is not the class that the reference names
+//! (qore_aot_encode_static_method_ref_target())
+constexpr uint16_t QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION = 49;
+static_assert(QORE_AOT_STATIC_METHOD_REF_TARGET_VERSION == QORE_AOT_BATCH_AM_VERSION,
+    "the format changes of batch AM share one format version (v49)");
 //! Old compiled artifacts must be rebuilt (see v49 above): the reader refuses older images, the program image of a qcc
 //! executable included (qore_aot_run_v3() reads it before anything else)
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = QORE_AOT_BATCH_AM_VERSION;

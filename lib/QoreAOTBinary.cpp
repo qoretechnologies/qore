@@ -14586,11 +14586,11 @@ static bool classifyAndWriteExprIntern(QoreAOTBinaryWriter& writer, const QoreVa
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
         // the class that the reference names, whose specialization of a generic class binds the method's type
-        // parameters (qore#6285)
+        // parameters (qore#6285), and the method with the class that declares it (qore#6679)
         const QoreClass* qc = scr->getScopeClass();
         std::string class_path = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_path.c_str());
-        writer.writeStringRef(method ? method->getName() : "");
+        writer.writeStringRef(qore_aot_encode_static_method_ref_target(method, qc).c_str());
         return true;
     }
     if (auto* dscr = dynamic_cast<const DeferredStaticMethodCallReferenceNode*>(node)) {

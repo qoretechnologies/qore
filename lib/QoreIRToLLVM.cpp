@@ -485,8 +485,10 @@ static bool isFastMethodCallEligible(
 
 //! the name of the method of an object method reference passed to qore_rt_create_object_method_ref_aot(): a static
 //! method of the receiver's declared class, to which the reference is bound (qore#5990), is given with the class, as
-//! "\x01<class reference>\x01<method name>"; otherwise the name of qore_aot_object_method_ref_name(), which gives a
-//! normal method of a parent class resolved for the declared class with both classes (qore#6680)
+//! "\x01<class reference>\x01<method>", the method as qore_aot_encode_static_method_ref_target() gives it, with the
+//! class that declares it if that is not the declared class (qore#6679); otherwise the name of
+//! qore_aot_object_method_ref_name(), which gives a normal method of a parent class resolved for the declared class
+//! with both classes (qore#6680)
 static std::string qore_aot_native_object_method_ref_name(const ParseObjectMethodReferenceNode* omr) {
     const QoreClass* qc = omr->getStaticBoundClass();
     if (!qc) {
@@ -495,7 +497,7 @@ static std::string qore_aot_native_object_method_ref_name(const ParseObjectMetho
     std::string rv(1, '\x01');
     rv += qore_aot_encode_class_ref(qc);
     rv += '\x01';
-    rv += omr->getMethodName();
+    rv += qore_aot_encode_static_method_ref_target(omr->getParseMethod(), qc);
     return rv;
 }
 
@@ -24359,9 +24361,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 qore_ir_create_global_string_ptr(builder,
                                     qc->getNamespacePath(),
                                     "static_call_ref_class_path");
+                            // the method with the class that declares it, so that the method that the compiler
+                            // resolved is the one called (qore#6679)
                             llvm::Value* method_name =
                                 qore_ir_create_global_string_ptr(builder,
-                                    method->getName(),
+                                    qore_aot_encode_static_method_ref_target(method, qc).c_str(),
                                     "static_call_ref_method_name");
                             auto cr_ft = llvm::FunctionType::get(i64_type,
                                     {ptr_type, ptr_type, ptr_type, ptr_type}, false);
@@ -34420,9 +34424,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             qore_ir_create_global_string_ptr(builder,
                                 qc->getNamespacePath(),
                                 "static_call_ref_class_path");
+                        // the method with the class that declares it, so that the method that the compiler
+                        // resolved is the one called (qore#6679)
                         llvm::Value* method_name =
                             qore_ir_create_global_string_ptr(builder,
-                                method->getName(),
+                                qore_aot_encode_static_method_ref_target(method, qc).c_str(),
                                 "static_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type, ptr_type}, false);
