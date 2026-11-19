@@ -1179,6 +1179,11 @@ private:
         //! for an entry with try_end_depth: the exception target outside the try statement, which an exception raised
         //! once the statement has ended goes to (#6128; the hand-over of a return in it, #6074)
         QoreIRBasicBlock* try_outer_target = nullptr;
+        //! for an entry with try_end_depth: the handler of an exception raised when the try statement ends (qore#6658:
+        //! the exception stack of a walk from the body of a handler lowered inline does not hold it): the catch block
+        //! of the try statement for its try block, the handler outside the statement for its catch block (nullptr: the
+        //! exception leaves the frame)
+        QoreIRBasicBlock* try_end_target = nullptr;
         const LVList* lvars = nullptr;             //!< local variables for Lvars entries
         //! the exception target where the entry was pushed, outside the block: an exception that a destructor raises
         //! when a break, a continue or a return releases the locals of an Lvars or CatchVar entry goes there, to the
