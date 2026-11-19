@@ -5,6 +5,8 @@
     MIT License
 */
 
+# test-platform: macos - iconv conversions of Shift_JIS, WINDOWS-1252, ISO-8859-1, ISO-8859-15 and UTF-16 text to UTF-8
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
@@ -33,6 +35,7 @@ class TokenizerInvalidEncodingTest inherits QUnit::Test {
         addTestCase("forms of invalid UTF-8 and other encodings", \invalidForms());
         addTestCase("tokens and added tokens", \tokens());
         addTestCase("configuration and chat templates", \chatTemplates());
+        addTestCase("configuration strings in other encodings", \configEncodings());
         addTestCase("text in other encodings", \otherEncodings());
         addTestCase("the Split pre-tokenizer", \split());
         addTestCase("decoded text is UTF-8", \decode());
@@ -220,11 +223,17 @@ class TokenizerInvalidEncodingTest inherits QUnit::Test {
             ({"eos_token": bad},));
         assertThrows("INVALID-ENCODING", msg("HFTokenizer::loadConfig()", "bos_token content", 2),
             \tok.loadConfig(), ({"bos_token": {"content": bad}},));
-        # nothing is changed by a configuration with invalid text
-        assertThrows("INVALID-ENCODING", \tok.loadConfig(), ({"model_max_length": 77, "chat_template": "x",
-            "eos_token": "</s>", "sep_token": bad},));
-        assertEq(-1, tok.getModelMaxLength());
+        # nothing is changed by a configuration with invalid text: "<s>" would change the EOS token ID from 3 to 2
         assertEq(3, tok.getEosTokenId(), "the EOS token is found among the added tokens");
+        assertThrows("INVALID-ENCODING", \tok.loadConfig(), ({"model_max_length": 77, "chat_template": "x",
+            "eos_token": "<s>", "sep_token": bad},));
+        assertEq(-1, tok.getModelMaxLength());
+        assertEq(3, tok.getEosTokenId(), "the EOS token ID is unchanged");
+        assertThrows("TOKENIZER-ERROR", "no chat_template", \tok.applyChatTemplate(), (({"content": "x"},),));
+        # the same configuration without the invalid text changes it
+        Tokenizer::HFTokenizer tok2 = chatTokenizer();
+        tok2.loadConfig({"eos_token": "<s>"});
+        assertEq(2, tok2.getEosTokenId(), "the EOS token ID changes with a valid configuration");
         assertThrows("TOKENIZER-ERROR", "no chat_template", \tok.applyChatTemplate(), (({"content": "x"},),));
 
         tok.loadConfig({"chat_template": "{% for message in messages %}[{{ message['role'] }}]"
@@ -239,6 +248,145 @@ class TokenizerInvalidEncodingTest inherits QUnit::Test {
         tok.loadConfig({"chat_template": "plain"});
         assertThrows("INVALID-ENCODING", msg("HFTokenizer::applyChatTemplate()", "message content at index 0", 2),
             \tok.applyChatTemplate(), (({"role": "user", "content": bad},),));
+    }
+
+    #! the strings of the configuration of the model and components are converted to UTF-8 (qore#6604)
+    configEncodings() {
+        string iso_e = convert_encoding("é", "ISO-8859-1");
+        assertEq(<e9>, binary(iso_e));
+
+        # BPE merges in ISO-8859-1: "c é" merges the UTF-8 characters of "cé"
+        hash<auto> bpe = {
+            "model": {
+                "type": "BPE",
+                "vocab": {"c": 0, "é": 1, "cé": 2, "[UNK]": 3},
+                "merges": (convert_encoding("c é", "ISO-8859-1"),),
+                "unk_token": "[UNK]",
+            },
+        };
+        assertEq((2,), new Tokenizer::HFTokenizer(bpe).encode("cé").input_ids);
+        # the [a, b] form
+        bpe.model.merges = (("c", iso_e),);
+        assertEq((2,), new Tokenizer::HFTokenizer(bpe).encode("cé").input_ids);
+        # UTF-16LE
+        bpe.model.merges = (convert_encoding("c é", "UTF-16LE"),);
+        assertEq((2,), new Tokenizer::HFTokenizer(bpe).encode("cé").input_ids);
+        # a UTF-8 configuration gives the same IDs
+        bpe.model.merges = ("c é",);
+        assertEq((2,), new Tokenizer::HFTokenizer(bpe).encode("cé").input_ids);
+
+        # a Replace normalizer, a Split pre-tokenizer and a WordPiece prefix and unknown token in ISO-8859-1
+        hash<auto> wp = {
+            "normalizer": {"type": "Replace", "pattern": {"String": iso_e}, "content": convert_encoding("ü",
+                "ISO-8859-1")},
+            "pre_tokenizer": {"type": "Split", "pattern": {"String": convert_encoding("·", "ISO-8859-1")},
+                "behavior": "Removed"},
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "ü": 1, "x": 2, "€€x": 3, "€€ü": 4, "<ä>": 5},
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": convert_encoding("€€", "WINDOWS-1252"),
+            },
+            "post_processor": {
+                "type": "TemplateProcessing",
+                "single": (
+                    {"SpecialToken": {"id": convert_encoding("<ä>", "ISO-8859-1"), "type_id": 0}},
+                    {"Sequence": {"id": "A", "type_id": 0}},
+                ),
+                "special_tokens": {"<ä>": {"id": "<ä>", "ids": (5,), "tokens": (convert_encoding("<ä>",
+                    "ISO-8859-1"),)}},
+            },
+        };
+        Tokenizer::HFTokenizer tok(wp);
+        hash<auto> enc = tok.encode("é·xé");
+        # "é" is replaced with "ü", "·" splits, and "xü" is "x" + "€€ü"
+        assertEq((5, 1, 2, 4), enc.input_ids);
+        assertEq(("<ä>", "ü", "x", "€€ü"), enc.tokens);
+        assertEq("UTF-8", enc.tokens[0].encoding());
+
+        # Metaspace and decoder strings
+        hash<auto> ms = {
+            "pre_tokenizer": {"type": "Metaspace", "replacement": convert_encoding("¤", "ISO-8859-1"),
+                "prepend_scheme": "always"},
+            "model": {
+                "type": "WordPiece",
+                "vocab": {"[UNK]": 0, "¤a": 1, "¤b": 2},
+                "unk_token": "[UNK]",
+            },
+            "decoder": {"type": "Metaspace", "replacement": convert_encoding("¤", "ISO-8859-1"),
+                "prepend_scheme": "always"},
+        };
+        tok = new Tokenizer::HFTokenizer(ms);
+        enc = tok.encode("a b");
+        assertEq((1, 2), enc.input_ids);
+        assertEq("a b", tok.decode(enc.input_ids));
+
+        # configuration strings that are not valid text
+        string bad = utf8(BadBytes);
+        bpe.model.merges = (bad,);
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "merge", 2),
+            sub () { new Tokenizer::HFTokenizer(bpe); });
+        bpe.model.merges = (("c", bad),);
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "merge", 2),
+            sub () { new Tokenizer::HFTokenizer(bpe); });
+        bpe.model.merges = ();
+        bpe.model.unk_token = bad;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "configuration value 'unk_token'", 2),
+            sub () { new Tokenizer::HFTokenizer(bpe); });
+        bpe.model.unk_token = {"content": bad};
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()",
+            "configuration value 'unk_token' content", 2), sub () { new Tokenizer::HFTokenizer(bpe); });
+        bpe.model.unk_token = "[UNK]";
+        bpe.model.type = bad;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "configuration value 'type'", 2),
+            sub () { new Tokenizer::HFTokenizer(bpe); });
+        bpe.model.type = "BPE";
+
+        hash<auto> c = wp + {"normalizer": {"type": "Replace", "pattern": {"String": bad}, "content": "x"}};
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "configuration value 'String'", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        c = wp + {"pre_tokenizer": {"type": "Split", "pattern": {"Regex": bad}}};
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "Split pattern 'Regex'", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        c = wp;
+        c.model.continuing_subword_prefix = bad;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()",
+            "configuration value 'continuing_subword_prefix'", 2), sub () { new Tokenizer::HFTokenizer(c); });
+        c = wp;
+        c.post_processor.special_tokens."<ä>".tokens = (bad,);
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "special token", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        c = wp;
+        c.post_processor.single[0].SpecialToken.id = bad;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "template SpecialToken id", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        c = ms;
+        c.decoder.replacement = binary_to_string(<6182>, "Shift_JIS");
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "configuration value 'replacement'", 1,
+            "Shift_JIS"), sub () { new Tokenizer::HFTokenizer(c); });
+        # a vocabulary key that is not valid UTF-8 (hash keys are in the default encoding, UTF-8 here)
+        hash<auto> v = {"[UNK]": 0};
+        v{bad} = 1;
+        c = wp;
+        c.model.vocab = v;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "vocabulary token", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        c = bpe;
+        c.model.vocab = v;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "vocabulary token", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        c = wp;
+        hash<auto> sk = {};
+        sk{bad} = {"id": "x", "ids": (5,), "tokens": ("x",)};
+        c.post_processor.special_tokens = sk;
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "special token", 2),
+            sub () { new Tokenizer::HFTokenizer(c); });
+        # Unigram
+        hash<auto> uni = {"model": {"type": "Unigram", "vocab": (("a", -1.0), (bad, -2.0)), "unk_id": 0}};
+        assertThrows("INVALID-ENCODING", msg("HFTokenizer::constructor()", "vocabulary token", 2),
+            sub () { new Tokenizer::HFTokenizer(uni); });
+        uni.model.vocab = (("<unk>", 0.0), (iso_e, -1.0));
+        assertEq((1,), new Tokenizer::HFTokenizer(uni).encode("é").input_ids);
     }
 
     otherEncodings() {

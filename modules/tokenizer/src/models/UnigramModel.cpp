@@ -39,7 +39,10 @@ UnigramModel::UnigramModel(const QoreHashNode* config, ExceptionSink* xsink) {
         for (size_t i = 0; i < vocab_list->size(); ++i) {
             const QoreListNode* pair = safeGetList(vocab_list->retrieveEntry(i));
             if (pair && pair->size() >= 2) {
-                std::string token = safeGetStdString(pair->retrieveEntry(0));
+                std::string token = configString(pair->retrieveEntry(0), "vocabulary token", xsink);
+                if (*xsink) {
+                    return;
+                }
                 double score = pair->retrieveEntry(1).getAsFloat();
                 int id = (int)vocab.size();
                 vocab.push_back({token, score});

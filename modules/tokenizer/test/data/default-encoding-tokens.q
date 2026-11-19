@@ -13,6 +13,7 @@
 
 %modern
 %requires tokenizer
+%requires json
 
 # an e acute and a euro sign in UTF-8
 string e_acute = binary_to_string(<c3a9>, "UTF-8");
@@ -70,3 +71,52 @@ foreach hash<auto> i in (vocab.pairIterator()) {
 # a token that the default encoding may not represent
 tok.addTokens((euro,));
 err("vocab-euro", sub () { tok.getVocab(); });
+
+# vocabulary keys in the default encoding match UTF-8 text
+hash<auto> vocab_keys = {"[UNK]": 0, "x": 1};
+vocab_keys{e_acute} = 4;
+Tokenizer::HFTokenizer wp({
+    "model": {
+        "type": "WordPiece",
+        "vocab": vocab_keys,
+        "unk_token": "[UNK]",
+    },
+});
+out("wordpiece-vocab-id", join(",", wp.encode(e_acute).input_ids));
+
+# a configuration parsed from JSON text has its keys in the default encoding too
+string json = "{\"model\": {\"type\": \"WordPiece\", \"unk_token\": \"[UNK]\", \"vocab\": {\"[UNK]\": 0, \""
+    + e_acute + "\": 4}}}";
+Tokenizer::HFTokenizer jt(parse_json(json));
+out("json-vocab-id", join(",", jt.encode(e_acute).input_ids));
+
+hash<auto> bpe_vocab = {"[UNK]": 0, "c": 1};
+bpe_vocab{"c" + e_acute} = 2;
+bpe_vocab{e_acute} = 3;
+Tokenizer::HFTokenizer bpe({
+    "model": {
+        "type": "BPE",
+        "vocab": bpe_vocab,
+        "merges": ("c " + e_acute,),
+        "unk_token": "[UNK]",
+    },
+});
+out("bpe-vocab-id", join(",", bpe.encode("c" + e_acute).input_ids));
+
+# a special token key of a template
+string st = "<" + e_acute + ">";
+hash<auto> special = {};
+special{st} = {"id": st, "ids": (5,), "tokens": (st,)};
+Tokenizer::HFTokenizer tt({
+    "model": {
+        "type": "WordPiece",
+        "vocab": vocab_keys,
+        "unk_token": "[UNK]",
+    },
+    "post_processor": {
+        "type": "TemplateProcessing",
+        "single": ({"SpecialToken": {"id": st, "type_id": 0}}, {"Sequence": {"id": "A", "type_id": 0}}),
+        "special_tokens": special,
+    },
+});
+out("special-token-key-ids", join(",", tt.encode(e_acute).input_ids));

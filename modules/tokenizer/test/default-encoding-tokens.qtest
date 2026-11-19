@@ -6,6 +6,7 @@
 */
 
 # test-exec-mode: children - the checks run in child qore processes whose default character encodings differ
+# test-platform: macos - iconv conversions between UTF-8 and the ISO-8859-1 default encoding set with QORE_CHARSET
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
@@ -46,12 +47,25 @@ class TokenizerDefaultEncodingTokensTest inherits QUnit::Test {
         hash<string, string> u = run("UTF-8", script);
         assertEq(e_acute, u."vocab-key");
         assertEq(make_hex_string(binary("none")), u."vocab-euro");
+
+        # the vocabulary keys and special token keys of a configuration are in the default encoding, and they are
+        # converted to UTF-8, the text that is tokenized (qore#6727)
+        foreach hash<string, string> r in ((iso, u)) {
+            string enc = r == iso ? "ISO-8859-1" : "UTF-8";
+            assertEq(make_hex_string(binary("4")), r."wordpiece-vocab-id", enc);
+            assertEq(make_hex_string(binary("4")), r."json-vocab-id", enc);
+            assertEq(make_hex_string(binary("2")), r."bpe-vocab-id", enc);
+            assertEq(make_hex_string(binary("5,4")), r."special-token-key-ids", enc);
+        }
     }
 
     #! runs the child script with the given default encoding and returns its results
     private hash<string, string> run(string encoding, string script) {
         string qore = TestInterpreter::qore_interpreter();
-        string output = backquote(sprintf("QORE_CHARSET=%s %s %s 2>&1", encoding, qore, script));
+        # the output of the child (its results are ASCII lines) is taken as ISO-8859-1, in which every byte is a
+        # character, as messages that it may print are in its own default encoding
+        string output = binary_to_string(binary(backquote(sprintf("QORE_CHARSET=%s '%s' '%s' 2>&1", encoding, qore,
+            script))), "ISO-8859-1");
         hash<string, string> results;
         foreach string line in (output.split("\n")) {
             *list<*string> parts = (line =~ x/^([a-z-]+)=([0-9a-f]*)$/);

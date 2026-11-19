@@ -22,9 +22,9 @@ extern const TypedHashDecl* hashdeclTokenizerModelInputBatch;
     Unigram (T5, XLM-RoBERTa) tokenization models.
 
     Tokenizers work on UTF-8 text: text given to a method (text to encode, words, tokens, added tokens, chat
-    messages and templates) is checked in its own encoding and an \c INVALID-ENCODING exception is raised if it is
-    not valid, and text in another encoding is converted to UTF-8, so that the same text gives the same token IDs in
-    any encoding; offsets are byte offsets in the UTF-8 form of the text.  Decoded text is UTF-8; see
+    messages and templates, the strings and token keys of the configuration) is checked in its own encoding and an
+    \c INVALID-ENCODING exception is raised if it is not valid, and text in another encoding is converted to UTF-8,
+    so that the same text gives the same token IDs in any encoding; offsets are byte offsets in the UTF-8 form of the text.  Decoded text is UTF-8; see
     @ref tokenizer_text_encoding.
 
     @par Example:
@@ -50,9 +50,16 @@ qclass HFTokenizer [arg=QoreHFTokenizer* tok; ns=Qore::Tokenizer; flags=final];
 /** @param config the parsed tokenizer.json hash (from parse_json())
 
     @throw TOKENIZER-ERROR if the configuration is invalid or missing required fields
-    @throw INVALID-ENCODING the content of an added token is not valid in its encoding (ex:
+    @throw INVALID-ENCODING the content of an added token, or a string or token key of the configuration of the model,
+    normalizer, pre-tokenizer, post-processor or decoder, is not valid in its encoding (ex:
     <tt>"HFTokenizer::constructor(): the added token content at index 0 is not valid UTF-8: invalid byte sequence at
-    byte offset 3"</tt>)
+    byte offset 3"</tt>, <tt>"HFTokenizer::constructor(): the merge is not valid UTF-8: ..."</tt>)
+    @throw ENCODING-CONVERSION-ERROR a string or token key of the configuration cannot be converted to UTF-8
+
+    @note the strings of the configuration (vocabulary tokens, merges, patterns, replacement strings, special tokens)
+    are converted to UTF-8 from their encodings, and the token keys (the vocabulary keys of a \c BPE or
+    \c WordPiece model, the special token keys of a \c TemplateProcessing post-processor) from the default encoding,
+    the encoding of hash keys; see @ref tokenizer_text_encoding
 */
 HFTokenizer::constructor(hash<auto> config) {
     self->setPrivate(CID_HFTOKENIZER, new QoreHFTokenizer(config, xsink));

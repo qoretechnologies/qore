@@ -65,15 +65,16 @@ static std::string extractPattern(const QoreHashNode* config, ExceptionSink* xsi
         // {"Regex": "pattern_string"} or {"String": "literal"}
         QoreValue rv = ph->getKeyValue("Regex");
         if (!rv.isNullOrNothing()) {
-            return safeGetStdString(rv);
+            return configString(rv, "Split pattern 'Regex'", xsink);
         }
         rv = ph->getKeyValue("String");
         if (!rv.isNullOrNothing()) {
-            return escapeLiteral(safeGetStdString(rv));
+            std::string str = configString(rv, "Split pattern 'String'", xsink);
+            return *xsink ? std::string() : escapeLiteral(str);
         }
     }
     // Plain string
-    return safeGetStdString(pv);
+    return configString(pv, "configuration value 'pattern'", xsink);
 }
 
 SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* xsink) {
@@ -115,7 +116,10 @@ SplitPreTokenizer::SplitPreTokenizer(const QoreHashNode* config, ExceptionSink* 
     }
 
     QoreValue bv = config->getKeyValue("behavior");
-    std::string bs = bv.isNullOrNothing() ? "" : safeGetStdString(bv);
+    std::string bs = bv.isNullOrNothing() ? "" : configString(bv, "configuration value 'behavior'", xsink);
+    if (*xsink) {
+        return;
+    }
     behavior = bs.empty() ? "Removed" : std::move(bs);
 }
 
