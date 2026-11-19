@@ -83,6 +83,7 @@ trej70(True): 2 [\"outer\", \"~handed\", \"caught-in RUNTIME-TYPE-ERROR\", \"~z\
             addTestCase(mode + ": the value of an interrupted return is kept", \modeTest(), (mode,));
         }
         addTestCase(ExecModeHarness::IRTierName + ": the value of an interrupted return is kept", \irTierTest());
+        addTestCase("jit with synchronous compiles: the value of an interrupted return is kept", \syncJitTest());
         foreach int opt in (OptLevels) {
             addTestCase(sprintf("qcc -O%d: the value of an interrupted return is kept", opt), \aotTest(), (opt,));
         }
@@ -99,6 +100,18 @@ trej70(True): 2 [\"outer\", \"~handed\", \"caught-in RUNTIME-TYPE-ERROR\", \"~z\
         string output = ExecModeHarness::run_ir_tier(sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s "
             "--exec-mode=tiered %s", libqore_dir, libqore_dir, qore_bin, script));
         checkOutput(ExecModeHarness::IRTierName, output);
+    }
+
+    #! JIT with its default thresholds and synchronous compiles: the first call of a function runs its native code
+    /** A run of the JIT mode without QORE_JIT_SYNC_COMPILE runs the first call of a function in the IR interpreter
+        while its native code compiles, which kept a rejected value as the AST interpreter does (#6763)
+    */
+    syncJitTest() {
+        hash<ExecModeHarness::ModeRunResult> r = ExecModeHarness::run_command(sprintf(
+            "LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s %s --exec-mode=jit %s", libqore_dir, libqore_dir, qore_bin,
+            script), NOTHING, "QORE_JIT_SYNC_COMPILE=1 QORE_JIT_TIMING=1");
+        ExecModeHarness::check_native(r);
+        checkOutput("jit with synchronous compiles", r.out);
     }
 
     aotTest(int opt) {
