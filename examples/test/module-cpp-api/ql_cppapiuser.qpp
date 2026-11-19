@@ -432,6 +432,19 @@ list<string> cpp_api_module_cmds() [flags=RET_VALUE_ONLY] {
     return cppapiuser_get_module_cmds();
 }
 
+//! returns the number of times the C++ destructor of the class of the \c "pending-error" and \c "pending-const" module commands has run, in any Program
+/** The commands create objects of a builtin class of the Program that the command runs in (its source Program), as
+    module-python creates the objects of the Python classes of the Program: \c "pending-error" raises
+    \c CPPAPIUSER-PENDING-ERROR with such an object as its argument, and \c "pending-const <name>" adds a constant
+    with such an object to the namespace \c CppApiPendingProbe of the Program (qore#6752); neither is recorded by
+    cpp_api_module_cmds()
+
+    @return the number of times the destructor has run so far in the process
+*/
+int cpp_api_pending_probe_destroyed() [flags=RET_VALUE_ONLY] {
+    return cppapiuser_pending_probe_destroyed();
+}
+
 //! returns whether the Program of the calling code has a sandbox manager
 /** Called from a user module's code, it tells whether the module's own Program is governed by a sandbox, which is
     what a module that takes the sandbox from the Program (QoreSandboxManagerHelper(QoreProgram*)) uses

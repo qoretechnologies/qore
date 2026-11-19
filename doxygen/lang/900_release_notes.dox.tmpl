@@ -2420,6 +2420,11 @@
     - a call by name of a \c constructor() or \c destructor() method that only a parent class declares, and a call
       reference by name to a \c constructor(), \c destructor() or \c copy() method, are refused with an exception, where
       they crashed (see @ref class_special_methods "special methods"; issue #6783)
+    - an object of a builtin class of a Program with code pending, or whose parse was rolled back without
+      @ref Qore::PO_ALLOW_REPARSE "PO_ALLOW_REPARSE", such as the argument of the exception of a failed module-python
+      command, can be destroyed and its pseudo-methods called: its C++ destructor and the method lookup no longer
+      raise \c PROGRAM-ERROR; its methods still do
+      (<a href="https://github.com/qoretechnologies/qore/issues/6752">issue 6752</a>)
     - @ref Qore::StreamReader "StreamReader" and @ref Qore::InputStreamLineIterator "InputStreamLineIterator" remove
       a byte order mark only at the start of the text, where they removed U+FEFF at the start of every line and could
       take it for the byte order of a line (see @ref encoding_errors; issue #6604)

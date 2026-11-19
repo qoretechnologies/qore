@@ -2627,6 +2627,81 @@ public:
     }
     */
 
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry; plock must be held
+    /** As ProgramThreadCountContextHelper::set() refuses it: the thread that holds the parse lock enters the Program
+        without its thread count and is not refused (see incThreadCount() for the others) (qore#6752)
+    */
+    DLLLOCAL bool parseRefusesEntryIntern(int tid) const {
+        return !parsingLocked(tid) && (refusesRuntimeEntry() || refusedByCommit(tid));
+    }
+
+    //! Returns true if code parsed in the Program refuses the given thread runtime entry (qore#6752)
+    DLLLOCAL bool parseRefusesEntry(int tid) const {
+        AutoLocker al(plock);
+        return parseRefusesEntryIntern(tid);
+    }
+
+    //! Enters the Program for native code that runs none of the Program's code, without its context if it refuses runtime entry to the thread because code is parsed in it (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  The decision and the entry are
+        made under one lock, so a parse that starts meanwhile cannot refuse the entry.
+
+        @param tid the current thread's TID
+        @param with_context set to true if incThreadCount() would let the thread enter the Program, so that it can
+        switch to its context, false if it entered the Program without its context (see enterWithoutContext()); also
+        false for the thread that holds the parse lock while code is parsed, which incThreadCount() refuses as well
+        @param xsink for the exception if the Program has been deleted
+
+        @return 0 if the thread entered the Program, -1 if not (the Program's teardown has marked it)
+    */
+    DLLLOCAL int enterForNativeCode(int tid, bool& with_context, ExceptionSink* xsink) {
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid)) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed at runtime");
+            }
+            return -1;
+        }
+        // the condition of incThreadCount()
+        with_context = !refusesRuntimeEntry() && !refusedByCommit(tid);
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return 0;
+    }
+
+    //! Enters the Program without its context if code parsed in it refuses the thread runtime entry (qore#6752)
+    /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).
+
+        @param tid the current thread's TID
+
+        @return true if the thread entered the Program without its context; false if it did not enter it: the Program
+        does not refuse it runtime entry because of a parse (the entry that follows enters it), or its teardown has
+        marked it (the entry that follows raises the exception)
+    */
+    DLLLOCAL bool enterWithoutContextIfParseRefused(int tid) {
+        // a Program that no code is parsed or committed in, the usual case, is decided without the lock; a parse that
+        // another thread starts after this read can still refuse the normal entry that follows, as it could before
+        // (qore#6752 covers the objects created while the Program is parsed, not a parse that races with the entry)
+        if (!parsing_in_progress.load() && !commit_entry_restricted.load()) {
+            return false;
+        }
+        // declared before the lock, so that a transition is published after it is released
+        ProgramThreadActivityPublisher activity;
+        AutoLocker al(plock);
+        if (!canEnterIntern(tid) || !parseRefusesEntryIntern(tid)) {
+            return false;
+        }
+        countThreadEntryIntern(tid, tid == q_gettid() && q_thread_is_foreign());
+        if (!thread_count++) {
+            activityTransitionIntern(activity, false);
+        }
+        return true;
+    }
+
     //! Enters the Program without switching to it or running its code: its teardown waits until the thread leaves it
     /** The thread leaves it with decThreadCount(QoreProgram&, int, ExceptionSink*).  Used where the Program's data
         must stay valid while the thread uses it, but none of its code runs as the Program's: the release of a
