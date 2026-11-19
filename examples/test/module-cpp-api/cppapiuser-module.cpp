@@ -215,11 +215,13 @@ static QoreClass* pending_probe_get_class() {
 }
 
 // returns a new object of the class in the current Program
-static QoreObject* pending_probe_new_object() {
+static QoreObject* pending_probe_new_object(ExceptionSink* xsink) {
     QoreClass* qc = pending_probe_get_class();
-    QoreObject* obj = new QoreObject(qc, getProgram());
-    obj->setPrivate(qc->getID(), new AbstractPrivateData);
-    return obj;
+    // the object and its private data are released if an allocation fails
+    ReferenceHolder<QoreObject> obj(new QoreObject(qc, getProgram()), xsink);
+    ReferenceHolder<AbstractPrivateData> data(new AbstractPrivateData, xsink);
+    obj->setPrivate(qc->getID(), data.release());
+    return obj.release();
 }
 
 int64 cppapiuser_pending_probe_destroyed() {
@@ -231,7 +233,7 @@ int64 cppapiuser_pending_probe_destroyed() {
 // for any other command
 static bool cppapiuser_pending_probe_cmd(const QoreString& cmd, ExceptionSink* xsink) {
     if (cmd == "pending-error") {
-        xsink->raiseExceptionArg("CPPAPIUSER-PENDING-ERROR", QoreValue(pending_probe_new_object()),
+        xsink->raiseExceptionArg("CPPAPIUSER-PENDING-ERROR", QoreValue(pending_probe_new_object(xsink)),
             "the command \"pending-error\" was issued");
         return true;
     }
@@ -241,7 +243,7 @@ static bool cppapiuser_pending_probe_cmd(const QoreString& cmd, ExceptionSink* x
         QoreClass* qc = pending_probe_get_class();
         QoreNamespace* ns = getProgram()->getRootNS()->findCreateNamespacePathAll(PENDING_PROBE_NS);
         // the object is held until the namespace takes it
-        ReferenceHolder<QoreObject> obj(pending_probe_new_object(), xsink);
+        ReferenceHolder<QoreObject> obj(pending_probe_new_object(xsink), xsink);
         ns->addConstant(name, obj.release(), qc->getTypeInfo());
         return true;
     }
