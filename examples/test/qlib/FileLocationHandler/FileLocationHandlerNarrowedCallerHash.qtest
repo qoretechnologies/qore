@@ -33,6 +33,7 @@ class FileLocationHandlerNarrowedCallerHashTest inherits QUnit::Test {
             {"encoding": "utf-8"}, True);
         assertEq({
             "encoding": "utf-8",
+            "encoding_errors": "raise",
             "max_file_len": -1,
             "stream_read_io_timeout": 60000,
             "stream_nonblock_open": False,

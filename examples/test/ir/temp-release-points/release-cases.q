@@ -1,4 +1,5 @@
 %modern
+%allow-weak-references
 %disable-warning invalid-operation
 # the cases of temp-release-points.qtest: the point at which a value read from a local, or a temporary that holds it,
 # is released, when the statement writes the local later (qore#5712); see design/temporary-lifetime.md
@@ -374,4 +375,133 @@ sub main() {
     });
 }
 
+# Operator source, element and result lifetimes (qore#5959).
+sub case_field() {
+    list<hash<auto>> l = ({"a": new E("a")}, {"a": new E("b")});
+    string s = f1(map $1.a, l) + f1(l = ()) + mark("field");
+}
+
+sub case_nested() {
+    list<list<auto>> l = ((new E("a"),), (new E("b"),));
+    string s = f1(map (foldl $2, $1), l) + f1(l = ()) + mark("nested");
+}
+
+sub case_write() {
+    list<E> l = (new E("a"), new E("b"));
+    string s = f1(map ((l = ()) ? NOTHING : $1), l) + mark("write");
+}
+
+sub case_select_single() {
+    *E l = new E("a");
+    string s = f1(select l, True) + ((l = NOTHING) ?? "") + mark("single");
+}
+
+sub case_select_hash() {
+    *hash<auto> l = {"x": new E("a"), "y": new E("b")};
+    string s = f1(select l, True) + ((l = NOTHING) ?? "") + mark("hash");
+}
+
+sub case_coalesce() {
+    *list<E> l = (new E("a"), new E("b"));
+    string s = f1((map $1, l) ?? l) + ((l = NOTHING) ?? "") + mark("coalesce");
+}
+
+sub case_hashmap() {
+    *list<E> l = (new E("a"), new E("b"));
+    string s = f1(map {$1.n: $1}, l) + ((l = NOTHING) ?? "") + mark("hashmap");
+}
+
+sub case_foldmap() {
+    *list<E> l = (new E("a"), new E("b"));
+    string s = f1(foldl $2, (map $1, l)) + ((l = NOTHING) ?? "") + mark("foldmap");
+}
+
+sub case_ternmap(bool c) {
+    *list<E> l = (new E("a"), new E("b"));
+    string s = f1(c ? (map $1, l) : (map $1, l)) + ((l = NOTHING) ?? "") + mark("ternmap");
+}
+
+sub case_ternfold(bool c) {
+    *list<E> l = (new E("a"), new E("b"));
+    string s = f1(c ? (foldl $2, l) : (foldl $1, l)) + ((l = NOTHING) ?? "") + mark("ternfold");
+}
+
+sub case_automap() {
+    auto l = (new E("a"), new E("b"));
+    string s = f1(map $1, l) + ((l = NOTHING) ?? "") + mark("automap");
+}
+
+sub case_autosel() {
+    auto l = (new E("a"), new E("b"));
+    string s = f1(select l, True) + ((l = NOTHING) ?? "") + mark("autosel");
+}
+
+sub case_autofold() {
+    auto l = (new E("a"), new E("b"));
+    string s = f1(foldl $2, l) + ((l = NOTHING) ?? "") + mark("autofold");
+}
+
+sub map_parameter(auto l) {
+    string s = f1(map $1, l) + ((l = NOTHING) ?? "") + mark("param");
+}
+
+sub map_reference_or_value(bool choose) {
+    auto target = (new E("ref"),);
+    auto l = choose ? \target : (new E("plain"),);
+    string s = f1(map $1, l) + ((l = NOTHING) ?? "") + mark("local");
+}
+
+class ThrowingElement inherits E {
+    constructor(string name) : E(name) {
+    }
+
+    destructor() {
+        throw "ELEMENT-RELEASE";
+    }
+}
+
+sub map_weak_element(bool catch_here) {
+    *E owner = new ThrowingElement("weak");
+    list<E> source = ();
+    source[0] := owner;
+    source[1] = new E("next");
+    if (catch_here) {
+        try {
+            string s = f1(map ((owner = NOTHING) ?? 1), source) + mark("unreachable");
+        } catch (hash<ExceptionInfo> ex) {
+            mark(ex.err);
+        }
+    } else {
+        string s = f1(map ((owner = NOTHING) ?? 1), source) + mark("unreachable");
+    }
+}
+
 main();
+
+case_field();
+case_nested();
+case_write();
+case_select_single();
+case_select_hash();
+case_coalesce();
+case_hashmap();
+case_foldmap();
+case_ternmap(True);
+case_ternmap(False);
+case_ternfold(True);
+case_ternfold(False);
+case_automap();
+case_autosel();
+case_autofold();
+string typed_source = f1(map $1, mkl("top")) + mark("top");
+map_parameter((new E("value"),));
+auto ref_list = (new E("ref-param"),);
+map_parameter(\ref_list);
+map_reference_or_value(True);
+map_reference_or_value(False);
+map_weak_element(True);
+try {
+    map_weak_element(False);
+} catch (hash<ExceptionInfo> ex) {
+    mark(ex.err);
+}

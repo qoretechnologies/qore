@@ -33,6 +33,8 @@
 #include "qore/intern/QC_File.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QC_TermIOS.h"
+#include "qore/intern/StringReaderHelper.h"
+#include "qore/intern/qore_qf_private.h"
 
 #include <unistd.h>
 
@@ -257,15 +259,27 @@ f.open2("/tmp/my-file.txt");
     @endcode
 
     @param encoding The @ref character_encoding "character encoding" for the %File. Any strings written to the %File will be converted to this @ref character_encoding "character encoding" if necessary; if this argument is not given then the %File will receive the @ref default_encoding "default encoding"
+    @param encoding_errors what text read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole string read ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors; it can be changed with ReadOnlyFile::setEncodingErrors()
 
     @throw ILLEGAL-EXPRESSION File::constructor() cannot be called with a TTY target when @ref no-terminal-io "%no-terminal-io" is set
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
 
     @see File::open(), File::open2()
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
-File::constructor(*string encoding) [flags=NAMED_ARGS] {
+File::constructor(*string encoding, *string encoding_errors) [flags=NAMED_ARGS] {
+   qore_encoding_errors_t ee;
+   if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+      return;
+   }
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
 
    SimpleRefHolder<File> f(new File(qe));
+   qore_qf_private::get(**f)->setEncodingErrors(ee);
    self->setPrivate(CID_FILE, f.release());
 }
 
@@ -277,14 +291,16 @@ File::destructor() [doconly=true] {
    assert(false);
 }
 
-//! Creates a new %File object with the same @ref character_encoding "character encoding" specification as the original, otherwise no other information is copied
+//! Creates a new %File object with the same @ref character_encoding "character encoding" and @ref encoding_errors "encoding_errors" option as the original, otherwise no other information is copied
 /** @par Example:
     @code{.py}
 File f1 = f.copy();
     @endcode
  */
 File::copy() {
-   self->setPrivate(CID_FILE, new File(f->getEncoding()));
+   File* nf = new File(f->getEncoding());
+   qore_qf_private::get(*nf)->setEncodingErrors(qore_qf_private::get(*f)->getEncodingErrors());
+   self->setPrivate(CID_FILE, nf);
 }
 
 //! Opens a %File in a particular mode, returns an error code on failure

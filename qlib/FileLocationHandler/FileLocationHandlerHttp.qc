@@ -230,7 +230,9 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     */
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
         hash<auto> resp = request(scheme, location, opts, "GET");
-        return HttpIoSupport::getStringBody(resp, opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding);
+        string text = HttpIoSupport::getStringBody(resp, opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding);
+        return AbstractFileLocationHandler::checkTextEncoding(text, opts.encoding_errors,
+            AbstractFileLocationHandler::getRequestedLocation(scheme, location));
     }
 
     #! Retrieves a binary file from the given location
@@ -395,7 +397,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         Qore::InputStream stream = response.stream;
         if (!response.decoded) {
             # the octets of a body that is not decoded are not text
-            return new StreamReader(stream, opts.encoding);
+            return new StreamReader(stream, opts.encoding, opts.encoding_errors);
         }
 
         # the encoding of the text is determined by the rules shared by all HTTP clients (see
@@ -427,7 +429,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
             stream = new HttpIoPrefixInputStream(start, stream);
         }
         # a body that is not text is read in the encoding option, as before
-        return new StreamReader(stream, enc ?? opts.encoding);
+        return new StreamReader(stream, enc ?? opts.encoding, opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location
@@ -606,7 +608,9 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     /** @return supported read options
     */
     private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
-        return bound_client ? BoundLocationOpts : HttpClientLocationOpts;
+        return (bound_client ? BoundLocationOpts : HttpClientLocationOpts) + {
+            "encoding_errors": EncodingErrorsOption,
+        };
     }
 
     #! Gets supported write options

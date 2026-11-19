@@ -248,6 +248,14 @@ hash<auto> desc = {
       column operator or of an update operator) whose encoding is invalid or that has a NUL character is refused
       with \c VALUE-ERROR, and its quotes are doubled without a regular expression
       (<a href="https://github.com/qoretechnologies/qore/issues/6586">issue 6586</a>)
+    - fixed @ref SqlUtil::op_in() "op_in()" with dates, which wrote an ANSI \c timestamp literal that SQLite does not
+      accept, and with numbers and floats, which compared otherwise than the same values bound: the values are written
+      as the sqlite3 driver binds them (<a href="https://github.com/qoretechnologies/qore/issues/6634">issue 6634</a>)
+    - fixed @ref SqlUtil::cop_value() "cop_value()" and the update operators (ex: @ref SqlUtil::uop_plus() "uop_plus()")
+      with floats, which were written with 9 significant digits (an update stored another value): a float is written
+      with 17 digits, and a relative date raises \c VALUE-ERROR, as SQLite has no interval type; a float default that
+      9 digits could not hold, as created before, now differs from its description in a schema alignment
+      (<a href="https://github.com/qoretechnologies/qore/issues/6715">issue 6715</a>)
     - implemented @ref select_option_recursive "recursive queries", which need SQLite 3.8.3 or later
       (<a href="https://github.com/qoretechnologies/qore/issues/3544">issue 3544</a>)
     - fixed a column declared with \c "default null" in lower case or \c "default (null)", which was
@@ -1410,11 +1418,32 @@ string sql = pk.getTableConstraintSql();
 
             #! where operator specializations for Sqlite3
             /** SQLite has no ANSI \c substring(... from ... for ...) syntax, so @ref SqlUtil::op_substr() "op_substr()"
-                uses SQLite's \c substr() function
+                uses SQLite's \c substr() function; the values of @ref SqlUtil::op_in() "op_in()" are written as the
+                sqlite3 driver binds them (issue #6634)
 
                 @since Sqlite3SqlUtil 1.2
             */
             const Sqlite3OpMap = DefaultOpMap + {
+                OP_IN: DefaultOpMap{OP_IN} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, string cn, auto arg) {
+                        list<string> in_exprs = ();
+                        foreach auto v in (arg) {
+                            # a binary value is bound, as with "="
+                            if (v.typeCode() == NT_BINARY) {
+                                info.args += v;
+                                in_exprs += "%v";
+                                continue;
+                            }
+                            *string sv = Sqlite3Table::getInValue(v);
+                            if (!exists sv) {
+                                throw "VALUE-ERROR", sprintf("%s: cannot convert type %y to an SQL string for "
+                                    "op_in() (value: %y)", info.table.getDesc(), v.type(), v);
+                            }
+                            in_exprs += sv;
+                        }
+                        return in_exprs ? sprintf("%s in (%s)", cn, join(",", in_exprs)) : "1 != 1";
+                    },
+                },
                 OP_SUBSTR: {
                     "code": string sub (reference<hash<QueryInfo>> info, string cn, softlist<auto> arg) {
                         info.args += arg[0]; # start
@@ -2243,7 +2272,7 @@ string sql = pk.getTableConstraintSql();
         #! returns a string for use in SQL queries representing the DB-specific value of the argument; returns NOTHING if the type cannot be converted to an SQL string
         private static *string getSqlValueIntern(auto v) {
             switch (v.typeCode()) {
-                case NT_FLOAT:
+                case NT_FLOAT: return Sqlite3Table::getFloatValue(v);
                 case NT_INT: return v.toString();
 
                 case NT_NUMBER: return string(v);
@@ -2258,11 +2287,58 @@ string sql = pk.getTableConstraintSql();
 
                 case NT_BOOLEAN: return v ? "true" : "false";
 
-                case NT_DATE:
-                    # issue #6586: SQLite has no timestamp literal; a date is given as the ISO-8601 string that the
-                    # sqlite3 driver binds for it
+                # a date is written as the text that the sqlite3 driver binds for it: SQLite has no timestamp literal
+                # (issues #6586, #6715)
+                case NT_DATE: {
+                    if (v.relative()) {
+                        throw "VALUE-ERROR", sprintf("SQLite has no interval type: the relative date %y cannot be "
+                            "written in SQL (ex: in date arithmetic)", v);
+                    }
                     return "'" + v.format("IF") + "'";
+                }
             }
+        }
+
+        #! returns the SQL of a value of @ref SqlUtil::op_in() "op_in()", which compares as the value bound by the sqlite3 driver
+        /** the driver binds a date as the text of its ISO-8601 form with its UTC offset (\c "IF" format) and a number
+            as its text, so that they are written as these strings; a float is written with the 17 significant digits
+            that give the same double (an infinity as a literal that SQLite reads as one, NaN, which SQLite stores as
+            \c NULL, as \c null); any other value is written as @ref getSqlValue() writes it (issue #6634)
+        */
+        static *string getInValue(auto v) {
+            switch (v.typeCode()) {
+                case NT_DATE: return "'" + v.format("IF") + "'";
+                case NT_NUMBER: return "'" + string(v) + "'";
+                case NT_FLOAT: return Sqlite3Table::getFloatValue(v);
+            }
+            return Sqlite3Table::getSqlValueIntern(v);
+        }
+
+        #! returns the SQL literal of a float that SQLite reads as the same double (issue #6715)
+        /** 17 significant digits, which SQLite reads as the same double (its parser reads some shorter forms that
+            give the same double in Qore as another double), always with a decimal point or an exponent, so that SQLite
+            reads a real; an infinity is written as a literal that SQLite reads as one, NaN, which SQLite stores as
+            \c NULL, as \c null
+        */
+        static string getFloatValue(float v) {
+            if (v != v) {
+                return "null";
+            }
+            if (v == 1e308 * 10) {
+                return "9e999";
+            }
+            if (v == -(1e308 * 10)) {
+                return "-9e999";
+            }
+            # 17 significant digits: SQLite's own parser reads some shorter forms that give the same double in Qore as
+            # another double
+            string s = sprintf("%.17g", v);
+            # a literal without a decimal point or an exponent is an integer in SQLite (ex: "2" for 2.0, which would
+            # make an update operator compute in integers): it is written as a real
+            if (s !~ /[.e]/) {
+                s += ".0";
+            }
+            return s;
         }
 
         #! returns the column name for use in SQL strings, as getSqlIdentifier() returns it

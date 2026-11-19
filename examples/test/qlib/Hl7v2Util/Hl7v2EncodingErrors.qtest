@@ -1,0 +1,62 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires Hl7v2Util
+
+%exec-class Hl7v2EncodingErrorsTest
+
+#! Tests the encoding_errors option of the HL7 v2 read data provider (issue #6604)
+public class Hl7v2EncodingErrorsTest inherits QUnit::Test {
+    public {
+        #! An HL7 v2 message in ISO-8859-1 with "é" in a patient name, which is not valid UTF-8
+        const Data = binary("MSH|^~\\&|ADT|HOSP|EHR|HOSP|202605261200||ADT^A01|MSG0001|P|2.5.1\rPID|1||123||Ren")
+            + <e9> + binary("^Marie\r");
+    }
+
+    constructor() : Test("Hl7v2EncodingErrorsTest", "1.0") {
+        addTestCase("read data provider", \dataProviderTest());
+        set_return_value(main());
+    }
+
+    private dataProviderTest() {
+        hash<DataProviderOptionInfo> info = Hl7v2ReadDataProvider::ConstructorOptions.encoding_errors;
+        assertEq("raise", info.default_value);
+        assertEq(("raise", "latin1", "keep"), map $1.value, info.allowed_values);
+
+        TmpDir dir();
+        string path = dir.path + DirSep + "msg.hl7";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(Data);
+        }
+        # the file is read in the default encoding (UTF-8)
+        assertThrows("INVALID-ENCODING", "not valid UTF-8", sub () { new Hl7v2ReadDataProvider({"path": path}); });
+        assertThrows("INVALID-ENCODING", sub () {
+            new Hl7v2ReadDataProvider({"path": path, "encoding_errors": "raise"});
+        });
+        # an unknown value is rejected by the reader of the file, which shows that the option is passed to it
+        assertThrows("ENCODING-ERRORS-ERROR", sub () {
+            new Hl7v2ReadDataProvider({"path": path, "encoding_errors": "ignore"});
+        });
+
+        # the bytes read as ISO-8859-1 give "é", and the message is parsed (issue #6697)
+        Hl7v2ReadDataProvider prov({"path": path, "encoding_errors": "latin1"});
+        list<hash<auto>> rows = map $1, prov.searchRecords();
+        assertEq(("MSH", "PID"), map $1.tag, rows);
+        assertEq((("René", "Marie"),), rows[1].fields[4].repetitions);
+
+        # the text kept without a check cannot be parsed: the invalid bytes are found when its characters are
+        # processed
+        assertThrows("INVALID-ENCODING", "invalid UTF-8 encoding encountered", sub () {
+            new Hl7v2ReadDataProvider({"path": path, "encoding_errors": "keep"});
+        });
+    }
+}

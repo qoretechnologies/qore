@@ -63,20 +63,33 @@ qclass InputStreamLineIterator [arg=InputStreamLineIterator* isli; ns=Qore; vpar
     @param trim_line if @ref True the string return values for the lines iterated will be trimmed of the line separator bytes
     @param buffer_size the size of the buffer for the internal @ref Qore::BufferedStreamReader "BufferedStreamReader" in
     bytes; must be a positive integer
+    @param encoding_errors what a line read that is not valid in the @ref character_encoding "character encoding"
+    gives; one of the @ref encoding_errors_constants: \c "raise" (the default) raises \c INVALID-ENCODING,
+    \c "latin1" tags the whole line ISO-8859-1 with its bytes, \c "keep" tags it with the encoding without a
+    check; see @ref encoding_errors; an
+    \c INVALID-ENCODING exception raised by InputStreamLineIterator::next() gives the line number
 
     @throw STREAM-BUFFER-ERROR an invalid stream buffer size was specified; the buffer size must be a positive integer
+    @throw ENCODING-ERRORS-ERROR an unknown \a encoding_errors value was given
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the line_separator argument has a different
     @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
 
     @note this variant of the InputStreamLineIterator::constructor creates a
     @ref Qore::BufferedStreamReader "BufferedStreamReader" to read the input data
+
+    @since %Qore 3.0 the \a encoding_errors parameter
  */
 InputStreamLineIterator::constructor(Qore::InputStream[InputStream] input_stream, *string encoding,
-        *string line_separator, bool trim_line = True, int buffer_size = DefaultStreamBufferSize) [flags=NAMED_ARGS] {
+        *string line_separator, bool trim_line = True, int buffer_size = DefaultStreamBufferSize,
+        *string encoding_errors) [flags=NAMED_ARGS] {
+    qore_encoding_errors_t ee;
+    if (q_get_encoding_errors(encoding_errors, ee, xsink)) {
+        return;
+    }
     if (line_separator && line_separator->empty())
         line_separator = nullptr;
     SimpleRefHolder<InputStreamLineIterator> li(new InputStreamLineIterator(xsink, input_stream.release(),
-        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, line_separator, trim_line, buffer_size));
+        encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, line_separator, trim_line, buffer_size, ee));
     if (*xsink)
         return;
     self->setPrivate(CID_INPUTSTREAMLINEITERATOR, li.release());
@@ -95,6 +108,9 @@ InputStreamLineIterator::constructor(Qore::InputStream[InputStream] input_stream
 
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the line_separator argument has a different
     @ref character_encoding "character encoding" from the data's and an error occurs during encoding conversion
+
+    @note the lines are checked with the @ref encoding_errors "encoding_errors" option of the \a stream_reader (see
+    StreamReader::setEncodingErrors())
  */
 InputStreamLineIterator::constructor(Qore::StreamReader[StreamReader] stream_reader, *string line_separator,
         bool trim_line = True) [flags=NAMED_ARGS] {
@@ -121,6 +137,10 @@ while (i.next()) {
     printf("line: %y\n", i.getValue());
 }
     @endcode
+
+    @throw INVALID-ENCODING the line read is not valid in the @ref character_encoding "character encoding" and the
+    @ref encoding_errors "encoding_errors" option is \c "raise" (the default); the message gives the line number;
+    see @ref encoding_errors
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
     @throw ENCODING-BYTE-ORDER-ERROR the text is in a form of UTF-16 or UTF-32 and the start of the data is in the other byte order than the encoding; see @ref Qore::check_unicode_byte_order() "check_unicode_byte_order()"
@@ -220,4 +240,19 @@ string encoding = i.getEncoding();
  */
 string InputStreamLineIterator::getEncoding() [flags=CONSTANT] {
     return new QoreStringNode(isli->getEncoding()->getCode());
+}
+
+//! Returns what a line read that is not valid in the @ref character_encoding "character encoding" gives
+/** @par Example:
+    @code{.py}
+string encoding_errors = i.getEncodingErrors();
+    @endcode
+
+    @return one of the @ref encoding_errors_constants: \c "raise", \c "latin1", or \c "keep"; the option of the
+    @ref StreamReader used internally; see @ref encoding_errors
+
+    @since %Qore 3.0
+ */
+string InputStreamLineIterator::getEncodingErrors() [flags=CONSTANT] {
+    return new QoreStringNode(q_encoding_errors_name(isli->getEncodingErrors()));
 }

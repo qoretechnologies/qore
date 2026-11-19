@@ -46,6 +46,7 @@ class FileLocationHandlerFile inherits AbstractFileLocationHandler {
         /**
         */
         const FileLocationReadOpts = FileLocationOpts + {
+            "encoding_errors": EncodingErrorsOption,
             "stream_read_io_timeout": <FileHandlerOptionInfo>{
                 "type": "int",
                 "default_value": 60000,
@@ -87,7 +88,8 @@ class FileLocationHandlerFile inherits AbstractFileLocationHandler {
         @note Supports environment variable substitution in \a location
     */
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
-        return ReadOnlyFile::readTextFile(substitute_env_vars(location), opts.encoding, opts.max_file_len);
+        return ReadOnlyFile::readTextFile(substitute_env_vars(location), opts.encoding, opts.max_file_len,
+            opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location
@@ -195,7 +197,7 @@ class FileLocationHandlerFile inherits AbstractFileLocationHandler {
         @note Supports environment variable substitution in \a location
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding, opts.encoding_errors);
     }
 
     #! Retrieves a binary file from the given location

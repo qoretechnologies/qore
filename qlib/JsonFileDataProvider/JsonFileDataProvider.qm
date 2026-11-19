@@ -181,8 +181,9 @@ namespace Priv {
                     "required": True,
                     "loc": "constructor",
                 }
+            # the data string is not read from a file or a stream, so encoding_errors does not apply to it
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                JsonFileReadDataProvider::ConstructorOptions - ("path", "data", "stream"), {
+                JsonFileReadDataProvider::ConstructorOptions - ("path", "data", "stream", "encoding_errors"), {
                     "loc": "constructor",
                 }
             ),

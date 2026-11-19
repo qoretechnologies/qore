@@ -195,6 +195,18 @@
           "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
           "message": "L'encodage de chaîne à utiliser si `text` = `True` (par défaut : `UTF-8`)"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.display_name": {
+          "source": "Encoding Errors",
+          "message": "Erreurs d'encodage"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.short_desc": {
+          "source": "What text that is not valid in its character encoding gives",
+          "message": "Ce que donne un texte qui n'est pas valide dans son encodage de caractères"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2RpbmdfZXJyb3Jz.desc": {
+          "source": "What text that is not valid in its character encoding gives if `text` = `True`: `raise` (the default) raises an `INVALID-ENCODING` error, `latin1` returns the text as `ISO-8859-1`, and `keep` returns it in the encoding without a check",
+          "message": "Ce que donne un texte qui n'est pas valide dans son encodage de caractères si `text` = `True` : `raise` (la valeur par défaut) lève une erreur `INVALID-ENCODING`, `latin1` renvoie le texte en `ISO-8859-1`, et `keep` le renvoie dans l'encodage sans vérification"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
           "source": "Max Len",
           "message": "Longueur max"

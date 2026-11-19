@@ -96,8 +96,8 @@ QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
         case BSON_TYPE_REGEX: {
             // Return as hash with pattern and options
             ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
-            h->setKeyValue("$regex", new QoreStringNode(value->value.v_regex.regex), xsink);
-            h->setKeyValue("$options", new QoreStringNode(value->value.v_regex.options), xsink);
+            h->setKeyValue("$regex", new QoreStringNode(value->value.v_regex.regex, QCS_UTF8), xsink);
+            h->setKeyValue("$options", new QoreStringNode(value->value.v_regex.options, QCS_UTF8), xsink);
             return h.release();
         }
 
@@ -105,7 +105,7 @@ QoreValue bson_value_to_qore(const bson_value_t* value, ExceptionSink* xsink) {
             // Deprecated type - return as hash
             ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
             h->setKeyValue("$ref", new QoreStringNode(value->value.v_dbpointer.collection,
-                value->value.v_dbpointer.collection_len), xsink);
+                value->value.v_dbpointer.collection_len, QCS_UTF8), xsink);
             char oid_str[25];
             bson_oid_to_string(&value->value.v_dbpointer.oid, oid_str);
             h->setKeyValue("$id", new QoreStringNode(oid_str), xsink);
@@ -185,7 +185,8 @@ QoreHashNode* bson_to_qore_hash(const bson_t* doc, ExceptionSink* xsink) {
         if (*xsink) {
             return nullptr;
         }
-        hash->setKeyValue(key, qv, xsink);
+        // a BSON key is UTF-8, and a hash key is in the default encoding
+        hash->setKeyValue(QoreString(key, QCS_UTF8), qv, xsink);
         if (*xsink) {
             return nullptr;
         }
@@ -374,10 +375,16 @@ bson_t* qore_hash_to_bson(const QoreHashNode* hash, ExceptionSink* xsink) {
 
     ConstHashIterator hi(hash);
     while (hi.next()) {
-        const char* key = hi.getKey();
+        // a hash key is in the default encoding, and a BSON key is UTF-8
+        QoreString key(hi.getKey());
+        TempEncodingHelper utf8_key(key, QCS_UTF8, xsink);
+        if (*xsink) {
+            bson_destroy(doc);
+            return nullptr;
+        }
         QoreValue value = hi.get();
 
-        if (qore_value_to_bson_append(doc, key, value, xsink)) {
+        if (qore_value_to_bson_append(doc, utf8_key->c_str(), value, xsink)) {
             bson_destroy(doc);
             return nullptr;
         }

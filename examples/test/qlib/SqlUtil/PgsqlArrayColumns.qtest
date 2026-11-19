@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires SqlUtil
+%requires ./PgsqlTestIsolation.qm
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlArrayColumnsTest
+
+#! PostgreSQL array columns in inserts, upserts and upsert keys (issue #6695)
+/** a list for an array column that is the first column of an inserted row was taken for a row of list values (bulk
+    DML), an array key column was compared with the value bound as \c bigint[] (no operator), and the \c UNNEST bulk
+    upsert failed for a table with an array column; runs when \c QORE_DB_CONNSTR_PGSQL is set
+*/
+class PgsqlArrayColumnsTest inherits QUnit::Test {
+    private {
+        *Datasource ds;
+        string skip = "QORE_DB_CONNSTR_PGSQL is not set";
+
+        const Strategies = {
+            "auto": AbstractTable::UpsertAuto,
+            "update-first": AbstractTable::UpsertUpdateFirst,
+            "select-first": AbstractTable::UpsertSelectFirst,
+            "insert-first": AbstractTable::UpsertInsertFirst,
+            "insert-only": AbstractTable::UpsertInsertOnly,
+            "update-only": AbstractTable::UpsertUpdateOnly,
+        };
+    }
+
+    constructor() : Test("PgsqlArrayColumns", "1.0", \ARGV) {
+        addTestCase("insert", \insertTest());
+        addTestCase("array key", \arrayKeyTest());
+        addTestCase("character array key", \charArrayKeyTest());
+        addTestCase("bulk upsert", \bulkUpsertTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+%ifndef NoPgsql
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::setup(ENV.QORE_DB_CONNSTR_PGSQL, "PgsqlArrayColumns");
+            ds = new Datasource(ENV.QORE_DB_CONNSTR_PGSQL);
+        }
+%else
+        skip = "no pgsql module";
+%endif
+    }
+
+    globalTearDown() {
+        if (ds) {
+            ds.rollback();
+            remove ds;
+        }
+        if (ENV.QORE_DB_CONNSTR_PGSQL) {
+            PgsqlRunSchema::teardown();
+        }
+    }
+
+    #! a list for an array column first in a row is its value; a row of list values gives a list of lists for it
+    insertTest() {
+        Datasource d = getDs();
+        withTable(d, "pac_ins", "tags integer[], id integer not null, v integer, primary key (id)",
+                sub (AbstractTable t) {
+            t.insert({"tags": (1, 2), "id": 1, "v": 1});
+            assertEq(({"tags": (1, 2), "id": 1, "v": 1},), getRows(t), "a single row");
+            # a row of list values with an array column: its rows are inserted, with the values that they return
+            *hash<auto> rh = t.insert({"tags": ((3,), (4, 5)), "id": (2, 3), "v": (2, 3)}, {"returning": "id"});
+            assertEq((2, 3), rh.id, "returning");
+            assertEq(({"tags": (1, 2), "id": 1, "v": 1}, {"tags": (3,), "id": 2, "v": 2},
+                {"tags": (4, 5), "id": 3, "v": 3}), getRows(t), "a row of list values");
+            # lists of other lengths are raised before any row is inserted
+            assertThrows("INSERT-ERROR", "must have the same length",
+                sub () { t.insert({"tags": ((6,), (7,)), "id": (4,), "v": (4, 5)}); });
+            assertEq(3, t.rowCount(), "nothing more is inserted");
+            # a value that is not a list first: it is the value of each row
+            t.insert({"v": 7, "id": (4, 5), "tags": ((6,), (7, 8))});
+            assertEq(({"tags": (6,), "id": 4, "v": 7}, {"tags": (7, 8), "id": 5, "v": 7}),
+                t.selectRows({"where": {"id": op_in(4, 5)}, "orderby": "id"}), "a value first");
+            # a table without a value for the array column takes the bulk insert as before
+            t.insert({"id": (10, 11), "v": (10, 11)});
+            assertEq(7, t.rowCount(), "a row of list values without an array column");
+        });
+    }
+
+    #! an array key column is compared with the value converted to its type by every strategy
+    arrayKeyTest() {
+        Datasource d = getDs();
+        withTable(d, "pac_key", "k integer[] not null, v integer, primary key (k)", sub (AbstractTable t) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                t.del();
+                d.exec("insert into pac_key values ('{1,2}', 1)");
+                int rc;
+                try {
+                    rc = t.upsert({"k": (1, 2), "v": 5}, st.value);
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("%s: %s: %s", st.key, ex.err, ex.desc));
+                }
+                *list<hash<auto>> rows = t.selectRows();
+                assertEq(1, rows.size(), st.key + ": no other row");
+                assertEq(st.key == "insert-only" ? 1 : 5, rows[0].v, st.key + ": the row of the key");
+                assertEq(st.key == "insert-only" ? AbstractTable::UR_Unchanged : (st.key == "select-first"
+                    ? AbstractTable::UR_Updated : AbstractTable::UR_Verified), rc, st.key + ": result");
+            }
+        });
+    }
+
+    #! a key of an array of a character type longer than the column's length is not truncated to match another row
+    charArrayKeyTest() {
+        Datasource d = getDs();
+        withTable(d, "pac_ckey", "k varchar(3)[] not null, v integer, primary key (k)", sub (AbstractTable t) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                t.del();
+                d.exec("insert into pac_ckey values ('{abc}', 1)");
+                try {
+                    t.upsert({"k": ("abcd",), "v": 5}, st.value);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the insert of the longer value fails, as a plain insert does
+                }
+                d.rollback();
+                # the row of the other key is not changed (checked after the rollback of a failed insert)
+                *hash<auto> row = t.selectRow({"where": {"v": op_ne(1)}});
+                assertEq(NOTHING, row, st.key + ": the row of another key is not changed");
+                # the same key is found
+                t.del();
+                d.exec("insert into pac_ckey values ('{abc}', 1)");
+                t.upsert({"k": ("abc",), "v": 6}, st.value);
+                assertEq(st.key == "insert-only" ? 1 : 6, t.selectRow().v, st.key + ": the same key");
+                d.rollback();
+            }
+        });
+    }
+
+    #! a bulk upsert of a table with an array column upserts its rows
+    bulkUpsertTest() {
+        Datasource d = getDs();
+        withTable(d, "pac_bulk", "id integer not null, tags integer[], v integer, primary key (id)",
+                sub (AbstractTable t) {
+            foreach hash<auto> st in (Strategies.pairIterator()) {
+                t.del();
+                d.exec("insert into pac_bulk values (1, '{1}', 1)");
+                try {
+                    t.getBulkUpsertClosure({"id": 1, "tags": (1,), "v": 1}, st.value)({"id": (1, 2),
+                        "tags": ((7, 8), (9,)), "v": (5, 6)});
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("%s: %s: %s", st.key, ex.err, ex.desc));
+                }
+                list<hash<auto>> expected;
+                switch (st.key) {
+                    case "insert-only":
+                        expected = ({"id": 1, "tags": (1,), "v": 1}, {"id": 2, "tags": (9,), "v": 6});
+                        break;
+                    case "update-only":
+                        expected = ({"id": 1, "tags": (7, 8), "v": 5},);
+                        break;
+                    default:
+                        expected = ({"id": 1, "tags": (7, 8), "v": 5}, {"id": 2, "tags": (9,), "v": 6});
+                        break;
+                }
+                assertEq(expected, getRows(t), st.key);
+            }
+        });
+    }
+
+    private Datasource getDs() {
+        if (!ds) {
+            testSkip(skip);
+        }
+        return ds;
+    }
+
+    private list<hash<auto>> getRows(AbstractTable t) {
+        return t.selectRows({"orderby": "id"}) ?? ();
+    }
+
+    private withTable(Datasource d, string name, string def, code test) {
+        on_exit d.rollback();
+        d.exec(sprintf("create table %s (%s)", name, def));
+        d.commit();
+        on_exit {
+            d.rollback();
+            d.exec("drop table " + name);
+            d.commit();
+        }
+        test(new Table(d, name).getTable());
+    }
+}

@@ -101,6 +101,8 @@ protected:
     SimpleRefHolder<SimpleValueQoreNode> data;
     File* file;
     bool to_string;
+    //! the maximum number of bytes read, or -1 to read all of the file
+    ssize_t max_bytes = -1;
     bool set_non_block = false;
     int state = FPS_NONE;
 
