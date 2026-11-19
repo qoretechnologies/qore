@@ -65,6 +65,7 @@ class EchoConnection inherits WebSocketConnection {
     }
 
     connectionClosed() {
+        on_exit h.open.dec();
         h.closed.push({"code": getCloseCode(), "reason": getCloseReason()});
     }
 }
@@ -75,12 +76,17 @@ class EchoHandler inherits WebSocketHandler {
         # the close code and reason of each connection, as connectionClosed() gets them
         Queue closed();
         *EchoConnection last;
+        # the connections that connectionClosed() was not called for yet
+        Counter open();
     }
 
-    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    # the close timeout is a hang guard only: the server waits for the client's answer to its close frame however
+    # long a slow run takes to send it (a close that times out has the close code 1006)
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts + {"close_timeout": 60s}) {
     }
 
     WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        open.inc();
         return last = new EchoConnection(self);
     }
 
@@ -136,6 +142,13 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
     }
 
     setUp() {
+        # the connections of the cases before have ended, so that their close codes and errors are not taken for
+        # this case's (a case that fails can leave its connection to be closed after it)
+        foreach EchoHandler h in ((plain, deflate)) {
+            if (h.open.waitForZero(30s)) {
+                throw "TEST-ERROR", sprintf("%d connection(s) of the cases before did not end", h.open.getCount());
+            }
+        }
         plain.errs.clear();
         plain.closed.clear();
         deflate.errs.clear();
@@ -156,7 +169,8 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         }
         hash<auto> info;
         s.sendHTTPMessage("GET", path, "1.1", hdr, NOTHING, \info);
-        assertEq(101, s.readHTTPHeader(10s).status_code, "the WebSocket handshake succeeds");
+        # a hang guard only: the first request of a run in the tiered mode compiles the server's code
+        assertEq(101, s.readHTTPHeader(60s).status_code, "the WebSocket handshake succeeds");
     }
 
     # asserts that the server closes the connection with the given code, and that the connection's code is told
@@ -168,10 +182,11 @@ class WebSocketInvalidUtf8Test inherits QUnit::Test {
         hash<WsMsgInfo> h = ws_read_message(s, 30s);
         assertEq(WSOP_Close, h.op, "the server closes the connection");
         assertEq(code, h.close, sprintf("with %d", code));
-        assertRegex(err_regex, handler.errs.get(30s), "the handler logs the error");
+        # the client answers the close frame at once, as a client does, before the handler's log is checked
         if (answer) {
             s.send(ws_encode_message(code.encodeMsb(2), WSOP_Close, True, True));
         }
+        assertRegex(err_regex, handler.errs.get(30s), "the handler logs the error");
         s.close();
         assertEq(code, handler.closed.get(30s).code, "connectionClosed() gets the close code");
     }
