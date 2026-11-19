@@ -242,10 +242,6 @@ class UpsertBulkRowsTest inherits QUnit::Test {
         }
         AbstractTable t = new Table(ds, name).getTable();
         foreach hash<auto> st in (Strategies.pairIterator()) {
-            # the Oracle select-first upsert binds the lists of the row in a select (issue #6688)
-            if (db == "oracle" && st.key == "select-first") {
-                continue;
-            }
             string desc = sprintf("%s: %s", db, st.key);
             # the rows expected after an upsert of the keys 1, 2 and 3 in a table with the rows of the keys 1 and 9
             hash<auto> expected = {"1": 10, "2": 20, "3": 30, "9": 9};
@@ -306,10 +302,6 @@ class UpsertBulkRowsTest inherits QUnit::Test {
         # a row of empty lists upserts nothing, and the bulk closure gives UR_Verified for a row of list values
         reset(t);
         foreach hash<auto> st in (Strategies.pairIterator()) {
-            # the Oracle select-first upsert binds the lists of the row in a select (issue #6688)
-            if (db == "oracle" && st.key == "select-first") {
-                continue;
-            }
             assertEq(AbstractTable::UR_Unchanged, t.getUpsertClosure({"k": (1,), "s": "a", "v": (1,)},
                 st.value)({"k": (), "s": (), "v": ()}), db + ": empty lists: " + st.key);
             assertEq({"unchanged": 1}, t.upsertFromIterator(({"k": (), "s": (), "v": ()},).iterator(), st.value),
