@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# test-platform: macos - WebSocket connections over HTTP/1.1, HTTP/2 and HTTP/3 sockets whose server-side setup fails
+/*  WebSocketSetupException.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A connection whose setup in WebSocketHandler::startImpl() raises an exception after the connection was registered
+    is deregistered, gets WebSocketConnection::connectionClosed() exactly once and is removed from the handler
+    (issue #6794): it was kept by the handler forever and connectionClosed() was never called.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires ../../TestCertificates.qm
+
+%exec-class WebSocketSetupExceptionTest
+
+#! the longest wait for an event that a correct server always produces
+const HangGuard = 60s;
+
+#! A connection whose setup fails: the handler sets its socket right after it registered it
+class FailingSetupConnection inherits WebSocketConnection {
+    private {
+        FailingSetupHandler setup_handler;
+    }
+
+    constructor(FailingSetupHandler handler) : WebSocketConnection(handler) {
+        setup_handler = handler;
+    }
+
+    destructor() {
+        # the handler holds the connection until it removes it
+        setup_handler.destroyed.dec();
+    }
+
+    setSocket(Socket sock) {
+        throw "TEST-SETUP-ERROR", "the setup of the connection fails";
+    }
+
+    connectionClosed() {
+        setup_handler.closedCalled();
+    }
+}
+
+#! Creates connections whose setup fails, and counts the calls of their connectionClosed()
+class FailingSetupHandler inherits WebSocketHandler {
+    public {
+        #! signaled when connectionClosed() was called
+        Counter closed(1);
+        #! signaled when the connection was destroyed: the handler no longer holds it
+        Counter destroyed(1);
+        #! the ID of the connection
+        *string cid;
+    }
+
+    private {
+        int closed_calls = 0;
+        Mutex lck();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        self.cid = cid;
+        return new FailingSetupConnection(self);
+    }
+
+    closedCalled() {
+        lck.lock();
+        on_exit lck.unlock();
+        if (!closed_calls++) {
+            closed.dec();
+        }
+    }
+
+    int getClosedCalls() {
+        lck.lock();
+        on_exit lck.unlock();
+        return closed_calls;
+    }
+}
+
+class WebSocketSetupExceptionTest inherits QUnit::Test {
+    private {
+        Logger logger;
+    }
+
+    constructor() : QUnit::Test("WebSocketSetupException", "1.0") {
+        addTestCase("HTTP/1.1", \http1Test());
+        addTestCase("HTTP/2", \http2Test());
+        addTestCase("HTTP/3", \http3Test());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the setup error is logged at error level; shown only with -vvv
+        logger = new Logger("ws-setup-exception", m_options.verbose > 2
+            ? LoggerLevel::getLevelInfo()
+            : LoggerLevel::getLevelError());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    http1Test() {
+        setupExceptionImpl("h1");
+    }
+
+    http2Test() {
+        setupExceptionImpl("h2");
+    }
+
+    http3Test() {
+        setupExceptionImpl("h3");
+    }
+
+    private setupExceptionImpl(string protocol) {
+        HttpServer server(<HttpServerOptionInfo>{"logger": logger});
+        on_exit server.stop();
+        FailingSetupHandler handler({"logger": logger});
+        server.setDefaultHandler("ws", handler);
+        hash<HttpListenerOptionInfo> listener = <HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        };
+        if (protocol != "h1") {
+            listener.cert = new SSLCertificate(CertPem);
+            listener.key = new SSLPrivateKey(KeyPem);
+            listener.enable_h3 = True;
+        }
+        int port = server.addListener(listener).port;
+        server.waitForAsyncIo();
+
+        hash<auto!> conn_opts;
+        switch (protocol) {
+            case "h1": conn_opts = {"url": "ws://127.0.0.1:" + port}; break;
+            case "h2": conn_opts = {"url": "wss://localhost:" + port, "http_version": "2.0"}; break;
+            case "h3": conn_opts = {"url": "wss://127.0.0.1:" + port, "http3_mode": "required"}; break;
+        }
+        WebSocketClient wsc(sub (*data msg) {}, conn_opts + {"ssl_verify_cert": False, "logger": logger});
+        on_exit try { wsc.disconnect(); } catch () {}
+        # the server may refuse the connection or end it after the upgrade: either way, its setup fails
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+
+        assertEq(0, handler.closed.waitForZero(HangGuard), "connectionClosed() is called");
+        assertEq(0, handler.destroyed.waitForZero(HangGuard), "the handler no longer holds the connection");
+        assertEq(1, handler.getClosedCalls(), "connectionClosed() is called once");
+        assertFalse(inlist(handler.cid, handler.getConnectionIds() ?? ()), "the connection is not registered");
+    }
+}
