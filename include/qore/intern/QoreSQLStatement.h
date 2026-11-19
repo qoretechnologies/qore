@@ -62,6 +62,17 @@ protected:
     QoreString str;
     // copy of prepare args
     QoreListNode* prepare_args = nullptr;
+    // the values bound to the prepared statement with bind() or exec() (bind_args), bindPlaceholders() and
+    // bindValues(), which are bound again when the statement is prepared again after a describe() that closed it
+    // (issue #6690); bind() sets every bind position, so that it discards the values of the other two; any other close
+    // of the statement discards them, as the statement is prepared again without them
+    QoreListNode* bind_args = nullptr;
+    QoreListNode* placeholder_args = nullptr;
+    QoreListNode* value_args = nullptr;
+    // set when describe() closed the statement after describing it with the driver's exec-describe method, or when
+    // binding the values again failed: the next preparation binds bind_args, placeholder_args and value_args again
+    // (issue #6690)
+    bool rebind_after_describe = false;
     // the lock of the datasource that the statement uses (sql_statement_private::ds)
     /** The datasource that the statement uses is what makes the statement a thread's (issue #2334): a statement of a
         DatasourcePool is used by the thread that holds that connection, and an action in another thread raises
@@ -84,11 +95,18 @@ protected:
 
     DLLLOCAL int checkStatus(ExceptionSink* xsink, DBActionHelper& dba, int stat, const char* action);
 
-    DLLLOCAL int closeIntern(ExceptionSink* xsink);
+    //! closes the statement; the values bound to it are discarded unless keep_values is set (issue #6690)
+    DLLLOCAL int closeIntern(ExceptionSink* xsink, bool keep_values = false);
+    //! discards the values bound to the statement (issue #6690)
+    DLLLOCAL void discardBoundValues(ExceptionSink* xsink);
+    //! keeps the values given to bind() or exec() as the values bound to every position (issue #6690)
+    DLLLOCAL void storeBindArgs(const QoreListNode& l, ExceptionSink* xsink);
     DLLLOCAL int execIntern(DBActionHelper& dba, ExceptionSink* xsink);
     DLLLOCAL int execDescribeIntern(DBActionHelper& dba, ExceptionSink* xsink);
     DLLLOCAL int defineIntern(ExceptionSink* xsink);
     DLLLOCAL int prepareIntern(ExceptionSink* xsink);
+    //! binds again the values bound before a describe() closed the statement (issue #6690)
+    DLLLOCAL int rebindAfterDescribe(ExceptionSink* xsink);
     DLLLOCAL int prepareArgs(bool n_raw, const QoreString& n_str, const QoreListNode* args, ExceptionSink* xsink);
 
 public:

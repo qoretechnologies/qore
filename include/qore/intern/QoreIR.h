@@ -1640,8 +1640,26 @@ public:
     // debug line-change gate below reports the wrong line
     int32_t cached_start_line;
     QoreIRIntrinsic intrinsic = QoreIRIntrinsic::None;
-    const QoreProgramLocation* loc = nullptr;
+    //! the value that the instruction defines; declared here, in the padding after the 16-bit intrinsic, so that the
+    //! runtime location (stmt_loc) adds no size to the instruction: a larger instruction changed the sizes that the
+    //! IR of every function allocates, and with them the state of the heap that the code allocates from afterwards
+    //! (qore#6646)
     QoreIRValue result{};
+    //! the source location of the instruction: of the expression or the statement that it was lowered from (the
+    //! call site of a call, the line of the debugger's step events and of native debug information)
+    const QoreProgramLocation* loc = nullptr;
+    //! the runtime location of the instruction: the location of the innermost statement whose code it is, which the
+    //! AST interpreter makes the thread's runtime location while the statement runs (AbstractStatement::exec()), and
+    //! which exceptions take (see @ref exception_location "the location of an exception"); nullptr for code outside
+    //! the statements of the function, which keeps the runtime location that it finds (qore#6646)
+    /** Set by the IR builder from the statement being lowered (QoreIRBuilder::setStatementLocation()); an instruction
+        that an analysis creates in place of another takes the location of the one it replaces.  The IR interpreter
+        and native code store it when it changes, not when the line changes: a statement and the statement or block
+        that contains it can start on the same line.  AOT images record it (QORE_AOT_STATEMENT_LOCATIONS_VERSION);
+        the IR of an image of an earlier format takes it from the instruction's own location
+        (qore_ir_set_deserialized_statement_locations()).
+    */
+    const QoreProgramLocation* stmt_loc = nullptr;
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
     // For list/hash creation instructions; for CheckReturnValue, the declared return type
