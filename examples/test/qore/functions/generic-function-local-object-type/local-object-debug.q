@@ -1,7 +1,8 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 # fixture of generic-function-local-object-type.qtest: the types that name the type parameters of generic functions
-# with a debugger attached, which makes qcc programs read the IR of their functions from the AOT image (qore#6261)
+# with a debugger attached, which makes qcc programs read the IR of their functions from the AOT image (qore#6261),
+# and the hashdecl casts of generic code (cast<hash<H<U>>>), whose hashdecl is resolved when the cast runs (qore#6327)
 
 %modern
 %allow-debugger
@@ -85,6 +86,19 @@ string sub nested<U>(U v) {
     };
     return outer();
 }
+# hashdecl casts with the type parameters of the code (qore#6327)
+namespace NS { hashdecl K<T> { T v; } }
+auto sub castHd<U>(auto v) { return cast<hash<H<U>>>(v).fullType(); }
+auto sub castHdOrNothing<U>(auto v) { return cast<*hash<H<U>>>(v); }
+auto sub castHdLiteral<U>() { return cast<hash<H<U>>>({"v": 2}).fullType(); }
+auto sub castHdNested<U>(auto v) { return cast<hash<NS::K<list<U>>>>(v).fullType(); }
+auto sub castHdClosure<U>(auto v) { code c = auto sub () { return cast<hash<H<U>>>(v).fullType(); }; return c(); }
+auto sub castHdSecond<A, B>(auto v) { return cast<hash<H<B>>>(v).fullType(); }
+class HdCast<T> {
+    auto classParam(auto v) { return cast<hash<H<T>>>(v).fullType(); }
+    auto methodParam<U>(auto v) { return cast<hash<H<U>>>(v).fullType(); }
+    static auto staticParam<U>(auto v) { return cast<hash<NS::K<hash<string, U>>>>(v).fullType(); }
+}
 sub runCases() {
     show("callee with the same type parameter name", auto sub () { return sameName<string>("a"); });
     show("callee with the same type parameter name, negative", auto sub () { return sameName<int>(1); });
@@ -119,6 +133,20 @@ sub runCases() {
     show("def list", auto sub () { return defList<int>(1); });
     show("def hash", auto sub () { return defHash<int>(1); });
     show("def cast", auto sub () { return defCast<int>((1,)); });
+    show("hashdecl cast", auto sub () { return castHd<int>({"v": 1}); });
+    show("hashdecl cast, string", auto sub () { return castHd<string>({"v": "a"}); });
+    show("hashdecl cast, wrong value", auto sub () { return castHd<int>({"v": "a"}); });
+    show("hashdecl cast, or nothing", auto sub () { return castHdOrNothing<int>(); });
+    show("hashdecl cast, literal", auto sub () { return castHdLiteral<int>(); });
+    show("hashdecl cast, nested type argument", auto sub () { return castHdNested<int>({"v": (1,)}); });
+    show("hashdecl cast in a closure", auto sub () { return castHdClosure<int>({"v": 1}); });
+    show("hashdecl cast, second type parameter", auto sub () { return castHdSecond<int, string>({"v": "a"}); });
+    show("hashdecl cast, class type parameter", auto sub () { HdCast<int> c(); return c.classParam({"v": 1}); });
+    show("hashdecl cast, method type parameter", auto sub () {
+        HdCast<int> c();
+        return c.methodParam<string>({"v": "a"});
+    });
+    show("hashdecl cast, static method", auto sub () { return HdCast<int>::staticParam<int>({"v": {"a": 1}}); });
 }
 Stepper stepper();
 ProgramControl pc = ProgramControl::getProgram();

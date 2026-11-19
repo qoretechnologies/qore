@@ -100,7 +100,10 @@ int QoreRegexSubst::parseRT(const char* pstr, size_t len, ExceptionSink* xsink) 
 
     //printd(5, "QoreRegexSubst::parseRT(%s) this: %p\n", t->c_str(), this);
 
-    p = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pstr), len, options, &errorcode, &eo, nullptr);
+    // \C matches one byte, which can be part of a character, and so gives a string that is not valid UTF-8: it is
+    // refused when the pattern is compiled (qore#6554)
+    p = pcre2_compile(reinterpret_cast<PCRE2_SPTR8>(pstr), len, options | PCRE2_NEVER_BACKSLASH_C, &errorcode, &eo,
+        nullptr);
     if (!p) {
         PCRE2_UCHAR buffer[qore_pcre2_errorbuf_size];
         pcre2_get_error_message(errorcode, buffer, sizeof(buffer));

@@ -20137,7 +20137,7 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
             // was matched already
             if (!fast_decided) {
                 QoreHashNode* fast_info = nullptr;
-                int fast_rc = serveFastRoute(*hdr, fast_info, xsink);
+                int fast_rc = serveFastRoute(*hdr, *info, fast_info, xsink);
                 if (fast_rc) {
                     return fast_rc > 0 ? fast_info : nullptr;
                 }
@@ -20172,7 +20172,8 @@ static bool fast_route_header(const QoreHashNode* hdr, const char* name, std::st
     return true;
 }
 
-int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, QoreHashNode*& info,
+int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr, const QoreHashNode* hdr_info,
+        QoreHashNode*& info,
         ExceptionSink* xsink) {
     // a draining server answers the request on the ordinary path, which closes the connection after the response
     // (qore#5899)
@@ -20215,6 +20216,9 @@ int SocketSendAndReadHeaderPollOperation::serveFastRoute(const QoreHashNode* hdr
     view.has_upgrade = fast_route_header(hdr, "upgrade", tmp) || fast_route_header(hdr, "http2-settings", tmp);
     // bytes of the next request are already buffered (buflen is the number of unread bytes in the buffer)
     view.pending = sp->buflen > 0;
+    // text that the normal path refuses with 400 (qore#6554)
+    view.invalid_text = !qore_http_target_text_valid(path.data(), path.size())
+        || hdr_info->getKeyValue("invalid-field-name").getAsBool();
 
     int us;
     int64 epoch_s = q_epoch_us(us);
@@ -20256,6 +20260,9 @@ int SocketSendAndReadHeaderPollOperation::serveFastRaw(const char* data, size_t 
         return 0;
     }
     view.pending = sp->buflen > 0;
+    // the strict parser accepts no "%" and no byte above 0x7f in the target and only token header names, so the
+    // request has no text that the normal path refuses (qore#6554)
+    assert(qore_http_target_text_valid(view.path.data(), view.path.size()));
 
     int us;
     int64 epoch_s = q_epoch_us(us);
@@ -21180,7 +21187,9 @@ QoreValue SocketHttp2ServerPollOperation::getOutput() const {
     }
     // RFC 8441: Add :protocol pseudo-header for extended CONNECT
     if (!cached_stream->connect_protocol.empty()) {
-        headers->setKeyValue(":protocol", new QoreStringNode(cached_stream->connect_protocol), nullptr);
+        // obs-text is given in ISO-8859-1 (qore#6554)
+        headers->setKeyValue(":protocol", qore_http_field_value_string(cached_stream->connect_protocol.data(),
+            cached_stream->connect_protocol.size()), nullptr);
     }
 
     // Include trailers from client if present (e.g., gRPC client-streaming)
@@ -22154,8 +22163,27 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
                 sock->priv->socket->priv->http_assumed_encoding.load(std::memory_order_relaxed));
         }
         if (charset.enc) {
-            response->setKeyValue("body", qore_http_body_string(charset, stream->body.data(),
-                stream->body.size()), xsink);
+            auto ct_it = stream->headers.find("content-type");
+            // a body that is not valid in its encoding is an error of the stream, which completes it, as the other
+            // errors of a stream are (qore#6554)
+            ExceptionSink body_xsink;
+            QoreStringNode* body = qore_http_response_body_string(ct_it != stream->headers.end()
+                && !ct_it->second.empty() ? ct_it->second.back().c_str() : nullptr, charset, stream->body.data(),
+                stream->body.size(), &body_xsink);
+            if (!body) {
+                QoreValue err = body_xsink.getExceptionErr();
+                QoreValue desc = body_xsink.getExceptionDesc();
+                ReferenceHolder<QoreHashNode> err_response(new QoreHashNode(autoTypeInfo), xsink);
+                err_response->setKeyValue("err", err.refSelf(), xsink);
+                err_response->setKeyValue("desc", desc.refSelf(), xsink);
+                err_response->setKeyValue("stream_id", stream_id, xsink);
+                err_response->setKeyValue("end_stream", true, xsink);
+                body_xsink.clear();
+                AutoLocker al(response_lock);
+                completed_responses.push_back(err_response.release());
+                return;
+            }
+            response->setKeyValue("body", body, xsink);
         } else {
             SimpleRefHolder<BinaryNode> body(new BinaryNode);
             body->append(stream->body.data(), stream->body.size());
@@ -22314,8 +22342,9 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                             ReferenceHolder<QoreHashNode> hdrs(new QoreHashNode(autoTypeInfo), xsink);
                             for (auto& [k, vals] : hdr_stream->headers) {
                                 if (!vals.empty()) {
+                                    // obs-text is given in ISO-8859-1 (qore#6554)
                                     hdrs->setKeyValue(k.c_str(),
-                                        new QoreStringNode(vals[0]), xsink);
+                                        qore_http_field_value_string(vals[0].data(), vals[0].size()), xsink);
                                 }
                             }
                             resp->setKeyValue("headers", hdrs.release(), xsink);

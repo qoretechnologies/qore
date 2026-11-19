@@ -94,23 +94,19 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     /** @return the request path for the entity, with characters not valid in a request target percent-encoded
     */
     private string getEntityUri(*string id) {
-        string uri;
-        if (companyId) {
+        string uri = companyId
             # Business Central: company-scoped URI
-            if (id) {
-                uri = sprintf("companies(%s)/%s(%s)", companyId, name, id);
-            } else {
-                uri = sprintf("companies(%s)/%s", companyId, name);
-            }
-        } else {
+            ? sprintf("companies(%s)/%s", companyId, name)
             # Dynamics CDS: direct entity URI
-            if (id) {
-                uri = sprintf("%s(%s)", record_info.entity_name, id);
-            } else {
-                uri = record_info.entity_name;
-            }
+            : record_info.entity_name;
+        uri = CdsRestDataProviderBase::encodeRequestPath(uri);
+        if (exists id) {
+            # the key is an OData literal of the key's type (a GUID is written without quotes), and is encoded as a
+            # part of the path segment, so that no character of it ends the segment
+            uri += "(" + CdsRestDataProviderBase::encodePathSegment(
+                AbstractODataRecordIterator::getODataLiteral(id, record_info.field_types{record_info.key})) + ")";
         }
-        return CdsRestDataProviderBase::encodeRequestPath(uri);
+        return uri;
     }
 
     #! Creates a record iterator
@@ -314,8 +310,8 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     #! Determine the entity set name for the entity (CDS only)
     private setEntitySetName() {
         try {
-            string uri = CdsRestDataProviderBase::encodeRequestPath(
-                sprintf("EntityDefinitions(LogicalName='%s')?$select=EntitySetName", name));
+            string uri = "EntityDefinitions(LogicalName=" + CdsRestDataProviderBase::encodePathSegment(
+                AbstractODataRecordIterator::getODataStringLiteral(name)) + ")?$select=EntitySetName";
             hash<RestClient::RestResponseInfo> resp = rest.restGet(uri);
             *string entity_set_name;
             if (!(entity_set_name = resp.body.EntitySetName)) {

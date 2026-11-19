@@ -197,7 +197,9 @@ public class SharePointGetListItemDataProvider inherits SharePointDataProviderBa
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", getListBasePath(req) + "/items/" + req.item_id + "?$expand=fields").body;
+        # the item ID is one segment of the path
+        return doRestCommand("GET", getListBasePath(req) + "/items/" + encode_url(req.item_id, True)
+            + "?$expand=fields").body;
     }
 }
 
@@ -260,7 +262,7 @@ public class SharePointListItemWriteDataProviderBase inherits SharePointDataProv
     static hash<auto> getWritableFields(*hash<auto> fields) {
         # heterogeneous by nature: the values are whatever the list's columns are typed as, and the
         # OData annotations added alongside them are strings
-        hash<auto!> rv;
+        hash<auto!> rv = {};
         foreach hash<auto> p in (fields.pairIterator()) {
             if (ReadOnlyItemFields{p.key} || p.key =~ /^@odata/ || p.key =~ /^_/) {
                 continue;
@@ -375,7 +377,7 @@ public class SharePointUpdateListItemDataProvider inherits SharePointListItemWri
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = SharePointListItemWriteDataProviderBase::getWritableFields(req.fields);
-        return doRestCommand("PATCH", getListBasePath(req) + "/items/" + req.item_id + "/fields",
+        return doRestCommand("PATCH", getListBasePath(req) + "/items/" + encode_url(req.item_id, True) + "/fields",
             body).body;
     }
 }
@@ -425,7 +427,7 @@ public class SharePointDeleteListItemDataProvider inherits SharePointDataProvide
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        doRestCommand("DELETE", getListBasePath(req) + "/items/" + req.item_id);
+        doRestCommand("DELETE", getListBasePath(req) + "/items/" + encode_url(req.item_id, True));
         return {
             "status": "deleted",
             "id": req.item_id,

@@ -122,6 +122,8 @@ make -j${MAKE_JOBS} ${PERF_TARGETS}
 # level of a recursion (issue #5852); this is the release build with the compiler the budgets are calibrated for
 echo && echo "-- checking the stack frames of the call path (tools/stack-usage-budgets.txt) --"
 python3 -I ${QORE_SRC_DIR}/tools/check-stack-usage.py ${QORE_SRC_DIR}/build
+echo && echo "-- checking the explicitly inlined calls of the hot paths (tools/hot-inlining.txt) --"
+python3 -I ${QORE_SRC_DIR}/tools/check-hot-inlining.py ${QORE_SRC_DIR}/build
 # the guard checks the qmods this build made, which are only those of the targets above
 qore_qmod_cache_finish "${QORE_SRC_DIR}" "${QORE_SRC_DIR}/build"
 

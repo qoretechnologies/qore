@@ -108,7 +108,8 @@ public class OneDriveUpdateItemDataProvider inherits OneDriveDataProviderBase {
                 "must be provided";
         }
 
-        return doRestCommand("PATCH", getDriveBasePath(req) + "/items/" + req.id, body).body;
+        return doRestCommand("PATCH", getDriveBasePath(req) + "/items/" + getItemIdPathSegment(req.id), body)
+            .body;
     }
 }
 }

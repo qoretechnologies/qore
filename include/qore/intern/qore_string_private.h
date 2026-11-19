@@ -198,6 +198,20 @@ public:
         view_offset = 0;
     }
 
+    //! Sets the ASCII prefix cache of a new string that owns its storage and holds only ASCII text
+    /** For a string made from text known to be ASCII, such as a string literal, so that its first use does not scan
+        it (qore#6625); no other thread can read the string yet
+    */
+    DLLLOCAL void setOwnedAsciiText() {
+        assert(!view_parent);
+#ifndef NDEBUG
+        for (size_t i = 0; i < len; ++i) {
+            assert(static_cast<unsigned char>(buffer[i]) < 0x80);
+        }
+#endif
+        view_offset = len;
+    }
+
     //! Lowers the ASCII prefix cache of a string that owns its storage to at most the given byte offset
     /** For a mutation that keeps the bytes before \a offset
     */
@@ -347,6 +361,75 @@ public:
 
     //! Raises the exception that QoreEncoding raises for text that is not valid in the encoding of the string
     DLLLOCAL void raiseInvalidEncoding(ExceptionSink* xsink) const;
+
+    //! Returns the number of characters of a string in a multi-byte encoding, counting each byte that does not start
+    //! a complete character as one character
+    /** The count of a string that is not valid in its encoding, for QoreString::length(), which cannot raise an
+        exception: it is not less than the number of characters of its valid text (qore#6597); in an encoding made
+        of units of more than one byte (UTF-16), each such unit counts as one character
+
+        @param b the bytes of the string: effective_buf()
+    */
+    DLLLOCAL QORE_INTERN_NOINLINE size_t getLengthCountingInvalidBytes(const char* b) const;
+
+    //! Raises \c INVALID-ENCODING if the string is not valid in its encoding
+    /** For an operation that gives a transformed copy of a string: one that walks its characters stops at the first
+        byte sequence that is not valid in the encoding, and must not give a partial result instead (qore#6595).
+
+        The validity is that of qore_string_encoding_valid(): strict (RFC 3629) in UTF-8, as for regular expressions.
+        A string in a single-byte encoding is not checked, as each byte is a character.  A string in UTF-8 whose cached
+        ASCII prefix covers it is valid without a scan, and the scan of another one starts at the end of its ASCII
+        prefix.
+
+        @param str the string to check
+        @param func the name of the operation, for the exception's description
+        @param what the string's role, for the exception's description (ex: \c "subject", \c "replacement")
+        @param xsink for the exception
+
+        @return 0 if the string is valid, -1 if an \c INVALID-ENCODING exception was raised
+    */
+    DLLLOCAL static int checkValidEncoding(const QoreString& str, const char* func, const char* what,
+            ExceptionSink* xsink) {
+        const qore_string_private* p = str.priv;
+        if (p->getEncoding() == QCS_UTF8 ? p->getAsciiPrefix() == p->len
+            : !p->getEncoding()->isMultiByte() && !p->isStateful()) {
+            return 0;
+        }
+        return checkValidEncodingIntern(str, func, what, xsink);
+    }
+
+    //! Returns the number of characters of a string, raising \c INVALID-ENCODING if it is not valid in its encoding
+    /** QoreString::length() cannot raise an exception, and stops counting at the first byte sequence that is not
+        valid in the encoding; an operation that resolves character offsets against the length must not take that
+        count for the length of the string, or it leaves out the characters after it (qore#6595)
+
+        @param str the string
+        @param op the name of the operation, for the exception's description
+        @param xsink for the exception
+
+        @return the number of characters, or -1 if an \c INVALID-ENCODING exception was raised
+    */
+    DLLLOCAL static int64 getCheckedLength(const QoreString& str, const char* op, ExceptionSink* xsink) {
+        const qore_string_private* p = str.priv;
+        if (p->getEncoding() == QCS_UTF8) {
+            if (p->getAsciiPrefix() == p->len) {
+                return static_cast<int64>(p->len);
+            }
+            return getCheckedUtf8Length(str, op, xsink);
+        }
+        if (checkValidEncoding(str, op, "subject", xsink)) {
+            return -1;
+        }
+        return static_cast<int64>(str.length());
+    }
+
+    //! The UTF-8 part of getCheckedLength(): checks the string and counts its characters
+    DLLLOCAL static QORE_INTERN_NOINLINE int64 getCheckedUtf8Length(const QoreString& str, const char* op,
+            ExceptionSink* xsink);
+
+    //! The out-of-line part of checkValidEncoding(): scans the string
+    DLLLOCAL static QORE_INTERN_NOINLINE int checkValidEncodingIntern(const QoreString& str, const char* func,
+            const char* what, ExceptionSink* xsink);
 
     DLLLOCAL qore_string_private() {
     }
@@ -1778,6 +1861,33 @@ DLLLOCAL T* binary_to_string(BinaryNode* bin, const QoreEncoding* qe) {
     @param len the length of the string in bytes
 */
 DLLLOCAL bool qore_string_get_as_bool(const char* str, size_t len);
+
+//! Returns true if the string is valid in its encoding; never raises an exception
+/** A UTF-8 string is checked strictly (RFC 3629: no overlong forms, surrogates, values above U+10FFFF or unexpected
+    continuation bytes; see IconvHelper::validUtf8Prefix()), as the regular expression engine checks it; ASCII text in
+    an ASCII-compatible encoding that is not stateful is valid; any other string is valid if it can be converted to
+    UTF-8 (so a string with a byte that its encoding does not define, or with text in an encoding that iconv cannot
+    convert, is not valid).  O(n) in the size of the string; no exception is raised or cleared (qore#6554).
+*/
+DLLLOCAL bool qore_string_encoding_valid(const QoreString& str);
+
+//! Returns a new string for an HTTP field value (a header or trailer value)
+/** The value is in the default encoding, or in ISO-8859-1 with its bytes unchanged if it is not valid in it: a field
+    value with bytes that are not valid UTF-8 is obs-text (RFC 9110 section 5.5), which is valid text in ISO-8859-1
+    (qore#6554)
+*/
+DLLLOCAL QoreStringNode* qore_http_field_value_string(const char* p, size_t len);
+
+//! Gives an HTTP field value made by concatenation in ISO-8859-1 if it is not valid in its encoding (qore#6554)
+DLLLOCAL void qore_http_field_value_check(QoreStringNode* str);
+
+//! Returns true if an HTTP request target (a path with an optional query) is text that the HTTP server accepts
+/** A target with a raw byte above 0x7f or a raw NUL is not accepted (the normal path decides, in the encoding of the
+    socket); otherwise the path and the query are decoded with the decoder of decode_url(), as \c HttpServer decodes
+    them, and each must decode to valid UTF-8; the decoded path must not have a NUL character (qore#6554).  No exception is left in an
+    exception sink; O(n), with no allocation for a target without \c "%" and bytes above 0x7f.
+*/
+DLLLOCAL bool qore_http_target_text_valid(const char* p, size_t len);
 
 
 //! a source for a QoreString operation: a copy if the source is part of the string's text, which the operation moves

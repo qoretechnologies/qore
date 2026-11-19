@@ -150,7 +150,7 @@ public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBa
             path += "&q=" + encode_url(q, True);
         }
         if (req.order_by.val()) {
-            path += "&orderBy=" + encode_url(req.order_by, True);
+            path += "&orderBy=" + encode_url(GoogleDriveListFilesDataProvider::checkOrderBy(req.order_by), True);
         }
         if (req.page_token.val()) {
             path += "&pageToken=" + encode_url(req.page_token, True);
@@ -193,7 +193,7 @@ public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBa
             base += "&q=" + encode_url(q, True);
         }
         if (req.order_by.val()) {
-            base += "&orderBy=" + encode_url(req.order_by, True);
+            base += "&orderBy=" + encode_url(GoogleDriveListFilesDataProvider::checkOrderBy(req.order_by), True);
         }
         base += GoogleDriveListFilesDataProvider::getSharedDriveQuery(req);
 
@@ -276,16 +276,94 @@ public class GoogleDriveListFilesDataProvider inherits GoogleDriveDataProviderBa
 
     #! Escapes a value for inclusion in a single-quoted Drive query term
     /** Without this a name containing an apostrophe terminates the quoted string, and the query is either
-        rejected or silently matches something other than what was asked for
+        rejected or silently matches something other than what was asked for.
+
+        Each backslash and each single quote is escaped with a backslash, as the Drive query language requires in a
+        string literal; a string whose encoding is invalid or that has a NUL character is refused first, and the
+        escaped value is in UTF-8
 
         @param str the value to escape
 
-        @return the escaped value
+        @return the escaped value, without the quotes
+
+        @throw VALUE-ERROR the string's encoding is invalid, or it has a NUL character; such a string is refused
+        before any query is made with it
+
+        @par Example:
+        @code{.py}
+string q = sprintf("name contains '%s'", GoogleDriveListFilesDataProvider::escape("O'Brien\\x"));
+# q: "name contains 'O\\'Brien\\\\x'"
+        @endcode
     */
     static string escape(string str) {
-        str =~ s/\\/\\\\/g;
-        str =~ s/'/\\'/g;
+        str = GoogleDriveListFilesDataProvider::checkQueryString(str);
+        # the string is valid in its encoding, so replace() processes all of it; backslashes are escaped first, so
+        # that the backslashes escaping the quotes are not escaped again
+        return replace(replace(str, "\\", "\\\\"), "'", "\\'");
+    }
+
+    #! Checks that a string can be given in a Drive query and returns it in UTF-8
+    /** @param str the string
+
+        @return the string in UTF-8
+
+        @throw VALUE-ERROR the string's encoding is invalid, or it has a NUL character; such a string is refused
+        before any query is made with it
+    */
+    static string checkQueryString(string str) {
+        try {
+            if (str.encoding() == "UTF-8") {
+                # a conversion to the same encoding would not check it
+                string check = convert_encoding(str, "UTF-16BE");
+                remove check;
+            } else {
+                # the conversion refuses a string whose encoding is invalid
+                str = convert_encoding(str, "UTF-8");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            throw "VALUE-ERROR", sprintf("a string given to a Drive query is not valid in its encoding (%s): %s: %s",
+                str.encoding(), ex.err, ex.desc);
+        }
+        # checked after the encoding, as a search in a string with an invalid encoding raises another error
+        if (str.find(chr(0)) >= 0) {
+            throw "VALUE-ERROR", "a string with a NUL character cannot be given in a Drive query";
+        }
         return str;
+    }
+
+    #! Checks a Drive \c orderBy expression and returns it
+    /** An \c orderBy expression is a comma-separated list of sort keys, each optionally followed by \c desc; a sort
+        key is a name of letters and underscores (such as \c modifiedTime or \c name_natural)
+
+        @param order_by the \c orderBy expression
+
+        @return the expression with its keys separated by commas and each \c desc by one space
+
+        @throw VALUE-ERROR the expression is not a list of sort keys, or its encoding is invalid
+
+        @par Example:
+        @code{.py}
+string order_by = GoogleDriveListFilesDataProvider::checkOrderBy("folder, modifiedTime desc");
+# order_by: "folder,modifiedTime desc"
+        @endcode
+    */
+    static string checkOrderBy(string order_by) {
+        order_by = GoogleDriveListFilesDataProvider::checkQueryString(order_by);
+        list<string> rv = ();
+        list<string> terms = order_by.split(",");
+        # an empty expression has one empty term, which is not a sort key
+        if (!terms) {
+            terms = ("",);
+        }
+        foreach string term in (terms) {
+            *list<*string> m = (term =~ x/^\s*([A-Za-z_]+)(\s+desc)?\s*$/);
+            if (!m) {
+                throw "VALUE-ERROR", sprintf("the Drive 'order_by' expression %y is not a comma-separated list of "
+                    "sort keys, each optionally followed by 'desc'", order_by);
+            }
+            rv += m[1] ? m[0] + " desc" : m[0];
+        }
+        return rv.join(",");
     }
 }
 

@@ -593,8 +593,10 @@ public class CdsCustomEntityWatchDataProvider inherits CdsEntityWatchDataProvide
             throw "CDS-EVENT-ERROR", "no connection is available to resolve entity " + logical_name;
         }
 
-        string uri = CdsRestDataProviderBase::encodeRequestPath(
-            sprintf("EntityDefinitions(LogicalName='%s')?$select=EntitySetName,PrimaryIdAttribute", logical_name));
+        # the logical name is an OData string literal, encoded as a part of the path segment
+        string uri = "EntityDefinitions(LogicalName=" + CdsRestDataProviderBase::encodePathSegment(
+            AbstractODataRecordIterator::getODataStringLiteral(logical_name))
+            + ")?$select=EntitySetName,PrimaryIdAttribute";
         # the exception argument of an error response includes the response
         hash<RestClient::RestResponseInfo> resp = rest.restGet(uri);
 

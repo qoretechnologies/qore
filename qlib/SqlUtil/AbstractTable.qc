@@ -444,12 +444,21 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         /** The following keys can be set for this option:
             - \c commit_block: the number of changes made before an automatic commit is made for upsert methods that
               perform commits
-            - \c delete_others: if this option is @ref True "True", then a hash of primary key values in the input
-              data is built as the input data is iterated.  After iterating, if the row count of the table and the
-              input data matches, then nothing more is done, otherwise, every row of the table is iterated and
-              compared to the primary key hash; if a row does not match a primary key value, then it is deleted.
-              This operation allows tables to be completely synchronized by removing rows in the target table not
-              present in the source table. This operation is expensive for large data sets.
+            - \c delete_others: if this option is @ref True "True", then the primary key values of the input data
+              are kept as the input data is iterated; afterwards, every row of the table is read, and the rows whose
+              primary key values are not those of an input row are deleted, so an empty input deletes every row.  The
+              values are compared as values of their types (a date with its time zone, a number by its value); an
+              input value that the database stores in another form (ex: a date in another time zone, a float with an
+              integer value for an integer column, a string with trailing spaces) is looked up in the database, which
+              compares it with the stored values.  A value that the column rounds (ex: a date with microseconds in a
+              column with whole seconds, or <tt>1.005</tt> in a column with two decimals) is not found, so the row
+              that it gave is deleted: give the values of the primary key as the column stores them.  This operation
+              allows tables to be completely synchronized by removing rows in the target table not present in the
+              source table. This operation is expensive for large data sets.  The table must have a primary key, and
+              each input row must have a plain value (not \c NULL, an operator, a list or an object) of each column
+              of the primary key, or
+              \c UPSERT-ERROR is raised; for an input row without one, the rows before it have been upserted (and
+              committed with \c commit_block).
             - \c info_callback: see @ref upsert_info_callback
             - \c omit_update: allows for an asymmetrical upsert where a set of column values is inserted, but a
               smaller set is updated in case the unique key values are present in the target table; the value of this
@@ -4244,11 +4253,11 @@ table.insert(row);
                 if (cmd.immediate) {
                     # make sure only identifiers are given to the operator's code, as the SQL that it returns from
                     # the argument is inserted directly into the query; the value must match the allowed characters
-                    # as a whole, so that a string that cannot be matched (one that is not valid UTF-8) is refused
-                    if (v !~ /\A[A-Za-z\._0-9]*\z/) {
+                    # as a whole; a string that is not valid in its encoding, which cannot be matched, is refused first
+                    if ((v.typeCode() == NT_STRING && !v.isEncodingValid()) || v !~ /\A[A-Za-z\._0-9]*\z/) {
                         # a value that is not valid in its encoding is not given in the message (qore#6553)
                         throw "INSERT-OPERATOR-ERROR", sprintf("%s: immediate value to insert operator %y is %s which "
-                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !(v =~ /^/)
+                            "contains illegal characters", getDesc(), iop, v.typeCode() == NT_STRING && !v.isEncodingValid()
                                 ? sprintf("a string of %d bytes not valid in its encoding", v.size())
                                 : sprintf("%y", v));
                     }
@@ -5046,7 +5055,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then every row of the table whose primary key values are not those of an input row is deleted after the input data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others for how the values are compared).  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
 
         @see
         - upsertFromIteratorCommit()
@@ -5087,7 +5096,7 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         @throw COLUMN-ERROR an unknown column was referenced in the hash to be inserted
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
-        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        @note if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then every row of the table whose primary key values are not those of an input row is deleted after the input data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others for how the values are compared).  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
 
         @see
         - upsertFromIteratorCommit()
@@ -5115,22 +5124,47 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
         # check upsert options
         validateOptionsIntern("OPTION-ERROR", getUpsertOptions(), \opt);
 
+        # the primary key is read from the database if it is not yet known
+        list<string> pkl = opt.delete_others ? getPrimaryKey().keys() : ();
+        if (opt.delete_others && !pkl) {
+            # there is no key to match the rows by; the delete step raised RUNTIME-TYPE-ERROR after the input was
+            # upserted
+            throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a primary key, which the table does "
+                "not have", getDesc());
+        }
+
         # try to get initial row
         if (!i.next()) {
-            return;
+            # an empty input keeps no row of the table (issue #6607)
+            if (!opt.delete_others) {
+                return;
+            }
+            opt.change_count = 0;
+            hash<string, hash<auto>> none = {};
+            return doDeleteOthersIntern(none, pkl, opt);
         }
 
         # result hash
         hash<string, int> rh;
 
-        # primary key value hash for "delete_others"
-        hash<string, bool> pkh;
+        # the primary key values of the input for "delete_others", by their exact key
+        hash<string, hash<auto>> pkh;
 
         hash<auto> row = i.getValue();
+        # the first row is checked before the upsert closure is made from it
+        bool first_row = True;
+        if (opt.delete_others) {
+            checkDeleteOthersRow(row, pkl);
+        }
         code upsert = getUpsertClosure(row, upsert_strategy, opt);
 
         opt.change_count = 0;
         do {
+            if (first_row) {
+                first_row = False;
+            } else if (opt.delete_others) {
+                checkDeleteOthersRow(row, pkl);
+            }
             int code = upsert(row);
             ++rh{AbstractTable::UpsertResultMap{code}};
             if (opt.info_callback) {
@@ -5146,33 +5180,147 @@ hash h = table.upsertFromIterator(i, AbstractTable::UpsertUpdateFirst);
 
             # save primary key value in primary key hash if "delete_others" is set
             if (opt.delete_others) {
-                pkh{foldl $1 + "-" + $2, (map row.$1.toString(), primaryKey.keyIterator())} = True;
+                pkh{getDeleteOthersKey(row, pkl)} = row{pkl};
             }
         } while (i.next() && (row = i.getValue()));
 
         if (opt.delete_others) {
-            rh += doDeleteOthersIntern(pkh, opt);
+            rh += doDeleteOthersIntern(pkh, pkl, opt);
         }
 
         return rh;
     }
 
-    private *hash<string, int> doDeleteOthersIntern(hash<auto> pkh, *hash<auto> opt) {
-        hash<string, int> rh;
+    #! raises UPSERT-ERROR if an input row of an upsert with the "delete_others" option has no plain value of a
+    #! column of the primary key
+    private checkDeleteOthersRow(hash<auto> row, list<string> pkl) {
+        # the row that an input row gives cannot be known without its primary key values: a missing or NULL
+        # value (which the database may generate) or an operator
+        foreach string col in (pkl) {
+            switch (row{col}.typeCode()) {
+                case NT_NOTHING:
+                case NT_NULL:
+                    throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a value of each column "
+                        "of the primary key (%y) in each input row; column %y has no value in: %y", getDesc(),
+                        pkl, col, row);
+                case NT_HASH:
+                case NT_LIST:
+                case NT_OBJECT:
+                    throw "UPSERT-ERROR", sprintf("%s: the 'delete_others' option needs a plain value of each "
+                        "column of the primary key (%y) in each input row; the value of column %y is an "
+                        "operator, a list or an object in: %y", getDesc(), pkl, col, row);
+            }
+        }
+    }
 
-        # iterate through the table to find rows that do not belong and delete them
-        list<string> pkl = primaryKey.keys();
+    #! returns the exact key of the primary key values of a row for the "delete_others" upsert option
+    /** each value is given with its type and its length, so that different values cannot give the same key (values
+        joined with a separator did: ("a-b", "c") and ("a", "b-c"); issue #6580); a date is given with its
+        microseconds and its UTC offset, a float as the shortest text that gives it back, and a number by its value
+        (issue #6607)
+
+        Values with the same key are stored in the same way by the database; values that the database stores in the
+        same way can still have different keys (ex: a date in another time zone, a float for an integer column), which
+        doDeleteOthersIntern() resolves in the database
+    */
+    private static string getDeleteOthersKey(hash<auto> row, list<string> pkl) {
+        string key = "";
+        foreach string col in (pkl) {
+            auto v = row{col};
+            string val;
+            switch (v.typeCode()) {
+                case NT_NOTHING:
+                case NT_NULL:
+                    key += "n;";
+                    continue;
+                case NT_DATE:
+                    val = v.relative() ? "r" + v.toString() : "d" + v.format("YYYYMMDDHHmmSSxx Z");
+                    break;
+                case NT_INT:
+                    val = "i" + v;
+                    break;
+                case NT_FLOAT:
+                    val = "f" + v.toString();
+                    break;
+                case NT_NUMBER:
+                    val = "m" + v.toString();
+                    break;
+                case NT_BINARY:
+                    val = "b" + v.toHex();
+                    break;
+                case NT_STRING:
+                    val = "s" + v;
+                    break;
+                default:
+                    val = "o" + v.typeCode() + ":" + v.toString();
+                    break;
+            }
+            key += sprintf("%d:%s;", val.length(), val);
+        }
+        return key;
+    }
+
+    private {
+        #! the largest number of input keys that doDeleteOthersIntern() looks up with one query
+        const DeleteOthersLookupBlockSize = 100;
+        #! the largest number of values that a lookup of doDeleteOthersIntern() binds (SQL Server binds at most 2100)
+        const DeleteOthersLookupMaxArgs = 2000;
+    }
+
+    #! deletes the rows of the table that are not in the input of an upsert with the "delete_others" option
+    /** @param pkh the primary key values of the input, by their exact key (getDeleteOthersKey())
+        @param pkl the columns of the primary key
+        @param opt the upsert options
+
+        A row is kept if its exact key is the key of an input row.  The database may store the value of an input row
+        in another form than the input gives it (ex: a date in another time zone, a float with an integer value for an
+        integer column, a string with trailing spaces), so that the exact keys differ: if any row is not matched, the
+        rows that the database finds for the keys of the input that matched no row are kept too (looked up in blocks
+        of where hashes with their values bound, which are combined with "or").  A value that the column rounds is not found.  The rows are
+        deleted after all are read (issue #6607).
+    */
+    private *hash<string, int> doDeleteOthersIntern(hash<string, hash<auto>> pkh, list<string> pkl,
+            *hash<auto> opt) {
+        # the rows whose exact key is not the key of an input row; only their key values are kept, unless the info
+        # callback is given the rows
+        list<hash<auto>> unmatched = ();
         foreach hash<auto> row in (getStatement()) {
-            string k = foldl $1 + "-" + $2, (map row.$1.toString(), pkl);
-            if (pkh{k})
+            string key = getDeleteOthersKey(row, pkl);
+            if (exists pkh{key}) {
+                # each key is the key of one row: the input keys that remain matched no row
+                remove pkh{key};
                 continue;
+            }
+            unmatched += exists opt.info_callback ? row : row{pkl};
+        }
+        if (!unmatched) {
+            return;
+        }
 
-            hash<auto> h = row{pkl};
-            self.del(h);
+        # the rows that the database finds for the input keys that matched no row, looked up in blocks with their
+        # values bound, so that the database compares them as the upsert did
+        hash<string, bool> kept;
+        # a list of where hashes is combined with "or"; a block binds at most DeleteOthersLookupMaxArgs values
+        list<hash<auto>> lookup = pkh.values();
+        int block_size = max(1, min(DeleteOthersLookupBlockSize, DeleteOthersLookupMaxArgs / pkl.size()));
+        for (int start = 0; start < lookup.size(); start += block_size) {
+            *list<hash<auto>> found = selectRows({"columns": pkl, "where": lookup[start..(start + block_size - 1)]});
+            foreach hash<auto> frow in (found) {
+                kept{getDeleteOthersKey(frow, pkl)} = True;
+            }
+        }
+
+        hash<string, int> rh;
+        foreach hash<auto> row in (unmatched) {
+            if (kept{getDeleteOthersKey(row, pkl)}) {
+                continue;
+            }
+            self.del(row{pkl});
 
             ++rh.deleted;
-            if (opt.info_callback)
+            if (opt.info_callback) {
                 opt.info_callback(getSqlName(), row, UR_Deleted);
+            }
             if (opt.commit_block) {
                 if (++opt.change_count >= opt.commit_block) {
                     ds.commit();
@@ -5226,12 +5374,11 @@ hash<auto> h = table.upsertFromSelectCommit(table2, ("where": ("account_type": "
         unique constraint/index are used in the upsert statement
 
         @note
-        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a
-          hash of primary key values in the input data is built as the input data is iterated.  After iterating, if
-          the row count of the table and the input data matches, then nothing more is done, otherwise, every row of
-          the table is iterated and compared to the primary key hash; if a row does not match a primary key value,
-          then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is
-          expensive for large data sets.
+        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then
+          every row of the table whose primary key values are not those of an input row is deleted after the input
+          data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions
+          "upsert option" \c delete_others for how the values are compared).  This operation is only executed if
+          \c delete_others is @ref True "True" and is expensive for large data sets.
         - this method also calls commit() or rollback() on the source table to release the transaction lock on the
           underlying source table datasource as an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object
           is used to pipeline the data to the upsert code; use upsertFromSelect() to do manual transaction management
@@ -5293,7 +5440,7 @@ hash h = table.upsertFromSelect(table2, ("where": ("account_type": "CUSTOMER")),
         @throw UPSERT-ERROR no primary key, unique constraint, or unique index for upsert; not all columns of the unique constraint/index are used in the upsert statement
 
         @note
-        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then a hash of primary key values in the input data is built as the input data is iterated.  After iterating, if the row count of the table and the input data matches, then nothing more is done, otherwise, every row of the table is iterated and compared to the primary key hash; if a row does not match a primary key value, then it is deleted.  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
+        - if \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others is @ref True "True", then every row of the table whose primary key values are not those of an input row is deleted after the input data is iterated, and an empty input deletes every row (see \c SqlUtil::AbstractTable::UpsertOptions "upsert option" \c delete_others for how the values are compared).  This operation is only executed if \c delete_others is @ref True "True" and is expensive for large data sets.
         - this method uses an @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object to pipeline the select data to the upsert code; to release the transaction lock acquired by the @ref Qore::SQL::AbstractSQLStatement "AbstractSQLStatement" object, a commit() or rollback() action must be executed on the underlying datasource object as in the example above
         - unlike insertFromSelect() and insertFromSelectCommit(), this method processes arbitrary input data and accepts @ref SqlUtil::AbstractTable::UpsertOptions "upsert options"
 
@@ -6475,8 +6622,10 @@ string sql = table.getSelectSql(sh, \args);
                 throw "PARTITION-ERROR", sprintf("%s: the named partition select qualifier cannot be applied to "
                     "a derived superquery table reference", getDesc());
             }
+            # the columns of the subquery are known names of the superquery; the map is "hash<auto>", as an alias in
+            # the superquery's columns sets its expression in it (issue #6592)
             return getSelectSqlStringIntern(info.query_hash.superquery, sprintf("(%s) subquery", sql), \info.args,
-                subquery_column_map, opt, (map {$1: True}, keys info.pseudo_column_map));
+                subquery_column_map, opt, {} + (map {$1: True}, keys info.pseudo_column_map));
         }
 
         return sql;

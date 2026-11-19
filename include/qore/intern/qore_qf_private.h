@@ -209,9 +209,13 @@ struct qore_qf_private {
         // the locks in the same order and cannot deadlock (issue #6567)
         qore_qf_private* first = std::less<qore_qf_private*>()(this, &file) ? this : &file;
         qore_qf_private* second = first == this ? &file : this;
+#ifdef DEBUG
+        qore_dbg_file_redirect_lock_wait(first, true);
+#endif
         AutoLocker al(first->m);
 #ifdef DEBUG
-        qore_dbg_file_redirect_locked();
+        qore_dbg_file_redirect_lock_wait(first, false);
+        qore_dbg_file_redirect_locked(first);
 #endif
         AutoLocker al2(second->m);
         if (checkNonBlock(xsink) || file.checkNonBlock(xsink)) {

@@ -577,6 +577,10 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      - the flags byte of the TIME_ZONE section has bit 2 set for a directive that applies only to a load of the
 //!        module as library code: one after the header of a module that declares the locale control domain, which
 //!        the module's own restriction disallowed when it was compiled (qore#6352)
+//! v46: the DebugStatement, DebugBlock and ScopeExit records of the debug IR end with the paths of a debugger's
+//!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
+//!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
+//!      v9-v45 image has none: a request at a step event of its code returns from the function.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
 //! First format version whose function variant flags record each variant's public flag (see v25 above).
 constexpr uint16_t QORE_AOT_VARIANT_PUBLIC_VERSION = 25;
@@ -661,10 +665,12 @@ constexpr uint16_t QORE_AOT_MODULE_DEPENDENCY_RESTRICTIONS_VERSION = 44;
     record of an earlier version is refused, asking for the module to be rebuilt (qore#6351, qore#6352)
 */
 constexpr uint16_t QORE_AOT_MODULE_INFO_DOMAINS_VERSION = 45;
+//! First format version whose debug IR has the paths of a debugger's flow requests (see v46 above).
+constexpr uint16_t QORE_AOT_DEBUG_FLOW_VERSION = 46;
 //! The current format version: the newest version of the history above, which is the newest feature version above
 //! when a reader branches on it (a merge with another format change takes the next version after the newest, here and
 //! in the history above)
-constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_MODULE_INFO_DOMAINS_VERSION;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = QORE_AOT_DEBUG_FLOW_VERSION;
 //! First format version whose serialized IR functions record their handler-own local slots (see v23 above).
 constexpr uint16_t QORE_AOT_HANDLER_OWN_LOCALS_VERSION = 23;
 //! First format version whose class records have a class-flags byte (see v22 above).
@@ -1572,19 +1578,40 @@ public:
     //! Write a source-path reference; ordinary string values must use writeStringRef().
     /** @param path physical source path */
     void writeSourcePath(const char* path) {
+        noteStringRef();
         writeU32(addSourcePath(path));
     }
 
     //! Write a string reference (adds to pool, writes offset)
     void writeStringRef(const char* str) {
         uint32_t offset = strings.add(str);
+        noteStringRef();
         writeU32(offset);
     }
 
     //! Write a string reference with explicit length
     void writeStringRef(const char* str, size_t len) {
         uint32_t offset = strings.add(str, len);
+        noteStringRef();
         writeU32(offset);
+    }
+
+    //! The positions of the string references written while set (see noteStringRef()), or nullptr
+    /** The offset of a string in the pool depends on the strings written before it, so a digest of a payload takes
+        the strings of its references instead (QORE_AOT_DEBUG_IR_DIGEST, #6201)
+    */
+    std::vector<uint32_t>* string_ref_positions = nullptr;
+
+    //! Records the position of the string reference written next, if string_ref_positions is set
+    void noteStringRef() {
+        if (string_ref_positions) {
+            string_ref_positions->push_back(position());
+        }
+    }
+
+    //! Returns the string at an offset of the pool, or nullptr
+    const char* getPoolString(uint32_t offset) const {
+        return strings.get(offset);
     }
 
     //! Write a QoreValue (serializes constant value)

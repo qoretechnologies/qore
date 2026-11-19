@@ -282,6 +282,8 @@ public class ConnectionSchemeCache {
 
             "pdfco": "PdfCoRestClient",
 
+            "convertapi": "ConvertApiRestClient",
+
             "pinecone": "PineconeRestClient",
             "pinecone-admin": "PineconeRestClient",
 
