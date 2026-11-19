@@ -581,7 +581,7 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      flow requests (a u8 mask: bit 0 break, bit 1 continue, bit 2 return, then the u16 block index of each path in
 //!      that order), and the flags of a block record have the bit 0x10 for a block of such a path (#6200, #6201).  A
 //!      v9-v45 image has none: a request at a step event of its code returns from the function.
-//! v47 (batch AJ; one format version for the format changes of the batch, one line each):
+//! v47 (batch AK; one format version for the format changes of the batch, one line each):
 //!      - each serialized IR instruction ends with its runtime location (QoreIRInstruction::stmt_loc), the location of
 //!        the innermost statement whose code it is: a u8 (QoreAOTStmtLocTag): 0 none, 1 the one of the instruction
 //!        written before it in its function, 2 an earlier entry of the function's statement location table (a u32
