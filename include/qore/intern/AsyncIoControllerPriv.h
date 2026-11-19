@@ -1341,6 +1341,29 @@ private:
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
+    //! A cancellation that a CancelByProgram command deferred until the result of the operation's step (qore#6703)
+    /** Held by the deferred PollInfo (shared by its copies); when the last copy goes, after the cancellation has run
+        (or the I/O thread's exit has delivered it), the command's caller, which waits for it in cancelByProgram(), is
+        released: the Program's callbacks are then still discarded, as the caller has not cleared the Program's
+        shutting-down mark yet
+    */
+    struct AsyncOpDeferredCancel {
+        AsyncOpCompletion* completion;
+
+        DLLLOCAL explicit AsyncOpDeferredCancel(AsyncOpCompletion* c) : completion(c) {
+            completion->addDeferred();
+            completion->ROreference();
+        }
+
+        DLLLOCAL ~AsyncOpDeferredCancel() {
+            completion->completeDeferred();
+            completion->deref();
+        }
+
+        AsyncOpDeferredCancel(const AsyncOpDeferredCancel&) = delete;
+        AsyncOpDeferredCancel& operator=(const AsyncOpDeferredCancel&) = delete;
+    };
+
     struct PollInfo {
         int64 timeout_date_us;          //!< Absolute timeout (microseconds since epoch), 0 = not set
         QoreObject* sock_obj;           //!< Pollable I/O QoreObject (referenced)
@@ -1433,6 +1456,10 @@ private:
         AsyncIoSandboxContext sandbox_ctx;
         //! The references taken by the synchronous exec() call that waits for the operation, or empty
         std::shared_ptr<AsyncIoSyncRelease> sync_release;
+        //! the callers of the CancelByProgram commands that wait until the operation's cancellation, deferred until the
+        //! result of its step, has run (see AsyncOpDeferredCancel): the command that deferred it, or one that found it
+        //! deferred by an earlier cancellation
+        std::vector<std::shared_ptr<AsyncOpDeferredCancel>> deferred_cancels;
         //! Back-ref to the owning controller (not ref'd; outlives pinfo).
         //! Used by cleanup() to erase the submit-time obj_to_sock_hash entry
         //! before deref'ing sock_obj — without this the map can accumulate
@@ -1508,6 +1535,37 @@ private:
         std::vector<PollInfo> cancel_pinfos;
         //! Protects cancel_pinfos against concurrent appends from I/O threads
         QoreThreadLock pinfos_lock;
+
+        //! The operations of a CancelByProgram command whose step was in flight, whose cancellation runs when the
+        //! step's result reaches their I/O thread (pending_aborts); guarded by deferred_lock, not by the controller's
+        //! mutex: the holder that counts one is released wherever the deferred PollInfo goes (qore#6703)
+        int deferred = 0;
+        QoreThreadLock deferred_lock;
+        //! Signaled when the last deferred cancellation has run
+        QoreCondition deferred_cond;
+
+        //! Counts a deferred cancellation (see AsyncOpDeferredCancel)
+        DLLLOCAL void addDeferred() {
+            AutoLocker al(deferred_lock);
+            ++deferred;
+        }
+
+        //! Ends a deferred cancellation; signals the waiter if it was the last
+        DLLLOCAL void completeDeferred() {
+            AutoLocker al(deferred_lock);
+            assert(deferred > 0);
+            if (!--deferred) {
+                deferred_cond.broadcast();
+            }
+        }
+
+        //! Waits until the deferred cancellations have run; the controller's mutex must not be held
+        DLLLOCAL void waitDeferred() {
+            AutoLocker al(deferred_lock);
+            while (deferred) {
+                deferred_cond.wait(deferred_lock);
+            }
+        }
 
         //! Build a completion for a fan-out of @a n_pending I/O threads.
         /** Starts with refcount = 1 (the caller's initial ref).  For
@@ -2311,6 +2369,35 @@ public:
 
     //! Debug-only: waits until the pause taken by dbgTakeDeliveryPause() is ended
     DLLLOCAL static void dbgWaitAfterDelivery(DbgPausePoint point);
+
+    //! Debug-only: the points of the cancellation of a Program's operations at which a test can pause (qore#6703)
+    enum DbgCancelPausePoint : int {
+        //! a callback worker that has taken a step of an operation (continuePoll()) waits before it enters the
+        //! operation's Program; the end of the processing of a CancelByProgram command ends the pause
+        DBG_CANCEL_STEP_BEFORE_ENTRY = 0,
+        //! an I/O thread waits before it runs a cancellation that was deferred until the result of the operation's
+        //! step (pending_aborts) and that no caller waits for, as a slow I/O thread does
+        DBG_CANCEL_DEFERRED_RESULT = 1,
+    };
+
+    //! Debug-only: requests a pause at the given point of the cancellation of a Program's operations, or ends it
+    /** @param point the point (DbgCancelPausePoint)
+        @param pause true to pause the next thread that reaches the point, false to end a pause (and to cancel one not
+        taken yet)
+
+        @return with @p pause = false: true if a thread took the pause since it was requested; false otherwise
+    */
+    DLLLOCAL static bool dbgPauseCancelPoint(int point, bool pause);
+
+    //! Debug-only: waits until a thread has taken the pause requested at the given point; returns false if none did
+    //! when \a timeout_ms elapsed
+    DLLLOCAL static bool dbgWaitCancelPointTaken(int point, int timeout_ms);
+
+    //! Debug-only: pauses the calling thread at the given point if a pause was requested there, until it is ended
+    DLLLOCAL static void dbgTakeCancelPause(int point);
+
+    //! Debug-only: ends the pause taken at the given point, if any
+    DLLLOCAL static void dbgEndCancelPause(int point);
 
     //! Debug-only: holds the callbacks of timers that fire from now on, instead of dispatching them
     /** Called by the dbg_async_io_hold_timer_callbacks() test hook, so that a test can run the callback of a timer

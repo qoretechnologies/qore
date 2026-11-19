@@ -1,0 +1,76 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# deletes a Program while a step of its async I/O operation is in flight (qore#6703); with the argument "owner", the
+# operation is canceled by its owner first; needs a debug build of the library
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+#! the code of the Program: an operation whose first step completes it, and whose onComplete() is code of the Program
+const Code = "
+class Op inherits AbstractPollOperation<auto> {
+    private {
+        bool done;
+    }
+    string getGoal() {
+        return \"done\";
+    }
+    string getState() {
+        return done ? \"done\" : \"pending\";
+    }
+    bool goalReached() {
+        return done;
+    }
+    *hash<SocketPollInfo> continuePoll() {
+        done = True;
+        return NOTHING;
+    }
+    onComplete(hash<SocketPollResultInfo> result) {
+        printf(\"onComplete: canceled: %y\\n\", result.canceled);
+        flush();
+    }
+}
+
+# the code of a Program that is only called (callFunction()) does not run its top-level statements
+our *EventNotifier notifier;
+
+sub start() {
+    notifier = new EventNotifier();
+    AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": notifier,
+        \"spop\": new Op(),
+        \"owner\": \"teardown-deferred-cancel\",
+        \"to\": -1s,
+    });
+}
+";
+
+# the worker that takes the operation's first step waits before it enters the Program, until the Program's
+# cancellation has seen the step in flight; the I/O thread waits before it runs the cancellation deferred until the
+# step's result, as a slow I/O thread does
+call_function("dbg_async_io_pause_cancel_point", 0, True);
+call_function("dbg_async_io_pause_cancel_point", 1, True);
+on_exit {
+    call_function("dbg_async_io_pause_cancel_point", 0, False);
+    call_function("dbg_async_io_pause_cancel_point", 1, False);
+}
+
+Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+p.parse(Code, "teardown-deferred-cancel");
+p.callFunction("start");
+printf("step paused: %y\n", call_function("dbg_async_io_wait_cancel_point", 0, 20s));
+if (ARGV[0] == "owner") {
+    # the operation is canceled by its owner first: its cancellation is deferred until the step's result before the
+    # Program's teardown cancels the Program's operations
+    AsyncIoController::cancelByOwner("teardown-deferred-cancel");
+}
+# the Program's teardown cancels its operations: the operation's step is in flight, so its cancellation waits for the
+# step's result; the worker then sends it, and the I/O thread waits before it runs the cancellation
+delete p;
+# the I/O thread runs the cancellation now if it waits, when the Program has been deleted (with the fix, the
+# cancellation of the Program waited until it had run, and the I/O thread did not wait)
+call_function("dbg_async_io_pause_cancel_point", 1, False);
+# the I/O thread processes this synchronous command after the cancellation, whose callbacks the workers then process
+AsyncIoController::cancelByOwner("teardown-deferred-cancel-barrier");
+AsyncIoController::flushCallbacks();
+printf("done\n");
