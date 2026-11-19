@@ -691,6 +691,20 @@ public class FileLocationHandler {
         static bool connection_filter_init;
     }
 
+    #! Refuses a change of the process-wide handlers or connection filter to sandboxed code
+    /** A handler that one sandboxed tenant registered would be given every caller's locations of its scheme with
+        their options, and a connection filter that it set would decide the connections of every caller; modules
+        register their handlers in their initialization, which no sandbox governs (qore#6747).
+
+        @throw FILE-LOCATION-REGISTRATION-DENIED the calling code is sandboxed
+    */
+    private:internal static checkRegistration(string what, string name) {
+        if (SandboxManager::isSandboxed()) {
+            throw "FILE-LOCATION-REGISTRATION-DENIED", sprintf("sandboxed code cannot register the %s%s in the "
+                "process-wide file location handler registry", what, name.val() ? sprintf(" %y", name) : "");
+        }
+    }
+
     #! Initializes default handlers
     static init() [dom=PROCESS_CONTROL] {
         # register default handlers
@@ -715,6 +729,8 @@ public class FileLocationHandler {
         @throw LOCATION-HANDLER-ERROR the given location handler scheme has already been registered
     */
     static registerHandler(string scheme, AbstractFileLocationHandler handler) [dom=PROCESS_CONTROL] {
+        # only trusted code adds to the process-wide registry of handlers (qore#6747)
+        FileLocationHandler::checkRegistration("location handler", scheme);
         bool has_lock = handler_lock.lockOwner();
         if (!has_lock) {
             handler_lock.lock();
@@ -740,6 +756,8 @@ public class FileLocationHandler {
         @code{.py} data sub (string scheme, bool text, string location) {} @endcode
     */
     static bool tryRegisterHandler(string scheme, AbstractFileLocationHandler handler) [dom=PROCESS_CONTROL] {
+        # only trusted code adds to the process-wide registry of handlers (qore#6747)
+        FileLocationHandler::checkRegistration("location handler", scheme);
         bool has_lock = handler_lock.lockOwner();
         if (!has_lock) {
             handler_lock.lock();
@@ -1129,6 +1147,8 @@ getHandlerNames
         @since FileLocationHandler 3.0
     */
     static setConnectionFilter(*code<bool(string, bool)> filter) [dom=PROCESS_CONTROL] {
+        # the filter is process-wide: only trusted code sets it (qore#6747)
+        FileLocationHandler::checkRegistration("connection filter", "");
         handler_lock.lock();
         on_exit handler_lock.unlock();
 

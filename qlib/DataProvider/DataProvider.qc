@@ -442,7 +442,7 @@ public class DataProvider {
         static Gate factory_cache_lock();
 
         #! data provider data type cache
-        static DataProviderTypeCache type_cache();
+        static DataProviderTypeCache type_cache(True);
 
         #! data provider type module map
         static hash<string, string> type_module_map = {};
@@ -974,7 +974,39 @@ list<hash<auto>> factories = map $1, (map DataProvider::tryGetFactoryInfoAsData(
         return info;
     }
 
+    #! Refuses a change of a process-wide registry or cache of a standard module to sandboxed code
+    /** A process-wide registry of a module (of schemes, handlers, lookups, resolvers, serializers, codecs, schemas or
+        types) is used by every caller of the module; sandboxed code
+        (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()") therefore cannot register, replace
+        or remove its entries, so that one tenant cannot change what the module does for another.  The modules call
+        this in every method that changes such a registry; modules register their entries in their initialization,
+        which no sandbox governs (see @ref sandbox_module_state).
+
+        @param registry the registry, for the error
+        @param what the kind of entry, for the error
+        @param name the name of the entry
+        @param removal @ref True if the entry is removed
+
+        @throw DATA-PROVIDER-REGISTRATION-DENIED the calling code is sandboxed
+
+        @since DataProvider 3.12
+    */
+    static checkSharedRegistration(string registry, string what, string name, *bool removal) {
+        DataProviderSandboxState::checkSharedRegistration(registry, what, name, removal);
+    }
+
+    #! Returns True if the calling code may change a process-wide registry or cache of a standard module
+    /** @return @ref False if the calling code is sandboxed (see checkSharedRegistration())
+
+        @since DataProvider 3.12
+    */
+    static bool mayRegisterShared() {
+        return DataProviderSandboxState::mayRegisterShared();
+    }
+
     #! Returns the data provider cache
+    /** The cache is process-wide: sandboxed code cannot change it (see checkSharedRegistration())
+    */
     static DataProviderTypeCache getTypeCache() {
         return type_cache;
     }

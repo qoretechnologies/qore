@@ -2045,6 +2045,8 @@ on_exit DataProviderActionCatalog::removeCatalogChangeListener(id);
         @since %DataProvider 3.11
     */
     static bool removeCatalogChangeListener(int id) {
+        # sandboxed code cannot add a listener, so it removes none: the listeners are trusted code's (qore#6747)
+        DataProviderSandboxState::checkRegistration("catalog change listener", id.toString(), True);
         string key = id.toString();
         int tid = gettid();
         AutoLock al(listener_lck);

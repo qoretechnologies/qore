@@ -1812,6 +1812,11 @@ auto v = limit.acceptsValue(NOTHING);  # NOTHING, not 20
       instead of its own
     - \c DataProviderBulkRecordIterator::nextImpl(), which is not used, raises \c INVALID-OPERATION instead of
       falling off its end without a return value (issue #5940)
+    - added @ref DataProvider::DataProvider::checkSharedRegistration() "DataProvider::checkSharedRegistration()" and
+      @ref DataProvider::DataProvider::mayRegisterShared() "DataProvider::mayRegisterShared()", with which the
+      standard modules refuse changes of their process-wide registries to sandboxed code; the process-wide type cache
+      (@ref DataProvider::DataProvider::getTypeCache() "DataProvider::getTypeCache()") refuses them too
+      (<a href="https://github.com/qoretechnologies/qore/issues/6747">issue 6747</a>)
 
     @section dataprovider_v3_11 DataProvider v3.11
     - added @ref DataProvider::DataProviderActionCatalog::registerLazyAppActions()

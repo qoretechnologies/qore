@@ -429,6 +429,15 @@ authenticate();
     hashes and lists are copy-on-write values.  A module that lets such code change a value exports a function or
     method that sets it.  See @ref module_public_variables.
 
+    The same applies to the code of a module that changes such state for its caller: a registry, lookup, resolver,
+    serializer, codec, schema or type cache of a standard module, which every caller uses, refuses registrations,
+    replacements and removals from sandboxed code
+    (@ref Qore::SandboxManager::isSandboxed() "SandboxManager::isSandboxed()"), whatever functional domains the
+    sandbox gives it, so that one tenant cannot change what a module does for another;
+    modules register their entries in their initialization, which no sandbox governs (see @ref sandbox_module_init).
+    A check of the sources of the standard modules (\c examples/test/runner/test_shared_registry_checks.py) fails for
+    a registry mutator that makes no such check.
+
     @subsection sandbox_caller_domains Operations That Module Code Performs for Its Caller
 
     A module is a capability: once it is loaded, its code runs with its own %Program's options, whatever the
