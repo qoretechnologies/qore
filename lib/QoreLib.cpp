@@ -1605,29 +1605,53 @@ int q_get_format_bounds(QoreFormatBounds& bounds, const QoreHashNode* h, Excepti
     return 0;
 }
 
+//! returns the class context of the caller if it may access the private members of \a cls, otherwise nullptr
+/** As the lookups of method calls (see QoreClass::findStaticMethod()): a class context outside the class hierarchy of
+    \a cls has no more access than code without a class context (qore#6782)
+*/
+static const qore_class_private* runtime_call_ref_ctx(const qore_class_private* cls) {
+    const qore_class_private* class_ctx = runtime_get_class();
+    return class_ctx && cls->runtimeCheckPrivateClassAccess(class_ctx) ? class_ctx : nullptr;
+}
+
+//! returns true if the caller may access the private members of \a cls (see runtime_call_ref_ctx())
+static bool runtime_call_ref_ctx_may_access(const qore_class_private* cls) {
+    return runtime_call_ref_ctx(cls) != nullptr;
+}
+
+//! finds the method that a call reference by name gives the caller, as a method call of the name finds it
+/** The lookup has the caller's class context only if it may access the class; a caller without such a context gets
+    the public method of the name if the method found first is not public (qore#6704, qore#6782)
+*/
+static const QoreMethod* runtime_call_ref_find_method(const qore_class_private* pcls, const char* name,
+        ClassAccess& access) {
+    const qore_class_private* class_ctx = runtime_call_ref_ctx(pcls);
+    const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name, access, class_ctx);
+    if (!meth) {
+        meth = pcls->runtimeFindCommittedStaticMethod(name, access, class_ctx);
+    }
+    if (meth && !class_ctx && access > Public) {
+        if (const QoreMethod* pmeth = pcls->runtimeFindPublicCommittedMethod(name)) {
+            meth = pmeth;
+            access = Public;
+        }
+    }
+    return meth;
+}
+
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
     if (!meth->isStatic() && !self) {
         xsink->raiseException("CALL-REFERENCE-ERROR", "non-static method \"%s\" is not accessible without an object "
             "context", name);
         return QoreValue();
     }
-    if (access > Public) {
-        // ensure the method can be accessed
-        if (self) {
-            const qore_class_private* selfcls = qore_class_private::get(*self->getClass());
-            if (selfcls != pcls) {
-                if (access > Private || !selfcls->runtimeCheckPrivateClassAccess(pcls)) {
-                    meth = nullptr;
-                }
-            }
-        } else {
-            meth = nullptr;
-        }
-        if (!meth) {
-            xsink->raiseException("CALL-REFERENCE-ERROR", "%s method \"%s\" is not accessible in this context",
-                privpub(access), name);
-            return QoreValue();
-        }
+    // the method was looked up with the caller's class context only if that context may access the class that was
+    // searched (see get_call_reference_intern()): a method that is not public was found for a caller that may call
+    // it, as a method call finds it; without such a context, only a public method is returned (qore#6782)
+    if (access > Public && !runtime_call_ref_ctx_may_access(pcls)) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "%s method \"%s\" is not accessible in this context",
+            privpub(access), name);
+        return QoreValue();
     }
     // see if non-static method is part of self's class hierarchy
     if (!meth->isStatic()) {
@@ -1636,6 +1660,13 @@ static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, Clas
             xsink->raiseException("CALL-REFERENCE-ERROR", "\"%s\" is not accessible from an object of " \
                 "class '%s' as the classes are not in the same hierarchy", name, self->getClassName());
             // no call reference with the error (issue #5866)
+            return QoreValue();
+        }
+        // a method of a privately inherited class (named with its class) is not accessible from outside the class
+        // hierarchy of the object, as a call of it is not (qore#6782)
+        if (priv && !runtime_call_ref_ctx_may_access(qore_class_private::get(*self->getClass()))) {
+            xsink->raiseException("CALL-REFERENCE-ERROR", "method \"%s\" of privately-inherited class '%s' is not "
+                "accessible in this context", name, meth->getClass()->getName());
             return QoreValue();
         }
     }
@@ -1660,17 +1691,13 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
         return QoreValue();
     }
     bool scoped_ref = strstr(name->c_str(), "::");
-    const qore_class_private* class_ctx = runtime_get_class();
     if (scoped_ref) {
         NamedScope ns(name->c_str());
         const QoreClass* cls = qore_root_ns_private::get(*(getRootNS()))->runtimeFindScopedClassWithMethod(ns);
         if (cls) {
             const qore_class_private* pcls = qore_class_private::get(*cls);
             ClassAccess access;
-            const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(ns.getIdentifier(), access, class_ctx);
-            if (!meth) {
-                meth = pcls->runtimeFindCommittedStaticMethod(ns.getIdentifier(), access, class_ctx);
-            }
+            const QoreMethod* meth = runtime_call_ref_find_method(pcls, ns.getIdentifier(), access);
             //printd(5, "get_call_reference_intern() '%s' -> cls: '%s' ctx: '%s' meth: %p\n", name->c_str(), cls->getName(), class_ctx ? class_ctx->name.c_str() : "n/a", meth);
             if (meth) {
                 return do_method_intern(self, meth, access, name->c_str(), pcls, xsink);
@@ -1679,10 +1706,7 @@ QoreValue get_call_reference_intern(QoreObject* self, const QoreStringNode* iden
     } else if (self) {
         const qore_class_private* pcls = qore_class_private::get(*self->getClass());
         ClassAccess access;
-        const QoreMethod* meth = pcls->runtimeFindCommittedMethodForEval(name->c_str(), access, class_ctx);
-        if (!meth) {
-            meth = pcls->runtimeFindCommittedStaticMethod(name->c_str(), access, class_ctx);
-        }
+        const QoreMethod* meth = runtime_call_ref_find_method(pcls, name->c_str(), access);
         if (meth) {
             return do_method_intern(self, meth, access, name->c_str(), pcls, xsink);
         }
