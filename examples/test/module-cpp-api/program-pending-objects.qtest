@@ -139,13 +139,15 @@ class ProgramPendingObjectsTest inherits QUnit::Test {
 
     #! the destructor of a Qore subclass is Qore code of the Program: it is still refused, the C++ one still runs
     qoreSubclassDestructorTest() {
-        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_REPARSE);
+        Program p(PO_NEW_STYLE | PO_ALLOW_REPARSE);
         p.loadModule("cppapiuser");
         # the module command creates the builtin class in the Program, while the code is parsed
         p.parse("%module-cmd(cppapiuser) pending-const C1\n"
             "class Sub inherits CppApiPendingProbe::PendingProbe { destructor() { ++destroyed; } } "
-            "int destroyed; object sub make() { return new Sub(); } int sub get_destroyed() { return destroyed; }",
+            "int destroyed = 0; object sub make() { return new Sub(); } int sub get_destroyed() { return destroyed; }",
             "sub");
+        # initializes the global variable
+        p.run();
         object o = p.callFunction("make");
         assertEq("Sub", o.className());
 
