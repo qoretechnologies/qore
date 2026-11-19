@@ -2369,6 +2369,9 @@
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - fixed @ref SqlUtil::AbstractTable::getAlignSql() "AbstractTable::getAlignSql()" of @ref sqlutilintro "SqlUtil"
+      with a description of another table name, which raised \c LOCK-ERROR
+      (<a href="https://github.com/qoretechnologies/qore/issues/6721">issue 6721</a>); see @ref sqlutilv3_11_0
     - @ref Qore::trunc_str() "trunc_str()" returns a string with a NUL byte that is shorter than the length whole,
       where it returned its bytes up to the NUL byte and memory after them (issue #6604)
     - SqlUtil driver modules: the names of types, their attributes, functions, procedures, packages and materialized
