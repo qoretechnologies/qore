@@ -621,6 +621,9 @@ module SqlUtil {
       \c omit_update), which gave an invalid update statement, inserted the row with an update-only upsert on SQL
       Server, and raised \c UPSERT-ERROR with an update-only upsert on Oracle: the row of its key is unchanged
       (<a href="https://github.com/qoretechnologies/qore/issues/6692">issue 6692</a>)
+    - fixed the upserts and the \c delete_others option on MySQL without a strict SQL mode, which did not find the row of
+      an integer key out of the range of its column, which MySQL stores as the nearest value in the range: the key
+      values are compared clamped to the range (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
