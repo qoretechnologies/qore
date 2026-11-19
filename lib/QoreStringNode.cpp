@@ -373,7 +373,7 @@ QoreStringNode* QoreStringNode::parseBase64UrlToString(const QoreEncoding* qe, E
 }
 
 QoreStringNode* QoreStringNode::parseBase64UrlToString(ExceptionSink* xsink) const {
-    return parseBase64ToString(QCS_DEFAULT, xsink);
+    return parseBase64UrlToString(QCS_DEFAULT, xsink);
 }
 
 void QoreStringNode::getStringRepresentation(QoreString &str) const {
