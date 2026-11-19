@@ -4354,8 +4354,8 @@ hs.setHandler("health", "/health", NOTHING, new HealthHandler());
         @return the request body
 
         @throw HTTP-BODY-TOO-LARGE the decompressed body exceeds the maximum size
-        @throw HTTP-BODY-ENCODING-ERROR the body is not valid text in its encoding; the server answers this error with
-        HTTP 400 (Bad Request)
+        @throw HTTP-BODY-ENCODING-ERROR the body is text that is not valid in its encoding (a binary body is never
+        refused); the server answers this error with HTTP 400 (Bad Request)
 
         @since HttpServerUtil 1.6 added the \a listener and \a trailers parameters; a chunked body and a decompressed
         body that are not valid text in their encoding are refused

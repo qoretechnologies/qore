@@ -1583,14 +1583,14 @@ server.setCompressionLevels({"br": 4, "zstd": 3});
     #! Returns a request body received as binary data as a string
     /** Text is decoded by the rules shared by all HTTP clients and servers (see
         @ref Qore::decode_http_body() "decode_http_body()"), with the default text encoding (@ref getDefaultTextEncoding()) as the assumed
-        encoding; a body of another type that is not delivered as binary data is returned in the default text
-        encoding.
+        encoding; a body of another type that is not delivered as binary data is returned with its bytes in the
+        default text encoding, or tagged \c ISO-8859-1 if they are not valid in it (binary data is never refused).
 
         @param hdr the request headers
         @param body the request body
 
-        @throw HTTP-BODY-ENCODING-ERROR the body is not valid text in its encoding; the request is answered with 400
-        (qore#6554, qore#6604)
+        @throw HTTP-BODY-ENCODING-ERROR the body is text that is not valid in its encoding; the request is answered
+        with 400 (qore#6554, qore#6604)
 
         @see @ref HttpServer::AbstractHttpRequestHandler::decodeRequestText() "AbstractHttpRequestHandler::decodeRequestText()",
         which handlers use for the bodies that they read themselves

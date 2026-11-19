@@ -322,7 +322,8 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
         response = rawRequest(port, chunkedRequest(MimeTypeJson, (<efbbbf7b>, <7d>)));
         assertEq(200, response.hdr.status_code);
         assertEq("body UTF-8 7b7d", response.body);
-        # binary data: the bytes are given unchanged, as a string in the socket's encoding as before
+        # binary data: the bytes are given unchanged, as a string in the server's default text encoding (ISO-8859-1
+        # here), or tagged ISO-8859-1 if they are not valid in it
         response = rawRequest(port, chunkedRequest(MimeTypeOctetStream, (<00ff>, <c0af80>)));
         assertEq(200, response.hdr.status_code);
         assertEq("body ISO-8859-1 00ffc0af80", response.body);
@@ -491,8 +492,19 @@ class HttpServerInvalidEncodingTest inherits QUnit::Test {
                         ? chunkedRequest(ct, (<ff00>,))
                         : lengthRequest(ct, <ff00>));
                     assertEq(200, response.hdr.status_code, label);
-                    assertRegex("^(binary|body ISO-8859-1) ff00$", response.body, label);
+                    # with a Content-Length, the server gives octet-stream and multipart bodies as binary data
+                    bool binary_body = !chunked && (ct =~ /^application\/octet-stream/ || ct =~ /^multipart\//);
+                    assertEq(binary_body ? "binary ff00" : "body ISO-8859-1 ff00", response.body, label);
                 }
+            }
+            # binary bytes that are valid in the assumed encoding are tagged with it
+            foreach bool chunked in ((True, False)) {
+                string label = sprintf("%y image/png valid chunked: %y", default_encoding, chunked);
+                hash<auto> response = rawRequest(port, chunked
+                    ? chunkedRequest("image/png", (<c3a9>,))
+                    : lengthRequest("image/png", <c3a9>));
+                assertEq(200, response.hdr.status_code, label);
+                assertEq(default_encoding ? "body UTF-8 c3a9" : "body ISO-8859-1 c3a9", response.body, label);
             }
             # text without a declared encoding: the same decision with a Content-Length and chunked
             foreach bool chunked in ((True, False)) {
