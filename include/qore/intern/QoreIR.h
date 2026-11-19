@@ -5271,6 +5271,10 @@ public:
     */
     static bool collectOnBlockExitLocals(const QoreIROnBlockExitInstruction& obe,
         std::unordered_set<const void*>& locals);
+    //! Collects the locals of this compiled handler and its statement tree, including nested handlers.
+    /** @return false when part of the handler can access unknown locals */
+    bool collectHandlerBodyLocals(const StatementBlock* code, std::unordered_set<const void*>& locals) const;
+
     //! Releases a read of a plain local after its last use when the statement writes the local later
     /** A read of a plain local (qore_ir_is_plain_local_read(), in a function that creates no reference; its storage
         can be IR-only or AST-visible) holds a reference of the frame until the statement's DiscardTemps, while the
