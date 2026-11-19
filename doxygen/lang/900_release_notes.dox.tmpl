@@ -3705,6 +3705,9 @@
     - fixed the upserts and the \c delete_others upsert option of @ref sqlutilintro "SqlUtil" on MySQL without a strict
       SQL mode, which did not find the row of an integer key out of the range of its column
       (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>); see @ref sqlutilv3_11_0
+    - fixed the upserts of @ref sqlutilintro "SqlUtil" on PostgreSQL with an array column in the upsert key, which
+      failed with a missing operator for the array types
+      (<a href="https://github.com/qoretechnologies/qore/issues/6695">issue 6695</a>); see @ref sqlutilv3_11_0
     - @ref Qore::pow() "pow()" with @ref number_type "number" arguments and an exponent that is negative, NaN or
       between -1 and 1 (ex: <tt>pow(2n, 0.5n)</tt>) ended the process with an MPFR assertion (issue #1034)
     - a @ref number_type "number" division after a number operation that left an MPFR flag set (ex: <tt>nlog(0n)</tt>)

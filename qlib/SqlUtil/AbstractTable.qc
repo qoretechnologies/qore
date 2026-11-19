@@ -4149,8 +4149,9 @@ table.insert(row);
         list<auto> exec_args = ia.args;
         args = exec_args;
 
-        # check for a bulk insert in case the driver does not support array binding
-        if (!hasArrayBind()) {
+        # check for a bulk insert in case the driver does not support array binding, or does not bind the row as arrays
+        # (ia.row_by_row, given by the driver's getInsertSqlAndArgs(); issue #6695)
+        if (ia.row_by_row || !hasArrayBind()) {
             int size = 0;
             foreach auto arg in (exec_args) {
                 if (arg.typeCode() == NT_LIST) {
@@ -4191,7 +4192,9 @@ table.insert(row);
         @ref getInsertArgs() gives are those of the SQL that @ref insert() runs; a driver that makes another SQL for
         some rows (PostgreSQL's \c UNNEST insert of a hash of lists) overrides it
 
-        @return a hash with \c sql: the SQL, and \c args: the values bound to its placeholders, in their order
+        @return a hash with \c sql: the SQL, and \c args: the values bound to its placeholders, in their order; a
+        driver that binds arrays sets \c row_by_row to @ref True "True" for a row of list values that it cannot bind as
+        arrays, which is then inserted row by row (issue #6695)
     */
     private hash<auto> getInsertSqlAndArgs(hash<auto> row) {
         # issue #3352: do not execute runtime DML while holding the lock

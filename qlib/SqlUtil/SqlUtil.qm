@@ -624,6 +624,9 @@ module SqlUtil {
     - fixed the upserts and the \c delete_others option on MySQL without a strict SQL mode, which did not find the row of
       an integer key out of the range of its column, which MySQL stores as the nearest value in the range: the key
       values are compared clamped to the range (<a href="https://github.com/qoretechnologies/qore/issues/6689">issue 6689</a>)
+    - fixed the upserts on PostgreSQL with an array column in the upsert key, which failed with
+      <tt>operator does not exist: integer[] = bigint[]</tt>: the key value is converted to the column's array type
+      (<a href="https://github.com/qoretechnologies/qore/issues/6695">issue 6695</a>)
 
     @section sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
