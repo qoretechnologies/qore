@@ -129,7 +129,14 @@ This generalizes the existing Phase 1.5 init-expression outliner
    functions use closures (`map` with a closure, callbacks), and keeping
    them out of regions would leave those functions unpartitioned; the
    restriction that remains is the one on closure-use locals crossing the
-   boundary (decision 5).
+   boundary (decision 5).  A closure-use local that only a region
+   references belongs to the helper: the transform takes it out of the
+   coordinator's `all_body_locals` (undo restores them), so that the
+   coordinator does not push its closure variable at its entry, below
+   those of its own closure-use locals, where the helper's scope exit
+   popped the variable on the top of the stack, another local's, and a
+   closure created later in the helper that also captured that local
+   failed ("local variable ... is not instantiated"; qore#6654).
 5. **Region discovery: SESE interval sweep over the block layout.**
    First, a reversible *block-split pre-pass* breaks blocks at
    statement-end markers (`DiscardTemps`/`CheckException`/
