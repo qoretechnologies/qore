@@ -41,7 +41,7 @@ class AOTIRStatementLocationsTest inherits QUnit::Test {
         int rc;
         string output = backquote(prefix + shellQuote(native) + " 2>&1", \rc);
         assertEq(0, rc, output);
-        assertEq("PASS: 16 AOT IR statement location checks\n", output);
+        assertEq("PASS: 24 AOT IR statement location checks\n", output);
     }
 
     private static string shellQuote(string value) {
