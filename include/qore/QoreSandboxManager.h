@@ -610,9 +610,6 @@ public:
         governs.store(true, std::memory_order_release);
     }
 
-    //! Gives a new manager the isolation domain of the sandbox that governs the code that creates it, if any
-    DLLLOCAL void inheritIsolationDomain();
-
     //! Sets the wall-clock time limit of each call into the sandbox in milliseconds
     /** @param ms the limit in milliseconds; 0 (or a negative value) = unlimited
 

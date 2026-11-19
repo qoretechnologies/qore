@@ -19,6 +19,10 @@ public:
     DLLLOCAL static QoreSandboxManager* combine(const std::vector<QoreSandboxManager*>& managers);
     DLLLOCAL static bool same(const QoreSandboxManager* a, const QoreSandboxManager* b);
     DLLLOCAL static const std::vector<QoreSandboxManager*>* members(const QoreSandboxManager* manager);
+
+    //! Gives a new manager the isolation domain of the sandbox that governs the code that creates it, if any
+    //! (qore#6536)
+    DLLLOCAL static void inheritIsolationDomain(QoreSandboxManager* sm);
 };
 
 class QoreProgram;

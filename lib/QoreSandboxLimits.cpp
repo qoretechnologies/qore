@@ -572,8 +572,9 @@ void qore_sandbox_budgets_deref(QoreSandboxBudgetList& budgets) {
 }
 
 QoreSandboxBudgetStack::~QoreSandboxBudgetStack() {
-    // every helper that attached a frame removes it before the thread's data is destroyed
+    // every helper that attached a frame or a floor removes it before the thread's data is destroyed
     assert(frames.empty());
+    assert(charge_floors.empty());
     for (Frame& frame : frames) {
         frame.budget->deref();
     }
@@ -600,7 +601,18 @@ QoreSandboxIsolation::QoreSandboxIsolation(QoreSandboxManager* callers, QoreSand
     }
 }
 
+QoreSandboxIsolation* QoreSandboxIsolation::join(QoreSandboxIsolation* captured, QoreSandboxIsolation* current) {
+    assert(captured && current);
+    QoreSandboxIsolation* rv = new QoreSandboxIsolation(nullptr, captured);
+    rv->joined = current;
+    current->ref();
+    return rv;
+}
+
 QoreSandboxIsolation::~QoreSandboxIsolation() {
+    if (joined) {
+        joined->deref();
+    }
     if (callers) {
         callers->deref(nullptr);
     }
@@ -620,6 +632,11 @@ void QoreSandboxIsolation::addCreator(QoreSandboxManager* sm) {
 const std::string* QoreSandboxIsolation::callerDomain() const {
     for (const QoreSandboxIsolation* level = this; level; level = level->outer) {
         if (!level->callers) {
+            if (level->joined) {
+                if (const std::string* domain = level->joined->callerDomain()) {
+                    return domain;
+                }
+            }
             continue;
         }
         if (const std::vector<QoreSandboxManager*>* members = QoreSandboxComposition::members(level->callers)) {
@@ -639,6 +656,12 @@ const std::string* QoreSandboxIsolation::refuses(const QoreSandboxManager* membe
     for (const QoreSandboxIsolation* level = this; level; level = level->outer) {
         if (const std::string* domain = level->levelRefuses(member)) {
             return domain;
+        }
+        // a continuation that runs inline inside another build: that build's isolation holds as well
+        if (level->joined) {
+            if (const std::string* domain = level->joined->refuses(member)) {
+                return domain;
+            }
         }
     }
     return nullptr;
@@ -1114,24 +1137,39 @@ void QoreSandboxBudgetStack::startBudget(int tid, QoreSandboxManager* sm, int64 
 }
 
 void QoreSandboxBudgetStack::attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner,
-        bool in_build, QoreSandboxIsolation* iso) {
+        bool in_build, QoreSandboxIsolation* iso, bool join) {
     if (refused_owner) {
         return;
     }
+    // a continuation that runs inline inside a build keeps that build's isolation as well; work that a thread runs
+    // for its submitter (a pool task, a thread's start) is governed by the submitter's isolation only, so its floor
+    // also hides the isolation of a build in which the thread started (qore#6536)
+    QoreSandboxIsolation* current = (join && !charge_floors.empty()) ? charge_floors.back().iso : nullptr;
+    const bool push = in_build || (join ? current != nullptr : !charge_floors.empty());
     // the floor of a continuation in a build is pushed also for a continuation of a call whose limits cannot be
     // enforced: the isolation of the build holds in it (qore#6536)
-    if (in_build && (!lost_owner || iso)) {
+    if (push && (!lost_owner || iso || current || !join)) {
         // the code that a continuation of code in a trusted build runs is charged to the sandboxes that govern it,
         // as in the build (see enterInBuild()); it has no caller: no sandbox code is the caller's there; the
         // isolation of the build holds in it (qore#6536)
+        QoreSandboxIsolation* floor_iso = nullptr;
         try {
-            charge_floors.push_back({frames.size(), nullptr, nullptr, owner, iso});
+            if (iso && current && iso != current) {
+                floor_iso = QoreSandboxIsolation::join(iso, current);
+            } else {
+                floor_iso = iso ? iso : current;
+                if (floor_iso) {
+                    floor_iso->ref();
+                }
+            }
+            charge_floors.push_back({frames.size(), nullptr, nullptr, owner, floor_iso});
         } catch (std::bad_alloc&) {
-            lose(tid, owner, QSB_LIMIT_MEMORY, 0, 0, 0, 0);
+            if (floor_iso) {
+                floor_iso->deref();
+            }
+            // an isolation that cannot be recorded: no code runs in the continuation (the stack is closed)
+            lose(tid, owner, (iso || current) ? (QSB_LIMIT_MEMORY | QSB_LIMIT_STACK) : QSB_LIMIT_MEMORY, 0, 0, 0, 0);
             return;
-        }
-        if (iso) {
-            iso->ref();
         }
     }
     if (lost_owner) {

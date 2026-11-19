@@ -279,12 +279,18 @@ public:
         return outer;
     }
 
+    //! Returns the isolation of a continuation (\a captured) that runs inline inside a build (\a current): code must
+    //! pass both; may throw std::bad_alloc
+    DLLLOCAL static QoreSandboxIsolation* join(QoreSandboxIsolation* captured, QoreSandboxIsolation* current);
+
 private:
     //! the sandboxes that governed the caller (referenced), or nullptr for a build that the outer build's own code
     //! entered
     QoreSandboxManager* callers;
     //! the isolation of the outer build (referenced), or nullptr
     QoreSandboxIsolation* outer;
+    //! the isolation of the build that a continuation runs inline in (referenced; see join()), or nullptr
+    QoreSandboxIsolation* joined = nullptr;
 
     //! Returns nullptr if this build allows the code of \a member, else its domain
     DLLLOCAL const std::string* levelRefuses(const QoreSandboxManager* member) const;
@@ -309,7 +315,8 @@ public:
 
     //! Returns true if no frame applies to the thread
     DLLLOCAL bool empty() const {
-        return frames.empty() && !lost_owner && !refused_owner;
+        // a continuation's floor in a build can have no frames (no sandbox with limits governs it): it is left too
+        return frames.empty() && !lost_owner && !refused_owner && charge_floors.empty();
     }
 
     //! Returns true if the thread entered a sandbox whose code may not run in the trusted build that it runs
@@ -341,8 +348,13 @@ public:
     /** @param in_build true if the budgets were captured in a trusted build: the continuation runs in a build with no
         caller (see suspendCharge()), until leave()
     */
+    /** \a iso is the isolation of the build in which the continuation was captured; with \a join, the
+        continuation runs inline in the current call (QoreSandboxContextHelper), and the isolation of a build that it
+        runs in holds as well; without it, the continuation is work that a thread runs for its submitter
+        (QoreSandboxCaptureHelper, a thread's start), governed by the submitter's isolation only (qore#6536)
+    */
     DLLLOCAL void attach(int tid, const QoreSandboxBudgetList& budgets, const void* owner, bool in_build = false,
-            QoreSandboxIsolation* iso = nullptr);
+            QoreSandboxIsolation* iso = nullptr, bool join = false);
 
     //! Returns the number of frames of the thread (for tests)
     DLLLOCAL size_t frameCount() const {

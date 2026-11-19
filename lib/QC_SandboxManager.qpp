@@ -193,7 +193,7 @@ SandboxManager sm();
 SandboxManager::constructor() {
     QoreSandboxManager* nsm = new QoreSandboxManager();
     // a sandbox that sandboxed code creates belongs to the tenant of that code (qore#6536)
-    nsm->inheritIsolationDomain();
+    QoreSandboxComposition::inheritIsolationDomain(nsm);
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);
@@ -212,7 +212,7 @@ SandboxManager::destructor() {
 SandboxManager::copy() {
     QoreSandboxManager* nsm = sm->copy();
     // a copy that sandboxed code makes belongs to the tenant of that code (qore#6536)
-    nsm->inheritIsolationDomain();
+    QoreSandboxComposition::inheritIsolationDomain(nsm);
     // code that is not trusted may change the managers that it creates (issue #5659)
     qore_sandbox_manager_record_creator(nsm);
     self->setPrivate(CID_SANDBOXMANAGER, nsm);

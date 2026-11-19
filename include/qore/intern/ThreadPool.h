@@ -130,8 +130,10 @@ protected:
     class SandboxScope {
     public:
         DLLLOCAL SandboxScope(const QoreSandboxContext& ctx) {
-            if (ctx.manager || ctx.policy_manager) {
-                helper.emplace(ctx);
+            // the task is work for its submitter: governed by the submitter's sandbox and the isolation of the
+            // trusted build that submitted it, if any (qore#6536)
+            if (ctx.manager || ctx.policy_manager || ctx.isolation) {
+                helper.emplace(ctx, false);
             }
         }
 

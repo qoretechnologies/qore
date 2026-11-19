@@ -1292,7 +1292,7 @@ std::string QoreSandboxManager::getIsolationDomain() const {
     return isolation_domain;
 }
 
-void QoreSandboxManager::inheritIsolationDomain() {
+void QoreSandboxComposition::inheritIsolationDomain(QoreSandboxManager* sm) {
     if (!qore_calling_code_is_untrusted()) {
         return;
     }
@@ -1302,9 +1302,9 @@ void QoreSandboxManager::inheritIsolationDomain() {
         return;
     }
     std::string domain = creator->getIsolationDomain();
-    std::lock_guard<std::mutex> lck(domain_lock);
-    assert(!governs.load(std::memory_order_relaxed));
-    isolation_domain = std::move(domain);
+    std::lock_guard<std::mutex> lck(sm->domain_lock);
+    assert(!sm->governs.load(std::memory_order_relaxed));
+    sm->isolation_domain = std::move(domain);
 }
 
 void QoreSandboxManager::setWallTimeLimit(int64 ms) {

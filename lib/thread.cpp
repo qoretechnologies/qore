@@ -7015,16 +7015,19 @@ QoreSandboxTrustedPolicyHelper::~QoreSandboxTrustedPolicyHelper() {
     td->trusted_policy_depth = old_depth;
 }
 
-QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx) {
+QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx, bool join) {
     ThreadData* td = thread_data.get();
     if (td) {
-        old_ctx = td->sandbox_context;
-        old_pgm_ctx = td->sandbox_context_pgm_ctx;
-        td->sandbox_context = &ctx;
-        td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
+        if (ctx.manager || ctx.policy_manager) {
+            old_ctx = td->sandbox_context;
+            old_pgm_ctx = td->sandbox_context_pgm_ctx;
+            td->sandbox_context = &ctx;
+            td->sandbox_context_pgm_ctx = td->current_pgm_ctx;
+            applied = true;
+        }
         active = true;
-        // the operation continues the call that started it, under the same budgets
-        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build, ctx.isolation);
+        // the operation continues the call that started it, under the same budgets and isolation
+        td->sandbox_budgets.attach(td->tid, ctx.budgets, this, ctx.in_build, ctx.isolation, join);
     }
 }
 
@@ -7032,8 +7035,10 @@ QoreSandboxContextHelper::~QoreSandboxContextHelper() {
     if (active) {
         ThreadData* td = thread_data.get();
         td->sandbox_budgets.leave(td->tid, this);
-        td->sandbox_context = old_ctx;
-        td->sandbox_context_pgm_ctx = old_pgm_ctx;
+        if (applied) {
+            td->sandbox_context = old_ctx;
+            td->sandbox_context_pgm_ctx = old_pgm_ctx;
+        }
     }
 }
 
@@ -7378,6 +7383,10 @@ ProgramRuntimeParseAccessHelper::ProgramRuntimeParseAccessHelper(ExceptionSink* 
         : xsink(xsink), restore(false) {
     ThreadData* td = thread_data.get();
     if (pgm != td->current_pgm) {
+        // the Program of another tenant is not accessed in a trusted build that a tenant called (qore#6536)
+        if (qore_sandbox_check_program_isolation(pgm, xsink, "accessing a Program")) {
+            return;
+        }
         if (qore_program_private::incThreadCount(*pgm, xsink))
             return;
 

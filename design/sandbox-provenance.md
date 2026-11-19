@@ -195,9 +195,16 @@ own code entered), the sandboxes of the Program that created it, and the isolati
 pass every level, so a nested build never widens what runs: a level allows a sandbox if it has no domain, is one of the
 level's caller's sandboxes or of its domain, or is a sandbox of the level's creator; a level whose caller has no domain
 allows everything. The build's own code is checked against the outer levels only. A continuation captures the
-isolation of the innermost floor (`QoreSandboxContext::isolation`), and a thread that a build starts keeps it even when
-no sandbox governs the starting code (`QoreInheritedSandbox::capture()`). Builds that trusted code entered have no
-isolation.
+isolation of the innermost floor (`QoreSandboxContext::isolation`), also when no sandbox governs the capturing code (a
+thread that a build starts: `QoreInheritedSandbox::capture()`; a pool task; an async I/O operation:
+`capture_async_io_sandbox_context()`); a context that only keeps an isolation is applied as a floor, not as the thread's
+sandbox context. Work that a thread runs for its submitter (a thread's start, a pool task, a step of an async
+operation: `attach()` without `join`) is governed by the submitter's isolation only: its floor hides the isolation of a
+build in which the thread itself started, so a shared worker that started in one tenant's build runs other work as
+before. A continuation that runs inline in the current call (`QoreSandboxContextHelper` with `join`) keeps the
+isolation of the build that it runs in as well (`QoreSandboxIsolation::join()`). If the floor cannot be recorded, the
+continuation's stack is closed. Builds that trusted code entered have no isolation. A continuation's floor can have no
+frames, so `QoreSandboxBudgetStack::empty()` counts the floors too.
 
 A refused entry fails closed: it records nothing more until it is left (`refused_owner`), closes the stack (the stack
 check at the entry of every function, method and closure, in each execution mode, raises `SANDBOX-ISOLATION-ERROR`),

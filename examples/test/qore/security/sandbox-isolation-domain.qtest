@@ -119,6 +119,33 @@ nothing sub build_parse(Program p, string src) {
     p.parse(src, "build-parse");
 }
 
+#! trusted code that a build runs: starts the worker of a shared pool (a library's lazily started worker)
+ThreadPool sub build_start_pool() {
+    ThreadPool tp(1, 1, 1);
+    Queue q();
+    tp.submit(sub () { q.push(True); });
+    q.get();
+    return tp;
+}
+
+#! trusted code that a build runs: runs the code that the caller gives it on the shared pool and returns the result or
+#! the error
+auto sub build_on_pool(ThreadPool tp, code c, softlist<auto> args) {
+    Queue q();
+    tp.submit(sub () {
+        try {
+            q.push({"result": call_function_args(c, args)});
+        } catch (hash<ExceptionInfo> ex) {
+            q.push({"err": ex.err});
+        }
+    });
+    hash<auto> h = q.get();
+    if (h.err) {
+        throw h.err, "in the pool";
+    }
+    return h.result;
+}
+
 #! trusted code that a build runs: calls a function of a Program that the caller gives it
 auto sub build_call_pgm(Program p, string f, softlist<auto> args) {
     return p.callFunctionArgs(f, args);
@@ -146,6 +173,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         code BuildNested;
         code BuildCallPgm;
         code BuildCallLoop;
+        code BuildStartPool;
+        code BuildOnPool;
         code BuildParse;
 
         #! tenant A's interface, its second interface (same domain), tenant B's interface
@@ -164,6 +193,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         addTestCase("sandboxes without a domain refuse nothing", \noDomain());
         addTestCase("the code of another tenant has no effect: direct calls, nested and lost calls, parsing",
             \noEffect());
+        addTestCase("a worker started in a tenant's build runs other work under its submitter's isolation",
+            \sharedWorker());
         set_return_value(main());
     }
 
@@ -176,6 +207,8 @@ class SandboxIsolationDomainTest inherits QUnit::Test {
         BuildNested = SandboxManager::createTrustedBuildCall(\build_nested());
         BuildCallPgm = SandboxManager::createTrustedBuildCall(\build_call_pgm());
         BuildCallLoop = SandboxManager::createTrustedBuildCall(\build_call_loop());
+        BuildStartPool = SandboxManager::createTrustedBuildCall(\build_start_pool());
+        BuildOnPool = SandboxManager::createTrustedBuildCall(\build_on_pool());
         BuildParse = SandboxManager::createTrustedBuildCall(\build_parse());
 
         a = tenant("a", "tenant-a");
@@ -372,6 +405,22 @@ code sub mk() {
             assertTrue(ex.err == "SANDBOX-ISOLATION-ERROR" || ex.err == "SANDBOX-ERROR", ex.err);
         }
         assertEq(70, counter.get());
+    }
+
+    sharedWorker() {
+        # the worker of a shared pool starts in tenant A's build (a library that starts it lazily)
+        ThreadPool tp = a.callFunction("call", BuildStartPool);
+        on_exit tp.stop();
+        code b_make = b.getCallReference("make");
+        # a task of the host runs tenant B's code on it: the host may run any tenant's code
+        Queue q();
+        tp.submit(sub () { q.push(b_make(3).size()); });
+        assertEq(3, q.get());
+        # tenant A's task in its build still cannot run tenant B's code there
+        assertThrows("SANDBOX-ISOLATION-ERROR", \a.callFunction(), ("call", BuildOnPool, (tp, b_make, 3)));
+        # and the host's tasks are not affected by it
+        tp.submit(sub () { q.push(b_make(4).size()); });
+        assertEq(4, q.get());
     }
 
     #! the number of call budget frames of the thread, or -1 in a release build
