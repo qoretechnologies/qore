@@ -34,6 +34,15 @@ class Q inherits private P {
     code hierRef(string name) { return self.getCallReference(name); }
 }
 
+#! a class with private methods of its own, which no parent class declares
+class O {
+    private string p() { return "O::p"; }
+    private static string ps() { return "O::ps"; }
+
+    #! the class's own code may take references to them
+    code ownRef(string name) { return self.getCallReference(name); }
+}
+
 #! a class outside the hierarchy
 class X {
     static code refOf(object o, string name) { return o.getCallReference(name); }
@@ -58,6 +67,7 @@ class CallRefPrivateAccessTest inherits QUnit::Test {
         addTestCase("a method of a privately inherited class", \privateInheritanceTest());
         addTestCase("the code of the hierarchy", \hierarchyTest());
         addTestCase("sandboxed code", \sandboxTest());
+        addTestCase("the object's own private method", \ownPrivateTest());
         set_return_value(main());
     }
 
@@ -103,6 +113,29 @@ class CallRefPrivateAccessTest inherits QUnit::Test {
         C c();
         assertEq("P::priv", c.hierRef("priv")());
         assertEq("P::priv", c.ownRef("priv")());
+    }
+
+    ownPrivateTest() {
+        O o();
+        # from outside, from a class outside the hierarchy and through a closure
+        assertThrows("CALL-REFERENCE-ERROR", \o.getCallReference(), "p");
+        assertThrows("CALL-REFERENCE-ERROR", \X::refOf(), (o, "p"));
+        code get = code sub (string name) { return o.getCallReference(name); };
+        assertThrows("CALL-REFERENCE-ERROR", get, "p");
+        # the static private method, by its unscoped name through the object and by its scoped name
+        assertThrows("CALL-REFERENCE-ERROR", \o.getCallReference(), "ps");
+        assertThrows("CALL-REFERENCE-ERROR", \X::staticRefOf(), "O::ps");
+        assertThrows("CALL-REFERENCE-ERROR", \get_call_reference(), "O::ps");
+        # sandboxed code
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern\nstring sub ref(object o, string n) { try { o.getCallReference(n); return \"returned\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err; } }", "tenant");
+        p.setSandboxManager(new SandboxManager());
+        assertEq("CALL-REFERENCE-ERROR", p.callFunction("ref", o, "p"));
+        assertEq("CALL-REFERENCE-ERROR", p.callFunction("ref", o, "ps"));
+        # the class's own code may
+        assertEq("O::p", o.ownRef("p")());
+        assertEq("O::ps", o.ownRef("ps")());
     }
 
     sandboxTest() {
