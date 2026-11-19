@@ -115,7 +115,11 @@ class LenientSmtpServer {
         if (line.size() && line[line.size() - 1] == 13) {
             line = line.substr(0, line.size() - 1);
         }
-        return line.toString();
+        # a line that is not valid UTF-8 (ex: a message body in ISO-8859-1) is read in ISO-8859-1, with its bytes, so
+        # that the server can match it (a regular expression raises an exception for a string that is not valid in
+        # its encoding: qore#6554)
+        string str = line.toString();
+        return str.isEncodingValid() ? str : binary_to_string(line, "ISO-8859-1");
     }
 
     #! serves a session; returns True for the session that stops the server

@@ -259,13 +259,11 @@ public class RegexSubstTest inherits QUnit::Test {
         assertEq("yéy", r.subst("xéx"), "invalid input does not poison the next call");
     }
 
+    #! \\C matches one byte, which can be part of a character: it is refused when the pattern is compiled (qore#6554)
     private utf8OffsetTest() {
         foreach string prefix in (("", "(*NO_JIT)")) {
-            RegexSubst r(prefix + "\\C", "X", RE_Global);
-            assertThrows("REGEX-ERROR", "bad offset into UTF string", \r.subst(), ("éé",));
-            assertThrows("REGEX-ERROR", "bad offset into UTF string", \regex_subst(),
-                ("中🙂", prefix + "\\C", "X", RE_Global));
-            assertEq("XXX", r.subst("abc"), "byte matches at character boundaries remain valid");
+            assertThrows("REGEX-COMPILATION-ERROR", sub () { RegexSubst r(prefix + "\\C", "X", RE_Global); });
+            assertThrows("REGEX-COMPILATION-ERROR", \regex_subst(), ("中🙂", prefix + "\\C", "X", RE_Global));
         }
     }
 
