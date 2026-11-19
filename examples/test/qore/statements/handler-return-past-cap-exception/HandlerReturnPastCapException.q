@@ -2,8 +2,9 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
-# The cases of handler-return-past-cap-exception.qtest (#6762): a return whose cleanups run handlers out of line past
-# the inline cap of the lowering, and an exception that a handler of an enclosing block raises before the return ends.
+# The cases of handler-return-past-cap-exception.qtest (#6762, #6763): a return whose cleanups run handlers out of line
+# past the inline cap of the lowering, and an exception that a handler of an enclosing block or the check of a value
+# that the return type rejects raises before the return ends.
 # The value of the return is the value of the return that the exception interrupts: the AST interpreter keeps it until
 # the function ends, after its locals, or releases it at the try statement that catches the exception.  Each case logs
 # the destruction of its objects; the output is the same in every execution mode and compiled with qcc.
@@ -811,6 +812,480 @@ auto sub blk(bool x) {
     return mk("end");
 }
 
+# a handler's return, lowered inline, with a value that the return type rejects, and 62 handlers that run before it
+# in the block of a return; the enclosing block's handler is past the cap for 63 and more (#6763)
+int sub rej62(bool x) {
+    T z("z");
+    {
+        on_exit { log += "outer"; }
+        {
+            on_exit { if (x) { auto o = mk("handed"); return o; } }
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            return 1;
+        }
+    }
+}
+
+# as rej62(), with a try statement of the function that catches the error
+int sub trej62(bool x) {
+    T z("z");
+    try {
+        on_exit { log += "outer"; }
+        {
+            on_exit { if (x) { auto o = mk("handed"); return o; } }
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            return 1;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught-in " + ex.err;
+    }
+    return 2;
+}
+
+# a handler's return, lowered inline, with a value that the return type rejects, and 63 handlers that run before it
+# in the block of a return; the enclosing block's handler is past the cap for 63 and more (#6763)
+int sub rej63(bool x) {
+    T z("z");
+    {
+        on_exit { log += "outer"; }
+        {
+            on_exit { if (x) { auto o = mk("handed"); return o; } }
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            return 1;
+        }
+    }
+}
+
+# as rej63(), with a try statement of the function that catches the error
+int sub trej63(bool x) {
+    T z("z");
+    try {
+        on_exit { log += "outer"; }
+        {
+            on_exit { if (x) { auto o = mk("handed"); return o; } }
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            return 1;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught-in " + ex.err;
+    }
+    return 2;
+}
+
+# a handler's return, lowered inline, with a value that the return type rejects, and 70 handlers that run before it
+# in the block of a return; the enclosing block's handler is past the cap for 63 and more (#6763)
+int sub rej70(bool x) {
+    T z("z");
+    {
+        on_exit { log += "outer"; }
+        {
+            on_exit { if (x) { auto o = mk("handed"); return o; } }
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            return 1;
+        }
+    }
+}
+
+# as rej70(), with a try statement of the function that catches the error
+int sub trej70(bool x) {
+    T z("z");
+    try {
+        on_exit { log += "outer"; }
+        {
+            on_exit { if (x) { auto o = mk("handed"); return o; } }
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            on_exit ++cnt;
+            return 1;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught-in " + ex.err;
+    }
+    return 2;
+}
+
 sub run(string name, code c) {
     foreach bool x in ((False, True)) {
         log = ();
@@ -835,3 +1310,9 @@ run("tinl80", \tinl80());
 run("plain", \plain());
 run("ool", \ool());
 run("blk", \blk());
+run("rej62", \rej62());
+run("trej62", \trej62());
+run("rej63", \rej63());
+run("trej63", \trej63());
+run("rej70", \rej70());
+run("trej70", \trej70());

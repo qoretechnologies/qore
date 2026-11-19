@@ -15,15 +15,18 @@
 
 %exec-class HandlerReturnPastCapExceptionTest
 
-#! The value of a return whose cleanups run handlers past the inline cap is kept when an exception interrupts it (#6762)
+#! The value of a return whose cleanups run handlers past the inline cap is kept when an exception interrupts it
+#! (#6762, #6763)
 /** A return statement whose cleanups run handlers out of line past the inline cap of the lowering (#5992) gives its
     value through a TakeHandedOverReturn after the cleanups, which takes the value that one of those handlers handed
     over, if any (#6137).  The value of the return before it, its own or the value of a handler's return lowered inline
     that replaced it, was not recorded as the value of the return: an exception that a handler of an enclosing block
     raised in the cleanups released it with the temporaries of the statement, before the locals of the function, where
     the AST interpreter keeps it until the function ends, or releases it at the try statement that catches the
-    exception.  HandlerReturnPastCapException.q gives the output of the AST interpreter in every execution mode, on the
-    IR tier and compiled with qcc.
+    exception.  A value that the return type rejects, of a handler's return lowered inline, is such a value too: native
+    code released it before the handlers of the enclosing blocks ran (#6763), where the IR interpreter holds it itself.
+    HandlerReturnPastCapException.q gives the output of the AST interpreter in every execution mode, on the IR tier and
+    compiled with qcc.
 */
 class HandlerReturnPastCapExceptionTest inherits QUnit::Test {
     public {
@@ -46,6 +49,18 @@ ool(False): T [\"~ret\", \"~w\", \"~z\", \"~handed\"]
 ool(True): ex:E [\"~ret\", \"~w\", \"~z\", \"~handed\"]
 blk(False): T [\"~w\", \"~z\", \"~handed\"]
 blk(True): ex:E [\"~w\", \"~z\", \"~handed\"]
+rej62(False): 1 [\"outer\", \"~z\"]
+rej62(True): ex:RUNTIME-TYPE-ERROR [\"outer\", \"~z\", \"~handed\"]
+trej62(False): 1 [\"outer\", \"~z\"]
+trej62(True): 2 [\"outer\", \"~handed\", \"caught-in RUNTIME-TYPE-ERROR\", \"~z\"]
+rej63(False): 1 [\"outer\", \"~z\"]
+rej63(True): ex:RUNTIME-TYPE-ERROR [\"outer\", \"~z\", \"~handed\"]
+trej63(False): 1 [\"outer\", \"~z\"]
+trej63(True): 2 [\"outer\", \"~handed\", \"caught-in RUNTIME-TYPE-ERROR\", \"~z\"]
+rej70(False): 1 [\"outer\", \"~z\"]
+rej70(True): ex:RUNTIME-TYPE-ERROR [\"outer\", \"~z\", \"~handed\"]
+trej70(False): 1 [\"outer\", \"~z\"]
+trej70(True): 2 [\"outer\", \"~handed\", \"caught-in RUNTIME-TYPE-ERROR\", \"~z\"]
 ";
 
         #! the optimization levels of the AOT compiles
